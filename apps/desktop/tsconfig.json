@@ -1,0 +1,31 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/plugin-api"
+    },
+    {
+      "path": "../../packages/ipc-contracts"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/asset-pipeline"
+    },
+    {
+      "path": "../../packages/runtime"
+    }
+  ]
+}

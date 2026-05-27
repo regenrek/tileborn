@@ -1,0 +1,14 @@
+{
+  "id": "project:550e8400-e29b-41d4-a716-446655440020",
+  "name": "Smoke Project",
+  "schemaVersion": 1,
+  "engineVersion": "0.1.0",
+  "plugins": [],
+  "assetPacks": [],
+  "maps": [
+    {
+      "id": "map:550e8400-e29b-41d4-a716-446655440010",
+      "path": "maps/smoke-arena.tileborne-map.json"
+    }
+  ]
+}

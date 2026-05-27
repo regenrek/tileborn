@@ -1,0 +1,50 @@
+{
+  "formats": ["tiled", "ldtk", "manifest", "tiled-source"],
+  "patterns": [
+    "wang2edge",
+    "wang2corner",
+    "wang4corner",
+    "blob47",
+    "rpgmA2",
+    "rpgmA3",
+    "rpgmA4"
+  ],
+  "matrix": {
+    "tiled": {
+      "wang2edge": true,
+      "wang2corner": true,
+      "wang4corner": true,
+      "blob47": false,
+      "rpgmA2": false,
+      "rpgmA3": false,
+      "rpgmA4": false
+    },
+    "ldtk": {
+      "wang2edge": true,
+      "wang2corner": false,
+      "wang4corner": false,
+      "blob47": false,
+      "rpgmA2": false,
+      "rpgmA3": false,
+      "rpgmA4": false
+    },
+    "manifest": {
+      "wang2edge": true,
+      "wang2corner": true,
+      "wang4corner": true,
+      "blob47": true,
+      "rpgmA2": true,
+      "rpgmA3": true,
+      "rpgmA4": true
+    },
+    "tiled-source": {
+      "wang2edge": false,
+      "wang2corner": false,
+      "wang4corner": true,
+      "blob47": false,
+      "rpgmA2": false,
+      "rpgmA3": false,
+      "rpgmA4": false
+    }
+  }
+}

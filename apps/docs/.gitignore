@@ -1,0 +1,12 @@
+# Generated docs content — produced by scripts/prebuild.mjs
+src/content/docs/adrs/
+src/content/docs/cli/
+src/content/docs/reference/
+src/content/docs/runtime/
+src/content/docs/follow-ups/
+src/content/docs/editor-ux/
+src/generated/
+
+# Astro
+.astro/
+dist/

@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/test-utils.ts"],
+  "references": [
+    {
+      "path": "../asset-pipeline"
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../plugin-api"
+    },
+    {
+      "path": "../services-foundation"
+    }
+  ]
+}

@@ -3,14 +3,37 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".vite/**", "out/**"]
+    },
+    "@tileborne/game-host#build": {
+      "dependsOn": ["@tileborne/plugin-battle-royale#build", "^build"],
       "outputs": ["dist/**"]
     },
+    "@tileborne/game-host#typecheck": {
+      "dependsOn": ["@tileborne/plugin-battle-royale#build", "^typecheck"]
+    },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^build", "^typecheck"]
     },
     "lint": {},
     "test": {
       "dependsOn": ["^build"]
+    },
+    "test:cli-e2e": {
+      "dependsOn": ["^build", "build"]
+    },
+    "test:boundaries": {
+      "dependsOn": ["^build", "build"]
+    },
+    "test:desktop-smoke": {
+      "dependsOn": ["^build", "build"]
+    },
+    "test:smoke": {
+      "dependsOn": ["^build", "build"]
+    },
+    "docs:build": {
+      "dependsOn": ["^build", "build"],
+      "outputs": ["dist/**"]
     }
   }
 }

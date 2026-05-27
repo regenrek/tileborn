@@ -1,31 +1,12 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "composite": true
+    "ignoreDeprecations": "6.0",
+    "baseUrl": "."
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "files": [],
   "references": [
-    {
-      "path": "../../packages/core"
-    },
-    {
-      "path": "../../packages/plugin-api"
-    },
-    {
-      "path": "../../packages/ipc-contracts"
-    },
-    {
-      "path": "../../packages/ui"
-    },
-    {
-      "path": "../../packages/asset-pipeline"
-    },
-    {
-      "path": "../../packages/runtime"
-    }
+    { "path": "./tsconfig.main.json" },
+    { "path": "./tsconfig.preload.json" },
+    { "path": "./tsconfig.renderer.json" }
   ]
 }

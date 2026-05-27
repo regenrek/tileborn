@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    "apps/desktop": {
+      "entry": [
+        "electron-forge.config.cjs",
+        "vite.*.config.ts",
+        "vitest*.config.ts",
+        "src/main/main.ts",
+        "src/preload/preload.ts",
+        "src/renderer/main.tsx",
+        "src/renderer/**/*.d.ts",
+        "src/renderer/lib/runtime-wire-protocol.ts",
+        "src/renderer/lib/tile-palette-metadata.ts",
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.spec.{ts,tsx}",
+        "src/smoke/**/*.ts"
+      ],
+      "project": [
+        "electron-forge.config.cjs",
+        "vite.*.config.ts",
+        "vitest*.config.ts",
+        "src/**/*.{ts,tsx}"
+      ]
+    },
+    "packages/ui": {
+      "entry": [
+        "src/index.ts",
+        "src/**/*.test.{ts,tsx}",
+        "vitest.config.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "vitest.config.ts"
+      ]
+    }
+  }
+}

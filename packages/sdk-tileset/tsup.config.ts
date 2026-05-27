@@ -1,0 +1,34 @@
+import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    index: "src/index.ts",
+    "schemas/index": "src/schemas/index.ts",
+    diagnostics: "src/diagnostics.ts",
+    "atlas/index": "src/atlas/index.ts",
+    "ldtk/index": "src/ldtk/index.ts",
+    "autotile/index": "src/autotile/index.ts",
+    "animation/index": "src/animation/index.ts",
+    "variants/index": "src/variants/index.ts",
+    "terrain/index": "src/terrain/index.ts",
+    "manifest/index": "src/manifest/index.ts",
+    "tiled/index": "src/tiled/index.ts",
+    "tiled-source-rules/index": "src/tiled-source-rules/index.ts",
+    "renderer/index": "src/renderer/index.ts",
+    "metadata/index": "src/metadata/index.ts",
+    "importers/tiled-source/index": "src/importers/tiled-source/index.ts",
+  },
+  format: ["esm"],
+  platform: "neutral",
+  target: "es2022",
+  outDir: "dist",
+  clean: true,
+  sourcemap: true,
+  splitting: false,
+  treeshake: true,
+  external: ["@tileborne/core", "effect"],
+  tsconfig: "tsconfig.build.json",
+  dts: {
+    resolve: true,
+  },
+});

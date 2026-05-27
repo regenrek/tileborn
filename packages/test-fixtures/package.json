@@ -2,6 +2,7 @@
   "name": "@tileborne/test-fixtures",
   "version": "0.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,10 +15,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.json"
+    "test": "vitest run",
+    "build": "tsc -b tsconfig.json --force"
   },
-  "dependencies": {
-    "@tileborne/core": "workspace:*"
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "vitest": "4.1.7"
   }
 }

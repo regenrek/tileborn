@@ -1,0 +1,16 @@
+# Rendered at build time by `tileborne game build --target cloudflare`.
+name = "{{SITE_NAME}}"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+[[durable_objects.bindings]]
+name = "PLAYTEST_ROOM"
+class_name = "PlaytestRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PlaytestRoom"]
+
+[vars]
+HANDOFF_SIGNING_KEY = "{{HANDOFF_SIGNING_KEY}}"
+ROOM_IDLE_TIMEOUT_SECONDS = "60"

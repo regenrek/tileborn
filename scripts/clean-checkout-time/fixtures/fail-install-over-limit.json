@@ -1,0 +1,44 @@
+{
+  "scriptPath": "scripts/clean-checkout-smoke.sh",
+  "mode": "time",
+  "totalMs": 98000,
+  "totalLimitMs": 300000,
+  "passed": false,
+  "steps": [
+    {
+      "name": "pnpm install --frozen-lockfile",
+      "exitCode": 0,
+      "durationMs": 95000,
+      "limitMs": 90000,
+      "passed": false
+    },
+    {
+      "name": "bootstrap package builds (composite references)",
+      "exitCode": 0,
+      "durationMs": 1000,
+      "limitMs": 90000,
+      "passed": true
+    },
+    {
+      "name": "pnpm turbo run typecheck --filter=!@tileborne/desktop",
+      "exitCode": 0,
+      "durationMs": 1000,
+      "limitMs": 90000,
+      "passed": true
+    },
+    {
+      "name": "pnpm -w build",
+      "exitCode": 0,
+      "durationMs": 1000,
+      "limitMs": 90000,
+      "passed": true
+    },
+    {
+      "name": "pnpm --filter @tileborne/desktop dev:cdp",
+      "exitCode": 0,
+      "durationMs": 1000,
+      "limitMs": 30000,
+      "passed": true
+    }
+  ]
+}

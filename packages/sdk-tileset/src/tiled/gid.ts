@@ -1,0 +1,61 @@
+import {
+  TILED_FLIPPED_DIAGONALLY_FLAG,
+  TILED_FLIPPED_HORIZONTALLY_FLAG,
+  TILED_FLIPPED_VERTICALLY_FLAG,
+  TILED_GID_MASK,
+  TILED_ROTATED_HEXAGONAL_120_FLAG,
+} from "./types.js";
+
+export type DecodedTiledGid = {
+  readonly gid: number;
+  readonly flippedHorizontal: boolean;
+  readonly flippedVertical: boolean;
+  readonly flippedDiagonal: boolean;
+  readonly rotatedHexagonal120: boolean;
+};
+
+export const decodeTiledGid = (raw: number): DecodedTiledGid => {
+  const unsigned = raw >>> 0;
+  return {
+    gid: unsigned & TILED_GID_MASK,
+    flippedHorizontal: (unsigned & TILED_FLIPPED_HORIZONTALLY_FLAG) !== 0,
+    flippedVertical: (unsigned & TILED_FLIPPED_VERTICALLY_FLAG) !== 0,
+    flippedDiagonal: (unsigned & TILED_FLIPPED_DIAGONALLY_FLAG) !== 0,
+    rotatedHexagonal120: (unsigned & TILED_ROTATED_HEXAGONAL_120_FLAG) !== 0,
+  };
+};
+
+export type TiledTilesetWindow = {
+  readonly firstgid: number;
+  readonly tileCount: number;
+  readonly tileborneTileCount: number;
+  readonly tileborneTileIndexOffset: number;
+  readonly name: string;
+};
+
+export const locateTiledGid = (
+  raw: number,
+  windows: readonly TiledTilesetWindow[],
+): { readonly window: TiledTilesetWindow; readonly localId: number } | null => {
+  const decoded = decodeTiledGid(raw);
+  if (decoded.gid === 0) return null;
+  let best: TiledTilesetWindow | undefined;
+  for (const window of windows) {
+    if (decoded.gid >= window.firstgid) {
+      if (!best || window.firstgid > best.firstgid) best = window;
+    }
+  }
+  if (!best) return null;
+  const localId = decoded.gid - best.firstgid;
+  if (localId < 0 || localId >= best.tileCount) return null;
+  return { window: best, localId };
+};
+
+export const tileborneTileIndexForTiledGid = (
+  raw: number,
+  windows: readonly TiledTilesetWindow[],
+): number => {
+  const located = locateTiledGid(raw, windows);
+  if (located === null || located.localId >= located.window.tileborneTileCount) return 0;
+  return located.window.tileborneTileIndexOffset + located.localId + 1;
+};

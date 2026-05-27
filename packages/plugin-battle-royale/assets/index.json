@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "loot-crate-icon",
+      "path": "./assets/loot-crate.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne Plugins",
+        "notes": "Placeholder asset reference; binary deferred."
+      }
+    },
+    {
+      "id": "spawn-marker",
+      "path": "./assets/spawn-marker.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne Plugins",
+        "notes": "Placeholder asset reference; binary deferred."
+      }
+    }
+  ]
+}

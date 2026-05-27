@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "validators": [
+    {
+      "id": "min-spawn-points",
+      "label": "Minimum spawn points",
+      "description": "Every map must have at least 4 SpawnPoints.",
+      "severity": "error",
+      "targetObjectType": "spawn-point",
+      "rule": {
+        "kind": "minCount",
+        "count": 4
+      }
+    },
+    {
+      "id": "single-shrink-anchor",
+      "label": "Single shrink zone anchor",
+      "description": "ShrinkZoneAnchor must exist exactly once.",
+      "severity": "error",
+      "targetObjectType": "shrink-zone-anchor",
+      "rule": {
+        "kind": "exactCount",
+        "count": 1
+      }
+    }
+  ]
+}

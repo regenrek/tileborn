@@ -1,0 +1,89 @@
+{
+  "name": "@tileborne/sdk-tileset",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "import": "./dist/diagnostics.js"
+    },
+    "./variants": {
+      "types": "./dist/variants/index.d.ts",
+      "import": "./dist/variants/index.js"
+    },
+    "./animation": {
+      "types": "./dist/animation/index.d.ts",
+      "import": "./dist/animation/index.js"
+    },
+    "./atlas": {
+      "types": "./dist/atlas/index.d.ts",
+      "import": "./dist/atlas/index.js"
+    },
+    "./autotile": {
+      "types": "./dist/autotile/index.d.ts",
+      "import": "./dist/autotile/index.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest/index.d.ts",
+      "import": "./dist/manifest/index.js"
+    },
+    "./ldtk": {
+      "types": "./dist/ldtk/index.d.ts",
+      "import": "./dist/ldtk/index.js"
+    },
+    "./terrain": {
+      "types": "./dist/terrain/index.d.ts",
+      "import": "./dist/terrain/index.js"
+    },
+    "./tiled": {
+      "types": "./dist/tiled/index.d.ts",
+      "import": "./dist/tiled/index.js"
+    },
+    "./tiled-source-rules": {
+      "types": "./dist/tiled-source-rules/index.d.ts",
+      "import": "./dist/tiled-source-rules/index.js"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "import": "./dist/renderer/index.js"
+    },
+    "./metadata": {
+      "types": "./dist/metadata/index.d.ts",
+      "import": "./dist/metadata/index.js"
+    },
+    "./importers/tiled-source": {
+      "types": "./dist/importers/tiled-source/index.d.ts",
+      "import": "./dist/importers/tiled-source/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts",
+    "build": "tsup",
+    "prepublishOnly": "tsup"
+  },
+  "dependencies": {
+    "@tileborne/core": "workspace:*",
+    "effect": "4.0.0-beta.70",
+    "fast-xml-parser": "5.8.0"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-beta.70",
+    "tsup": "8.5.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+{
+  "maskTable": {
+    "10101010": [
+      "tile:62656465-0000-4000-8000-000000000002"
+    ]
+  },
+  "ruleName": "verification-wall",
+  "ruleTag": "wang4corner"
+}

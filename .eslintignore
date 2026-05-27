@@ -5,3 +5,4 @@ out
 coverage
 .turbo
 *.tsbuildinfo
+apps/game-host/src/.generated

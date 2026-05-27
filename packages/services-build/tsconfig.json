@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../asset-pipeline" },
+    { "path": "../plugin-api" },
+    { "path": "../runtime" },
+    { "path": "../services-app" },
+    { "path": "../services-foundation" },
+    { "path": "../services-plugin" },
+    { "path": "../../apps/game-host" }
+  ]
+}

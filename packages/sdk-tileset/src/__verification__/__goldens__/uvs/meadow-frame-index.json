@@ -1,0 +1,27 @@
+{
+  "animated": {
+    "animationId": "animation:62656465-0000-4000-8000-000000000006",
+    "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
+    "sourceAssetPaths": [
+      "atlases/meadow.png"
+    ],
+    "uv": {
+      "h": 32,
+      "w": 32,
+      "x": 0,
+      "y": 0
+    }
+  },
+  "static": {
+    "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
+    "sourceAssetPaths": [
+      "atlases/meadow.png"
+    ],
+    "uv": {
+      "h": 32,
+      "w": 32,
+      "x": 32,
+      "y": 0
+    }
+  }
+}

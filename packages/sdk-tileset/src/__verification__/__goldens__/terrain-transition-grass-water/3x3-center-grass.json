@@ -1,0 +1,63 @@
+{
+  "center": {
+    "base": "tile:62656465-0000-4000-8000-000000000010",
+    "debug": {
+      "fromClass": "grass",
+      "mode": "autotile-derived",
+      "toClass": "water",
+      "transitionRuleId": "autotile-rule:62656465-0000-4000-8000-000000000030"
+    },
+    "overlays": [
+      "tile:62656465-0000-4000-8000-000000000031"
+    ],
+    "x": 1,
+    "y": 1
+  },
+  "grid": [
+    {
+      "terrainClass": "grass",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "terrainClass": "water",
+      "x": 1,
+      "y": 0
+    },
+    {
+      "terrainClass": "grass",
+      "x": 2,
+      "y": 0
+    },
+    {
+      "terrainClass": "grass",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "terrainClass": "grass",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "terrainClass": "grass",
+      "x": 2,
+      "y": 1
+    },
+    {
+      "terrainClass": "grass",
+      "x": 0,
+      "y": 2
+    },
+    {
+      "terrainClass": "water",
+      "x": 1,
+      "y": 2
+    },
+    {
+      "terrainClass": "grass",
+      "x": 2,
+      "y": 2
+    }
+  ]
+}

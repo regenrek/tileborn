@@ -1,3 +1,11 @@
-// TODO: TS stub only; Rust crate added in t-code-runtime-wasm.
-// Spec: docs/01-spec.md §3 @tileborne/runtime-wasm
-export {};
+export * from "./backends.js";
+export * from "./errors.js";
+export * from "./select.js";
+export { findPathOnGrid, makeBlockedGrid } from "./pathfinding/astar.js";
+export { findBroadphasePairs } from "./broadphase/sweep-prune.js";
+export { createProcgenRng, Xoshiro256StarStarRng } from "./procgen/rng.js";
+export {
+  generatePresetTiles,
+  MAP_GENERATE_PRESETS,
+  type MapGeneratePreset,
+} from "./procgen/generator.js";

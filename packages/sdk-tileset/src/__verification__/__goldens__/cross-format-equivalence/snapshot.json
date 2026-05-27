@@ -1,0 +1,740 @@
+{
+  "formats": {
+    "ldtk": {
+      "layout": {
+        "cells": [],
+        "height": 2,
+        "width": 2
+      },
+      "mapCells": [
+        {
+          "tileKey": "tile:bc356c1b-ea19-4ed8-9cda-689dbf064d6a",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "tileKey": "tile:3d733ea5-cae0-45c6-92bb-464adee3e4a6",
+          "x": 1,
+          "y": 0
+        },
+        {
+          "tileKey": "tile:3d733ea5-cae0-45c6-92bb-464adee3e4a6",
+          "x": 0,
+          "y": 1
+        },
+        {
+          "tileKey": "tile:bc356c1b-ea19-4ed8-9cda-689dbf064d6a",
+          "x": 1,
+          "y": 1
+        }
+      ],
+      "pack": {
+        "assetPaths": [
+          "terrain.png"
+        ],
+        "autotileRules": [],
+        "terrainClasses": [],
+        "tileCount": 4,
+        "tiles": [
+          {
+            "hasAnimation": false,
+            "key": "0,0,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "0,16,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "16,0,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "16,16,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 16
+            }
+          }
+        ],
+        "tilesetCount": 1,
+        "tilesets": [
+          {
+            "cellSize": {
+              "height": 16,
+              "width": 16
+            },
+            "margin": 0,
+            "name": "Terrain",
+            "spacing": 0,
+            "tileCount": 4
+          }
+        ]
+      }
+    },
+    "manifest": {
+      "layout": {
+        "cells": [
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 0,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 1,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 0,
+            "y": 1
+          },
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "height": 2,
+        "width": 2
+      },
+      "pack": {
+        "assetPaths": [
+          "terrain.png"
+        ],
+        "autotileRules": [],
+        "terrainClasses": [
+          "grass",
+          "water"
+        ],
+        "tileCount": 2,
+        "tiles": [
+          {
+            "hasAnimation": false,
+            "key": "0,16,16,16",
+            "tags": [
+              "water"
+            ],
+            "terrainClass": "water",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "collision": {
+              "blocksMovement": true,
+              "edgeCount": 1,
+              "tag": "polygon"
+            },
+            "hasAnimation": false,
+            "key": "16,0,16,16",
+            "tags": [
+              "grass"
+            ],
+            "terrainClass": "grass",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            }
+          }
+        ],
+        "tilesetCount": 1,
+        "tilesets": [
+          {
+            "cellSize": {
+              "height": 16,
+              "width": 16
+            },
+            "margin": 0,
+            "name": "Terrain",
+            "spacing": 0,
+            "tileCount": 2
+          }
+        ]
+      }
+    },
+    "tmj": {
+      "layout": {
+        "cells": [
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 0,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 1,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 0,
+            "y": 1
+          },
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "height": 2,
+        "width": 2
+      },
+      "mapCells": [
+        {
+          "tileKey": "16,0,16,16",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "tileKey": "0,16,16,16",
+          "x": 1,
+          "y": 0
+        },
+        {
+          "tileKey": "0,16,16,16",
+          "x": 0,
+          "y": 1
+        },
+        {
+          "tileKey": "16,0,16,16",
+          "x": 1,
+          "y": 1
+        }
+      ],
+      "pack": {
+        "assetPaths": [
+          "terrain.png"
+        ],
+        "autotileRules": [],
+        "terrainClasses": [
+          "terrain:grass",
+          "terrain:water"
+        ],
+        "tileCount": 4,
+        "tiles": [
+          {
+            "hasAnimation": false,
+            "key": "0,0,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "0,16,16,16",
+            "tags": [
+              "tiled:terrain=water"
+            ],
+            "terrainClass": "terrain:water",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "collision": {
+              "blocksMovement": true,
+              "edgeCount": 4,
+              "tag": "polygon"
+            },
+            "hasAnimation": false,
+            "key": "16,0,16,16",
+            "tags": [
+              "tiled:terrain=grass"
+            ],
+            "terrainClass": "terrain:grass",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "16,16,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 16
+            }
+          }
+        ],
+        "tilesetCount": 1,
+        "tilesets": [
+          {
+            "cellSize": {
+              "height": 16,
+              "width": 16
+            },
+            "margin": 0,
+            "name": "terrain",
+            "spacing": 0,
+            "tileCount": 4
+          }
+        ]
+      }
+    },
+    "tmx": {
+      "layout": {
+        "cells": [
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 0,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 1,
+            "y": 0
+          },
+          {
+            "resolvedTileKey": "0,16,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "0,16,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            },
+            "x": 0,
+            "y": 1
+          },
+          {
+            "resolvedTileKey": "16,0,16,16",
+            "sourceAssetPaths": [
+              "terrain.png"
+            ],
+            "tileKey": "16,0,16,16",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            },
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "height": 2,
+        "width": 2
+      },
+      "mapCells": [
+        {
+          "tileKey": "16,0,16,16",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "tileKey": "0,16,16,16",
+          "x": 1,
+          "y": 0
+        },
+        {
+          "tileKey": "0,16,16,16",
+          "x": 0,
+          "y": 1
+        },
+        {
+          "tileKey": "16,0,16,16",
+          "x": 1,
+          "y": 1
+        }
+      ],
+      "pack": {
+        "assetPaths": [
+          "terrain.png"
+        ],
+        "autotileRules": [],
+        "terrainClasses": [
+          "terrain:grass",
+          "terrain:water"
+        ],
+        "tileCount": 4,
+        "tiles": [
+          {
+            "hasAnimation": false,
+            "key": "0,0,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "0,16,16,16",
+            "tags": [
+              "tiled:terrain=water"
+            ],
+            "terrainClass": "terrain:water",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "collision": {
+              "blocksMovement": true,
+              "edgeCount": 4,
+              "tag": "polygon"
+            },
+            "hasAnimation": false,
+            "key": "16,0,16,16",
+            "tags": [
+              "tiled:terrain=grass"
+            ],
+            "terrainClass": "terrain:grass",
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 0
+            }
+          },
+          {
+            "hasAnimation": false,
+            "key": "16,16,16,16",
+            "tags": [],
+            "uv": {
+              "h": 16,
+              "w": 16,
+              "x": 16,
+              "y": 16
+            }
+          }
+        ],
+        "tilesetCount": 1,
+        "tilesets": [
+          {
+            "cellSize": {
+              "height": 16,
+              "width": 16
+            },
+            "margin": 0,
+            "name": "terrain",
+            "spacing": 0,
+            "tileCount": 4
+          }
+        ]
+      }
+    }
+  },
+  "reference": {
+    "layout": {
+      "cells": [
+        {
+          "resolvedTileKey": "16,0,16,16",
+          "sourceAssetPaths": [
+            "terrain.png"
+          ],
+          "tileKey": "16,0,16,16",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 16,
+            "y": 0
+          },
+          "x": 0,
+          "y": 0
+        },
+        {
+          "resolvedTileKey": "0,16,16,16",
+          "sourceAssetPaths": [
+            "terrain.png"
+          ],
+          "tileKey": "0,16,16,16",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 0,
+            "y": 16
+          },
+          "x": 1,
+          "y": 0
+        },
+        {
+          "resolvedTileKey": "0,16,16,16",
+          "sourceAssetPaths": [
+            "terrain.png"
+          ],
+          "tileKey": "0,16,16,16",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 0,
+            "y": 16
+          },
+          "x": 0,
+          "y": 1
+        },
+        {
+          "resolvedTileKey": "16,0,16,16",
+          "sourceAssetPaths": [
+            "terrain.png"
+          ],
+          "tileKey": "16,0,16,16",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 16,
+            "y": 0
+          },
+          "x": 1,
+          "y": 1
+        }
+      ],
+      "height": 2,
+      "width": 2
+    },
+    "mapCells": [
+      {
+        "tileKey": "16,0,16,16",
+        "x": 0,
+        "y": 0
+      },
+      {
+        "tileKey": "0,16,16,16",
+        "x": 1,
+        "y": 0
+      },
+      {
+        "tileKey": "0,16,16,16",
+        "x": 0,
+        "y": 1
+      },
+      {
+        "tileKey": "16,0,16,16",
+        "x": 1,
+        "y": 1
+      }
+    ],
+    "pack": {
+      "assetPaths": [
+        "terrain.png"
+      ],
+      "autotileRules": [],
+      "terrainClasses": [
+        "terrain:grass",
+        "terrain:water"
+      ],
+      "tileCount": 4,
+      "tiles": [
+        {
+          "hasAnimation": false,
+          "key": "0,0,16,16",
+          "tags": [],
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "hasAnimation": false,
+          "key": "0,16,16,16",
+          "tags": [
+            "tiled:terrain=water"
+          ],
+          "terrainClass": "terrain:water",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 0,
+            "y": 16
+          }
+        },
+        {
+          "collision": {
+            "blocksMovement": true,
+            "edgeCount": 4,
+            "tag": "polygon"
+          },
+          "hasAnimation": false,
+          "key": "16,0,16,16",
+          "tags": [
+            "tiled:terrain=grass"
+          ],
+          "terrainClass": "terrain:grass",
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 16,
+            "y": 0
+          }
+        },
+        {
+          "hasAnimation": false,
+          "key": "16,16,16,16",
+          "tags": [],
+          "uv": {
+            "h": 16,
+            "w": 16,
+            "x": 16,
+            "y": 16
+          }
+        }
+      ],
+      "tilesetCount": 1,
+      "tilesets": [
+        {
+          "cellSize": {
+            "height": 16,
+            "width": 16
+          },
+          "margin": 0,
+          "name": "terrain",
+          "spacing": 0,
+          "tileCount": 4
+        }
+      ]
+    }
+  }
+}

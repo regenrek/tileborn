@@ -1,0 +1,17 @@
+{
+  "bounded": true,
+  "referencedTileIds": [
+    "tile:62656465-0000-4000-8000-000000000001",
+    "tile:62656465-0000-4000-8000-000000000006"
+  ],
+  "summary": {
+    "animationCount": 1,
+    "assetCount": 1,
+    "autotileRuleCount": 1,
+    "collisionMaskCount": 0,
+    "terrainTransitionCount": 0,
+    "tileCount": 3,
+    "tilesetCount": 1,
+    "variantFilterCount": 0
+  }
+}

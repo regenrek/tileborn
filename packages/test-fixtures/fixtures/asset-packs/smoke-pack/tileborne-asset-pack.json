@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "id": "pack:550e8400-e29b-41d4-a716-446655440099",
+  "name": "Smoke Pack",
+  "version": "1.0.0-smoke",
+  "license": {
+    "spdxId": "CC0-1.0",
+    "sourceUrl": "https://example.invalid/tileborne-smoke-fixture"
+  },
+  "assets": [
+    {
+      "id": "asset:550e8400-e29b-41d4-a716-446655440098",
+      "path": "tiles/terrain.png",
+      "mime": "image/png",
+      "size": 8,
+      "hash": "sha256:4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+      "license": {
+        "spdxId": "CC0-1.0",
+        "sourceUrl": "https://example.invalid/tileborne-smoke-fixture"
+      }
+    }
+  ],
+  "provenance": {
+    "sourcePath": "packages/test-fixtures/fixtures/asset-packs/smoke-pack",
+    "originTool": "tileborne-fixture",
+    "importedAt": "2026-05-23T07:00:00.000Z"
+  },
+  "terrainClasses": ["floor", "wall"],
+  "tilesets": [
+    {
+      "id": "tileset:550e8400-e29b-41d4-a716-446655440090",
+      "name": "Terrain - Sample Tileset",
+      "atlasAssetId": "asset:550e8400-e29b-41d4-a716-446655440098",
+      "cellSize": { "width": 16, "height": 16 },
+      "margin": 0,
+      "spacing": 0
+    },
+    {
+      "id": "tileset:550e8400-e29b-41d4-a716-446655440091",
+      "name": "wall-1",
+      "atlasAssetId": "asset:550e8400-e29b-41d4-a716-446655440098",
+      "cellSize": { "width": 16, "height": 16 },
+      "margin": 0,
+      "spacing": 0
+    }
+  ],
+  "tiles": [
+    {
+      "id": "tile:550e8400-e29b-41d4-a716-446655440090",
+      "tilesetId": "tileset:550e8400-e29b-41d4-a716-446655440090",
+      "uv": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "tags": ["water"],
+      "terrainClass": "floor"
+    },
+    {
+      "id": "tile:550e8400-e29b-41d4-a716-446655440091",
+      "tilesetId": "tileset:550e8400-e29b-41d4-a716-446655440090",
+      "uv": { "x": 16, "y": 0, "w": 16, "h": 16 },
+      "tags": ["transparent"],
+      "terrainClass": "floor"
+    },
+    {
+      "id": "tile:550e8400-e29b-41d4-a716-446655440092",
+      "tilesetId": "tileset:550e8400-e29b-41d4-a716-446655440090",
+      "uv": { "x": 32, "y": 0, "w": 16, "h": 16 },
+      "tags": ["floor", "grass"],
+      "terrainClass": "floor"
+    },
+    {
+      "id": "tile:550e8400-e29b-41d4-a716-446655440093",
+      "tilesetId": "tileset:550e8400-e29b-41d4-a716-446655440091",
+      "uv": { "x": 0, "y": 16, "w": 16, "h": 16 },
+      "tags": ["wall", "stone"],
+      "terrainClass": "wall"
+    }
+  ],
+  "animations": [],
+  "collisionMasks": [],
+  "autotileRules": [],
+  "variantFilters": [],
+  "terrainTransitions": []
+}

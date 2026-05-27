@@ -1,0 +1,29 @@
+{
+  "name": "@tileborne/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "node scripts/prebuild.mjs",
+    "build": "astro build",
+    "dev": "node scripts/prebuild.mjs && astro dev",
+    "preview": "astro preview",
+    "typecheck": "astro sync && tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src scripts vitest.config.ts astro.config.mjs",
+    "test": "node scripts/prebuild.mjs && vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.39.2",
+    "astro": "6.3.7",
+    "sharp": "0.34.5"
+  },
+  "devDependencies": {
+    "@tileborne/cli": "workspace:*",
+    "@types/node": "22.19.19",
+    "typedoc": "0.28.19",
+    "typedoc-plugin-markdown": "4.11.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
+  },
+  "license": "MIT"
+}

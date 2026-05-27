@@ -1,0 +1,131 @@
+// @vitest-environment jsdom
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { AssetLibraryGroup, AssetLibraryReference, makePackId, makeTileId } from '@tileborne/core';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  ASSET_LIBRARY_PAGE_SIZE,
+  useAssetLibraryCacheStatus,
+  useAssetPackLibraryPages,
+} from './queries';
+
+const packId = makePackId('550e8400-e29b-41d4-a716-446655440000');
+const tileId = makeTileId('550e8400-e29b-41d4-a716-446655440003');
+const tileRef = new AssetLibraryReference({
+  packId,
+  kind: 'tile',
+  refId: tileId,
+  tileId,
+});
+
+const groupForOffset = (offset: number) =>
+  new AssetLibraryGroup({
+    id: `tileset:${offset}`,
+    packId,
+    kind: 'tileset',
+    label: `Tileset ${offset}`,
+    count: 1,
+    metadata: {},
+    searchText: `tileset ${offset}`,
+    previewRefs: [tileRef],
+  });
+
+describe('asset library query pagination', () => {
+  let client: QueryClient;
+  let getPackLibrary: ReturnType<typeof vi.fn>;
+  let getPackCacheStatus: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+    getPackLibrary = vi.fn(async (input: { readonly offset?: number; readonly limit?: number }) => {
+      const offset = input.offset ?? 0;
+      const limit = input.limit ?? ASSET_LIBRARY_PAGE_SIZE;
+      return {
+        packId,
+        total: ASSET_LIBRARY_PAGE_SIZE * 3,
+        offset,
+        limit,
+        groups: [groupForOffset(offset)],
+      };
+    });
+    getPackCacheStatus = vi.fn(async () => ({
+      status: {
+        packId,
+        integrityHash: 'sha256:test',
+        indexSchemaVersion: 1,
+        state: 'cached',
+        cacheKind: 'index-metadata',
+        groupCount: 42,
+        previewRefCount: 12,
+        thumbnailSheetCount: 0,
+        thumbnailSheetsAvailable: false,
+        updatedAt: '2026-05-25T16:40:00.000Z',
+      },
+    }));
+    Object.defineProperty(window, 'tileborne', {
+      configurable: true,
+      value: {
+        assetLibrary: { getPackLibrary, getPackCacheStatus },
+        assets: { getAssetDataUrl: vi.fn() },
+      },
+    });
+  });
+
+  afterEach(() => {
+    client.clear();
+  });
+
+  const wrapper = ({ children }: { readonly children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  it('loads additional offsets without refetching previous pages', async () => {
+    const { result, rerender } = renderHook(
+      ({ pageCount }: { readonly pageCount: number }) =>
+        useAssetPackLibraryPages(packId, {
+          groupKind: 'tileset',
+          pageCount,
+          pageSize: ASSET_LIBRARY_PAGE_SIZE,
+          integrityHash: 'sha256:test',
+          cacheVersion: 'library:v1',
+        }),
+      { initialProps: { pageCount: 1 }, wrapper },
+    );
+
+    await waitFor(() => expect(result.current.data?.groups).toHaveLength(1));
+    expect(getPackLibrary).toHaveBeenCalledTimes(1);
+    expect(getPackLibrary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 0, limit: ASSET_LIBRARY_PAGE_SIZE }),
+    );
+
+    rerender({ pageCount: 2 });
+
+    await waitFor(() => expect(result.current.data?.groups).toHaveLength(2));
+    expect(getPackLibrary).toHaveBeenCalledTimes(2);
+    expect(getPackLibrary).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        offset: ASSET_LIBRARY_PAGE_SIZE,
+        limit: ASSET_LIBRARY_PAGE_SIZE,
+      }),
+    );
+  });
+
+  it('normalizes typed cache status responses into cache-versioned query data', async () => {
+    const { result } = renderHook(() => useAssetLibraryCacheStatus(packId, 'sha256:test'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.data?.status).toBe('cached'));
+    expect(result.current.data?.cacheVersion).toContain('library:index-metadata:schema-1');
+    expect(result.current.data?.cacheVersion).toContain('2026-05-25T16:40:00.000Z');
+    expect(result.current.data?.thumbnailCacheVersion).toBeUndefined();
+    expect(result.current.data?.message).toContain('42 groups');
+  });
+});

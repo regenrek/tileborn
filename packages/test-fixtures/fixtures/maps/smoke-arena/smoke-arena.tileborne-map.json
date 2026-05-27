@@ -1,0 +1,10 @@
+{
+  "id": "map:550e8400-e29b-41d4-a716-446655440010",
+  "schemaVersion": 1,
+  "name": "Smoke Arena",
+  "size": { "width": 16, "height": 16 },
+  "tileSize": { "width": 32, "height": 32 },
+  "layers": [],
+  "objects": [],
+  "properties": {}
+}

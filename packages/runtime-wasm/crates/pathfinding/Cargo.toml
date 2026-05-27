@@ -1,0 +1,12 @@
+[package]
+name = "tileborne-runtime-wasm-pathfinding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = false
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "rlib"]

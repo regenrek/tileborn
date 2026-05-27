@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "solo-spawn",
+      "objectTypeId": "spawn-point",
+      "label": "Solo Spawn",
+      "defaults": {
+        "team": "solo",
+        "weight": 1
+      }
+    },
+    {
+      "id": "squad-spawn",
+      "objectTypeId": "spawn-point",
+      "label": "Squad Spawn",
+      "defaults": {
+        "team": "squad",
+        "weight": 2
+      }
+    },
+    {
+      "id": "default-shrink-anchor",
+      "objectTypeId": "shrink-zone-anchor",
+      "label": "Default Shrink Anchor",
+      "defaults": {
+        "initialRadiusTiles": 48,
+        "finalRadiusTiles": 4
+      }
+    },
+    {
+      "id": "common-loot-crate",
+      "objectTypeId": "loot-crate",
+      "label": "Common Loot Crate",
+      "defaults": {
+        "tier": "common",
+        "respawnSeconds": 0
+      }
+    }
+  ]
+}

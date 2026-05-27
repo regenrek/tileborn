@@ -1,3 +1,19 @@
-// TODO: Implement per docs/03-runtime-game-host.md, task t-code-game-host-scaffold.
-// Spec: docs/01-spec.md §2 apps/game-host and docs/03-runtime-game-host.md
-export {};
+export { buildCloudflareGameHost, type CloudflareGameHostBuildInput, type CloudflareGameHostBuildResult } from "./build/cloudflare.js";
+export type {
+  BundledAssetPackSummary,
+  BundledManifest,
+  BundledManifestDiscoverSummary,
+  BundledManifestFileEntry,
+  BundledPluginSummary,
+  Env,
+  PlaytestRoomMeta,
+  PlaytestStartRequest,
+  PlaytestStartResponse,
+  PlaytestSummary,
+  RoomCreateRequest,
+  RoomCreateResponse,
+  RoomLifecycleStatus,
+} from "./types.js";
+export { buildBundledManifest, hashFileSha256, hashManifestPayload } from "./build/manifest.js";
+export { createWorkerApp } from "./worker.js";
+export { PlaytestRoom, broadcastBinaryFrame, createRoomMeta, parsePlaytestInitBody, toPlaytestSummary } from "./room.js";

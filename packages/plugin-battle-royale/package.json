@@ -1,0 +1,35 @@
+{
+  "name": "@tileborne/plugin-battle-royale",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsup"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/runtime.js": "./dist/runtime.js",
+    "./dist/server.js": "./dist/server.js"
+  },
+  "dependencies": {
+    "@tileborne/core": "workspace:*",
+    "@tileborne/ipc-contracts": "workspace:*",
+    "@tileborne/runtime": "workspace:*",
+    "@tileborne/sdk-tileset": "workspace:*",
+    "effect": "4.0.0-beta.70"
+  },
+  "devDependencies": {
+    "@tileborne/plugin-api": "workspace:*",
+    "@tileborne/services-plugin": "workspace:*",
+    "tsup": "8.5.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
+  }
+}

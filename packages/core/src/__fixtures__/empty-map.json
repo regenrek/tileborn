@@ -1,0 +1,26 @@
+{
+  "id": "map:550e8400-e29b-41d4-a716-446655440000",
+  "schemaVersion": 1,
+  "size": { "width": 8, "height": 8 },
+  "tileSize": { "width": 32, "height": 32 },
+  "layers": [
+    {
+      "kind": "tile",
+      "id": "layer:550e8400-e29b-41d4-a716-446655440001",
+      "name": "ground",
+      "visible": true,
+      "opacity": 1,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 8,
+          "height": 8,
+          "tiles": [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        }
+      ]
+    }
+  ],
+  "objects": [],
+  "properties": { "slug": "empty" }
+}

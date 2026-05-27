@@ -4,10 +4,31 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**'],
+    ignores: [
+      '**/dist/**',
+      '**/dist-smoke/**',
+      '**/node_modules/**',
+      '**/.turbo/**',
+      '**/coverage/**',
+      '**/.vite/**',
+      '**/out/**',
+      '**/src/.generated/**',
+      '**/*.d.ts',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
@@ -25,13 +46,29 @@ export default tseslint.config(
         'error',
         {
           devDependencies: [
+            '**/alchemy.example.run.ts',
             '**/*.test.ts',
+            '**/*.test.tsx',
+            '**/__e2e__/**/*.ts',
             '**/*.spec.ts',
+            '**/*.smoke.spec.ts',
             '**/vitest.config.ts',
+            '**/playwright.config.ts',
+            '**/vite.*.config.ts',
+            '**/src/smoke/**/*.ts',
+            '**/src/main/**/*.ts',
+            '**/src/preload/**/*.ts',
+            '**/src/renderer/main.tsx',
+            '**/src/renderer/router.tsx',
             'eslint.config.js',
             'vitest.config.ts',
+            'vitest.e2e.config.ts',
+            'vitest.smoke.config.ts',
+            '**/tsup.config.ts',
+            '**/scripts/**/*.mjs',
+            'astro.config.mjs',
           ],
-          packageDir: ['.', './packages/*', './apps/*'],
+          packageDir: ['.', './apps/desktop', './packages/*', './apps/*'],
         },
       ],
       // Layer boundary rules will be tightened in t-code-boundary.

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "@tileborne-plugins/smoke-fixture",
+  "name": "smoke-fixture",
+  "version": "0.1.0-smoke",
+  "displayName": "Smoke Fixture",
+  "description": "Minimal plugin for game-host smoke tests",
+  "author": "Tileborne",
+  "license": "MIT",
+  "engines": {
+    "tileborne": "^0.1.0"
+  },
+  "contributes": {},
+  "permissions": [],
+  "dependsOn": []
+}

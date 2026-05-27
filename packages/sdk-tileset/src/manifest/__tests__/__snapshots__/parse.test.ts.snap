@@ -1,0 +1,137 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseTilesetManifest > matches a stable written manifest snapshot 1`] = `
+{
+  "animations": [
+    {
+      "frames": [
+        {
+          "durationMs": 120,
+          "tileId": "tile:62656465-0000-4000-8000-000000000001",
+        },
+      ],
+      "id": "animation:62656465-0000-4000-8000-000000000006",
+      "loop": true,
+    },
+  ],
+  "assets": [
+    {
+      "id": "asset:62656465-0000-4000-8000-000000000007",
+      "mime": "image/png",
+      "path": "atlases/meadow.png",
+    },
+  ],
+  "autotileRules": [
+    {
+      "_tag": "wang2corner",
+      "id": "autotile-rule:62656465-0000-4000-8000-000000000004",
+      "maskToTileIds": {
+        "0001": [
+          "tile:62656465-0000-4000-8000-000000000001",
+        ],
+      },
+      "name": "grass-corner",
+      "terrainClasses": [
+        "grass",
+      ],
+      "tilesetId": "tileset:62656465-0000-4000-8000-000000000003",
+    },
+  ],
+  "collisionMasks": [
+    {
+      "mask": {
+        "_tag": "bitmask",
+        "blocked": 0,
+        "passable": 15,
+      },
+      "tileId": "tile:62656465-0000-4000-8000-000000000001",
+    },
+  ],
+  "id": "pack:62656465-0000-4000-8000-000000000002",
+  "license": {
+    "redistributable": false,
+    "spdxId": "CC0-1.0",
+  },
+  "name": "Meadow Pack",
+  "provenance": {
+    "importedAt": "2026-05-23T07:00:00.000Z",
+    "originTool": "tileborne-fixture",
+    "sourcePath": "fixtures/meadow/manifest.json",
+  },
+  "schemaVersion": 1,
+  "terrainClasses": [
+    "grass",
+    "water",
+  ],
+  "terrainTransitions": [
+    {
+      "from": "grass",
+      "ruleId": "autotile-rule:62656465-0000-4000-8000-000000000004",
+      "tilesetId": "tileset:62656465-0000-4000-8000-000000000003",
+      "to": "water",
+    },
+  ],
+  "tiles": [
+    {
+      "animationId": "animation:62656465-0000-4000-8000-000000000006",
+      "id": "tile:62656465-0000-4000-8000-000000000001",
+      "tags": [
+        "grass",
+      ],
+      "terrainClass": "grass",
+      "tilesetId": "tileset:62656465-0000-4000-8000-000000000003",
+      "uv": {
+        "h": 32,
+        "w": 32,
+        "x": 0,
+        "y": 0,
+      },
+    },
+    {
+      "id": "tile:62656465-0000-4000-8000-000000000002",
+      "tags": [
+        "grass",
+      ],
+      "terrainClass": "grass",
+      "tilesetId": "tileset:62656465-0000-4000-8000-000000000003",
+      "uv": {
+        "h": 32,
+        "w": 32,
+        "x": 32,
+        "y": 0,
+      },
+    },
+  ],
+  "tilesets": [
+    {
+      "atlasAssetId": "asset:62656465-0000-4000-8000-000000000007",
+      "cellSize": {
+        "height": 32,
+        "width": 32,
+      },
+      "id": "tileset:62656465-0000-4000-8000-000000000003",
+      "margin": 0,
+      "name": "Meadow",
+      "spacing": 0,
+    },
+  ],
+  "variantFilters": [
+    {
+      "id": "variant-filter:62656465-0000-4000-8000-000000000005",
+      "seedSalt": "layer-0",
+      "stableAcrossAnimationFrames": true,
+      "terrainClass": "grass",
+      "tileIds": [
+        "tile:62656465-0000-4000-8000-000000000001",
+        "tile:62656465-0000-4000-8000-000000000002",
+      ],
+      "tilesetId": "tileset:62656465-0000-4000-8000-000000000003",
+      "weights": [
+        1,
+        3,
+      ],
+    },
+  ],
+  "version": "1.0.0",
+}
+`;

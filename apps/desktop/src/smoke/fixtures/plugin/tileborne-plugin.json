@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "@tileborne-plugins/smoke-fixture",
+  "name": "@tileborne-plugins/smoke-fixture",
+  "version": "0.1.0",
+  "displayName": "Smoke Fixture Plugin",
+  "description": "Deterministic plugin fixture for desktop smoke tests.",
+  "author": "Tileborne",
+  "license": "MIT",
+  "engines": {
+    "tileborne": "^0.1.0"
+  },
+  "contributes": {},
+  "permissions": [],
+  "dependsOn": []
+}

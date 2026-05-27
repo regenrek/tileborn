@@ -1,0 +1,34 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compileTileMetadata > snapshots a full compiled per-tile metadata block 1`] = `
+{
+  "bounds": {
+    "height": 32,
+    "width": 32,
+    "x": 0,
+    "y": 0,
+  },
+  "collisionMask": BitmaskCollisionMask {
+    "_tag": "bitmask",
+    "blocked": 0,
+    "passable": 15,
+  },
+  "custom": {
+    "gameplay": {
+      "blocked": false,
+    },
+    "tileborne": {
+      "pathCost": 2,
+    },
+  },
+  "pathfinding": {
+    "blocked": false,
+    "cost": 2,
+  },
+  "spawnAnchors": [],
+  "terrainClasses": [
+    "grass",
+  ],
+  "tileId": "tile:62656465-0000-4000-8000-000000000004",
+}
+`;

@@ -1,0 +1,30 @@
+export const tiledSourceApplicationInputSlice = {
+  schema: "tileborne.tiled-source-rule-application-input.v1",
+  version: 1,
+  sourceDigest: "tiled-source-tiled-source-v1:c4b43218",
+  seed: "procgen:v1:1fc884b2",
+  width: 2,
+  height: 1,
+  terrainCells: [
+    {
+      column: 0,
+      row: 0,
+      baseMaterial: "grass",
+      overlays: [],
+      roads: [],
+      hazards: [],
+      biomeTags: ["tiled-source-sample"],
+      sourceId: "tiled-source:tiled-source-tilesets-tileset-terrain",
+    },
+    {
+      column: 1,
+      row: 0,
+      baseMaterial: "water",
+      overlays: ["shore"],
+      roads: [],
+      hazards: [],
+      biomeTags: ["tiled-source-sample"],
+      sourceId: "tiled-source:tiled-source-tilesets-tileset-animated-terrains-8-frames",
+    },
+  ],
+} as const;

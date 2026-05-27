@@ -3,17 +3,16 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true
+    "composite": true,
+    "allowJs": true,
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts", "src/.generated/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/test-helpers/**", "src/smoke/**"],
   "references": [
-    {
-      "path": "../../packages/core"
-    },
-    {
-      "path": "../../packages/runtime"
-    }
+    { "path": "../../packages/core" },
+    { "path": "../../packages/ipc-contracts" },
+    { "path": "../../packages/runtime" }
   ]
 }

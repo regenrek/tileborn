@@ -9,15 +9,29 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./protocols/battle-royale": {
+      "types": "./dist/protocols/battle-royale.d.ts",
+      "default": "./dist/protocols/battle-royale.js"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.json"
+    "test": "vitest run --config vitest.config.ts",
+    "build": "tsc -b tsconfig.json --force"
   },
   "dependencies": {
-    "@tileborne/core": "workspace:*"
-  }
+    "@tileborne/core": "workspace:*",
+    "@tileborne/plugin-api": "workspace:*",
+    "@tileborne/sdk-tileset": "workspace:*",
+    "effect": "4.0.0-beta.70",
+    "msgpackr": "2.0.1"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-beta.70",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
+  },
+  "license": "MIT"
 }

@@ -1,0 +1,461 @@
+import { defineMigrationChain, PluginId } from "@tileborne/core";
+import { Option, Schema } from "effect";
+import { describe, expect, it } from "vitest";
+
+import {
+  AssetPackContribution,
+  MigrationsTable,
+  PluginContributionZone,
+  PluginContributions,
+  PluginPanelContribution,
+  PluginToolContribution,
+  type InlineSchemaMigrationChainEntry,
+  validatePluginContributions,
+} from "./contributions.js";
+import { DuplicateContributionError } from "./errors.js";
+import { PluginManifest } from "./manifest.js";
+
+const display = {
+  label: "Battle Royale",
+  description: undefined,
+  icon: undefined,
+  order: undefined,
+};
+const data = { label: "Battle Royale", icon: "lucide:swords" };
+const license = {
+  spdxId: "CC0-1.0",
+  attribution: "Kenney",
+  sourceUrl: "https://example.invalid/assets",
+};
+
+const declarative = (tag: string, id: string, extraData = data) => ({
+  _tag: tag,
+  id,
+  kind: "declarative",
+  display,
+  data: extraData,
+});
+
+const executable = (tag: string, id: string, entry: string) => ({
+  _tag: tag,
+  id,
+  kind: "executable",
+  display,
+  entry,
+});
+
+describe("PluginContributions", () => {
+  it("accepts the spec-defined editor, runtime, and server contribution slots", () => {
+    const decoded = Schema.decodeUnknownSync(PluginContributions)({
+      panels: undefined,
+      tools: undefined,
+      assetPacks: [
+        {
+          _tag: "AssetPackContribution",
+          id: "meadow",
+          name: "Meadow",
+          path: "./assets/meadow",
+          license,
+        },
+      ],
+      tilesetPacks: undefined,
+      objectKinds: undefined,
+      editor: {
+        tabs: [declarative("DeclarativeEditorTabContribution", "gameplay")],
+        tools: [executable("ExecutableEditorToolContribution", "safe-zone-tool", "editor.tools.safeZone")],
+        inspectors: [declarative("DeclarativeEditorInspectorContribution", "selection")],
+        commands: [declarative("DeclarativeEditorCommandContribution", "validate-br")],
+        menus: [declarative("DeclarativeEditorMenuContribution", "export-menu")],
+        settings: [declarative("DeclarativeEditorSettingsContribution", "editor-defaults")],
+        paletteCategories: [
+          declarative("DeclarativeEditorPaletteCategoryContribution", "gameplay"),
+        ],
+        paletteSubFilters: [
+          declarative("DeclarativeEditorPaletteSubFilterContribution", "spawn-filters"),
+        ],
+        paletteItemActions: [
+          declarative("DeclarativeEditorPaletteItemActionContribution", "open-atlas"),
+        ],
+        viewportActions: [
+          declarative("DeclarativeEditorViewportActionContribution", "set-safe-zone"),
+        ],
+        toolDock: [declarative("DeclarativeEditorToolDockContribution", "validate-dock")],
+        overlays: [declarative("DeclarativeEditorOverlayContribution", "safe-zone")],
+        inspectorPanels: [
+          declarative("DeclarativeEditorInspectorPanelContribution", "br-rules"),
+        ],
+        settingsPanels: [
+          declarative("DeclarativeEditorSettingsPanelContribution", "br-settings"),
+        ],
+        mapKinds: [declarative("DeclarativeEditorMapKindContribution", "br-arena")],
+        objectTypes: [declarative("DeclarativeEditorObjectTypeContribution", "br-spawn")],
+        presets: [declarative("DeclarativeEditorPresetContribution", "meadow")],
+        panels: [declarative("DeclarativeEditorPanelContribution", "gameplay-panel")],
+        validators: [
+          executable("ExecutableEditorValidatorContribution", "strict-br", "editor.validators.strictBr"),
+        ],
+        exporters: [
+          executable("ExecutableEditorExporterContribution", "brmap", "editor.exporters.brmap"),
+        ],
+        generators: [
+          executable("ExecutableEditorGeneratorContribution", "br-generator", "editor.generators.br"),
+        ],
+        assetMetadata: [
+          declarative("DeclarativeEditorAssetMetadataContribution", "license-badges"),
+        ],
+      },
+      runtime: {
+        systems: [executable("ExecutableRuntimeSystemContribution", "legacy-system", "runtime.systems.legacy")],
+        components: [declarative("DeclarativeRuntimeComponentContribution", "health")],
+        events: [declarative("DeclarativeRuntimeEventContribution", "safe-zone-tick")],
+        assetLoaders: [
+          executable("ExecutableRuntimeAssetLoaderContribution", "r2-loader", "runtime.assets.r2"),
+        ],
+        clientSystems: [
+          executable("ExecutableRuntimeClientSystemContribution", "safe-zone-visual", "runtime.systems.safeZoneVisual"),
+        ],
+        hudWidgets: [
+          executable("ExecutableRuntimeHudWidgetContribution", "safe-zone-timer", "runtime.hud.safeZoneTimer"),
+        ],
+        lobbyPanels: [
+          executable("ExecutableRuntimeLobbyPanelContribution", "loadout", "runtime.lobby.loadout"),
+        ],
+        inputMaps: [declarative("DeclarativeRuntimeInputMapContribution", "br-inputs")],
+        audioBuses: [declarative("DeclarativeRuntimeAudioBusContribution", "gunfire")],
+        cameras: [executable("ExecutableRuntimeCameraContribution", "killcam", "runtime.cameras.killcam")],
+        interpolators: [
+          executable("ExecutableRuntimeInterpolatorContribution", "health-tween", "runtime.interpolators.health"),
+        ],
+        assetPacks: [
+          {
+            _tag: "AssetPackContribution",
+            id: "sample-meadow",
+            name: "Sample Meadow",
+            path: "r2://sample/meadow",
+            license,
+          },
+        ],
+        errorMappers: [declarative("DeclarativeRuntimeErrorMapperContribution", "build-mismatch")],
+      },
+      server: {
+        rules: [declarative("DeclarativeServerRuleContribution", "legacy-rules")],
+        scoring: [declarative("DeclarativeServerScoringContribution", "br-scoring")],
+        lootTables: [declarative("DeclarativeServerLootTableContribution", "meadow-default")],
+        matchmaking: [executable("ExecutableServerMatchmakingContribution", "matchmaker", "server.matchmaking.br")],
+        serverSystems: [
+          executable("ExecutableServerSystemContribution", "safe-zone-damage", "server.systems.safeZoneDamage"),
+        ],
+        roomRules: [declarative("DeclarativeServerRoomRuleContribution", "br-room")],
+        weaponCatalog: [declarative("DeclarativeServerWeaponCatalogContribution", "weapons")],
+        mapValidators: [
+          executable("ExecutableServerMapValidatorContribution", "spawn-count", "server.validators.spawnCount"),
+        ],
+        matchPhases: [declarative("DeclarativeServerMatchPhaseContribution", "countdown")],
+        replayWriters: [
+          executable("ExecutableServerReplayWriterContribution", "binary-log", "server.replays.binaryLog"),
+        ],
+      },
+    });
+
+    expect(Option.isSome(decoded.editor)).toBe(true);
+    expect(Option.isSome(decoded.runtime)).toBe(true);
+    expect(Option.isSome(decoded.server)).toBe(true);
+    if (Option.isSome(decoded.editor) && Option.isSome(decoded.runtime) && Option.isSome(decoded.server)) {
+      expect(Option.isSome(decoded.editor.value.paletteCategories)).toBe(true);
+      expect(Option.isSome(decoded.runtime.value.clientSystems)).toBe(true);
+      expect(Option.isSome(decoded.server.value.serverSystems)).toBe(true);
+      if (
+        Option.isSome(decoded.editor.value.paletteCategories) &&
+        Option.isSome(decoded.runtime.value.clientSystems) &&
+        Option.isSome(decoded.server.value.serverSystems)
+      ) {
+        expect(decoded.editor.value.paletteCategories.value[0]?.id).toBe("gameplay");
+        expect(decoded.runtime.value.clientSystems.value[0]?.kind).toBe("executable");
+        expect(decoded.server.value.serverSystems.value[0]?.entry).toBe("server.systems.safeZoneDamage");
+      }
+    }
+  });
+
+  it("accepts canonical sidebar panel and tool contribution zones", () => {
+    const decoded = Schema.decodeUnknownSync(PluginContributions)({
+      panels: [
+        {
+          id: "battle-royale-settings",
+          zone: "plugins",
+          title: "Battle Royale Settings",
+          description: "Configure Battle Royale gameplay.",
+          group: "gameplay",
+          order: 10,
+          capabilities: ["settings"],
+          data: { indexPath: "./panels/index.json" },
+        },
+        {
+          id: "match-rules",
+          zone: "project",
+          title: "Match Rules",
+          description: undefined,
+          group: undefined,
+          order: undefined,
+          capabilities: undefined,
+          data: undefined,
+        },
+      ],
+      tools: [
+        {
+          id: "spawn-tools",
+          zone: "working-palette",
+          title: "Spawn Tools",
+          description: "Place gameplay spawn objects.",
+          group: "spawns",
+          order: 20,
+          commandId: undefined,
+          capabilities: ["paint", "spawn"],
+          data: { objectType: "br-spawn" },
+        },
+      ],
+      assetPacks: undefined,
+      tilesetPacks: undefined,
+      objectKinds: undefined,
+      editor: undefined,
+      runtime: undefined,
+      server: undefined,
+    });
+
+    const panels = Option.getOrElse(decoded.panels, () => []);
+    const tools = Option.getOrElse(decoded.tools, () => []);
+    expect(panels.map((panel) => panel.zone)).toEqual(["plugins", "project"]);
+    expect(tools[0]?.zone).toBe("working-palette");
+  });
+
+  it("rejects sidebar contributions outside the canonical zones", () => {
+    expect(() => Schema.decodeUnknownSync(PluginContributionZone)("activity-bar")).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(PluginPanelContribution)({
+        id: "bad-zone",
+        zone: "activity-bar",
+        title: "Bad Zone",
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(PluginToolContribution)({
+        id: "bad-tool-zone",
+        zone: "activity-bar",
+        title: "Bad Tool Zone",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects duplicate sidebar panel and tool ids within a plugin manifest", () => {
+    const pluginId = Schema.decodeUnknownSync(PluginId)("@tileborne-plugins/battle-royale");
+    const contributions = Schema.decodeUnknownSync(PluginContributions)({
+      panels: [
+        {
+          id: "battle-royale-settings",
+          zone: "plugins",
+          title: "Settings",
+          description: undefined,
+          group: undefined,
+          order: undefined,
+          capabilities: undefined,
+          data: undefined,
+        },
+        {
+          id: "battle-royale-settings",
+          zone: "project",
+          title: "Settings Copy",
+          description: undefined,
+          group: undefined,
+          order: undefined,
+          capabilities: undefined,
+          data: undefined,
+        },
+      ],
+      tools: [
+        {
+          id: "spawn-tools",
+          zone: "working-palette",
+          title: "Spawn Tools",
+          description: undefined,
+          group: undefined,
+          order: undefined,
+          commandId: undefined,
+          capabilities: undefined,
+          data: undefined,
+        },
+        {
+          id: "spawn-tools",
+          zone: "working-palette",
+          title: "Spawn Tools Copy",
+          description: undefined,
+          group: undefined,
+          order: undefined,
+          commandId: undefined,
+          capabilities: undefined,
+          data: undefined,
+        },
+      ],
+      assetPacks: undefined,
+      tilesetPacks: undefined,
+      objectKinds: undefined,
+      editor: undefined,
+      runtime: undefined,
+      server: undefined,
+    });
+
+    expect(() => validatePluginContributions(pluginId, contributions)).toThrow(DuplicateContributionError);
+  });
+});
+
+describe("AssetPackContribution license", () => {
+  it("requires the structured asset-pipeline License shape", () => {
+    const decoded = Schema.decodeUnknownSync(AssetPackContribution)({
+      _tag: "AssetPackContribution",
+      id: "meadow",
+      name: "Meadow",
+      path: "./assets/meadow",
+      license,
+    });
+
+    expect(decoded.license.spdxId).toBe("CC0-1.0");
+    expect(Option.isSome(decoded.license.attribution)).toBe(true);
+    if (Option.isSome(decoded.license.attribution)) {
+      expect(decoded.license.attribution.value).toBe("Kenney");
+    }
+  });
+
+  it("rejects asset packs without a license", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(AssetPackContribution)({
+        _tag: "AssetPackContribution",
+        id: "meadow",
+        name: "Meadow",
+        path: "./assets/meadow",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects unparseable license metadata", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(AssetPackContribution)({
+        _tag: "AssetPackContribution",
+        id: "meadow",
+        name: "Meadow",
+        path: "./assets/meadow",
+        license: { spdxId: "../../bad" },
+      }),
+    ).toThrow();
+  });
+});
+
+describe("manifest migrations", () => {
+  const chain = defineMigrationChain<{ readonly schemaVersion: number }>({
+    entity: "map",
+    latestVersion: 2,
+    migrators: [
+      {
+        entity: "map",
+        fromVersion: 1,
+        toVersion: 2,
+        migrate: () => ({ schemaVersion: 2 }),
+      },
+    ],
+  });
+
+  it("round-trips top-level migration tables", () => {
+    const inline: InlineSchemaMigrationChainEntry = {
+      kind: "inline",
+      latestVersion: 2,
+      chain,
+    };
+    const decoded = Schema.decodeUnknownSync(MigrationsTable)({
+      entries: {
+        map: {
+          _tag: "InlineSchemaMigrationChain",
+          ...inline,
+        },
+        assetPackManifest: {
+          _tag: "ExecutableSchemaMigrationChain",
+          kind: "executable",
+          latestVersion: 1,
+          chainEntry: "server.migrations.assetPackManifest",
+        },
+      },
+    });
+
+    expect(decoded.entries.map?.latestVersion).toBe(2);
+    expect(decoded.entries.assetPackManifest?.latestVersion).toBe(1);
+  });
+
+  it("keeps migrations at the top-level manifest path", () => {
+    const manifest = Schema.decodeUnknownSync(PluginManifest)({
+      schemaVersion: 1,
+      id: "@tileborne-plugins/battle-royale",
+      name: "@tileborne-plugins/battle-royale",
+      version: "0.1.0",
+      displayName: "Battle Royale",
+      description: "Battle royale rules and editor contributions.",
+      author: "Tileborne",
+      license: "MIT",
+      engines: { tileborne: "^0.1.0" },
+      repository: undefined,
+      homepage: undefined,
+      entry: undefined,
+      contributes: {
+        panels: undefined,
+        tools: undefined,
+        assetPacks: undefined,
+        tilesetPacks: undefined,
+        objectKinds: undefined,
+        editor: undefined,
+        runtime: undefined,
+        server: undefined,
+      },
+      permissions: [],
+      dependsOn: [],
+      migrations: {
+        entries: {
+          map: {
+            _tag: "ExecutableSchemaMigrationChain",
+            kind: "executable",
+            latestVersion: 2,
+            chainEntry: "server.migrations.map",
+          },
+        },
+      },
+    });
+
+    expect(Option.isSome(manifest.migrations)).toBe(true);
+    if (Option.isSome(manifest.migrations)) {
+      expect(manifest.migrations.value.entries.map?.latestVersion).toBe(2);
+    }
+  });
+
+  it("rejects migration entries with conflicting chain paths", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(MigrationsTable)({
+        entries: {
+          map: {
+            _tag: "InlineSchemaMigrationChain",
+            kind: "inline",
+            latestVersion: 2,
+            chainEntry: "server.migrations.map",
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects migration entries without latestVersion", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(MigrationsTable)({
+        entries: {
+          map: {
+            _tag: "ExecutableSchemaMigrationChain",
+            kind: "executable",
+            chainEntry: "server.migrations.map",
+          },
+        },
+      }),
+    ).toThrow();
+  });
+});

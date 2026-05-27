@@ -9,16 +9,46 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./build": {
+      "types": "./dist/build/cloudflare.d.ts",
+      "default": "./dist/build/cloudflare.js"
+    },
+    "./local": {
+      "types": "./dist/local/launcher.d.ts",
+      "default": "./dist/local/launcher.js"
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate:bundled": "node scripts/generate-bundled-modules.mjs",
+    "prebuild": "node scripts/generate-bundled-modules.mjs",
+    "pretypecheck": "node scripts/generate-bundled-modules.mjs",
+    "pretest": "node scripts/generate-bundled-modules.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.smoke.json && tsc --noEmit -p tsconfig.alchemy.example.json",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.json"
+    "test": "vitest run",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "build": "tsc -b tsconfig.json --force && node scripts/bundle-worker.mjs"
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",
-    "@tileborne/runtime": "workspace:*"
-  }
+    "@tileborne/ipc-contracts": "workspace:*",
+    "@tileborne/runtime": "workspace:*",
+    "effect": "4.0.0-beta.70",
+    "esbuild": "0.25.5",
+    "hono": "4.12.18",
+    "miniflare": "4.20250525.1",
+    "msgpackr": "2.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20250508.0",
+    "@tileborne/plugin-battle-royale": "workspace:*",
+    "@tileborne/test-fixtures": "workspace:*",
+    "@types/node": "22.19.19",
+    "alchemy": "0.93.7",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7",
+    "wrangler": "4.19.1"
+  },
+  "license": "MIT"
 }

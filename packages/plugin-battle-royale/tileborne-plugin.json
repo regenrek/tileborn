@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "id": "@tileborne-plugins/battle-royale",
+  "name": "@tileborne-plugins/battle-royale",
+  "version": "0.1.0",
+  "displayName": "Battle Royale",
+  "description": "Battle royale plugin with spawn points, shrink zone anchors, loot crates, map validation, generation, and runtime adapter scaffold.",
+  "author": "Tileborne",
+  "license": "MIT",
+  "engines": {
+    "tileborne": "^0.1.0"
+  },
+  "entry": {
+    "editor": "./dist/server.js",
+    "runtime": "./dist/runtime.js",
+    "server": "./dist/server.js"
+  },
+  "permissions": [
+    {
+      "_tag": "ValidateMap",
+      "profile": "battle-royale"
+    },
+    {
+      "_tag": "GenerateMap",
+      "generatorId": "generate-map"
+    },
+    {
+      "_tag": "ExportArtifact",
+      "formats": ["battle-royale-artifact"]
+    },
+    {
+      "_tag": "RegisterRuntimeSystem",
+      "systemId": "battle-royale-runtime"
+    },
+    {
+      "_tag": "RegisterServerRule",
+      "ruleId": "br-room-rules"
+    },
+    {
+      "_tag": "ReadAssetPack",
+      "packId": "battle-royale-core"
+    }
+  ],
+  "dependsOn": [],
+  "contributes": {
+    "panels": [
+      {
+        "id": "battle-royale-settings",
+        "zone": "plugins",
+        "title": "Battle Royale Settings",
+        "description": "Configure zone shrink timing, player cap, and loot density for authored maps.",
+        "group": "gameplay",
+        "order": 10,
+        "capabilities": ["settings"],
+        "data": {
+          "indexPath": "./panels/index.json"
+        }
+      },
+      {
+        "id": "battle-royale-match-rules",
+        "zone": "project",
+        "title": "Battle Royale Match Rules",
+        "description": "Project-level match rules for Battle Royale maps.",
+        "group": "gameplay",
+        "order": 20,
+        "capabilities": ["settings"],
+        "data": {
+          "indexPath": "./panels/index.json"
+        }
+      }
+    ],
+    "tools": [
+      {
+        "id": "battle-royale-spawn-tools",
+        "zone": "working-palette",
+        "title": "Battle Royale Spawn Tools",
+        "description": "Curated spawn and loot placement tools for Battle Royale maps.",
+        "group": "gameplay",
+        "order": 10,
+        "capabilities": ["spawn", "paint"],
+        "data": {
+          "objectTypeContributionId": "br-object-types"
+        }
+      }
+    ],
+    "assetPacks": [
+      {
+        "_tag": "AssetPackContribution",
+        "id": "battle-royale-core",
+        "name": "Battle Royale Core Assets",
+        "path": "./assets/index.json",
+        "license": {
+          "spdxId": "MIT",
+          "attribution": "Tileborne"
+        }
+      }
+    ],
+    "editor": {
+      "objectTypes": [
+        {
+          "_tag": "DeclarativeEditorObjectTypeContribution",
+          "id": "br-object-types",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Object Types",
+            "description": "Spawn points, shrink anchors, and loot crates."
+          },
+          "data": {
+            "indexPath": "./schemas/object-types.json"
+          }
+        }
+      ],
+      "presets": [
+        {
+          "_tag": "DeclarativeEditorPresetContribution",
+          "id": "br-presets",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Presets"
+          },
+          "data": {
+            "indexPath": "./presets/index.json"
+          }
+        }
+      ],
+      "panels": [
+        {
+          "_tag": "DeclarativeEditorPanelContribution",
+          "id": "br-settings-index",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Settings",
+            "icon": "lucide:settings"
+          },
+          "data": {
+            "indexPath": "./panels/index.json"
+          }
+        }
+      ],
+      "validators": [
+        {
+          "_tag": "DeclarativeEditorValidatorContribution",
+          "id": "br-validators",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Validators"
+          },
+          "data": {
+            "indexPath": "./validators/index.json"
+          }
+        },
+        {
+          "_tag": "ExecutableEditorValidatorContribution",
+          "id": "validate-map",
+          "kind": "executable",
+          "display": {
+            "label": "Battle Royale Map Validator"
+          },
+          "entry": "./dist/server.js"
+        }
+      ],
+      "generators": [
+        {
+          "_tag": "ExecutableEditorGeneratorContribution",
+          "id": "generate-map",
+          "kind": "executable",
+          "display": {
+            "label": "Generate Battle Royale Arena"
+          },
+          "entry": "./dist/server.js"
+        }
+      ],
+      "exporters": [
+        {
+          "_tag": "ExecutableEditorExporterContribution",
+          "id": "export-artifact",
+          "kind": "executable",
+          "display": {
+            "label": "Export Battle Royale Artifact"
+          },
+          "entry": "./dist/server.js"
+        }
+      ],
+      "assetMetadata": [
+        {
+          "_tag": "DeclarativeEditorAssetMetadataContribution",
+          "id": "br-asset-metadata",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Asset Metadata"
+          },
+          "data": {
+            "indexPath": "./assets/index.json"
+          }
+        }
+      ],
+      "commands": [
+        {
+          "_tag": "DeclarativeEditorCommandContribution",
+          "id": "br.validate-map",
+          "kind": "declarative",
+          "display": {
+            "label": "Validate Battle Royale Map",
+            "description": "Run battle royale map validation for spawn points, shrink anchor, and loot crates.",
+            "icon": "lucide:shield-check",
+            "order": 10
+          },
+          "data": {
+            "keybinding": "Ctrl+Shift+V",
+            "action": {
+              "channel": "tileborne.maps.validate",
+              "profile": "battle-royale"
+            }
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "systems": [
+        {
+          "_tag": "ExecutableRuntimeSystemContribution",
+          "id": "battle-royale-runtime",
+          "kind": "executable",
+          "display": {
+            "label": "Battle Royale Runtime Adapter"
+          },
+          "entry": "./dist/runtime.js"
+        }
+      ]
+    },
+    "server": {
+      "mapValidators": [
+        {
+          "_tag": "ExecutableServerMapValidatorContribution",
+          "id": "validate-map",
+          "kind": "executable",
+          "display": {
+            "label": "Battle Royale Map Validator"
+          },
+          "entry": "./dist/server.js"
+        }
+      ]
+    }
+  }
+}

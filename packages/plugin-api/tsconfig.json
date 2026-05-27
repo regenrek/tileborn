@@ -8,7 +8,14 @@
   "include": [
     "src/**/*.ts"
   ],
+  "exclude": [
+    "dist",
+    "**/*.test.ts"
+  ],
   "references": [
+    {
+      "path": "../asset-pipeline"
+    },
     {
       "path": "../core"
     }

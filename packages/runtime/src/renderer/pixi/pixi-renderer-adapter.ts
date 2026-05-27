@@ -1,0 +1,408 @@
+import * as tilemapModule from "@pixi/tilemap";
+import {
+  Application,
+  Assets,
+  Container,
+  Sprite,
+  Texture,
+  type ApplicationOptions,
+} from "pixi.js";
+import { Effect, Option } from "effect";
+
+import type { RegisteredBundledAsset } from "../../assets/bundled-asset.js";
+import { RuntimeAssetLoader, type LoadedAsset, type LoadedAssets } from "../../assets/runtime-asset-loader.js";
+import { PositionComponent, RenderableComponent, TransformComponent } from "../../ecs/components.js";
+import type { EntityId, World } from "../../ecs/world.js";
+import type { RenderableAssetId, RenderableEntity } from "../../plugin/renderable-entity.js";
+import {
+  previousPositionFor,
+  rendererAssetError,
+  rendererDisposeError,
+  rendererInitError,
+  rendererRenderError,
+  type MountedRenderer,
+  type RendererAdapter,
+  type RendererError,
+} from "../renderer-adapter.js";
+
+export interface TileLayerTile {
+  readonly assetId: number;
+  readonly x: number;
+  readonly y: number;
+  readonly u?: number;
+  readonly v?: number;
+  readonly tileWidth?: number;
+  readonly tileHeight?: number;
+}
+
+export interface StaticTileLayer {
+  readonly layerIndex: number;
+  readonly tiles: readonly TileLayerTile[];
+}
+
+export interface PixiRendererAdapterOptions {
+  readonly applicationOptions?: Partial<ApplicationOptions>;
+  readonly assetLoader?: RuntimeAssetLoader;
+  readonly textureFactory?: (asset: LoadedAsset) => Texture | Promise<Texture>;
+  readonly bundledTextureFactory?: (asset: RegisteredBundledAsset) => Texture | Promise<Texture>;
+}
+
+const DEFAULT_APPLICATION_OPTIONS: Partial<ApplicationOptions> = {
+  autoStart: false,
+  backgroundAlpha: 0,
+};
+
+const isHtmlContainer = (value: unknown): value is HTMLElement =>
+  typeof value === "object" &&
+  value !== null &&
+  "appendChild" in value &&
+  typeof (value as { appendChild?: unknown }).appendChild === "function";
+
+const lerp = (from: number, to: number, alpha: number): number => from + (to - from) * alpha;
+
+const assetIndexFor = (index: number): number => index + 1;
+
+type CompositeTilemapLike = Container & {
+  tile: (
+    tileTexture: Texture | string | number,
+    x: number,
+    y: number,
+    options?: {
+      readonly u?: number;
+      readonly v?: number;
+      readonly tileWidth?: number;
+      readonly tileHeight?: number;
+    },
+  ) => CompositeTilemapLike;
+};
+
+type CompositeTilemapConstructor = new () => CompositeTilemapLike;
+
+const CompositeTilemap = (tilemapModule as unknown as { readonly CompositeTilemap: CompositeTilemapConstructor })
+  .CompositeTilemap;
+
+export class PixiRendererAdapter implements RendererAdapter {
+  private readonly applicationOptions: Partial<ApplicationOptions>;
+  private readonly assetLoader: RuntimeAssetLoader;
+  private readonly textureFactory: (asset: LoadedAsset) => Texture | Promise<Texture>;
+  private readonly bundledTextureFactory: (asset: RegisteredBundledAsset) => Texture | Promise<Texture>;
+  private readonly spritePool = new Map<EntityId, Sprite>();
+  private readonly spritePoolByStringId = new Map<string, Sprite>();
+  private readonly spriteLayers = new Map<number, Container>();
+  private readonly texturesByRenderableAssetId = new Map<number | string, Texture>();
+  private readonly objectUrls: string[] = [];
+  private app: Application | undefined;
+
+  constructor(options: PixiRendererAdapterOptions = {}) {
+    this.applicationOptions = { ...DEFAULT_APPLICATION_OPTIONS, ...options.applicationOptions };
+    this.assetLoader = options.assetLoader ?? new RuntimeAssetLoader();
+    this.textureFactory = options.textureFactory ?? ((asset) => this.textureFromAsset(asset));
+    this.bundledTextureFactory = options.bundledTextureFactory ?? ((asset) => this.textureFromBundledAsset(asset));
+  }
+
+  mount(container: unknown): Effect.Effect<MountedRenderer, RendererError> {
+    return Effect.tryPromise({
+      try: async () => {
+        if (!isHtmlContainer(container)) {
+          throw new Error("Pixi renderer requires an HTMLElement container");
+        }
+        const app = new Application();
+        await app.init(this.applicationOptions);
+        container.appendChild(app.canvas);
+        this.app = app;
+        return { container };
+      },
+      catch: (cause) => rendererInitError("failed to mount Pixi renderer", cause),
+    });
+  }
+
+  loadAssets(manifest: Parameters<RendererAdapter["loadAssets"]>[0]): Effect.Effect<LoadedAssets, RendererError> {
+    return this.assetLoader.load(manifest).pipe(
+      Effect.flatMap((loaded) =>
+        Effect.all(
+          [...loaded.values()].map((asset, index) =>
+            Effect.tryPromise({
+              try: () => Promise.resolve(this.textureFactory(asset)),
+              catch: (cause) =>
+                rendererAssetError(String(asset.id), "failed to create Pixi texture", cause),
+            }).pipe(
+              Effect.tap((texture) =>
+                Effect.sync(() => {
+                  this.texturesByRenderableAssetId.set(assetIndexFor(index), texture);
+                  this.texturesByRenderableAssetId.set(asset.id, texture);
+                }),
+              ),
+            ),
+          ),
+        ).pipe(Effect.as(loaded)),
+      ),
+    );
+  }
+
+  loadBundledAssets(
+    assets: readonly RegisteredBundledAsset[],
+  ): Effect.Effect<readonly RegisteredBundledAsset[], RendererError> {
+    return Effect.all(
+      assets.map((asset) =>
+        Effect.tryPromise({
+          try: () => Promise.resolve(this.bundledTextureFactory(asset)),
+          catch: (cause) =>
+            rendererAssetError(String(asset.assetId), "failed to create Pixi bundled texture", cause),
+        }).pipe(
+          Effect.tap((texture) =>
+            Effect.sync(() => {
+              this.texturesByRenderableAssetId.set(asset.assetId, texture);
+            }),
+          ),
+        ),
+      ),
+    ).pipe(Effect.as(assets));
+  }
+
+  addTileLayer(layer: StaticTileLayer): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        const app = this.requireApp();
+        const tilemap = new CompositeTilemap();
+        tilemap.zIndex = layer.layerIndex;
+        for (const tile of layer.tiles) {
+          const texture = this.texturesByRenderableAssetId.get(tile.assetId);
+          if (!texture) {
+            throw new Error(`missing tile texture ${tile.assetId}`);
+          }
+          tilemap.tile(texture, tile.x, tile.y, {
+            ...(tile.u === undefined ? {} : { u: tile.u }),
+            ...(tile.v === undefined ? {} : { v: tile.v }),
+            ...(tile.tileWidth === undefined ? {} : { tileWidth: tile.tileWidth }),
+            ...(tile.tileHeight === undefined ? {} : { tileHeight: tile.tileHeight }),
+          });
+        }
+        app.stage.sortableChildren = true;
+        app.stage.addChild(tilemap);
+      },
+      catch: (cause) => rendererRenderError("failed to add Pixi tile layer", cause),
+    });
+  }
+
+  renderFrame(world: World, alpha: number): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        const app = this.requireApp();
+        const liveEntities = new Set<EntityId>();
+        app.stage.sortableChildren = true;
+
+        world.query([PositionComponent, RenderableComponent], (entity, position, renderable) => {
+          liveEntities.add(entity);
+          const sprite = this.spriteFor(entity, renderable.assetId, renderable.layerIndex);
+          const previous = previousPositionFor(world, entity) ?? position;
+          sprite.position.set(lerp(previous.x, position.x, alpha), lerp(previous.y, position.y, alpha));
+
+          const transform = world.getComponent(entity, TransformComponent);
+          if (Option.isSome(transform)) {
+            sprite.rotation = transform.value.rotation;
+            sprite.scale.set(transform.value.scaleX, transform.value.scaleY);
+          }
+        });
+
+        for (const [entity, sprite] of this.spritePool) {
+          if (!liveEntities.has(entity)) {
+            sprite.removeFromParent();
+            this.spritePool.delete(entity);
+          }
+        }
+        app.render();
+      },
+      catch: (cause) => rendererRenderError("failed to render Pixi frame", cause),
+    });
+  }
+
+  renderFromEntities(
+    entities: readonly RenderableEntity[],
+    previousById: ReadonlyMap<string, RenderableEntity>,
+    alpha: number,
+  ): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        const app = this.requireApp();
+        const liveEntities = new Set<string>();
+        app.stage.sortableChildren = true;
+
+        for (const entity of entities) {
+          liveEntities.add(entity.id);
+          const sprite = this.spriteForStringId(entity.id, entity.assetId, entity.layerIndex ?? 0);
+          const previous = previousById.get(entity.id) ?? entity;
+          sprite.position.set(lerp(previous.x, entity.x, alpha), lerp(previous.y, entity.y, alpha));
+
+          if (entity.rotation !== undefined) {
+            sprite.rotation = entity.rotation;
+          }
+          if (entity.scale !== undefined) {
+            sprite.scale.set(entity.scale, entity.scale);
+          }
+        }
+
+        for (const [entityId, sprite] of this.spritePoolByStringId) {
+          if (!liveEntities.has(entityId)) {
+            sprite.removeFromParent();
+            this.spritePoolByStringId.delete(entityId);
+          }
+        }
+        app.render();
+      },
+      catch: (cause) => rendererRenderError("failed to render Pixi entities", cause),
+    });
+  }
+
+  /** Root container for editor viewport layers (camera pan/zoom applied here). */
+  getEditorWorldRoot(): Container {
+    const app = this.requireApp();
+    app.stage.sortableChildren = true;
+    let root = app.stage.getChildByLabel("editor-world-root") as Container | null;
+    if (!root) {
+      root = new Container();
+      root.label = "editor-world-root";
+      root.sortableChildren = true;
+      root.zIndex = 0;
+      app.stage.addChild(root);
+    }
+    return root;
+  }
+
+  resize(width: number, height: number): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        const app = this.requireApp();
+        app.renderer.resize(width, height);
+      },
+      catch: (cause) => rendererRenderError("failed to resize Pixi renderer", cause),
+    });
+  }
+
+  requestRender(): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        this.requireApp().render();
+      },
+      catch: (cause) => rendererRenderError("failed to render Pixi frame", cause),
+    });
+  }
+
+  canvasElement(): HTMLCanvasElement | undefined {
+    return this.app?.canvas;
+  }
+
+  textureForRenderableAssetId(renderableAssetId: number | string): Texture | undefined {
+    return this.texturesByRenderableAssetId.get(renderableAssetId);
+  }
+
+  dispose(): Effect.Effect<void, RendererError> {
+    return Effect.try({
+      try: () => {
+        for (const sprite of this.spritePool.values()) {
+          sprite.removeFromParent();
+        }
+        for (const sprite of this.spritePoolByStringId.values()) {
+          sprite.removeFromParent();
+        }
+        this.spritePool.clear();
+        this.spritePoolByStringId.clear();
+        this.spriteLayers.clear();
+        this.texturesByRenderableAssetId.clear();
+        for (const url of this.objectUrls.splice(0)) {
+          URL.revokeObjectURL(url);
+        }
+        this.app?.destroy({ removeView: true }, { children: true, texture: false, textureSource: false });
+        this.app = undefined;
+      },
+      catch: (cause) => rendererDisposeError("failed to dispose Pixi renderer", cause),
+    });
+  }
+
+  spritePoolSize(): number {
+    return this.spritePool.size;
+  }
+
+  private requireApp(): Application {
+    if (!this.app) {
+      throw new Error("Pixi renderer is not mounted");
+    }
+    return this.app;
+  }
+
+  private spriteFor(entity: EntityId, renderableAssetId: number, layerIndex: number): Sprite {
+    const existing = this.spritePool.get(entity);
+    if (existing) {
+      return existing;
+    }
+    const texture = this.texturesByRenderableAssetId.get(renderableAssetId);
+    if (!texture) {
+      throw new Error(`missing sprite texture ${renderableAssetId}`);
+    }
+    const sprite = new Sprite({ texture });
+    sprite.zIndex = layerIndex;
+    this.layerFor(layerIndex).addChild(sprite);
+    this.spritePool.set(entity, sprite);
+    return sprite;
+  }
+
+  private spriteForStringId(entityId: string, renderableAssetId: RenderableAssetId, layerIndex: number): Sprite {
+    const existing = this.spritePoolByStringId.get(entityId);
+    if (existing) {
+      return existing;
+    }
+    const texture = this.texturesByRenderableAssetId.get(renderableAssetId);
+    if (!texture) {
+      throw new Error(`missing sprite texture ${renderableAssetId}`);
+    }
+    const sprite = new Sprite({ texture });
+    sprite.zIndex = layerIndex;
+    this.layerFor(layerIndex).addChild(sprite);
+    this.spritePoolByStringId.set(entityId, sprite);
+    return sprite;
+  }
+
+  private layerFor(layerIndex: number): Container {
+    const existing = this.spriteLayers.get(layerIndex);
+    if (existing) {
+      return existing;
+    }
+    const layer = new Container();
+    layer.zIndex = layerIndex;
+    this.requireApp().stage.addChild(layer);
+    this.spriteLayers.set(layerIndex, layer);
+    return layer;
+  }
+
+  private async textureFromAsset(asset: LoadedAsset): Promise<Texture> {
+    if (typeof Blob === "undefined" || typeof URL.createObjectURL !== "function") {
+      throw new Error("Blob URLs are unavailable in this environment");
+    }
+    const body = asset.bytes.buffer.slice(
+      asset.bytes.byteOffset,
+      asset.bytes.byteOffset + asset.bytes.byteLength,
+    ) as ArrayBuffer;
+    const url = URL.createObjectURL(new Blob([body], { type: asset.mime }));
+    this.objectUrls.push(url);
+    if (typeof Image === "undefined") {
+      return Assets.load<Texture>(url);
+    }
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(`failed to decode ${asset.mime} asset ${asset.id}`));
+      image.src = url;
+    });
+    if (typeof image.decode === "function") {
+      try {
+        await image.decode();
+      } catch {
+        // Some browser engines reject decode() after onload for cached blob images.
+      }
+    }
+    return Texture.from(image);
+  }
+
+  private async textureFromBundledAsset(asset: RegisteredBundledAsset): Promise<Texture> {
+    return Assets.load<Texture>(asset.path);
+  }
+}

@@ -3,26 +3,18 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true
+    "composite": true,
+    "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/__e2e__/**"],
   "references": [
-    {
-      "path": "../core"
-    },
-    {
-      "path": "../plugin-api"
-    },
-    {
-      "path": "../ipc-contracts"
-    },
-    {
-      "path": "../asset-pipeline"
-    },
-    {
-      "path": "../runtime"
-    }
+    { "path": "../core" },
+    { "path": "../runtime" },
+    { "path": "../runtime-wasm" },
+    { "path": "../services-app" },
+    { "path": "../services-build" },
+    { "path": "../services-foundation" },
+    { "path": "../services-plugin" }
   ]
 }

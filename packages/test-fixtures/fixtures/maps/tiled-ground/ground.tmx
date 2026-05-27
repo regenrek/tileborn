@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="4" height="4" tilewidth="32" tileheight="32" infinite="0" nextlayerid="2" nextobjectid="1">
+ <tileset firstgid="1" name="ground" tilewidth="32" tileheight="32" tilecount="3" columns="3">
+  <image source="ground.png" width="96" height="32"/>
+ </tileset>
+ <layer id="1" name="ground" width="4" height="4">
+  <data encoding="csv">
+1,1,1,1,
+1,2,2,2,
+2,2,3,3,
+3,3,3,3
+  </data>
+ </layer>
+</map>

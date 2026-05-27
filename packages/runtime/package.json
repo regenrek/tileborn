@@ -9,16 +9,28 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -b tsconfig.json --force"
   },
   "dependencies": {
+    "@pixi/tilemap": "5.0.2",
+    "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
-    "@tileborne/runtime-wasm": "workspace:*"
-  }
+    "effect": "4.0.0-beta.70",
+    "msgpackr": "2.0.1",
+    "pixi.js": "8.18.1"
+  },
+  "devDependencies": {
+    "vitest": "4.1.7"
+  },
+  "license": "MIT"
 }

@@ -8,7 +8,7 @@ coverage/
 *.tsbuildinfo
 .tmp/
 .cache/
-#.cursor/
+.cursor/
 
 # Cloudflare, env, and local machine state
 .alchemy/
@@ -24,10 +24,15 @@ coverage/
 # Logs and diagnostics
 logs/
 *.log
+*.err
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+test-results/
+
+# Internal agent documentation, not for the OSS repo
+/docs/
 
 # Package artifacts and caches
 *.tgz
@@ -35,13 +40,31 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .parcel-cache/
 .eslintcache
 .stylelintcache
+dist-smoke/
+
+# Third-party local asset imports, not for the OSS repo
+packages/test-fixtures/fixtures/asset-packs/[a]ncient/
 
 # Electron
 release/
 .electron-builder/
 
 # Vite
+.vite/
 *.local
+
+# Generated local bundles
+apps/game-host/src/.generated/
+
+# TypeScript emits accidentally written next to package sources
+packages/ipc-contracts/src/**/*.d.ts
+packages/ipc-contracts/src/**/*.d.ts.map
+packages/ipc-contracts/src/**/*.js
+packages/ipc-contracts/src/**/*.js.map
+packages/runtime-wasm/src/**/*.d.ts
+packages/runtime-wasm/src/**/*.d.ts.map
+packages/runtime-wasm/src/**/*.js
+packages/runtime-wasm/src/**/*.js.map
 
 # OS/editor noise
 .DS_Store
@@ -58,5 +81,7 @@ release/
 
 
 .plandb
-docs
 .turbo
+.refs
+project.json
+project.lock.json

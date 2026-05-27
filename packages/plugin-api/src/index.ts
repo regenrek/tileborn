@@ -1,3 +1,7 @@
-// TODO: Implement plugin contracts per docs/01-spec.md §3.
-// Spec: docs/01-spec.md §3 @tileborne/plugin-api
-export {};
+export * from "./api.js";
+export * from "./contributions.js";
+export * from "./errors.js";
+export * from "./manifest.js";
+export * from "./permissions.js";
+export * from "./primitives.js";
+export * from "./registry.js";

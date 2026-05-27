@@ -8,9 +8,18 @@
   "include": [
     "src/**/*.ts"
   ],
+  "exclude": [
+    "**/*.test.ts"
+  ],
   "references": [
     {
       "path": "../core"
+    },
+    {
+      "path": "../plugin-api"
+    },
+    {
+      "path": "../sdk-tileset"
     }
   ]
 }

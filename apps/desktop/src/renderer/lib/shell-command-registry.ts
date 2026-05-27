@@ -76,9 +76,18 @@ const TOOL_ICONS: Record<EditorTool, LucideIcon> = {
   regionMark: MapIcon,
 };
 
-const toolCommands: ShellCommandDef[] = (
-  Object.keys(TOOL_LABELS) as EditorTool[]
-).map((tool) => ({
+const COMMAND_TOOL_IDS: readonly EditorTool[] = [
+  'select',
+  'pan',
+  'tileBrush',
+  'rectangleFill',
+  'eraser',
+  'objectMove',
+  'collisionPaint',
+  'regionMark',
+] as const;
+
+const toolCommands: ShellCommandDef[] = COMMAND_TOOL_IDS.map((tool) => ({
   id: `tool.${tool}`,
   label: TOOL_LABELS[tool],
   group: 'edit',

@@ -201,7 +201,7 @@ describe('TilesetPalette', () => {
       kind: 'placeable',
       placeableId,
     });
-    expect(useEditorUiStore.getState().activeTool).toBe('objectPlace');
+    expect(useEditorUiStore.getState().activeTool).toBe('tileBrush');
     expect(screen.getByText(/objects/i)).toBeTruthy();
   });
 

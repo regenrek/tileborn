@@ -4,7 +4,7 @@ import { TOOL_KEY_BINDINGS } from '@/editor/viewport/tool-state';
 export const TOOL_LABELS: Record<EditorTool, string> = {
   select: 'Select',
   pan: 'Pan',
-  tileBrush: 'Tile brush',
+  tileBrush: 'Brush',
   rectangleFill: 'Rectangle fill',
   eraser: 'Eraser',
   objectPlace: 'Place object',

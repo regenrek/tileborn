@@ -370,7 +370,7 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
               _tag: "InvalidManifestField",
               path: `/autotileRules/${index}/maskToTileIds/${mask}/${tileIndex}`,
               message: "Autotile rule references an unknown tile",
-              severity: "error",
+              severity: "warning",
             });
           }
         }
@@ -498,13 +498,41 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
   diagnostics.some((diagnostic) => diagnostic.severity === "error");
 
-const toAutotileRule = (rule: ManifestAutotileRule): AutotileRule => {
+const sanitizeMaskToTileIds = (
+  maskToTileIds: ManifestAutotileRule["maskToTileIds"],
+  validTileIds: ReadonlySet<string> | undefined,
+): ManifestAutotileRule["maskToTileIds"] => {
+  if (validTileIds === undefined) {
+    return maskToTileIds;
+  }
+  const sanitized: Record<string, [ManifestAutotileRule["maskToTileIds"][string][number], ...ManifestAutotileRule["maskToTileIds"][string][number][]]> = {};
+  for (const [mask, tileIds] of Object.entries(maskToTileIds)) {
+    const valid = tileIds.filter((tileId) => validTileIds.has(String(tileId)));
+    if (valid[0] !== undefined) {
+      sanitized[mask] = valid as [typeof valid[number], ...typeof valid[number][]];
+    }
+  }
+  return sanitized;
+};
+
+const fallbackTileIdOption = (
+  fallbackTileId: ManifestAutotileRule["fallbackTileId"],
+  validTileIds: ReadonlySet<string> | undefined,
+) =>
+  fallbackTileId === undefined || validTileIds?.has(String(fallbackTileId)) === false
+    ? Option.none()
+    : Option.some(fallbackTileId);
+
+const toAutotileRule = (
+  rule: ManifestAutotileRule,
+  validTileIds?: ReadonlySet<string> | undefined,
+): AutotileRule => {
   const base = {
     id: rule.id,
     name: rule.name,
     terrainClasses: rule.terrainClasses,
-    maskToTileIds: rule.maskToTileIds,
-    fallbackTileId: optionalToOption(rule.fallbackTileId),
+    maskToTileIds: sanitizeMaskToTileIds(rule.maskToTileIds, validTileIds),
+    fallbackTileId: fallbackTileIdOption(rule.fallbackTileId, validTileIds),
   };
 
   switch (rule._tag) {
@@ -536,6 +564,11 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
   const collisionByTileId = new Map(
     manifest.collisionMasks.map((entry) => [String(entry.tileId), entry.mask]),
   );
+  const tileIdsByTileset = new Map<string, ReadonlySet<string>>();
+  for (const tileset of manifest.tilesets) {
+    const tilesetId = String(tileset.id);
+    tileIdsByTileset.set(tilesetId, tileIdSetForTileset(manifest, tilesetId));
+  }
 
   const tilesets = manifest.tilesets.map((entry) => {
     const tilesetId = String(entry.id);
@@ -558,7 +591,7 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
 
     const autotileRules = manifest.autotileRules
       .filter((rule) => String(rule.tilesetId) === tilesetId)
-      .map(toAutotileRule);
+      .map((rule) => toAutotileRule(rule, tileIdsByTileset.get(tilesetId)));
 
     const variantFilters = manifest.variantFilters
       .filter((filter) => String(filter.tilesetId) === tilesetId)

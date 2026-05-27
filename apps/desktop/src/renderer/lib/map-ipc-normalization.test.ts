@@ -33,6 +33,7 @@ const mapWithPlacement = () =>
         layerId: 'layer:00000000-0000-4000-8000-000000000042',
         properties: {},
         placement: {
+          packId: 'pack:00000000-0000-4000-8000-000000000047',
           placeableId: 'placeable:00000000-0000-4000-8000-000000000044',
           source: 'manual',
           assetId: 'asset:00000000-0000-4000-8000-000000000045',
@@ -52,6 +53,7 @@ describe('map IPC normalization', () => {
       objects: [
         {
           placement: {
+            packId: 'pack:00000000-0000-4000-8000-000000000047',
             placeableId: 'placeable:00000000-0000-4000-8000-000000000044',
             source: 'manual',
             assetId: 'asset:00000000-0000-4000-8000-000000000045',
@@ -68,6 +70,9 @@ describe('map IPC normalization', () => {
     const decoded = decodeMap(normalized);
     const placement = decoded.objects[0]?.placement;
 
+    expect(Option.getOrUndefined(placement?.packId ?? Option.none())).toBe(
+      'pack:00000000-0000-4000-8000-000000000047',
+    );
     expect(placement?.placeableId).toBe('placeable:00000000-0000-4000-8000-000000000044');
     expect(Option.getOrUndefined(placement?.assetId ?? Option.none())).toBe(
       'asset:00000000-0000-4000-8000-000000000045',

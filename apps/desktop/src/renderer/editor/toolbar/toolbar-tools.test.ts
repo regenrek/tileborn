@@ -10,7 +10,6 @@ describe('map editor toolbar tools', () => {
       'tileBrush',
       'rectangleFill',
       'eraser',
-      'objectPlace',
       'collisionPaint',
       'regionMark',
     ]);

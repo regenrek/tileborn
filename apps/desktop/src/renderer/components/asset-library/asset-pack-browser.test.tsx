@@ -199,7 +199,17 @@ const installWorkingPaletteBridge = () => {
     ),
     update: vi.fn(),
     delete: vi.fn(),
-    removeItem: vi.fn(),
+    removeItem: vi.fn(
+      async (input: { paletteId: WorkingPaletteId; itemId: WorkingPalette['items'][number]['id'] }) => {
+        const existing = palettes.find((palette) => palette.id === input.paletteId)!;
+        const next: WorkingPalette = {
+          ...existing,
+          items: existing.items.filter((item) => item.id !== input.itemId),
+        };
+        palettes = [next];
+        return { palette: next };
+      },
+    ),
     reorderItems: vi.fn(),
     getActive: vi.fn(),
   };
@@ -733,6 +743,29 @@ describe('AssetPackBrowser', () => {
     });
   });
 
+  it('removes an added preview cell from the active working palette when clicked again', async () => {
+    const pack = parseTilesetPackJson(samplePackJson);
+    useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
+    render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
+
+    const cell = screen.getAllByTestId(
+      'asset-pack-browser-item-tileset:tileset:550e8400-e29b-41d4-a716-446655440002',
+    )[0]!;
+    fireEvent.click(cell);
+
+    await waitFor(() => {
+      expect(useWorkingPalettesStore.getState().list({ projectId })[0]?.items).toHaveLength(1);
+      expect(cell.getAttribute('data-added')).toBe('true');
+    });
+
+    fireEvent.click(cell);
+
+    await waitFor(() => {
+      expect(useWorkingPalettesStore.getState().list({ projectId })[0]?.items).toHaveLength(0);
+      expect(cell.getAttribute('data-added')).toBe('false');
+    });
+  });
+
   it('adds visible preview refs for a tileset via "Add group"', async () => {
     const pack = parseTilesetPackJson(samplePackJson);
     useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
@@ -745,6 +778,29 @@ describe('AssetPackBrowser', () => {
       const palette = useWorkingPalettesStore.getState().list({ projectId })[0];
       expect(palette?.items).toHaveLength(2);
       expect(palette?.items[0]?.ref.kind).toBe('tile');
+    });
+  });
+
+  it('removes a fully added group from the active working palette', async () => {
+    const pack = parseTilesetPackJson(samplePackJson);
+    useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
+    render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
+    const group = screen.getByTestId(
+      'asset-pack-browser-group-tileset:tileset:550e8400-e29b-41d4-a716-446655440002',
+    );
+    const groupButton = within(group).getByTestId(/asset-pack-browser-add-group-/);
+    fireEvent.click(groupButton);
+
+    await waitFor(() => {
+      expect(useWorkingPalettesStore.getState().list({ projectId })[0]?.items).toHaveLength(2);
+      expect(groupButton.textContent).toContain('Remove group');
+    });
+
+    fireEvent.click(groupButton);
+
+    await waitFor(() => {
+      expect(useWorkingPalettesStore.getState().list({ projectId })[0]?.items).toHaveLength(0);
+      expect(groupButton.textContent).toContain('Add group');
     });
   });
 

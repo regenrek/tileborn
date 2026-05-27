@@ -308,6 +308,7 @@ const placementToJson = (
     return undefined;
   }
   return {
+    ...optionalJsonProperty('packId', optionValue(placement.packId)),
     placeableId: placement.placeableId,
     source: placement.source,
     ...optionalJsonProperty('assetId', optionValue(placement.assetId)),
@@ -325,6 +326,7 @@ const normalizePlacementJsonForDecode = (value: unknown): unknown => {
   }
   return {
     ...value,
+    packId: 'packId' in value ? value.packId : undefined,
     assetId: 'assetId' in value ? value.assetId : undefined,
     tileId: 'tileId' in value ? value.tileId : undefined,
     gid: 'gid' in value ? value.gid : undefined,

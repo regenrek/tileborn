@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist, subscribeWithSelector } from 'zustand/middleware';
 
-import type { LayerId } from '@tileborne/core';
+import type { LayerId, PackId } from '@tileborne/core';
 import type {
   AutotileRuleIdType,
   PlaceableIdType,
@@ -135,10 +135,10 @@ const workspaceTabsEqual = (
   });
 
 export type BrushIntent =
-  | { readonly kind: 'tile'; readonly tileId: TileIdType }
-  | { readonly kind: 'autotile'; readonly ruleId: AutotileRuleIdType }
-  | { readonly kind: 'terrain'; readonly classId: TerrainClassType }
-  | { readonly kind: 'placeable'; readonly placeableId: PlaceableIdType }
+  | { readonly kind: 'tile'; readonly tileId: TileIdType; readonly packId?: PackId | undefined }
+  | { readonly kind: 'autotile'; readonly ruleId: AutotileRuleIdType; readonly packId?: PackId | undefined }
+  | { readonly kind: 'terrain'; readonly classId: TerrainClassType; readonly packId?: PackId | undefined }
+  | { readonly kind: 'placeable'; readonly placeableId: PlaceableIdType; readonly packId?: PackId | undefined }
   | { readonly kind: 'eraser' };
 
 interface CameraState {
@@ -293,13 +293,13 @@ const brushIntentEquals = (left: BrushIntent, right: BrushIntent): boolean => {
   }
   switch (right.kind) {
     case 'tile':
-      return left.kind === 'tile' && left.tileId === right.tileId;
+      return left.kind === 'tile' && left.tileId === right.tileId && left.packId === right.packId;
     case 'autotile':
-      return left.kind === 'autotile' && left.ruleId === right.ruleId;
+      return left.kind === 'autotile' && left.ruleId === right.ruleId && left.packId === right.packId;
     case 'terrain':
-      return left.kind === 'terrain' && left.classId === right.classId;
+      return left.kind === 'terrain' && left.classId === right.classId && left.packId === right.packId;
     case 'placeable':
-      return left.kind === 'placeable' && left.placeableId === right.placeableId;
+      return left.kind === 'placeable' && left.placeableId === right.placeableId && left.packId === right.packId;
     case 'eraser':
       return true;
   }
@@ -408,10 +408,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
             set({ brushIntent });
           }
         },
-        selectBrush: (
-          brushIntent,
-          activeTool = brushIntent.kind === 'placeable' ? 'objectPlace' : 'tileBrush',
-        ) => {
+        selectBrush: (brushIntent, activeTool = 'tileBrush') => {
           const state = get();
           const next: Partial<EditorUiState> = {};
           if (!brushIntentEquals(state.brushIntent, brushIntent)) {

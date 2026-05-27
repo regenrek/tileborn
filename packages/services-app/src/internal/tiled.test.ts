@@ -8,6 +8,7 @@ import {
   makeLayerId,
   makeMapId,
   makeObjectId,
+  makePackId,
   makePlaceableId,
   makeTileId,
 } from "@tileborne/core";
@@ -56,6 +57,7 @@ describe("exportMapToTiled", () => {
           layerId: objectLayerId,
           properties: {},
           placement: new MapObjectPlacement({
+            packId: Option.some(makePackId("00000000-0000-4000-8000-000000000007")),
             placeableId: makePlaceableId("00000000-0000-4000-8000-000000000004"),
             source: "tiled-object",
             assetId: Option.some(makeAssetId("00000000-0000-4000-8000-000000000005")),
@@ -89,6 +91,7 @@ describe("exportMapToTiled", () => {
               width: 96,
               height: 128,
               placement: {
+                packId: "pack:00000000-0000-4000-8000-000000000007",
                 placeableId: "placeable:00000000-0000-4000-8000-000000000004",
                 source: "tiled-object",
                 assetId: "asset:00000000-0000-4000-8000-000000000005",

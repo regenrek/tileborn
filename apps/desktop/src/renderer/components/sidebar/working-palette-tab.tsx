@@ -17,6 +17,7 @@ import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
 import { WorkingPaletteSidebar } from '@/components/sidebar/working-palette-sidebar';
 import { useAssetPacks, useMap } from '@/hooks/queries';
+import { useActiveWorkingPalette } from '@/hooks/use-working-palettes';
 import { pickPaintablePackId, usePackCapabilities } from '@/lib/pack-capability-client';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
@@ -34,6 +35,7 @@ interface InstalledPackSummary {
 export function WorkingPaletteTab({ projectId, mapId }: WorkingPaletteTabProps) {
   const assetPacksQuery = useAssetPacks();
   const mapQuery = useMap(projectId, mapId);
+  const activePalette = useActiveWorkingPalette(projectId ?? null);
   const activePalettePackId = useEditorUiStore((s) => s.activePalettePackId);
   const installedPacks: readonly InstalledPackSummary[] = useMemo(
     () => assetPacksQuery.data?.packs ?? [],
@@ -46,20 +48,22 @@ export function WorkingPaletteTab({ projectId, mapId }: WorkingPaletteTabProps) 
       ? mapQuery.data.map.properties.tilesetPackId
       : undefined;
 
-  const palettePackId = useMemo(
-    () =>
-      pickPaintablePackId(
-        installedPacks,
-        capabilityById,
-        mapTilesetPackId ?? activePalettePackId ?? undefined,
-      ),
-    [installedPacks, capabilityById, mapTilesetPackId, activePalettePackId],
-  );
+  const activePaletteItemPackId = activePalette?.items[0]?.ref.packId;
+  const preferredPalettePackId = [mapTilesetPackId, activePalettePackId ?? undefined, activePaletteItemPackId]
+    .filter((packId): packId is string => packId !== undefined)
+    .find((packId) => installedPacks.some((pack) => pack.id === packId));
+  const palettePackId = useMemo(() => {
+    if (preferredPalettePackId !== undefined) {
+      return preferredPalettePackId;
+    }
+    return pickPaintablePackId(installedPacks, capabilityById, undefined);
+  }, [installedPacks, capabilityById, preferredPalettePackId]);
 
   const paintableCount = useMemo(
     () => installedPacks.filter((pack) => capabilityById.get(pack.id)?.paintable === true).length,
     [installedPacks, capabilityById],
   );
+  const hasCuratedPaletteItems = (activePalette?.items.length ?? 0) > 0;
 
   const activePack = installedPacks.find((pack) => pack.id === palettePackId);
   const loading = assetPacksQuery.isLoading || capabilitiesLoading;
@@ -97,7 +101,7 @@ export function WorkingPaletteTab({ projectId, mapId }: WorkingPaletteTabProps) 
             title="No asset packs"
             description="Open Assets to import a pack, then add items to your Working Palette."
           />
-        ) : paintableCount === 0 ? (
+        ) : paintableCount === 0 && !hasCuratedPaletteItems ? (
           <SidebarEmptyState
             icon={LayersIcon}
             title="No paintable packs"

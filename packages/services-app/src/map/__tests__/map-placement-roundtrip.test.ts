@@ -9,6 +9,7 @@ import {
   type Uuid,
   makeAssetId,
   makeLayerId,
+  makePackId,
   makeObjectId,
   makePlaceableId,
   makeTileId,
@@ -91,6 +92,7 @@ describe("MapService placement persistence", () => {
         placeable: makePlaceableId("00000000-0000-4000-8000-000000000054" as Uuid),
         asset: makeAssetId("00000000-0000-4000-8000-000000000055" as Uuid),
         tile: makeTileId("00000000-0000-4000-8000-000000000056" as Uuid),
+        pack: makePackId("00000000-0000-4000-8000-000000000057" as Uuid),
       };
 
       const { projectId, mapId, loaded } = await runApp(
@@ -117,6 +119,7 @@ describe("MapService placement persistence", () => {
             layerId: ids.layer,
             properties: {},
             placement: new MapObjectPlacement({
+              packId: Option.some(ids.pack),
               placeableId: ids.placeable,
               source: "manual",
               assetId: Option.some(ids.asset),
@@ -144,6 +147,7 @@ describe("MapService placement persistence", () => {
       ) as {
         readonly objects?: readonly {
           readonly placement?: {
+            readonly packId?: string;
             readonly placeableId?: string;
             readonly source?: string;
             readonly assetId?: string;
@@ -154,6 +158,7 @@ describe("MapService placement persistence", () => {
       };
 
       expect(persisted.objects?.[0]?.placement).toStrictEqual({
+        packId: ids.pack,
         placeableId: ids.placeable,
         source: "manual",
         assetId: ids.asset,
@@ -162,6 +167,7 @@ describe("MapService placement persistence", () => {
       });
 
       const placement = loaded.objects[0]?.placement;
+      expect(Option.getOrUndefined(placement?.packId ?? Option.none())).toBe(ids.pack);
       expect(placement?.placeableId).toBe(ids.placeable);
       expect(placement?.source).toBe("manual");
       expect(Option.getOrUndefined(placement?.assetId ?? Option.none())).toBe(ids.asset);
@@ -201,6 +207,7 @@ describe("MapService placement persistence", () => {
             layerId: ids.layer,
             properties: {},
             placement: new MapObjectPlacement({
+              packId: Option.none(),
               placeableId: ids.placeable,
               source: "manual",
               assetId: Option.none(),

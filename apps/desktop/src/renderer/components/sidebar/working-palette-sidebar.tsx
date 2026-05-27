@@ -16,7 +16,6 @@ import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
 import { useTilesetPack } from '@/hooks/queries';
 import {
   buildLibraryPreviewIndex,
-  type LibraryPreviewRef,
 } from '@/lib/asset-library-bridge';
 import {
   brushIntentMatchesItem,
@@ -74,25 +73,8 @@ export function WorkingPaletteSidebar({
 }: WorkingPaletteSidebarProps) {
   const activePalette = useActiveWorkingPalette(projectId);
   const paletteActions = useWorkingPaletteActions();
-  const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
   const tilesetPackQuery = useTilesetPack(packId);
-
-  const previewByItemKey = useMemo(() => {
-    const map = new Map<string, readonly LibraryPreviewRef[]>();
-    if (tilesetPackQuery.data === undefined || activePalette === undefined) {
-      return map;
-    }
-    const previewIndex = buildLibraryPreviewIndex(tilesetPackQuery.data);
-    for (const item of activePalette.items) {
-      const key = workingPaletteItemKey(item);
-      const preview = previewIndex.previewForRef(item.ref);
-      if (preview !== undefined) {
-        map.set(key, [preview]);
-      }
-    }
-    return map;
-  }, [activePalette, tilesetPackQuery.data]);
 
   return (
     <section className="flex flex-col gap-2 px-1" data-testid="working-palette-sidebar">
@@ -155,55 +137,12 @@ export function WorkingPaletteSidebar({
             >
               {activePalette.items.map((item) => {
                 const key = workingPaletteItemKey(item);
-                const previews = previewByItemKey.get(key) ?? [];
-                const active = brushIntentMatchesItem(brushIntent, item);
-                const kind = item.ref.kind;
-                const Icon = KIND_ICON[kind];
                 return (
-                  <li key={key} className="min-w-0">
-                    <button
-                      type="button"
-                      data-testid={`working-palette-sidebar-item-${key}`}
-                      data-active={active ? 'true' : 'false'}
-                      aria-pressed={active}
-                      aria-label={`${item.label} (${KIND_LABEL[kind]})`}
-                      title={`${item.label} (${KIND_LABEL[kind]})`}
-                      onClick={() => selectBrush(workingPaletteItemToBrushIntent(item))}
-                      className={cn(
-                        'flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-md border bg-card p-1 transition-colors hover:border-primary/70 hover:bg-accent/20',
-                        active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
-                      )}
-                    >
-                      {tilesetPackQuery.isLoading ? (
-                        <Skeleton className="size-8" />
-                      ) : previews.length === 0 ? (
-                        <span
-                          aria-hidden
-                          className="flex shrink-0 items-center justify-center rounded bg-muted/40"
-                          style={{ width: GRID_THUMB_PX, height: GRID_THUMB_PX }}
-                        >
-                          <Icon className="size-4 text-muted-foreground" />
-                        </span>
-                      ) : kind === 'tile' || kind === 'placeable' ? (
-                        <LibraryPreviewThumb
-                          packId={item.ref.packId}
-                          preview={previews[0]!}
-                          sizePx={GRID_THUMB_PX}
-                          testId="working-palette-sidebar-thumb"
-                        />
-                      ) : (
-                        <LibraryPreviewMosaic
-                          packId={item.ref.packId}
-                          previews={previews}
-                          sizePx={GRID_THUMB_PX}
-                          testId="working-palette-sidebar-thumb"
-                        />
-                      )}
-                      <span className="sr-only">
-                        {item.label} ({KIND_LABEL[kind]})
-                      </span>
-                    </button>
-                  </li>
+                  <WorkingPaletteSidebarItem
+                    key={key}
+                    item={item}
+                    fallbackPackLoading={tilesetPackQuery.isLoading}
+                  />
                 );
               })}
             </ul>
@@ -227,5 +166,77 @@ export function WorkingPaletteSidebar({
         </>
       )}
     </section>
+  );
+}
+
+function WorkingPaletteSidebarItem({
+  item,
+  fallbackPackLoading,
+}: {
+  readonly item: WorkingPaletteItem;
+  readonly fallbackPackLoading: boolean;
+}) {
+  const brushIntent = useEditorUiStore((state) => state.brushIntent);
+  const selectBrush = useEditorUiStore((state) => state.selectBrush);
+  const itemPackQuery = useTilesetPack(item.ref.packId);
+  const previews = useMemo(() => {
+    if (itemPackQuery.data === undefined) {
+      return [];
+    }
+    const previewIndex = buildLibraryPreviewIndex(itemPackQuery.data);
+    const preview = previewIndex.previewForRef(item.ref);
+    return preview === undefined ? [] : [preview];
+  }, [item.ref, itemPackQuery.data]);
+  const key = workingPaletteItemKey(item);
+  const active = brushIntentMatchesItem(brushIntent, item);
+  const kind = item.ref.kind;
+  const Icon = KIND_ICON[kind];
+
+  return (
+    <li className="min-w-0">
+      <button
+        type="button"
+        data-testid={`working-palette-sidebar-item-${key}`}
+        data-active={active ? 'true' : 'false'}
+        aria-pressed={active}
+        aria-label={`${item.label} (${KIND_LABEL[kind]})`}
+        title={`${item.label} (${KIND_LABEL[kind]})`}
+        onClick={() => selectBrush(workingPaletteItemToBrushIntent(item))}
+        className={cn(
+          'flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-md border bg-card p-1 transition-colors hover:border-primary/70 hover:bg-accent/20',
+          active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
+        )}
+      >
+        {fallbackPackLoading || itemPackQuery.isLoading ? (
+          <Skeleton className="size-8" />
+        ) : previews.length === 0 ? (
+          <span
+            aria-hidden
+            className="flex shrink-0 items-center justify-center rounded bg-muted/40"
+            style={{ width: GRID_THUMB_PX, height: GRID_THUMB_PX }}
+          >
+            <Icon className="size-4 text-muted-foreground" />
+          </span>
+        ) : kind === 'tile' || kind === 'placeable' ? (
+          <LibraryPreviewThumb
+            packId={item.ref.packId}
+            preview={previews[0]!}
+            sizePx={GRID_THUMB_PX}
+            testId="working-palette-sidebar-thumb"
+            eager
+          />
+        ) : (
+          <LibraryPreviewMosaic
+            packId={item.ref.packId}
+            previews={previews}
+            sizePx={GRID_THUMB_PX}
+            testId="working-palette-sidebar-thumb"
+          />
+        )}
+        <span className="sr-only">
+          {item.label} ({KIND_LABEL[kind]})
+        </span>
+      </button>
+    </li>
   );
 }

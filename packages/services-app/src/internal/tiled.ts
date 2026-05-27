@@ -17,6 +17,7 @@ const objectPlacementToTiled = (placement: MapObject["placement"] | undefined): 
     return undefined;
   }
   return {
+    packId: optionValue(placement.packId),
     placeableId: placement.placeableId,
     source: placement.source,
     assetId: optionValue(placement.assetId),

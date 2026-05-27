@@ -36,7 +36,7 @@ import {
 } from './editor-viewport-controller.js';
 import { EditorLayerZIndex } from './layers.js';
 import { createTileEditCommand } from '../editor-commands.js';
-import { setTileIndex } from '../map-utils.js';
+import { setLayerVisible, setTileIndex } from '../map-utils.js';
 import { createTestMap, TEST_TILE_LAYER_ID } from '../test-fixtures.js';
 
 describe('EditorViewportController texture diagnostics', () => {
@@ -197,6 +197,32 @@ describe('EditorViewportController render batching', () => {
     expect((unrelatedChunk as Container | undefined)?.children.length).toBeGreaterThan(0);
   });
 
+  it('renders hidden tile layers as dimmed map context instead of dropping them', () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender: vi.fn(() => Effect.void),
+    } as unknown as PixiRendererAdapter;
+    const controller = new EditorViewportController(adapter);
+    const paintedMap = setTileIndex(createTestMap(), TEST_TILE_LAYER_ID, 2, 3, 4);
+    const hiddenMap = setLayerVisible(paintedMap, TEST_TILE_LAYER_ID, false);
+
+    controller.setMap(hiddenMap);
+
+    const tileLayerRoot = worldRoot.children.find((child) => child.label === 'tiles') as
+      | Container
+      | undefined;
+    const chunk = tileLayerRoot?.children.find(
+      (child) => child.label === `${TEST_TILE_LAYER_ID}:0:0`,
+    ) as Container | undefined;
+
+    expect(chunk).toBeDefined();
+    expect(chunk?.alpha).toBeGreaterThan(0);
+    expect(chunk?.alpha).toBeLessThan(1);
+  });
+
   it('renders placement objects as sprites', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -275,6 +301,7 @@ describe('EditorViewportController render batching', () => {
           layerId,
           properties: {},
           placement: new MapObjectPlacement({
+            packId: Option.some(pack.id),
             placeableId,
             source: 'manual',
             assetId: Option.some(assetId),
@@ -304,5 +331,118 @@ describe('EditorViewportController render batching', () => {
     const renderedObject = objectLayerRoot?.children[0] as Container | undefined;
     expect(renderedObject?.children[0]).toBeInstanceOf(Sprite);
     expect((renderedObject?.children[0] as Sprite | undefined)?.width).toBe(96);
+  });
+
+  it('renders duplicate placeable ids from the placement pack', () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const uuid = (suffix: string): Uuid =>
+      `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
+    const assetId = makeAssetId(uuid('41'));
+    const tileId = makeTileId(uuid('42'));
+    const placeableId = makePlaceableId(uuid('43'));
+    const layerId = makeLayerId(uuid('44'));
+    const objectId = makeObjectId(uuid('45'));
+    const firstPackId = makePackId(uuid('46'));
+    const selectedPackId = makePackId(uuid('47'));
+    const makePack = (id: typeof firstPackId, path: string) =>
+      new TilesetPack({
+        schemaVersion: 1,
+        id,
+        name: path,
+        version: '1.0.0',
+        license: new TilesetPackLicense({
+          spdxId: 'CC0-1.0',
+          attribution: Option.none(),
+          sourceUrl: Option.none(),
+          notes: Option.none(),
+          redistributable: true,
+        }),
+        tilesets: [],
+        assets: [new TilesetPackAsset({ id: assetId, path, mime: 'image/png' })],
+        placeables: [
+          new Placeable({
+            id: placeableId,
+            name: 'Duplicate Statue',
+            size: new PlaceableSize({ width: 96, height: 128 }),
+            frames: [
+              new PlaceableFrameRef({
+                assetId,
+                tileId,
+                uv: new UVRect({ x: 0, y: 0, w: 96, h: 128 }),
+                durationMs: Option.none(),
+              }),
+            ],
+            tags: ['prop'],
+            placementMode: 'object',
+            source: new TiledPlaceableSource({
+              format: 'tiled',
+              tilesetName: 'objects',
+              localTileId: 0,
+              image: Option.some(path),
+              imageWidth: Option.some(96),
+              imageHeight: Option.some(128),
+              objectType: Option.none(),
+              objectClass: Option.some('statue'),
+              properties: {},
+            }),
+          }),
+        ],
+      });
+    const map = new TileborneMap({
+      id: makeMapId(uuid('48')),
+      schemaVersion: 1,
+      size: { width: 4, height: 4 },
+      tileSize: { width: 32, height: 32 },
+      layers: [
+        new ObjectLayer({
+          id: layerId,
+          name: 'objects',
+          visible: true,
+          opacity: 1,
+          objectIds: [objectId],
+        }),
+      ],
+      objects: [
+        new MapObject({
+          id: objectId,
+          kind: 'placeable',
+          x: 32,
+          y: 64,
+          width: Option.some(96),
+          height: Option.some(128),
+          layerId,
+          properties: {},
+          placement: new MapObjectPlacement({
+            packId: Option.some(selectedPackId),
+            placeableId,
+            source: 'manual',
+            assetId: Option.some(assetId),
+            tileId: Option.some(tileId),
+            gid: Option.none(),
+          }),
+        }),
+      ],
+      properties: {},
+    });
+    const textureForRenderableAssetId = vi.fn(() => Texture.WHITE);
+    const controller = new EditorViewportController(
+      {
+        getEditorWorldRoot: () => new Container(),
+        requestRender: vi.fn(() => Effect.void),
+        textureForRenderableAssetId,
+      } as unknown as PixiRendererAdapter,
+      {
+        packs: [makePack(firstPackId, 'first/statue.png'), makePack(selectedPackId, 'selected/statue.png')],
+        renderableAssetIdByPath: new Map([
+          ['first/statue.png', 1],
+          ['selected/statue.png', 2],
+        ]),
+      },
+    );
+
+    controller.setMap(map);
+
+    expect(textureForRenderableAssetId).toHaveBeenCalledWith(2);
   });
 });

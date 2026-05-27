@@ -9,6 +9,7 @@ import {
   type AssetId,
   type LayerId,
   type ObjectId,
+  type PackId,
   type PlaceableId,
   type TileId,
   type TileborneMap,
@@ -48,10 +49,14 @@ const layerIdFor = (seed: string, sourceId: string): LayerId =>
 const objectIdFor = (seed: string, sourceId: string): ObjectId =>
   deterministicObjectId(`${seed}/object/${sourceId}`);
 
-const corePlacement = (placement: TiledMapObject["placement"] | undefined): MapObjectPlacement | undefined =>
+const corePlacement = (
+  placement: TiledMapObject["placement"] | undefined,
+  packId: PackId | undefined,
+): MapObjectPlacement | undefined =>
   placement === undefined
     ? undefined
     : new MapObjectPlacement({
+        packId: packId === undefined ? Option.none() : Option.some(packId),
         placeableId: placement.placeableId as PlaceableId,
         source: placement.source,
         assetId: Option.some(placement.assetId as AssetId),
@@ -63,6 +68,7 @@ export const compileTileborneMap = (input: {
   readonly map: TiledMapImport;
   readonly sourcePath: string;
   readonly mapIdSeed?: string;
+  readonly packId?: PackId;
 }): TileborneMap => {
   const seed = input.mapIdSeed ?? input.sourcePath;
   const layers: Array<TileborneMap["layers"][number]> = [];
@@ -115,7 +121,7 @@ export const compileTileborneMap = (input: {
         height: layer.height === undefined ? Option.none() : Option.some(layer.height),
         layerId,
         properties: layer.properties,
-        ...(layer.placement === undefined ? {} : { placement: corePlacement(layer.placement) }),
+        ...(layer.placement === undefined ? {} : { placement: corePlacement(layer.placement, input.packId) }),
       }),
     );
   }

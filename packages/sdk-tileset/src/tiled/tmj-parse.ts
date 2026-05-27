@@ -227,6 +227,7 @@ export const parseTmj = async (
   const coreMap = compileTileborneMap({
     map: compiledMap.map,
     sourcePath: options.sourcePath,
+    packId: pack.id,
   });
 
   return {
@@ -335,6 +336,7 @@ export const parseTmjSync = (
   const coreMap = compileTileborneMap({
     map: compiledMap.map,
     sourcePath: options.sourcePath,
+    packId: pack.id,
   });
   return {
     value: { pack, map: coreMap, tiledMap: compiledMap.map },

@@ -6,7 +6,6 @@ import {
   PaintbrushIcon,
   ScanIcon,
   ShieldIcon,
-  SquarePlusIcon,
 } from 'lucide-react';
 
 import { TOOL_KEY_BINDINGS } from '@/editor/viewport/tool-state';
@@ -45,12 +44,6 @@ export const MAP_EDITOR_TOOLBAR_TOOLS: readonly MapEditorToolbarTool[] = [
     label: TOOL_LABELS.eraser,
     shortcut: TOOL_KEY_BINDINGS.eraser,
     icon: EraserIcon,
-  },
-  {
-    id: 'objectPlace',
-    label: TOOL_LABELS.objectPlace,
-    shortcut: TOOL_KEY_BINDINGS.objectPlace,
-    icon: SquarePlusIcon,
   },
   {
     id: 'collisionPaint',

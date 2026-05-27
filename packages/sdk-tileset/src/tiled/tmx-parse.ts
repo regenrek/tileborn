@@ -341,6 +341,7 @@ export const parseTmx = async (
     const coreMap = compileTileborneMap({
       map: compiledMap.map,
       sourcePath: options.sourcePath,
+      packId: pack.id,
     });
 
     return {

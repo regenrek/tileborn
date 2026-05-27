@@ -1,6 +1,6 @@
 import { Schema, SchemaGetter } from "effect";
 
-import { AssetId, LayerId, MapId, ObjectId, PlaceableId, TileId } from "../ids.js";
+import { AssetId, LayerId, MapId, ObjectId, PackId, PlaceableId, TileId } from "../ids.js";
 import { JsonObject } from "../project/index.js";
 
 /** Size in tile or pixel units. */
@@ -117,6 +117,7 @@ export type MapLayer = TileLayer | ObjectLayer | ImageLayer | CollisionLayer;
 
 /** Reference from a map object to an asset-pack placeable. */
 export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObjectPlacement")({
+  packId: Schema.OptionFromUndefinedOr(PackId),
   placeableId: PlaceableId,
   source: Schema.Union([Schema.Literal("manual"), Schema.Literal("tiled-object")]),
   assetId: Schema.OptionFromUndefinedOr(AssetId),

@@ -3,6 +3,7 @@ import {
   type AssetId,
   type LayerId,
   type ObjectId,
+  type PackId,
   type PlaceableId,
   type TileId,
   type TileborneMap,
@@ -18,7 +19,13 @@ import {
   createRectangleFillCommand,
   createRegionMarkCommand,
 } from '../editor-commands.js';
-import { findTileLayer, getTileIndex } from '../map-utils.js';
+import {
+  findCollisionLayer,
+  findLayerById,
+  findObjectLayer,
+  findTileLayer,
+  getTileIndex,
+} from '../map-utils.js';
 import type { BrushIntent, EditorTool } from '@/stores/editor-ui-store';
 import {
   autotileCellsToRefresh,
@@ -90,6 +97,7 @@ export type ResolvedBrush =
   | AutotilePaintBrush
   | {
       readonly kind: 'placeObject';
+      readonly packId: PackId;
       readonly placeableId: PlaceableId;
       readonly width: number;
       readonly height: number;
@@ -122,7 +130,30 @@ const optionValue = <A>(
 };
 
 export const resolveLayerId = (map: TileborneMap, activeLayerId?: LayerId): LayerId | undefined => {
-  return findTileLayer(map, activeLayerId)?.id ?? findTileLayer(map)?.id;
+  if (activeLayerId !== undefined) {
+    return findLayerById(map, activeLayerId)?._tag === 'tile' ? activeLayerId : undefined;
+  }
+  return findTileLayer(map)?.id;
+};
+
+export const resolveObjectLayerId = (
+  map: TileborneMap,
+  activeLayerId?: LayerId,
+): LayerId | undefined => {
+  if (activeLayerId !== undefined) {
+    return findLayerById(map, activeLayerId)?._tag === 'object' ? activeLayerId : undefined;
+  }
+  return findObjectLayer(map)?.id;
+};
+
+export const resolveCollisionLayerId = (
+  map: TileborneMap,
+  activeLayerId?: LayerId,
+): LayerId | undefined => {
+  if (activeLayerId !== undefined) {
+    return findLayerById(map, activeLayerId)?._tag === 'collision' ? activeLayerId : undefined;
+  }
+  return findCollisionLayer(map)?.id;
 };
 
 export const dispatchPointerDown = (
@@ -136,6 +167,9 @@ export const dispatchPointerDown = (
     case 'pan':
       return { session: { ...session, origin: point, dragging: true }, result: {} };
     case 'tileBrush':
+      if (context.resolvedBrush?.kind === 'placeObject') {
+        return applyObjectPlace(context, point);
+      }
       return applyTileCommand(context, point, { ...session, dragging: true });
     case 'rectangleFill':
       return {
@@ -679,14 +713,20 @@ const applyObjectPlace = (
   point: PointerPoint,
 ): { session: ToolSession; result: ToolDispatchResult } => {
   const tileSize = context.map.tileSize.width;
+  const layerId = resolveObjectLayerId(context.map, context.activeLayerId);
+  if (!layerId) {
+    return { session: {}, result: {} };
+  }
   if (context.brushIntent.kind === 'placeable' && context.resolvedBrush?.kind === 'placeObject') {
     const command = createObjectPlaceCommand(context.map, {
       kind: 'placeable',
       x: point.tileX * tileSize,
       y: point.tileY * tileSize,
+      layerId,
       width: context.resolvedBrush.width,
       height: context.resolvedBrush.height,
       placement: new MapObjectPlacement({
+        packId: Option.some(context.resolvedBrush.packId),
         placeableId: context.resolvedBrush.placeableId,
         source: 'manual',
         assetId: Option.some(context.resolvedBrush.frame.assetId),
@@ -700,6 +740,7 @@ const applyObjectPlace = (
     kind: context.stagedObjectKind,
     x: point.tileX * tileSize,
     y: point.tileY * tileSize,
+    layerId,
   });
   return { session: {}, result: { command } };
 };
@@ -708,6 +749,9 @@ const applyCollisionPaint = (
   context: ToolContext,
   point: PointerPoint,
 ): { session: ToolSession; result: ToolDispatchResult } => {
+  if (!resolveCollisionLayerId(context.map, context.activeLayerId)) {
+    return { session: {}, result: {} };
+  }
   const command = createCollisionPaintCommand(context.map, point.tileX, point.tileY);
   return {
     session: {},
@@ -741,6 +785,20 @@ const rectSelection = (origin: PointerPoint, point: PointerPoint): Set<string> =
 };
 
 const brushPreviewForTool = (context: ToolContext, point: PointerPoint) => {
+  if (
+    (context.activeTool === 'tileBrush' || context.activeTool === 'objectPlace') &&
+    context.resolvedBrush?.kind === 'placeObject'
+  ) {
+    const tileW = context.map.tileSize.width;
+    const tileH = context.map.tileSize.height;
+    return {
+      x: point.tileX,
+      y: point.tileY,
+      w: Math.max(1, Math.ceil(context.resolvedBrush.width / tileW)),
+      h: Math.max(1, Math.ceil(context.resolvedBrush.height / tileH)),
+      tileIndex: 1,
+    };
+  }
   if (context.activeTool === 'tileBrush' || context.activeTool === 'collisionPaint') {
     return {
       x: point.tileX,
@@ -755,17 +813,6 @@ const brushPreviewForTool = (context: ToolContext, point: PointerPoint) => {
             : context.resolvedBrush?.kind === 'paintAutotile'
               ? context.resolvedBrush.previewTileIndex
               : 1,
-    };
-  }
-  if (context.activeTool === 'objectPlace' && context.resolvedBrush?.kind === 'placeObject') {
-    const tileW = context.map.tileSize.width;
-    const tileH = context.map.tileSize.height;
-    return {
-      x: point.tileX,
-      y: point.tileY,
-      w: Math.max(1, Math.ceil(context.resolvedBrush.width / tileW)),
-      h: Math.max(1, Math.ceil(context.resolvedBrush.height / tileH)),
-      tileIndex: 1,
     };
   }
   return null;

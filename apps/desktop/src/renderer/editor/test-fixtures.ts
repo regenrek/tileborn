@@ -45,6 +45,7 @@ export const createTestMap = () =>
 
 export const TEST_TILE_LAYER_ID = TILE_LAYER_ID;
 export const TEST_OBJECT_LAYER_ID = OBJECT_LAYER_ID;
+export const TEST_COLLISION_LAYER_ID = COLLISION_LAYER_ID;
 
 /** Map without a collision layer — for inverse tests when apply creates the layer. */
 export const createTestMapWithoutCollision = () =>

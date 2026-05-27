@@ -5,13 +5,13 @@ import {
   makeLayerId,
   makeObjectId,
   MapObject,
+  MapObjectPlacement,
   ObjectLayer,
   TileborneMap,
   TileChunk,
   TileLayer,
   type LayerId,
   type MapLayer,
-  type MapObjectPlacement,
   type ObjectId,
 } from '@tileborne/core';
 
@@ -68,17 +68,54 @@ const cloneChunk = (chunk: TileChunk): TileChunk =>
     tiles: [...chunk.tiles],
   });
 
+const optionFromMaybeEncoded = <Value>(value: unknown): Option.Option<Value> => {
+  if (Option.isOption(value)) {
+    return value as Option.Option<Value>;
+  }
+  if (value === undefined || value === null) {
+    return Option.none();
+  }
+  if (typeof value === 'object' && value !== null) {
+    if (Object.keys(value).length === 0) {
+      return Option.none();
+    }
+    if ('_tag' in value) {
+      return value._tag === 'Some'
+        ? Option.some((value as unknown as { readonly value: Value }).value)
+        : Option.none();
+    }
+    if ('value' in value) {
+      return Option.some((value as { readonly value: Value }).value);
+    }
+  }
+  return Option.some(value as Value);
+};
+
+const clonePlacement = (placement: MapObject['placement']): MapObjectPlacement | undefined => {
+  if (placement === undefined) {
+    return undefined;
+  }
+  return new MapObjectPlacement({
+    packId: optionFromMaybeEncoded(placement.packId),
+    placeableId: placement.placeableId,
+    source: placement.source,
+    assetId: optionFromMaybeEncoded(placement.assetId),
+    tileId: optionFromMaybeEncoded(placement.tileId),
+    gid: optionFromMaybeEncoded(placement.gid),
+  });
+};
+
 const cloneObject = (object: MapObject): MapObject =>
   new MapObject({
     id: object.id,
     kind: object.kind,
     x: object.x,
     y: object.y,
-    width: object.width,
-    height: object.height,
+    width: optionFromMaybeEncoded(object.width),
+    height: optionFromMaybeEncoded(object.height),
     layerId: object.layerId,
     properties: { ...object.properties },
-    placement: object.placement,
+    placement: clonePlacement(object.placement),
   });
 
 interface RebuildMapOverrides {
@@ -124,13 +161,7 @@ export const findObjectLayer = (map: TileborneMap, layerId?: LayerId): ObjectLay
 export const findLayerById = (
   map: TileborneMap,
   layerId: LayerId,
-): TileLayer | CollisionLayer | undefined => {
-  const layer = map.layers.find((entry) => entry.id === layerId);
-  if (layer?._tag === 'tile' || layer?._tag === 'collision') {
-    return layer;
-  }
-  return undefined;
-};
+): MapLayer | undefined => map.layers.find((entry) => entry.id === layerId);
 
 const cloneLayerWithVisible = (layer: MapLayer, visible: boolean): MapLayer => {
   if (layer._tag === 'tile') {
@@ -199,7 +230,7 @@ export const getTileIndex = (
   tileY: number,
 ): number => {
   const layer = findLayerById(map, layerId);
-  if (!layer) {
+  if (!layer || (layer._tag !== 'tile' && layer._tag !== 'collision')) {
     return 0;
   }
   const { chunkX, chunkY } = chunkOrigin(tileX, tileY);

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { TileborneMap } from '@tileborne/core';
+import type { PackId, TileborneMap } from '@tileborne/core';
 import { PixiRendererAdapter } from '@tileborne/runtime';
 import { Effect, Option } from 'effect';
 
 import { MapEditorMinimap } from '@/components/map-editor-minimap';
 import { isEditableTarget } from '@/editor/is-editable-target';
+import { resolveToolActiveLayerId } from '@/editor/layer-selection';
 import { useEditorCommands } from '@/editor/use-editor-commands';
 import { zoomCameraByWheel, wheelDeltaPixels } from '@/editor/viewport/viewport-navigation';
 import {
@@ -25,12 +26,35 @@ import {
 } from '@/editor/viewport/viewport-mount-lifecycle';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { loadViewportAssetBundle } from '@/editor/viewport/viewport-asset-manifest';
+import { useActiveWorkingPalette } from '@/hooks/use-working-palettes';
 import {
   createAutotilePaintResolver,
   type AutotilePaintResolver,
 } from '@/editor/viewport/autotile-paint';
 import { useEditorUiStore, type BrushIntent, type EditorTool } from '@/stores/editor-ui-store';
 import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
+
+type ViewportPointerEvent = PointerEvent | React.PointerEvent<HTMLDivElement>;
+type ViewportWheelEvent = WheelEvent | React.WheelEvent<HTMLDivElement>;
+
+const trySetPointerCapture = (target: HTMLDivElement, pointerId: number): void => {
+  try {
+    target.setPointerCapture(pointerId);
+  } catch {
+    // Synthetic/CDP-dispatched pointer events may not have an active browser
+    // pointer. Placement should still run; capture only improves drag continuity.
+  }
+};
+
+const tryReleasePointerCapture = (target: HTMLDivElement, pointerId: number): void => {
+  try {
+    if (target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
+    }
+  } catch {
+    // See trySetPointerCapture.
+  }
+};
 
 export interface MapEditorViewportProps {
   readonly projectId: string;
@@ -41,6 +65,7 @@ export interface MapEditorViewportProps {
 export interface BrushActionContext {
   readonly brushIntent: BrushIntent;
   readonly pack?: TilesetPack | undefined;
+  readonly packs?: readonly TilesetPack[] | undefined;
   readonly tileIndexByTileId: ReadonlyMap<TileIdType, number>;
   readonly autotileResolver?: AutotilePaintResolver | undefined;
 }
@@ -48,6 +73,7 @@ export interface BrushActionContext {
 export const resolveBrushAction = ({
   brushIntent,
   pack,
+  packs,
   tileIndexByTileId,
   autotileResolver,
 }: BrushActionContext): ResolvedBrush | undefined => {
@@ -71,18 +97,23 @@ export const resolveBrushAction = ({
       return tileIndex === undefined ? undefined : { kind: 'paintTile', tileIndex };
     }
     case 'placeable': {
-      const placeable = pack?.placeables?.find(
-        (candidate) => candidate.id === brushIntent.placeableId,
-      );
-      const frame = placeable?.frames[0];
-      if (placeable === undefined || frame === undefined) {
+      const candidatePacks = packs ?? (pack === undefined ? [] : [pack]);
+      const placeableEntry = candidatePacks
+        .filter((candidatePack) => brushIntent.packId === undefined || candidatePack.id === brushIntent.packId)
+        .flatMap((candidatePack) =>
+          (candidatePack.placeables ?? []).map((candidate) => ({ packId: candidatePack.id, placeable: candidate })),
+        )
+        .find((candidate) => candidate.placeable.id === brushIntent.placeableId);
+      const frame = placeableEntry?.placeable.frames[0];
+      if (placeableEntry === undefined || frame === undefined) {
         return undefined;
       }
       return {
         kind: 'placeObject',
-        placeableId: placeable.id,
-        width: placeable.size.width,
-        height: placeable.size.height,
+        packId: placeableEntry.packId,
+        placeableId: placeableEntry.placeable.id,
+        width: placeableEntry.placeable.size.width,
+        height: placeableEntry.placeable.size.height,
         frame: {
           assetId: frame.assetId,
           tileId: frame.tileId,
@@ -107,6 +138,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   const panOriginRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const tileIndexByTileIdRef = useRef<ReadonlyMap<TileIdType, number>>(new Map());
   const viewportPackRef = useRef<TilesetPack | undefined>(undefined);
+  const viewportPacksRef = useRef<readonly TilesetPack[]>([]);
   const autotileResolverRef = useRef<AutotilePaintResolver | undefined>(undefined);
   const localEditPendingRef = useRef(false);
 
@@ -116,6 +148,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const stagedObjectKind = useEditorUiStore((state) => state.stagedObjectKind);
   const activeLayerId = useEditorUiStore((state) => state.activeLayerId);
+  const setActiveLayerId = useEditorUiStore((state) => state.setActiveLayerId);
   const showGrid = useEditorUiStore((state) => state.showGrid);
   const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
   const showDebugOverlay = useEditorUiStore((state) => state.showDebugOverlay);
@@ -124,6 +157,30 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   const setSelection = useEditorUiStore((state) => state.setSelection);
   const clearSelection = useEditorUiStore((state) => state.clearSelection);
   const setHoverTile = useEditorUiStore((state) => state.setHoverTile);
+  const activePalette = useActiveWorkingPalette(projectId);
+  const brushPackId =
+    brushIntent.kind === 'placeable' && brushIntent.packId !== map.properties.tilesetPackId
+      ? brushIntent.packId
+      : undefined;
+  const extraPackIds = Array.from(
+    new Set(
+      [
+        ...(activePalette?.items ?? [])
+          .map((item) => item.ref.packId)
+          .filter((packId): packId is PackId => packId !== map.properties.tilesetPackId),
+        ...(brushPackId === undefined ? [] : [brushPackId]),
+      ],
+    ),
+  ).sort();
+  const renderablePlaceableRefs =
+    brushIntent.kind === 'placeable'
+      ? [{ packId: brushIntent.packId, placeableId: brushIntent.placeableId }]
+      : [];
+  const extraPackIdsKey = extraPackIds.join('|');
+  const renderablePlaceableRefsKey = renderablePlaceableRefs
+    .map((ref) => `${ref.packId ?? ''}:${ref.placeableId}`)
+    .join('|');
+  const resolvedActiveLayerId = resolveToolActiveLayerId(map, activeLayerId, activeTool, brushIntent);
 
   const { applyCommand, undo, redo } = useEditorCommands({
     projectId,
@@ -173,20 +230,24 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
 
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
+        await Effect.runPromise(adapter.mount(container));
+        for (const canvas of container.querySelectorAll('canvas')) {
+          canvas.style.pointerEvents = 'none';
+        }
         const bundle = await Effect.runPromise(
-          adapter.mount(container).pipe(
-            Effect.flatMap(() => loadViewportAssetBundle({ projectId, map })),
-            Effect.flatMap((bundle) => adapter.loadAssets(bundle.manifest).pipe(Effect.as(bundle))),
-          ),
+          loadViewportAssetBundle({ projectId, map, extraPackIds, renderablePlaceableRefs }),
         );
         viewportPackRef.current = bundle.pack;
+        viewportPacksRef.current = bundle.packs;
         tileIndexByTileIdRef.current = bundle.tileIndexByTileId;
         autotileResolverRef.current = createAutotilePaintResolver(
           bundle.pack,
           bundle.tileIndexByTileId,
         );
+        await Effect.runPromise(adapter.loadAssets(bundle.manifest));
         return new EditorViewportController(adapter, {
           pack: bundle.pack,
+          packs: bundle.packs,
           frameIndex: bundle.frameIndex,
           tileIdByTileIndex: bundle.tileIdByTileIndex,
           collisionMaskByTileIndex: bundle.collisionMaskByTileIndex,
@@ -231,7 +292,14 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
         }
       });
     };
-  }, [mapId, projectId]);
+  }, [extraPackIdsKey, mapId, projectId, renderablePlaceableRefsKey]);
+
+  useEffect(() => {
+    if (resolvedActiveLayerId !== activeLayerId) {
+      setActiveLayerId(resolvedActiveLayerId);
+    }
+    controllerRef.current?.setActiveLayerId(resolvedActiveLayerId);
+  }, [activeLayerId, resolvedActiveLayerId, setActiveLayerId]);
 
   const loadedMapIdRef = useRef(mapId);
   useEffect(() => {
@@ -318,7 +386,6 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
         b: 'tileBrush',
         r: 'rectangleFill',
         e: 'eraser',
-        o: 'objectPlace',
         m: 'objectMove',
         c: 'collisionPaint',
         t: 'regionMark',
@@ -349,21 +416,23 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       resolvedBrush: resolveBrushAction({
         brushIntent,
         pack: viewportPackRef.current,
+        packs: viewportPacksRef.current,
         tileIndexByTileId: tileIndexByTileIdRef.current,
         autotileResolver: autotileResolverRef.current,
       }),
       autotileResolver: autotileResolverRef.current,
       stagedObjectKind,
-      activeLayerId: activeLayerId ?? undefined,
+      activeLayerId: resolvedActiveLayerId ?? undefined,
       selection,
       shiftKey: false,
     }),
-    [activeLayerId, activeTool, brushIntent, selection, stagedObjectKind],
+    [activeTool, brushIntent, resolvedActiveLayerId, selection, stagedObjectKind],
   );
 
   const toPoint = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      const bounds = event.currentTarget.getBoundingClientRect();
+    (event: ViewportPointerEvent) => {
+      const target = event.currentTarget as HTMLDivElement;
+      const bounds = target.getBoundingClientRect();
       const currentMap = currentMapRef.current;
       const tile = tileCoordsFromPointer(
         currentMap,
@@ -414,7 +483,8 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     [setHoverTile],
   );
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (event: ViewportPointerEvent) => {
+    const target = event.currentTarget as HTMLDivElement;
     const effectiveTool =
       event.button === 1 || spaceDownRef.current
         ? 'pan'
@@ -423,7 +493,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
           : activeTool;
     activePointerIdRef.current = event.pointerId;
     strokeToolRef.current = effectiveTool;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    trySetPointerCapture(target, event.pointerId);
     if (effectiveTool === 'pan') {
       panOriginRef.current = {
         x: event.clientX,
@@ -449,7 +519,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     }
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (event: ViewportPointerEvent) => {
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== event.pointerId) {
       return;
     }
@@ -481,7 +551,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     }
   };
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerUp = (event: ViewportPointerEvent) => {
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== event.pointerId) {
       return;
     }
@@ -494,9 +564,8 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       sessionRef.current,
     );
     sessionRef.current = session;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
+    const target = event.currentTarget as HTMLDivElement;
+    tryReleasePointerCapture(target, event.pointerId);
     activePointerIdRef.current = null;
     strokeToolRef.current = null;
     if (result.selection) {
@@ -506,10 +575,9 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     controllerRef.current?.setBrushPreview(result.brushPreview ?? null);
   };
 
-  const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
+  const handlePointerCancel = (event: ViewportPointerEvent) => {
+    const target = event.currentTarget as HTMLDivElement;
+    tryReleasePointerCapture(target, event.pointerId);
     activePointerIdRef.current = null;
     strokeToolRef.current = null;
     panOriginRef.current = null;
@@ -517,9 +585,10 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     controllerRef.current?.setBrushPreview(null);
   };
 
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+  const handleWheel = (event: ViewportWheelEvent) => {
     event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const target = event.currentTarget as HTMLDivElement;
+    const bounds = target.getBoundingClientRect();
     if (event.ctrlKey || event.metaKey) {
       const nextCamera = zoomCameraByWheel(
         camera,
@@ -538,23 +607,46 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     });
   };
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => handlePointerDown(event);
+    const onPointerMove = (event: PointerEvent) => handlePointerMove(event);
+    const onPointerUp = (event: PointerEvent) => handlePointerUp(event);
+    const onPointerCancel = (event: PointerEvent) => handlePointerCancel(event);
+    const onWheel = (event: WheelEvent) => handleWheel(event);
+    const onPointerLeave = () => {
+      if (activePointerIdRef.current !== null) {
+        return;
+      }
+      updateHoverTile(null);
+      controllerRef.current?.setBrushPreview(null);
+    };
+    const onContextMenu = (event: MouseEvent) => event.preventDefault();
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointermove', onPointerMove);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointercancel', onPointerCancel);
+    container.addEventListener('pointerleave', onPointerLeave);
+    container.addEventListener('contextmenu', onContextMenu);
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerup', onPointerUp);
+      container.removeEventListener('pointercancel', onPointerCancel);
+      container.removeEventListener('pointerleave', onPointerLeave);
+      container.removeEventListener('contextmenu', onContextMenu);
+      container.removeEventListener('wheel', onWheel);
+    };
+  });
+
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full touch-none overflow-hidden bg-background"
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onWheel={handleWheel}
-      onPointerLeave={() => {
-        if (activePointerIdRef.current !== null) {
-          return;
-        }
-        updateHoverTile(null);
-        controllerRef.current?.setBrushPreview(null);
-      }}
-      onContextMenu={(event) => event.preventDefault()}
+      className="relative h-full w-full touch-none overflow-hidden bg-background [&>canvas]:pointer-events-none"
     >
       {showMinimapOverlay ? (
         <MapEditorMinimap

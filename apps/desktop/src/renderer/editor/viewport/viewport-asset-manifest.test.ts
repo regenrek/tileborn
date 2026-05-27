@@ -1,14 +1,25 @@
-import { makeAssetId, makePackId, makeTileId, type ContentHash, type Uuid } from '@tileborne/core';
+import {
+  makeAssetId,
+  makePackId,
+  makePlaceableId,
+  makeTileId,
+  type ContentHash,
+  type Uuid,
+} from '@tileborne/core';
 import { createRuntimeAssetManifest, type RuntimeAssetManifest } from '@tileborne/runtime';
 import {
   BitmaskCollisionMask,
   CellSize,
+  Placeable,
+  PlaceableFrameRef,
+  PlaceableSize,
   Tile,
   Tileset,
   TilesetId,
   TilesetPack,
   TilesetPackAsset,
   TilesetPackLicense,
+  TiledPlaceableSource,
   UVRect,
 } from '@tileborne/sdk-tileset/schemas';
 import { writeTilesetManifest } from '@tileborne/sdk-tileset/manifest';
@@ -253,6 +264,216 @@ describe('viewport asset manifest', () => {
     expect(fetchedPaths).toContain('tiles/sample.png');
     expect(fetchedPaths).not.toContain('props/decoy-sprite.png');
     expect(bundle.renderableAssetIdByPath.get('props/decoy-sprite.png')).toBeUndefined();
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+  });
+
+  it('fetches only selected placeable frames from image-collection packs', async () => {
+    const selectedPlaceableId = makePlaceableId(uuid('300'));
+    const selectedAssetId = makeAssetId(uuid('301'));
+    const selectedTileId = makeTileId(uuid('302'));
+    const hiddenPlaceableId = makePlaceableId(uuid('303'));
+    const hiddenAssetId = makeAssetId(uuid('304'));
+    const hiddenTileId = makeTileId(uuid('305'));
+    const packWithPlaceables = new TilesetPack({
+      schemaVersion: fakeTilesetPack.schemaVersion,
+      id: fakeTilesetPack.id,
+      name: fakeTilesetPack.name,
+      version: fakeTilesetPack.version,
+      license: fakeTilesetPack.license,
+      tilesets: fakeTilesetPack.tilesets,
+      assets: [
+        ...fakeTilesetPack.assets,
+        new TilesetPackAsset({
+          id: selectedAssetId,
+          path: 'props/selected.png',
+          mime: 'image/png',
+        }),
+        new TilesetPackAsset({
+          id: hiddenAssetId,
+          path: 'props/hidden.png',
+          mime: 'image/png',
+        }),
+      ],
+      placeables: [
+        new Placeable({
+          id: selectedPlaceableId,
+          name: 'Selected',
+          size: new PlaceableSize({ width: 64, height: 64 }),
+          frames: [
+            new PlaceableFrameRef({
+              assetId: selectedAssetId,
+              tileId: selectedTileId,
+              uv: new UVRect({ x: 0, y: 0, w: 64, h: 64 }),
+              durationMs: Option.none(),
+            }),
+          ],
+          tags: [],
+          placementMode: 'object',
+          source: new TiledPlaceableSource({
+            format: 'tiled',
+            tilesetName: 'Props',
+            localTileId: 0,
+            image: Option.some('props/selected.png'),
+            imageWidth: Option.some(64),
+            imageHeight: Option.some(64),
+            objectType: Option.none(),
+            objectClass: Option.none(),
+            properties: {},
+          }),
+        }),
+        new Placeable({
+          id: hiddenPlaceableId,
+          name: 'Hidden',
+          size: new PlaceableSize({ width: 64, height: 64 }),
+          frames: [
+            new PlaceableFrameRef({
+              assetId: hiddenAssetId,
+              tileId: hiddenTileId,
+              uv: new UVRect({ x: 0, y: 0, w: 64, h: 64 }),
+              durationMs: Option.none(),
+            }),
+          ],
+          tags: [],
+          placementMode: 'object',
+          source: new TiledPlaceableSource({
+            format: 'tiled',
+            tilesetName: 'Props',
+            localTileId: 1,
+            image: Option.some('props/hidden.png'),
+            imageWidth: Option.some(64),
+            imageHeight: Option.some(64),
+            objectType: Option.none(),
+            objectClass: Option.none(),
+            properties: {},
+          }),
+        }),
+      ],
+    });
+    const manifestJson = JSON.stringify(writeTilesetManifest(packWithPlaceables));
+    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
+
+    const getAssetDataUrl = vi.fn(async ({ assetPath }: { assetPath: string }) => {
+      if (assetPath === 'tileborne-asset-pack.json') {
+        return { dataUrl: manifestDataUrl };
+      }
+      if (assetPath === 'tiles/sample.png' || assetPath === 'props/selected.png') {
+        return { dataUrl: fakeTextureDataUrl };
+      }
+      throw new Error(`unexpected asset path: ${assetPath}`);
+    });
+    vi.stubGlobal('window', {
+      tileborne: {
+        assets: {
+          listPacks: vi.fn().mockResolvedValue({
+            packs: [
+              {
+                id: packWithPlaceables.id,
+                name: packWithPlaceables.name,
+                version: packWithPlaceables.version,
+              },
+            ],
+          }),
+          getAssetDataUrl,
+        },
+        projects: { get: vi.fn() },
+      },
+    });
+
+    const bundle = await Effect.runPromise(
+      loadViewportAssetBundle({
+        renderablePlaceableRefs: [
+          { packId: packWithPlaceables.id, placeableId: selectedPlaceableId },
+        ],
+      }),
+    );
+    const fetchedPaths = getAssetDataUrl.mock.calls.map((call) => call[0]?.assetPath);
+    expect(fetchedPaths).toContain('tiles/sample.png');
+    expect(fetchedPaths).toContain('props/selected.png');
+    expect(fetchedPaths).not.toContain('props/hidden.png');
+    expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(2);
+    expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
+  });
+
+  it('keeps the primary map pack renderable when an optional palette pack is stale', async () => {
+    const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440088');
+    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
+    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
+
+    const getAssetDataUrl = vi.fn(
+      async ({ packId, assetPath }: { packId: string; assetPath: string }) => {
+        if (packId === missingPackId) {
+          throw new Error(`asset pack not found: ${packId}`);
+        }
+        if (assetPath === 'tileborne-asset-pack.json') {
+          return { dataUrl: manifestDataUrl };
+        }
+        if (assetPath === 'tiles/sample.png') {
+          return { dataUrl: fakeTextureDataUrl };
+        }
+        throw new Error(`unexpected asset path: ${assetPath}`);
+      },
+    );
+    vi.stubGlobal('window', {
+      tileborne: {
+        assets: {
+          listPacks: vi.fn(),
+          getAssetDataUrl,
+        },
+        projects: { get: vi.fn() },
+      },
+    });
+
+    const bundle = await Effect.runPromise(
+      loadViewportAssetBundle({
+        packId: fakeTilesetPack.id,
+        extraPackIds: [missingPackId],
+      }),
+    );
+
+    expect(bundle.packs.map((pack) => pack.id)).toEqual([fakeTilesetPack.id]);
+    expect(bundle.manifest.assets).toHaveLength(1);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+  });
+
+  it('loads an extra palette pack when the primary map pack is stale', async () => {
+    const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440089');
+    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
+    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
+
+    const getAssetDataUrl = vi.fn(
+      async ({ packId, assetPath }: { packId: string; assetPath: string }) => {
+        if (packId === missingPackId) {
+          throw new Error(`asset pack not found: ${packId}`);
+        }
+        if (assetPath === 'tileborne-asset-pack.json') {
+          return { dataUrl: manifestDataUrl };
+        }
+        if (assetPath === 'tiles/sample.png') {
+          return { dataUrl: fakeTextureDataUrl };
+        }
+        throw new Error(`unexpected asset path: ${assetPath}`);
+      },
+    );
+    vi.stubGlobal('window', {
+      tileborne: {
+        assets: {
+          listPacks: vi.fn(),
+          getAssetDataUrl,
+        },
+        projects: { get: vi.fn() },
+      },
+    });
+
+    const bundle = await Effect.runPromise(
+      loadViewportAssetBundle({
+        packId: missingPackId,
+        extraPackIds: [fakeTilesetPack.id],
+      }),
+    );
+
+    expect(bundle.packs.map((pack) => pack.id)).toEqual([fakeTilesetPack.id]);
+    expect(bundle.manifest.name).toBe(fakeTilesetPack.name);
+    expect(bundle.manifest.assets).toHaveLength(1);
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
   });
 

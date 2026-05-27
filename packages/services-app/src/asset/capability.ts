@@ -30,7 +30,7 @@ interface ProbeInput {
   readonly manifestPath: string;
 }
 
-const CAPABILITY_CACHE_VERSION = 4;
+const CAPABILITY_CACHE_VERSION = 5;
 const textEncoder = new TextEncoder();
 
 const capabilityIntegrityHash = (rawManifest: string): ContentHash =>

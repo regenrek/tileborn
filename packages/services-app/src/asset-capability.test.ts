@@ -25,6 +25,7 @@ import { withTempHome } from './test-utils.js';
 const appLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const textEncoder = new TextEncoder();
 
 const runApp = <A, E>(
   effect: Effect.Effect<A, E, ProjectService | MapService | AssetService | JobService>,
@@ -164,6 +165,60 @@ describe('Asset pack capability', () => {
       expect(pack.capability.tileCount).toBeGreaterThanOrEqual(1);
     }));
 
+  it('keeps packs paintable when legacy autotile masks contain dangling tile refs', () => {
+    const packId = makePackId('550e8400-e29b-41d4-a716-446655440207');
+    const assetId = makeAssetId('550e8400-e29b-41d4-a716-446655440207');
+    const tilesetId = 'tileset:550e8400-e29b-41d4-a716-446655440207';
+    const validTileId = 'tile:550e8400-e29b-41d4-a716-446655440207';
+    const danglingTileId = 'tile:550e8400-e29b-41d4-a716-446655440208';
+
+    const capability = detectPackCapability(packId, {
+      schemaVersion: 1,
+      id: packId,
+      name: 'Legacy Wang Pack',
+      version: '1.0.0',
+      license: { spdxId: 'CC0-1.0', redistributable: true },
+      assets: [{ id: assetId, path: 'tiles/terrain.png', mime: 'image/png' }],
+      terrainClasses: ['grass'],
+      tilesets: [
+        {
+          id: tilesetId,
+          name: 'Terrain',
+          atlasAssetId: assetId,
+          cellSize: { width: 16, height: 16 },
+          margin: 0,
+          spacing: 0,
+        },
+      ],
+      tiles: [{ id: validTileId, tilesetId, uv: { x: 0, y: 0, w: 16, h: 16 }, tags: [] }],
+      autotileRules: [
+        {
+          _tag: 'wang2corner',
+          tilesetId,
+          id: 'autotile-rule:550e8400-e29b-41d4-a716-446655440207',
+          name: 'ground',
+          terrainClasses: ['grass'],
+          maskToTileIds: { '1111': [validTileId, danglingTileId] },
+        },
+      ],
+      variantFilters: [],
+      animations: [],
+      terrainTransitions: [],
+      collisionMasks: [],
+    });
+
+    expect(capability.paintable).toBe(true);
+    expect(capability.source).toBe('tileborne');
+    expect(capability.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _tag: 'PACK.unsupported-schema',
+          message: 'Autotile rule references an unknown tile',
+        }),
+      ]),
+    );
+  });
+
   it('recomputes stale no-tile capability locks for canonical tileset manifests', () =>
     withTempHome(async (home) => {
       const source = path.join(repoRoot, 'packages/test-fixtures/fixtures/asset-packs/smoke-pack');
@@ -213,6 +268,62 @@ describe('Asset pack capability', () => {
         readonly manifestHash: string;
       };
       expect(nextLock.capability?.integrityHash).not.toBe(nextLock.manifestHash);
+    }));
+
+  it('recomputes old-version capability locks after capability semantics change', () =>
+    withTempHome(async (home) => {
+      const source = path.join(repoRoot, 'packages/test-fixtures/fixtures/asset-packs/smoke-pack');
+      const pack = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const packId = yield* assets.importPackNow(
+            new DirectoryAssetPackSource({ path: source }),
+          );
+          return yield* assets.getPack(packId);
+        }),
+      );
+      expect(pack.capability.paintable).toBe(true);
+
+      const installedRoot = packDir(home, pack.id, pack.version);
+      const manifestRaw = await readFile(path.join(installedRoot, 'tileborne-asset-pack.json'), 'utf8');
+      const oldVersionHash = hashBytes(textEncoder.encode(`pack-capability-v4\n${manifestRaw}`));
+      const lockPath = path.join(installedRoot, 'lock.json');
+      const staleLock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+        capability?: {
+          integrityHash?: string;
+          capability?: Record<string, unknown>;
+        };
+      };
+      staleLock.capability ??= {};
+      staleLock.capability.integrityHash = oldVersionHash;
+      staleLock.capability.capability = {
+        ...(staleLock.capability.capability ?? {}),
+        paintable: false,
+        source: 'asset-only',
+        tilesetCount: 0,
+        tileCount: 0,
+        diagnostics: [{ _tag: 'PACK.no-tilesets', message: 'Pack does not contain paintable tilesets.' }],
+      };
+      await writeFile(lockPath, `${JSON.stringify(staleLock, null, 2)}\n`, 'utf8');
+
+      const migrated = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          return (yield* assets.listPacks()).find((candidate) => candidate.id === pack.id);
+        }),
+      );
+
+      expect(migrated?.capability.paintable).toBe(true);
+      expect(migrated?.capability.source).toBe('tileborne');
+      expect(migrated?.capability.tileCount).toBeGreaterThan(0);
+      const nextLock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+        readonly capability?: {
+          readonly integrityHash?: string;
+          readonly capability?: Record<string, unknown>;
+        };
+      };
+      expect(nextLock.capability?.integrityHash).not.toBe(oldVersionHash);
+      expect(nextLock.capability?.capability?.['source']).toBe('tileborne');
     }));
 
   it('marks an asset-only manifest as non-paintable and caches the result', () =>

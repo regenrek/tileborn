@@ -17,12 +17,17 @@ export function AssetPackPreviewThumb({ packId, className }: AssetPackPreviewThu
       return undefined;
     }
     const firstTile = pack.tilesets[0]?.tiles[0];
-    if (firstTile === undefined) {
-      return undefined;
+    if (firstTile !== undefined) {
+      return buildFrameIndex(pack).lookup(firstTile.id);
     }
-    return buildFrameIndex(pack).lookup(firstTile.id);
+    return pack.placeables?.[0]?.frames[0];
   }, [pack]);
-  const previewAssetPath = previewFrame?.sourceAssetPaths[0];
+  const previewAssetPath =
+    previewFrame === undefined
+      ? undefined
+      : 'sourceAssetPaths' in previewFrame
+        ? previewFrame.sourceAssetPaths[0]
+        : pack?.assets.find((asset) => asset.id === previewFrame.assetId)?.path;
   const dataUrlQuery = useAssetDataUrl(packId, previewAssetPath);
 
   const loading = packQuery.isLoading || (previewAssetPath !== undefined && dataUrlQuery.isLoading);

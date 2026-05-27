@@ -181,6 +181,7 @@ describe('WorkingPaletteSidebar', () => {
     fireEvent.click(button);
     expect(selectBrushMock).toHaveBeenCalledWith({
       kind: 'placeable',
+      packId,
       placeableId: item.ref.refId,
     });
   });

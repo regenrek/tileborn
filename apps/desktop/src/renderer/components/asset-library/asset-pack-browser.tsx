@@ -75,6 +75,7 @@ import {
   assetLibraryReferenceKey,
   workingPaletteItemKey,
   type WorkingPalette,
+  type WorkingPaletteItem,
 } from '@/lib/working-palettes-bridge';
 
 interface AssetPackBrowserProps {
@@ -185,11 +186,11 @@ export function AssetPackBrowser({
   const activePalette = useActiveWorkingPalette(projectId);
   const paletteActions = useWorkingPaletteActions();
 
-  const itemKeysInActivePalette = useMemo(() => {
+  const itemsByKeyInActivePalette = useMemo(() => {
     if (activePalette === undefined) {
-      return new Set<string>();
+      return new Map<string, WorkingPaletteItem>();
     }
-    return new Set(activePalette.items.map((item) => workingPaletteItemKey(item)));
+    return new Map(activePalette.items.map((item) => [workingPaletteItemKey(item), item] as const));
   }, [activePalette]);
   const groups = libraryQuery.data?.groups ?? [];
   const totalGroups = libraryQuery.data?.total ?? 0;
@@ -219,7 +220,7 @@ export function AssetPackBrowser({
     prefetchLibraryPage,
   ]);
 
-  const handleAddDrafts = useCallback(
+  const handleToggleDrafts = useCallback(
     (
       items: readonly { readonly ref: AssetLibraryReference; readonly label?: string | undefined }[],
       label: string,
@@ -228,31 +229,54 @@ export function AssetPackBrowser({
         return;
       }
       void (async () => {
+        const existingItems = items
+          .map((item) => itemsByKeyInActivePalette.get(assetLibraryReferenceKey(item.ref)))
+          .filter((item): item is WorkingPaletteItem => item !== undefined);
+        if (activePalette !== undefined && existingItems.length === items.length) {
+          for (const item of existingItems) {
+            await paletteActions.removeItem({
+              projectId,
+              paletteId: activePalette.id,
+              itemId: item.id,
+            });
+          }
+          notifySuccess(
+            `Removed ${label} (${items.length} ${items.length === 1 ? 'item' : 'items'}) from ${activePalette.name}`,
+          );
+          return;
+        }
+
+        const missingItems = items.filter(
+          (item) => !itemsByKeyInActivePalette.has(assetLibraryReferenceKey(item.ref)),
+        );
+        if (missingItems.length === 0) {
+          return;
+        }
         const target =
           activePalette ??
           (await ensureWorkingPalette({
             projectId,
             name: `${packName} palette`,
           }));
-        await paletteActions.addItems({ projectId, paletteId: target.id, items });
+        await paletteActions.addItems({ projectId, paletteId: target.id, items: missingItems });
         notifySuccess(
-          `Added ${label} (${items.length} ${items.length === 1 ? 'item' : 'items'}) to ${target.name}`,
+          `Added ${label} (${missingItems.length} ${missingItems.length === 1 ? 'item' : 'items'}) to ${target.name}`,
         );
       })();
     },
-    [activePalette, packName, paletteActions, projectId],
+    [activePalette, itemsByKeyInActivePalette, packName, paletteActions, projectId],
   );
   const handleAddGroup = useCallback(
     (group: AssetLibraryGroup, items?: ReturnType<typeof libraryGroupToPaletteDrafts>) => {
-      handleAddDrafts(items ?? libraryGroupToPaletteDrafts(group), group.label);
+      handleToggleDrafts(items ?? libraryGroupToPaletteDrafts(group), group.label);
     },
-    [handleAddDrafts],
+    [handleToggleDrafts],
   );
   const handleAddReference = useCallback(
     (group: AssetLibraryGroup, ref: AssetLibraryReference, label: string) => {
-      handleAddDrafts([{ ref, label }], group.label);
+      handleToggleDrafts([{ ref, label }], group.label);
     },
-    [handleAddDrafts],
+    [handleToggleDrafts],
   );
 
   if (packQuery.isLoading || libraryQuery.isLoading) {
@@ -356,7 +380,7 @@ export function AssetPackBrowser({
                       previewIndex={previewIndex}
                       onAddGroup={handleAddGroup}
                       onAddReference={handleAddReference}
-                      addedItemKeys={itemKeysInActivePalette}
+                      addedItemKeys={new Set(itemsByKeyInActivePalette.keys())}
                       integrityHash={integrityHash}
                       thumbnailCacheVersion={thumbnailCacheVersion}
                       prefetchThumbnail={prefetchThumbnail}
@@ -688,10 +712,10 @@ function BrowserGroup({
           data-testid={`asset-pack-browser-add-group-${group.id}`}
           disabled={groupDrafts.length === 0}
           onClick={() => onAddGroup(group, groupDrafts)}
-          title={`Add ${group.label} to working palette`}
+          title={`${added ? 'Remove' : 'Add'} ${group.label} ${added ? 'from' : 'to'} working palette`}
         >
           {added ? <CheckIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
-          Add group
+          {added ? 'Remove group' : 'Add group'}
         </Button>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-0">
@@ -775,8 +799,8 @@ function BrowserPreviewCell({
       data-testid={testId}
       data-added={added ? 'true' : 'false'}
       aria-pressed={added}
-      aria-label={`${added ? 'Added' : 'Add'} ${label}`}
-      title={`${label} · ${added ? 'in working palette' : 'click to add'}`}
+      aria-label={`${added ? 'Remove' : 'Add'} ${label}`}
+      title={`${label} · ${added ? 'click to remove' : 'click to add'}`}
       className={cn(
         'relative size-12 overflow-hidden p-1',
         added ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'bg-card',

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const useAssetPacksMock = vi.hoisted(() => vi.fn());
 const useMapMock = vi.hoisted(() => vi.fn());
+const useActiveWorkingPaletteMock = vi.hoisted(() => vi.fn());
 const battleRoyalePluginId = ['@tileborne-plugins', 'battle-royale'].join('/');
 
 vi.mock('@tanstack/react-router', () => ({
@@ -61,6 +62,10 @@ vi.mock('@/lib/pack-capability-client', () => ({
   }),
 }));
 
+vi.mock('@/hooks/use-working-palettes', () => ({
+  useActiveWorkingPalette: useActiveWorkingPaletteMock,
+}));
+
 vi.mock('@/components/sidebar/working-palette-sidebar', () => ({
   WorkingPaletteSidebar: ({
     packId,
@@ -94,10 +99,12 @@ describe('WorkingPaletteTab', () => {
     cleanup();
     useAssetPacksMock.mockReset();
     useMapMock.mockReset();
+    useActiveWorkingPaletteMock.mockReset();
   });
 
   it('renders the active working palette for a paintable pack', () => {
     useMapMock.mockReturnValue({ data: undefined });
+    useActiveWorkingPaletteMock.mockReturnValue(undefined);
     useAssetPacksMock.mockReturnValue({
       data: {
         packs: [
@@ -117,6 +124,7 @@ describe('WorkingPaletteTab', () => {
   });
 
   it('prefers the opened map tileset pack for imported map painting', () => {
+    useActiveWorkingPaletteMock.mockReturnValue(undefined);
     useMapMock.mockReturnValue({
       data: { map: { properties: { tilesetPackId: 'pack-imported-map' } } },
     });
@@ -137,6 +145,7 @@ describe('WorkingPaletteTab', () => {
 
   it('does not render installed pack rows or thousands of tile cards in the section shell', () => {
     useMapMock.mockReturnValue({ data: undefined });
+    useActiveWorkingPaletteMock.mockReturnValue(undefined);
     useAssetPacksMock.mockReturnValue({
       data: {
         packs: [{ id: 'pack-paintable-1', name: 'Huge Pack', assetCount: 29_000 }],
@@ -152,6 +161,7 @@ describe('WorkingPaletteTab', () => {
 
   it('guides users to Assets when no packs are installed', () => {
     useMapMock.mockReturnValue({ data: undefined });
+    useActiveWorkingPaletteMock.mockReturnValue(undefined);
     useAssetPacksMock.mockReturnValue({
       data: { packs: [] },
       isLoading: false,
@@ -161,5 +171,35 @@ describe('WorkingPaletteTab', () => {
 
     expect(screen.getByText('No asset packs')).toBeTruthy();
     expect(screen.getByText(/Open Assets to import a pack/i)).toBeTruthy();
+  });
+
+  it('renders curated object-only palettes without requiring a paintable pack', () => {
+    useMapMock.mockReturnValue({ data: { map: { properties: {} } } });
+    useActiveWorkingPaletteMock.mockReturnValue({
+      id: 'working-palette-objects',
+      name: 'Object palette',
+      items: [
+        {
+          id: 'working-palette-item-1',
+          label: 'Statue',
+          ref: {
+            kind: 'placeable',
+            packId: 'pack-asset-only',
+            refId: 'placeable-1',
+          },
+        },
+      ],
+    });
+    useAssetPacksMock.mockReturnValue({
+      data: {
+        packs: [{ id: 'pack-asset-only', name: 'Object Pack', assetCount: 641 }],
+      },
+      isLoading: false,
+    });
+
+    render(<WorkingPaletteTab projectId="project-1" mapId="map-1" />);
+
+    expect(screen.getByTestId('working-palette-sidebar-stub-pack-asset-only')).toBeTruthy();
+    expect(screen.queryByText('No paintable packs')).toBeNull();
   });
 });

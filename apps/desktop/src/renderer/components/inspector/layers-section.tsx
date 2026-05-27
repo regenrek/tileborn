@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import {
   Badge,
@@ -16,6 +17,7 @@ import {
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
 import { createSetLayerVisibilityCommand } from '@/editor/editor-commands';
+import { resolveActiveLayerId } from '@/editor/layer-selection';
 import { useMap } from '@/hooks/queries';
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -110,6 +112,16 @@ export function LayersSection() {
   const applyCommand = useEditorCommandsBridge((s) => s.applyCommand);
 
   const layers = mapQuery.data?.map.layers ?? [];
+  const resolvedActiveLayerId =
+    mapQuery.data?.map === undefined
+      ? null
+      : resolveActiveLayerId(mapQuery.data.map, activeLayerId);
+
+  useEffect(() => {
+    if (resolvedActiveLayerId !== activeLayerId) {
+      setActiveLayerId(resolvedActiveLayerId);
+    }
+  }, [activeLayerId, resolvedActiveLayerId, setActiveLayerId]);
 
   const handleToggleVisibility = (layerId: LayerId) => {
     const currentMap = mapQuery.data?.map;
@@ -168,7 +180,7 @@ export function LayersSection() {
               <LayerRow
                 key={layer.id}
                 layer={layer}
-                active={activeLayerId === layer.id}
+                active={resolvedActiveLayerId === layer.id}
                 onSelect={() => setActiveLayerId(layer.id as LayerId)}
                 onToggleVisibility={() => handleToggleVisibility(layer.id as LayerId)}
               />

@@ -1,5 +1,5 @@
 import { PixiRendererAdapter } from '@tileborne/runtime';
-import type { LayerId, MapObject, TileborneMap } from '@tileborne/core';
+import type { LayerId, MapLayer, MapObject, TileborneMap } from '@tileborne/core';
 import {
   cellsNeedingRefresh,
   neighborhoodForRule,
@@ -60,6 +60,15 @@ const optionValue = <A>(
   return value;
 };
 
+const HIDDEN_LAYER_ALPHA = 0.18;
+
+const layerAlpha = (layer: MapLayer | undefined): number => {
+  if (layer === undefined) {
+    return 1;
+  }
+  return layer.visible ? layer.opacity : HIDDEN_LAYER_ALPHA;
+};
+
 export interface ViewportPatch {
   readonly layerId?: LayerId;
   readonly cells?: readonly { readonly x: number; readonly y: number }[];
@@ -68,6 +77,7 @@ export interface ViewportPatch {
 
 export interface EditorViewportTileAtlas {
   readonly pack?: TilesetPack | undefined;
+  readonly packs?: readonly TilesetPack[] | undefined;
   readonly frameIndex?: FrameIndex | undefined;
   readonly tileIdByTileIndex?: ReadonlyMap<number, TileIdType> | undefined;
   readonly collisionMaskByTileIndex?: ReadonlyMap<number, CollisionMaskType> | undefined;
@@ -97,16 +107,19 @@ export class EditorViewportController {
   private readonly debugText: Text;
   private readonly chunkContainers = new Map<string, Container>();
   private readonly pack?: TilesetPack | undefined;
+  private readonly packs: readonly TilesetPack[];
   private readonly collisionMaskByTileIndex: ReadonlyMap<number, CollisionMaskType>;
   private readonly tileFramesByIndex = new Map<number, EditorViewportTileFrame>();
   private readonly tileTextureCache = new Map<number, Texture>();
   private readonly objectTextureCache = new Map<string, Texture>();
   private readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  private readonly assetPathByPackAndId: ReadonlyMap<string, string>;
   private readonly assetPathById: ReadonlyMap<string, string>;
   private map: TileborneMap | undefined;
   private showGrid = true;
   private showCollision = false;
   private showDebug = false;
+  private activeLayerId: LayerId | null = null;
   private selection = new Set<EntityId>();
   private hoverTile: { x: number; y: number } | null = null;
   private brushPreview: {
@@ -127,9 +140,17 @@ export class EditorViewportController {
   ) {
     this.adapter = adapter;
     this.pack = atlas.pack;
+    this.packs = atlas.packs ?? (atlas.pack === undefined ? [] : [atlas.pack]);
     this.collisionMaskByTileIndex = atlas.collisionMaskByTileIndex ?? new Map();
     this.renderableAssetIdByPath = atlas.renderableAssetIdByPath;
-    this.assetPathById = new Map(atlas.pack?.assets.map((asset) => [String(asset.id), asset.path]) ?? []);
+    this.assetPathByPackAndId = new Map(
+      this.packs.flatMap((pack) =>
+        pack.assets.map((asset) => [`${pack.id}:${asset.id}`, asset.path] as const),
+      ),
+    );
+    this.assetPathById = new Map(
+      this.packs.flatMap((pack) => pack.assets.map((asset) => [String(asset.id), asset.path] as const)),
+    );
     for (const [tileIndex, tileId] of atlas.tileIdByTileIndex ?? []) {
       const frame = atlas.frameIndex?.lookup(tileId);
       const assetPath = frame?.sourceAssetPaths[0];
@@ -234,6 +255,16 @@ export class EditorViewportController {
   setShowDebug(show: boolean): void {
     this.showDebug = show;
     this.debugLayer.visible = show;
+    this.requestRender();
+  }
+
+  setActiveLayerId(layerId: LayerId | null): void {
+    if (this.activeLayerId === layerId) {
+      return;
+    }
+    this.activeLayerId = layerId;
+    this.renderAllChunks();
+    this.renderObjects();
     this.requestRender();
   }
 
@@ -353,9 +384,7 @@ export class EditorViewportController {
     if (!this.map) {
       return;
     }
-    const tileLayers = this.map.layers.flatMap((layer) =>
-      layer._tag === 'tile' && layer.visible ? [layer] : [],
-    );
+    const tileLayers = this.map.layers.flatMap((layer) => (layer._tag === 'tile' ? [layer] : []));
     if (tileLayers.length === 0) {
       this.tileLayerRoot.removeChildren();
       this.chunkContainers.clear();
@@ -446,6 +475,7 @@ export class EditorViewportController {
     existing?.removeFromParent();
     const container = new Container();
     container.label = key;
+    container.alpha = layerAlpha(layer);
     const tileW = this.map.tileSize.width;
     const tileH = this.map.tileSize.height;
     const graphics = new Graphics();
@@ -517,8 +547,15 @@ export class EditorViewportController {
     if (!this.map) {
       return;
     }
+    const layerById = new Map(this.map.layers.map((layer) => [layer.id, layer] as const));
     for (const object of this.map.objects) {
-      this.objectLayerRoot.addChild(this.objectGraphic(object));
+      const objectLayer = layerById.get(object.layerId);
+      if (objectLayer?._tag !== 'object') {
+        continue;
+      }
+      const graphic = this.objectGraphic(object);
+      graphic.alpha = layerAlpha(objectLayer);
+      this.objectLayerRoot.addChild(graphic);
     }
   }
 
@@ -550,10 +587,14 @@ export class EditorViewportController {
 
   private objectDimensions(object: MapObject): { readonly width: number; readonly height: number } {
     const placement = object.placement;
+    const placementPackId = optionValue(placement?.packId);
     const placeable =
       placement === undefined
         ? undefined
-        : this.pack?.placeables?.find((candidate) => candidate.id === placement.placeableId);
+        : this.packs
+            .filter((pack) => placementPackId === undefined || pack.id === placementPackId)
+            .flatMap((pack) => pack.placeables ?? [])
+            .find((candidate) => candidate.id === placement.placeableId);
     const tileW = this.map?.tileSize.width ?? 32;
     const tileH = this.map?.tileSize.height ?? 32;
     const legacyWidth =
@@ -576,10 +617,18 @@ export class EditorViewportController {
     if (placement === undefined) {
       return undefined;
     }
-    const placeable = this.pack?.placeables?.find((candidate) => candidate.id === placement.placeableId);
-    if (placeable === undefined) {
+    const placementPackId = optionValue(placement.packId);
+    const placeableEntry = this.packs
+      .filter((pack) => placementPackId === undefined || pack.id === placementPackId)
+      .flatMap((pack) =>
+        (pack.placeables ?? []).map((placeable) => ({ packId: pack.id, placeable })),
+      )
+      .find((candidate) => candidate.placeable.id === placement.placeableId);
+    if (placeableEntry === undefined) {
       return undefined;
     }
+    const placeable = placeableEntry.placeable;
+    const placeablePackId = placeableEntry.packId;
     const placementAssetId = optionValue(placement.assetId);
     const placementTileId = optionValue(placement.tileId);
     const frame =
@@ -591,11 +640,13 @@ export class EditorViewportController {
     if (frame === undefined) {
       return undefined;
     }
-    const assetPath = this.assetPathById.get(String(frame.assetId));
+    const assetPath =
+      this.assetPathByPackAndId.get(`${placeablePackId}:${frame.assetId}`) ??
+      this.assetPathById.get(String(frame.assetId));
     if (assetPath === undefined) {
       return undefined;
     }
-    const cacheKey = `${frame.assetId}:${frame.tileId}:${frame.uv.x}:${frame.uv.y}:${frame.uv.w}:${frame.uv.h}`;
+    const cacheKey = `${placeablePackId}:${frame.assetId}:${frame.tileId}:${frame.uv.x}:${frame.uv.y}:${frame.uv.w}:${frame.uv.h}`;
     const cached = this.objectTextureCache.get(cacheKey);
     const texture = cached ?? this.textureForObjectFrame(cacheKey, assetPath, frame.uv);
     if (texture === undefined) {

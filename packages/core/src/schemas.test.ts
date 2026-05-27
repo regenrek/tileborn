@@ -157,6 +157,7 @@ describe("schema round-trips", () => {
     });
 
     roundTrip(MapObjectPlacement, {
+      packId: makePackId(UUID),
       placeableId: makePlaceableId(UUID),
       source: "tiled-object",
       assetId: makeAssetId(UUID),
@@ -174,6 +175,7 @@ describe("schema round-trips", () => {
       layerId,
       properties: {},
       placement: {
+        packId: makePackId(UUID),
         placeableId: makePlaceableId(UUID),
         source: "tiled-object",
         assetId: makeAssetId(UUID),

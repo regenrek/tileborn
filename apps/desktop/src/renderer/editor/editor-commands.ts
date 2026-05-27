@@ -38,6 +38,7 @@ export interface ObjectPlaceInput {
   readonly y: number;
   readonly width?: number | undefined;
   readonly height?: number | undefined;
+  readonly layerId?: LayerId;
   readonly placement?: MapObjectPlacement | undefined;
 }
 

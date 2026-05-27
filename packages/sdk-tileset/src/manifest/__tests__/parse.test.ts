@@ -171,6 +171,35 @@ describe("parseTilesetManifest", () => {
     expect(diagnosticTag(result.diagnostics[0]!)).toBe("UnknownAutotilePattern");
   });
 
+  it("sanitizes dangling autotile tile refs without rejecting the pack", () => {
+    const missingTileId = "tile:62656465-0000-4000-8000-000000009999";
+    const result = parseTilesetManifest({
+      ...meadowPack,
+      autotileRules: [
+        {
+          ...meadowPack.autotileRules[0]!,
+          maskToTileIds: {
+            "1111": [meadowPack.tiles[0]!.id, missingTileId],
+          },
+        },
+      ],
+    });
+
+    expect(result.value).toBeDefined();
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _tag: "InvalidManifestField",
+          severity: "warning",
+          message: "Autotile rule references an unknown tile",
+        }),
+      ]),
+    );
+    expect(result.value?.tilesets[0]?.autotileRules[0]?.maskToTileIds["1111"]).toEqual([
+      meadowPack.tiles[0]!.id,
+    ]);
+  });
+
   it("rejects manifests with missing terrain class declarations", () => {
     const result = parseTilesetManifest({
       ...meadowPack,

@@ -15,6 +15,7 @@ const placementToJson = (placement: MapObject['placement'] | undefined): unknown
     return undefined;
   }
   return {
+    packId: optionValue(placement.packId),
     placeableId: placement.placeableId,
     source: placement.source,
     assetId: optionValue(placement.assetId),

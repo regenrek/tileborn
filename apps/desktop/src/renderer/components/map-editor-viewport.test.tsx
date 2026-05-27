@@ -4,12 +4,19 @@ import { cleanup, render, waitFor } from '@testing-library/react';
 import {
   makeAssetId,
   makePackId,
+  makePlaceableId,
   makeTileId,
+  makeWorkingPaletteId,
+  makeWorkingPaletteItemId,
+  AssetLibraryReference,
   type Uuid,
 } from '@tileborne/core';
 import {
   AutotileRuleId,
   CellSize,
+  Placeable,
+  PlaceableFrameRef,
+  PlaceableSize,
   TerrainClass,
   Tile,
   Tileset,
@@ -17,6 +24,7 @@ import {
   TilesetPack,
   TilesetPackAsset,
   TilesetPackLicense,
+  TiledPlaceableSource,
   UVRect,
   Wang2EdgeAutotileRule,
 } from '@tileborne/sdk-tileset/schemas';
@@ -25,12 +33,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTileEditCommand } from '@/editor/editor-commands';
 import { createTestMap, TEST_TILE_LAYER_ID } from '@/editor/test-fixtures';
+import type { BrushIntent } from '@/stores/editor-ui-store';
 
 const setMapMock = vi.hoisted(() => vi.fn());
 const resizeMock = vi.hoisted(() => vi.fn());
 const setCameraMock = vi.hoisted(() => vi.fn());
 const disposeMock = vi.hoisted(() => vi.fn());
 const loadViewportAssetBundleMock = vi.hoisted(() => vi.fn());
+const activePaletteMock = vi.hoisted(() => ({ current: undefined as unknown }));
+const editorStateMock = vi.hoisted(() => ({
+  current: {
+    activeTool: 'select',
+    camera: { zoom: 1, panX: 0, panY: 0 },
+    selection: new Set<string>(),
+    brushIntent: { kind: 'eraser' } as BrushIntent,
+    stagedObjectKind: 'prop',
+    activeLayerId: null,
+    showGrid: true,
+    showCollisionOverlay: false,
+    showDebugOverlay: false,
+    showMinimapOverlay: true,
+    setCamera: vi.fn(),
+    setSelection: vi.fn(),
+    clearSelection: vi.fn(),
+    setHoverTile: vi.fn(),
+    setActiveLayerId: vi.fn(),
+    setActiveTool: vi.fn(),
+  },
+}));
 
 vi.mock('@tileborne/runtime', () => ({
   PixiRendererAdapter: class PixiRendererAdapter {
@@ -53,6 +83,7 @@ vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
     setShowCollision = vi.fn();
     setShowDebug = vi.fn();
     setSelection = vi.fn();
+    setActiveLayerId = vi.fn();
     setHoverTile = vi.fn();
     setBrushPreview = vi.fn();
     syncMapContent = vi.fn();
@@ -72,27 +103,15 @@ vi.mock('@/editor/use-editor-commands', () => ({
   }),
 }));
 
+vi.mock('@/hooks/use-working-palettes', () => ({
+  useActiveWorkingPalette: () => activePaletteMock.current,
+}));
+
 vi.mock('@/stores/editor-ui-store', () => {
-  const state = {
-    activeTool: 'select',
-    camera: { zoom: 1, panX: 0, panY: 0 },
-    selection: new Set<string>(),
-    brushIntent: { kind: 'eraser' },
-    stagedObjectKind: 'prop',
-    activeLayerId: null,
-    showGrid: true,
-    showCollisionOverlay: false,
-    showDebugOverlay: false,
-    showMinimapOverlay: true,
-    setCamera: vi.fn(),
-    setSelection: vi.fn(),
-    clearSelection: vi.fn(),
-    setHoverTile: vi.fn(),
-    setActiveTool: vi.fn(),
-  };
-  const useEditorUiStore = (selector: (value: typeof state) => unknown) => selector(state);
+  const useEditorUiStore = (selector: (value: typeof editorStateMock.current) => unknown) =>
+    selector(editorStateMock.current);
   return {
-    useEditorUiStore: Object.assign(useEditorUiStore, { getState: () => state }),
+    useEditorUiStore: Object.assign(useEditorUiStore, { getState: () => editorStateMock.current }),
   };
 });
 
@@ -105,6 +124,7 @@ class ResizeObserverStub {
 
 const viewportBundle = {
   manifest: { assets: [] },
+  packs: [],
   tileIndexByTileId: new Map(),
   tileIdByTileIndex: new Map(),
   collisionMaskByTileIndex: new Map(),
@@ -202,6 +222,53 @@ const wallRulePack = new TilesetPack({
   ],
 });
 
+const placeableAssetId = makeAssetId(uuid('7'));
+const placeableTileId = makeTileId(uuid('8'));
+const placeableId = makePlaceableId(uuid('9'));
+const placeablePack = new TilesetPack({
+  schemaVersion: 1,
+  id: makePackId(uuid('10')),
+  name: 'Props Pack',
+  version: '1.0.0',
+  license: paintablePack.license,
+  assets: [
+    new TilesetPackAsset({
+      id: placeableAssetId,
+      path: 'props/statue.png',
+      mime: 'image/png',
+    }),
+  ],
+  tilesets: [],
+  placeables: [
+    new Placeable({
+      id: placeableId,
+      name: 'Statue',
+      size: new PlaceableSize({ width: 96, height: 128 }),
+      frames: [
+        new PlaceableFrameRef({
+          assetId: placeableAssetId,
+          tileId: placeableTileId,
+          uv: new UVRect({ x: 0, y: 0, w: 96, h: 128 }),
+          durationMs: Option.none(),
+        }),
+      ],
+      tags: [],
+      placementMode: 'object',
+      source: new TiledPlaceableSource({
+        format: 'tiled',
+        tilesetName: 'Props',
+        localTileId: 0,
+        image: Option.some('statue.png'),
+        imageWidth: Option.some(96),
+        imageHeight: Option.some(128),
+        objectType: Option.none(),
+        objectClass: Option.none(),
+        properties: {},
+      }),
+    }),
+  ],
+});
+
 describe('MapEditorViewport initial map sync', () => {
   beforeEach(() => {
     setMapMock.mockReset();
@@ -209,6 +276,8 @@ describe('MapEditorViewport initial map sync', () => {
     setCameraMock.mockReset();
     disposeMock.mockReset();
     loadViewportAssetBundleMock.mockReset();
+    activePaletteMock.current = undefined;
+    editorStateMock.current.brushIntent = { kind: 'eraser' };
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   });
 
@@ -248,6 +317,68 @@ describe('MapEditorViewport initial map sync', () => {
       expect(setMapMock).toHaveBeenCalledWith(updatedMap);
     });
   });
+
+  it('loads palette placeable packs together with the map paint pack', async () => {
+    loadViewportAssetBundleMock.mockReturnValue(Effect.succeed(viewportBundle));
+    activePaletteMock.current = {
+      id: makeWorkingPaletteId(uuid('20')),
+      projectId: 'project-1',
+      name: 'Props',
+      createdAt: '2026-05-27T00:00:00.000Z',
+      updatedAt: '2026-05-27T00:00:00.000Z',
+      items: [
+        {
+          id: makeWorkingPaletteItemId(uuid('21')),
+          ref: new AssetLibraryReference({
+            packId: placeablePack.id,
+            kind: 'placeable',
+            refId: placeableId,
+            tileId: placeableTileId,
+          }),
+          label: 'Statue',
+        },
+      ],
+    };
+    const map = {
+      ...createTestMap(),
+      properties: { tilesetPackId: paintablePack.id },
+    };
+
+    render(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
+
+    await waitFor(() => {
+      expect(loadViewportAssetBundleMock).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        map,
+        extraPackIds: [placeablePack.id],
+        renderablePlaceableRefs: [],
+      });
+    });
+  });
+
+  it('loads the selected placeable brush pack even before palette metadata catches up', async () => {
+    loadViewportAssetBundleMock.mockReturnValue(Effect.succeed(viewportBundle));
+    editorStateMock.current.brushIntent = {
+      kind: 'placeable',
+      packId: placeablePack.id,
+      placeableId,
+    };
+    const map = {
+      ...createTestMap(),
+      properties: { tilesetPackId: paintablePack.id },
+    };
+
+    render(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
+
+    await waitFor(() => {
+      expect(loadViewportAssetBundleMock).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        map,
+        extraPackIds: [placeablePack.id],
+        renderablePlaceableRefs: [{ packId: placeablePack.id, placeableId }],
+      });
+    });
+  });
 });
 
 describe('resolveBrushAction', () => {
@@ -285,5 +416,74 @@ describe('resolveBrushAction', () => {
         tileIndexByTileId: new Map([[tileId, 9]]),
       }),
     ).toMatchObject({ kind: 'paintAutotile', ruleId: wallRuleId, previewTileIndex: 9 });
+  });
+
+  it('resolves placeable brushes from palette packs outside the map paint pack', () => {
+    expect(
+      resolveBrushAction({
+        brushIntent: { kind: 'placeable', placeableId },
+        pack: paintablePack,
+        packs: [paintablePack, placeablePack],
+        tileIndexByTileId: new Map([[tileId, 9]]),
+      }),
+    ).toEqual({
+      kind: 'placeObject',
+      packId: placeablePack.id,
+      placeableId,
+      width: 96,
+      height: 128,
+      frame: {
+        assetId: placeableAssetId,
+        tileId: placeableTileId,
+        uv: new UVRect({ x: 0, y: 0, w: 96, h: 128 }),
+      },
+    });
+  });
+
+  it('resolves duplicate placeable ids by pack when the brush intent is scoped', () => {
+    const otherAssetId = makeAssetId(uuid('30'));
+    const otherTileId = makeTileId(uuid('31'));
+    const sourcePlaceable = placeablePack.placeables?.[0];
+    expect(sourcePlaceable).toBeDefined();
+    const otherPack = new TilesetPack({
+      ...placeablePack,
+      id: makePackId(uuid('32')),
+      name: 'Other Props Pack',
+      assets: [new TilesetPackAsset({ id: otherAssetId, path: 'props/other.png', mime: 'image/png' })],
+      placeables: [
+        new Placeable({
+          ...sourcePlaceable!,
+          frames: [
+            new PlaceableFrameRef({
+              assetId: otherAssetId,
+              tileId: otherTileId,
+              uv: new UVRect({ x: 0, y: 0, w: 32, h: 48 }),
+              durationMs: Option.none(),
+            }),
+          ],
+          size: new PlaceableSize({ width: 32, height: 48 }),
+        }),
+      ],
+    });
+
+    expect(
+      resolveBrushAction({
+        brushIntent: { kind: 'placeable', packId: otherPack.id, placeableId },
+        pack: paintablePack,
+        packs: [placeablePack, otherPack],
+        tileIndexByTileId: new Map([[tileId, 9]]),
+      }),
+    ).toEqual({
+      kind: 'placeObject',
+      packId: otherPack.id,
+      placeableId,
+      width: 32,
+      height: 48,
+      frame: {
+        assetId: otherAssetId,
+        tileId: otherTileId,
+        uv: new UVRect({ x: 0, y: 0, w: 32, h: 48 }),
+      },
+    });
   });
 });

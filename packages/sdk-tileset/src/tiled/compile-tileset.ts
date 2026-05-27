@@ -333,10 +333,13 @@ export const compileTiledTileset = (input: {
         ]
       : [];
 
+  const tileIdForRenderableIndex = (localIndex: number) =>
+    uvByIndex.has(localIndex) ? tileIds.get(localIndex) : undefined;
+
   const wang = compileWangSets({
     packSeed: input.packSeed,
     tilesetSeed: input.tilesetSeed,
-    tileIdForIndex: (localIndex) => tileIds.get(localIndex),
+    tileIdForIndex: tileIdForRenderableIndex,
     wangsets: source.wangsets,
   });
   diagnostics.push(...wang.diagnostics);

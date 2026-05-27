@@ -507,6 +507,9 @@ describe("tiled import", () => {
     expect(result.value?.map.objects[0]?.placement?.placeableId).toBe(
       result.value?.pack.placeables?.[0]?.id,
     );
+    expect(result.value?.map.objects[0]?.placement?.packId).toStrictEqual(
+      Option.some(result.value!.pack.id),
+    );
     expect(result.value?.map.objects[0]?.y).toBe(32);
     expect(result.value?.map.objects[0]?.properties).toMatchObject({
       "tileborne.anchor": "top-left",
@@ -1021,6 +1024,37 @@ describe("tiled import", () => {
     const rule = tsj.value?.tileset.autotileRules[0];
     expect(rule).toBeInstanceOf(Wang2CornerAutotileRule);
     expect(wangIdToMaskKey([0, 1, 0, 1, 0, 1, 0, 1], "wang2corner")).toBe("1111");
+  });
+
+  it("skips out-of-bounds wang tiles instead of emitting invalid manifest refs", () => {
+    const tsj = parseTsj(
+      JSON.stringify({
+        ...inlineTileset,
+        tilecount: 4,
+        wangsets: [
+          {
+            name: "ground",
+            type: "corner",
+            colors: [{ name: "grass", color: "#00ff00", tile: 0 }],
+            wangtiles: [
+              { tileid: 1, wangid: [0, 1, 0, 1, 0, 1, 0, 1] },
+              { tileid: 99, wangid: [0, 1, 0, 1, 0, 1, 0, 1] },
+            ],
+          },
+        ],
+      }),
+      {
+        packIdSeed: PACK_SEED,
+        tilesetSeed: "terrain",
+      },
+    );
+
+    expect(tsj.value?.tileset.autotileRules[0]?.maskToTileIds["1111"]).toHaveLength(1);
+    expect(tsj.diagnostics.some((diagnostic) => diagnostic.path.includes("wangtiles/99"))).toBe(true);
+
+    const tileIds = new Set(tsj.value?.tileset.tiles.map((tile) => String(tile.id)));
+    const ruleIds = Object.values(tsj.value?.tileset.autotileRules[0]?.maskToTileIds ?? {}).flat();
+    expect(ruleIds.every((tileId) => tileIds.has(String(tileId)))).toBe(true);
   });
 
   it("parses tile animations", () => {

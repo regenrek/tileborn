@@ -35,13 +35,13 @@ export const workingPaletteItemKey = (item: WorkingPaletteItem): string =>
 export const workingPaletteItemToBrushIntent = (item: WorkingPaletteItem): BrushIntent => {
   switch (item.ref.kind) {
     case 'tile':
-      return { kind: 'tile', tileId: (item.ref.tileId ?? item.ref.refId) as TileIdType };
+      return { kind: 'tile', packId: item.ref.packId, tileId: (item.ref.tileId ?? item.ref.refId) as TileIdType };
     case 'autotile':
-      return { kind: 'autotile', ruleId: item.ref.refId as AutotileRuleIdType };
+      return { kind: 'autotile', packId: item.ref.packId, ruleId: item.ref.refId as AutotileRuleIdType };
     case 'terrain':
-      return { kind: 'terrain', classId: item.ref.refId as TerrainClassType };
+      return { kind: 'terrain', packId: item.ref.packId, classId: item.ref.refId as TerrainClassType };
     case 'placeable':
-      return { kind: 'placeable', placeableId: item.ref.refId as PlaceableIdType };
+      return { kind: 'placeable', packId: item.ref.packId, placeableId: item.ref.refId as PlaceableIdType };
   }
 };
 
@@ -53,13 +53,26 @@ export const brushIntentMatchesItem = (
     case 'tile':
       return (
         intent.kind === 'tile' &&
+        (intent.packId === undefined || intent.packId === item.ref.packId) &&
         intent.tileId === ((item.ref.tileId ?? item.ref.refId) as TileIdType)
       );
     case 'autotile':
-      return intent.kind === 'autotile' && intent.ruleId === item.ref.refId;
+      return (
+        intent.kind === 'autotile' &&
+        (intent.packId === undefined || intent.packId === item.ref.packId) &&
+        intent.ruleId === item.ref.refId
+      );
     case 'terrain':
-      return intent.kind === 'terrain' && intent.classId === item.ref.refId;
+      return (
+        intent.kind === 'terrain' &&
+        (intent.packId === undefined || intent.packId === item.ref.packId) &&
+        intent.classId === item.ref.refId
+      );
     case 'placeable':
-      return intent.kind === 'placeable' && intent.placeableId === item.ref.refId;
+      return (
+        intent.kind === 'placeable' &&
+        (intent.packId === undefined || intent.packId === item.ref.packId) &&
+        intent.placeableId === item.ref.refId
+      );
   }
 };

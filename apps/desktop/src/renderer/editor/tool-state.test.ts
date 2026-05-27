@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   makeAssetId,
+  makeObjectId,
   TileChunk,
   TileLayer,
   TileborneMap,
+  MapObject,
+  MapObjectPlacement,
   makeLayerId,
   makeMapId,
   makePackId,
   makeTileId,
   type AssetId,
+  ObjectLayer,
   type PlaceableId,
   type ProjectId,
   type TileId,
@@ -39,7 +43,12 @@ import {
 } from './viewport/tool-state.js';
 import { createStrokeTileCommand, createTileEditCommand } from './editor-commands.js';
 import { getTileIndex } from './map-utils.js';
-import { createTestMap, TEST_OBJECT_LAYER_ID, TEST_TILE_LAYER_ID } from './test-fixtures.js';
+import {
+  createTestMap,
+  TEST_COLLISION_LAYER_ID,
+  TEST_OBJECT_LAYER_ID,
+  TEST_TILE_LAYER_ID,
+} from './test-fixtures.js';
 import { normalizeMapForIpc } from '@/lib/map-ipc-normalization';
 import { createAutotilePaintResolver } from './viewport/autotile-paint.js';
 
@@ -152,6 +161,7 @@ const placeableBrush = {
 } as const;
 const resolvedPlaceableBrush = {
   kind: 'placeObject',
+  packId: makePackId('00000000-0000-4000-8000-000000000044' as Uuid),
   placeableId,
   width: 96,
   height: 128,
@@ -296,7 +306,7 @@ describe('tool state machine', () => {
     expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 1, 1)).toBe(10);
   });
 
-  it('tileBrush falls back to the first tile layer when active layer is not paintable', () => {
+  it('tileBrush does not paint a different layer when the active layer is not paintable', () => {
     const map = createTestMap();
     const down = dispatchPointerDown(
       {
@@ -314,8 +324,8 @@ describe('tool state machine', () => {
     );
     const edited = down.result.command?.apply(map);
 
-    expect(down.result.command).toMatchObject({ layerId: TEST_TILE_LAYER_ID });
-    expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 2, 2)).toBe(3);
+    expect(down.result.command).toBeUndefined();
+    expect(edited).toBeUndefined();
   });
 
   it('tileBrush emits a persistable paint command for an imported map palette brush', () => {
@@ -478,12 +488,12 @@ describe('tool state machine', () => {
     expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 3, 2)).toBe(6);
   });
 
-  it('objectPlace creates a placement-bearing object for placeable brushes', () => {
+  it('tileBrush creates a placement-bearing object for placeable brushes on object layers', () => {
     const map = createTestMap();
     const { result } = dispatchPointerDown(
       {
         map,
-        activeTool: 'objectPlace',
+        activeTool: 'tileBrush',
         brushIntent: placeableBrush,
         resolvedBrush: resolvedPlaceableBrush,
         stagedObjectKind: 'prop',
@@ -507,12 +517,99 @@ describe('tool state machine', () => {
     expect(Option.getOrUndefined(object?.width ?? Option.none())).toBe(96);
     expect(Option.getOrUndefined(object?.height ?? Option.none())).toBe(128);
     expect(object?.placement?.placeableId).toBe(placeableId);
+    expect(Option.getOrUndefined(object?.placement?.packId ?? Option.none())).toBe(
+      resolvedPlaceableBrush.packId,
+    );
     expect(Option.getOrUndefined(object?.placement?.assetId ?? Option.none())).toBe(
       resolvedPlaceableBrush.frame.assetId,
     );
   });
 
-  it('tileBrush ignores placeable brush intents', () => {
+  it('tileBrush can place after loading maps with encoded optional object dimensions', () => {
+    const existingObjectId = makeObjectId('00000000-0000-4000-8000-000000000045' as Uuid);
+    const baseMap = createTestMap();
+    const map = {
+      id: baseMap.id,
+      schemaVersion: baseMap.schemaVersion,
+      size: baseMap.size,
+      tileSize: baseMap.tileSize,
+      properties: baseMap.properties,
+      layers: baseMap.layers.map((layer) =>
+        layer.id === TEST_OBJECT_LAYER_ID && layer._tag === 'object'
+          ? new ObjectLayer({
+              id: layer.id,
+              name: layer.name,
+              visible: layer.visible,
+              opacity: layer.opacity,
+              objectIds: [existingObjectId],
+            })
+          : layer,
+      ),
+      objects: [
+        {
+          id: existingObjectId,
+          kind: 'placeable',
+          x: 0,
+          y: 0,
+          width: { value: 64 },
+          height: { value: 64 },
+          layerId: TEST_OBJECT_LAYER_ID,
+          properties: {},
+          placement: {
+            packId: {},
+            placeableId,
+            source: 'manual',
+            assetId: { value: resolvedPlaceableBrush.frame.assetId },
+            tileId: { value: resolvedPlaceableBrush.frame.tileId },
+            gid: {},
+          },
+        } as unknown as MapObject,
+      ],
+    } as unknown as TileborneMap;
+    const { result } = dispatchPointerDown(
+      {
+        map,
+        activeTool: 'tileBrush',
+        brushIntent: placeableBrush,
+        resolvedBrush: resolvedPlaceableBrush,
+        stagedObjectKind: 'prop',
+        activeLayerId: TEST_OBJECT_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(4, 5),
+      {},
+    );
+    const edited = result.command?.apply(map);
+
+    expect(edited?.objects).toHaveLength(2);
+    expect(Option.getOrUndefined(edited?.objects[0]?.width ?? Option.none())).toBe(64);
+    expect(Option.getOrUndefined(edited?.objects[1]?.placement?.packId ?? Option.none())).toBe(
+      resolvedPlaceableBrush.packId,
+    );
+  });
+
+  it('tileBrush does not place objects on a different layer when the active layer is not an object layer', () => {
+    const map = createTestMap();
+    const { result } = dispatchPointerDown(
+      {
+        map,
+        activeTool: 'tileBrush',
+        brushIntent: placeableBrush,
+        resolvedBrush: resolvedPlaceableBrush,
+        stagedObjectKind: 'prop',
+        activeLayerId: TEST_TILE_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(2, 3),
+      {},
+    );
+
+    expect(result.command).toBeUndefined();
+  });
+
+  it('tileBrush ignores placeable brush intents on tile layers', () => {
     const map = createTestMap();
     const { result } = dispatchPointerDown(
       {
@@ -540,6 +637,7 @@ describe('tool state machine', () => {
         activeTool: 'collisionPaint',
         brushIntent: { kind: 'eraser' },
         stagedObjectKind: 'prop',
+        activeLayerId: TEST_COLLISION_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
       },
@@ -547,6 +645,25 @@ describe('tool state machine', () => {
       {},
     );
     expect(result.command?.kind).toBe('collision-paint');
+  });
+
+  it('collisionPaint does not mutate when the active layer is not a collision layer', () => {
+    const map = createTestMap();
+    const { result } = dispatchPointerDown(
+      {
+        map,
+        activeTool: 'collisionPaint',
+        brushIntent: { kind: 'eraser' },
+        stagedObjectKind: 'prop',
+        activeLayerId: TEST_TILE_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(4, 4),
+      {},
+    );
+
+    expect(result.command).toBeUndefined();
   });
 
   it('regionMark drag release emits RegionMarkCommand', () => {

@@ -290,6 +290,7 @@ describe('AssetLibraryService', () => {
                     layerId: map.layers[0]!.id,
                     properties: {},
                     placement: new MapObjectPlacement({
+                      packId: Option.some(removedPackId),
                       placeableId: makePlaceableId(
                         '00000000-0000-4000-8000-000000000092' as Uuid,
                       ),

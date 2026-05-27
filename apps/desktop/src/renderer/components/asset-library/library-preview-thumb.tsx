@@ -13,6 +13,7 @@ interface LibraryPreviewThumbProps {
   readonly alt?: string | undefined;
   readonly integrityHash?: string | undefined;
   readonly cacheVersion?: string | undefined;
+  readonly eager?: boolean | undefined;
 }
 
 /**
@@ -29,13 +30,17 @@ export function LibraryPreviewThumb({
   alt,
   integrityHash,
   cacheVersion,
+  eager = false,
 }: LibraryPreviewThumbProps) {
-  const [inView, setInView] = useState(false);
+  const [inView, setInView] = useState(eager);
   const containerRef = useRef<HTMLSpanElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     const node = containerRef.current;
+    if (eager) {
+      return;
+    }
     if (node === null) {
       return;
     }
@@ -59,7 +64,7 @@ export function LibraryPreviewThumb({
       observer.disconnect();
       observerRef.current = null;
     };
-  }, []);
+  }, [eager]);
 
   const dataUrlQuery = useAssetThumbnailDataUrl(packId, inView ? preview : undefined, {
     integrityHash,

@@ -15,12 +15,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const selectBrushMock = vi.hoisted(() => vi.fn());
-const useTilesetPackMock = vi.hoisted(() => vi.fn());
-const useAssetDataUrlMock = vi.hoisted(() => vi.fn());
+const useWorkingPalettePreviewsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/queries', () => ({
-  useAssetDataUrl: useAssetDataUrlMock,
-  useTilesetPack: useTilesetPackMock,
+  useWorkingPalettePreviews: useWorkingPalettePreviewsMock,
 }));
 
 vi.mock('@/stores/app-notifications-store', () => ({
@@ -107,22 +105,13 @@ const installWorkingPaletteBridge = () => {
   return workingPalettes;
 };
 
-// The sidebar only renders items from the working palette. When the
-// underlying TilesetPack query is undefined the sidebar shows placeholder
-// icons for previews, which is the explicit test surface we want to verify
-// here (curated count is independent of pack size).
-const stubTilesetPackQuery = (overrides: { isLoading?: boolean; isError?: boolean } = {}) => ({
-  data: undefined,
-  isLoading: overrides.isLoading ?? false,
-  isError: overrides.isError ?? false,
-});
-
 describe('WorkingPaletteSidebar', () => {
   beforeEach(() => {
     selectBrushMock.mockReset();
-    useTilesetPackMock.mockReset();
-    useAssetDataUrlMock.mockReset();
-    useAssetDataUrlMock.mockReturnValue({ data: undefined, isLoading: false });
+    useWorkingPalettePreviewsMock.mockReset();
+    // Previews now come from the main process via IPC; the sidebar only renders
+    // the curated items and looks previews up by ref key.
+    useWorkingPalettePreviewsMock.mockReturnValue({ previewByKey: new Map(), isLoading: false });
     editorState = {
       brushIntent: { kind: 'eraser' },
       selectBrush: selectBrushMock,
@@ -137,7 +126,6 @@ describe('WorkingPaletteSidebar', () => {
   });
 
   it('shows the empty state when no working palette exists', () => {
-    useTilesetPackMock.mockReturnValue(stubTilesetPackQuery());
     render(
       <WorkingPaletteSidebar
         projectId={projectId}
@@ -149,7 +137,6 @@ describe('WorkingPaletteSidebar', () => {
   });
 
   it('does not render thousands of cards when underlying pack has thousands of tiles', () => {
-    useTilesetPackMock.mockReturnValue(stubTilesetPackQuery());
     bridgePalettes = [makePalette([tileItem(1), tileItem(2)])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
@@ -163,8 +150,22 @@ describe('WorkingPaletteSidebar', () => {
     expect(itemButtons).toHaveLength(2);
   });
 
+  it('resolves previews for the palette item refs via the main-process IPC hook', () => {
+    bridgePalettes = [makePalette([tileItem(1), tileItem(2), tileItem(3)])];
+    useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
+    render(
+      <WorkingPaletteSidebar
+        projectId={projectId}
+        packId={packId}
+        packName="Test pack"
+      />,
+    );
+    const refs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly { refId: string }[];
+    expect(refs).toHaveLength(3);
+    expect(screen.getAllByTestId(/^working-palette-sidebar-item-/)).toHaveLength(3);
+  });
+
   it('invokes selectBrush with the matching brush intent when a palette item is clicked', () => {
-    useTilesetPackMock.mockReturnValue(stubTilesetPackQuery());
     const item = placeableItem(1);
     bridgePalettes = [makePalette([item])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
@@ -187,7 +188,6 @@ describe('WorkingPaletteSidebar', () => {
   });
 
   it('renders palette items as a compact grid without per-item remove buttons', () => {
-    useTilesetPackMock.mockReturnValue(stubTilesetPackQuery());
     bridgePalettes = [makePalette([tileItem(1), tileItem(2)])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
@@ -203,7 +203,6 @@ describe('WorkingPaletteSidebar', () => {
   });
 
   it('humanises long internal identifiers in labels coming from the working palette', () => {
-    useTilesetPackMock.mockReturnValue(stubTilesetPackQuery());
     bridgePalettes = [makePalette([{ ...tileItem(1), label: 'Grass Terrain' }])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(

@@ -61,6 +61,16 @@ export type { AutotileRule as AutotileRuleType, AutotileRulePattern as AutotileR
 
 export { TerrainTransition } from "./terrain-transition.js";
 
+export {
+  AssetSemanticRole,
+  AssetSemanticRoleName,
+  AssetSemanticRoleSource,
+} from "./semantic-role.js";
+export type {
+  AssetSemanticRoleName as AssetSemanticRoleNameType,
+  AssetSemanticRoleSource as AssetSemanticRoleSourceType,
+} from "./semantic-role.js";
+
 export { CellSize, Tileset } from "./tileset.js";
 
 export { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "./tileset-pack.js";

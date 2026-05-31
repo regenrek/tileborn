@@ -22,7 +22,6 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/hooks/queries', () => ({
   useAssetPack: useAssetPackMock,
   useAssetDataUrl: () => ({ data: undefined, isLoading: false }),
-  useAssetThumbnailDataUrl: () => ({ data: undefined, isLoading: false }),
   useTilesetPack: () => ({ data: undefined, isLoading: false }),
   useAssetPackLibraryPages: () => ({ data: undefined, isLoading: false, isError: false }),
   useAssetLibraryCacheStatus: () => ({
@@ -30,7 +29,6 @@ vi.mock('@/hooks/queries', () => ({
     isLoading: false,
   }),
   usePrefetchAssetLibraryPage: () => vi.fn(),
-  usePrefetchAssetThumbnail: () => vi.fn(),
   ASSET_LIBRARY_PAGE_SIZE: 64,
 }));
 

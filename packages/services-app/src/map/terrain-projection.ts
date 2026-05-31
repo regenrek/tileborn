@@ -1,5 +1,7 @@
 import { TileChunk, TileLayer, type JsonObject, type MapLayer } from '@tileborne/core';
 import type {
+  AssetSemanticRole,
+  AssetSemanticRoleNameType,
   Tile,
   TileIdType,
   Tileset,
@@ -7,7 +9,7 @@ import type {
   TilesetPack,
 } from '@tileborne/sdk-tileset/schemas';
 
-export type GeneratedTerrainSemantic = 'floor' | 'wall' | 'path';
+export type GeneratedTerrainSemantic = Extract<AssetSemanticRoleNameType, 'floor' | 'wall' | 'path'>;
 
 export interface TerrainProjectionDiagnostic {
   readonly severity: 'warning' | 'error';
@@ -38,7 +40,7 @@ interface TileCandidate {
   readonly tileset: Tileset;
   readonly tileIndex: number;
   readonly atlasAssetPath: string;
-  readonly searchText: string;
+  readonly roles: readonly AssetSemanticRole[];
 }
 
 const semanticValue = (tileValue: number): GeneratedTerrainSemantic | undefined => {
@@ -46,58 +48,6 @@ const semanticValue = (tileValue: number): GeneratedTerrainSemantic | undefined 
   if (tileValue === 2) return 'wall';
   if (tileValue > 2) return 'path';
   return undefined;
-};
-
-const isTransparentLike = (text: string): boolean =>
-  /\btransp\b|transparent|transparency|with transparency/.test(text);
-
-const isPropLike = (text: string): boolean => /\bprop\b|\bprops\b|\bsprite\b|\bsprites\b/.test(text);
-
-const isWaterLike = (text: string): boolean => /\bwater\b|\bwaterfall\b/.test(text);
-
-const isAnimatedLike = (text: string): boolean => /\banimated\b|\bframes\b/.test(text);
-
-const isWallLike = (text: string): boolean => /\bwall\b|wall-/.test(text);
-
-const isTerrainLike = (text: string): boolean =>
-  /\bterrain\b|\bfloor\b|\bground\b|\bpath\b|\bruin\b/.test(text);
-
-const isAtlasOriginTile = (candidate: TileCandidate): boolean =>
-  candidate.tile.uv.x === 0 && candidate.tile.uv.y === 0;
-
-const hasBlockingTerrainPenalty = (candidate: TileCandidate): boolean =>
-  isPropLike(candidate.searchText) ||
-  isTransparentLike(candidate.searchText) ||
-  isWaterLike(candidate.searchText);
-
-const scoreFloor = (candidate: TileCandidate): number => {
-  if (hasBlockingTerrainPenalty(candidate) || isWallLike(candidate.searchText)) {
-    return Number.NEGATIVE_INFINITY;
-  }
-  let score = 0;
-  if (isTerrainLike(candidate.tileset.name.toLowerCase())) score += 120;
-  if (isTerrainLike(candidate.searchText)) score += 40;
-  if (!isAnimatedLike(candidate.searchText)) score += 20;
-  if (isAtlasOriginTile(candidate)) score -= 5;
-  return score;
-};
-
-const scoreWall = (candidate: TileCandidate): number => {
-  if (
-    isPropLike(candidate.searchText) ||
-    isTransparentLike(candidate.searchText) ||
-    isWaterLike(candidate.searchText) ||
-    !isWallLike(candidate.searchText)
-  ) {
-    return Number.NEGATIVE_INFINITY;
-  }
-  let score = 100;
-  const tilesetName = candidate.tileset.name.toLowerCase();
-  if (/\bwall-?1\b/.test(tilesetName)) score += 40;
-  if (/^wall\b|^wall-/.test(tilesetName)) score += 20;
-  if (!isAnimatedLike(candidate.searchText)) score += 10;
-  if (isAtlasOriginTile(candidate)) score -= 5;
-  return score;
 };
 
 const toProjectedTile = (
@@ -112,14 +62,19 @@ const toProjectedTile = (
   atlasAssetPath: candidate.atlasAssetPath,
 });
 
+const rolePriority = (role: AssetSemanticRole): number =>
+  role.source === 'user' ? role.confidence + 1 : role.confidence;
+
 const chooseTile = (
   semantic: GeneratedTerrainSemantic,
   candidates: readonly TileCandidate[],
 ): ProjectedTerrainTile | undefined => {
-  const scorer = semantic === 'wall' ? scoreWall : scoreFloor;
   const ranked = candidates
-    .map((candidate) => ({ candidate, score: scorer(candidate) }))
-    .filter((entry) => Number.isFinite(entry.score))
+    .flatMap((candidate) =>
+      candidate.roles
+        .filter((role) => role.role === semantic)
+        .map((role) => ({ candidate, score: rolePriority(role) })),
+    )
     .sort((left, right) =>
       right.score === left.score
         ? left.candidate.tileIndex - right.candidate.tileIndex
@@ -131,6 +86,13 @@ const chooseTile = (
 
 const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
   const assetPathById = new Map(pack.assets.map((asset) => [String(asset.id), asset.path]));
+  const rolesByTileId = new Map<string, AssetSemanticRole[]>();
+  for (const role of pack.semanticRoles ?? []) {
+    const key = String(role.tileId);
+    const roles = rolesByTileId.get(key) ?? [];
+    roles.push(role);
+    rolesByTileId.set(key, roles);
+  }
   const candidates: TileCandidate[] = [];
   let tileIndex = 1;
   for (const tileset of pack.tilesets) {
@@ -141,7 +103,7 @@ const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
         tileset,
         tileIndex,
         atlasAssetPath,
-        searchText: [tileset.name, atlasAssetPath, ...tile.tags].join(' ').toLowerCase(),
+        roles: rolesByTileId.get(String(tile.id)) ?? [],
       });
       tileIndex += 1;
     }
@@ -221,21 +183,21 @@ export const projectGeneratedTerrainLayers = (input: {
     diagnostics.push({
       severity: 'error',
       code: 'TERRAIN_PROJECTION.no-floor-tile',
-      message: 'Could not resolve a non-transparent terrain/floor tile from the selected pack.',
+      message: 'Could not resolve a floor semantic role from the selected pack.',
     });
   }
   if (required.has('wall') && wall === undefined) {
     diagnostics.push({
       severity: 'error',
       code: 'TERRAIN_PROJECTION.no-wall-tile',
-      message: 'Could not resolve a non-transparent wall tile from the selected pack.',
+      message: 'Could not resolve a wall semantic role from the selected pack.',
     });
   }
   if (required.has('path') && path === undefined) {
     diagnostics.push({
       severity: 'warning',
       code: 'TERRAIN_PROJECTION.no-path-tile',
-      message: 'Could not resolve a path tile; generated path cells will use the floor tile.',
+      message: 'Could not resolve a path semantic role; generated path cells will use the floor role.',
     });
   }
 

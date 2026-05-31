@@ -10,10 +10,11 @@ import { toPixiDescriptor, type FrameIndex } from '@tileborne/sdk-tileset/render
 import type { CollisionMaskType, TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import { Effect } from 'effect';
 import { Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { CompositeTilemap } from '@pixi/tilemap';
 
 import type { EntityId } from '@/stores/editor-ui-store';
 
-import { findLayerById } from '../map-utils.js';
+import { CHUNK_SIZE, findLayerById } from '../map-utils.js';
 import { EditorLayerZIndex } from './layers.js';
 
 const TILE_COLORS = [
@@ -105,7 +106,7 @@ export class EditorViewportController {
   private readonly gizmosLayer: Graphics;
   private readonly debugLayer: Container;
   private readonly debugText: Text;
-  private readonly chunkContainers = new Map<string, Container>();
+  private readonly chunkTilemaps = new Map<string, CompositeTilemap>();
   private readonly pack?: TilesetPack | undefined;
   private readonly packs: readonly TilesetPack[];
   private readonly collisionMaskByTileIndex: ReadonlyMap<number, CollisionMaskType>;
@@ -116,6 +117,11 @@ export class EditorViewportController {
   private readonly assetPathByPackAndId: ReadonlyMap<string, string>;
   private readonly assetPathById: ReadonlyMap<string, string>;
   private map: TileborneMap | undefined;
+  private zoom = 1;
+  private panX = 0;
+  private panY = 0;
+  private viewWidth = 0;
+  private viewHeight = 0;
   private showGrid = true;
   private showCollision = false;
   private showDebug = false;
@@ -235,8 +241,12 @@ export class EditorViewportController {
   }
 
   setCamera(zoom: number, panX: number, panY: number): void {
+    this.zoom = zoom;
+    this.panX = panX;
+    this.panY = panY;
     this.worldRoot.scale.set(zoom);
     this.worldRoot.position.set(panX, panY);
+    this.updateVisibleChunks();
     this.requestRender();
   }
 
@@ -306,7 +316,10 @@ export class EditorViewportController {
   }
 
   resize(width: number, height: number): void {
+    this.viewWidth = width;
+    this.viewHeight = height;
     void Effect.runPromise(this.adapter.resize(width, height)).then(() => {
+      this.updateVisibleChunks();
       this.requestRender();
     });
   }
@@ -316,7 +329,7 @@ export class EditorViewportController {
       cancelFrame(this.renderFrameHandle);
       this.renderFrameHandle = undefined;
     }
-    this.chunkContainers.clear();
+    this.chunkTilemaps.clear();
     this.tileTextureCache.clear();
     this.map = undefined;
     await Effect.runPromise(this.adapter.dispose());
@@ -384,18 +397,81 @@ export class EditorViewportController {
     if (!this.map) {
       return;
     }
-    const tileLayers = this.map.layers.flatMap((layer) => (layer._tag === 'tile' ? [layer] : []));
-    if (tileLayers.length === 0) {
-      this.tileLayerRoot.removeChildren();
-      this.chunkContainers.clear();
+    // Full reset path (map/layer swap): drop every built chunk so stale alpha and
+    // content can be rebuilt, then build only the chunks inside the visible set.
+    this.tileLayerRoot.removeChildren();
+    this.chunkTilemaps.clear();
+    const hasTileLayer = this.map.layers.some((layer) => layer._tag === 'tile');
+    if (!hasTileLayer) {
       return;
     }
-    for (const tileLayer of tileLayers) {
-      for (const chunk of tileLayer.chunks) {
-        this.renderChunk(tileLayer.id, chunk.x, chunk.y);
+    this.updateVisibleChunks();
+    this.renderCollision();
+  }
+
+  /**
+   * Chunk-origin bounding box (tile coords) intersecting the viewport plus one
+   * chunk of padding on every side. Returns `undefined` when canvas dimensions
+   * are unknown (before the first resize / headless tests), meaning "no culling
+   * — every chunk is visible" so small maps still render fully.
+   */
+  private visibleChunkBounds():
+    | { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number }
+    | undefined {
+    const map = this.map;
+    if (!map || !(this.viewWidth > 0 && this.viewHeight > 0 && this.zoom > 0)) {
+      return undefined;
+    }
+    const tileW = map.tileSize.width;
+    const tileH = map.tileSize.height;
+    // Visible world rect = inverse of the worldRoot pan/zoom over the canvas.
+    const worldMinX = -this.panX / this.zoom;
+    const worldMinY = -this.panY / this.zoom;
+    const worldMaxX = (this.viewWidth - this.panX) / this.zoom;
+    const worldMaxY = (this.viewHeight - this.panY) / this.zoom;
+    const chunkOriginFor = (tile: number): number => Math.floor(tile / CHUNK_SIZE) * CHUNK_SIZE;
+    return {
+      minX: chunkOriginFor(Math.floor(worldMinX / tileW)) - CHUNK_SIZE,
+      maxX: chunkOriginFor(Math.floor(worldMaxX / tileW)) + CHUNK_SIZE,
+      minY: chunkOriginFor(Math.floor(worldMinY / tileH)) - CHUNK_SIZE,
+      maxY: chunkOriginFor(Math.floor(worldMaxY / tileH)) + CHUNK_SIZE,
+    };
+  }
+
+  /** Builds chunk containers entering the visible set and destroys ones leaving it. */
+  private updateVisibleChunks(): void {
+    if (!this.map) {
+      return;
+    }
+    const bounds = this.visibleChunkBounds();
+    const isVisible = (chunkX: number, chunkY: number): boolean =>
+      bounds === undefined ||
+      (chunkX >= bounds.minX &&
+        chunkX <= bounds.maxX &&
+        chunkY >= bounds.minY &&
+        chunkY <= bounds.maxY);
+    const wanted = new Set<string>();
+    for (const layer of this.map.layers) {
+      if (layer._tag !== 'tile') {
+        continue;
+      }
+      for (const chunk of layer.chunks) {
+        if (!isVisible(chunk.x, chunk.y)) {
+          continue;
+        }
+        const key = `${layer.id}:${chunk.x}:${chunk.y}`;
+        wanted.add(key);
+        if (!this.chunkTilemaps.has(key)) {
+          this.renderChunk(layer.id, chunk.x, chunk.y);
+        }
       }
     }
-    this.renderCollision();
+    for (const [key, tilemap] of this.chunkTilemaps) {
+      if (!wanted.has(key)) {
+        tilemap.removeFromParent();
+        this.chunkTilemaps.delete(key);
+      }
+    }
   }
 
   private chunksForPatch(
@@ -471,14 +547,15 @@ export class EditorViewportController {
     }
     const chunk = layer.chunks.find((entry) => entry.x === chunkX && entry.y === chunkY);
     const key = `${layerId}:${chunkX}:${chunkY}`;
-    const existing = this.chunkContainers.get(key);
-    existing?.removeFromParent();
-    const container = new Container();
-    container.label = key;
-    container.alpha = layerAlpha(layer);
+    // @pixi/tilemap's update model is clear + re-add (no per-tile mutation), so an
+    // edit rebuilds the whole chunk: drop the previous tilemap and build a fresh one.
+    this.chunkTilemaps.get(key)?.removeFromParent();
+    const tilemap = new CompositeTilemap();
+    tilemap.label = key;
+    tilemap.alpha = layerAlpha(layer);
     const tileW = this.map.tileSize.width;
     const tileH = this.map.tileSize.height;
-    const graphics = new Graphics();
+    const diagnostics = new Graphics();
     let usedDiagnosticGraphics = false;
     if (chunk) {
       for (let localY = 0; localY < chunk.height; localY += 1) {
@@ -491,16 +568,11 @@ export class EditorViewportController {
           const y = (chunk.y + localY) * tileH;
           const texture = this.textureForTileIndex(index);
           if (texture) {
-            const sprite = new Sprite({ texture });
-            sprite.x = x;
-            sprite.y = y;
-            sprite.width = tileW;
-            sprite.height = tileH;
-            container.addChild(sprite);
+            tilemap.tile(texture, x, y, { tileWidth: tileW, tileHeight: tileH });
           } else {
-            graphics.rect(x, y, tileW, tileH);
-            graphics.fill({ color: missingTileTextureDiagnosticColor(index), alpha: 0.22 });
-            graphics.stroke({
+            diagnostics.rect(x, y, tileW, tileH);
+            diagnostics.fill({ color: missingTileTextureDiagnosticColor(index), alpha: 0.22 });
+            diagnostics.stroke({
               width: 1,
               color: MISSING_TILE_TEXTURE_DIAGNOSTIC_COLOR,
               alpha: 0.85,
@@ -510,11 +582,12 @@ export class EditorViewportController {
         }
       }
     }
+    // Unresolved tiles keep a visible diagnostic overlay layered above the batch.
     if (usedDiagnosticGraphics) {
-      container.addChild(graphics);
+      tilemap.addChild(diagnostics);
     }
-    this.chunkContainers.set(key, container);
-    this.tileLayerRoot.addChild(container);
+    this.chunkTilemaps.set(key, tilemap);
+    this.tileLayerRoot.addChild(tilemap);
   }
 
   private textureForTileIndex(tileIndex: number): Texture | undefined {
@@ -758,7 +831,7 @@ export class EditorViewportController {
       return;
     }
     const hover = this.hoverTile;
-    this.debugText.text = `FPS ${this.fps}\nDraw ${this.chunkContainers.size + this.map!.objects.length}\nHover ${hover ? `${hover.x},${hover.y}` : '—'}`;
+    this.debugText.text = `FPS ${this.fps}\nDraw ${this.chunkTilemaps.size + this.map!.objects.length}\nHover ${hover ? `${hover.x},${hover.y}` : '—'}`;
   }
 }
 

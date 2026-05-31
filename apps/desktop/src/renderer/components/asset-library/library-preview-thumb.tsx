@@ -1,25 +1,31 @@
 import { Skeleton, cn } from '@tileborne/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { useAssetThumbnailDataUrl } from '@/hooks/queries';
+import { assetThumbnailUrl } from '@/lib/asset-url';
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
 
 interface LibraryPreviewThumbProps {
   readonly packId: string;
   readonly preview: LibraryPreviewRef;
-  readonly sizePx: number;
+  /**
+   * Fixed square box in px. Omit to fill the parent (the caller sizes it via
+   * `className`, e.g. an auto-sized grid cell).
+   */
+  readonly sizePx?: number | undefined;
   readonly testId?: string | undefined;
   readonly className?: string | undefined;
   readonly alt?: string | undefined;
   readonly integrityHash?: string | undefined;
-  readonly cacheVersion?: string | undefined;
   readonly eager?: boolean | undefined;
 }
 
 /**
- * Lazy, viewport-aware preview thumb. Only requests the asset data URL once
- * the thumb is near the viewport, so a 29k-tile pack doesn't kick off 29k
- * IPC `getAssetDataUrl` calls when the user opens the asset library.
+ * Canonical preview thumbnail: a plain, fixed-size `<img>` pointing at a
+ * precomputed small thumbnail served by the `tileborne-asset://thumb` protocol.
+ * The main process crops + downscales the source atlas once and disk-caches the
+ * result, so the renderer never decodes full-resolution atlases or CSS-crops
+ * them. Rendering is in-view gated so large grids don't request every offscreen
+ * thumbnail at once. A `Skeleton` placeholder is shown until the image loads.
  */
 export function LibraryPreviewThumb({
   packId,
@@ -29,18 +35,17 @@ export function LibraryPreviewThumb({
   className,
   alt,
   integrityHash,
-  cacheVersion,
   eager = false,
 }: LibraryPreviewThumbProps) {
   const [inView, setInView] = useState(eager);
+  const [loaded, setLoaded] = useState(false);
   const containerRef = useRef<HTMLSpanElement | null>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
-    const node = containerRef.current;
     if (eager) {
       return;
     }
+    const node = containerRef.current;
     if (node === null) {
       return;
     }
@@ -53,48 +58,34 @@ export function LibraryPreviewThumb({
         if (entries.some((entry) => entry.isIntersecting)) {
           setInView(true);
           observer.disconnect();
-          observerRef.current = null;
         }
       },
       { rootMargin: '320px' },
     );
     observer.observe(node);
-    observerRef.current = observer;
-    return () => {
-      observer.disconnect();
-      observerRef.current = null;
-    };
+    return () => observer.disconnect();
   }, [eager]);
 
-  const dataUrlQuery = useAssetThumbnailDataUrl(packId, inView ? preview : undefined, {
-    integrityHash,
-    sizePx,
-    cacheVersion,
-  });
-  const inner = sizePx - 4;
-  const scale = Math.min(inner / preview.width, inner / preview.height, 1);
+  const src = inView ? assetThumbnailUrl(packId, preview, integrityHash) : undefined;
 
   return (
     <span
       ref={containerRef}
       className={cn('relative block overflow-hidden rounded bg-muted/40', className)}
-      style={{ width: sizePx, height: sizePx }}
+      style={sizePx === undefined ? undefined : { width: sizePx, height: sizePx }}
     >
-      {dataUrlQuery.data?.dataUrl ? (
+      {src !== undefined ? (
         <img
           data-testid={testId}
-          src={dataUrlQuery.data.dataUrl}
+          src={src}
           alt={alt ?? ''}
-          className="absolute left-0.5 top-0.5 max-w-none select-none"
-          style={{
-            imageRendering: 'pixelated',
-            transform: `translate(${-preview.x * scale}px, ${-preview.y * scale}px) scale(${scale})`,
-            transformOrigin: 'top left',
-          }}
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          className="absolute inset-0 h-full w-full select-none"
+          style={{ imageRendering: 'pixelated', objectFit: 'contain' }}
         />
-      ) : (
-        <Skeleton className="h-full w-full" />
-      )}
+      ) : null}
+      {loaded ? null : <Skeleton className="absolute inset-0 h-full w-full" />}
     </span>
   );
 }
@@ -105,7 +96,7 @@ interface LibraryPreviewMosaicProps {
   readonly sizePx: number;
   readonly testId?: string | undefined;
   readonly integrityHash?: string | undefined;
-  readonly cacheVersion?: string | undefined;
+  readonly eager?: boolean | undefined;
 }
 
 /**
@@ -118,7 +109,7 @@ export function LibraryPreviewMosaic({
   sizePx,
   testId,
   integrityHash,
-  cacheVersion,
+  eager,
 }: LibraryPreviewMosaicProps) {
   if (previews.length === 0) {
     return (
@@ -147,7 +138,7 @@ export function LibraryPreviewMosaic({
         sizePx={sizePx}
         testId={testId}
         integrityHash={integrityHash}
-        cacheVersion={cacheVersion}
+        eager={eager}
       />
     );
   }
@@ -165,7 +156,7 @@ export function LibraryPreviewMosaic({
           sizePx={cellSize}
           testId={testId}
           integrityHash={integrityHash}
-          cacheVersion={cacheVersion}
+          eager={eager}
         />
       ))}
     </span>

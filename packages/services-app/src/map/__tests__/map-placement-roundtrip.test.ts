@@ -5,6 +5,7 @@ import {
   MapObject,
   MapObjectPlacement,
   ObjectLayer,
+  TileTransform,
   TileborneMap,
   type Uuid,
   makeAssetId,
@@ -125,6 +126,12 @@ describe("MapService placement persistence", () => {
               assetId: Option.some(ids.asset),
               tileId: Option.some(ids.tile),
               gid: Option.some(7),
+              transform: new TileTransform({
+                flippedHorizontal: true,
+                flippedVertical: false,
+                flippedDiagonal: false,
+                rotatedHexagonal120: false,
+              }),
             }),
           });
           const updated = new TileborneMap({
@@ -153,6 +160,12 @@ describe("MapService placement persistence", () => {
             readonly assetId?: string;
             readonly tileId?: string;
             readonly gid?: number;
+            readonly transform?: {
+              readonly flippedHorizontal: boolean;
+              readonly flippedVertical: boolean;
+              readonly flippedDiagonal: boolean;
+              readonly rotatedHexagonal120: boolean;
+            };
           };
         }[];
       };
@@ -164,6 +177,12 @@ describe("MapService placement persistence", () => {
         assetId: ids.asset,
         tileId: ids.tile,
         gid: 7,
+        transform: {
+          flippedHorizontal: true,
+          flippedVertical: false,
+          flippedDiagonal: false,
+          rotatedHexagonal120: false,
+        },
       });
 
       const placement = loaded.objects[0]?.placement;
@@ -173,6 +192,12 @@ describe("MapService placement persistence", () => {
       expect(Option.getOrUndefined(placement?.assetId ?? Option.none())).toBe(ids.asset);
       expect(Option.getOrUndefined(placement?.tileId ?? Option.none())).toBe(ids.tile);
       expect(Option.getOrUndefined(placement?.gid ?? Option.none())).toBe(7);
+      expect(placement?.transform).toMatchObject({
+        flippedHorizontal: true,
+        flippedVertical: false,
+        flippedDiagonal: false,
+        rotatedHexagonal120: false,
+      });
     }));
 
   it("round-trips placements that omit optional nested refs", () =>

@@ -13,13 +13,15 @@ import {
   type AutotileRule,
 } from "../../schemas/autotile-rule.js";
 import { createManifestProvenance, type ManifestProvenance } from "../../manifest/index.js";
+import { inferAssetSemanticRoles } from "../../manifest/semantic-roles.js";
 import { compileTileMetadata, type CompiledTileMetadata } from "../../metadata/index.js";
 import { TerrainClass } from "../../schemas/terrain-class.js";
 import { TerrainTransition } from "../../schemas/terrain-transition.js";
 import { Tileset } from "../../schemas/tileset.js";
 import type { Placeable } from "../../schemas/placeable.js";
 import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../../schemas/tileset-pack.js";
-import type { TiledJsonTileset, TiledMapImport } from "../../tiled/types.js";
+import type { TiledJsonTileset, TiledMapImport, TiledSourceInventory } from "../../tiled/types.js";
+import { buildTiledSourceInventory } from "../../tiled/source-inventory.js";
 import {
   convertTiledXmlTileset,
   parseTiledXmlDocument,
@@ -59,6 +61,7 @@ export type TiledSourceImportResult = ParseResult<TilesetPack> & {
   readonly maps: readonly TiledMapImport[];
   readonly tileMetadata: readonly CompiledTileMetadata[];
   readonly tileProvenance: readonly TiledSourceTileProvenance[];
+  readonly sourceInventory: TiledSourceInventory;
 };
 
 const PACK_SEED = "tiled-source";
@@ -500,6 +503,13 @@ export const importTiledSource = async (
 
   const withWallRules = addWallRules(imported, rulesBySource);
   const maps: TiledMapImport[] = [];
+  const exampleMaps: Array<{
+    readonly path: string;
+    readonly width: number;
+    readonly height: number;
+    readonly tileWidth: number;
+    readonly tileHeight: number;
+  }> = [];
   for (const [mapPath, raw] of rawMaps) {
     const parsed = await parseTmx(raw, {
       packIdSeed: PACK_SEED,
@@ -511,13 +521,25 @@ export const importTiledSource = async (
     diagnostics.push(...parsed.diagnostics);
     if (parsed.value !== undefined) {
       maps.push(parsed.value.tiledMap);
+      exampleMaps.push({
+        path: mapPath,
+        width: parsed.value.tiledMap.width,
+        height: parsed.value.tiledMap.height,
+        tileWidth: parsed.value.tiledMap.tileWidth,
+        tileHeight: parsed.value.tiledMap.tileHeight,
+      });
     }
   }
 
   const metadataResults = withWallRules.map(compileImportedTilesetMetadata);
   diagnostics.push(...metadataResults.flatMap((result) => result.diagnostics));
+  const sourceInventory = buildTiledSourceInventory({
+    tilesets: withWallRules.map((entry) => ({ tileset: entry.source, source: entry.sourcePath })),
+    rules: input.ruleFiles ?? [],
+    exampleMaps,
+  });
 
-  const pack = new TilesetPack({
+  const packWithoutRoles = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(PACK_SEED),
     name: input.packName ?? "Tiled source",
@@ -533,6 +555,10 @@ export const importTiledSource = async (
     assets: dedupeAssets(withWallRules.flatMap((entry) => entry.assets)),
     placeables: withWallRules.flatMap((entry) => entry.placeables),
   });
+  const pack = new TilesetPack({
+    ...packWithoutRoles,
+    semanticRoles: inferAssetSemanticRoles(packWithoutRoles),
+  });
 
   return {
     value: pack,
@@ -545,5 +571,6 @@ export const importTiledSource = async (
     maps,
     tileMetadata: metadataResults.flatMap((result) => result.metadata),
     tileProvenance: withWallRules.flatMap((entry) => captureTileProvenance(entry.tileset, entry.sourcePath)),
+    sourceInventory,
   };
 };

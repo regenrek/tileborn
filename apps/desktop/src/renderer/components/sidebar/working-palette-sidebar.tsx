@@ -13,10 +13,8 @@ import { useMemo } from 'react';
 import { LibraryPreviewMosaic, LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
-import { useTilesetPack } from '@/hooks/queries';
-import {
-  buildLibraryPreviewIndex,
-} from '@/lib/asset-library-bridge';
+import { useWorkingPalettePreviews } from '@/hooks/queries';
+import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
 import {
   brushIntentMatchesItem,
   workingPaletteItemKey,
@@ -74,7 +72,9 @@ export function WorkingPaletteSidebar({
   const activePalette = useActiveWorkingPalette(projectId);
   const paletteActions = useWorkingPaletteActions();
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
-  const tilesetPackQuery = useTilesetPack(packId);
+  const paletteItems = activePalette?.items ?? [];
+  const paletteRefs = useMemo(() => paletteItems.map((item) => item.ref), [paletteItems]);
+  const { previewByKey, isLoading: previewsLoading } = useWorkingPalettePreviews(paletteRefs);
 
   return (
     <section className="flex flex-col gap-2 px-1" data-testid="working-palette-sidebar">
@@ -88,16 +88,6 @@ export function WorkingPaletteSidebar({
           testId="working-palette-sidebar-switcher"
         />
       </div>
-
-      {tilesetPackQuery.isError ? (
-        <p
-          className={cn('px-2', typography.bodyMicro)}
-          data-testid="working-palette-sidebar-pack-error"
-        >
-          This pack does not expose a tileset manifest. Curated palettes only work for paintable
-          Tileborne packs.
-        </p>
-      ) : null}
 
       {activePalette === undefined ? (
         <SidebarEmptyState
@@ -137,11 +127,13 @@ export function WorkingPaletteSidebar({
             >
               {activePalette.items.map((item) => {
                 const key = workingPaletteItemKey(item);
+                const preview = previewByKey.get(key);
                 return (
                   <WorkingPaletteSidebarItem
                     key={key}
                     item={item}
-                    fallbackPackLoading={tilesetPackQuery.isLoading}
+                    packLoading={preview === undefined && previewsLoading}
+                    preview={preview}
                   />
                 );
               })}
@@ -171,22 +163,15 @@ export function WorkingPaletteSidebar({
 
 function WorkingPaletteSidebarItem({
   item,
-  fallbackPackLoading,
+  packLoading,
+  preview,
 }: {
   readonly item: WorkingPaletteItem;
-  readonly fallbackPackLoading: boolean;
+  readonly packLoading: boolean;
+  readonly preview: LibraryPreviewRef | undefined;
 }) {
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
-  const itemPackQuery = useTilesetPack(item.ref.packId);
-  const previews = useMemo(() => {
-    if (itemPackQuery.data === undefined) {
-      return [];
-    }
-    const previewIndex = buildLibraryPreviewIndex(itemPackQuery.data);
-    const preview = previewIndex.previewForRef(item.ref);
-    return preview === undefined ? [] : [preview];
-  }, [item.ref, itemPackQuery.data]);
   const key = workingPaletteItemKey(item);
   const active = brushIntentMatchesItem(brushIntent, item);
   const kind = item.ref.kind;
@@ -207,9 +192,9 @@ function WorkingPaletteSidebarItem({
           active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
         )}
       >
-        {fallbackPackLoading || itemPackQuery.isLoading ? (
+        {packLoading ? (
           <Skeleton className="size-8" />
-        ) : previews.length === 0 ? (
+        ) : preview === undefined ? (
           <span
             aria-hidden
             className="flex shrink-0 items-center justify-center rounded bg-muted/40"
@@ -220,7 +205,7 @@ function WorkingPaletteSidebarItem({
         ) : kind === 'tile' || kind === 'placeable' ? (
           <LibraryPreviewThumb
             packId={item.ref.packId}
-            preview={previews[0]!}
+            preview={preview}
             sizePx={GRID_THUMB_PX}
             testId="working-palette-sidebar-thumb"
             eager
@@ -228,9 +213,10 @@ function WorkingPaletteSidebarItem({
         ) : (
           <LibraryPreviewMosaic
             packId={item.ref.packId}
-            previews={previews}
+            previews={[preview]}
             sizePx={GRID_THUMB_PX}
             testId="working-palette-sidebar-thumb"
+            eager
           />
         )}
         <span className="sr-only">
@@ -240,3 +226,4 @@ function WorkingPaletteSidebarItem({
     </li>
   );
 }
+

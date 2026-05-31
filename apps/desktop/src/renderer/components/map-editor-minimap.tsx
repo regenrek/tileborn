@@ -128,6 +128,7 @@ export function MapEditorMinimap({
         'pointer-events-auto absolute right-4 top-4 z-10 overflow-hidden rounded-xl border border-border bg-sidebar/90 p-1.5 shadow-md backdrop-blur-sm',
         elevation.md,
       )}
+      data-viewport-overlay="minimap"
       data-testid="map-editor-minimap"
       title="Minimap - click or drag to jump the view"
       onPointerDown={(event) => event.stopPropagation()}

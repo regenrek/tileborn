@@ -30,6 +30,7 @@ import {
   TileLayerPersisted,
   TileborneMap,
   TileChunk,
+  TileTransform,
 } from "./map/index.js";
 import { Asset, Tile, TileSet } from "./tileset/index.js";
 import { hashJsonStable } from "./hashing/index.js";
@@ -105,7 +106,35 @@ describe("schema round-trips", () => {
     const layerId = makeLayerId(UUID);
     const objectId = makeObjectId(UUID);
 
+    roundTrip(TileTransform, {
+      flippedHorizontal: true,
+      flippedVertical: false,
+      flippedDiagonal: true,
+      rotatedHexagonal120: false,
+    });
+
     roundTrip(TileChunk, { x: 0, y: 0, width: 16, height: 16, tiles: [1, 0, 2] });
+    roundTrip(TileChunk, {
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 1,
+      tiles: [1, 2],
+      transforms: [
+        {
+          flippedHorizontal: true,
+          flippedVertical: false,
+          flippedDiagonal: false,
+          rotatedHexagonal120: false,
+        },
+        {
+          flippedHorizontal: false,
+          flippedVertical: true,
+          flippedDiagonal: true,
+          rotatedHexagonal120: false,
+        },
+      ],
+    });
 
     roundTrip(TileLayerPersisted, {
       kind: "tile",
@@ -163,6 +192,12 @@ describe("schema round-trips", () => {
       assetId: makeAssetId(UUID),
       tileId: makeTileId(UUID),
       gid: 1,
+      transform: {
+        flippedHorizontal: true,
+        flippedVertical: false,
+        flippedDiagonal: false,
+        rotatedHexagonal120: false,
+      },
     });
 
     roundTrip(MapObject, {
@@ -181,6 +216,12 @@ describe("schema round-trips", () => {
         assetId: makeAssetId(UUID),
         tileId: makeTileId(UUID),
         gid: 1,
+        transform: {
+          flippedHorizontal: true,
+          flippedVertical: false,
+          flippedDiagonal: false,
+          rotatedHexagonal120: false,
+        },
       },
     });
 

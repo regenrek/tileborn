@@ -74,6 +74,8 @@ export const queryKeys = {
         limit,
         cacheVersion,
       ] as const,
+    previews: (packId: string, refsKey: string) =>
+      [...queryKeys.assetLibrary.all, packId, 'previews', refsKey] as const,
   },
   workingPalettes: {
     all: ['workingPalettes'] as const,

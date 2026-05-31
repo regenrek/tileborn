@@ -75,6 +75,7 @@ import { ConfirmStep } from './confirm-step';
 import { ImportWizard } from './tiled-import-wizard';
 import { LicenseStep } from './license-step';
 import { MappingReviewStep } from './mapping-review-step';
+import { ScanStep } from './scan-step';
 
 const inventory = {
   mapCount: 0,
@@ -101,6 +102,8 @@ const featureFlags = {
   parallax: false,
   infiniteChunks: false,
   unsupportedOrientation: false,
+  classProperties: false,
+  projectFiles: false,
   flipFlags: false,
 } satisfies TiledImportScan['featureFlags'];
 
@@ -237,6 +240,69 @@ describe('Tiled import wizard steps', () => {
     expect(onAccepted).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('checkbox'));
     expect(onAccepted).toHaveBeenCalledWith(['placeable:atlas:1']);
+  });
+
+  it('shows supported Tiled transform preservation in scan diagnostics', () => {
+    render(
+      <ScanStep
+        scan={minimalScan({ featureFlags: { flipFlags: true } })}
+        diagnostics={[]}
+        pending={false}
+      />,
+    );
+
+    expect(screen.getByText('Tiled transforms preserved')).toBeTruthy();
+    expect(screen.getByText('No blocking diagnostics')).toBeTruthy();
+  });
+
+  it('shows actionable unsupported Tiled feature diagnostics', () => {
+    render(
+      <ScanStep
+        scan={minimalScan({
+          inventory: { unsupportedFeatureCount: 1 },
+          featureFlags: { classProperties: true },
+          unsupportedFeatures: [
+            {
+              feature: 'class-properties',
+              path: '/properties/0',
+              message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+              action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+            },
+          ],
+        })}
+        diagnostics={[]}
+        pending={false}
+      />,
+    );
+
+    expect(screen.getByText('class-properties')).toBeTruthy();
+    expect(
+      screen.getByText('Flatten class properties to primitive string, number, or boolean properties before importing.'),
+    ).toBeTruthy();
+  });
+
+  it('shows typed unsupported zstd compression diagnostics from import-center analysis', () => {
+    render(
+      <ScanStep
+        scan={minimalScan()}
+        diagnostics={[
+          {
+            _tag: 'TiledUnsupportedCompression',
+            severity: 'warning',
+            path: '/layers/ground/data',
+            message: 'Layer uses unsupported compression "zstd"',
+            action: 'Re-export the Tiled layer as raw, CSV, base64, gzip, or zlib.',
+          },
+        ]}
+        pending={false}
+      />,
+    );
+
+    expect(screen.getByText('TiledUnsupportedCompression')).toBeTruthy();
+    expect(screen.getByText('Layer uses unsupported compression "zstd"')).toBeTruthy();
+    expect(
+      screen.getByText('Re-export the Tiled layer as raw, CSV, base64, gzip, or zlib.'),
+    ).toBeTruthy();
   });
 
   it('routes a Tileborne pack folder from source detection into License', async () => {

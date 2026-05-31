@@ -7,8 +7,15 @@ import {
   resolvePath,
   tilesetIdFromSource,
 } from "./external-resolve.js";
-import { decodeTiledGid, locateTiledGid } from "./gid.js";
+import { decodeTiledGid, isIdentityTiledTransform, locateTiledGid } from "./gid.js";
 import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
+import {
+  primitivePropertyValue,
+  unsupportedClassPropertyFeaturesForMap,
+  unsupportedClassPropertyFeaturesForTileset,
+  unsupportedFeature,
+  unsupportedFeatureDiagnostic,
+} from "./support-policy.js";
 import {
   childNode,
   convertTiledXmlMap,
@@ -21,6 +28,7 @@ import {
 } from "./xml-common.js";
 import { normalizeJsonTileLayers, validateTiledJsonMap, validateTiledJsonTileset } from "./validate.js";
 import { buildTilesetWindows } from "./compile-map.js";
+import { buildTiledSourceInventory } from "./source-inventory.js";
 import type {
   TiledExternalReader,
   TiledImportScan,
@@ -39,7 +47,9 @@ import type {
   TiledScanPlaceableCandidate,
   TiledScanTileset,
   TiledScanUnsupportedFeature,
+  TiledSourceInventoryRule,
 } from "./types.js";
+import type { TiledInventoryTilesetInput } from "./source-inventory.js";
 
 export type TiledScanSourceInput = {
   readonly sourcePath: string;
@@ -54,6 +64,9 @@ type LoadedTileset = {
   readonly source?: string;
 };
 
+const inventoryTilesetInput = ({ tileset, source }: LoadedTileset): TiledInventoryTilesetInput =>
+  source === undefined ? { tileset } : { tileset, source };
+
 type DirectoryEntry = {
   readonly path: string;
   readonly kind: "file" | "directory";
@@ -62,7 +75,7 @@ type DirectoryEntry = {
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => properties?.find((property) => property.name === name)?.value;
+): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
 
 const boolProperty = (properties: readonly TiledJsonProperty[] | undefined, name: string): boolean =>
   propertyValue(properties, name) === true;
@@ -365,7 +378,7 @@ const flattenLayers = (layers: readonly TiledJsonAnyLayer[]): readonly TiledJson
 
 const hasUnsupportedTiledGidFlags = (rawGid: number): boolean => {
   const decoded = decodeTiledGid(rawGid);
-  return decoded.flippedHorizontal || decoded.flippedVertical || decoded.flippedDiagonal || decoded.rotatedHexagonal120;
+  return !isIdentityTiledTransform(decoded.transform);
 };
 
 const featureFlagsFor = (map: TiledJsonMap, tilesets: readonly LoadedTileset[]): TiledScanFeatureFlags => {
@@ -382,6 +395,8 @@ const featureFlagsFor = (map: TiledJsonMap, tilesets: readonly LoadedTileset[]):
     parallax: layers.some((layer) => layer.parallaxx !== undefined || layer.parallaxy !== undefined),
     infiniteChunks: map.infinite === true || layers.some((layer) => layer.type === "tilelayer" && (layer.chunks?.length ?? 0) > 0),
     unsupportedOrientation: map.orientation !== "orthogonal",
+    classProperties: unsupportedClassPropertyFeaturesForMap(map, tilesets.map(({ tileset }) => tileset)).length > 0,
+    projectFiles: false,
     flipFlags:
       layers.some((layer) => layer.type === "tilelayer" && layer.data.some(hasUnsupportedTiledGidFlags)) ||
       objects.some((object) => object.gid !== undefined && hasUnsupportedTiledGidFlags(object.gid)),
@@ -530,27 +545,25 @@ const scanCategories = (
 const unsupportedFeatures = (features: TiledScanFeatureFlags): readonly TiledScanUnsupportedFeature[] => {
   const unsupported: TiledScanUnsupportedFeature[] = [];
   if (features.templates) {
-    unsupported.push({ feature: "templates", path: "/layers", message: "Tiled object templates are diagnosed but not imported." });
+    unsupported.push(unsupportedFeature("templates", "/layers"));
   }
   if (features.infiniteChunks) {
-    unsupported.push({ feature: "infinite-chunks", path: "/layers", message: "Infinite chunk maps require a future import mode." });
+    unsupported.push(unsupportedFeature("infinite-chunks", "/layers"));
   }
   if (features.rotation) {
-    unsupported.push({ feature: "rotation", path: "/layers", message: "Object rotation is diagnosed but not applied to map placement." });
+    unsupported.push(unsupportedFeature("rotation", "/layers"));
   }
   if (features.parallax) {
-    unsupported.push({ feature: "parallax", path: "/layers", message: "Layer parallax is diagnosed but not applied to map layers." });
+    unsupported.push(unsupportedFeature("parallax", "/layers"));
   }
   if (features.unsupportedOrientation) {
-    unsupported.push({ feature: "orientation", path: "/orientation", message: "Only orthogonal Tiled maps are supported." });
+    unsupported.push(unsupportedFeature("orientation", "/orientation"));
   }
-  if (features.flipFlags) {
-    unsupported.push({
-      feature: "flip-flags",
-      path: "/layers",
-      // TODO(tiled-flip-support): add a canonical transform model before accepting flipped Tiled GIDs.
-      message: "Tiled flip flags are not supported by the canonical importer.",
-    });
+  if (features.classProperties) {
+    unsupported.push(unsupportedFeature("class-properties", "/properties"));
+  }
+  if (features.projectFiles) {
+    unsupported.push(unsupportedFeature("project-files", "/"));
   }
   return unsupported;
 };
@@ -693,9 +706,15 @@ const buildScanFromTilesets = (input: {
   readonly sourceKind: "tileset" | "source-folder";
   readonly maps: TiledImportScan["maps"];
   readonly tilesets: readonly LoadedTileset[];
-  readonly rulesCount?: number;
+  readonly rules?: readonly TiledSourceInventoryRule[];
+  readonly projectFilePaths?: readonly string[];
 }): TiledImportScan => {
   const scannedTilesets = input.tilesets.map(scanTileset);
+  const classPropertyFeatures = input.tilesets.flatMap(({ tileset }) =>
+    unsupportedClassPropertyFeaturesForTileset(tileset, `/tilesets/${tileset.name}`),
+  );
+  const projectFileFeatures = (input.projectFilePaths ?? []).map((path) => unsupportedFeature("project-files", path));
+  const unsupported = [...classPropertyFeatures, ...projectFileFeatures];
   const flags: TiledScanFeatureFlags = {
     gridAtlas: input.tilesets.some(({ tileset }) => tileset.columns > 0),
     imageCollection: input.tilesets.some(({ tileset }) => tileset.columns === 0),
@@ -707,6 +726,8 @@ const buildScanFromTilesets = (input: {
     parallax: false,
     infiniteChunks: false,
     unsupportedOrientation: false,
+    classProperties: classPropertyFeatures.length > 0,
+    projectFiles: projectFileFeatures.length > 0,
     flipFlags: false,
   };
   const placeableCandidates = scanPlaceables(input.tilesets);
@@ -716,8 +737,13 @@ const buildScanFromTilesets = (input: {
     tilesets: scannedTilesets,
     objectLayers: [],
     placeableCandidates,
-    unsupportedFeatures: [],
+    unsupportedFeatures: unsupported,
     ambiguousAtlasObjects: [],
+  });
+  const sourceInventory = buildTiledSourceInventory({
+    tilesets: input.tilesets.map(inventoryTilesetInput),
+    rules: input.rules ?? [],
+    exampleMaps: input.maps,
   });
   return {
     sourceKind: input.sourceKind,
@@ -739,15 +765,16 @@ const buildScanFromTilesets = (input: {
       collisionObjectCount: scannedTilesets.reduce((count, tileset) => count + tileset.collisionObjectCount, 0),
       objectLayerCount: 0,
       placeableCandidateCount: placeableCandidates.length,
-      unsupportedFeatureCount: 0,
+      unsupportedFeatureCount: unsupported.length,
     },
-    confidence: 0.95,
+    confidence: unsupported.length > 0 ? 0.2 : 0.95,
     featureFlags: flags,
-    unsupportedFeatures: [],
+    unsupportedFeatures: unsupported,
     ambiguousAtlasObjects: [],
     recommendedProfile: importRecommendation.recommendedProfile,
     sourceRoles: importRecommendation.sourceRoles,
     importRecommendation,
+    sourceInventory,
   };
 };
 
@@ -805,6 +832,10 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
         return entry.kind === "file" && (lower.endsWith(".tmx") || lower.endsWith(".tmj"));
       })
       .sort((left, right) => left.path.localeCompare(right.path));
+    const projectFilePaths = entries
+      .filter((entry) => entry.kind === "file" && entry.path.toLowerCase().endsWith(".tiled"))
+      .map((entry) => entry.path)
+      .sort((left, right) => left.localeCompare(right));
     const diagnostics: ParseDiagnostic[] = [];
     const tilesets: LoadedTileset[] = [];
     for (const sourcePath of tileSources.map((entry) => entry.path)) {
@@ -818,15 +849,24 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
     if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
       return { diagnostics };
     }
-    return {
-      scan: buildScanFromTilesets({
+    const ruleSources = entries
+      .filter((entry) => {
+        const lower = entry.path.toLowerCase();
+        return entry.kind === "file" && (lower.endsWith("/rules.txt") || /\/rules\/[^/]+\.(tmx|tmj)$/.test(lower));
+      })
+      .map((entry) => ({
+        path: entry.path,
+        kind: entry.path.toLowerCase().endsWith("/rules.txt") ? "rules-index" as const : "rule-map" as const,
+      }));
+    const scan = buildScanFromTilesets({
         sourceKind: "source-folder",
         sourcePath: input.sourcePath,
         maps: mapSources.map((entry) => ({ path: entry.path, width: 0, height: 0, tileWidth: 0, tileHeight: 0 })),
         tilesets,
-      }),
-      diagnostics,
-    };
+        rules: ruleSources,
+        projectFilePaths,
+      });
+    return { scan, diagnostics: [...diagnostics, ...scan.unsupportedFeatures.map(unsupportedFeatureDiagnostic)] };
   }
   const raw =
     input.raw ??
@@ -871,7 +911,11 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
   }
   const tilesets = loaded.tilesets;
   const flags = featureFlagsFor(parsed.map, tilesets);
-  const unsupported = unsupportedFeatures(flags);
+  const classPropertyUnsupported = unsupportedClassPropertyFeaturesForMap(parsed.map, tilesets.map(({ tileset }) => tileset));
+  const unsupported = [
+    ...unsupportedFeatures({ ...flags, classProperties: false }),
+    ...classPropertyUnsupported,
+  ];
   const ambiguous = ambiguousAtlasObjects(parsed.map, tilesets);
   const layers = flattenLayers(parsed.map.layers);
   const placeableCandidates = scanPlaceables(tilesets);
@@ -912,17 +956,23 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
     placeableCandidateCount: placeableCandidates.length,
     unsupportedFeatureCount: unsupported.length,
   };
+  const sourceInventory = buildTiledSourceInventory({
+    tilesets: tilesets.map(inventoryTilesetInput),
+    exampleMaps: [
+      {
+        path: input.sourcePath,
+        width: parsed.map.width,
+        height: parsed.map.height,
+        tileWidth: parsed.map.tilewidth,
+        tileHeight: parsed.map.tileheight,
+      },
+    ],
+  });
   const confidence = unsupported.length > 0 ? 0.2 : ambiguous.length > 0 ? 0.65 : 0.95;
   const diagnostics: ParseDiagnostic[] = [
     ...parsed.diagnostics,
     ...loaded.diagnostics,
-    ...unsupported.map((feature) => ({
-      _tag: "TiledUnsupportedFeature" as const,
-      path: feature.path,
-      message: feature.message,
-      severity: "error" as const,
-      feature: feature.feature,
-    })),
+    ...unsupported.map(unsupportedFeatureDiagnostic),
     ...ambiguous.map((entry) => ({
       _tag: "TiledAmbiguousAtlasObject" as const,
       path: entry.path,
@@ -975,6 +1025,7 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
       recommendedProfile: importRecommendation.recommendedProfile,
       sourceRoles: importRecommendation.sourceRoles,
       importRecommendation,
+      sourceInventory,
     },
     diagnostics,
   };

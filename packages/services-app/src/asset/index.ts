@@ -62,6 +62,7 @@ import {
 import { Context, Effect, Layer, Option, PubSub, Result, Schema, Stream } from 'effect';
 import { importTiledSource } from '@tileborne/sdk-tileset/importers/tiled-source';
 import { writeTilesetManifest, type ManifestProvenance } from '@tileborne/sdk-tileset/manifest';
+import type { TiledSourceInventory } from '@tileborne/sdk-tileset/tiled';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
 
 import {
@@ -324,7 +325,9 @@ const discoverTiledSourceInputFiles = async (
         continue;
       }
       const extension = path.extname(entry.name).toLowerCase();
-      if (TILED_MAP_EXTENSIONS.has(extension)) {
+      if (relative.toLowerCase().endsWith('/rules.txt') || relative.toLowerCase() === 'rules.txt') {
+        ruleFiles.push(relative);
+      } else if (TILED_MAP_EXTENSIONS.has(extension)) {
         if (relative.split('/').some((segment) => segment.toLowerCase() === 'rules')) {
           ruleFiles.push(relative);
         } else {
@@ -900,6 +903,7 @@ const manifestWithTilesetAssetIntegrity = async (
   sourceRoot: string,
   stagingDir: string,
   provenance: ManifestProvenance,
+  sourceInventory: TiledSourceInventory,
 ): Promise<unknown> => {
   const manifest = writeTilesetManifest(pack, { provenance }) as {
     readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
@@ -926,7 +930,7 @@ const manifestWithTilesetAssetIntegrity = async (
       license: tileborneTiledSourceLicenseJson(sourceRoot),
     });
   }
-  return { ...manifest, assets };
+  return { ...manifest, assets, tiledSourceInventory: sourceInventory };
 };
 
 const readTiledSourceFile = (sourceRoot: string) => async (filePath: string) => {
@@ -986,6 +990,7 @@ const stageTiledSourcePack = (
           resolvedSource,
           stagingDir,
           imported.provenance,
+          imported.sourceInventory,
         ),
       catch: (cause) =>
         cause instanceof AssetImportError
@@ -1109,19 +1114,6 @@ const listVerifiedPacks = (
   listVerifiedPackEntries(assetsRoot).pipe(
     Effect.map((entries) => entries.map((entry) => entry.pack)),
   );
-
-const getVerifiedPack = (
-  assetsRoot: string,
-  packId: PackId,
-): Effect.Effect<AssetPackWithCapability, AssetServiceError> =>
-  Effect.gen(function* () {
-    const packs = yield* listVerifiedPacks(assetsRoot);
-    const pack = packs.find((candidate) => candidate.id === packId);
-    if (!pack) {
-      yield* new AssetPackNotFoundError({ packId, message: `asset pack not found: ${packId}` });
-    }
-    return pack as AssetPackWithCapability;
-  });
 
 const removeVerifiedPack = (
   assetsRoot: string,
@@ -1369,7 +1361,69 @@ export const AssetServiceLive = Layer.effect(
     const paths = yield* home.init();
     const trigger = yield* PubSub.unbounded<void>();
     const capabilityTrigger = yield* PubSub.unbounded<PackCapabilityRefreshed>();
+
+    // Verified-pack cache, keyed by packId. Full byte-integrity verification
+    // (read+SHA every asset file) is expensive and MUST NOT run per request:
+    // the asset protocol calls getPack ~90-100x on first open, which otherwise
+    // serializes that many full-pack rehashes on the single main thread. We
+    // verify once at boot / after a pack changes, then serve the cached
+    // verified manifest. `cachePopulated` distinguishes "no packs installed"
+    // from "not yet scanned". The cache is dropped on any pack-set change
+    // (import/remove) so changed packs are re-verified.
+    const verifiedPackCache = new Map<
+      PackId,
+      { readonly pack: AssetPackWithCapability; readonly integrityHash: ContentHash }
+    >();
+    let cachePopulated = false;
+
+    const cacheVerifiedEntries = (
+      entries: readonly { readonly pack: AssetPackWithCapability; readonly refreshed: boolean }[],
+    ): void => {
+      verifiedPackCache.clear();
+      for (const entry of entries) {
+        verifiedPackCache.set(entry.pack.id, {
+          pack: entry.pack,
+          // Warms the packManifestContentHash memo for this pack object so the
+          // protocol/asset-library hash lookups stay O(1) per request.
+          integrityHash: packManifestContentHash(entry.pack),
+        });
+      }
+      cachePopulated = true;
+    };
+
+    const invalidateVerifiedPackCache = (): void => {
+      verifiedPackCache.clear();
+      cachePopulated = false;
+    };
+
+    const ensureVerifiedPackCache = Effect.fn('AssetService.ensureVerifiedPackCache')(function* () {
+      if (cachePopulated) {
+        return;
+      }
+      cacheVerifiedEntries(yield* listVerifiedPackEntries(paths.assets));
+    });
+
+    const cachedVerifiedPacks = Effect.fn('AssetService.cachedVerifiedPacks')(function* () {
+      yield* ensureVerifiedPackCache();
+      return [...verifiedPackCache.values()]
+        .map((entry) => entry.pack)
+        .sort((left, right) => left.name.localeCompare(right.name));
+    });
+
+    const cachedGetPack = Effect.fn('AssetService.cachedGetPack')(function* (packId: PackId) {
+      yield* ensureVerifiedPackCache();
+      const entry = verifiedPackCache.get(packId);
+      if (entry === undefined) {
+        return yield* new AssetPackNotFoundError({
+          packId,
+          message: `asset pack not found: ${packId}`,
+        });
+      }
+      return entry.pack;
+    });
+
     const bootEntries = yield* listVerifiedPackEntries(paths.assets);
+    cacheVerifiedEntries(bootEntries);
     for (const entry of bootEntries) {
       if (entry.refreshed) {
         yield* PubSub.publish(capabilityTrigger, {
@@ -1393,6 +1447,7 @@ export const AssetServiceLive = Layer.effect(
             );
             return imported;
           });
+      invalidateVerifiedPackCache();
       yield* PubSub.publish(trigger, void 0);
       yield* PubSub.publish(capabilityTrigger, {
         packId: pack.id,
@@ -1417,6 +1472,7 @@ export const AssetServiceLive = Layer.effect(
       const pack = yield* importDirectoryPack(paths.assets, staging).pipe(
         Effect.ensuring(Effect.promise(() => rm(staging, { recursive: true, force: true }).catch(() => undefined))),
       );
+      invalidateVerifiedPackCache();
       yield* PubSub.publish(trigger, void 0);
       yield* PubSub.publish(capabilityTrigger, {
         packId: pack.id,
@@ -1446,15 +1502,15 @@ export const AssetServiceLive = Layer.effect(
     });
 
     const listPacks = Effect.fn('AssetService.listPacks')(function* () {
-      return yield* listVerifiedPacks(paths.assets);
+      return yield* cachedVerifiedPacks();
     });
 
     const getPack = Effect.fn('AssetService.getPack')(function* (packId: PackId) {
-      return yield* getVerifiedPack(paths.assets, packId);
+      return yield* cachedGetPack(packId);
     });
 
     const describePack = Effect.fn('AssetService.describePack')(function* (packId: PackId) {
-      const pack = yield* getVerifiedPack(paths.assets, packId);
+      const pack = yield* cachedGetPack(packId);
       return {
         pack,
         capability: pack.capability,
@@ -1463,9 +1519,10 @@ export const AssetServiceLive = Layer.effect(
     });
 
     const removePack = Effect.fn('AssetService.removePack')(function* (packId: PackId) {
-      const pack = yield* getVerifiedPack(paths.assets, packId);
+      const pack = yield* cachedGetPack(packId);
       yield* cleanupProjectPackReferences(paths.projects, pack);
       yield* removeVerifiedPack(paths.assets, pack);
+      invalidateVerifiedPackCache();
       yield* PubSub.publish(trigger, void 0);
     });
 
@@ -1483,7 +1540,7 @@ export const AssetServiceLive = Layer.effect(
         ProjectManifestSchema,
         (message) => new AssetImportError({ path: resolved.projectPath, message }),
       );
-      const installed = yield* listVerifiedPacks(paths.assets);
+      const installed = yield* cachedVerifiedPacks();
       return installed.filter((pack) =>
         project.assetPacks.some((ref) => ref.id === pack.id && ref.version === pack.version),
       );
@@ -1573,5 +1630,18 @@ export const AssetServiceLive = Layer.effect(
   }),
 );
 
-export const packManifestContentHash = (manifest: AssetPackManifest): ContentHash =>
-  hashJsonStable(assetPackManifestToJson(manifest));
+// Hashing a manifest serializes the whole canonical pack JSON, which is too
+// expensive to redo per protocol/asset-library request. Cached verified packs
+// are stable object references, so memoizing by manifest identity makes repeat
+// hash lookups O(1) without changing the result for a given manifest object.
+const contentHashByManifest = new WeakMap<AssetPackManifest, ContentHash>();
+
+export const packManifestContentHash = (manifest: AssetPackManifest): ContentHash => {
+  const memoized = contentHashByManifest.get(manifest);
+  if (memoized !== undefined) {
+    return memoized;
+  }
+  const hash = hashJsonStable(assetPackManifestToJson(manifest));
+  contentHashByManifest.set(manifest, hash);
+  return hash;
+};

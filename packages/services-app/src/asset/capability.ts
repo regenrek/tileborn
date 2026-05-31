@@ -9,6 +9,7 @@ import {
   PackUnsupportedSchemaDiagnostic,
   hashBytes,
   type PackCapabilityDiagnostic,
+  type PackSourceInventorySummary,
   type PackCapabilitySource,
   type PackId,
 } from "@tileborne/core";
@@ -30,7 +31,7 @@ interface ProbeInput {
   readonly manifestPath: string;
 }
 
-const CAPABILITY_CACHE_VERSION = 5;
+const CAPABILITY_CACHE_VERSION = 6;
 const textEncoder = new TextEncoder();
 
 const capabilityIntegrityHash = (rawManifest: string): ContentHash =>
@@ -45,6 +46,9 @@ interface ManifestLike {
   readonly terrainClasses?: readonly unknown[];
   readonly animations?: readonly unknown[];
   readonly collisionMasks?: readonly unknown[];
+  readonly tiledSourceInventory?: {
+    readonly summary?: Partial<PackSourceInventorySummary>;
+  };
 }
 
 const asManifestLike = (json: unknown): ManifestLike =>
@@ -65,6 +69,28 @@ const rawTileCount = (manifest: ManifestLike): number => {
     }
     return sum + arrayLength((tileset as { readonly tiles?: unknown }).tiles);
   }, 0);
+};
+
+const numberField = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? value : 0;
+
+const sourceInventorySummary = (manifest: ManifestLike): PackSourceInventorySummary | undefined => {
+  const summary = manifest.tiledSourceInventory?.summary;
+  if (summary === undefined) return undefined;
+  return {
+    tilesetCount: numberField(summary.tilesetCount),
+    tileCount: numberField(summary.tileCount),
+    frameCount: numberField(summary.frameCount),
+    imageCollectionTileCount: numberField(summary.imageCollectionTileCount),
+    wangSetCount: numberField(summary.wangSetCount),
+    animationCount: numberField(summary.animationCount),
+    animationFrameCount: numberField(summary.animationFrameCount),
+    tileProbabilityCount: numberField(summary.tileProbabilityCount),
+    wangColorProbabilityCount: numberField(summary.wangColorProbabilityCount),
+    collisionObjectCount: numberField(summary.collisionObjectCount),
+    ruleMapCount: numberField(summary.ruleMapCount),
+    rulesIndexCount: numberField(summary.rulesIndexCount),
+    exampleMapCount: numberField(summary.exampleMapCount),
+  };
 };
 
 const schemaVersionOption = (schemaVersion: unknown): Option.Option<number> =>
@@ -166,6 +192,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
   const parsed = parseTilesetManifest(json);
   const schemaVersion = schemaVersionOption(manifest.schemaVersion);
   const unsupported = unsupportedSchemaDiagnostic(manifest.schemaVersion);
+  const sourceInventory = sourceInventorySummary(manifest);
 
   if (parsed.value !== undefined) {
     const missingAssets = missingImageAssetDiagnostics(parsed.value);
@@ -205,6 +232,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
       schemaVersion,
       source: "tileborne",
       diagnostics,
+      ...(sourceInventory === undefined ? {} : { sourceInventory }),
     });
   }
 
@@ -239,6 +267,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
     schemaVersion,
     source,
     diagnostics,
+    ...(sourceInventory === undefined ? {} : { sourceInventory }),
   });
 };
 

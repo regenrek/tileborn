@@ -35,7 +35,7 @@ export type AssetKey = typeof AssetKey.Type;
 export const ProjectionDigest = NonEmptyBrandedString("TiledSourceProjectionDigest");
 export type ProjectionDigest = typeof ProjectionDigest.Type;
 
-export const TiledSourceRulePhase = Schema.Literals(["reset", "place", "variation", "unknown"] as const);
+export const TiledSourceRulePhase = Schema.String.check(Schema.isMinLength(1));
 export type TiledSourceRulePhase = typeof TiledSourceRulePhase.Type;
 
 export const TiledSourceDiagnosticSeverity = Schema.Literals(["error", "warning", "info"] as const);
@@ -269,6 +269,8 @@ export class TiledSourceCompiledAutomappingRule extends Schema.Class<TiledSource
   matchInOrder: Schema.Boolean,
   width: Schema.Number,
   height: Schema.Number,
+  inputLayer: LayerId,
+  outputLayer: LayerId,
   inputTiles: Schema.Array(TiledSourceCompiledRuleTile),
   outputTiles: Schema.Array(TiledSourceCompiledRuleTile),
   options: Schema.Array(TiledSourceCompiledRuleOption),

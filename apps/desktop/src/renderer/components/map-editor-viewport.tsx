@@ -37,6 +37,9 @@ import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
 type ViewportPointerEvent = PointerEvent | React.PointerEvent<HTMLDivElement>;
 type ViewportWheelEvent = WheelEvent | React.WheelEvent<HTMLDivElement>;
 
+const isViewportOverlayEvent = (event: Event): boolean =>
+  event.target instanceof Element && event.target.closest('[data-viewport-overlay]') !== null;
+
 const trySetPointerCapture = (target: HTMLDivElement, pointerId: number): void => {
   try {
     target.setPointerCapture(pointerId);
@@ -231,8 +234,11 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
         await Effect.runPromise(adapter.mount(container));
-        for (const canvas of container.querySelectorAll('canvas')) {
-          canvas.style.pointerEvents = 'none';
+        // Only the Pixi render surface (a direct child of the container) must be
+        // click-through. Using a descendant selector here would also disable the
+        // nested minimap overlay canvas, breaking its pointer handlers.
+        for (const canvas of container.querySelectorAll(':scope > canvas')) {
+          (canvas as HTMLCanvasElement).style.pointerEvents = 'none';
         }
         const bundle = await Effect.runPromise(
           loadViewportAssetBundle({ projectId, map, extraPackIds, renderablePlaceableRefs }),
@@ -257,9 +263,11 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       disposePendingMount: () => Effect.runPromise(adapter.dispose()),
       onMounted: (controller) => {
         controllerRef.current = controller;
-        controller.setMap(currentMapRef.current);
+        // Seed canvas size and camera before the first setMap so chunk culling
+        // builds only the in-view chunks instead of every chunk of a large map.
         controller.resize(container.clientWidth, container.clientHeight);
         controller.setCamera(camera.zoom, camera.panX, camera.panY);
+        controller.setMap(currentMapRef.current);
       },
     });
     handle.settled.catch(console.error);
@@ -612,11 +620,31 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     if (!container) {
       return;
     }
-    const onPointerDown = (event: PointerEvent) => handlePointerDown(event);
-    const onPointerMove = (event: PointerEvent) => handlePointerMove(event);
-    const onPointerUp = (event: PointerEvent) => handlePointerUp(event);
-    const onPointerCancel = (event: PointerEvent) => handlePointerCancel(event);
-    const onWheel = (event: WheelEvent) => handleWheel(event);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        handlePointerDown(event);
+      }
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        handlePointerMove(event);
+      }
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        handlePointerUp(event);
+      }
+    };
+    const onPointerCancel = (event: PointerEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        handlePointerCancel(event);
+      }
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        handleWheel(event);
+      }
+    };
     const onPointerLeave = () => {
       if (activePointerIdRef.current !== null) {
         return;
@@ -624,7 +652,11 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       updateHoverTile(null);
       controllerRef.current?.setBrushPreview(null);
     };
-    const onContextMenu = (event: MouseEvent) => event.preventDefault();
+    const onContextMenu = (event: MouseEvent) => {
+      if (!isViewportOverlayEvent(event)) {
+        event.preventDefault();
+      }
+    };
     container.addEventListener('pointerdown', onPointerDown);
     container.addEventListener('pointermove', onPointerMove);
     container.addEventListener('pointerup', onPointerUp);

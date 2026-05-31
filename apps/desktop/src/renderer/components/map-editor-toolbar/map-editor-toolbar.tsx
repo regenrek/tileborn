@@ -29,6 +29,20 @@ import { ZOOM_SHORTCUTS, zoomInFrom, zoomOutFrom } from '@/editor/toolbar/zoom';
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
+/**
+ * Active toggle surface for toolbar tools. The base toggle variants ship
+ * `hover:bg-muted` / `data-[state=on]:bg-muted` / `aria-pressed:bg-muted`,
+ * whose `:hover` / attribute selectors outweigh the plain `bg-info/10` from
+ * `statusSurface.info`. That made the active highlight only appear once the
+ * pointer left the button. Re-stating the info surface for those variants lets
+ * tailwind-merge drop the muted ones, so the active tool reads as active
+ * immediately on click — like Figma/Photoshop.
+ */
+const ACTIVE_TOOL_SURFACE = cn(
+  statusSurface.info,
+  'hover:bg-info/10 hover:text-info data-[state=on]:bg-info/10 aria-pressed:bg-info/10',
+);
+
 interface ToolbarTooltipLabelProps {
   readonly label: string;
   readonly shortcut?: string;
@@ -96,7 +110,7 @@ export function MapEditorToolbar() {
                       aria-label={tool.label}
                       className={cn(
                         'rounded-md border-0',
-                        isActive && statusSurface.info,
+                        isActive && ACTIVE_TOOL_SURFACE,
                       )}
                     >
                       <Icon aria-hidden className="size-3.5" />
@@ -120,7 +134,7 @@ export function MapEditorToolbar() {
             size="sm"
             variant="outline"
             aria-label="Toggle grid"
-            className={cn(showGrid && statusSurface.info)}
+            className={cn(showGrid && ACTIVE_TOOL_SURFACE)}
           >
             <Grid3x3Icon aria-hidden className="size-3.5" />
           </Toggle>
@@ -131,7 +145,7 @@ export function MapEditorToolbar() {
             size="sm"
             variant="outline"
             aria-label="Toggle snap to grid"
-            className={cn(snapToGrid && statusSurface.info)}
+            className={cn(snapToGrid && ACTIVE_TOOL_SURFACE)}
           >
             <MagnetIcon aria-hidden className="size-3.5" />
           </Toggle>

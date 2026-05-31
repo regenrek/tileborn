@@ -36,6 +36,30 @@ describe("parseTilesetManifest", () => {
     });
   });
 
+  it("infers and round-trips asset semantic roles", () => {
+    const inferred = parseTilesetManifest(meadowPack);
+    expect(inferred.value?.semanticRoles?.map((role) => role.role)).toContain("floor");
+
+    const userRole = {
+      role: "wall",
+      tileId: meadowPack.tiles[0]!.id,
+      source: "user",
+      confidence: 1,
+    };
+    const explicit = parseTilesetManifest({
+      ...meadowPack,
+      assetSemanticRoles: [userRole],
+    });
+    const written = writeTilesetManifest(explicit.value!);
+    const reparsed = parseTilesetManifest(written);
+
+    expect(explicit.value?.semanticRoles).toEqual([
+      expect.objectContaining(userRole),
+    ]);
+    expect(written).toMatchObject({ assetSemanticRoles: [userRole] });
+    expect(reparsed.value?.semanticRoles).toEqual(explicit.value?.semanticRoles);
+  });
+
   it("round-trips manifest placeables into TilesetPack objects", () => {
     const placeable = {
       id: "placeable:62656465-0000-4000-8000-000000000009",

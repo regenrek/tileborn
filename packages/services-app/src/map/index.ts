@@ -301,6 +301,25 @@ const optionalJsonProperty = <K extends string, A>(
   value: A | undefined,
 ): Partial<Record<K, A>> => (value === undefined ? {} : ({ [key]: value } as Record<K, A>));
 
+const transformToJson = (
+  transform:
+    | {
+        readonly flippedHorizontal: boolean;
+        readonly flippedVertical: boolean;
+        readonly flippedDiagonal: boolean;
+        readonly rotatedHexagonal120: boolean;
+      }
+    | undefined,
+): unknown =>
+  transform === undefined
+    ? undefined
+    : {
+        flippedHorizontal: transform.flippedHorizontal,
+        flippedVertical: transform.flippedVertical,
+        flippedDiagonal: transform.flippedDiagonal,
+        rotatedHexagonal120: transform.rotatedHexagonal120,
+      };
+
 const placementToJson = (
   placement: TileborneMap['objects'][number]['placement'] | undefined,
 ): unknown => {
@@ -314,6 +333,7 @@ const placementToJson = (
     ...optionalJsonProperty('assetId', optionValue(placement.assetId)),
     ...optionalJsonProperty('tileId', optionValue(placement.tileId)),
     ...optionalJsonProperty('gid', optionValue(placement.gid)),
+    ...optionalJsonProperty('transform', transformToJson(placement.transform)),
   };
 };
 
@@ -376,6 +396,7 @@ const mapToJson = (map: TileborneMap): unknown => ({
             width: chunk.width,
             height: chunk.height,
             tiles: [...chunk.tiles],
+            ...optionalJsonProperty('transforms', chunk.transforms?.map(transformToJson)),
           })),
         };
       case 'object':
@@ -411,6 +432,7 @@ const mapToJson = (map: TileborneMap): unknown => ({
             width: chunk.width,
             height: chunk.height,
             tiles: [...chunk.tiles],
+            ...optionalJsonProperty('transforms', chunk.transforms?.map(transformToJson)),
           })),
         };
     }

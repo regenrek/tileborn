@@ -4,6 +4,7 @@ import { Effect, Option } from "effect";
 import { tiledSourceApplicationInputSlice } from "../../../tests/fixtures/tiled-source-application-slice.js";
 import {
   buildTiledSourceRulePack,
+  collectProjectedAssetKeys,
   compileTiledSourceRulePipeline,
   decodeTiledSourceSourceManifest,
   decodeTiledSourceRuleApplicationInput,
@@ -13,6 +14,8 @@ import {
 const TILESET_PATH = "TiledMap Editor/Tilesets/Terrain.tsx";
 const RULE_PATH = "TiledMap Editor/Rules/wall-1-rule1-place.tmx";
 const SOURCE_DIGEST = "tiled-source-tiled-source-v1:c4b43218";
+const INPUT_RULE_ASSET_KEY = "tiled-rule:TiledMap-Editor-Tilesets-Terrain:0";
+const OUTPUT_RULE_ASSET_KEY = "tiled-rule:TiledMap-Editor-Tilesets-Terrain:1";
 
 const minimalSourceManifest = {
   schema: "tileborne.tiled-source-manifest.v1",
@@ -188,6 +191,24 @@ function rule(input: {
 
 const cloneManifest = () => structuredClone(minimalSourceManifest);
 
+const applicationInputWithRuleSource = () => {
+  const input = structuredClone(tiledSourceApplicationInputSlice);
+  input.terrainCells[0]!.sourceId = INPUT_RULE_ASSET_KEY;
+  return input;
+};
+
+const renameRuleLayers = (
+  input: ReturnType<typeof cloneManifest>,
+  inputName: string,
+  outputName: string,
+) => {
+  for (const ruleMap of input.automappingRules) {
+    ruleMap.layers = [inputName, outputName];
+    ruleMap.tileLayers[0]!.name = inputName;
+    ruleMap.tileLayers[1]!.name = outputName;
+  }
+};
+
 describe("Tiled source rule schemas", () => {
   it.effect("parses and compiles a minimal source manifest", () =>
     Effect.gen(function* () {
@@ -262,6 +283,17 @@ describe("Tiled source rule schemas", () => {
       ]);
     }));
 
+  it.effect("compiles generic Tiled automapping layer names", () =>
+    Effect.gen(function* () {
+      const input = cloneManifest();
+      renameRuleLayers(input, "input2_ground", "output2_ground");
+      const manifest = yield* decodeTiledSourceSourceManifest(input);
+      const pipeline = yield* compileTiledSourceRulePipeline(manifest);
+      expect(pipeline.summary.automappingInputTiles).toBe(2);
+      expect(pipeline.summary.automappingOutputTiles).toBe(2);
+      expect(pipeline.diagnostics).toEqual([]);
+    }));
+
   it.effect("is deterministic for equal manifests and rule application inputs", () =>
     Effect.gen(function* () {
       const packA = yield* buildTiledSourceRulePack(cloneManifest());
@@ -269,11 +301,21 @@ describe("Tiled source rule schemas", () => {
       expect(packA.pipeline).toEqual(packB.pipeline);
       expect(packA.pipeline.pipelineDigest).toBe(packB.pipeline.pipelineDigest);
 
-      const applicationInput = yield* decodeTiledSourceRuleApplicationInput(tiledSourceApplicationInputSlice);
+      const applicationInput = yield* decodeTiledSourceRuleApplicationInput(applicationInputWithRuleSource());
       const outputA = yield* projectTiledSourceRuleApplication(packA.pipeline, applicationInput);
       const outputB = yield* projectTiledSourceRuleApplication(packA.pipeline, applicationInput);
       expect(outputA).toEqual(outputB);
       expect(outputA.projectionDigest).toBe(outputB.projectionDigest);
+      expect(outputA.visualTiles).toHaveLength(1);
+      expect(outputA.visualTiles[0]).toMatchObject({
+        assetKey: OUTPUT_RULE_ASSET_KEY,
+        x: 0,
+        y: 0,
+        column: Option.some(0),
+        row: Option.some(0),
+        material: Option.some("grass"),
+      });
+      expect(collectProjectedAssetKeys(outputA)).toEqual([OUTPUT_RULE_ASSET_KEY]);
     }));
 
   it.effect("decodes a minimal Tiled source application fixture", () =>

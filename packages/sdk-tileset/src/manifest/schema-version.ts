@@ -5,6 +5,7 @@ import { AutotileRulePattern } from "../schemas/autotile-rule.js";
 import { Animation } from "../schemas/animation.js";
 import { CollisionMask } from "../schemas/collision-mask.js";
 import { AnimationId, AutotileRuleId, PlaceableId, TileId, TilesetId, VariantFilterId } from "../schemas/ids.js";
+import { AssetSemanticRoleName, AssetSemanticRoleSource } from "../schemas/semantic-role.js";
 import { TerrainClass } from "../schemas/terrain-class.js";
 import { UVRect } from "../schemas/uv-rect.js";
 import { ManifestProvenance } from "./provenance.js";
@@ -132,6 +133,14 @@ export const ManifestCollisionMask = Schema.Struct({
 });
 export type ManifestCollisionMask = typeof ManifestCollisionMask.Type;
 
+export const ManifestAssetSemanticRole = Schema.Struct({
+  role: AssetSemanticRoleName,
+  tileId: TileId,
+  source: AssetSemanticRoleSource,
+  confidence: Schema.Number,
+});
+export type ManifestAssetSemanticRole = typeof ManifestAssetSemanticRole.Type;
+
 /** One renderable manifest frame for an object-layer placeable. */
 export const ManifestPlaceableFrameRef = Schema.Struct({
   assetId: AssetId,
@@ -208,6 +217,7 @@ export const TilesetManifest = Schema.Struct({
   animations: Schema.Array(Animation),
   terrainTransitions: Schema.Array(ManifestTerrainTransition),
   collisionMasks: Schema.Array(ManifestCollisionMask),
+  assetSemanticRoles: Schema.optional(Schema.Array(ManifestAssetSemanticRole)),
   placeables: Schema.optional(Schema.Array(ManifestPlaceable)),
 });
 export type TilesetManifest = typeof TilesetManifest.Type;

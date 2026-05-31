@@ -16,22 +16,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const useTilesetPackMock = vi.hoisted(() => vi.fn());
 const useAssetPackMock = vi.hoisted(() => vi.fn());
-const useAssetThumbnailDataUrlMock = vi.hoisted(() => vi.fn());
 const useAssetPackLibraryPagesMock = vi.hoisted(() => vi.fn());
 const useAssetLibraryCacheStatusMock = vi.hoisted(() => vi.fn());
 const prefetchAssetLibraryPageMock = vi.hoisted(() => vi.fn());
-const prefetchAssetThumbnailMock = vi.hoisted(() => vi.fn());
 const reloadCacheMutateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/queries', () => ({
   ASSET_LIBRARY_PAGE_SIZE: 64,
   useAssetPack: useAssetPackMock,
   useTilesetPack: useTilesetPackMock,
-  useAssetThumbnailDataUrl: useAssetThumbnailDataUrlMock,
   useAssetPackLibraryPages: useAssetPackLibraryPagesMock,
   useAssetLibraryCacheStatus: useAssetLibraryCacheStatusMock,
   usePrefetchAssetLibraryPage: () => prefetchAssetLibraryPageMock,
-  usePrefetchAssetThumbnail: () => prefetchAssetThumbnailMock,
 }));
 
 vi.mock('@/hooks/mutations', () => ({
@@ -355,8 +351,6 @@ describe('AssetPackBrowser', () => {
       isLoading: false,
       isError: false,
     });
-    useAssetThumbnailDataUrlMock.mockReset();
-    useAssetThumbnailDataUrlMock.mockReturnValue({ data: undefined });
     useTilesetPackMock.mockReset();
     useAssetPackLibraryPagesMock.mockReset();
     useAssetPackLibraryPagesMock.mockImplementation(
@@ -390,7 +384,6 @@ describe('AssetPackBrowser', () => {
       isLoading: false,
     });
     prefetchAssetLibraryPageMock.mockReset();
-    prefetchAssetThumbnailMock.mockReset();
     reloadCacheMutateMock.mockReset();
     palettes = [];
     activePaletteId = undefined;
@@ -612,7 +605,7 @@ describe('AssetPackBrowser', () => {
     });
   });
 
-  it('does not request thumbnail data for preview cells before they enter the viewport', () => {
+  it('does not render thumbnail images for preview cells before they enter the viewport', () => {
     const originalIntersectionObserver = window.IntersectionObserver;
     class MockIntersectionObserver implements IntersectionObserver {
       readonly root = null;
@@ -656,10 +649,11 @@ describe('AssetPackBrowser', () => {
     try {
       render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
 
-      const requestedThumbnails = useAssetThumbnailDataUrlMock.mock.calls.filter(
-        (call) => call[1] !== undefined,
-      );
-      expect(requestedThumbnails).toHaveLength(0);
+      // With an IntersectionObserver that never reports intersection, the
+      // canonical thumbnail `<img>` is never mounted (no protocol request),
+      // even though the bounded grid of preview cells is rendered.
+      expect(screen.queryAllByTestId('asset-pack-browser-item-thumb')).toHaveLength(0);
+      expect(screen.getAllByTestId('asset-pack-browser-item-tileset:thumb-0').length).toBeGreaterThan(0);
     } finally {
       window.IntersectionObserver = originalIntersectionObserver;
     }

@@ -4,6 +4,7 @@ import {
   AssetLibraryCacheStatus,
   AssetLibraryGroup,
   AssetLibraryGroupKind,
+  AssetLibraryReference,
   ContentHash,
   PackId,
 } from '@tileborne/core';
@@ -47,6 +48,28 @@ export const AssetLibraryReloadPackCacheResponse = Schema.Struct({
   status: AssetLibraryCacheStatus,
 });
 
+export const AssetLibraryPreviewRect = Schema.Struct({
+  assetPath: Schema.String,
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+});
+
+export const AssetLibraryResolvePreviewsRequest = Schema.Struct({
+  packId: PackId,
+  refs: Schema.Array(AssetLibraryReference),
+});
+
+export const AssetLibraryPreviewEntry = Schema.Struct({
+  key: Schema.String,
+  preview: Schema.optional(AssetLibraryPreviewRect),
+});
+
+export const AssetLibraryResolvePreviewsResponse = Schema.Struct({
+  previews: Schema.Array(AssetLibraryPreviewEntry),
+});
+
 export const AssetLibraryGetPackLibraryContract = defineContract({
   channel: 'tileborne:asset-library:getPackLibrary',
   request: AssetLibraryGetPackLibraryRequest,
@@ -68,10 +91,18 @@ export const AssetLibraryReloadPackCacheContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const AssetLibraryResolvePreviewsContract = defineContract({
+  channel: 'tileborne:asset-library:resolvePreviews',
+  request: AssetLibraryResolvePreviewsRequest,
+  response: AssetLibraryResolvePreviewsResponse,
+  errors: IpcContractErrors,
+});
+
 export const AssetLibraryContracts = [
   AssetLibraryGetPackLibraryContract,
   AssetLibraryGetPackCacheStatusContract,
   AssetLibraryReloadPackCacheContract,
+  AssetLibraryResolvePreviewsContract,
 ] as const;
 
 export const AssetLibraryIpcRegistry = createRegistry(AssetLibraryContracts);

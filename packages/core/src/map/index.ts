@@ -9,6 +9,14 @@ export class Size2D extends Schema.Class<Size2D>("Size2D")({
   height: Schema.Number,
 }) {}
 
+/** Canonical per-cell/placeable transform decoded from source tile flags. */
+export class TileTransform extends Schema.Class<TileTransform>("TileTransform")({
+  flippedHorizontal: Schema.Boolean,
+  flippedVertical: Schema.Boolean,
+  flippedDiagonal: Schema.Boolean,
+  rotatedHexagonal120: Schema.Boolean,
+}) {}
+
 /** Chunk of dense tile indices for large maps (spec §10). */
 export class TileChunk extends Schema.Class<TileChunk>("TileChunk")({
   x: Schema.Int,
@@ -16,6 +24,7 @@ export class TileChunk extends Schema.Class<TileChunk>("TileChunk")({
   width: Schema.Int,
   height: Schema.Int,
   tiles: Schema.Array(Schema.Int),
+  transforms: Schema.optional(Schema.Array(TileTransform)),
 }) {}
 
 /** JSON-safe tile chunk shape used inside persisted map layers. */
@@ -25,6 +34,7 @@ const tileChunkPersisted = Schema.Struct({
   width: Schema.Int,
   height: Schema.Int,
   tiles: Schema.Array(Schema.Int),
+  transforms: Schema.optional(Schema.Array(TileTransform)),
 });
 
 const tileLayerFields = {
@@ -123,6 +133,7 @@ export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObj
   assetId: Schema.OptionFromUndefinedOr(AssetId),
   tileId: Schema.OptionFromUndefinedOr(TileId),
   gid: Schema.OptionFromUndefinedOr(Schema.Int),
+  transform: Schema.optional(TileTransform),
 }) {}
 
 /** Placed object instance on a map. */
@@ -157,6 +168,7 @@ export const MapLayerSchema = MapLayer;
 export const MapObjectSchema = MapObject;
 export const MapObjectPlacementSchema = MapObjectPlacement;
 export const TileChunkSchema = TileChunk;
+export const TileTransformSchema = TileTransform;
 
 export const makeTileborneMap = (input: {
   id: MapId;

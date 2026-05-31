@@ -165,6 +165,46 @@ describe('Asset pack capability', () => {
       expect(pack.capability.tileCount).toBeGreaterThanOrEqual(1);
     }));
 
+  it('imports the CC0 Tiled compatibility source fixture with inventory and semantic roles', () =>
+    withTempHome(async (home) => {
+      const source = path.join(
+        repoRoot,
+        'packages/test-fixtures/fixtures/tiled-sources/compat-hardening/TiledMap Editor',
+      );
+      const result = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const packId = yield* assets.importTiledSourcePackNow(source);
+          const pack = yield* assets.getPack(packId);
+          return { packId, pack };
+        }),
+      );
+      const manifest = JSON.parse(
+        await readFile(path.join(packDir(home, result.packId), 'tileborne-asset-pack.json'), 'utf8'),
+      ) as {
+        readonly assetSemanticRoles?: readonly { readonly role: string }[];
+        readonly tiledSourceInventory?: { readonly summary?: Record<string, number> };
+      };
+
+      expect(result.pack.capability.paintable).toBe(true);
+      expect(result.pack.capability.sourceInventory).toMatchObject({
+        tilesetCount: 2,
+        ruleMapCount: 1,
+        rulesIndexCount: 1,
+        exampleMapCount: 1,
+        animationFrameCount: 2,
+        collisionObjectCount: 1,
+      });
+      expect(manifest.tiledSourceInventory?.summary).toMatchObject({
+        imageCollectionTileCount: 1,
+        tileProbabilityCount: 3,
+        wangColorProbabilityCount: 2,
+      });
+      expect(manifest.assetSemanticRoles?.map((role) => role.role)).toEqual(
+        expect.arrayContaining(['floor', 'wall', 'water', 'decoration', 'collision']),
+      );
+    }));
+
   it('keeps packs paintable when legacy autotile masks contain dangling tile refs', () => {
     const packId = makePackId('550e8400-e29b-41d4-a716-446655440207');
     const assetId = makeAssetId('550e8400-e29b-41d4-a716-446655440207');
@@ -217,6 +257,64 @@ describe('Asset pack capability', () => {
         }),
       ]),
     );
+  });
+
+  it('exposes generic Tiled source inventory in pack capability', () => {
+    const packId = makePackId('550e8400-e29b-41d4-a716-446655440217');
+    const assetId = makeAssetId('550e8400-e29b-41d4-a716-446655440217');
+    const tilesetId = 'tileset:550e8400-e29b-41d4-a716-446655440217';
+    const tileId = 'tile:550e8400-e29b-41d4-a716-446655440217';
+
+    const capability = detectPackCapability(packId, {
+      schemaVersion: 1,
+      id: packId,
+      name: 'Tiled Source Pack',
+      version: '1.0.0',
+      license: { spdxId: 'UNKNOWN', redistributable: false },
+      assets: [{ id: assetId, path: 'tiles/terrain.png', mime: 'image/png' }],
+      terrainClasses: [],
+      tilesets: [
+        {
+          id: tilesetId,
+          name: 'Terrain',
+          atlasAssetId: assetId,
+          cellSize: { width: 16, height: 16 },
+          margin: 0,
+          spacing: 0,
+        },
+      ],
+      tiles: [{ id: tileId, tilesetId, uv: { x: 0, y: 0, w: 16, h: 16 }, tags: [] }],
+      autotileRules: [],
+      variantFilters: [],
+      animations: [],
+      terrainTransitions: [],
+      collisionMasks: [],
+      tiledSourceInventory: {
+        summary: {
+          tilesetCount: 1,
+          tileCount: 1,
+          frameCount: 1,
+          imageCollectionTileCount: 0,
+          wangSetCount: 1,
+          animationCount: 0,
+          animationFrameCount: 0,
+          tileProbabilityCount: 0,
+          wangColorProbabilityCount: 0,
+          collisionObjectCount: 0,
+          ruleMapCount: 1,
+          rulesIndexCount: 1,
+          exampleMapCount: 1,
+        },
+      },
+    });
+
+    expect(capability.sourceInventory).toMatchObject({
+      tilesetCount: 1,
+      frameCount: 1,
+      ruleMapCount: 1,
+      rulesIndexCount: 1,
+      exampleMapCount: 1,
+    });
   });
 
   it('recomputes stale no-tile capability locks for canonical tileset manifests', () =>

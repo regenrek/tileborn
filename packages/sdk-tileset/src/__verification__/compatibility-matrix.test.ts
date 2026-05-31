@@ -16,6 +16,7 @@ import { parseLdtkProject } from "../ldtk/ldtk-parse.js";
 import { parseTilesetManifest } from "../manifest/parse.js";
 import type { AutotileRule } from "../schemas/autotile-rule.js";
 import { AutotileRuleId, TerrainClass } from "../schemas/index.js";
+import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "../tiled/tile-data.js";
 import { parseTsj } from "../tiled/tsj-parse.js";
 
 import goldenMatrix from "./__goldens__/compatibility-matrix.json" with { type: "json" };
@@ -37,6 +38,8 @@ const patternRuleSuffix: Record<AutotilePattern, string> = {
 const TILESET_ID = "tileset:62656465-0000-4000-8000-000000000902";
 
 const PACK_SEED = "compat-matrix";
+const COMPRESSED_GZIP_GIDS_1_2_3_4 = "H4sIAAAAAAAAE2NkYGBgAmJmIGYBYgDv1AWvEAAAAA==";
+const COMPRESSED_ZLIB_GIDS_1_2_3_4 = "eJxjZGBgYAJiZiBmAWIAAGAACw==";
 
 const uuid = (suffix: string): Uuid =>
   `62656465-0000-4000-8000-${suffix.padStart(12, "0")}` as Uuid;
@@ -45,6 +48,13 @@ const tileId = (suffix: string) => makeTileId(uuid(suffix));
 const ruleIdFor = (suffix: string) =>
   Schema.decodeUnknownSync(AutotileRuleId)(`autotile-rule:${uuid(suffix)}`);
 const terrain = (value: string) => Schema.decodeUnknownSync(TerrainClass)(value);
+
+const tileLayerBase64 = (gids: readonly number[]): string => {
+  const bytes = new Uint8Array(gids.length * 4);
+  const view = new DataView(bytes.buffer);
+  gids.forEach((gid, index) => view.setUint32(index * 4, gid, true));
+  return Buffer.from(bytes).toString("base64");
+};
 
 const cellsForCount = (count: number): readonly ReturnType<typeof tileId>[] =>
   Array.from({ length: count }, (_, index) => tileId(String(index + 1).padStart(2, "0")));
@@ -398,4 +408,67 @@ describe("format × autotile pattern compatibility matrix", () => {
       });
     }
   }
+});
+
+describe("Tiled tile-layer data compatibility matrix", () => {
+  it("keeps raw, CSV, base64, gzip, and zlib supported while zstd is diagnostic-only", async () => {
+    const gids = [1, 2, 3, 4] as const;
+
+    const cases = [
+      decodeTileLayerDataSync({ layerName: "raw", width: 2, height: 2, data: gids }),
+      decodeTileLayerDataSync({
+        layerName: "csv",
+        width: 2,
+        height: 2,
+        encoding: "csv",
+        text: gids.join(","),
+      }),
+      decodeTileLayerDataSync({
+        layerName: "base64",
+        width: 2,
+        height: 2,
+        encoding: "base64",
+        text: tileLayerBase64(gids),
+      }),
+      await decodeTileLayerDataAsync({
+        layerName: "gzip",
+        width: 2,
+        height: 2,
+        encoding: "base64",
+        compression: "gzip",
+        text: COMPRESSED_GZIP_GIDS_1_2_3_4,
+      }),
+      await decodeTileLayerDataAsync({
+        layerName: "zlib",
+        width: 2,
+        height: 2,
+        encoding: "base64",
+        compression: "zlib",
+        text: COMPRESSED_ZLIB_GIDS_1_2_3_4,
+      }),
+    ];
+
+    for (const result of cases) {
+      expect(result).toMatchObject({ data: gids, diagnostics: [] });
+    }
+
+    const zstd = await decodeTileLayerDataAsync({
+      layerName: "zstd",
+      width: 2,
+      height: 2,
+      encoding: "base64",
+      compression: "zstd",
+      text: tileLayerBase64(gids),
+    });
+
+    expect(zstd.data).toEqual([]);
+    expect(zstd.diagnostics).toEqual([
+      expect.objectContaining({
+        _tag: "TiledUnsupportedCompression",
+        severity: "warning",
+        layerName: "zstd",
+        compression: "zstd",
+      }),
+    ]);
+  });
 });

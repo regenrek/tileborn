@@ -35,13 +35,6 @@ const useTilesetPackMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/queries', () => ({
   useTilesetPack: useTilesetPackMock,
-  useAssetDataUrl: () => ({
-    data: {
-      dataUrl:
-        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-    },
-    isLoading: false,
-  }),
 }));
 
 const uuid = (suffix: string): Uuid =>

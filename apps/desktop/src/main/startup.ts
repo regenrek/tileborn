@@ -8,6 +8,7 @@ import {
 } from "@tileborne/services-foundation";
 
 import type { StartupReporter } from "./startup-reporter.js";
+import { registerAssetProtocol } from "./asset-library/asset-protocol.js";
 import { registerMainIpc, type MainIpcRegistration } from "./ipc/handlers.js";
 import { stopDesktopLocalGameHost } from "./local-game-host-manager.js";
 import { disposeRuntime, runEffect } from "./runtime.js";
@@ -109,6 +110,11 @@ export const createDesktopStartupController = ({
   const start = async (): Promise<void> => {
     reporter.begin("background-startup");
     try {
+      // Serve installed pack assets via the custom protocol as early as
+      // possible (app is already ready here). Renderer image/atlas loads then
+      // bypass base64-data-URL IPC and decode off the main thread.
+      registerAssetProtocol();
+
       const homeService = await runRequiredEffect(
         reporter,
         "runtime-services",

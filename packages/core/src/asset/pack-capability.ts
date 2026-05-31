@@ -62,6 +62,23 @@ export const PackCapabilityDiagnostic = Schema.Union([
 ]);
 export type PackCapabilityDiagnostic = typeof PackCapabilityDiagnostic.Type;
 
+export const PackSourceInventorySummary = Schema.Struct({
+  tilesetCount: Schema.Number,
+  tileCount: Schema.Number,
+  frameCount: Schema.Number,
+  imageCollectionTileCount: Schema.Number,
+  wangSetCount: Schema.Number,
+  animationCount: Schema.Number,
+  animationFrameCount: Schema.Number,
+  tileProbabilityCount: Schema.Number,
+  wangColorProbabilityCount: Schema.Number,
+  collisionObjectCount: Schema.Number,
+  ruleMapCount: Schema.Number,
+  rulesIndexCount: Schema.Number,
+  exampleMapCount: Schema.Number,
+});
+export type PackSourceInventorySummary = typeof PackSourceInventorySummary.Type;
+
 export class PackCapability extends Schema.Class<PackCapability>('PackCapability')({
   packId: PackId,
   paintable: Schema.Boolean,
@@ -75,6 +92,7 @@ export class PackCapability extends Schema.Class<PackCapability>('PackCapability
   schemaVersion: Schema.OptionFromOptional(Schema.Number),
   source: PackCapabilitySource,
   diagnostics: Schema.Array(PackCapabilityDiagnostic),
+  sourceInventory: Schema.optional(PackSourceInventorySummary),
 }) {}
 
 export const makeAssetOnlyPackCapability = (packId: PackId): PackCapability =>

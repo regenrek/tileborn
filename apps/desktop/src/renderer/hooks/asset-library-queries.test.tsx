@@ -6,6 +6,7 @@ import { AssetLibraryGroup, AssetLibraryReference, makePackId, makeTileId } from
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assetThumbnailUrl } from '@/lib/asset-url';
 import {
   ASSET_LIBRARY_PAGE_SIZE,
   useAssetLibraryCacheStatus,
@@ -37,6 +38,7 @@ describe('asset library query pagination', () => {
   let client: QueryClient;
   let getPackLibrary: ReturnType<typeof vi.fn>;
   let getPackCacheStatus: ReturnType<typeof vi.fn>;
+  let getAssetDataUrl: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     client = new QueryClient({
@@ -69,11 +71,12 @@ describe('asset library query pagination', () => {
         updatedAt: '2026-05-25T16:40:00.000Z',
       },
     }));
+    getAssetDataUrl = vi.fn(async () => ({ dataUrl: 'data:image/png;base64,atlas' }));
     Object.defineProperty(window, 'tileborne', {
       configurable: true,
       value: {
         assetLibrary: { getPackLibrary, getPackCacheStatus },
-        assets: { getAssetDataUrl: vi.fn() },
+        assets: { getAssetDataUrl },
       },
     });
   });
@@ -127,5 +130,26 @@ describe('asset library query pagination', () => {
     expect(result.current.data?.cacheVersion).toContain('2026-05-25T16:40:00.000Z');
     expect(result.current.data?.thumbnailCacheVersion).toBeUndefined();
     expect(result.current.data?.message).toContain('42 groups');
+  });
+
+  it('addresses thumbnails by crop geometry on the tileborne-asset thumb host', () => {
+    const url = new URL(
+      assetThumbnailUrl(
+        packId,
+        { assetPath: 'Images/terrain.png', x: 32, y: 64, width: 32, height: 32 },
+        'sha256:test',
+      ),
+    );
+    expect(url.protocol).toBe('tileborne-asset:');
+    expect(url.host).toBe('thumb');
+    expect(url.searchParams.get('id')).toBe(packId);
+    expect(url.searchParams.get('path')).toBe('Images/terrain.png');
+    expect(url.searchParams.get('x')).toBe('32');
+    expect(url.searchParams.get('y')).toBe('64');
+    expect(url.searchParams.get('w')).toBe('32');
+    expect(url.searchParams.get('h')).toBe('32');
+    expect(url.searchParams.get('v')).toBe('sha256:test');
+    // No IPC is involved in resolving a thumbnail URL.
+    expect(getAssetDataUrl).not.toHaveBeenCalled();
   });
 });

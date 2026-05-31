@@ -2,6 +2,7 @@ import { Option } from "effect";
 
 import type { ParseDiagnostic } from "../diagnostics.js";
 import { TilesetPack, TilesetPackLicense } from "../schemas/tileset-pack.js";
+import { inferAssetSemanticRoles } from "../manifest/semantic-roles.js";
 
 import {
   isSupportedTilesetSource,
@@ -29,6 +30,7 @@ import type {
   TiledTilesetPackImport,
 } from "./types.js";
 import { scanTiledSource } from "./scan.js";
+import { unsupportedFeatureDiagnostic } from "./support-policy.js";
 
 type DirectoryEntry = {
   readonly path: string;
@@ -41,14 +43,11 @@ const planDiagnostics = (
 ): readonly ParseDiagnostic[] => {
   if (scan.unsupportedFeatures.length === 0) return [];
   return scan.unsupportedFeatures.map((feature) => ({
-    _tag: "TiledUnsupportedFeature" as const,
-    path: feature.path,
+    ...unsupportedFeatureDiagnostic(feature),
     message:
       typeof profile === "object"
         ? feature.message
         : `${feature.message} Choose a plugin profile only when that plugin explicitly supports this feature.`,
-    severity: "error" as const,
-    feature: feature.feature,
   }));
 };
 
@@ -124,8 +123,8 @@ const buildPack = (
   options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion">,
   sourcePath: string,
   compiled: readonly NonNullable<ReturnType<typeof parseTsj>["value"]>[],
-): TilesetPack =>
-  new TilesetPack({
+): TilesetPack => {
+  const pack = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(options.packIdSeed),
     name: options.packName ?? compiled[0]?.tileset.name ?? "Tiled Import",
@@ -141,6 +140,8 @@ const buildPack = (
     assets: compiled.flatMap((entry) => entry.assets),
     placeables: compiled.flatMap((entry) => entry.placeables),
   });
+  return new TilesetPack({ ...pack, semanticRoles: inferAssetSemanticRoles(pack) });
+};
 
 const importStandaloneTileset = async (
   source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader"> & {

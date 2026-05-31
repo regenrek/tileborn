@@ -39,8 +39,8 @@ describe("generated terrain projection", () => {
 
     expect(projection.diagnostics).toEqual([]);
     expect(projection.floor?.tilesetName).toBe("Terrain - Sample Tileset");
-    expect(projection.wall?.tilesetName).toMatch(/^wall-/);
-    expect(projection.wall?.tilesetName).not.toMatch(/transp|transparent/i);
+    expect(projection.floor?.tileId).toBe("tile:550e8400-e29b-41d4-a716-446655440092");
+    expect(projection.wall?.tileId).toBe("tile:550e8400-e29b-41d4-a716-446655440093");
     expect(projection.floor?.tileIndex).toBeGreaterThan(2);
     expect(projection.wall?.tileIndex).toBeGreaterThan(2);
     expect(nonZeroTiles).not.toContain(1);

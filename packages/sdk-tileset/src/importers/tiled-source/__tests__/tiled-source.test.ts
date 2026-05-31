@@ -129,8 +129,27 @@ describe("Tiled source importer", () => {
     expect(tileset.autotileRules.length).toBeGreaterThanOrEqual(2);
     expect(tileset.variantFilters).toHaveLength(1);
     expect(hasAnimation(tileset.tiles[1]!)).toBe(true);
+    expect(result.value?.semanticRoles?.map((role) => role.role)).toContain("wall");
     expect(result.maps[0]?.layers.some((layer) => layer.kind === "object" && layer.role === "spawn")).toBe(true);
     expect(result.provenance.importedAt).toBe("2026-05-23T00:00:00.000Z");
+    expect(result.sourceInventory.summary).toMatchObject({
+      tilesetCount: 1,
+      tileCount: 4,
+      frameCount: 4,
+      animationCount: 1,
+      animationFrameCount: 2,
+      tileProbabilityCount: 1,
+      wangSetCount: 1,
+      wangColorProbabilityCount: 1,
+      ruleMapCount: 1,
+      exampleMapCount: 1,
+    });
+    expect(result.sourceInventory.frames.find((frame) => frame.localTileId === 1)).toMatchObject({
+      tilesetPath: TILESET_PATH,
+      probability: 0.5,
+      animationFrameCount: 2,
+      wangSetNames: ["wall-test"],
+    });
   });
 
   it("uses Unity meta sprites as an animation fallback", async () => {

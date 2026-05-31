@@ -113,13 +113,26 @@ export const TiledImportFeatureFlags = Schema.Struct({
   parallax: Schema.Boolean,
   infiniteChunks: Schema.Boolean,
   unsupportedOrientation: Schema.Boolean,
+  classProperties: Schema.Boolean,
+  projectFiles: Schema.Boolean,
   flipFlags: Schema.Boolean,
 });
 
+export const TiledImportUnsupportedFeatureId = Schema.Literals([
+  'templates',
+  'infinite-chunks',
+  'rotation',
+  'parallax',
+  'orientation',
+  'class-properties',
+  'project-files',
+]);
+
 export const TiledImportUnsupportedFeature = Schema.Struct({
-  feature: Schema.String,
+  feature: TiledImportUnsupportedFeatureId,
   path: Schema.String,
   message: Schema.String,
+  action: Schema.String,
 });
 
 export const TiledImportAmbiguousAtlasObject = Schema.Struct({

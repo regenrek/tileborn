@@ -1,4 +1,4 @@
-import type { TileborneMap } from "@tileborne/core";
+import type { AssetId, TileborneMap } from "@tileborne/core";
 
 /** Raw Tiled JSON shapes consumed by the Tileborne SDK importer. */
 
@@ -208,6 +208,10 @@ export type TiledMapCell = {
   readonly tileIndex: number;
   readonly localTileIndex: number;
   readonly tilesetName: string;
+  readonly transform: TiledGidTransform;
+};
+
+export type TiledGidTransform = {
   readonly flippedHorizontal: boolean;
   readonly flippedVertical: boolean;
   readonly flippedDiagonal: boolean;
@@ -234,10 +238,7 @@ export type TiledObjectTileRef = {
   readonly gid: number;
   readonly localTileIndex: number;
   readonly tilesetName: string;
-  readonly flippedHorizontal: boolean;
-  readonly flippedVertical: boolean;
-  readonly flippedDiagonal: boolean;
-  readonly rotatedHexagonal120: boolean;
+  readonly transform: TiledGidTransform;
 };
 
 export type TiledObjectPlacementRef = {
@@ -247,6 +248,7 @@ export type TiledObjectPlacementRef = {
   readonly tileId: string;
   readonly gid: number;
   readonly anchor: TiledCanonicalObjectAnchor;
+  readonly transform: TiledGidTransform;
 };
 
 export type TiledMapObject = {
@@ -275,6 +277,7 @@ export type TiledMapImageLayer = {
   readonly id: string;
   readonly name: string;
   readonly image: string;
+  readonly assetId: AssetId;
   readonly x?: number;
   readonly y?: number;
   readonly visible: boolean;
@@ -377,6 +380,65 @@ export type TiledScanImageAssetRef = {
   readonly localTileId?: number;
 };
 
+export type TilesetFrameIndex = {
+  readonly tilesetName: string;
+  readonly tilesetPath?: string;
+  readonly localTileId: number;
+  readonly image?: string;
+  readonly probability?: number;
+  readonly animationFrameCount: number;
+  readonly collisionObjectCount: number;
+  readonly wangSetNames: readonly string[];
+};
+
+export type TiledSourceInventoryTileset = {
+  readonly name: string;
+  readonly path?: string;
+  readonly kind: "grid" | "image-collection";
+  readonly tileCount: number;
+  readonly frameCount: number;
+  readonly imageCollectionTileCount: number;
+  readonly wangSetCount: number;
+  readonly animationCount: number;
+  readonly animationFrameCount: number;
+  readonly tileProbabilityCount: number;
+  readonly wangColorProbabilityCount: number;
+  readonly collisionObjectCount: number;
+};
+
+export type TiledSourceInventoryRule = {
+  readonly path: string;
+  readonly kind: "rules-index" | "rule-map";
+};
+
+export type TiledSourceInventory = {
+  readonly summary: {
+    readonly tilesetCount: number;
+    readonly tileCount: number;
+    readonly frameCount: number;
+    readonly imageCollectionTileCount: number;
+    readonly wangSetCount: number;
+    readonly animationCount: number;
+    readonly animationFrameCount: number;
+    readonly tileProbabilityCount: number;
+    readonly wangColorProbabilityCount: number;
+    readonly collisionObjectCount: number;
+    readonly ruleMapCount: number;
+    readonly rulesIndexCount: number;
+    readonly exampleMapCount: number;
+  };
+  readonly tilesets: readonly TiledSourceInventoryTileset[];
+  readonly frames: readonly TilesetFrameIndex[];
+  readonly rules: readonly TiledSourceInventoryRule[];
+  readonly exampleMaps: readonly {
+    readonly path: string;
+    readonly width: number;
+    readonly height: number;
+    readonly tileWidth: number;
+    readonly tileHeight: number;
+  }[];
+};
+
 export type TiledScanObjectLayer = {
   readonly name: string;
   readonly objectCount: number;
@@ -415,13 +477,25 @@ export type TiledScanFeatureFlags = {
   readonly parallax: boolean;
   readonly infiniteChunks: boolean;
   readonly unsupportedOrientation: boolean;
+  readonly classProperties: boolean;
+  readonly projectFiles: boolean;
   readonly flipFlags: boolean;
 };
 
+export type TiledUnsupportedFeatureId =
+  | "templates"
+  | "infinite-chunks"
+  | "rotation"
+  | "parallax"
+  | "orientation"
+  | "class-properties"
+  | "project-files";
+
 export type TiledScanUnsupportedFeature = {
-  readonly feature: string;
+  readonly feature: TiledUnsupportedFeatureId;
   readonly path: string;
   readonly message: string;
+  readonly action: string;
 };
 
 export type TiledScanAmbiguousAtlasObject = {
@@ -467,6 +541,7 @@ export type TiledImportScan = {
   readonly recommendedProfile: TiledImportRecommendedProfile;
   readonly sourceRoles: readonly TiledImportSourceRole[];
   readonly importRecommendation: TiledImportRecommendation;
+  readonly sourceInventory?: TiledSourceInventory;
 };
 
 export type TiledImportPlanMapping = {

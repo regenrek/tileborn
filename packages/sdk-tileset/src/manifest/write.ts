@@ -4,7 +4,9 @@ import { Animation } from "../schemas/animation.js";
 import { CollisionMask } from "../schemas/collision-mask.js";
 import type { TilesetPack } from "../schemas/tileset-pack.js";
 import type { Tile } from "../schemas/tile.js";
+import type { AssetSemanticRole } from "../schemas/semantic-role.js";
 import type { ManifestProvenanceInput } from "./provenance.js";
+import { inferAssetSemanticRoles } from "./semantic-roles.js";
 import { TILESET_MANIFEST_SCHEMA_VERSION } from "./schema-version.js";
 
 const optionProperty = <K extends string, A>(
@@ -78,6 +80,13 @@ const placeablesToJson = (placeables: TilesetPack["placeables"]) =>
       properties: placeable.source.properties,
     },
   }));
+
+const semanticRoleToJson = (role: AssetSemanticRole) => ({
+  role: role.role,
+  tileId: role.tileId,
+  source: role.source,
+  confidence: role.confidence,
+});
 
 const tileToJson = (
   tile: Tile,
@@ -216,6 +225,8 @@ export const writeTilesetManifest = (
     }
   }
 
+  const semanticRoles = pack.semanticRoles ?? inferAssetSemanticRoles(pack);
+
   return {
     schemaVersion: TILESET_MANIFEST_SCHEMA_VERSION,
     id: pack.id,
@@ -243,6 +254,7 @@ export const writeTilesetManifest = (
     animations: [...animations.values()],
     terrainTransitions,
     collisionMasks,
+    ...(semanticRoles.length === 0 ? {} : { assetSemanticRoles: semanticRoles.map(semanticRoleToJson) }),
     ...(pack.placeables === undefined || pack.placeables.length === 0
       ? {}
       : { placeables: placeablesToJson(pack.placeables) }),

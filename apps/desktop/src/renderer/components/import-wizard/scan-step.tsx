@@ -113,6 +113,9 @@ export function ScanStep({
             <Badge variant="outline">
               Confidence: {Math.round((scan?.confidence ?? 0) * 100)}%
             </Badge>
+            {scan?.featureFlags.flipFlags ? (
+              <Badge variant="outline">Tiled transforms preserved</Badge>
+            ) : null}
           </div>
         </CardContent>
       </Card>

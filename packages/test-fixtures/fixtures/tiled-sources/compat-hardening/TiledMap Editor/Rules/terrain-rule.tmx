@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="1" height="1" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="2">
+ <tileset firstgid="1" source="../Tilesets/terrain.tsx"/>
+ <layer id="1" name="input2_ground" width="1" height="1">
+  <data encoding="csv">1</data>
+ </layer>
+ <layer id="2" name="output2_ground" width="1" height="1">
+  <data encoding="csv">2</data>
+ </layer>
+ <objectgroup id="3" name="rule_options">
+  <object id="1" x="0" y="0" width="16" height="16">
+   <properties>
+    <property name="Probability" type="float" value="1"/>
+   </properties>
+  </object>
+ </objectgroup>
+</map>

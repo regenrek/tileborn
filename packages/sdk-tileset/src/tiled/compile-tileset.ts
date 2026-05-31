@@ -29,20 +29,19 @@ import {
   deterministicPlaceableId,
   deterministicVariantFilterId,
 } from "./deterministic-ids.js";
+import {
+  primitivePropertyValue,
+  propertiesToPrimitiveRecord,
+  unsupportedClassPropertyFeaturesForTileset,
+  unsupportedFeatureDiagnostic,
+} from "./support-policy.js";
 import type { TiledJsonObject, TiledJsonProperty, TiledJsonTile, TiledJsonTileset } from "./types.js";
 import type { TiledImportProfile } from "./types.js";
 
 const terrainFromProperty = (seed: string, value: string): typeof TerrainClass.Type =>
   Schema.decodeUnknownSync(TerrainClass)(`${seed}:${value}`.replace(/[^A-Za-z0-9:_-]+/g, "-"));
 
-const propertiesToRecord = (
-  properties: readonly TiledJsonProperty[] | undefined,
-): Readonly<Record<string, string | number | boolean>> => {
-  if (!properties || properties.length === 0) return {};
-  const record: Record<string, string | number | boolean> = {};
-  for (const property of properties) record[property.name] = property.value;
-  return record;
-};
+const propertiesToRecord = propertiesToPrimitiveRecord;
 
 const propertyTags = (properties: readonly TiledJsonProperty[] | undefined): readonly string[] =>
   (properties ?? []).map((property) => `tiled:${property.name}=${String(property.value)}`);
@@ -50,7 +49,7 @@ const propertyTags = (properties: readonly TiledJsonProperty[] | undefined): rea
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => properties?.find((property) => property.name === name)?.value;
+): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
 
 const boolProperty = (properties: readonly TiledJsonProperty[] | undefined, name: string): boolean =>
   propertyValue(properties, name) === true;
@@ -114,6 +113,9 @@ export const compileTiledTileset = (input: {
 }): ParseResult<CompiledTileset> & { readonly diagnostics: readonly ParseDiagnostic[] } => {
   const diagnostics: ParseDiagnostic[] = [];
   const source = input.source;
+  diagnostics.push(...unsupportedClassPropertyFeaturesForTileset(source).map(unsupportedFeatureDiagnostic));
+  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) return { diagnostics };
+
   const isImageCollection = source.columns === 0;
   const margin = source.margin ?? 0;
   const spacing = source.spacing ?? 0;

@@ -5,25 +5,31 @@ import {
   TILED_GID_MASK,
   TILED_ROTATED_HEXAGONAL_120_FLAG,
 } from "./types.js";
+import type { TiledGidTransform } from "./types.js";
 
 export type DecodedTiledGid = {
   readonly gid: number;
-  readonly flippedHorizontal: boolean;
-  readonly flippedVertical: boolean;
-  readonly flippedDiagonal: boolean;
-  readonly rotatedHexagonal120: boolean;
+  readonly transform: TiledGidTransform;
 };
 
 export const decodeTiledGid = (raw: number): DecodedTiledGid => {
   const unsigned = raw >>> 0;
   return {
     gid: unsigned & TILED_GID_MASK,
-    flippedHorizontal: (unsigned & TILED_FLIPPED_HORIZONTALLY_FLAG) !== 0,
-    flippedVertical: (unsigned & TILED_FLIPPED_VERTICALLY_FLAG) !== 0,
-    flippedDiagonal: (unsigned & TILED_FLIPPED_DIAGONALLY_FLAG) !== 0,
-    rotatedHexagonal120: (unsigned & TILED_ROTATED_HEXAGONAL_120_FLAG) !== 0,
+    transform: {
+      flippedHorizontal: (unsigned & TILED_FLIPPED_HORIZONTALLY_FLAG) !== 0,
+      flippedVertical: (unsigned & TILED_FLIPPED_VERTICALLY_FLAG) !== 0,
+      flippedDiagonal: (unsigned & TILED_FLIPPED_DIAGONALLY_FLAG) !== 0,
+      rotatedHexagonal120: (unsigned & TILED_ROTATED_HEXAGONAL_120_FLAG) !== 0,
+    },
   };
 };
+
+export const isIdentityTiledTransform = (transform: TiledGidTransform): boolean =>
+  !transform.flippedHorizontal &&
+  !transform.flippedVertical &&
+  !transform.flippedDiagonal &&
+  !transform.rotatedHexagonal120;
 
 export type TiledTilesetWindow = {
   readonly firstgid: number;

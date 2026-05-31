@@ -13,6 +13,7 @@ import {
   Wang4CornerAutotileRule,
 } from "../schemas/autotile-rule.js";
 import { Tile } from "../schemas/tile.js";
+import { AssetSemanticRole } from "../schemas/semantic-role.js";
 import { TerrainTransition } from "../schemas/terrain-transition.js";
 import { CellSize, Tileset } from "../schemas/tileset.js";
 import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../schemas/tileset-pack.js";
@@ -23,9 +24,11 @@ import {
   TILESET_MANIFEST_SCHEMA_VERSION,
   type ManifestPlaceable,
   type ManifestPlaceableFrameRef,
+  type ManifestAssetSemanticRole,
   type ManifestTiledPlaceableSource,
   type TilesetManifestLicense,
 } from "./schema-version.js";
+import { inferAssetSemanticRoles } from "./semantic-roles.js";
 import {
   Placeable,
   PlaceableFrameRef,
@@ -75,6 +78,14 @@ const toPlaceable = (placeable: ManifestPlaceable): Placeable =>
     tags: placeable.tags,
     placementMode: placeable.placementMode ?? "object",
     source: toTiledPlaceableSource(placeable.source),
+  });
+
+const toAssetSemanticRole = (role: ManifestAssetSemanticRole): AssetSemanticRole =>
+  new AssetSemanticRole({
+    role: role.role,
+    tileId: role.tileId,
+    source: role.source,
+    confidence: role.confidence,
   });
 
 const KNOWN_AUTOTILE_PATTERNS = new Set<string>([
@@ -212,10 +223,30 @@ const terrainClassRefDiagnostics = (
   return diagnostics;
 };
 
-const tileIdSetForTileset = (manifest: TilesetManifest, tilesetId: string): ReadonlySet<string> =>
-  new Set(
-    manifest.tiles.filter((tile) => tile.tilesetId === tilesetId).map((tile) => String(tile.id)),
-  );
+type ManifestTile = TilesetManifest["tiles"][number];
+
+/**
+ * Groups tiles by tileset id in a single O(tiles) pass. Callers previously
+ * re-filtered the flat `manifest.tiles` array once per tileset, which is
+ * O(tilesets * tiles) and dominates parsing of large packs (tens of thousands
+ * of tiles). Grouping once keeps the whole assemble/validate path O(tiles).
+ */
+const groupTilesByTilesetId = (tiles: readonly ManifestTile[]): Map<string, ManifestTile[]> => {
+  const byTileset = new Map<string, ManifestTile[]>();
+  for (const tile of tiles) {
+    const key = String(tile.tilesetId);
+    const bucket = byTileset.get(key);
+    if (bucket === undefined) {
+      byTileset.set(key, [tile]);
+    } else {
+      bucket.push(tile);
+    }
+  }
+  return byTileset;
+};
+
+const tileIdSetFromTiles = (tiles: readonly ManifestTile[]): ReadonlySet<string> =>
+  new Set(tiles.map((tile) => String(tile.id)));
 
 const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnostic[] => {
   const diagnostics: ParseDiagnostic[] = [];
@@ -283,28 +314,27 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
     }
   });
 
+  const tilesByTilesetId = groupTilesByTilesetId(manifest.tiles);
   const tileIdsByTileset = new Map<string, ReadonlySet<string>>();
   for (const tileset of manifest.tilesets) {
     const tilesetId = String(tileset.id);
-    const tileIds = tileIdSetForTileset(manifest, tilesetId);
-    tileIdsByTileset.set(tilesetId, tileIds);
+    const tilesetTiles = tilesByTilesetId.get(tilesetId) ?? [];
+    tileIdsByTileset.set(tilesetId, tileIdSetFromTiles(tilesetTiles));
 
     const seenTileIds = new Set<string>();
-    manifest.tiles
-      .filter((tile) => String(tile.tilesetId) === tilesetId)
-      .forEach((tile, index) => {
-        const tileId = String(tile.id);
-        if (seenTileIds.has(tileId)) {
-          diagnostics.push({
-            _tag: "DuplicateTileId",
-            path: `/tiles/${index}/id`,
-            message: "Duplicate tile id in tileset",
-            severity: "error",
-            tileId,
-          });
-        }
-        seenTileIds.add(tileId);
-      });
+    tilesetTiles.forEach((tile, index) => {
+      const tileId = String(tile.id);
+      if (seenTileIds.has(tileId)) {
+        diagnostics.push({
+          _tag: "DuplicateTileId",
+          path: `/tiles/${index}/id`,
+          message: "Duplicate tile id in tileset",
+          severity: "error",
+          tileId,
+        });
+      }
+      seenTileIds.add(tileId);
+    });
   }
 
   const animationById = new Map(manifest.animations.map((animation) => [String(animation.id), animation]));
@@ -564,16 +594,16 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
   const collisionByTileId = new Map(
     manifest.collisionMasks.map((entry) => [String(entry.tileId), entry.mask]),
   );
+  const tilesByTilesetId = groupTilesByTilesetId(manifest.tiles);
   const tileIdsByTileset = new Map<string, ReadonlySet<string>>();
   for (const tileset of manifest.tilesets) {
     const tilesetId = String(tileset.id);
-    tileIdsByTileset.set(tilesetId, tileIdSetForTileset(manifest, tilesetId));
+    tileIdsByTileset.set(tilesetId, tileIdSetFromTiles(tilesByTilesetId.get(tilesetId) ?? []));
   }
 
   const tilesets = manifest.tilesets.map((entry) => {
     const tilesetId = String(entry.id);
-    const tiles = manifest.tiles
-      .filter((tile) => String(tile.tilesetId) === tilesetId)
+    const tiles = (tilesByTilesetId.get(tilesetId) ?? [])
       .map(
         (tile) =>
           new Tile({
@@ -632,7 +662,7 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
     });
   });
 
-  return new TilesetPack({
+  const pack = new TilesetPack({
     schemaVersion: TILESET_MANIFEST_SCHEMA_VERSION,
     id: manifest.id,
     name: manifest.name,
@@ -648,7 +678,11 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
         }),
     ),
     placeables: manifest.placeables?.map(toPlaceable),
+    semanticRoles: manifest.assetSemanticRoles?.map(toAssetSemanticRole),
   });
+  return pack.semanticRoles === undefined
+    ? new TilesetPack({ ...pack, semanticRoles: inferAssetSemanticRoles(pack) })
+    : pack;
 };
 
 /** Decode canonical Tileborne manifest JSON into a typed `TilesetPack`. */

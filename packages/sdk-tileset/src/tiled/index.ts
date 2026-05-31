@@ -8,6 +8,7 @@ export * from "./compile-wang.js";
 export * from "./compile-map.js";
 export * from "./core-map.js";
 export * from "./scan.js";
+export * from "./source-inventory.js";
 export * from "./infer.js";
 export * from "./import.js";
 export * from "./tsj-parse.js";

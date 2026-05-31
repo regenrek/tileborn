@@ -13,9 +13,10 @@ import type {
 import { Input, Skeleton, cn, typography } from '@tileborne/ui';
 import { Option } from 'effect';
 import { SearchIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
-import { useAssetDataUrl, useTilesetPack } from '@/hooks/queries';
+import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
+import { useTilesetPack } from '@/hooks/queries';
 import { useEditorUiStore, type BrushIntent } from '@/stores/editor-ui-store';
 
 interface TilesetPaletteProps {
@@ -74,52 +75,6 @@ type BrushPreviewIntent =
     }
   | { readonly intentKind: 'terrain'; readonly classId: TerrainClassType; readonly ruleId?: never };
 
-function useInView(rootMargin = '320px'): {
-  readonly ref: (node: HTMLElement | null) => void;
-  readonly inView: boolean;
-} {
-  const [inView, setInView] = useState(false);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const nodeRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    return () => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-    };
-  }, []);
-
-  const setRef = (node: HTMLElement | null) => {
-    if (nodeRef.current === node) {
-      return;
-    }
-    observerRef.current?.disconnect();
-    observerRef.current = null;
-    nodeRef.current = node;
-    if (node === null) {
-      return;
-    }
-    if (typeof IntersectionObserver === 'undefined') {
-      setInView(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setInView(true);
-          observer.disconnect();
-          observerRef.current = null;
-        }
-      },
-      { rootMargin },
-    );
-    observer.observe(node);
-    observerRef.current = observer;
-  };
-
-  return { ref: setRef, inView };
-}
-
 const TileBrushButton = memo(
   function TileBrushButton({
     packId,
@@ -134,12 +89,8 @@ const TileBrushButton = memo(
     readonly selectBrush: (intent: BrushIntent) => void;
     readonly onHover: (entry: TilePaletteEntry | ObjectPaletteEntry | null) => void;
   }) {
-    const { ref, inView } = useInView();
-    const dataUrlQuery = useAssetDataUrl(packId, inView ? entry.assetPath : undefined);
-
     return (
       <button
-        ref={ref as (node: HTMLButtonElement | null) => void}
         type="button"
         className={cn(
           'group relative aspect-square overflow-hidden rounded-md border bg-card transition-colors hover:border-primary/70 hover:bg-accent/20',
@@ -155,22 +106,13 @@ const TileBrushButton = memo(
         onFocus={() => onHover(entry)}
         onBlur={() => onHover(null)}
       >
-        <span className="absolute inset-0 flex items-center justify-center bg-muted/40">
-          {dataUrlQuery.data?.dataUrl ? (
-            <img
-              data-testid="tile-palette-thumb"
-              src={dataUrlQuery.data.dataUrl}
-              alt=""
-              className="absolute left-0 top-0 max-w-none select-none"
-              style={{
-                imageRendering: 'pixelated',
-                transform: `translate(${-entry.x}px, ${-entry.y}px)`,
-              }}
-            />
-          ) : (
-            <Skeleton className="h-full w-full" />
-          )}
-        </span>
+        <LibraryPreviewThumb
+          packId={packId}
+          preview={entry}
+          testId="tile-palette-thumb"
+          alt={entry.label}
+          className="absolute inset-0 bg-muted/40"
+        />
       </button>
     );
   },
@@ -196,13 +138,8 @@ const ObjectBrushButton = memo(
     readonly selectBrush: (intent: BrushIntent) => void;
     readonly onHover: (entry: TilePaletteEntry | ObjectPaletteEntry | null) => void;
   }) {
-    const { ref, inView } = useInView();
-    const dataUrlQuery = useAssetDataUrl(packId, inView ? entry.assetPath : undefined);
-    const scale = Math.min((TILE_CELL_PX - 8) / entry.width, (TILE_CELL_PX - 8) / entry.height, 1);
-
     return (
       <button
-        ref={ref as (node: HTMLButtonElement | null) => void}
         type="button"
         className={cn(
           'group relative aspect-square overflow-hidden rounded-md border bg-card transition-colors hover:border-primary/70 hover:bg-accent/20',
@@ -218,23 +155,13 @@ const ObjectBrushButton = memo(
         onFocus={() => onHover(entry)}
         onBlur={() => onHover(null)}
       >
-        <span className="absolute inset-0 flex items-center justify-center bg-muted/40">
-          {dataUrlQuery.data?.dataUrl ? (
-            <img
-              data-testid="object-palette-thumb"
-              src={dataUrlQuery.data.dataUrl}
-              alt=""
-              className="absolute left-1 top-1 max-w-none select-none"
-              style={{
-                imageRendering: 'pixelated',
-                transform: `translate(${-entry.x * scale}px, ${-entry.y * scale}px) scale(${scale})`,
-                transformOrigin: 'top left',
-              }}
-            />
-          ) : (
-            <Skeleton className="h-full w-full" />
-          )}
-        </span>
+        <LibraryPreviewThumb
+          packId={packId}
+          preview={entry}
+          testId="object-palette-thumb"
+          alt={entry.label}
+          className="absolute inset-0 bg-muted/40 p-1"
+        />
       </button>
     );
   },
@@ -267,12 +194,10 @@ const BrushPreviewButton = memo(
     readonly previewTiles: readonly TilePaletteEntry[];
     readonly selectBrush: (intent: BrushIntent) => void;
   } & BrushPreviewIntent) {
-    const { ref, inView } = useInView();
     const hasPreview = previewTiles.length > 0;
 
     return (
       <button
-        ref={ref as (node: HTMLButtonElement | null) => void}
         type="button"
         className={cn(
           'flex w-full items-center gap-2 rounded-md border bg-card p-1.5 text-left transition-colors hover:border-primary/70 hover:bg-accent/20',
@@ -298,12 +223,12 @@ const BrushPreviewButton = memo(
               )}
             >
               {previewTiles.map((entry) => (
-                <BrushPreviewThumb
+                <LibraryPreviewThumb
                   key={entry.renderKey}
                   packId={packId}
-                  entry={entry}
-                  enabled={inView}
+                  preview={entry}
                   testId={`${intentKind}-palette-thumb`}
+                  className="min-h-0 min-w-0 bg-muted/50"
                 />
               ))}
             </span>
@@ -330,40 +255,6 @@ const BrushPreviewButton = memo(
     prev.classId === next.classId &&
     prev.selectBrush === next.selectBrush,
 );
-
-function BrushPreviewThumb({
-  packId,
-  entry,
-  enabled,
-  testId,
-}: {
-  readonly packId: string;
-  readonly entry: TilePaletteEntry;
-  readonly enabled: boolean;
-  readonly testId: string;
-}) {
-  const dataUrlQuery = useAssetDataUrl(packId, enabled ? entry.assetPath : undefined);
-  const scale = Math.min(20 / entry.width, 20 / entry.height, 1);
-  return (
-    <span className="relative min-h-0 min-w-0 overflow-hidden rounded-sm bg-muted/50">
-      {dataUrlQuery.data?.dataUrl ? (
-        <img
-          data-testid={testId}
-          src={dataUrlQuery.data.dataUrl}
-          alt=""
-          className="absolute left-0 top-0 max-w-none select-none"
-          style={{
-            imageRendering: 'pixelated',
-            transform: `translate(${-entry.x * scale}px, ${-entry.y * scale}px) scale(${scale})`,
-            transformOrigin: 'top left',
-          }}
-        />
-      ) : (
-        <Skeleton className="h-full w-full" />
-      )}
-    </span>
-  );
-}
 
 function BrushPreviewPlaceholder({ testId }: { readonly testId: string }) {
   return (
@@ -1162,21 +1053,12 @@ function ReadoutThumb({
   readonly packId: string;
   readonly entry: PreviewPaletteEntry;
 }) {
-  const dataUrlQuery = useAssetDataUrl(packId, entry.assetPath);
-  if (!dataUrlQuery.data?.dataUrl) {
-    return <Skeleton className="h-full w-full" />;
-  }
-  const scale = Math.min(28 / entry.width, 28 / entry.height, 1);
   return (
-    <img
-      src={dataUrlQuery.data.dataUrl}
-      alt=""
-      className="absolute left-0 top-0 max-w-none select-none"
-      style={{
-        imageRendering: 'pixelated',
-        transform: `translate(${-entry.x * scale}px, ${-entry.y * scale}px) scale(${scale})`,
-        transformOrigin: 'top left',
-      }}
+    <LibraryPreviewThumb
+      packId={packId}
+      preview={entry}
+      eager
+      className="absolute inset-0 bg-transparent"
     />
   );
 }

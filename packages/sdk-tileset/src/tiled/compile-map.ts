@@ -1,8 +1,11 @@
 import type { ParseDiagnostic } from "../diagnostics.js";
 import type { Placeable } from "../schemas/placeable.js";
+import type { AssetId } from "@tileborne/core";
 
+import { deterministicAssetId } from "./deterministic-ids.js";
 import { decodeTiledGid, locateTiledGid, tileborneTileIndexForTiledGid, type TiledTilesetWindow } from "./gid.js";
 import { propertiesToMetadata } from "./compile-tileset.js";
+import { primitivePropertyValue } from "./support-policy.js";
 import type {
   TiledJsonAnyLayer,
   TiledJsonMap,
@@ -22,12 +25,15 @@ import type {
 
 const CANONICAL_OBJECT_ANCHOR = "top-left" as const;
 
+export const tiledImageLayerAssetId = (image: string): AssetId =>
+  deterministicAssetId(`tiled-image-layer:${image}`);
+
 const placeableKey = (tilesetName: string, localTileId: number): string => `${tilesetName}:${localTileId}`;
 
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => properties?.find((property) => property.name === name)?.value;
+): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
 
 const stringProperty = (
   properties: readonly TiledJsonProperty[] | undefined,
@@ -35,20 +41,6 @@ const stringProperty = (
 ): string | undefined => {
   const value = propertyValue(properties, name);
   return typeof value === "string" ? value : undefined;
-};
-
-const hasUnsupportedTiledGidFlags = (decoded: ReturnType<typeof decodeTiledGid>): boolean =>
-  decoded.flippedHorizontal || decoded.flippedVertical || decoded.flippedDiagonal || decoded.rotatedHexagonal120;
-
-const pushFlipFlagDiagnostic = (diagnostics: ParseDiagnostic[], path: string): void => {
-  diagnostics.push({
-    _tag: "TiledUnsupportedFeature",
-    path,
-    // TODO(tiled-flip-support): add a canonical transform model before accepting flipped Tiled GIDs.
-    message: "Tiled flip flags are not supported by the canonical importer.",
-    severity: "error",
-    feature: "flip-flags",
-  });
 };
 
 const tileObjectAnchor = (args: {
@@ -185,6 +177,7 @@ const compileLayer = (args: {
       id: layerId,
       name: layer.name,
       image: layer.image,
+      assetId: tiledImageLayerAssetId(layer.image),
       ...(layer.x === undefined ? {} : { x: layer.x }),
       ...(layer.y === undefined ? {} : { y: layer.y }),
       visible: layer.visible ?? true,
@@ -224,11 +217,9 @@ const compileTileLayer = (
   windows: readonly TiledTilesetWindow[],
   diagnostics: ParseDiagnostic[],
 ): TiledMapTileLayer => {
-  const cells = layer.data.map((rawGid, cellIndex) => {
+  void diagnostics;
+  const cells = layer.data.map((rawGid) => {
     const decoded = decodeTiledGid(rawGid);
-    if (hasUnsupportedTiledGidFlags(decoded)) {
-      pushFlipFlagDiagnostic(diagnostics, `/layers/${layer.name}/data/${cellIndex}`);
-    }
     const located = locateTiledGid(rawGid, windows);
     return {
       rawGid,
@@ -236,10 +227,7 @@ const compileTileLayer = (
       tileIndex: tileborneTileIndexForTiledGid(rawGid, windows),
       localTileIndex: located?.localId ?? -1,
       tilesetName: located?.window.name ?? "",
-      flippedHorizontal: decoded.flippedHorizontal,
-      flippedVertical: decoded.flippedVertical,
-      flippedDiagonal: decoded.flippedDiagonal,
-      rotatedHexagonal120: decoded.rotatedHexagonal120,
+      transform: decoded.transform,
     };
   });
   return {
@@ -268,9 +256,6 @@ const compileObjectLayer = (args: {
 }): TiledMapObject => {
   const { object, layer, layerId, windows } = args;
   const decoded = object.gid === undefined ? undefined : decodeTiledGid(object.gid);
-  if (decoded !== undefined && hasUnsupportedTiledGidFlags(decoded)) {
-    pushFlipFlagDiagnostic(args.diagnostics, `/layers/${layer.name ?? "objects"}/objects/${object.id}/gid`);
-  }
   const located = object.gid === undefined ? null : locateTiledGid(object.gid, windows);
   const tileRef =
     object.gid === undefined || decoded === undefined
@@ -280,10 +265,7 @@ const compileObjectLayer = (args: {
           gid: decoded.gid,
           localTileIndex: located?.localId ?? -1,
           tilesetName: located?.window.name ?? "",
-          flippedHorizontal: decoded.flippedHorizontal,
-          flippedVertical: decoded.flippedVertical,
-          flippedDiagonal: decoded.flippedDiagonal,
-          rotatedHexagonal120: decoded.rotatedHexagonal120,
+          transform: decoded.transform,
         };
   const placeable =
     tileRef === undefined
@@ -320,6 +302,7 @@ const compileObjectLayer = (args: {
           tileId: frame.tileId,
           gid: decoded.gid,
           anchor: CANONICAL_OBJECT_ANCHOR,
+          transform: decoded.transform,
         };
 
   return {

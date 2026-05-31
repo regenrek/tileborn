@@ -49,6 +49,8 @@ const scan = {
     parallax: false,
     infiniteChunks: false,
     unsupportedOrientation: false,
+    classProperties: false,
+    projectFiles: false,
     flipFlags: false,
   },
   unsupportedFeatures: [],
@@ -224,6 +226,35 @@ describe('tiled import IPC contracts', () => {
       plan,
       diagnostics: [],
       inventoryPreview,
+    });
+
+    const unsupportedScan = {
+      ...scan,
+      inventory: { ...scan.inventory, unsupportedFeatureCount: 1 },
+      featureFlags: { ...scan.featureFlags, classProperties: true },
+      unsupportedFeatures: [
+        {
+          feature: 'class-properties',
+          path: '/properties/0',
+          message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+          action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+        },
+      ],
+    } as const;
+    roundTrip(TiledImportScanContract.response, {
+      sourceKind: 'tiled-map',
+      scan: unsupportedScan,
+      diagnostics: [
+        {
+          _tag: 'TiledUnsupportedFeature',
+          severity: 'error',
+          path: '/properties/0',
+          message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+          feature: 'class-properties',
+          action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+        },
+      ],
+      inventoryPreview: { ...inventoryPreview, unsupportedFeatureCount: 1 },
     });
   });
 });

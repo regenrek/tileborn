@@ -1,9 +1,10 @@
 import { Option } from "effect";
 
 import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import { TilesetPack, TilesetPackLicense } from "../schemas/tileset-pack.js";
+import type { TilesetPackAsset as TilesetPackAssetType } from "../schemas/tileset-pack.js";
+import { TilesetPack, TilesetPackAsset as TilesetPackAssetClass, TilesetPackLicense } from "../schemas/tileset-pack.js";
 
-import { buildTilesetWindows, compileTiledMap } from "./compile-map.js";
+import { buildTilesetWindows, compileTiledMap, tiledImageLayerAssetId } from "./compile-map.js";
 import { compileTiledTileset } from "./compile-tileset.js";
 import { compileTileborneMap } from "./core-map.js";
 import { deterministicPackId } from "./deterministic-ids.js";
@@ -17,11 +18,25 @@ import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "./tile-data.j
 import { normalizeJsonTileLayers, validateTiledJsonMap } from "./validate.js";
 import { parseTsj } from "./tsj-parse.js";
 import { parseTsx } from "./tsx-parse.js";
+import { unsupportedClassPropertyFeaturesForMap, unsupportedFeatureDiagnostic } from "./support-policy.js";
 import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
 import type { TiledImportOptions, TiledImportSuccess, TiledJsonAnyLayer, TiledJsonMap, TiledJsonTileLayer, TiledJsonTileset } from "./types.js";
 
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
   diagnostics.some((diagnostic) => diagnostic.severity === "error");
+
+const imageLayerPackAssets = (layers: readonly TiledJsonAnyLayer[]): readonly TilesetPackAssetType[] =>
+  layers.flatMap((layer) => {
+    if (layer.type === "group") return imageLayerPackAssets(layer.layers);
+    if (layer.type !== "imagelayer") return [];
+    return [
+      new TilesetPackAssetClass({
+        id: tiledImageLayerAssetId(layer.image),
+        path: layer.image,
+        mime: "image/png",
+      }),
+    ];
+  });
 
 const layerDecodeInput = (
   layer: TiledJsonTileLayer & { readonly text?: string },
@@ -190,6 +205,14 @@ export const parseTmj = async (
   const tilesets = await resolveTilesets(map, options);
   const diagnostics = [...hydrated.diagnostics, ...tilesets.diagnostics];
 
+  const mapPolicyDiagnostics = unsupportedClassPropertyFeaturesForMap(map, map.tilesets).map(
+    unsupportedFeatureDiagnostic,
+  );
+  diagnostics.push(...mapPolicyDiagnostics);
+  if (hasBlockingDiagnostics(diagnostics)) {
+    return { diagnostics };
+  }
+
   const tilesetValues = tilesets.compiled.flatMap((entry) => (entry.value ? [entry.value] : []));
   if (tilesetValues.length === 0) {
     return { diagnostics };
@@ -208,7 +231,7 @@ export const parseTmj = async (
       redistributable: false,
     }),
     tilesets: tilesetValues.map((entry) => entry.tileset),
-    assets: tilesetValues.flatMap((entry) => entry.assets),
+    assets: [...tilesetValues.flatMap((entry) => entry.assets), ...imageLayerPackAssets(map.layers)],
     placeables: tilesetValues.flatMap((entry) => entry.placeables),
   });
 
@@ -298,6 +321,14 @@ export const parseTmjSync = (
     });
 
   diagnostics.push(...compiledTilesets.flatMap((entry) => [...entry.diagnostics]));
+  const mapPolicyDiagnostics = unsupportedClassPropertyFeaturesForMap(map, map.tilesets).map(
+    unsupportedFeatureDiagnostic,
+  );
+  diagnostics.push(...mapPolicyDiagnostics);
+  if (hasBlockingDiagnostics(diagnostics)) {
+    return { diagnostics };
+  }
+
   const tilesetValues = compiledTilesets.flatMap((entry) => (entry.value ? [entry.value] : []));
   if (tilesetValues.length === 0) {
     return { diagnostics };
@@ -316,7 +347,7 @@ export const parseTmjSync = (
       redistributable: false,
     }),
     tilesets: tilesetValues.map((entry) => entry.tileset),
-    assets: tilesetValues.flatMap((entry) => entry.assets),
+    assets: [...tilesetValues.flatMap((entry) => entry.assets), ...imageLayerPackAssets(map.layers)],
     placeables: tilesetValues.flatMap((entry) => entry.placeables),
   });
 

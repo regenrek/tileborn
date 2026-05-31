@@ -52,6 +52,17 @@ export default defineConfig({
     ],
   },
   root: path.resolve(import.meta.dirname, "src/renderer"),
+  server: {
+    // fsevents-based watching is unreliable in this electron-forge + Vite dev
+    // setup (edits/HMR were intermittently missed, forcing full restarts).
+    // Polling detects renderer source changes deterministically. Dev-only; the
+    // watched root is `src/renderer` (node_modules is ignored by default), so
+    // the polling cost is small.
+    watch: {
+      usePolling: true,
+      interval: 120,
+    },
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, ".vite/renderer/main_window"),
     emptyOutDir: true,

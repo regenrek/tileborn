@@ -3,8 +3,8 @@ import {
   MapObject,
   MapObjectPlacement,
   ObjectLayer,
-  TileChunk,
   TileLayer,
+  TileTransform,
   makeTileborneMap,
   type AssetId,
   type LayerId,
@@ -12,17 +12,27 @@ import {
   type PackId,
   type PlaceableId,
   type TileId,
+  type TileChunk,
   type TileborneMap,
 } from "@tileborne/core";
 import { Option } from "effect";
 
 import { deterministicLayerId, deterministicMapId, deterministicObjectId } from "./deterministic-ids.js";
-import type { TiledMapImport, TiledMapObject } from "./types.js";
+import { isIdentityTiledTransform } from "./gid.js";
+import type { TiledGidTransform, TiledMapImport, TiledMapObject } from "./types.js";
+
+const coreTransform = (transform: TiledGidTransform): TileTransform =>
+  new TileTransform({
+    flippedHorizontal: transform.flippedHorizontal,
+    flippedVertical: transform.flippedVertical,
+    flippedDiagonal: transform.flippedDiagonal,
+    rotatedHexagonal120: transform.rotatedHexagonal120,
+  });
 
 const chunkFromCells = (
   width: number,
   height: number,
-  cells: readonly { readonly tileIndex: number }[],
+  cells: readonly { readonly tileIndex: number; readonly transform: TiledGidTransform }[],
   chunkWidth = 32,
   chunkHeight = 32,
 ): readonly TileChunk[] => {
@@ -32,12 +42,32 @@ const chunkFromCells = (
       const cw = Math.min(chunkWidth, width - cx);
       const ch = Math.min(chunkHeight, height - cy);
       const tiles: number[] = [];
+      const transforms: TileTransform[] = [];
+      let hasTransforms = false;
       for (let y = 0; y < ch; y += 1) {
         for (let x = 0; x < cw; x += 1) {
-          tiles.push(cells[(cy + y) * width + cx + x]?.tileIndex ?? 0);
+          const cell = cells[(cy + y) * width + cx + x];
+          tiles.push(cell?.tileIndex ?? 0);
+          const transform = coreTransform(
+            cell?.transform ?? {
+              flippedHorizontal: false,
+              flippedVertical: false,
+              flippedDiagonal: false,
+              rotatedHexagonal120: false,
+            },
+          );
+          transforms.push(transform);
+          hasTransforms = hasTransforms || !isIdentityTiledTransform(transform);
         }
       }
-      chunks.push(new TileChunk({ x: cx, y: cy, width: cw, height: ch, tiles }));
+      chunks.push({
+        x: cx,
+        y: cy,
+        width: cw,
+        height: ch,
+        tiles,
+        ...(hasTransforms ? { transforms } : {}),
+      } as TileChunk);
     }
   }
   return chunks;
@@ -62,6 +92,7 @@ const corePlacement = (
         assetId: Option.some(placement.assetId as AssetId),
         tileId: Option.some(placement.tileId as TileId),
         gid: Option.some(placement.gid),
+        ...(isIdentityTiledTransform(placement.transform) ? {} : { transform: coreTransform(placement.transform) }),
       });
 
 export const compileTileborneMap = (input: {
@@ -93,7 +124,7 @@ export const compileTileborneMap = (input: {
           name: layer.name,
           visible: layer.visible,
           opacity: layer.opacity,
-          assetId: layer.image as AssetId,
+          assetId: layer.assetId as AssetId,
           x: layer.x ?? 0,
           y: layer.y ?? 0,
         }),

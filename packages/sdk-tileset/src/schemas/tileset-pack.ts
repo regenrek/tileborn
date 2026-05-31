@@ -2,6 +2,7 @@ import { AssetId, PackId } from "@tileborne/core";
 import { Schema } from "effect";
 
 import { Placeable } from "./placeable.js";
+import { AssetSemanticRole } from "./semantic-role.js";
 import { Tileset } from "./tileset.js";
 
 /** License metadata attached to a tileset pack. */
@@ -30,4 +31,5 @@ export class TilesetPack extends Schema.Class<TilesetPack>("TilesetPack")({
   tilesets: Schema.Array(Tileset),
   assets: Schema.Array(TilesetPackAsset),
   placeables: Schema.optional(Schema.Array(Placeable)),
+  semanticRoles: Schema.optional(Schema.Array(AssetSemanticRole)),
 }) {}

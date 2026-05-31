@@ -1,7 +1,8 @@
 import process from "node:process";
 
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, protocol } from "electron";
 
+import { ASSET_PROTOCOL_SCHEME } from "./asset-library/asset-protocol.js";
 import { createStartupReporter } from "./startup-reporter.js";
 import { createMainWindow } from "./window.js";
 import {
@@ -18,6 +19,28 @@ const cdpPort =
 if (!app.isPackaged && cdpPort !== undefined && cdpPort.length > 0) {
   app.commandLine.appendSwitch("remote-debugging-port", cdpPort);
 }
+
+// Privileged scheme for streaming installed pack assets (atlases, manifests)
+// directly to the renderer. Must run before `app.ready`. The renderer loads
+// these via `<img src>` / `fetch`, so decoding happens off the main thread
+// instead of base64 data URLs over IPC. See asset-protocol.ts.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: ASSET_PROTOCOL_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      // The renderer runs on an http(s)/file origin, so `fetch()` to this
+      // scheme (viewport atlas loader, manifest load) is cross-origin and must
+      // opt into CORS; the handler also returns an Access-Control-Allow-Origin
+      // header. Without this, fetch() is blocked while <img> (no-cors) still
+      // works.
+      corsEnabled: true,
+    },
+  },
+]);
 
 const skipSingleInstance = process.env.TILEBORNE_SMOKE === "true";
 const gotSingleInstanceLock = skipSingleInstance || app.requestSingleInstanceLock();

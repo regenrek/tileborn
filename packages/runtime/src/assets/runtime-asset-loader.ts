@@ -26,7 +26,7 @@ export interface RuntimeAssetLoaderOptions {
 
 export const DEFAULT_RUNTIME_ASSET_CACHE_CAPACITY = 256;
 
-const isRemoteUrl = (value: string): boolean => /^(https?|data|blob):/u.test(value);
+const isRemoteUrl = (value: string): boolean => /^(https?|data|blob|tileborne-asset):/u.test(value);
 
 const toAssetIdString = (assetId: AssetId): string => assetId;
 

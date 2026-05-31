@@ -22,3 +22,4 @@ export {
 } from "./schema-version.js";
 export type { TilesetManifestSchemaVersion } from "./schema-version.js";
 export { writeTilesetManifest } from "./write.js";
+export { inferAssetSemanticRoles } from "./semantic-roles.js";

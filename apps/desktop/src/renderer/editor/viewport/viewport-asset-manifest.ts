@@ -17,6 +17,7 @@ import {
   tileIdByTileIndex,
   tileIndexByTileId,
 } from '@/lib/tileset-pack';
+import { assetProtocolUrl } from '@/lib/asset-url';
 import { Effect, Option, Schema } from 'effect';
 
 /** 1×1 transparent PNG used when no pack is available for the viewport. */
@@ -314,20 +315,15 @@ const loadViewportAssetBundleForPacks = (
       renderableAssetIdByPath.set(asset.path, index + 1);
     });
 
-    const textureEntries = yield* Effect.forEach(
-      renderableAssets,
-      ({ packId, asset }) =>
-        Effect.tryPromise({
-          try: () =>
-            window.tileborne.assets.getAssetDataUrl({
-              packId,
-              assetPath: asset.path,
-            }),
-          catch: (cause) => new Error(String(cause)),
-        }).pipe(Effect.map(({ dataUrl }) => [asset.path, dataUrl] as const)),
-      { concurrency: 8 },
+    // Atlases are streamed via the `tileborne-asset` protocol and fetched by the
+    // runtime asset loader, so the renderer decodes them off the main thread
+    // without a base64-data-URL round-trip over IPC.
+    const textureDataUrls = new Map<string, string>(
+      renderableAssets.map(({ packId, asset }) => [
+        asset.path,
+        assetProtocolUrl(String(packId), asset.path),
+      ]),
     );
-    const textureDataUrls = new Map<string, string>(textureEntries);
 
     return {
       packId: pack.id,

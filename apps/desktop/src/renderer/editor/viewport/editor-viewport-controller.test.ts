@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Effect, Option } from 'effect';
 import { Container, Sprite, Texture } from 'pixi.js';
+import { CompositeTilemap, Tilemap, POINT_STRUCT_SIZE } from '@pixi/tilemap';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
 import {
   MapObject,
   MapObjectPlacement,
   ObjectLayer,
   TileborneMap,
+  TileLayer,
   makeAssetId,
   makeLayerId,
   makeMapId,
@@ -14,6 +16,7 @@ import {
   makePackId,
   makePlaceableId,
   makeTileId,
+  makeTileborneMap,
   type Uuid,
 } from '@tileborne/core';
 import {
@@ -26,6 +29,7 @@ import {
   TilesetPackLicense,
   UVRect,
 } from '@tileborne/sdk-tileset/schemas';
+import type { FrameIndex } from '@tileborne/sdk-tileset/renderer';
 
 import {
   EDITOR_GRID_OUTLINE_COLOR,
@@ -444,5 +448,207 @@ describe('EditorViewportController render batching', () => {
     controller.setMap(map);
 
     expect(textureForRenderableAssetId).toHaveBeenCalledWith(2);
+  });
+});
+
+describe('EditorViewportController chunk culling', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const LARGE_LAYER_ID = makeLayerId('00000000-0000-4000-8000-000000000099');
+
+  // 128x128 tiles → chunk origins {0, 32, 64, 96} on each axis, one populated
+  // tile per chunk so every chunk exists in the layer.
+  const createLargeMap = (): TileborneMap => {
+    let map = makeTileborneMap({
+      id: makeMapId('00000000-0000-4000-8000-000000000098'),
+      width: 128,
+      height: 128,
+      tileWidth: 32,
+      tileHeight: 32,
+      layers: [
+        new TileLayer({
+          id: LARGE_LAYER_ID,
+          name: 'ground',
+          visible: true,
+          opacity: 1,
+          chunks: [],
+        }),
+      ],
+    });
+    for (let chunkY = 0; chunkY < 128; chunkY += 32) {
+      for (let chunkX = 0; chunkX < 128; chunkX += 32) {
+        map = setTileIndex(map, LARGE_LAYER_ID, chunkX, chunkY, 1);
+      }
+    }
+    return map;
+  };
+
+  const builtChunkKeys = (worldRoot: Container): Set<string> => {
+    const tileLayerRoot = worldRoot.children.find((child) => child.label === 'tiles') as
+      | Container
+      | undefined;
+    return new Set((tileLayerRoot?.children ?? []).map((child) => child.label));
+  };
+
+  const setup = () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender: vi.fn(() => Effect.void),
+      resize: vi.fn(() => Effect.void),
+    } as unknown as PixiRendererAdapter;
+    return { worldRoot, controller: new EditorViewportController(adapter) };
+  };
+
+  it('builds only the in-view chunks plus one chunk of padding for a large map', () => {
+    const { worldRoot, controller } = setup();
+    controller.resize(100, 100);
+    controller.setCamera(1, 0, 0);
+    controller.setMap(createLargeMap());
+
+    const built = builtChunkKeys(worldRoot);
+    // View covers tiles 0..3 → chunk origin 0; +1 chunk padding → {0, 32}.
+    expect(built).toEqual(
+      new Set([
+        `${LARGE_LAYER_ID}:0:0`,
+        `${LARGE_LAYER_ID}:32:0`,
+        `${LARGE_LAYER_ID}:0:32`,
+        `${LARGE_LAYER_ID}:32:32`,
+      ]),
+    );
+    expect(built.has(`${LARGE_LAYER_ID}:64:0`)).toBe(false);
+    expect(built.has(`${LARGE_LAYER_ID}:96:96`)).toBe(false);
+  });
+
+  it('reveals newly visible chunks and drops scrolled-out chunks when panning', () => {
+    const { worldRoot, controller } = setup();
+    controller.resize(100, 100);
+    controller.setCamera(1, 0, 0);
+    controller.setMap(createLargeMap());
+
+    expect(builtChunkKeys(worldRoot).has(`${LARGE_LAYER_ID}:0:0`)).toBe(true);
+    expect(builtChunkKeys(worldRoot).has(`${LARGE_LAYER_ID}:64:0`)).toBe(false);
+
+    // Pan content left so world x ≈ 2100..2200 (tiles 65..68 → chunk origin 64).
+    controller.setCamera(1, -2100, 0);
+
+    const built = builtChunkKeys(worldRoot);
+    expect(built.has(`${LARGE_LAYER_ID}:64:0`)).toBe(true);
+    expect(built.has(`${LARGE_LAYER_ID}:0:0`)).toBe(false);
+  });
+
+  it('renders every chunk before canvas dimensions are known', () => {
+    const { worldRoot, controller } = setup();
+    // No resize/setCamera with dimensions → fall back to rendering all chunks.
+    controller.setMap(createLargeMap());
+
+    const built = builtChunkKeys(worldRoot);
+    // 4x4 chunk origins = 16 chunks all built.
+    expect(built.size).toBe(16);
+    expect(built.has(`${LARGE_LAYER_ID}:96:96`)).toBe(true);
+  });
+});
+
+describe('EditorViewportController tilemap chunks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const uuid = (suffix: string): Uuid =>
+    `74696c65-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
+
+  // Resolves tile index 1 → a 32x32 frame on a single shared atlas asset so the
+  // controller batches real tiles instead of falling back to the diagnostic overlay.
+  const resolvableAtlas = () => {
+    const tileId = makeTileId(uuid('01'));
+    const assetId = makeAssetId(uuid('02'));
+    const frameIndex: FrameIndex = {
+      lookup: (id) =>
+        String(id) === String(tileId)
+          ? {
+              imageAssetId: assetId,
+              uv: new UVRect({ x: 0, y: 0, w: 32, h: 32 }),
+              sourceAssetPaths: ['ground.png'],
+            }
+          : undefined,
+      lookupWithVariant: () => undefined,
+      resolveVariantTileId: (id) => id,
+      getCompiledAnimation: () => undefined,
+    };
+    return {
+      frameIndex,
+      tileIdByTileIndex: new Map([[1, tileId]]),
+      renderableAssetIdByPath: new Map([['ground.png', 1]]),
+    };
+  };
+
+  const tileCount = (tilemap: CompositeTilemap): number =>
+    tilemap.children.reduce((total, child) => {
+      if (child instanceof Tilemap) {
+        const points = (child as unknown as { pointsBuf: number[] }).pointsBuf;
+        return total + points.length / POINT_STRUCT_SIZE;
+      }
+      return total;
+    }, 0);
+
+  const setup = () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender: vi.fn(() => Effect.void),
+      textureForRenderableAssetId: vi.fn(() => Texture.WHITE),
+    } as unknown as PixiRendererAdapter;
+    const controller = new EditorViewportController(adapter, resolvableAtlas());
+    return { worldRoot, controller };
+  };
+
+  const chunkAt = (worldRoot: Container, key: string): CompositeTilemap | undefined => {
+    const tileLayerRoot = worldRoot.children.find((child) => child.label === 'tiles') as
+      | Container
+      | undefined;
+    return tileLayerRoot?.children.find((child) => child.label === key) as
+      | CompositeTilemap
+      | undefined;
+  };
+
+  it('renders a chunk as one CompositeTilemap with the expected resolved tile count', () => {
+    const { worldRoot, controller } = setup();
+    const map = setTileIndex(
+      setTileIndex(createTestMap(), TEST_TILE_LAYER_ID, 2, 3, 1),
+      TEST_TILE_LAYER_ID,
+      4,
+      5,
+      1,
+    );
+
+    controller.setMap(map);
+
+    const chunk = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
+    expect(chunk).toBeInstanceOf(CompositeTilemap);
+    expect(tileCount(chunk!)).toBe(2);
+  });
+
+  it('rebuilds the chunk tilemap when patchChunk applies a new edit', () => {
+    const { worldRoot, controller } = setup();
+    const map = setTileIndex(createTestMap(), TEST_TILE_LAYER_ID, 2, 3, 1);
+    // Paint a second resolvable tile (index 1) in the same chunk.
+    const command = createTileEditCommand(map, TEST_TILE_LAYER_ID, 4, 6, 1);
+    const edited = command.apply(map);
+
+    controller.setMap(map);
+    expect(tileCount(chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`)!)).toBe(1);
+
+    controller.syncMapContent(edited);
+    controller.patchFromCommand(command.preview);
+
+    const rebuilt = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
+    expect(rebuilt).toBeInstanceOf(CompositeTilemap);
+    expect(tileCount(rebuilt!)).toBe(2);
   });
 });

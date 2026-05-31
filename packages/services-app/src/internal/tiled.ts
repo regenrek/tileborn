@@ -12,6 +12,16 @@ const optionValue = <A>(
   return value;
 };
 
+const transformToTiled = (transform: NonNullable<MapObject["placement"]>["transform"] | undefined): unknown =>
+  transform === undefined
+    ? undefined
+    : {
+        flippedHorizontal: transform.flippedHorizontal,
+        flippedVertical: transform.flippedVertical,
+        flippedDiagonal: transform.flippedDiagonal,
+        rotatedHexagonal120: transform.rotatedHexagonal120,
+      };
+
 const objectPlacementToTiled = (placement: MapObject["placement"] | undefined): unknown => {
   if (placement === undefined) {
     return undefined;
@@ -23,6 +33,7 @@ const objectPlacementToTiled = (placement: MapObject["placement"] | undefined): 
     assetId: optionValue(placement.assetId),
     tileId: optionValue(placement.tileId),
     gid: optionValue(placement.gid),
+    transform: transformToTiled(placement.transform),
   };
 };
 

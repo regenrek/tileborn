@@ -55,7 +55,6 @@ import {
   useAssetPack,
   useAssetPackLibraryPages,
   usePrefetchAssetLibraryPage,
-  usePrefetchAssetThumbnail,
   useTilesetPack,
   type AssetLibraryCacheStatus,
 } from '@/hooks/queries';
@@ -142,7 +141,6 @@ export function AssetPackBrowser({
   const integrityKeyedPackId = integrityHash === undefined ? undefined : packId;
   const cacheStatusQuery = useAssetLibraryCacheStatus(integrityKeyedPackId, integrityHash);
   const cacheVersion = cacheStatusQuery.data?.cacheVersion;
-  const thumbnailCacheVersion = cacheStatusQuery.data?.thumbnailCacheVersion;
   const tilesetPackQuery = useTilesetPack(integrityKeyedPackId, { integrityHash });
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -162,7 +160,6 @@ export function AssetPackBrowser({
     cacheVersion,
   });
   const prefetchLibraryPage = usePrefetchAssetLibraryPage();
-  const prefetchThumbnail = usePrefetchAssetThumbnail();
   const reloadCache = useReloadAssetLibraryCache();
   const previewIndex = useMemo(
     () => (tilesetPackQuery.data ? buildLibraryPreviewIndex(tilesetPackQuery.data) : undefined),
@@ -382,8 +379,6 @@ export function AssetPackBrowser({
                       onAddReference={handleAddReference}
                       addedItemKeys={new Set(itemsByKeyInActivePalette.keys())}
                       integrityHash={integrityHash}
-                      thumbnailCacheVersion={thumbnailCacheVersion}
-                      prefetchThumbnail={prefetchThumbnail}
                     />
                   )}
                   footer={
@@ -598,8 +593,6 @@ function BrowserGroup({
   onAddReference,
   addedItemKeys,
   integrityHash,
-  thumbnailCacheVersion,
-  prefetchThumbnail,
 }: {
   readonly packId: string;
   readonly group: AssetLibraryGroup;
@@ -615,8 +608,6 @@ function BrowserGroup({
   ) => void;
   readonly addedItemKeys: ReadonlySet<string>;
   readonly integrityHash?: string | undefined;
-  readonly thumbnailCacheVersion?: string | undefined;
-  readonly prefetchThumbnail: ReturnType<typeof usePrefetchAssetThumbnail>;
 }) {
   const [visibleLimit, setVisibleLimit] = useState(GROUP_GRID_INITIAL_LIMIT);
   const displayRefs = libraryGroupPreviewRefs(group, previewIndex, {
@@ -653,35 +644,12 @@ function BrowserGroup({
   const previews = visibleEntries
     .flatMap((entry) => (entry.preview === undefined ? [] : [entry.preview]))
     .slice(0, PREVIEW_REF_RENDER_LIMIT);
-  const prefetchGroupThumbnails = () => {
-    const targets = visibleEntries
-      .flatMap((entry) => (entry.preview === undefined ? [] : [entry.preview]))
-      .slice(0, PREVIEW_REF_RENDER_LIMIT);
-    for (const preview of targets) {
-      prefetchThumbnail({
-        packId,
-        integrityHash,
-        assetPath: preview.assetPath,
-        x: preview.x,
-        y: preview.y,
-        width: preview.width,
-        height: preview.height,
-        sizePx: GRID_THUMB_PX,
-        cacheVersion: thumbnailCacheVersion,
-      });
-    }
-  };
   const canLoadMore =
     visibleLimit < previewEntries.length && visibleLimit < GROUP_GRID_MAX_LIMIT;
   const shownCount = Math.min(visibleEntries.length, previewEntries.length);
   const hiddenCount = Math.max(0, group.count - shownCount);
   return (
-    <Card
-      className="h-[294px] gap-2 py-2"
-      data-testid={`asset-pack-browser-group-${group.id}`}
-      onFocus={prefetchGroupThumbnails}
-      onMouseEnter={prefetchGroupThumbnails}
-    >
+    <Card className="h-[294px] gap-2 py-2" data-testid={`asset-pack-browser-group-${group.id}`}>
       <CardHeader className="flex-row items-start justify-between gap-3 px-3 py-0">
         <div className="flex min-w-0 items-center gap-2">
           <LibraryPreviewMosaic
@@ -690,7 +658,6 @@ function BrowserGroup({
             sizePx={GROUP_THUMB_PX}
             testId="asset-pack-browser-group-thumb"
             integrityHash={integrityHash}
-            cacheVersion={thumbnailCacheVersion}
           />
           <div className="min-w-0">
             <CardTitle className={cn(typography.sectionLabelMicro, 'truncate normal-case')}>
@@ -740,7 +707,6 @@ function BrowserGroup({
                 testId={`asset-pack-browser-item-${group.id}`}
                 onAdd={() => onAddReference(group, entry.actionRef, entry.label)}
                 integrityHash={integrityHash}
-                thumbnailCacheVersion={thumbnailCacheVersion}
               />
             ))}
           </div>
@@ -779,7 +745,6 @@ function BrowserPreviewCell({
   testId,
   onAdd,
   integrityHash,
-  thumbnailCacheVersion,
 }: {
   readonly packId: string;
   readonly label: string;
@@ -788,7 +753,6 @@ function BrowserPreviewCell({
   readonly testId: string;
   readonly onAdd: () => void;
   readonly integrityHash?: string | undefined;
-  readonly thumbnailCacheVersion?: string | undefined;
 }) {
   return (
     <Button
@@ -815,7 +779,6 @@ function BrowserPreviewCell({
           sizePx={GRID_THUMB_PX}
           testId="asset-pack-browser-item-thumb"
           integrityHash={integrityHash}
-          cacheVersion={thumbnailCacheVersion}
         />
       )}
       {added ? (

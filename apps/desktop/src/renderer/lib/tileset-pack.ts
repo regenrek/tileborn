@@ -4,16 +4,9 @@ import { parseTilesetManifest } from '@tileborne/sdk-tileset/manifest';
 import type { CollisionMaskType, TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import { Option } from 'effect';
 
-export const TILESET_MANIFEST_PATH = 'tileborne-asset-pack.json';
+import { assetProtocolUrl } from '@/lib/asset-url';
 
-const parseDataUrlJson = (dataUrl: string): unknown => {
-  const commaIndex = dataUrl.indexOf(',');
-  if (commaIndex === -1) {
-    throw new Error('invalid asset data URL');
-  }
-  const payload = dataUrl.slice(commaIndex + 1);
-  return JSON.parse(atob(payload)) as unknown;
-};
+export const TILESET_MANIFEST_PATH = 'tileborne-asset-pack.json';
 
 const diagnosticsMessage = (diagnostics: readonly { readonly message: string }[]): string =>
   diagnostics.map((diagnostic) => diagnostic.message).join('; ');
@@ -44,11 +37,15 @@ export const parseTilesetPackJson = (json: unknown): TilesetPack => {
 };
 
 export const loadTilesetPack = async (packId: PackId): Promise<TilesetPack> => {
-  const { dataUrl } = await window.tileborne.assets.getAssetDataUrl({
-    packId,
-    assetPath: TILESET_MANIFEST_PATH,
-  });
-  return parseTilesetPackJson(parseDataUrlJson(dataUrl));
+  // Fetch the manifest through the `tileborne-asset` protocol instead of a
+  // base64 data URL over IPC: this avoids allocating/decoding a ~12MB base64
+  // string for large packs and lets the network stack stream the JSON.
+  const response = await fetch(assetProtocolUrl(packId, TILESET_MANIFEST_PATH));
+  if (!response.ok) {
+    throw new Error(`failed to load tileset manifest for ${packId}: ${response.status}`);
+  }
+  const json = (await response.json()) as unknown;
+  return parseTilesetPackJson(json);
 };
 
 export const tileIndexByTileId = (pack: TilesetPack): ReadonlyMap<TileIdType, number> => {

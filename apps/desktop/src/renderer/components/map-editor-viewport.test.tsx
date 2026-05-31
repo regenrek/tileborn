@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import {
   makeAssetId,
   makePackId,
@@ -276,6 +276,7 @@ describe('MapEditorViewport initial map sync', () => {
     setCameraMock.mockReset();
     disposeMock.mockReset();
     loadViewportAssetBundleMock.mockReset();
+    editorStateMock.current.setHoverTile.mockReset();
     activePaletteMock.current = undefined;
     editorStateMock.current.brushIntent = { kind: 'eraser' };
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
@@ -378,6 +379,26 @@ describe('MapEditorViewport initial map sync', () => {
         renderablePlaceableRefs: [{ packId: placeablePack.id, placeableId }],
       });
     });
+  });
+
+  it('keeps minimap pointer movement out of the underlying viewport tool handlers', async () => {
+    loadViewportAssetBundleMock.mockReturnValue(Effect.succeed(viewportBundle));
+
+    const { getByLabelText } = render(
+      <MapEditorViewport projectId="project-1" mapId="map-1" map={createTestMap()} />,
+    );
+
+    await waitFor(() => {
+      expect(loadViewportAssetBundleMock).toHaveBeenCalled();
+    });
+
+    fireEvent.pointerMove(getByLabelText('Map minimap'), {
+      pointerId: 1,
+      clientX: 12,
+      clientY: 12,
+    });
+
+    expect(editorStateMock.current.setHoverTile).not.toHaveBeenCalled();
   });
 });
 

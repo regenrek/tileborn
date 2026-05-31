@@ -24,6 +24,11 @@ import {
   type TileId,
 } from '@tileborne/core';
 import { parseTilesetManifest, writeTilesetManifest } from '@tileborne/sdk-tileset/manifest';
+import {
+  buildLibraryPreviewIndex,
+  type LibraryPreviewIndex,
+  type LibraryPreviewRef,
+} from '@tileborne/sdk-tileset/renderer';
 import type { AutotileRule, TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import type { TiledAppliedImportPlan, TiledImportRecommendation } from '@tileborne/sdk-tileset/tiled';
 import { ConfigService, HomeService, writeJsonAtomic } from '@tileborne/services-foundation';
@@ -103,6 +108,27 @@ export interface InvalidatePackCacheResult {
   readonly removedEntries: number;
 }
 
+export interface ResolvePreviewsInput {
+  readonly packId: PackId;
+  readonly refs: readonly AssetLibraryReference[];
+}
+
+export interface ResolvedPreviewEntry {
+  readonly key: string;
+  readonly preview?: LibraryPreviewRef | undefined;
+}
+
+export interface ResolvePreviewsResult {
+  readonly previews: readonly ResolvedPreviewEntry[];
+}
+
+/**
+ * Stable key for an asset-library reference. Must match the renderer's
+ * `assetLibraryReferenceKey` so resolved previews map back to palette items.
+ */
+export const assetLibraryReferenceKey = (ref: AssetLibraryReference): string =>
+  `${ref.kind}:${ref.packId}:${ref.refId}:${ref.tileId ?? ''}`;
+
 export interface WorkingPaletteItemDraft {
   readonly ref: AssetLibraryReference;
   readonly label?: string | undefined;
@@ -169,6 +195,9 @@ export class AssetLibraryService extends Context.Service<
     readonly invalidatePackCache: (
       input: PackLibraryCacheInput,
     ) => Effect.Effect<InvalidatePackCacheResult, AssetLibraryServiceError>;
+    readonly resolvePreviews: (
+      input: ResolvePreviewsInput,
+    ) => Effect.Effect<ResolvePreviewsResult, AssetLibraryServiceError>;
   }
 >()('@tileborne/services-app/AssetLibraryService') {}
 
@@ -1167,6 +1196,25 @@ export const AssetLibraryServiceLive = Layer.effect(
     const memoryCache = new Map<string, CachedLibraryIndex>();
     const buildingKeys = new Set<string>();
     const lastErrors = new Map<string, string>();
+    // Parsed pack + preview resolver, keyed by `cacheKeyForPack`. The parse and
+    // preview index build run on the main process (off the renderer UI thread)
+    // and are reused across palette opens / item changes.
+    const previewIndexCache = new Map<string, LibraryPreviewIndex>();
+
+    const rememberPreviewIndex = (key: string, index: LibraryPreviewIndex): LibraryPreviewIndex => {
+      if (previewIndexCache.has(key)) {
+        previewIndexCache.delete(key);
+      }
+      previewIndexCache.set(key, index);
+      while (previewIndexCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
+        const oldest = previewIndexCache.keys().next().value as string | undefined;
+        if (oldest === undefined) {
+          break;
+        }
+        previewIndexCache.delete(oldest);
+      }
+      return index;
+    };
 
     const remember = (cached: CachedLibraryIndex): CachedLibraryIndex => {
       if (memoryCache.has(cached.key)) {
@@ -1347,6 +1395,7 @@ export const AssetLibraryServiceLive = Layer.effect(
           memoryCache.delete(key);
           lastErrors.delete(key);
           buildingKeys.delete(key);
+          previewIndexCache.delete(key);
           removedEntries += 1;
         }
       }
@@ -1379,7 +1428,31 @@ export const AssetLibraryServiceLive = Layer.effect(
       return { packId: input.packId, removedEntries };
     });
 
-    return { getPackLibrary, getPackCacheStatus, reloadPackCache, invalidatePackCache };
+    const resolvePreviews = Effect.fn('AssetLibraryService.resolvePreviews')(function* (
+      input: ResolvePreviewsInput,
+    ) {
+      const context = yield* resolvePackContext(input.packId);
+      let previewIndex = previewIndexCache.get(context.key);
+      if (previewIndex !== undefined) {
+        rememberPreviewIndex(context.key, previewIndex);
+      } else {
+        const pack = yield* readTilesetPack(path.join(context.packRoot, MANIFEST_FILENAME));
+        previewIndex = rememberPreviewIndex(context.key, buildLibraryPreviewIndex(pack));
+      }
+      const previews = input.refs.map((ref) => {
+        const preview = previewIndex!.previewForRef(ref);
+        return { key: assetLibraryReferenceKey(ref), preview: preview ?? undefined };
+      });
+      return { previews } satisfies ResolvePreviewsResult;
+    });
+
+    return {
+      getPackLibrary,
+      getPackCacheStatus,
+      reloadPackCache,
+      invalidatePackCache,
+      resolvePreviews,
+    };
   }),
 );
 

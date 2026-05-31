@@ -70,6 +70,7 @@ export function DiagnosticsReport({
               <span className="grid gap-1">
                 <span>{feature.message}</span>
                 <span className="text-xs text-muted-foreground">{feature.path}</span>
+                <span>{feature.action}</span>
               </span>
             </AlertDescription>
           </Alert>

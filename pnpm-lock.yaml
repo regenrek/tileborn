@@ -250,6 +250,9 @@ importers:
       '@fontsource-variable/ibm-plex-sans':
         specifier: 5.2.8
         version: 5.2.8
+      '@pixi/tilemap':
+        specifier: 5.0.2
+        version: 5.0.2(pixi.js@8.18.1)
       '@remixicon/react':
         specifier: 4.9.0
         version: 4.9.0(react@19.2.6)

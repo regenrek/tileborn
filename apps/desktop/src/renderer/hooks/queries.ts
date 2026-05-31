@@ -6,16 +6,26 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { AssetLibraryGroupKind, MapId, PackId, PluginId, ProjectId } from '@tileborne/core';
+import type {
+  AssetLibraryGroupKind,
+  AssetLibraryReference,
+  MapId,
+  PackId,
+  PluginId,
+  ProjectId,
+} from '@tileborne/core';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import { useCallback, useMemo } from 'react';
 
+import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
 import { loadTilesetPack } from '@/lib/tileset-pack';
+import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
 
 import type {
   AssetDataUrlResponse,
   AssetLibraryGetPackCacheStatusResponse,
   AssetLibraryGetPackLibraryResponse,
+  AssetLibraryResolvePreviewsResponse,
   AssetPackGetResponse,
   AssetPacksListResponse,
   HomePathsResponse,
@@ -66,19 +76,8 @@ export interface AssetLibraryCacheStatus {
   readonly updatedAt?: string | undefined;
 }
 
-type AssetLibraryThumbnailMethod = (input: {
-  readonly packId: PackId;
-  readonly assetPath: string;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly sizePx: number;
-}) => Promise<AssetDataUrlResponse>;
-
 type AssetLibraryPerformanceBridge = {
   readonly getPackCacheStatus?: typeof window.tileborne.assetLibrary.getPackCacheStatus | undefined;
-  readonly getThumbnailDataUrl?: AssetLibraryThumbnailMethod | undefined;
 };
 
 export interface AssetLibraryPageQueryInput {
@@ -88,18 +87,6 @@ export interface AssetLibraryPageQueryInput {
   readonly query?: string | undefined;
   readonly offset: number;
   readonly limit?: number | undefined;
-  readonly cacheVersion?: string | undefined;
-}
-
-export interface AssetThumbnailQueryInput {
-  readonly packId: string | undefined;
-  readonly integrityHash?: string | undefined;
-  readonly assetPath: string | undefined;
-  readonly x?: number | undefined;
-  readonly y?: number | undefined;
-  readonly width?: number | undefined;
-  readonly height?: number | undefined;
-  readonly sizePx: number;
   readonly cacheVersion?: string | undefined;
 }
 
@@ -172,44 +159,6 @@ const assetLibraryCacheStatus = async (packId: string): Promise<AssetLibraryCach
   return normalizeCacheStatus(response.status);
 };
 
-const thumbnailVariantKey = (input: AssetThumbnailQueryInput): string => {
-  const bridge = assetLibraryPerformanceBridge();
-  if (typeof bridge.getThumbnailDataUrl !== 'function') {
-    return 'atlas';
-  }
-  return `${input.x ?? 0}:${input.y ?? 0}:${input.width ?? 0}:${input.height ?? 0}`;
-};
-
-const fetchAssetThumbnail = (input: AssetThumbnailQueryInput): Promise<AssetDataUrlResponse> => {
-  const bridge = assetLibraryPerformanceBridge();
-  if (
-    typeof bridge.getThumbnailDataUrl === 'function' &&
-    input.assetPath !== undefined &&
-    input.x !== undefined &&
-    input.y !== undefined &&
-    input.width !== undefined &&
-    input.height !== undefined
-  ) {
-    return invokeIpc(() =>
-      bridge.getThumbnailDataUrl!({
-        packId: input.packId! as PackId,
-        assetPath: input.assetPath!,
-        x: input.x!,
-        y: input.y!,
-        width: input.width!,
-        height: input.height!,
-        sizePx: input.sizePx,
-      }),
-    );
-  }
-  return invokeIpc(() =>
-    window.tileborne.assets.getAssetDataUrl({
-      packId: input.packId! as PackId,
-      assetPath: input.assetPath!,
-    }),
-  );
-};
-
 export const assetLibraryStatusQueryOptions = (input: {
   readonly packId: string | undefined;
   readonly integrityHash?: string | undefined;
@@ -258,26 +207,6 @@ export const assetLibraryPageQueryOptions = (input: AssetLibraryPageQueryInput) 
     gcTime: ASSET_LIBRARY_METADATA_GC_MS,
   });
 };
-
-export const assetThumbnailQueryOptions = (input: AssetThumbnailQueryInput) =>
-  queryOptions({
-    queryKey: queryKeys.assets.thumbnail(
-      input.packId ?? '',
-      queryIdentity(input.integrityHash, UNKNOWN_INTEGRITY_HASH),
-      input.assetPath ?? '',
-      input.sizePx,
-      queryIdentity(input.cacheVersion, UNKNOWN_CACHE_VERSION),
-      thumbnailVariantKey(input),
-    ),
-    queryFn: () => fetchAssetThumbnail(input),
-    enabled:
-      input.packId !== undefined &&
-      input.packId.length > 0 &&
-      input.assetPath !== undefined &&
-      input.assetPath.length > 0,
-    staleTime: ASSET_LIBRARY_THUMBNAIL_STALE_MS,
-    gcTime: ASSET_LIBRARY_THUMBNAIL_GC_MS,
-  });
 
 export function useProjectsList() {
   return useQuery<ProjectsListResponse>({
@@ -343,7 +272,14 @@ export function useTilesetPack(
   packId: string | undefined,
   options: { readonly integrityHash?: string | undefined } = {},
 ): UseQueryResult<TilesetPack> {
-  return useQuery<TilesetPack>({
+  return useQuery(tilesetPackQueryOptions(packId, options));
+}
+
+export const tilesetPackQueryOptions = (
+  packId: string | undefined,
+  options: { readonly integrityHash?: string | undefined } = {},
+) =>
+  queryOptions({
     queryKey: queryKeys.assets.tilesetPack(
       packId ?? '',
       queryIdentity(options.integrityHash, UNKNOWN_INTEGRITY_HASH),
@@ -352,6 +288,11 @@ export function useTilesetPack(
     enabled: packId !== undefined && packId.length > 0,
     staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
     gcTime: ASSET_LIBRARY_METADATA_GC_MS,
+  });
+
+export function useTilesetPacks(packIds: readonly string[]) {
+  return useQueries({
+    queries: packIds.map((packId) => tilesetPackQueryOptions(packId)),
   });
 }
 
@@ -384,30 +325,73 @@ export function useAssetDataUrl(
   });
 }
 
-export function useAssetThumbnailDataUrl(
-  packId: string | undefined,
-  preview:
-    | Omit<AssetThumbnailQueryInput, 'packId' | 'integrityHash' | 'sizePx' | 'cacheVersion'>
-    | undefined,
-  options: {
-    readonly integrityHash?: string | undefined;
-    readonly sizePx: number;
-    readonly cacheVersion?: string | undefined;
-  },
-) {
-  return useQuery(
-    assetThumbnailQueryOptions({
-      packId,
-      integrityHash: options.integrityHash,
-      assetPath: preview?.assetPath,
-      x: preview?.x,
-      y: preview?.y,
-      width: preview?.width,
-      height: preview?.height,
-      sizePx: options.sizePx,
-      cacheVersion: options.cacheVersion,
-    }),
-  );
+const groupRefsByPackId = (
+  refs: readonly AssetLibraryReference[],
+): ReadonlyMap<string, readonly AssetLibraryReference[]> => {
+  const byPack = new Map<string, AssetLibraryReference[]>();
+  for (const ref of refs) {
+    const bucket = byPack.get(ref.packId);
+    if (bucket === undefined) {
+      byPack.set(ref.packId, [ref]);
+    } else {
+      bucket.push(ref);
+    }
+  }
+  return byPack;
+};
+
+const refsIdentity = (refs: readonly AssetLibraryReference[]): string =>
+  refs.map(assetLibraryReferenceKey).join('|');
+
+const workingPalettePreviewsQueryOptions = (
+  packId: string,
+  refs: readonly AssetLibraryReference[],
+) =>
+  queryOptions({
+    queryKey: queryKeys.assetLibrary.previews(packId, refsIdentity(refs)),
+    queryFn: (): Promise<AssetLibraryResolvePreviewsResponse> =>
+      invokeIpc(() =>
+        window.tileborne.assetLibrary.resolvePreviews({ packId: packId as PackId, refs }),
+      ),
+    enabled: packId.length > 0 && refs.length > 0,
+    staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
+    gcTime: ASSET_LIBRARY_METADATA_GC_MS,
+  });
+
+export interface WorkingPalettePreviews {
+  readonly previewByKey: ReadonlyMap<string, LibraryPreviewRef>;
+  readonly isLoading: boolean;
+}
+
+/**
+ * Resolves palette item previews via the main process (which parses the pack
+ * and builds the preview index off the renderer UI thread, cached per pack).
+ * The renderer receives only the small atlas rects, never the full manifest.
+ */
+export function useWorkingPalettePreviews(
+  refs: readonly AssetLibraryReference[],
+): WorkingPalettePreviews {
+  const refsByPack = useMemo(() => groupRefsByPackId(refs), [refs]);
+  const packIds = useMemo(() => [...refsByPack.keys()], [refsByPack]);
+  return useQueries({
+    queries: packIds.map((packId) =>
+      workingPalettePreviewsQueryOptions(packId, refsByPack.get(packId) ?? []),
+    ),
+    combine: (results) => {
+      const previewByKey = new Map<string, LibraryPreviewRef>();
+      for (const result of results) {
+        for (const entry of result.data?.previews ?? []) {
+          if (entry.preview !== undefined) {
+            previewByKey.set(entry.key, entry.preview);
+          }
+        }
+      }
+      return {
+        previewByKey,
+        isLoading: results.some((result) => result.isLoading),
+      };
+    },
+  });
 }
 
 export function useAssetPackLibrary(
@@ -518,16 +502,6 @@ export function usePrefetchAssetLibraryPage() {
   return useCallback(
     (input: AssetLibraryPageQueryInput) => {
       void queryClient.prefetchQuery(assetLibraryPageQueryOptions(input));
-    },
-    [queryClient],
-  );
-}
-
-export function usePrefetchAssetThumbnail() {
-  const queryClient = useQueryClient();
-  return useCallback(
-    (input: AssetThumbnailQueryInput) => {
-      void queryClient.prefetchQuery(assetThumbnailQueryOptions(input));
     },
     [queryClient],
   );

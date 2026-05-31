@@ -57,7 +57,10 @@ import {
   type PluginPanelContribution,
   type PluginToolContribution,
 } from '@tileborne/plugin-api';
-import { InvalidSourceManifestError } from '@tileborne/sdk-tileset/tiled-source-rules';
+import {
+  compileTiledSourceRulePipeline,
+  projectTiledSourceRuleApplication,
+} from '@tileborne/sdk-tileset/tiled-source-rules';
 import type { TiledImportProfile } from '@tileborne/sdk-tileset/tiled';
 
 import { ipcCatchAll } from './errors.js';
@@ -236,9 +239,11 @@ const installedPackRoot = (assetsRoot: string, pack: AssetPackManifest): string 
   path.join(assetsRoot, 'packs', `${pack.id}-${pack.version}`);
 
 const TILESET_MANIFEST_PATH = 'tileborne-asset-pack.json';
-const TILED_SOURCE_RULES_RUNTIME_APPLY_PENDING = 'stub: implementation pending t-tiled-source-runtime-apply';
 
 type IpcPlaytestRuntimeMetrics = Schema.Schema.Type<typeof PlaytestRuntimeMetricsSchema>;
+
+const includeDiagnosticsEnabled = (includeDiagnostics: Option.Option<boolean> | undefined): boolean =>
+  includeDiagnostics === undefined || Option.getOrElse(includeDiagnostics, () => true);
 
 const toPlaytestSessionView = (session: PlaytestSession) => {
   const artifactDirectory = Option.getOrUndefined(session.artifactDirectory);
@@ -642,6 +647,13 @@ const buildHandlers = Effect.gen(function* () {
         assetLibrary.reloadPackCache(request).pipe(Effect.map((status) => ({ status }))),
       ),
     )
+    .add('tileborne:asset-library:resolvePreviews', (request) =>
+      ipcCatchAll('tileborne:asset-library:resolvePreviews')(
+        assetLibrary
+          .resolvePreviews({ packId: request.packId, refs: request.refs })
+          .pipe(Effect.map((result) => result)),
+      ),
+    )
     .build();
 
   const workingPaletteHandlers = handlerBuilder(MainIpcRegistry)
@@ -943,20 +955,23 @@ const buildHandlers = Effect.gen(function* () {
     .build();
 
   const tiledSourceRulesHandlers = handlerBuilder(MainIpcRegistry)
-    .add('tileborne:tiled-source-rules:compilePreview', () =>
-      Effect.fail(
-        new InvalidSourceManifestError({
-          message: 'Tiled source rules compile preview is not implemented.',
-          reason: TILED_SOURCE_RULES_RUNTIME_APPLY_PENDING,
-        }),
+    .add('tileborne:tiled-source-rules:compilePreview', ({ manifestId, manifest, includeDiagnostics }) =>
+      compileTiledSourceRulePipeline(manifest).pipe(
+        Effect.map((pipeline) => ({
+          manifestId,
+          sourceDigest: pipeline.sourceDigest,
+          pipeline,
+          diagnostics: includeDiagnosticsEnabled(includeDiagnostics) ? pipeline.diagnostics : [],
+        })),
       ),
     )
-    .add('tileborne:tiled-source-rules:runtimeApply', () =>
-      Effect.fail(
-        new InvalidSourceManifestError({
-          message: 'Tiled source rules runtime apply is not implemented.',
-          reason: TILED_SOURCE_RULES_RUNTIME_APPLY_PENDING,
-        }),
+    .add('tileborne:tiled-source-rules:runtimeApply', ({ manifestId, pipeline, input }) =>
+      projectTiledSourceRuleApplication(pipeline, input).pipe(
+        Effect.map((output) => ({
+          manifestId,
+          sourceDigest: output.sourceDigest,
+          output,
+        })),
       ),
     )
     .build();

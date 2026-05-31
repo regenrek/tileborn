@@ -25,6 +25,7 @@ import {
 import { writeTilesetManifest } from '@tileborne/sdk-tileset/manifest';
 import { Effect, Option, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assetProtocolUrl } from '@/lib/asset-url';
 import {
   buildRuntimeViewportManifest,
   clearViewportAssetBundleCache,
@@ -32,6 +33,28 @@ import {
   loadViewportAssetBundle,
   loadViewportAssetManifest,
 } from './viewport-asset-manifest.js';
+
+/**
+ * Stubs `fetch` to serve pack manifests through the `tileborne-asset` protocol
+ * (the renderer now loads the manifest via fetch instead of base64 IPC). Atlas
+ * images are referenced by protocol URL and never fetched here.
+ */
+const stubFetchManifests = (manifestByPackId: ReadonlyMap<string, unknown>): ReturnType<typeof vi.fn> => {
+  const fetchMock = vi.fn(async (input: string | URL) => {
+    const url = new URL(String(input));
+    const id = url.searchParams.get('id');
+    const assetPath = url.searchParams.get('path');
+    if (assetPath === 'tileborne-asset-pack.json' && id !== null && manifestByPackId.has(id)) {
+      return new Response(JSON.stringify(manifestByPackId.get(id)), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+};
 
 const mountMock = vi.fn();
 const loadAssetsMock = vi.fn();
@@ -160,26 +183,16 @@ describe('viewport asset manifest', () => {
     expect(manifest.assets[0]?.path.startsWith('data:image/png;base64,')).toBe(true);
   });
 
-  it('loads textures from IPC and passes a populated manifest into loadAssets on mount', async () => {
-    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(async ({ assetPath }: { assetPath: string }) => {
-      if (assetPath === 'tileborne-asset-pack.json') {
-        return { dataUrl: manifestDataUrl };
-      }
-      if (assetPath === 'tiles/sample.png') {
-        return { dataUrl: fakeTextureDataUrl };
-      }
-      throw new Error(`unexpected asset path: ${assetPath}`);
-    });
+  it('loads the manifest via protocol and passes a protocol-url manifest into loadAssets on mount', async () => {
+    const fetchMock = stubFetchManifests(
+      new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]),
+    );
     vi.stubGlobal('window', {
       tileborne: {
         assets: {
           listPacks: vi.fn().mockResolvedValue({
             packs: [{ id: fakePackManifest.id, name: fakePackManifest.name, version: fakePackManifest.version }],
           }),
-          getAssetDataUrl,
         },
         projects: {
           get: vi.fn(),
@@ -201,7 +214,11 @@ describe('viewport asset manifest', () => {
     expect(loadAssetsMock).toHaveBeenCalledTimes(1);
     const loadedManifest = loadAssetsMock.mock.calls[0]?.[0] as RuntimeAssetManifest;
     expect(loadedManifest.assets.length).toBeGreaterThan(0);
-    expect(loadedManifest.assets[0]?.path).toBe(fakeTextureDataUrl);
+    // Atlas textures are now referenced by `tileborne-asset` protocol URL and
+    // decoded off the main thread, not shipped as base64 data URLs.
+    expect(loadedManifest.assets[0]?.path).toBe(
+      assetProtocolUrl(fakeTilesetPack.id, 'tiles/sample.png'),
+    );
     expect(loadedManifest.name).toBe('Tiled source');
     expect(bundle.frameIndex?.lookup(fakeTilesetPack.tilesets[0]!.tiles[0]!.id)?.sourceAssetPaths).toEqual([
       'tiles/sample.png',
@@ -209,12 +226,14 @@ describe('viewport asset manifest', () => {
     expect(bundle.tileIdByTileIndex.get(1)).toBe(fakeTilesetPack.tilesets[0]!.tiles[0]!.id);
     expect(bundle.collisionMaskByTileIndex.get(1)?._tag).toBe('bitmask');
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
-    // Only the manifest + the single atlas image are fetched. The viewport
-    // does NOT eager-load every image asset in the pack (see
-    // .refs/v0.1.x-paint-bug/diag/diag.md — sequential 673-asset loads
-    // produced ~13 min spinning fallbacks before paint).
-    const fetchedPaths = getAssetDataUrl.mock.calls.map((call) => call[0]?.assetPath);
-    expect(fetchedPaths.sort()).toEqual(['tileborne-asset-pack.json', 'tiles/sample.png']);
+    // Only the manifest JSON is fetched. Atlas images are referenced by URL and
+    // decoded lazily by the renderer; the viewport does NOT eager-fetch every
+    // pack image (see .refs/v0.1.x-paint-bug/diag/diag.md).
+    const fetchedPaths = fetchMock.mock.calls.map((call) => {
+      const url = new URL(String(call[0]));
+      return url.searchParams.get('path');
+    });
+    expect(fetchedPaths).toEqual(['tileborne-asset-pack.json']);
   });
 
   it('only fetches atlas images (not sprite or sample assets) when loading the bundle', async () => {
@@ -235,36 +254,25 @@ describe('viewport asset manifest', () => {
         }),
       ],
     });
-    const manifestJson = JSON.stringify(writeTilesetManifest(packWithDecoy));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(async ({ assetPath }: { assetPath: string }) => {
-      if (assetPath === 'tileborne-asset-pack.json') {
-        return { dataUrl: manifestDataUrl };
-      }
-      if (assetPath === 'tiles/sample.png') {
-        return { dataUrl: fakeTextureDataUrl };
-      }
-      throw new Error(`unexpected asset path: ${assetPath}`);
-    });
+    stubFetchManifests(new Map([[packWithDecoy.id, writeTilesetManifest(packWithDecoy)]]));
     vi.stubGlobal('window', {
       tileborne: {
         assets: {
           listPacks: vi.fn().mockResolvedValue({
             packs: [{ id: packWithDecoy.id, name: packWithDecoy.name, version: packWithDecoy.version }],
           }),
-          getAssetDataUrl,
         },
         projects: { get: vi.fn() },
       },
     });
 
     const bundle = await Effect.runPromise(loadViewportAssetBundle());
-    const fetchedPaths = getAssetDataUrl.mock.calls.map((call) => call[0]?.assetPath);
-    expect(fetchedPaths).toContain('tiles/sample.png');
-    expect(fetchedPaths).not.toContain('props/decoy-sprite.png');
+    // Only the atlas is renderable; the decoy sprite asset is not referenced.
     expect(bundle.renderableAssetIdByPath.get('props/decoy-sprite.png')).toBeUndefined();
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.manifest.assets.map((asset) => asset.path)).toEqual([
+      assetProtocolUrl(packWithDecoy.id, 'tiles/sample.png'),
+    ]);
   });
 
   it('fetches only selected placeable frames from image-collection packs', async () => {
@@ -349,18 +357,7 @@ describe('viewport asset manifest', () => {
         }),
       ],
     });
-    const manifestJson = JSON.stringify(writeTilesetManifest(packWithPlaceables));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(async ({ assetPath }: { assetPath: string }) => {
-      if (assetPath === 'tileborne-asset-pack.json') {
-        return { dataUrl: manifestDataUrl };
-      }
-      if (assetPath === 'tiles/sample.png' || assetPath === 'props/selected.png') {
-        return { dataUrl: fakeTextureDataUrl };
-      }
-      throw new Error(`unexpected asset path: ${assetPath}`);
-    });
+    stubFetchManifests(new Map([[packWithPlaceables.id, writeTilesetManifest(packWithPlaceables)]]));
     vi.stubGlobal('window', {
       tileborne: {
         assets: {
@@ -373,7 +370,6 @@ describe('viewport asset manifest', () => {
               },
             ],
           }),
-          getAssetDataUrl,
         },
         projects: { get: vi.fn() },
       },
@@ -386,39 +382,20 @@ describe('viewport asset manifest', () => {
         ],
       }),
     );
-    const fetchedPaths = getAssetDataUrl.mock.calls.map((call) => call[0]?.assetPath);
-    expect(fetchedPaths).toContain('tiles/sample.png');
-    expect(fetchedPaths).toContain('props/selected.png');
-    expect(fetchedPaths).not.toContain('props/hidden.png');
+    // Only the atlas and the selected placeable's frame are renderable.
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
     expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(2);
     expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
   });
 
   it('keeps the primary map pack renderable when an optional palette pack is stale', async () => {
     const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440088');
-    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(
-      async ({ packId, assetPath }: { packId: string; assetPath: string }) => {
-        if (packId === missingPackId) {
-          throw new Error(`asset pack not found: ${packId}`);
-        }
-        if (assetPath === 'tileborne-asset-pack.json') {
-          return { dataUrl: manifestDataUrl };
-        }
-        if (assetPath === 'tiles/sample.png') {
-          return { dataUrl: fakeTextureDataUrl };
-        }
-        throw new Error(`unexpected asset path: ${assetPath}`);
-      },
-    );
+    // The missing pack has no manifest entry, so its protocol fetch 404s and the
+    // pack is skipped gracefully.
+    stubFetchManifests(new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]));
     vi.stubGlobal('window', {
       tileborne: {
-        assets: {
-          listPacks: vi.fn(),
-          getAssetDataUrl,
-        },
+        assets: { listPacks: vi.fn() },
         projects: { get: vi.fn() },
       },
     });
@@ -437,29 +414,10 @@ describe('viewport asset manifest', () => {
 
   it('loads an extra palette pack when the primary map pack is stale', async () => {
     const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440089');
-    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(
-      async ({ packId, assetPath }: { packId: string; assetPath: string }) => {
-        if (packId === missingPackId) {
-          throw new Error(`asset pack not found: ${packId}`);
-        }
-        if (assetPath === 'tileborne-asset-pack.json') {
-          return { dataUrl: manifestDataUrl };
-        }
-        if (assetPath === 'tiles/sample.png') {
-          return { dataUrl: fakeTextureDataUrl };
-        }
-        throw new Error(`unexpected asset path: ${assetPath}`);
-      },
-    );
+    stubFetchManifests(new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]));
     vi.stubGlobal('window', {
       tileborne: {
-        assets: {
-          listPacks: vi.fn(),
-          getAssetDataUrl,
-        },
+        assets: { listPacks: vi.fn() },
         projects: { get: vi.fn() },
       },
     });
@@ -478,25 +436,15 @@ describe('viewport asset manifest', () => {
   });
 
   it('reuses the viewport asset bundle for repeated loads of the same pack', async () => {
-    const manifestJson = JSON.stringify(writeTilesetManifest(fakeTilesetPack));
-    const manifestDataUrl = `data:application/json;base64,${btoa(manifestJson)}`;
-
-    const getAssetDataUrl = vi.fn(async ({ assetPath }: { assetPath: string }) => {
-      if (assetPath === 'tileborne-asset-pack.json') {
-        return { dataUrl: manifestDataUrl };
-      }
-      if (assetPath === 'tiles/sample.png') {
-        return { dataUrl: fakeTextureDataUrl };
-      }
-      throw new Error(`unexpected asset path: ${assetPath}`);
-    });
+    const fetchMock = stubFetchManifests(
+      new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]),
+    );
     vi.stubGlobal('window', {
       tileborne: {
         assets: {
           listPacks: vi.fn().mockResolvedValue({
             packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
           }),
-          getAssetDataUrl,
         },
         projects: { get: vi.fn() },
       },
@@ -508,11 +456,13 @@ describe('viewport asset manifest', () => {
     ]);
 
     expect(second).toBe(first);
-    expect(getAssetDataUrl).toHaveBeenCalledTimes(2);
-    expect(getAssetDataUrl.mock.calls.map((call) => call[0]?.assetPath).sort()).toEqual([
-      'tileborne-asset-pack.json',
-      'tiles/sample.png',
-    ]);
+    // The bundle cache dedupes concurrent loads: the manifest JSON is fetched
+    // once; atlas images are referenced by URL, not fetched here.
+    const fetchedPaths = fetchMock.mock.calls.map((call) => {
+      const url = new URL(String(call[0]));
+      return url.searchParams.get('path');
+    });
+    expect(fetchedPaths).toEqual(['tileborne-asset-pack.json']);
   });
 
   it('creates a single-image blank fallback manifest', () => {

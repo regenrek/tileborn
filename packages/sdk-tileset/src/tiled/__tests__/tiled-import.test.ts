@@ -2,7 +2,7 @@ import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { decodeTiledGid } from "../gid.js";
-import { decodeTileLayerDataSync } from "../tile-data.js";
+import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "../tile-data.js";
 import { resolveExternalPath } from "../external-resolve.js";
 import { wangIdToMaskKey } from "../compile-wang.js";
 import { parseTsj } from "../tsj-parse.js";
@@ -18,6 +18,15 @@ const PACK_SEED = "test-pack";
 const FLIPPED_H = 0x80000000 + 1;
 const FLIPPED_V = 0x40000000 + 1;
 const FLIPPED_D = 0x20000000 + 1;
+const COMPRESSED_GZIP_GIDS_1_2_3_4 = "H4sIAAAAAAAAE2NkYGBgAmJmIGYBYgDv1AWvEAAAAA==";
+const COMPRESSED_ZLIB_GIDS_1_2_3_4 = "eJxjZGBgYAJiZiBmAWIAAGAACw==";
+
+const tileLayerBase64 = (gids: readonly number[]): string => {
+  const bytes = new Uint8Array(gids.length * 4);
+  const view = new DataView(bytes.buffer);
+  gids.forEach((gid, index) => view.setUint32(index * 4, gid, true));
+  return Buffer.from(bytes).toString("base64");
+};
 
 const inlineTileset = {
   name: "terrain",
@@ -367,6 +376,59 @@ describe("tiled import", () => {
     expect(result.value!.pack.tilesets[0]?.name).toBe("terrain");
   });
 
+  it("preserves supported image-layer semantics without unsupported diagnostics", async () => {
+    const raw = tiledMapWith({
+      layers: [
+        { type: "tilelayer", name: "ground", width: 1, height: 1, data: [1] },
+        {
+          type: "imagelayer",
+          name: "backdrop",
+          image: "images/backdrop.png",
+          x: 12,
+          y: 24,
+          opacity: 0.5,
+          properties: [{ name: "theme", type: "string", value: "forest" }],
+        },
+      ],
+    });
+
+    const scanned = await scanTiledSource({
+      sourcePath: `${PROJECT_ROOT}/maps/image-layer.tmj`,
+      projectRoot: PROJECT_ROOT,
+      raw,
+    });
+    const imported = await importTiled(
+      { sourcePath: `${PROJECT_ROOT}/maps/image-layer.tmj`, projectRoot: PROJECT_ROOT, raw },
+      { packIdSeed: PACK_SEED, profile: "standard" },
+    );
+
+    expect(scanned.scan?.unsupportedFeatures).toEqual([]);
+    expect(scanned.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ feature: "image-layer" })]),
+    );
+    expect(imported.value?.tiledMap.layers[1]).toMatchObject({
+      kind: "image",
+      name: "backdrop",
+      image: "images/backdrop.png",
+      assetId: expect.stringMatching(/^asset:/),
+      x: 12,
+      y: 24,
+      opacity: 0.5,
+      properties: { theme: "forest" },
+    });
+    expect(imported.value?.pack.assets.map((asset) => asset.path)).toContain("images/backdrop.png");
+    expect(imported.value?.map.layers[1]).toMatchObject({
+      _tag: "image",
+      name: "backdrop",
+      assetId: imported.value?.tiledMap.layers[1]?.kind === "image"
+        ? imported.value.tiledMap.layers[1].assetId
+        : undefined,
+      x: 12,
+      y: 24,
+      opacity: 0.5,
+    });
+  });
+
   it("writes Tileborne map chunks in pack tile-index space, not raw Tiled GIDs", () => {
     const result = parseTmjSync(
       JSON.stringify({
@@ -673,6 +735,14 @@ describe("tiled import", () => {
       ]),
     );
     expect(value?.rules.find((rule) => rule.kind === "rules-index")?.raw).toBe("Rules/walls.tmx\n");
+    expect(value?.scan.sourceInventory?.summary).toMatchObject({
+      tilesetCount: 2,
+      frameCount: 6,
+      imageCollectionTileCount: 2,
+      ruleMapCount: 1,
+      rulesIndexCount: 1,
+    });
+    expect(value?.scan.sourceInventory?.rules.map((rule) => rule.kind).sort()).toEqual(["rule-map", "rules-index"]);
   });
 
   it("converts default Tiled tile-object bottom-left coordinates to canonical top-left", () => {
@@ -806,10 +876,10 @@ describe("tiled import", () => {
   });
 
   it.each([
-    ["horizontal", FLIPPED_H],
-    ["vertical", FLIPPED_V],
-    ["diagonal", FLIPPED_D],
-  ])("blocks %s tile-layer flip flags in scan and import", async (_label, rawGid) => {
+    ["horizontal", FLIPPED_H, { flippedHorizontal: true, flippedVertical: false, flippedDiagonal: false, rotatedHexagonal120: false }],
+    ["vertical", FLIPPED_V, { flippedHorizontal: false, flippedVertical: true, flippedDiagonal: false, rotatedHexagonal120: false }],
+    ["diagonal", FLIPPED_D, { flippedHorizontal: false, flippedVertical: false, flippedDiagonal: true, rotatedHexagonal120: false }],
+  ])("preserves %s tile-layer flip flags in scan, SDK map, and Core chunks", async (_label, rawGid, transform) => {
     const raw = tiledMapWith({
       layers: [{ type: "tilelayer", name: "ground", width: 1, height: 1, data: [rawGid] }],
     });
@@ -824,21 +894,36 @@ describe("tiled import", () => {
       { packIdSeed: PACK_SEED, profile: "standard" },
     );
 
-    expect(scanned.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ _tag: "TiledUnsupportedFeature", feature: "flip-flags", severity: "error" }),
-      ]),
+    expect(scanned.scan?.featureFlags.flipFlags).toBe(true);
+    expect(scanned.scan?.unsupportedFeatures).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ feature: "flip-flags" })]),
     );
-    expect(imported.value).toBeUndefined();
-    expect(imported.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ _tag: "TiledUnsupportedFeature", feature: "flip-flags", severity: "error" }),
-      ]),
+    expect(scanned.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ feature: "flip-flags", severity: "error" })]),
     );
+    expect(imported.value?.tiledMap.layers[0]).toMatchObject({
+      kind: "tile",
+      cells: [expect.objectContaining({ rawGid, gid: 1, tileIndex: 1, transform })],
+    });
+    expect(imported.value?.map.layers[0]).toMatchObject({
+      _tag: "tile",
+      chunks: [expect.objectContaining({ tiles: [1], transforms: [transform] })],
+    });
   });
 
-  it("blocks flipped tile objects in scan and import", async () => {
+  it("preserves flipped tile objects in tile refs, placements, and Core object placement", async () => {
     const raw = tiledMapWith({
+      tilesets: [
+        {
+          firstgid: 1,
+          name: "objects",
+          tilewidth: 16,
+          tileheight: 16,
+          tilecount: 1,
+          columns: 0,
+          tiles: [{ id: 0, image: "tree.png", imagewidth: 16, imageheight: 16 }],
+        },
+      ],
       layers: [
         {
           type: "objectgroup",
@@ -858,15 +943,34 @@ describe("tiled import", () => {
       { packIdSeed: PACK_SEED, profile: "standard-plus-hints" },
     );
 
-    expect(scanned.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ _tag: "TiledUnsupportedFeature", feature: "flip-flags", severity: "error" }),
-      ]),
+    const transform = {
+      flippedHorizontal: true,
+      flippedVertical: false,
+      flippedDiagonal: false,
+      rotatedHexagonal120: false,
+    };
+
+    expect(scanned.scan?.featureFlags.flipFlags).toBe(true);
+    expect(scanned.scan?.unsupportedFeatures).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ feature: "flip-flags" })]),
     );
-    expect(imported.value).toBeUndefined();
+    expect(imported.value?.tiledMap.layers[0]).toMatchObject({
+      kind: "object",
+      tileRef: expect.objectContaining({ rawGid: FLIPPED_H, gid: 1, transform }),
+      placement: expect.objectContaining({ gid: 1, transform }),
+    });
+    expect(imported.value?.map.objects[0]?.placement).toMatchObject({
+      gid: Option.some(1),
+      transform,
+    });
   });
 
   it.each([
+    [
+      "non-orthogonal orientation",
+      tiledMapWith({ orientation: "isometric" }),
+      "orientation",
+    ],
     [
       "infinite chunks",
       tiledMapWith({
@@ -909,6 +1013,13 @@ describe("tiled import", () => {
       }),
       "parallax",
     ],
+    [
+      "class typed custom properties",
+      tiledMapWith({
+        properties: [{ name: "spawnConfig", type: "class", propertytype: "SpawnConfig", value: { count: 2 } }],
+      }),
+      "class-properties",
+    ],
   ])("blocks unsupported %s in standard and standard-plus-hints", async (_label, raw, feature) => {
     const scanned = await scanTiledSource({
       sourcePath: `${PROJECT_ROOT}/maps/unsupported.tmj`,
@@ -918,8 +1029,16 @@ describe("tiled import", () => {
 
     expect(scanned.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ _tag: "TiledUnsupportedFeature", feature, severity: "error" }),
+        expect.objectContaining({
+          _tag: "TiledUnsupportedFeature",
+          feature,
+          severity: "error",
+          action: expect.any(String),
+        }),
       ]),
+    );
+    expect(scanned.scan?.unsupportedFeatures).toEqual(
+      expect.arrayContaining([expect.objectContaining({ feature, action: expect.any(String) })]),
     );
 
     for (const profile of ["standard", "standard-plus-hints"] as const) {
@@ -991,29 +1110,79 @@ describe("tiled import", () => {
   it("decodes GID flip flags", () => {
     const decoded = decodeTiledGid(2147483649);
     expect(decoded.gid).toBe(1);
-    expect(decoded.flippedHorizontal).toBe(true);
-    expect(decoded.flippedVertical).toBe(false);
-    expect(decoded.flippedDiagonal).toBe(false);
+    expect(decoded.transform.flippedHorizontal).toBe(true);
+    expect(decoded.transform.flippedVertical).toBe(false);
+    expect(decoded.transform.flippedDiagonal).toBe(false);
   });
 
-  it("decodes CSV and base64 tile data", () => {
+  it("decodes the supported tile layer data matrix", async () => {
+    const raw = decodeTileLayerDataSync({
+      layerName: "raw",
+      width: 2,
+      height: 2,
+      data: [1, 2, 3, 4],
+    });
+    expect(raw).toMatchObject({ data: [1, 2, 3, 4], diagnostics: [] });
+
     const csv = decodeTileLayerDataSync({
-      layerName: "ground",
+      layerName: "csv",
       width: 2,
       height: 2,
       encoding: "csv",
       text: "1,2,3,4",
     });
-    expect(csv.data).toEqual([1, 2, 3, 4]);
+    expect(csv).toMatchObject({ data: [1, 2, 3, 4], diagnostics: [] });
 
     const base64 = decodeTileLayerDataSync({
-      layerName: "ground",
-      width: 1,
-      height: 1,
+      layerName: "base64",
+      width: 2,
+      height: 2,
       encoding: "base64",
-      text: "AQAAAA==",
+      text: tileLayerBase64([1, 2, 3, 4]),
     });
-    expect(base64.data).toEqual([1]);
+    expect(base64).toMatchObject({ data: [1, 2, 3, 4], diagnostics: [] });
+
+    const gzip = await decodeTileLayerDataAsync({
+      layerName: "gzip",
+      width: 2,
+      height: 2,
+      encoding: "base64",
+      compression: "gzip",
+      text: COMPRESSED_GZIP_GIDS_1_2_3_4,
+    });
+    expect(gzip).toMatchObject({ data: [1, 2, 3, 4], diagnostics: [] });
+
+    const zlib = await decodeTileLayerDataAsync({
+      layerName: "zlib",
+      width: 2,
+      height: 2,
+      encoding: "base64",
+      compression: "zlib",
+      text: COMPRESSED_ZLIB_GIDS_1_2_3_4,
+    });
+    expect(zlib).toMatchObject({ data: [1, 2, 3, 4], diagnostics: [] });
+  });
+
+  it("returns a typed diagnostic for zstd tile-layer compression without decoding", async () => {
+    const result = await decodeTileLayerDataAsync({
+      layerName: "zstd",
+      width: 2,
+      height: 2,
+      encoding: "base64",
+      compression: "zstd",
+      text: tileLayerBase64([1, 2, 3, 4]),
+    });
+
+    expect(result.data).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        _tag: "TiledUnsupportedCompression",
+        layerName: "zstd",
+        compression: "zstd",
+        path: "/layers/zstd/data",
+        severity: "warning",
+      }),
+    ]);
   });
 
   it("converts wang sets to AutotileRule", () => {
@@ -1340,6 +1509,44 @@ describe("tiled import", () => {
       expect.arrayContaining([
         expect.objectContaining({ kind: "paintable-tileset", evidence: "grid-tileset" }),
         expect.objectContaining({ kind: "placeable-object", evidence: "image-collection" }),
+      ]),
+    );
+  });
+
+  it("diagnoses Tiled project files in source-folder scans", async () => {
+    const files = new Map<string, string>([
+      [`${PROJECT_ROOT}/Source/Tilesets/grid.tsj`, atlasPropsTsj],
+      [`${PROJECT_ROOT}/Source/project.tiled`, JSON.stringify({ propertyTypes: [] })],
+    ]);
+    const directories = new Map<string, readonly { readonly name: string; readonly kind: "file" | "directory" }[]>([
+      [`${PROJECT_ROOT}/Source`, [
+        { name: "Tilesets", kind: "directory" },
+        { name: "project.tiled", kind: "file" },
+      ]],
+      [`${PROJECT_ROOT}/Source/Tilesets`, [{ name: "grid.tsj", kind: "file" }]],
+    ]);
+
+    const scanned = await scanTiledSource({
+      sourcePath: `${PROJECT_ROOT}/Source`,
+      projectRoot: PROJECT_ROOT,
+      reader: {
+        readFile: (path) => {
+          const value = files.get(path);
+          if (value === undefined) throw new Error(`unexpected read: ${path}`);
+          return value;
+        },
+        readDirectory: (path) => directories.get(path) ?? [],
+      },
+    });
+
+    expect(scanned.scan?.unsupportedFeatures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ feature: "project-files", path: `${PROJECT_ROOT}/Source/project.tiled` }),
+      ]),
+    );
+    expect(scanned.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ feature: "project-files", severity: "error", action: expect.any(String) }),
       ]),
     );
   });

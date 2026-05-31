@@ -1009,6 +1009,81 @@ describe('AssetService', () => {
       expect(pack.id).toBe(manifest.id);
     }));
 
+  it('verifies a pack once then serves it from the in-memory cache', () =>
+    withTempHome(async (home) => {
+      const source = await writePackSource(home);
+      const result = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const id = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          // First call verifies + caches the pack.
+          const first = yield* assets.getPack(id);
+          // Corrupt the installed asset bytes on disk. A cached getPack must NOT
+          // re-read/re-hash them, so it should still succeed with the same data.
+          yield* Effect.promise(() =>
+            writeFile(path.join(packDir(home, id), 'tiles', 'terrain.png'), changedPng),
+          );
+          const second = yield* assets.getPack(id);
+          return { firstId: first.id, secondId: second.id };
+        }),
+      );
+      expect(result.secondId).toBe(result.firstId);
+    }));
+
+  it('invalidates the cached pack after removal', () =>
+    withTempHome(async (home) => {
+      const source = await writePackSource(home);
+      const outcome = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const id = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          yield* assets.getPack(id);
+          yield* assets.removePack(id);
+          return yield* assets.getPack(id).pipe(
+            Effect.match({
+              onFailure: (error) => error._tag,
+              onSuccess: () => 'unexpected-success',
+            }),
+          );
+        }),
+      );
+      expect(outcome).toBe('AssetPackNotFoundError');
+    }));
+
+  it('re-verifies a pack after re-import invalidates the cache', () =>
+    withTempHome(async (home) => {
+      const packId = makePackId('550e8400-e29b-41d4-a716-446655440031');
+      // Distinct but still-valid PNG (valid 8-byte signature + trailing byte) so
+      // the re-import passes security validation while changing the pack hash.
+      const png2 = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+      const source = await writePackSource(
+        home,
+        makeManifest(packId, 'tiles/terrain.png', png),
+        png,
+      );
+      const result = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const id = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          const before = yield* assets.getPack(id);
+          // Re-author the same source with changed bytes, then re-import. The
+          // import must drop the cache so the next getPack re-verifies the new
+          // content rather than returning the stale cached pack.
+          yield* Effect.promise(() =>
+            writePackSource(home, makeManifest(id, 'tiles/terrain.png', png2), png2),
+          );
+          yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          const after = yield* assets.getPack(id);
+          return {
+            beforeHash: before.assets[0]?.hash,
+            afterHash: after.assets[0]?.hash,
+          };
+        }),
+      );
+      expect(result.afterHash).toBeDefined();
+      expect(result.afterHash).not.toBe(result.beforeHash);
+    }));
+
   it('rejects path traversal during pack import', () =>
     withTempHome(async (home) => {
       const manifest = makeManifest(

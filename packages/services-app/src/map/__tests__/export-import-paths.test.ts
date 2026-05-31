@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { deflateSync } from "node:zlib";
 
 import { ProjectId } from "@tileborne/core";
 import { FoundationLayer } from "@tileborne/services-foundation";
@@ -36,6 +37,23 @@ const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/luzJ7wAAAABJRU5ErkJggg==",
   "base64",
 );
+
+const tileLayerBase64 = (gids: readonly number[]): string => {
+  const bytes = new Uint8Array(gids.length * 4);
+  const view = new DataView(bytes.buffer);
+  gids.forEach((gid, index) => view.setUint32(index * 4, gid, true));
+  return Buffer.from(bytes).toString("base64");
+};
+
+const compressedGroundTmx = (payload: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" orientation="orthogonal" width="2" height="2" tilewidth="16" tileheight="16">
+  <tileset firstgid="1" name="ground" tilewidth="16" tileheight="16" tilecount="4" columns="2">
+    <image source="ground.png" width="32" height="32"/>
+  </tileset>
+  <layer id="1" name="ground" width="2" height="2">
+    <data encoding="base64" compression="zlib">${payload}</data>
+  </layer>
+</map>`;
 
 const standaloneTilesetTsx = `<?xml version="1.0" encoding="UTF-8"?>
 <tileset version="1.10" tiledversion="1.10.2" name="props" tilewidth="16" tileheight="16" tilecount="1" columns="0">
@@ -112,6 +130,30 @@ describe("MapService export/import path security", () => {
         }),
       );
       expect(mapId).toMatch(/^map:/);
+    }));
+
+  it("importFromTiledFile imports zlib-compressed base64 tile-layer data", () =>
+    withTempHome(async (home) => {
+      const payload = deflateSync(Buffer.from(tileLayerBase64([1, 2, 3, 4]), "base64")).toString("base64");
+      const result = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const maps = yield* MapService;
+          const projectId = yield* projects.create({ name: "Import Compressed TMX" });
+          const relativeFixture = "imports/compressed-ground.tmx";
+          yield* Effect.promise(async () => {
+            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
+            await writeFile(path.join(projectDir(home, projectId), relativeFixture), compressedGroundTmx(payload));
+            await writeFile(path.join(projectDir(home, projectId), "imports/ground.png"), png);
+          });
+          return yield* maps.importFromTiledFile(projectId, relativeFixture);
+        }),
+      );
+
+      expect(result).toMatchObject({ kind: "map", mapId: expect.stringMatching(/^map:/) });
+      expect(result.report.diagnostics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ _tag: "TiledUnsupportedCompression" })]),
+      );
     }));
 
   it("importFromTiledFile reads a TMJ fixture from the project root", () =>

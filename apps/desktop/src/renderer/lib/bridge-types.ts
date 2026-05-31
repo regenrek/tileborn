@@ -4,6 +4,7 @@ import {
   AssetLibraryGetPackCacheStatusResponse,
   AssetLibraryGetPackLibraryResponse,
   AssetLibraryReloadPackCacheResponse,
+  AssetLibraryResolvePreviewsResponse,
   AssetsDetectImportSourceResponse,
   AssetsGetAssetDataUrlResponse,
   AssetsGetPackResponse,
@@ -66,6 +67,9 @@ export type AssetLibraryGetPackCacheStatusResponse = Schema.Schema.Type<
 >;
 export type AssetLibraryReloadPackCacheResponse = Schema.Schema.Type<
   typeof AssetLibraryReloadPackCacheResponse
+>;
+export type AssetLibraryResolvePreviewsResponse = Schema.Schema.Type<
+  typeof AssetLibraryResolvePreviewsResponse
 >;
 export type WorkingPalettesListResponse = Schema.Schema.Type<typeof WorkingPalettesListResponse>;
 export type WorkingPalettesGetActiveResponse = Schema.Schema.Type<

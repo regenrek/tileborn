@@ -20,12 +20,10 @@ const TiledJsonPropertyType = Schema.Literals([
   "class",
 ] as const);
 
-const TiledJsonPropertyValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean]);
-
 const TiledJsonPropertySchema = Schema.Struct({
   name: Schema.String,
   type: TiledJsonPropertyType,
-  value: TiledJsonPropertyValue,
+  value: Schema.Unknown,
   propertytype: Schema.optionalKey(Schema.String),
 });
 
@@ -294,15 +292,15 @@ const decodeLayer = (
   switch (layerType.value.type) {
     case "tilelayer": {
       const decoded = decodeSchema(TiledJsonTileLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value } : decoded;
+      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
     }
     case "objectgroup": {
       const decoded = decodeSchema(TiledJsonObjectGroupLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value } : decoded;
+      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
     }
     case "imagelayer": {
       const decoded = decodeSchema(TiledJsonImageLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value } : decoded;
+      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
     }
     case "group": {
       const decoded = decodeSchema(TiledJsonGroupLayerSchema, value, format, pathPrefix);
@@ -314,7 +312,7 @@ const decodeLayer = (
         if (!childLayer.ok) return childLayer;
         layers.push(childLayer.layer);
       }
-      return { ok: true, layer: { ...decoded.value, layers } };
+      return { ok: true, layer: { ...decoded.value, layers } as unknown as TiledJsonMap["layers"][number] };
     }
   }
 };
@@ -344,7 +342,7 @@ export const validateTiledJsonTileset = (
   const dimensionGuard = isImageCollection ? isNonNegativeInteger : isPositiveInteger;
   if (!dimensionGuard(decoded.value.tilewidth)) return parseError("tsj", "Tiled tileset is missing tilewidth");
   if (!dimensionGuard(decoded.value.tileheight)) return parseError("tsj", "Tiled tileset is missing tileheight");
-  return { ok: true, tileset: decoded.value };
+  return { ok: true, tileset: decoded.value as unknown as TiledJsonTileset };
 };
 
 export const validateTiledJsonMap = (
@@ -368,7 +366,7 @@ export const validateTiledJsonMap = (
   const layers = decodeLayers(decoded.value.layers, "tmj");
   if (!layers.ok) return layers;
 
-  return { ok: true, map: { ...decoded.value, layers: layers.layers } };
+  return { ok: true, map: { ...decoded.value, layers: layers.layers } as unknown as TiledJsonMap };
 };
 
 export const normalizeJsonTileLayers = (map: TiledJsonMap): TiledJsonMap => map;
@@ -387,4 +385,3 @@ const parseError = (
     format,
   },
 });
-

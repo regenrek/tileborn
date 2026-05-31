@@ -21,6 +21,7 @@ import {
   TiledSourceRuleDiagnostic,
   TiledSourceRulePipelineSummary,
   TiledSourceTerrainCell,
+  TiledSourceVisualTile,
   type TiledSourceRulePhase,
   InvalidRuleOptionError,
   InvalidSourceManifestError,
@@ -41,8 +42,8 @@ import {
   type TiledSourceTiledTileLayer,
 } from "./model.js";
 
-const INPUT_WALLS = "input_walls" as LayerId;
-const OUTPUT_WALLS = "output_walls" as LayerId;
+const LEGACY_INPUT_WALLS = "input_walls" as LayerId;
+const LEGACY_OUTPUT_WALLS = "output_walls" as LayerId;
 const RULE_OPTIONS = "rule_options" as LayerId;
 
 type CompileFailure = MissingTilesetError | InvalidRuleOptionError | ContradictoryRuleError;
@@ -104,6 +105,25 @@ const objectGroupNamed = (
 ): TiledSourceTiledObjectGroup | undefined =>
   groups.find((group) => group.name === name);
 
+const isRuleLayerName = (name: string, prefix: "input" | "output"): boolean =>
+  prefix === "input"
+    ? name === "input" || /^input(?:not)?\d*_/.test(name)
+    : name === "output" || /^output\d*_/.test(name);
+
+const firstRuleLayer = (
+  layers: readonly TiledSourceTiledTileLayer[],
+  prefix: "input" | "output",
+): TiledSourceTiledTileLayer | undefined =>
+  layers
+    .filter((layer) => isRuleLayerName(layer.name, prefix))
+    .sort((left, right) => left.name.localeCompare(right.name))[0];
+
+const inputLayerFor = (rule: TiledSourceAutomappingRule): TiledSourceTiledTileLayer | undefined =>
+  layerNamed(rule.tileLayers, LEGACY_INPUT_WALLS) ?? firstRuleLayer(rule.tileLayers, "input");
+
+const outputLayerFor = (rule: TiledSourceAutomappingRule): TiledSourceTiledTileLayer | undefined =>
+  layerNamed(rule.tileLayers, LEGACY_OUTPUT_WALLS) ?? firstRuleLayer(rule.tileLayers, "output");
+
 const layerDiagnostics = (
   rule: TiledSourceAutomappingRule,
   inputLayer: TiledSourceTiledTileLayer | undefined,
@@ -113,34 +133,34 @@ const layerDiagnostics = (
   if (inputLayer === undefined) {
     diagnostics.push(new MissingRuleLayerDiagnostic({
       severity: "error",
-      message: `${rule.path}: missing input_walls layer`,
+      message: `${rule.path}: missing input layer`,
       ruleId: rule.path,
-      layer: INPUT_WALLS,
+      layer: LEGACY_INPUT_WALLS,
       sourcePath: Option.some(rule.path),
     }));
   } else if (inputLayer.tiles.length === 0) {
     diagnostics.push(new EmptyRuleLayerDiagnostic({
       severity: "warning",
-      message: `${rule.path}: empty input_walls layer`,
+      message: `${rule.path}: empty ${inputLayer.name} layer`,
       ruleId: rule.path,
-      layer: INPUT_WALLS,
+      layer: inputLayer.name,
       sourcePath: Option.some(rule.path),
     }));
   }
   if (outputLayer === undefined) {
     diagnostics.push(new MissingRuleLayerDiagnostic({
       severity: "error",
-      message: `${rule.path}: missing output_walls layer`,
+      message: `${rule.path}: missing output layer`,
       ruleId: rule.path,
-      layer: OUTPUT_WALLS,
+      layer: LEGACY_OUTPUT_WALLS,
       sourcePath: Option.some(rule.path),
     }));
   } else if (outputLayer.tiles.length === 0) {
     diagnostics.push(new EmptyRuleLayerDiagnostic({
       severity: "warning",
-      message: `${rule.path}: empty output_walls layer`,
+      message: `${rule.path}: empty ${outputLayer.name} layer`,
       ruleId: rule.path,
-      layer: OUTPUT_WALLS,
+      layer: outputLayer.name,
       sourcePath: Option.some(rule.path),
     }));
   }
@@ -252,8 +272,8 @@ const compileAutomappingRule = Effect.fn("TiledSourceRules.compileAutomappingRul
   manifestTilesets: ReadonlySet<TilesetPath>,
   rule: TiledSourceAutomappingRule,
 ) {
-  const inputLayer = layerNamed(rule.tileLayers, INPUT_WALLS);
-  const outputLayer = layerNamed(rule.tileLayers, OUTPUT_WALLS);
+  const inputLayer = inputLayerFor(rule);
+  const outputLayer = outputLayerFor(rule);
   const inputTiles = inputLayer?.tiles ?? [];
   const outputTiles = outputLayer?.tiles ?? [];
   yield* assertTilesetReferences(manifestTilesets, rule, [...inputTiles, ...outputTiles]);
@@ -275,6 +295,8 @@ const compileAutomappingRule = Effect.fn("TiledSourceRules.compileAutomappingRul
       matchInOrder: rule.properties.MatchInOrder === true,
       width: rule.width,
       height: rule.height,
+      inputLayer: inputLayer?.name ?? LEGACY_INPUT_WALLS,
+      outputLayer: outputLayer?.name ?? LEGACY_OUTPUT_WALLS,
       inputTiles: sortRuleTiles(inputTiles),
       outputTiles: sortRuleTiles(outputTiles),
       options,
@@ -448,6 +470,54 @@ export const decodeTiledSourceRuleApplicationInput: (
   return decoded.value;
 });
 
+const assetKeySegment = (value: string): string =>
+  value.replaceAll("\\", "/").replace(/\.[A-Za-z0-9]+$/u, "").replace(/[^A-Za-z0-9:_-]+/g, "-");
+
+const ruleTileAssetKey = (tile: TiledSourceCompiledRuleTile): AssetKey =>
+  `tiled-rule:${assetKeySegment(tile.tilesetPath)}:${tile.localId}` as AssetKey;
+
+const cellSourceId = (cell: TiledSourceTerrainCell): AssetKey | undefined =>
+  Option.getOrUndefined(cell.sourceId);
+
+const ruleMatchesCell = (
+  rule: TiledSourceCompiledAutomappingRule,
+  cell: TiledSourceTerrainCell,
+): boolean => {
+  const sourceId = cellSourceId(cell);
+  return sourceId !== undefined && rule.inputTiles.some((tile) => ruleTileAssetKey(tile) === sourceId);
+};
+
+const projectRuleVisualTiles = (
+  pipeline: TiledSourceRulePipeline,
+  terrainCells: readonly TiledSourceTerrainCell[],
+): readonly TiledSourceVisualTile[] => {
+  const visualTiles: TiledSourceVisualTile[] = [];
+  for (const cell of terrainCells) {
+    for (const rule of pipeline.automappingRules) {
+      if (!ruleMatchesCell(rule, cell)) {
+        continue;
+      }
+      const anchor = rule.inputTiles[0] ?? { column: 0, row: 0 };
+      rule.outputTiles.forEach((tile, index) => {
+        visualTiles.push(
+          new TiledSourceVisualTile({
+            id: `${rule.path}:${cell.column}:${cell.row}:${index}`,
+            assetKey: ruleTileAssetKey(tile),
+            x: cell.column + tile.column - anchor.column,
+            y: cell.row + tile.row - anchor.row,
+            layer: rule.outputLayer,
+            column: Option.some(cell.column + tile.column - anchor.column),
+            row: Option.some(cell.row + tile.row - anchor.row),
+            material: Option.some(cell.baseMaterial),
+            transitionTo: Option.none(),
+          }),
+        );
+      });
+    }
+  }
+  return visualTiles.sort((left, right) => left.id.localeCompare(right.id));
+};
+
 export const projectTiledSourceRuleApplication: (
   pipeline: TiledSourceRulePipeline,
   input: TiledSourceRuleApplicationInput,
@@ -455,6 +525,7 @@ export const projectTiledSourceRuleApplication: (
   "TiledSourceRules.projectRuleApplication",
 )(function (pipeline: TiledSourceRulePipeline, input: TiledSourceRuleApplicationInput) {
   const terrainCells = [...input.terrainCells].sort(stableCellOrder);
+  const ruleApplications = projectRuleVisualTiles(pipeline, terrainCells);
   return Effect.succeed(
     new TiledSourceRuleApplicationOutput({
       schema: "tileborne.tiled-source-rule-application-output.v1",
@@ -467,9 +538,10 @@ export const projectTiledSourceRuleApplication: (
         width: input.width,
         height: input.height,
         terrainCells: terrainCells.map((cell) => encodeForHash(TiledSourceTerrainCell, cell)),
+        visualTiles: ruleApplications.map((tile) => encodeForHash(TiledSourceVisualTile, tile)),
       }),
       terrainCells,
-      visualTiles: [],
+      visualTiles: ruleApplications,
       collision: [],
       spawnHints: [],
       diagnostics: pipeline.diagnostics,

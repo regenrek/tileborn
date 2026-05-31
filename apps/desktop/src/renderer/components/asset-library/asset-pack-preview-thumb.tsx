@@ -2,12 +2,15 @@ import { buildFrameIndex } from '@tileborne/sdk-tileset/renderer';
 import { Skeleton, cn } from '@tileborne/ui';
 import { useMemo } from 'react';
 
-import { useAssetDataUrl, useTilesetPack } from '@/hooks/queries';
+import { useTilesetPack } from '@/hooks/queries';
+import { LibraryPreviewThumb } from './library-preview-thumb';
 
 interface AssetPackPreviewThumbProps {
   readonly packId: string;
   readonly className?: string;
 }
+
+const PACK_PREVIEW_THUMBNAIL_SIZE = 96;
 
 export function AssetPackPreviewThumb({ packId, className }: AssetPackPreviewThumbProps) {
   const packQuery = useTilesetPack(packId);
@@ -22,15 +25,25 @@ export function AssetPackPreviewThumb({ packId, className }: AssetPackPreviewThu
     }
     return pack.placeables?.[0]?.frames[0];
   }, [pack]);
-  const previewAssetPath =
-    previewFrame === undefined
+  const previewAssetPath = (() => {
+    if (previewFrame === undefined) {
+      return undefined;
+    }
+    if ('sourceAssetPaths' in previewFrame) {
+      return previewFrame.sourceAssetPaths[0];
+    }
+    return pack?.assets.find((asset) => asset.id === previewFrame.assetId)?.path;
+  })();
+  const preview =
+    previewFrame === undefined || previewAssetPath === undefined
       ? undefined
-      : 'sourceAssetPaths' in previewFrame
-        ? previewFrame.sourceAssetPaths[0]
-        : pack?.assets.find((asset) => asset.id === previewFrame.assetId)?.path;
-  const dataUrlQuery = useAssetDataUrl(packId, previewAssetPath);
-
-  const loading = packQuery.isLoading || (previewAssetPath !== undefined && dataUrlQuery.isLoading);
+      : {
+          assetPath: previewAssetPath,
+          x: previewFrame.uv.x,
+          y: previewFrame.uv.y,
+          width: previewFrame.uv.w,
+          height: previewFrame.uv.h,
+        };
 
   return (
     <div
@@ -39,17 +52,18 @@ export function AssetPackPreviewThumb({ packId, className }: AssetPackPreviewThu
         className,
       )}
     >
-      {loading ? (
+      {packQuery.isLoading ? (
         <Skeleton className="size-12" />
-      ) : dataUrlQuery.data?.dataUrl ? (
-        <img
-          data-testid="asset-pack-preview-thumb"
-          src={dataUrlQuery.data.dataUrl}
-          alt=""
-          className="max-h-full max-w-full object-contain"
-        />
-      ) : (
+      ) : preview === undefined ? (
         <Skeleton className="size-12 opacity-50" />
+      ) : (
+        <LibraryPreviewThumb
+          packId={packId}
+          preview={preview}
+          sizePx={PACK_PREVIEW_THUMBNAIL_SIZE}
+          testId="asset-pack-preview-thumb"
+          eager
+        />
       )}
     </div>
   );

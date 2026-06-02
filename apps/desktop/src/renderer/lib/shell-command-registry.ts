@@ -113,6 +113,13 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
     keywords: ['asset', 'import', 'tileset', 'pack'],
   },
   {
+    id: 'file.open-sprite-studio',
+    label: 'Open Sprite / Animation Studio',
+    group: 'file',
+    icon: PackageIcon,
+    keywords: ['sprite', 'animation', 'sheet', 'slice', 'clip', 'import', 'aseprite'],
+  },
+  {
     id: 'edit.undo',
     label: 'Undo',
     group: 'edit',

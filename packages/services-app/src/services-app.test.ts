@@ -711,7 +711,7 @@ describe('MapService', () => {
       );
       expect(generated.size.width).toBe(16);
       expect(generated.layers).toHaveLength(3);
-      expect(generated.layers[0]?._tag).toBe('tile');
+      expect(generated.layers.map((layer) => layer._tag)).toEqual(['tile', 'object', 'object']);
       expect(generated.layers.map((layer) => layer.name)).toEqual(['terrain', 'props', 'entities']);
       expect(generated.properties.preset).toBe('dungeon');
     }));
@@ -1048,6 +1048,58 @@ describe('AssetService', () => {
         }),
       );
       expect(outcome).toBe('AssetPackNotFoundError');
+    }));
+
+  it('clears the pack selection from a legacy-`kind` map during pack removal', () =>
+    withTempHome(async (home) => {
+      const sampleFixture = path.join(
+        repoRoot,
+        'packages/test-fixtures/fixtures/asset-packs/smoke-pack',
+      );
+      const ids = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const maps = yield* MapService;
+          const assets = yield* AssetService;
+          const projectId = yield* projects.create({ name: 'Legacy Cleanup' });
+          const mapId = yield* maps.create(projectId, { width: 4, height: 4 });
+          const packId = yield* assets.importPackNow(
+            new DirectoryAssetPackSource({ path: sampleFixture }),
+          );
+          yield* maps.setMapTilesetPack(projectId, mapId, packId);
+          return { projectId, mapId, packId };
+        }),
+      );
+
+      // Rewrite the persisted map with a pre-ADR-0019 free-string `kind` object
+      // (and omitted optional keys). Pack-removal cleanup must decode it through
+      // the canonical migration boundary instead of failing on the legacy shape.
+      const mapFile = mapJson(home, ids.projectId, ids.mapId);
+      const persisted = JSON.parse(await readFile(mapFile, 'utf8')) as {
+        objects: unknown[];
+        layers: readonly { readonly id: string }[];
+      };
+      persisted.objects = [
+        ...persisted.objects,
+        {
+          id: 'object:f08061c1-423d-4532-b972-0cb221b1a08a',
+          kind: 'spawn-point',
+          x: 1,
+          y: 1,
+          layerId: persisted.layers[0]?.id ?? 'layer:00000000-0000-4000-8000-000000000004',
+          properties: {},
+        },
+      ];
+      await writeFile(mapFile, `${JSON.stringify(persisted, null, 2)}\n`, 'utf8');
+
+      await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          yield* assets.removePack(ids.packId);
+        }),
+      );
+
+      await expect(readFile(mapFile, 'utf8')).resolves.not.toContain(ids.packId);
     }));
 
   it('re-verifies a pack after re-import invalidates the cache', () =>

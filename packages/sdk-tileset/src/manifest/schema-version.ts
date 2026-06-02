@@ -4,7 +4,7 @@ import { Schema } from "effect";
 import { AutotileRulePattern } from "../schemas/autotile-rule.js";
 import { Animation } from "../schemas/animation.js";
 import { CollisionMask } from "../schemas/collision-mask.js";
-import { AnimationId, AutotileRuleId, PlaceableId, TileId, TilesetId, VariantFilterId } from "../schemas/ids.js";
+import { AnimationId, AutotileRuleId, ClipId, PlaceableId, TileId, TilesetId, VariantFilterId } from "../schemas/ids.js";
 import { AssetSemanticRoleName, AssetSemanticRoleSource } from "../schemas/semantic-role.js";
 import { TerrainClass } from "../schemas/terrain-class.js";
 import { UVRect } from "../schemas/uv-rect.js";
@@ -150,6 +150,16 @@ export const ManifestPlaceableFrameRef = Schema.Struct({
 });
 export type ManifestPlaceableFrameRef = typeof ManifestPlaceableFrameRef.Type;
 
+/** One named animation clip stored in the durable manifest. */
+export const ManifestSpriteClip = Schema.Struct({
+  id: ClipId,
+  name: Schema.String,
+  frames: Schema.NonEmptyArray(ManifestPlaceableFrameRef),
+  loop: Schema.Boolean,
+  defaultDurationMs: Schema.Int,
+});
+export type ManifestSpriteClip = typeof ManifestSpriteClip.Type;
+
 /** Tiled provenance retained for image-collection object definitions. */
 export const ManifestTiledPlaceableSource = Schema.Struct({
   format: Schema.Literal("tiled"),
@@ -173,6 +183,7 @@ export const ManifestPlaceable = Schema.Struct({
     height: Schema.Number,
   }),
   frames: Schema.NonEmptyArray(ManifestPlaceableFrameRef),
+  clips: Schema.optional(Schema.Array(ManifestSpriteClip)),
   tags: Schema.Array(Schema.String),
   placementMode: Schema.optional(Schema.Literals(["object", "tile-and-object"])),
   source: ManifestTiledPlaceableSource,

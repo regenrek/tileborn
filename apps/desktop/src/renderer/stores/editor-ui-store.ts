@@ -1,14 +1,17 @@
+import type { ComponentType } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist, subscribeWithSelector } from 'zustand/middleware';
 
 import type { LayerId, PackId } from '@tileborne/core';
 import type {
   AutotileRuleIdType,
+  ClipIdType,
   PlaceableIdType,
   TerrainClassType,
   TileIdType,
 } from '@tileborne/sdk-tileset/schemas';
 
+import { assertNever } from '@/lib/assert-never';
 import { normalizeOptionalRouteParam, normalizeRouteParam } from '@/lib/route-params';
 
 export type EntityId = string;
@@ -134,11 +137,39 @@ const workspaceTabsEqual = (
     );
   });
 
+/**
+ * Icon component contributed for a `plugin-object` palette action. Typed as a
+ * minimal React component (only `className` is required) so the store stays
+ * decoupled from any specific icon library and from any plugin.
+ */
+export type PaletteActionIcon = ComponentType<{ readonly className?: string }>;
+
 export type BrushIntent =
   | { readonly kind: 'tile'; readonly tileId: TileIdType; readonly packId?: PackId | undefined }
   | { readonly kind: 'autotile'; readonly ruleId: AutotileRuleIdType; readonly packId?: PackId | undefined }
   | { readonly kind: 'terrain'; readonly classId: TerrainClassType; readonly packId?: PackId | undefined }
-  | { readonly kind: 'placeable'; readonly placeableId: PlaceableIdType; readonly packId?: PackId | undefined }
+  | {
+      readonly kind: 'placeable';
+      readonly placeableId: PlaceableIdType;
+      readonly packId?: PackId | undefined;
+      /** Default animation clip for animated sprites; pinned onto the placement. */
+      readonly clipId?: ClipIdType | undefined;
+    }
+  | {
+      /**
+       * A plugin-contributed placement action surfaced as a first-class palette
+       * brush. Placement is STICKY: the brush stays active and stamps its
+       * `objectKind` on every canvas click until another brush is selected. The
+       * editor keys purely on this abstract kind + the contributed `objectKind`,
+       * never on any plugin-specific string, so a future RPG-mode spawn reuses
+       * it unchanged.
+       */
+      readonly kind: 'plugin-object';
+      readonly objectKind: string;
+      readonly label: string;
+      readonly icon?: PaletteActionIcon | undefined;
+      readonly packId?: PackId | undefined;
+    }
   | { readonly kind: 'eraser' };
 
 interface CameraState {
@@ -176,7 +207,6 @@ interface EditorUiState {
   brushParams: BrushParams;
   camera: CameraState;
   brushIntent: BrushIntent;
-  stagedObjectKind: string;
   activeLayerId: LayerId | null;
   showGrid: boolean;
   snapToGrid: boolean;
@@ -197,6 +227,7 @@ interface EditorUiState {
   pluginInstallDialogOpen: boolean;
   assetImportDialogOpen: boolean;
   assetImportSourcePath: string | null;
+  spriteEditorOpen: boolean;
   createProjectDialogOpen: boolean;
   playtestActive: boolean;
   playtestSessionId: string | null;
@@ -218,12 +249,17 @@ interface EditorUiActions {
   clearSelection: () => void;
   setHoverEntityId: (entityId: EntityId | null) => void;
   setHoverTile: (tile: HoverTile | null) => void;
-  setActiveTool: (tool: EditorTool) => void;
+  /**
+   * Canonical tool-selection path. Sets `activeTool` and normalizes
+   * `brushIntent` so a tool that does not consume the active brush clears its
+   * palette/inspector highlight. Route every tool entry point (toolbar,
+   * keyboard, command palette) through this — never set `activeTool` directly.
+   */
+  selectTool: (tool: EditorTool) => void;
   setBrushParams: (params: Partial<BrushParams>) => void;
   setCamera: (camera: Partial<CameraState>) => void;
   setBrushIntent: (intent: BrushIntent) => void;
   selectBrush: (intent: BrushIntent, tool?: EditorTool) => void;
-  setStagedObjectKind: (kind: string) => void;
   setActiveLayerId: (layerId: LayerId | null) => void;
   setShowGrid: (show: boolean) => void;
   setSnapToGrid: (snap: boolean) => void;
@@ -242,6 +278,7 @@ interface EditorUiActions {
   setCreateMapDialogOpen: (open: boolean) => void;
   setPluginInstallDialogOpen: (open: boolean) => void;
   setAssetImportDialogOpen: (open: boolean) => void;
+  setSpriteEditorOpen: (open: boolean) => void;
   setAssetImportSourcePath: (path: string | null) => void;
   setCreateProjectDialogOpen: (open: boolean) => void;
   setPlaytestActive: (active: boolean) => void;
@@ -300,10 +337,52 @@ const brushIntentEquals = (left: BrushIntent, right: BrushIntent): boolean => {
       return left.kind === 'terrain' && left.classId === right.classId && left.packId === right.packId;
     case 'placeable':
       return left.kind === 'placeable' && left.placeableId === right.placeableId && left.packId === right.packId;
+    case 'plugin-object':
+      // Identity is the abstract object kind (+ optional pack); the contributed
+      // label/icon are presentation and never affect which brush is active.
+      return (
+        left.kind === 'plugin-object' &&
+        left.objectKind === right.objectKind &&
+        left.packId === right.packId
+      );
     case 'eraser':
       return true;
   }
+  return assertNever(right);
 };
+
+/**
+ * The brush kinds each tool actually paints/places with. A tool switch keeps the
+ * active brush only when the destination tool consumes that brush kind; any
+ * other brush is normalized to the inert eraser intent so no palette/inspector
+ * chip stays highlighted while a tool that ignores it is active. This is the
+ * single rule that keeps `activeTool` and `brushIntent` from ever disagreeing
+ * (SSOT: exactly one logical brush/tool highlights anywhere).
+ */
+const TOOL_BRUSH_KINDS: Record<EditorTool, ReadonlySet<BrushIntent['kind']>> = {
+  select: new Set(),
+  pan: new Set(),
+  objectMove: new Set(),
+  collisionPaint: new Set(),
+  regionMark: new Set(),
+  eraser: new Set(['eraser']),
+  tileBrush: new Set(['tile', 'autotile', 'terrain', 'placeable']),
+  rectangleFill: new Set(['tile', 'autotile', 'terrain']),
+  objectPlace: new Set(['placeable', 'plugin-object']),
+};
+
+/** Inert brush: highlights nothing in the palette and paints nothing. */
+const NEUTRAL_BRUSH_INTENT: BrushIntent = { kind: 'eraser' };
+
+/**
+ * Returns the brush the editor should hold after switching to `tool`. When the
+ * destination tool consumes the current brush kind it is kept unchanged;
+ * otherwise it collapses to {@link NEUTRAL_BRUSH_INTENT} (e.g. switching to
+ * select/pan/objectMove clears a tile/placeable/plugin-object highlight, while
+ * the eraser tool normalizes any non-eraser brush to the eraser intent).
+ */
+const normalizeBrushIntentForTool = (tool: EditorTool, intent: BrushIntent): BrushIntent =>
+  TOOL_BRUSH_KINDS[tool].has(intent.kind) ? intent : NEUTRAL_BRUSH_INTENT;
 
 const hoverTileEquals = (left: HoverTile | null, right: HoverTile | null): boolean =>
   left?.x === right?.x && left?.y === right?.y && (left !== null) === (right !== null);
@@ -340,7 +419,6 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         brushParams: { size: 1, shape: 'square' },
         camera: defaultCamera,
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         activeLayerId: null,
         showGrid: true,
         snapToGrid: true,
@@ -360,6 +438,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         createMapDialogOpen: false,
         pluginInstallDialogOpen: false,
         assetImportDialogOpen: false,
+        spriteEditorOpen: false,
         assetImportSourcePath: null,
         createProjectDialogOpen: false,
         playtestActive: false,
@@ -396,9 +475,21 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
             set({ hoverTile });
           }
         },
-        setActiveTool: (activeTool) => {
-          if (get().activeTool !== activeTool) {
-            set({ activeTool });
+        selectTool: (activeTool) => {
+          // Selecting a tool is the single source of truth for the active tool:
+          // it switches `activeTool` and normalizes `brushIntent` so the palette
+          // never keeps a brush highlighted that the new tool would ignore.
+          const state = get();
+          const brushIntent = normalizeBrushIntentForTool(activeTool, state.brushIntent);
+          const next: Partial<EditorUiState> = {};
+          if (state.activeTool !== activeTool) {
+            next.activeTool = activeTool;
+          }
+          if (!brushIntentEquals(state.brushIntent, brushIntent)) {
+            next.brushIntent = brushIntent;
+          }
+          if (Object.keys(next).length > 0) {
+            set(next);
           }
         },
         setBrushParams: (params) => set({ brushParams: { ...get().brushParams, ...params } }),
@@ -409,6 +500,10 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
           }
         },
         selectBrush: (brushIntent, activeTool = 'tileBrush') => {
+          // Selecting ANY brush/tool is the single source of truth for the
+          // active brush: it overwrites `brushIntent` (deselecting whatever was
+          // active before — tile, placeable, or plugin-object) and switches to
+          // the tool that drives it. Exactly one thing is highlighted anywhere.
           const state = get();
           const next: Partial<EditorUiState> = {};
           if (!brushIntentEquals(state.brushIntent, brushIntent)) {
@@ -417,11 +512,10 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
           if (state.activeTool !== activeTool) {
             next.activeTool = activeTool;
           }
-          if (next.brushIntent !== undefined || next.activeTool !== undefined) {
+          if (Object.keys(next).length > 0) {
             set(next);
           }
         },
-        setStagedObjectKind: (stagedObjectKind) => set({ stagedObjectKind }),
         setActiveLayerId: (activeLayerId) => set({ activeLayerId }),
         setShowGrid: (showGrid) => set({ showGrid }),
         setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
@@ -464,6 +558,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         setCreateMapDialogOpen: (createMapDialogOpen) => set({ createMapDialogOpen }),
         setPluginInstallDialogOpen: (pluginInstallDialogOpen) => set({ pluginInstallDialogOpen }),
         setAssetImportDialogOpen: (assetImportDialogOpen) => set({ assetImportDialogOpen }),
+        setSpriteEditorOpen: (spriteEditorOpen) => set({ spriteEditorOpen }),
         setAssetImportSourcePath: (assetImportSourcePath) => set({ assetImportSourcePath }),
         setCreateProjectDialogOpen: (createProjectDialogOpen) => set({ createProjectDialogOpen }),
         setPlaytestActive: (playtestActive) => set({ playtestActive }),

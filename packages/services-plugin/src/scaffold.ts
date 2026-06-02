@@ -41,7 +41,6 @@ const defaultContributions = {
   tools: undefined,
   assetPacks: undefined,
   tilesetPacks: undefined,
-  objectKinds: undefined,
   editor: undefined,
   runtime: undefined,
   server: undefined,

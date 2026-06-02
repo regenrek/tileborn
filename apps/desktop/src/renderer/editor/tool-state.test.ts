@@ -6,11 +6,13 @@ import {
   TileLayer,
   TileborneMap,
   MapObject,
-  MapObjectPlacement,
   makeLayerId,
   makeMapId,
+  makeTileborneMap,
   makePackId,
   makeTileId,
+  gameObjectTypeIdForKey,
+  PLACEABLE_OBJECT_TYPE_ID,
   type AssetId,
   ObjectLayer,
   type PlaceableId,
@@ -36,12 +38,19 @@ import {
 import { Option, Schema } from 'effect';
 
 import {
+  createFillSelectionCommand,
+  createFillSelectionTileCommand,
   dispatchPointerDown,
   dispatchPointerMove,
   dispatchPointerUp,
   type PointerPoint,
 } from './viewport/tool-state.js';
-import { createStrokeTileCommand, createTileEditCommand } from './editor-commands.js';
+import {
+  createObjectPlaceCommand,
+  createSetLayerVisibilityCommand,
+  createStrokeTileCommand,
+  createTileEditCommand,
+} from './editor-commands.js';
 import { getTileIndex } from './map-utils.js';
 import {
   createTestMap,
@@ -151,7 +160,11 @@ const autotileIndexes = new Map<TileIdType, number>([
   [westConnectedTileId, 30],
   [eastWestConnectedTileId, 40],
 ]);
-const autotileResolver = createAutotilePaintResolver(autotilePack, autotileIndexes)!;
+const autotileResolver = createAutotilePaintResolver({
+  autotileRules: autotilePack.tilesets.flatMap((tileset) => tileset.autotileRules),
+  tileIndexByTileId: autotileIndexes,
+  directTileIndexByTerrainClass: new Map(),
+})!;
 const resolvedAutotileBrush = autotileResolver.brushForRuleId(edgeRuleId)!;
 const placeableId =
   'placeable:00000000-0000-4000-8000-000000000041' as PlaceableId;
@@ -180,7 +193,6 @@ describe('tool state machine', () => {
       activeTool: 'tileBrush' as const,
       brushIntent: tileBrush,
       resolvedBrush: paintBrush(3),
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -210,7 +222,6 @@ describe('tool state machine', () => {
           activeTool: 'tileBrush',
           brushIntent,
           resolvedBrush: paintBrush(7),
-          stagedObjectKind: 'prop',
           activeLayerId: TEST_TILE_LAYER_ID,
           selection: new Set(),
           shiftKey: false,
@@ -234,7 +245,6 @@ describe('tool state machine', () => {
       brushIntent: { kind: 'autotile' as const, ruleId: edgeRuleId },
       resolvedBrush: resolvedAutotileBrush,
       autotileResolver,
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -261,7 +271,6 @@ describe('tool state machine', () => {
       brushIntent: { kind: 'autotile' as const, ruleId: edgeRuleId },
       resolvedBrush: resolvedAutotileBrush,
       autotileResolver,
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -293,7 +302,6 @@ describe('tool state machine', () => {
       activeTool: 'eraser' as const,
       brushIntent: { kind: 'eraser' as const },
       autotileResolver,
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -314,7 +322,6 @@ describe('tool state machine', () => {
         activeTool: 'tileBrush',
         brushIntent: tileBrush,
         resolvedBrush: paintBrush(3),
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_OBJECT_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -363,7 +370,6 @@ describe('tool state machine', () => {
         activeTool: 'tileBrush',
         brushIntent: tileBrush,
         resolvedBrush: paintBrush(2),
-        stagedObjectKind: 'prop',
         activeLayerId: undefined,
         selection: new Set(),
         shiftKey: false,
@@ -390,7 +396,6 @@ describe('tool state machine', () => {
       activeTool: 'tileBrush' as const,
       brushIntent: tileBrush,
       resolvedBrush: paintBrush(3),
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -419,7 +424,6 @@ describe('tool state machine', () => {
         map,
         activeTool: 'eraser',
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -441,7 +445,6 @@ describe('tool state machine', () => {
         activeTool: 'rectangleFill',
         brushIntent: tileBrush,
         resolvedBrush: paintBrush(2),
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -455,7 +458,6 @@ describe('tool state machine', () => {
         activeTool: 'rectangleFill',
         brushIntent: tileBrush,
         resolvedBrush: paintBrush(2),
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -473,7 +475,6 @@ describe('tool state machine', () => {
       activeTool: 'rectangleFill' as const,
       brushIntent: terrainBrush,
       resolvedBrush: paintBrush(6),
-      stagedObjectKind: 'prop',
       activeLayerId: TEST_TILE_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -496,7 +497,6 @@ describe('tool state machine', () => {
         activeTool: 'tileBrush',
         brushIntent: placeableBrush,
         resolvedBrush: resolvedPlaceableBrush,
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_OBJECT_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -509,7 +509,7 @@ describe('tool state machine', () => {
 
     expect(result.command?.kind).toBe('object-place');
     expect(object).toMatchObject({
-      kind: 'placeable',
+      kind: PLACEABLE_OBJECT_TYPE_ID,
       x: 64,
       y: 96,
       layerId: TEST_OBJECT_LAYER_ID,
@@ -548,7 +548,7 @@ describe('tool state machine', () => {
       objects: [
         {
           id: existingObjectId,
-          kind: 'placeable',
+          kind: PLACEABLE_OBJECT_TYPE_ID,
           x: 0,
           y: 0,
           width: { value: 64 },
@@ -572,7 +572,6 @@ describe('tool state machine', () => {
         activeTool: 'tileBrush',
         brushIntent: placeableBrush,
         resolvedBrush: resolvedPlaceableBrush,
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_OBJECT_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -589,7 +588,10 @@ describe('tool state machine', () => {
     );
   });
 
-  it('tileBrush does not place objects on a different layer when the active layer is not an object layer', () => {
+  it('tileBrush places placeables on the existing object layer when a tile layer is active', () => {
+    // The map has an object layer but a tile layer is nominally active. A
+    // placeable must never be dropped or written with the tile layerId — it is
+    // routed to the existing object layer instead.
     const map = createTestMap();
     const { result } = dispatchPointerDown(
       {
@@ -597,7 +599,6 @@ describe('tool state machine', () => {
         activeTool: 'tileBrush',
         brushIntent: placeableBrush,
         resolvedBrush: resolvedPlaceableBrush,
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -605,19 +606,40 @@ describe('tool state machine', () => {
       point(2, 3),
       {},
     );
+    const edited = result.command?.apply(map);
+    const object = edited?.objects[0];
 
-    expect(result.command).toBeUndefined();
+    expect(result.command?.kind).toBe('object-place');
+    expect(object?.kind).toBe(PLACEABLE_OBJECT_TYPE_ID);
+    expect(object?.layerId).toBe(TEST_OBJECT_LAYER_ID);
   });
 
-  it('tileBrush ignores placeable brush intents on tile layers', () => {
-    const map = createTestMap();
+  it('tileBrush auto-creates an object layer for placeables when the map has none', () => {
+    // Generated maps used to ship only tile layers (terrain/props/entities), so
+    // placing a placeable found no object layer. Placement now auto-creates one
+    // instead of silently dropping the object.
+    const tileOnlyMap = makeTileborneMap({
+      id: makeMapId('00000000-0000-4000-8000-000000000099'),
+      width: 16,
+      height: 16,
+      tileWidth: 32,
+      tileHeight: 32,
+      layers: [
+        new TileLayer({
+          id: TEST_TILE_LAYER_ID,
+          name: 'terrain',
+          visible: true,
+          opacity: 1,
+          chunks: [],
+        }),
+      ],
+    });
     const { result } = dispatchPointerDown(
       {
-        map,
+        map: tileOnlyMap,
         activeTool: 'tileBrush',
         brushIntent: placeableBrush,
         resolvedBrush: resolvedPlaceableBrush,
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -625,8 +647,14 @@ describe('tool state machine', () => {
       point(2, 2),
       {},
     );
+    const edited = result.command?.apply(tileOnlyMap);
+    const objectLayer = edited?.layers.find((layer) => layer._tag === 'object');
+    const object = edited?.objects[0];
 
-    expect(result.command).toBeUndefined();
+    expect(result.command?.kind).toBe('object-place');
+    expect(objectLayer).toBeDefined();
+    expect(object?.kind).toBe(PLACEABLE_OBJECT_TYPE_ID);
+    expect(object?.layerId).toBe(objectLayer?.id);
   });
 
   it('collisionPaint pointer down emits CollisionPaintCommand', () => {
@@ -636,7 +664,6 @@ describe('tool state machine', () => {
         map,
         activeTool: 'collisionPaint',
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_COLLISION_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -654,7 +681,6 @@ describe('tool state machine', () => {
         map,
         activeTool: 'collisionPaint',
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         activeLayerId: TEST_TILE_LAYER_ID,
         selection: new Set(),
         shiftKey: false,
@@ -673,7 +699,6 @@ describe('tool state machine', () => {
         map,
         activeTool: 'regionMark',
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         selection: new Set(),
         shiftKey: false,
       },
@@ -685,7 +710,6 @@ describe('tool state machine', () => {
         map,
         activeTool: 'regionMark',
         brushIntent: { kind: 'eraser' },
-        stagedObjectKind: 'prop',
         selection: new Set(),
         shiftKey: false,
       },
@@ -693,5 +717,284 @@ describe('tool state machine', () => {
       down.session,
     );
     expect(result.command?.kind).toBe('region-mark');
+  });
+
+  it('select drag previews a marquee and commits a rectangle selection', () => {
+    const map = createTestMap();
+    const context = {
+      map,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+    const down = dispatchPointerDown(context, point(1, 1), {});
+    const move = dispatchPointerMove(context, point(3, 2), down.session);
+    const up = dispatchPointerUp(context, point(3, 2), down.session);
+
+    expect(down.result.selection && [...down.result.selection]).toEqual(['1:1']);
+    expect(move.result.brushPreview).toMatchObject({ x: 1, y: 1, w: 3, h: 2, variant: 'select' });
+    expect(up.result.selection && [...up.result.selection].sort()).toEqual(
+      ['1:1', '1:2', '2:1', '2:2', '3:1', '3:2'].sort(),
+    );
+    expect(up.result.brushPreview).toBeNull();
+  });
+
+  it('select click without drag keeps single-tile selection and clears the marquee', () => {
+    const map = createTestMap();
+    const context = {
+      map,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+    const down = dispatchPointerDown(context, point(2, 2), {});
+    const up = dispatchPointerUp(context, point(2, 2), down.session);
+
+    expect(down.result.selection && [...down.result.selection]).toEqual(['2:2']);
+    expect(up.result.selection).toBeUndefined();
+    expect(up.result.brushPreview).toBeNull();
+  });
+
+  it('select drags a clicked object to a new tile, preserving its layer', () => {
+    const baseMap = createTestMap();
+    const placed = createObjectPlaceCommand(baseMap, {
+      kind: gameObjectTypeIdForKey('prop'),
+      x: 2 * 32,
+      y: 2 * 32,
+      layerId: TEST_OBJECT_LAYER_ID,
+    }).apply(baseMap);
+    const object = placed.objects[0]!;
+    const context = {
+      map: placed,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+
+    const down = dispatchPointerDown(context, point(2, 2), {});
+    expect(down.session.objectId).toBe(object.id);
+    expect(down.result.selection && [...down.result.selection]).toEqual([object.id]);
+
+    const up = dispatchPointerUp(context, point(5, 4), down.session);
+    const moved = up.result.command?.apply(placed);
+    const movedObject = moved?.objects.find((entry) => entry.id === object.id);
+
+    expect(up.result.command?.kind).toBe('object-move');
+    expect(movedObject?.x).toBe(5 * 32);
+    expect(movedObject?.y).toBe(4 * 32);
+    expect(movedObject?.layerId).toBe(TEST_OBJECT_LAYER_ID);
+  });
+
+  it('select click on an object selects without emitting a (snapping) move', () => {
+    const baseMap = createTestMap();
+    const placed = createObjectPlaceCommand(baseMap, {
+      kind: gameObjectTypeIdForKey('prop'),
+      x: 2 * 32,
+      y: 2 * 32,
+      layerId: TEST_OBJECT_LAYER_ID,
+    }).apply(baseMap);
+    const context = {
+      map: placed,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+
+    const down = dispatchPointerDown(context, point(2, 2), {});
+    const up = dispatchPointerUp(context, point(2, 2), down.session);
+
+    expect(up.result.command).toBeUndefined();
+  });
+
+  it('select ignores objects sitting on a hidden layer', () => {
+    const baseMap = createTestMap();
+    const placed = createObjectPlaceCommand(baseMap, {
+      kind: gameObjectTypeIdForKey('prop'),
+      x: 2 * 32,
+      y: 2 * 32,
+      layerId: TEST_OBJECT_LAYER_ID,
+    }).apply(baseMap);
+    const hidden = createSetLayerVisibilityCommand(placed, TEST_OBJECT_LAYER_ID, false)!.apply(placed);
+    const context = {
+      map: hidden,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+
+    const down = dispatchPointerDown(context, point(2, 2), {});
+
+    expect(down.session.objectId).toBeUndefined();
+    expect(down.result.selection && [...down.result.selection]).toEqual(['2:2']);
+  });
+
+  it('createFillSelectionTileCommand paints the active index into selected tiles only', () => {
+    const map = createTestMap();
+    const selection = new Set<string>([
+      '1:1',
+      '2:1',
+      'object:00000000-0000-4000-8000-000000000099',
+    ]);
+    const command = createFillSelectionTileCommand(map, TEST_TILE_LAYER_ID, selection, 5);
+    const edited = command?.apply(map);
+
+    expect(command?.kind).toBe('tile-rectangle-fill');
+    expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 1, 1)).toBe(5);
+    expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 2, 1)).toBe(5);
+  });
+
+  it('createFillSelectionCommand resolves autotile variants across the filled selection', () => {
+    const map = createTestMap();
+    const selection = new Set<string>(['1:1', '2:1']);
+    const command = createFillSelectionCommand(
+      map,
+      TEST_TILE_LAYER_ID,
+      selection,
+      resolvedAutotileBrush,
+    );
+    const edited = command?.apply(map);
+
+    // 1:1 connects east to 2:1, 2:1 connects west to 1:1 (same variants the
+    // brush would paint), proving the fill resolves edges inside the region.
+    expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 1, 1)).toBe(20);
+    expect(edited && getTileIndex(edited, TEST_TILE_LAYER_ID, 2, 1)).toBe(30);
+  });
+
+  it('objectPlace tool places the active plugin-object brush kind on the object layer', () => {
+    // The plugin-object marker brush (Battle Royale spawn/anchor/loot and any
+    // future RPG spawn) places its abstract objectKind on each click. The
+    // editor keys only on the brush kind + contributed objectKind.
+    const map = createTestMap();
+    const { result } = dispatchPointerDown(
+      {
+        map,
+        activeTool: 'objectPlace',
+        brushIntent: { kind: 'plugin-object', objectKind: 'spawn-point', label: 'Spawn point' },
+        activeLayerId: TEST_OBJECT_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(3, 4),
+      {},
+    );
+    const edited = result.command?.apply(map);
+    const object = edited?.objects[0];
+
+    expect(result.command?.kind).toBe('object-place');
+    expect(object).toMatchObject({
+      kind: gameObjectTypeIdForKey('spawn-point'),
+      x: 96,
+      y: 128,
+      layerId: TEST_OBJECT_LAYER_ID,
+    });
+  });
+
+  it('plugin-object marker preview is 1x1 even when a previous placeable size carries over', () => {
+    // Regression: switching from a large placeable to a sizeless marker left a
+    // stale `placeObject` resolvedBrush in context. The preview must reflect the
+    // CURRENT marker (1x1), never the previous placeable's footprint (96x128 =>
+    // 3x4 tiles). Preview size keys on the active brush intent, not on a stale
+    // resolvedBrush.
+    const map = createTestMap();
+    const move = dispatchPointerMove(
+      {
+        map,
+        activeTool: 'objectPlace',
+        brushIntent: { kind: 'plugin-object', objectKind: 'spawn-point', label: 'Spawn point' },
+        resolvedBrush: resolvedPlaceableBrush,
+        activeLayerId: TEST_OBJECT_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(5, 6),
+      {},
+    );
+
+    expect(move.result.brushPreview).toMatchObject({ x: 5, y: 6, w: 1, h: 1 });
+  });
+
+  it('plugin-object brush placement is sticky — repeated clicks each place without resetting the brush', () => {
+    const map = createTestMap();
+    const context = {
+      map,
+      activeTool: 'objectPlace' as const,
+      brushIntent: { kind: 'plugin-object' as const, objectKind: 'loot-crate', label: 'Loot crate' },
+      activeLayerId: TEST_OBJECT_LAYER_ID,
+      selection: new Set<string>(),
+      shiftKey: false,
+    };
+
+    const firstDown = dispatchPointerDown(context, point(1, 1), {});
+    const afterFirst = firstDown.result.command?.apply(map);
+    // The session never carries a "single-shot done" signal; the brush stays
+    // active so the next click on the freshly edited map places again.
+    const secondDown = dispatchPointerDown({ ...context, map: afterFirst! }, point(2, 2), firstDown.session);
+    const afterSecond = secondDown.result.command?.apply(afterFirst!);
+
+    expect(firstDown.result.command?.kind).toBe('object-place');
+    expect(secondDown.result.command?.kind).toBe('object-place');
+    expect(
+      afterSecond?.objects.filter((entry) => entry.kind === gameObjectTypeIdForKey('loot-crate')),
+    ).toHaveLength(2);
+  });
+
+  it('plugin-object brush auto-creates an object layer when the map has none', () => {
+    const tileOnlyMap = makeTileborneMap({
+      id: makeMapId('00000000-0000-4000-8000-0000000000a1'),
+      width: 16,
+      height: 16,
+      tileWidth: 32,
+      tileHeight: 32,
+      layers: [
+        new TileLayer({
+          id: TEST_TILE_LAYER_ID,
+          name: 'terrain',
+          visible: true,
+          opacity: 1,
+          chunks: [],
+        }),
+      ],
+    });
+    const { result } = dispatchPointerDown(
+      {
+        map: tileOnlyMap,
+        activeTool: 'objectPlace',
+        brushIntent: { kind: 'plugin-object', objectKind: 'spawn-point', label: 'Spawn point' },
+        activeLayerId: TEST_TILE_LAYER_ID,
+        selection: new Set(),
+        shiftKey: false,
+      },
+      point(2, 2),
+      {},
+    );
+    const edited = result.command?.apply(tileOnlyMap);
+    const objectLayer = edited?.layers.find((layer) => layer._tag === 'object');
+    const object = edited?.objects[0];
+
+    expect(objectLayer).toBeDefined();
+    expect(object?.kind).toBe(gameObjectTypeIdForKey('spawn-point'));
+    expect(object?.layerId).toBe(objectLayer?.id);
+  });
+
+  it('select shift-drag adds the marquee rectangle to the existing selection', () => {
+    const map = createTestMap();
+    const context = {
+      map,
+      activeTool: 'select' as const,
+      brushIntent: { kind: 'eraser' as const },
+      selection: new Set<string>(['9:9']),
+      shiftKey: true,
+    };
+    const down = dispatchPointerDown(context, point(1, 1), {});
+    const up = dispatchPointerUp(context, point(2, 1), down.session);
+
+    expect(up.result.selection && [...up.result.selection].sort()).toEqual(
+      ['1:1', '2:1', '9:9'].sort(),
+    );
   });
 });

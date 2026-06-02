@@ -16,6 +16,7 @@ import { useCallback, useEffect } from 'react';
 
 import { AppNotifications } from '@/components/app-notifications';
 import { AssetImportDialog } from '@/components/asset-import-dialog';
+import { SpriteAnimationStudio } from '@/components/sprite-studio/sprite-animation-studio';
 import { CreateMapDialog } from '@/components/create-map-dialog';
 import { DuplicatePackDialog } from '@/components/duplicate-pack-dialog';
 import { GenerateMapDialog } from '@/components/generate-map-dialog';
@@ -49,6 +50,8 @@ export function AppShell() {
   const createMapDialogOpen = useEditorUiStore((s) => s.createMapDialogOpen);
   const pluginInstallDialogOpen = useEditorUiStore((s) => s.pluginInstallDialogOpen);
   const assetImportDialogOpen = useEditorUiStore((s) => s.assetImportDialogOpen);
+  const spriteEditorOpen = useEditorUiStore((s) => s.spriteEditorOpen);
+  const setSpriteEditorOpen = useEditorUiStore((s) => s.setSpriteEditorOpen);
 
   const sidebarPanelRef = usePanelRef();
   const inspectorPanelRef = usePanelRef();
@@ -236,6 +239,7 @@ export function AppShell() {
         onOpenChange={setAssetImportDialogOpen}
         projectId={projectId}
       />
+      <SpriteAnimationStudio open={spriteEditorOpen} onOpenChange={setSpriteEditorOpen} />
       <DuplicatePackDialog />
 
       <AppNotifications />

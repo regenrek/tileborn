@@ -5,6 +5,7 @@ import { PluginId } from "@tileborne/core";
 import { PluginManifest, validatePluginContributions } from "@tileborne/plugin-api";
 import { Context, Effect, Layer, Option, Ref, Schema } from "effect";
 
+import { resolvePluginGameObjectCatalogs } from "../catalog.js";
 import {
   hashPluginDirectory,
   readInstalledLock,
@@ -16,6 +17,7 @@ import {
 import {
   InstalledPlugin,
   LoadedDeclarativePlugin,
+  MaterializedGameObjectCatalog,
   type LoadedExecutablePlugin,
   PLUGIN_MANIFEST_FILE,
   PluginExecutionContext,
@@ -157,10 +159,22 @@ export const PluginLoaderServiceLive = Layer.effect(
             ? cause
             : new PluginInstallError({ path: plugin.rootPath, message: toMessage(cause) }),
       });
+      // Resolve + decode the plugin's catalog contributions at load time
+      // (ADR-0019) so the loaded plugin carries materialized catalogs instead of
+      // raw `{ indexPath }` indirection. Cross-plugin merge stays deferred to the
+      // runtime-map-package capstone.
+      const resolvedCatalogs = yield* resolvePluginGameObjectCatalogs(plugin.rootPath, plugin.manifest);
       const loaded = new LoadedDeclarativePlugin({
         pluginId,
         manifest: plugin.manifest,
         contributions: plugin.manifest.contributes,
+        gameObjectCatalogs: resolvedCatalogs.map(
+          (entry) =>
+            new MaterializedGameObjectCatalog({
+              contributionId: entry.contributionId,
+              catalog: entry.catalog,
+            }),
+        ),
       });
       yield* Ref.update(declarativeRef, (current) => new Map(current).set(pluginId, loaded));
       return loaded;

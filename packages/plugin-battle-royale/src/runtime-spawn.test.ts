@@ -1,4 +1,4 @@
-import { MapObject, makeTileborneMap } from "@tileborne/core";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -18,7 +18,7 @@ const makeTestObject = (
 ): MapObject =>
   new MapObject({
     id,
-    kind,
+    kind: gameObjectTypeIdForKey(kind),
     x,
     y,
     width: Option.none(),
@@ -71,6 +71,22 @@ describe("spawnPlayersFromArtifact", () => {
       const velocity = velocities.get(entity);
       expect(velocity).toEqual({ vx: 0, vy: 0 });
     }
+  });
+
+  it("assigns per-slot and default model ids onto spawned players", () => {
+    const artifact = exportArtifact(makeSpawnFixtureMap());
+    const world = createTestPluginWorld();
+
+    const entities = spawnPlayersFromArtifact(world, artifact, {
+      playerModelIds: ["model:hero"],
+      defaultModelId: "model:default",
+    });
+
+    const players = world.getComponent<Player>(PLAYER_COMPONENT);
+    // First slot uses the per-slot override; the rest fall back to the default.
+    expect(players.get(entities[0]!)?.modelId).toBe("model:hero");
+    expect(players.get(entities[1]!)?.modelId).toBe("model:default");
+    expect(players.get(entities[2]!)?.modelId).toBe("model:default");
   });
 
   it("falls back to map center when no spawn markers exist", () => {

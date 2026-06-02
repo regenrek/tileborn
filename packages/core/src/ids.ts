@@ -40,12 +40,17 @@ const map = definePrefixedId('map', 'MapId');
 const layer = definePrefixedId('layer', 'LayerId');
 const object = definePrefixedId('object', 'ObjectId');
 const placeable = definePrefixedId('placeable', 'PlaceableId');
+const clip = definePrefixedId('clip', 'ClipId');
 const tileset = definePrefixedId('tileset', 'TileSetId');
 const runtime = definePrefixedId('runtime', 'RuntimeId');
 const build = definePrefixedId('build', 'BuildId');
 const pack = definePrefixedId('pack', 'PackId');
 const workingPalette = definePrefixedId('working-palette', 'WorkingPaletteId');
 const workingPaletteItem = definePrefixedId('working-palette-item', 'WorkingPaletteItemId');
+const gameObjectType = definePrefixedId('gobj', 'GameObjectTypeId');
+const itemDefinition = definePrefixedId('item', 'ItemDefinitionId');
+const lootTable = definePrefixedId('loot', 'LootTableId');
+const catalog = definePrefixedId('catalog', 'CatalogId');
 
 /** Branded asset identifier (`asset:<uuid>`). */
 export const AssetId = asset.schema;
@@ -82,6 +87,11 @@ export const PlaceableId = placeable.schema;
 export type PlaceableId = typeof PlaceableId.Type;
 export const makePlaceableId = placeable.make;
 
+/** Branded animation clip identifier (`clip:<uuid>`). */
+export const ClipId = clip.schema;
+export type ClipId = typeof ClipId.Type;
+export const makeClipId = clip.make;
+
 /** Branded tileset identifier (`tileset:<uuid>`). */
 export const TileSetId = tileset.schema;
 export type TileSetId = typeof TileSetId.Type;
@@ -112,6 +122,26 @@ export const WorkingPaletteItemId = workingPaletteItem.schema;
 export type WorkingPaletteItemId = typeof WorkingPaletteItemId.Type;
 export const makeWorkingPaletteItemId = workingPaletteItem.make;
 
+/** Branded game-object catalog type identifier (`gobj:<uuid>`). */
+export const GameObjectTypeId = gameObjectType.schema;
+export type GameObjectTypeId = typeof GameObjectTypeId.Type;
+export const makeGameObjectTypeId = gameObjectType.make;
+
+/** Branded item-definition identifier (`item:<uuid>`). */
+export const ItemDefinitionId = itemDefinition.schema;
+export type ItemDefinitionId = typeof ItemDefinitionId.Type;
+export const makeItemDefinitionId = itemDefinition.make;
+
+/** Branded loot-table identifier (`loot:<uuid>`). */
+export const LootTableId = lootTable.schema;
+export type LootTableId = typeof LootTableId.Type;
+export const makeLootTableId = lootTable.make;
+
+/** Branded catalog identifier (`catalog:<uuid>`). */
+export const CatalogId = catalog.schema;
+export type CatalogId = typeof CatalogId.Type;
+export const makeCatalogId = catalog.make;
+
 /** All prefixed domain id schemas keyed by prefix. */
 export const PrefixedIdSchemas = {
   asset: AssetId,
@@ -121,12 +151,17 @@ export const PrefixedIdSchemas = {
   layer: LayerId,
   object: ObjectId,
   placeable: PlaceableId,
+  clip: ClipId,
   tileset: TileSetId,
   runtime: RuntimeId,
   build: BuildId,
   pack: PackId,
   'working-palette': WorkingPaletteId,
   'working-palette-item': WorkingPaletteItemId,
+  gobj: GameObjectTypeId,
+  item: ItemDefinitionId,
+  loot: LootTableId,
+  catalog: CatalogId,
 } as const;
 
 const decodeSchema = <A, I>(

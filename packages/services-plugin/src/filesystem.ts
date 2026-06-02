@@ -115,7 +115,7 @@ export const readManifestJson = async (rootPath: string): Promise<unknown> => {
 };
 
 const optionalContributionKeys = {
-  contributes: ["panels", "tools", "assetPacks", "tilesetPacks", "objectKinds", "editor", "runtime", "server"],
+  contributes: ["panels", "tools", "assetPacks", "tilesetPacks", "editor", "runtime", "server"],
   entry: ["editor", "runtime", "server"],
   editor: [
     "tabs",
@@ -133,13 +133,13 @@ const optionalContributionKeys = {
     "inspectorPanels",
     "settingsPanels",
     "mapKinds",
-    "objectTypes",
     "presets",
     "panels",
     "validators",
     "exporters",
     "generators",
     "assetMetadata",
+    "playerModelPolicies",
   ],
   runtime: [
     "systems",
@@ -149,12 +149,14 @@ const optionalContributionKeys = {
     "clientSystems",
     "hudWidgets",
     "lobbyPanels",
+    "menuSections",
     "inputMaps",
     "audioBuses",
     "cameras",
     "interpolators",
     "assetPacks",
     "errorMappers",
+    "gameObjectCatalogs",
   ],
   server: [
     "rules",
@@ -244,9 +246,6 @@ export const materializePluginManifestInput = (input: unknown): unknown => {
       manifest["contributes"]["tools"] = manifest["contributes"]["tools"].map(
         materializeSidebarToolContributionEntry,
       );
-    }
-    if (Array.isArray(manifest["contributes"]["objectKinds"])) {
-      manifest["contributes"]["objectKinds"] = materializeContributionList(manifest["contributes"]["objectKinds"]);
     }
     manifest["contributes"]["editor"] = materializeContributionBucket(
       manifest["contributes"]["editor"],

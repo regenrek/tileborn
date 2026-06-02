@@ -3,10 +3,10 @@ import {
   makePackId,
   makePlaceableId,
   makeTileId,
-  type ContentHash,
   type Uuid,
 } from '@tileborne/core';
-import { createRuntimeAssetManifest, type RuntimeAssetManifest } from '@tileborne/runtime';
+import { type RuntimeAssetManifest } from '@tileborne/runtime';
+import { buildEditorTilesetIndex } from '@tileborne/sdk-tileset/editor-index';
 import {
   BitmaskCollisionMask,
   CellSize,
@@ -22,39 +22,16 @@ import {
   TiledPlaceableSource,
   UVRect,
 } from '@tileborne/sdk-tileset/schemas';
-import { writeTilesetManifest } from '@tileborne/sdk-tileset/manifest';
 import { Effect, Option, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assetProtocolUrl } from '@/lib/asset-url';
 import {
-  buildRuntimeViewportManifest,
   clearViewportAssetBundleCache,
   createBlankViewportManifest,
   loadViewportAssetBundle,
   loadViewportAssetManifest,
+  viewportControllerAtlas,
 } from './viewport-asset-manifest.js';
-
-/**
- * Stubs `fetch` to serve pack manifests through the `tileborne-asset` protocol
- * (the renderer now loads the manifest via fetch instead of base64 IPC). Atlas
- * images are referenced by protocol URL and never fetched here.
- */
-const stubFetchManifests = (manifestByPackId: ReadonlyMap<string, unknown>): ReturnType<typeof vi.fn> => {
-  const fetchMock = vi.fn(async (input: string | URL) => {
-    const url = new URL(String(input));
-    const id = url.searchParams.get('id');
-    const assetPath = url.searchParams.get('path');
-    if (assetPath === 'tileborne-asset-pack.json' && id !== null && manifestByPackId.has(id)) {
-      return new Response(JSON.stringify(manifestByPackId.get(id)), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    }
-    return new Response('not found', { status: 404 });
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-};
 
 const mountMock = vi.fn();
 const loadAssetsMock = vi.fn();
@@ -72,34 +49,57 @@ vi.mock('@tileborne/runtime', async (importOriginal) => {
   };
 });
 
-const fakePackManifest = createRuntimeAssetManifest({
-  id: makePackId('a6ffcd59-011f-4f05-a4e2-832b87155ade'),
-  name: 'Tiled source',
-  version: '1.0.0-sample',
-  license: {
-    spdxId: 'CC0-1.0',
-    attribution: Option.none(),
-    sourceUrl: Option.some('https://example.invalid/tileborne-sample-fixture'),
-    notes: Option.none(),
-  },
-  assets: [
-    {
-      id: makeAssetId('660e8400-e29b-41d4-a716-446655440011'),
-      path: 'tiles/sample.png',
-      mime: 'image/png',
-      size: 289,
-      hash: 'sha256:720b55b57d2f4f665c9edfdcfa0d49efaee3f61951183afc4d5219879c8f3707' as ContentHash,
-      license: Option.none(),
+/**
+ * Serves editor indexes through the IPC bridge (the renderer now consumes the
+ * persisted compact index instead of parsing the full manifest). Each pack's
+ * index is built from its synthetic `TilesetPack` exactly as the main process
+ * would.
+ */
+const stubEditorIndexBridge = (
+  packsById: ReadonlyMap<string, TilesetPack>,
+): ReturnType<typeof vi.fn> => {
+  const getEditorIndex = vi.fn(async (input: { packId: string }) => {
+    const pack = packsById.get(String(input.packId));
+    if (pack === undefined) {
+      throw new Error(`no editor index for pack ${input.packId}`);
+    }
+    const integrityHash = `sha256:${String(input.packId)}`;
+    const index = buildEditorTilesetIndex(pack, integrityHash);
+    return {
+      packId: input.packId,
+      integrityHash,
+      schemaVersion: 1,
+      indexJson: JSON.stringify(index),
+    };
+  });
+  return getEditorIndex;
+};
+
+const stubWindow = (input: {
+  readonly packsById?: ReadonlyMap<string, TilesetPack>;
+  readonly listPacks?: ReturnType<typeof vi.fn>;
+}): ReturnType<typeof vi.fn> => {
+  const getEditorIndex = stubEditorIndexBridge(input.packsById ?? new Map());
+  vi.stubGlobal('window', {
+    tileborne: {
+      assets: {
+        listPacks: input.listPacks ?? vi.fn().mockResolvedValue({ packs: [] }),
+      },
+      assetLibrary: { getEditorIndex },
+      projects: { get: vi.fn() },
     },
-  ],
-});
+  });
+  return getEditorIndex;
+};
 
 const uuid = (suffix: string): Uuid =>
   `660e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
 
+const fakePackId = makePackId('a6ffcd59-011f-4f05-a4e2-832b87155ade');
+
 const fakeTilesetPack = new TilesetPack({
   schemaVersion: 1,
-  id: fakePackManifest.id,
+  id: fakePackId,
   name: 'Tiled source',
   version: '1.0.0-sample',
   license: new TilesetPackLicense({
@@ -113,7 +113,7 @@ const fakeTilesetPack = new TilesetPack({
     new Tileset({
       id: Schema.decodeUnknownSync(TilesetId)(`tileset:${uuid('100')}`),
       name: 'Sample Terrain',
-      atlasAssetId: fakePackManifest.assets[0]!.id,
+      atlasAssetId: makeAssetId(uuid('11')),
       cellSize: new CellSize({ width: 32, height: 32 }),
       margin: 0,
       spacing: 0,
@@ -134,15 +134,14 @@ const fakeTilesetPack = new TilesetPack({
   ],
   assets: [
     new TilesetPackAsset({
-      id: fakePackManifest.assets[0]!.id,
+      id: makeAssetId(uuid('11')),
       path: 'tiles/sample.png',
       mime: 'image/png',
     }),
   ],
 });
 
-const fakeTextureDataUrl =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const sampleTileId = fakeTilesetPack.tilesets[0]!.tiles[0]!.id;
 
 describe('viewport asset manifest', () => {
   beforeEach(() => {
@@ -154,26 +153,12 @@ describe('viewport asset manifest', () => {
     vi.unstubAllGlobals();
   });
 
-  it('builds a runtime manifest with data-url texture paths', () => {
-    const manifest = buildRuntimeViewportManifest(
-      fakeTilesetPack,
-      new Map([['tiles/sample.png', fakeTextureDataUrl]]),
-    );
-
-    expect(manifest.assets).toHaveLength(1);
-    expect(manifest.assets[0]?.path).toBe(fakeTextureDataUrl);
-    expect(manifest.assets[0]?.mime).toBe('image/png');
-  });
-
   it('uses a blank texture fallback manifest when no pack resolves', async () => {
     vi.stubGlobal('window', {
       tileborne: {
-        assets: {
-          listPacks: vi.fn().mockResolvedValue({ packs: [] }),
-        },
-        projects: {
-          get: vi.fn().mockResolvedValue({ project: { assetPacks: [] } }),
-        },
+        assets: { listPacks: vi.fn().mockResolvedValue({ packs: [] }) },
+        assetLibrary: { getEditorIndex: vi.fn() },
+        projects: { get: vi.fn().mockResolvedValue({ project: { assetPacks: [] } }) },
       },
     });
 
@@ -183,21 +168,12 @@ describe('viewport asset manifest', () => {
     expect(manifest.assets[0]?.path.startsWith('data:image/png;base64,')).toBe(true);
   });
 
-  it('loads the manifest via protocol and passes a protocol-url manifest into loadAssets on mount', async () => {
-    const fetchMock = stubFetchManifests(
-      new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]),
-    );
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: {
-          listPacks: vi.fn().mockResolvedValue({
-            packs: [{ id: fakePackManifest.id, name: fakePackManifest.name, version: fakePackManifest.version }],
-          }),
-        },
-        projects: {
-          get: vi.fn(),
-        },
-      },
+  it('builds the bundle from the editor index and passes protocol-url textures to loadAssets', async () => {
+    const getEditorIndex = stubWindow({
+      packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+      }),
     });
 
     const { PixiRendererAdapter } = await import('@tileborne/runtime');
@@ -207,36 +183,32 @@ describe('viewport asset manifest', () => {
     const bundle = await Effect.runPromise(
       adapter.mount(container).pipe(
         Effect.flatMap(() => loadViewportAssetBundle()),
-        Effect.flatMap((bundle) => adapter.loadAssets(bundle.manifest).pipe(Effect.as(bundle))),
+        Effect.flatMap((loaded) => adapter.loadAssets(loaded.manifest).pipe(Effect.as(loaded))),
       ),
     );
 
     expect(loadAssetsMock).toHaveBeenCalledTimes(1);
     const loadedManifest = loadAssetsMock.mock.calls[0]?.[0] as RuntimeAssetManifest;
-    expect(loadedManifest.assets.length).toBeGreaterThan(0);
-    // Atlas textures are now referenced by `tileborne-asset` protocol URL and
-    // decoded off the main thread, not shipped as base64 data URLs.
     expect(loadedManifest.assets[0]?.path).toBe(
       assetProtocolUrl(fakeTilesetPack.id, 'tiles/sample.png'),
     );
     expect(loadedManifest.name).toBe('Tiled source');
-    expect(bundle.frameIndex?.lookup(fakeTilesetPack.tilesets[0]!.tiles[0]!.id)?.sourceAssetPaths).toEqual([
-      'tiles/sample.png',
-    ]);
-    expect(bundle.tileIdByTileIndex.get(1)).toBe(fakeTilesetPack.tilesets[0]!.tiles[0]!.id);
+    expect(bundle.tileFramesByIndex.get(1)).toMatchObject({
+      assetPath: 'tiles/sample.png',
+      x: 0,
+      y: 0,
+      width: 32,
+      height: 32,
+    });
+    expect(bundle.tileIndexByTileId.get(sampleTileId)).toBe(1);
     expect(bundle.collisionMaskByTileIndex.get(1)?._tag).toBe('bitmask');
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
-    // Only the manifest JSON is fetched. Atlas images are referenced by URL and
-    // decoded lazily by the renderer; the viewport does NOT eager-fetch every
-    // pack image (see .refs/v0.1.x-paint-bug/diag/diag.md).
-    const fetchedPaths = fetchMock.mock.calls.map((call) => {
-      const url = new URL(String(call[0]));
-      return url.searchParams.get('path');
-    });
-    expect(fetchedPaths).toEqual(['tileborne-asset-pack.json']);
+    // The renderer no longer parses the full manifest: it fetches the compact
+    // editor index exactly once per pack.
+    expect(getEditorIndex).toHaveBeenCalledTimes(1);
   });
 
-  it('only fetches atlas images (not sprite or sample assets) when loading the bundle', async () => {
+  it('only renders atlas images (not decoy sprite/sample assets) from the bundle', async () => {
     const decoyAssetId = makeAssetId('660e8400-e29b-41d4-a716-446655440099');
     const packWithDecoy = new TilesetPack({
       schemaVersion: fakeTilesetPack.schemaVersion,
@@ -247,27 +219,17 @@ describe('viewport asset manifest', () => {
       tilesets: fakeTilesetPack.tilesets,
       assets: [
         ...fakeTilesetPack.assets,
-        new TilesetPackAsset({
-          id: decoyAssetId,
-          path: 'props/decoy-sprite.png',
-          mime: 'image/png',
-        }),
+        new TilesetPackAsset({ id: decoyAssetId, path: 'props/decoy-sprite.png', mime: 'image/png' }),
       ],
     });
-    stubFetchManifests(new Map([[packWithDecoy.id, writeTilesetManifest(packWithDecoy)]]));
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: {
-          listPacks: vi.fn().mockResolvedValue({
-            packs: [{ id: packWithDecoy.id, name: packWithDecoy.name, version: packWithDecoy.version }],
-          }),
-        },
-        projects: { get: vi.fn() },
-      },
+    stubWindow({
+      packsById: new Map([[packWithDecoy.id, packWithDecoy]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [{ id: packWithDecoy.id, name: packWithDecoy.name, version: packWithDecoy.version }],
+      }),
     });
 
     const bundle = await Effect.runPromise(loadViewportAssetBundle());
-    // Only the atlas is renderable; the decoy sprite asset is not referenced.
     expect(bundle.renderableAssetIdByPath.get('props/decoy-sprite.png')).toBeUndefined();
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
     expect(bundle.manifest.assets.map((asset) => asset.path)).toEqual([
@@ -275,13 +237,46 @@ describe('viewport asset manifest', () => {
     ]);
   });
 
-  it('fetches only selected placeable frames from image-collection packs', async () => {
+  it('renders only selected placeable frames from image-collection packs', async () => {
     const selectedPlaceableId = makePlaceableId(uuid('300'));
     const selectedAssetId = makeAssetId(uuid('301'));
     const selectedTileId = makeTileId(uuid('302'));
     const hiddenPlaceableId = makePlaceableId(uuid('303'));
     const hiddenAssetId = makeAssetId(uuid('304'));
     const hiddenTileId = makeTileId(uuid('305'));
+    const makeImagePlaceable = (
+      id: ReturnType<typeof makePlaceableId>,
+      assetId: ReturnType<typeof makeAssetId>,
+      tileId: ReturnType<typeof makeTileId>,
+      image: string,
+      localTileId: number,
+    ) =>
+      new Placeable({
+        id,
+        name: image,
+        size: new PlaceableSize({ width: 64, height: 64 }),
+        frames: [
+          new PlaceableFrameRef({
+            assetId,
+            tileId,
+            uv: new UVRect({ x: 0, y: 0, w: 64, h: 64 }),
+            durationMs: Option.none(),
+          }),
+        ],
+        tags: [],
+        placementMode: 'object',
+        source: new TiledPlaceableSource({
+          format: 'tiled',
+          tilesetName: 'Props',
+          localTileId,
+          image: Option.some(image),
+          imageWidth: Option.some(64),
+          imageHeight: Option.some(64),
+          objectType: Option.none(),
+          objectClass: Option.none(),
+          properties: {},
+        }),
+      });
     const packWithPlaceables = new TilesetPack({
       schemaVersion: fakeTilesetPack.schemaVersion,
       id: fakeTilesetPack.id,
@@ -291,26 +286,59 @@ describe('viewport asset manifest', () => {
       tilesets: fakeTilesetPack.tilesets,
       assets: [
         ...fakeTilesetPack.assets,
-        new TilesetPackAsset({
-          id: selectedAssetId,
-          path: 'props/selected.png',
-          mime: 'image/png',
-        }),
-        new TilesetPackAsset({
-          id: hiddenAssetId,
-          path: 'props/hidden.png',
-          mime: 'image/png',
-        }),
+        new TilesetPackAsset({ id: selectedAssetId, path: 'props/selected.png', mime: 'image/png' }),
+        new TilesetPackAsset({ id: hiddenAssetId, path: 'props/hidden.png', mime: 'image/png' }),
+      ],
+      placeables: [
+        makeImagePlaceable(selectedPlaceableId, selectedAssetId, selectedTileId, 'props/selected.png', 0),
+        makeImagePlaceable(hiddenPlaceableId, hiddenAssetId, hiddenTileId, 'props/hidden.png', 1),
+      ],
+    });
+    stubWindow({
+      packsById: new Map([[packWithPlaceables.id, packWithPlaceables]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [
+          { id: packWithPlaceables.id, name: packWithPlaceables.name, version: packWithPlaceables.version },
+        ],
+      }),
+    });
+
+    const bundle = await Effect.runPromise(
+      loadViewportAssetBundle({
+        renderablePlaceableRefs: [{ packId: packWithPlaceables.id, placeableId: selectedPlaceableId }],
+      }),
+    );
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(2);
+    expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
+  });
+
+  it('loads packs referenced only by existing map object placeables', async () => {
+    // An object placed from a pack that is neither the map's tileset pack nor in
+    // the working palette must still resolve its placeable + atlas on map open.
+    const objectPackId = makePackId('660e8400-e29b-41d4-a716-446655440077');
+    const objectPlaceableId = makePlaceableId(uuid('400'));
+    const objectAssetId = makeAssetId(uuid('401'));
+    const objectTileId = makeTileId(uuid('402'));
+    const objectPack = new TilesetPack({
+      schemaVersion: 1,
+      id: objectPackId,
+      name: 'Object Props',
+      version: '1.0.0',
+      license: fakeTilesetPack.license,
+      tilesets: [],
+      assets: [
+        new TilesetPackAsset({ id: objectAssetId, path: 'props/object.png', mime: 'image/png' }),
       ],
       placeables: [
         new Placeable({
-          id: selectedPlaceableId,
-          name: 'Selected',
+          id: objectPlaceableId,
+          name: 'props/object.png',
           size: new PlaceableSize({ width: 64, height: 64 }),
           frames: [
             new PlaceableFrameRef({
-              assetId: selectedAssetId,
-              tileId: selectedTileId,
+              assetId: objectAssetId,
+              tileId: objectTileId,
               uv: new UVRect({ x: 0, y: 0, w: 64, h: 64 }),
               durationMs: Option.none(),
             }),
@@ -321,33 +349,7 @@ describe('viewport asset manifest', () => {
             format: 'tiled',
             tilesetName: 'Props',
             localTileId: 0,
-            image: Option.some('props/selected.png'),
-            imageWidth: Option.some(64),
-            imageHeight: Option.some(64),
-            objectType: Option.none(),
-            objectClass: Option.none(),
-            properties: {},
-          }),
-        }),
-        new Placeable({
-          id: hiddenPlaceableId,
-          name: 'Hidden',
-          size: new PlaceableSize({ width: 64, height: 64 }),
-          frames: [
-            new PlaceableFrameRef({
-              assetId: hiddenAssetId,
-              tileId: hiddenTileId,
-              uv: new UVRect({ x: 0, y: 0, w: 64, h: 64 }),
-              durationMs: Option.none(),
-            }),
-          ],
-          tags: [],
-          placementMode: 'object',
-          source: new TiledPlaceableSource({
-            format: 'tiled',
-            tilesetName: 'Props',
-            localTileId: 1,
-            image: Option.some('props/hidden.png'),
+            image: Option.some('props/object.png'),
             imageWidth: Option.some(64),
             imageHeight: Option.some(64),
             objectType: Option.none(),
@@ -357,97 +359,60 @@ describe('viewport asset manifest', () => {
         }),
       ],
     });
-    stubFetchManifests(new Map([[packWithPlaceables.id, writeTilesetManifest(packWithPlaceables)]]));
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: {
-          listPacks: vi.fn().mockResolvedValue({
-            packs: [
-              {
-                id: packWithPlaceables.id,
-                name: packWithPlaceables.name,
-                version: packWithPlaceables.version,
-              },
-            ],
-          }),
-        },
-        projects: { get: vi.fn() },
-      },
-    });
-
-    const bundle = await Effect.runPromise(
-      loadViewportAssetBundle({
-        renderablePlaceableRefs: [
-          { packId: packWithPlaceables.id, placeableId: selectedPlaceableId },
-        ],
-      }),
-    );
-    // Only the atlas and the selected placeable's frame are renderable.
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
-    expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(2);
-    expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
-  });
-
-  it('keeps the primary map pack renderable when an optional palette pack is stale', async () => {
-    const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440088');
-    // The missing pack has no manifest entry, so its protocol fetch 404s and the
-    // pack is skipped gracefully.
-    stubFetchManifests(new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]));
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: { listPacks: vi.fn() },
-        projects: { get: vi.fn() },
-      },
+    stubWindow({
+      packsById: new Map([
+        [fakeTilesetPack.id, fakeTilesetPack],
+        [objectPackId, objectPack],
+      ]),
     });
 
     const bundle = await Effect.runPromise(
       loadViewportAssetBundle({
         packId: fakeTilesetPack.id,
-        extraPackIds: [missingPackId],
+        renderablePlaceableRefs: [{ packId: objectPackId, placeableId: objectPlaceableId }],
       }),
     );
 
-    expect(bundle.packs.map((pack) => pack.id)).toEqual([fakeTilesetPack.id]);
+    expect(
+      bundle.placeables.some(
+        (entry) => entry.packId === objectPackId && entry.placeable.id === objectPlaceableId,
+      ),
+    ).toBe(true);
+    expect(bundle.renderableAssetIdByPath.get('props/object.png')).toBeDefined();
+  });
+
+  it('keeps the primary map pack renderable when an optional palette pack is stale', async () => {
+    const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440088');
+    stubWindow({ packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]) });
+
+    const bundle = await Effect.runPromise(
+      loadViewportAssetBundle({ packId: fakeTilesetPack.id, extraPackIds: [missingPackId] }),
+    );
+
+    expect(bundle.packId).toBe(fakeTilesetPack.id);
     expect(bundle.manifest.assets).toHaveLength(1);
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
   });
 
   it('loads an extra palette pack when the primary map pack is stale', async () => {
     const missingPackId = makePackId('660e8400-e29b-41d4-a716-446655440089');
-    stubFetchManifests(new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]));
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: { listPacks: vi.fn() },
-        projects: { get: vi.fn() },
-      },
-    });
+    stubWindow({ packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]) });
 
     const bundle = await Effect.runPromise(
-      loadViewportAssetBundle({
-        packId: missingPackId,
-        extraPackIds: [fakeTilesetPack.id],
-      }),
+      loadViewportAssetBundle({ packId: missingPackId, extraPackIds: [fakeTilesetPack.id] }),
     );
 
-    expect(bundle.packs.map((pack) => pack.id)).toEqual([fakeTilesetPack.id]);
+    expect(bundle.packId).toBe(fakeTilesetPack.id);
     expect(bundle.manifest.name).toBe(fakeTilesetPack.name);
-    expect(bundle.manifest.assets).toHaveLength(1);
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
   });
 
   it('reuses the viewport asset bundle for repeated loads of the same pack', async () => {
-    const fetchMock = stubFetchManifests(
-      new Map([[fakeTilesetPack.id, writeTilesetManifest(fakeTilesetPack)]]),
-    );
-    vi.stubGlobal('window', {
-      tileborne: {
-        assets: {
-          listPacks: vi.fn().mockResolvedValue({
-            packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
-          }),
-        },
-        projects: { get: vi.fn() },
-      },
+    const getEditorIndex = stubWindow({
+      packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+      }),
     });
 
     const [first, second] = await Promise.all([
@@ -456,18 +421,37 @@ describe('viewport asset manifest', () => {
     ]);
 
     expect(second).toBe(first);
-    // The bundle cache dedupes concurrent loads: the manifest JSON is fetched
-    // once; atlas images are referenced by URL, not fetched here.
-    const fetchedPaths = fetchMock.mock.calls.map((call) => {
-      const url = new URL(String(call[0]));
-      return url.searchParams.get('path');
-    });
-    expect(fetchedPaths).toEqual(['tileborne-asset-pack.json']);
+    expect(getEditorIndex).toHaveBeenCalledTimes(1);
   });
 
   it('creates a single-image blank fallback manifest', () => {
     const manifest = createBlankViewportManifest();
     expect(manifest.assets).toHaveLength(1);
     expect(manifest.assets[0]?.mime).toBe('image/png');
+  });
+
+  it('projects a loaded bundle into the controller tile-atlas lookups', async () => {
+    stubWindow({
+      packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+      }),
+    });
+
+    const bundle = await Effect.runPromise(loadViewportAssetBundle());
+    const atlas = viewportControllerAtlas(bundle);
+
+    // The playtest viewports rely on these lookups to resolve real terrain
+    // textures instead of the missing-texture diagnostic fallback, so they must
+    // carry through unchanged from the loaded bundle.
+    expect(atlas.tileFramesByIndex).toBe(bundle.tileFramesByIndex);
+    expect(atlas.collisionMaskByTileIndex).toBe(bundle.collisionMaskByTileIndex);
+    expect(atlas.renderableAssetIdByPath).toBe(bundle.renderableAssetIdByPath);
+    expect(atlas.placeables).toBe(bundle.placeables);
+    expect(atlas.assetPathByPackAndId).toBe(bundle.assetPathByPackAndId);
+    expect(atlas.assetPathById).toBe(bundle.assetPathById);
+    expect(atlas.autotileRules).toBe(bundle.autotileRules);
+    expect(atlas.terrainTransitions).toBe(bundle.terrainTransitions);
+    expect(atlas.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
   });
 });

@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 
 import {
+  ClipId,
   ContentHash,
   PackId,
   ProjectId,
@@ -14,6 +15,7 @@ export const AssetLibraryReferenceKind = Schema.Literals([
   'autotile',
   'terrain',
   'placeable',
+  'sprite',
 ]);
 export type AssetLibraryReferenceKind = typeof AssetLibraryReferenceKind.Type;
 
@@ -38,9 +40,50 @@ export class AssetLibraryReference extends Schema.Class<AssetLibraryReference>(
   kind: AssetLibraryReferenceKind,
   refId: Schema.String,
   tileId: Schema.optional(TileId),
+  /** Default animation clip for sprite references; placement pins this clip. */
+  clipId: Schema.optional(ClipId),
   thumbnailCacheKey: Schema.optional(Schema.String),
   thumbnailUrl: Schema.optional(Schema.String),
 }) {}
+
+/**
+ * Reusable, game-mode-agnostic reference to a renderable player avatar: a
+ * sprite/placeable asset-library reference plus the clip to play and the
+ * normalized pivot to render it at. This is the shared TYPE only — the policy
+ * for whether a mode uses a fixed model or a selectable set lives in a
+ * `@tileborne/plugin-api` contribution, and resolution into a RenderableEntity
+ * lives in the runtime projector (see ADR-candidate, context c-l3l6).
+ */
+export class PlayerModelAnchor extends Schema.Class<PlayerModelAnchor>('PlayerModelAnchor')({
+  /** Normalized pivot x (0..1, origin top-left). */
+  x: Schema.Number,
+  /** Normalized pivot y (0..1, origin top-left). */
+  y: Schema.Number,
+}) {}
+
+/** Asset-library reference kinds that can back a player model (renderable sprites). */
+export const PlayerModelRefableKinds = ['sprite', 'placeable'] as const;
+
+export class PlayerModelRef extends Schema.Class<PlayerModelRef>('PlayerModelRef')({
+  /** Stable selection id (used by rosters, lobby picks, and wire snapshots). */
+  id: Schema.String,
+  /** Human-facing label shown in pickers. */
+  label: Schema.String,
+  /** Underlying sprite/placeable reference (kind must be 'sprite' or 'placeable'). */
+  ref: AssetLibraryReference,
+  /** Animation clip to play; falls back to `ref.clipId` when omitted. */
+  defaultClipId: Schema.optional(ClipId),
+  /** Normalized pivot (0..1, origin top-left). */
+  anchor: PlayerModelAnchor,
+}) {}
+
+/** True when an asset-library reference kind can be promoted to a player model. */
+export const isPlayerModelRefable = (kind: AssetLibraryReferenceKind): boolean =>
+  (PlayerModelRefableKinds as readonly string[]).includes(kind);
+
+/** Resolve the effective clip id for a player model (explicit default, else ref clip). */
+export const resolvePlayerModelClipId = (model: PlayerModelRef): ClipId | undefined =>
+  model.defaultClipId ?? model.ref.clipId;
 
 export const AssetLibraryGroupKind = Schema.Literals([
   'tileset',
@@ -48,6 +91,7 @@ export const AssetLibraryGroupKind = Schema.Literals([
   'autotile',
   'placeable',
   'placeable-category',
+  'sprite',
   'source',
   'tag',
 ]);

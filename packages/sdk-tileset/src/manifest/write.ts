@@ -55,17 +55,28 @@ const animationToJson = (animation: Animation) => ({
   loop: animation.loop,
 });
 
+const frameToJson = (frame: NonNullable<TilesetPack["placeables"]>[number]["frames"][number]) => ({
+  assetId: frame.assetId,
+  tileId: frame.tileId,
+  uv: uvToJson(frame.uv),
+  ...optionProperty("durationMs", frame.durationMs),
+});
+
+const clipToJson = (clip: NonNullable<NonNullable<TilesetPack["placeables"]>[number]["clips"]>[number]) => ({
+  id: clip.id,
+  name: clip.name,
+  frames: clip.frames.map(frameToJson),
+  loop: clip.loop,
+  defaultDurationMs: clip.defaultDurationMs,
+});
+
 const placeablesToJson = (placeables: TilesetPack["placeables"]) =>
   (placeables ?? []).map((placeable) => ({
     id: placeable.id,
     name: placeable.name,
     size: sizeToJson(placeable.size),
-    frames: placeable.frames.map((frame) => ({
-      assetId: frame.assetId,
-      tileId: frame.tileId,
-      uv: uvToJson(frame.uv),
-      ...optionProperty("durationMs", frame.durationMs),
-    })),
+    frames: placeable.frames.map(frameToJson),
+    ...(placeable.clips === undefined ? {} : { clips: placeable.clips.map(clipToJson) }),
     tags: placeable.tags,
     placementMode: placeable.placementMode,
     source: {

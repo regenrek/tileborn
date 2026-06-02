@@ -4,6 +4,7 @@ import {
   ObjectLayer,
   TileChunk,
   TileLayer,
+  gameObjectTypeIdForKey,
   makeAssetId,
   makeLayerId,
   makeMapId,
@@ -49,7 +50,7 @@ describe("exportMapToTiled", () => {
       objects: [
         new MapObject({
           id: objectId,
-          kind: "statue",
+          kind: gameObjectTypeIdForKey("statue"),
           x: 64,
           y: 96,
           width: Option.some(96),
@@ -84,8 +85,8 @@ describe("exportMapToTiled", () => {
           type: "objectgroup",
           objects: [
             {
-              name: "statue",
-              type: "statue",
+              name: gameObjectTypeIdForKey("statue"),
+              type: gameObjectTypeIdForKey("statue"),
               x: 64,
               y: 96,
               width: 96,

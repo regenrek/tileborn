@@ -1,5 +1,7 @@
 import {
   MapObjectPlacement,
+  PLACEABLE_OBJECT_TYPE_ID,
+  gameObjectTypeIdForKey,
   type AssetId,
   type LayerId,
   type ObjectId,
@@ -47,7 +49,6 @@ export interface ToolContext {
   readonly brushIntent: BrushIntent;
   readonly resolvedBrush?: ResolvedBrush | undefined;
   readonly autotileResolver?: AutotilePaintResolver | undefined;
-  readonly stagedObjectKind: string;
   readonly activeLayerId?: LayerId | undefined;
   readonly selection: ReadonlySet<string>;
   readonly shiftKey: boolean;
@@ -66,6 +67,11 @@ export interface ToolDispatchResult {
     w?: number;
     h?: number;
     tileIndex?: number;
+    /**
+     * `'select'` renders the rectangle in the selection color (marquee) instead
+     * of the paint-fill color. Defaults to `'paint'` when omitted.
+     */
+    variant?: 'paint' | 'select';
   } | null;
 }
 
@@ -73,6 +79,11 @@ export interface ToolSession {
   readonly origin?: PointerPoint;
   readonly dragging?: boolean;
   readonly objectId?: ObjectId;
+  /**
+   * Selection captured at the start of a `select` drag so a shift-drag adds the
+   * marquee rectangle to the pre-existing selection instead of replacing it.
+   */
+  readonly selectionBase?: ReadonlySet<string>;
   readonly lastPaintedCell?: {
     readonly layerId: LayerId;
     readonly tileX: number;
@@ -156,6 +167,146 @@ export const resolveCollisionLayerId = (
   return findCollisionLayer(map)?.id;
 };
 
+/** Parses the selection set into in-bounds tile cells, dropping object ids. */
+const selectionTileCells = (
+  map: TileborneMap,
+  selection: ReadonlySet<string>,
+): readonly { readonly tileX: number; readonly tileY: number }[] => {
+  const cells: { readonly tileX: number; readonly tileY: number }[] = [];
+  for (const id of selection) {
+    const parts = id.split(':');
+    if (parts.length !== 2) {
+      continue;
+    }
+    const tileX = Number(parts[0]);
+    const tileY = Number(parts[1]);
+    if (!Number.isInteger(tileX) || !Number.isInteger(tileY) || !insideMap(map, tileX, tileY)) {
+      continue;
+    }
+    cells.push({ tileX, tileY });
+  }
+  return cells;
+};
+
+/**
+ * Builds an undoable command that paints `tileIndex` into every selected tile
+ * cell of `layerId`. Object ids in the selection (and out-of-bounds / no-op
+ * cells) are skipped. Returns `undefined` when nothing would change.
+ */
+export const createFillSelectionTileCommand = (
+  map: TileborneMap,
+  layerId: LayerId,
+  selection: ReadonlySet<string>,
+  tileIndex: number,
+): EditorCommand | undefined => {
+  const cells: {
+    readonly tileX: number;
+    readonly tileY: number;
+    readonly oldIndex: number;
+    readonly newIndex: number;
+  }[] = [];
+  for (const { tileX, tileY } of selectionTileCells(map, selection)) {
+    const oldIndex = getTileIndex(map, layerId, tileX, tileY);
+    if (oldIndex === tileIndex) {
+      continue;
+    }
+    cells.push({ tileX, tileY, oldIndex, newIndex: tileIndex });
+  }
+  return cells.length === 0 ? undefined : createStrokeTileCommand(layerId, cells);
+};
+
+/**
+ * Fills the selected cells with an autotile brush, resolving each cell's edge
+ * variant from its neighbors. Filled cells (and adjacent existing same-autotile
+ * cells) are re-resolved so the region connects internally and stitches into
+ * surrounding autotile tiles. Returns `undefined` when nothing would change.
+ */
+const createFillSelectionAutotileCommand = (
+  map: TileborneMap,
+  layerId: LayerId,
+  selection: ReadonlySet<string>,
+  brush: AutotilePaintBrush,
+): EditorCommand | undefined => {
+  const cells = selectionTileCells(map, selection);
+  if (cells.length === 0) {
+    return undefined;
+  }
+  const cellKey = (x: number, y: number): string => `${x}:${y}`;
+  // Overlay holds the brush index for every cell being written; mask resolution
+  // reads through it so neighbors inside the fill count as connected. Variants
+  // stay within `brush.tileIndexes`, so resolution order does not matter.
+  const overlay = new Map<string, number>();
+  for (const cell of cells) {
+    overlay.set(cellKey(cell.tileX, cell.tileY), brush.previewTileIndex);
+  }
+  const tileIndexAt = (x: number, y: number): number => {
+    const overlaid = overlay.get(cellKey(x, y));
+    return overlaid !== undefined ? overlaid : getTileIndex(map, layerId, x, y);
+  };
+  const isBrushCell = (x: number, y: number): boolean =>
+    overlay.has(cellKey(x, y)) || brush.tileIndexes.has(tileIndexAt(x, y));
+
+  const toResolve = new Map<string, { readonly x: number; readonly y: number }>();
+  for (const cell of cells) {
+    const origin = { x: cell.tileX, y: cell.tileY };
+    toResolve.set(cellKey(origin.x, origin.y), origin);
+    for (const neighbor of autotileCellsToRefresh(origin, brush)) {
+      toResolve.set(cellKey(neighbor.x, neighbor.y), { x: neighbor.x, y: neighbor.y });
+    }
+  }
+
+  for (const cell of toResolve.values()) {
+    if (!insideMap(map, cell.x, cell.y) || !isBrushCell(cell.x, cell.y)) {
+      continue;
+    }
+    const resolved = resolveAutotileTileIndex(brush, cell, tileIndexAt);
+    if (resolved !== undefined) {
+      overlay.set(cellKey(cell.x, cell.y), resolved);
+    }
+  }
+
+  const strokeCells: {
+    readonly tileX: number;
+    readonly tileY: number;
+    readonly oldIndex: number;
+    readonly newIndex: number;
+  }[] = [];
+  for (const cell of toResolve.values()) {
+    if (!insideMap(map, cell.x, cell.y) || !isBrushCell(cell.x, cell.y)) {
+      continue;
+    }
+    const newIndex = overlay.get(cellKey(cell.x, cell.y));
+    if (newIndex === undefined) {
+      continue;
+    }
+    const oldIndex = getTileIndex(map, layerId, cell.x, cell.y);
+    if (oldIndex === newIndex) {
+      continue;
+    }
+    strokeCells.push({ tileX: cell.x, tileY: cell.y, oldIndex, newIndex });
+  }
+  return strokeCells.length === 0 ? undefined : createStrokeTileCommand(layerId, strokeCells);
+};
+
+/**
+ * Fills the current selection with the active resolved brush. Handles direct
+ * tile and autotile/terrain brushes; placeable brushes are not fillable.
+ */
+export const createFillSelectionCommand = (
+  map: TileborneMap,
+  layerId: LayerId,
+  selection: ReadonlySet<string>,
+  brush: ResolvedBrush,
+): EditorCommand | undefined => {
+  if (brush.kind === 'paintTile') {
+    return createFillSelectionTileCommand(map, layerId, selection, brush.tileIndex);
+  }
+  if (brush.kind === 'paintAutotile') {
+    return createFillSelectionAutotileCommand(map, layerId, selection, brush);
+  }
+  return undefined;
+};
+
 export const dispatchPointerDown = (
   context: ToolContext,
   point: PointerPoint,
@@ -222,18 +373,22 @@ export const dispatchPointerMove = (
       },
     };
   }
+  if (context.activeTool === 'select' && session.dragging && session.objectId) {
+    return {
+      session,
+      result: { brushPreview: objectMovePreview(context.map, point, session.objectId) },
+    };
+  }
+  if (context.activeTool === 'select' && session.dragging && session.origin) {
+    return {
+      session,
+      result: { brushPreview: { ...previewRect(session.origin, point), variant: 'select' } },
+    };
+  }
   if (context.activeTool === 'objectMove' && session.dragging && session.objectId) {
     return {
       session,
-      result: {
-        brushPreview: {
-          x: point.tileX,
-          y: point.tileY,
-          w: 1,
-          h: 1,
-          tileIndex: 0,
-        },
-      },
+      result: { brushPreview: objectMovePreview(context.map, point, session.objectId) },
     };
   }
   if (context.activeTool === 'tileBrush' && session.dragging) {
@@ -313,9 +468,38 @@ export const dispatchPointerUp = (
       },
     };
   }
+  if (context.activeTool === 'select' && session.objectId && session.dragging) {
+    const movedTile =
+      session.origin === undefined ||
+      session.origin.tileX !== point.tileX ||
+      session.origin.tileY !== point.tileY;
+    if (!movedTile) {
+      // Click without drag: the object was already selected on pointer down, so
+      // do not emit a (grid-snapping) no-op move.
+      return { session: {}, result: { brushPreview: null } };
+    }
+    const tileSize = context.map.tileSize.width;
+    const command = createObjectMoveCommand(
+      context.map,
+      session.objectId,
+      point.tileX * tileSize,
+      point.tileY * tileSize,
+    );
+    return { session: {}, result: { command, brushPreview: null } };
+  }
   if (context.activeTool === 'select' && session.origin && session.dragging) {
-    const selection = rectSelection(session.origin, point);
-    return { session: {}, result: { selection } };
+    const sameTile =
+      session.origin.tileX === point.tileX && session.origin.tileY === point.tileY;
+    if (sameTile) {
+      // No drag: the single-tile selection was already applied on pointer down
+      // (which preserves shift-click toggling); only clear the marquee preview.
+      return { session: {}, result: { brushPreview: null } };
+    }
+    const selection = new Set(session.selectionBase ?? []);
+    for (const tileId of rectSelection(session.origin, point)) {
+      selection.add(tileId);
+    }
+    return { session: {}, result: { selection, brushPreview: null } };
   }
   return { session: {}, result: { brushPreview: null } };
 };
@@ -326,7 +510,7 @@ const handleSelectDown = (
   session: ToolSession,
 ): { session: ToolSession; result: ToolDispatchResult } => {
   void session;
-  const hitObject = context.map.objects.find((object) => objectContainsPoint(context.map, object, point));
+  const hitObject = findHitObject(context.map, point);
   if (hitObject) {
     const next = new Set(context.selection);
     if (context.shiftKey) {
@@ -335,20 +519,30 @@ const handleSelectDown = (
       } else {
         next.add(hitObject.id);
       }
-    } else {
-      next.clear();
-      next.add(hitObject.id);
+      // Shift-click extends a multi-object selection; it never starts a move.
+      return { session: { origin: point }, result: { selection: next } };
     }
-    return { session: { origin: point }, result: { selection: next } };
+    next.clear();
+    next.add(hitObject.id);
+    // A plain click on an object begins a move drag. `moveObject` preserves the
+    // object's `layerId`, so a moved object always stays on its own layer.
+    return {
+      session: { origin: point, dragging: true, objectId: hitObject.id },
+      result: { selection: next },
+    };
   }
   const tileId = `${point.tileX}:${point.tileY}`;
-  const next = context.shiftKey ? new Set(context.selection) : new Set<string>();
+  const base: ReadonlySet<string> = context.shiftKey ? new Set(context.selection) : new Set<string>();
+  const next = new Set(base);
   if (context.shiftKey && next.has(tileId)) {
     next.delete(tileId);
   } else {
     next.add(tileId);
   }
-  return { session: { origin: point, dragging: true }, result: { selection: next } };
+  return {
+    session: { origin: point, dragging: true, selectionBase: base },
+    result: { selection: next },
+  };
 };
 
 const handleObjectMoveDown = (
@@ -356,13 +550,70 @@ const handleObjectMoveDown = (
   point: PointerPoint,
   session: ToolSession,
 ): { session: ToolSession; result: ToolDispatchResult } => {
-  const hit = context.map.objects.find((object) => objectContainsPoint(context.map, object, point));
+  const hit = findHitObject(context.map, point);
   if (!hit) {
     return { session, result: {} };
   }
   return {
     session: { origin: point, dragging: true, objectId: hit.id },
     result: { selection: new Set([hit.id]) },
+  };
+};
+
+type MapObjectEntry = TileborneMap['objects'][number];
+
+const objectLayerVisible = (map: TileborneMap, object: MapObjectEntry): boolean => {
+  const layer = findLayerById(map, object.layerId);
+  return layer === undefined ? true : layer.visible;
+};
+
+/**
+ * Picks the top-most object under the pointer (objects render in array order, so
+ * later entries sit on top) while skipping objects on hidden layers — an
+ * invisible layer must never steal the pick or be moved by accident.
+ */
+const findHitObject = (map: TileborneMap, point: PointerPoint): MapObjectEntry | undefined => {
+  for (let index = map.objects.length - 1; index >= 0; index -= 1) {
+    const object = map.objects[index]!;
+    if (objectLayerVisible(map, object) && objectContainsPoint(map, object, point)) {
+      return object;
+    }
+  }
+  return undefined;
+};
+
+const objectTileFootprint = (
+  map: TileborneMap,
+  object: MapObjectEntry,
+): { readonly w: number; readonly h: number } => {
+  const tileW = map.tileSize.width;
+  const tileH = map.tileSize.height;
+  const widthPx =
+    optionValue(object.width as number | { readonly _tag: string; readonly value?: number } | undefined) ??
+    (typeof object.properties.tileWidth === 'number' ? object.properties.tileWidth * tileW : tileW);
+  const heightPx =
+    optionValue(object.height as number | { readonly _tag: string; readonly value?: number } | undefined) ??
+    (typeof object.properties.tileHeight === 'number' ? object.properties.tileHeight * tileH : tileH);
+  return {
+    w: Math.max(1, Math.round(widthPx / tileW)),
+    h: Math.max(1, Math.round(heightPx / tileH)),
+  };
+};
+
+const objectMovePreview = (
+  map: TileborneMap,
+  point: PointerPoint,
+  objectId: ObjectId,
+): NonNullable<ToolDispatchResult['brushPreview']> => {
+  const object = map.objects.find((entry) => entry.id === objectId);
+  const footprint = object ? objectTileFootprint(map, object) : { w: 1, h: 1 };
+  return {
+    x: point.tileX,
+    y: point.tileY,
+    w: footprint.w,
+    h: footprint.h,
+    tileIndex: 1,
+    variant: 'select',
   };
 };
 
@@ -713,13 +964,19 @@ const applyObjectPlace = (
   point: PointerPoint,
 ): { session: ToolSession; result: ToolDispatchResult } => {
   const tileSize = context.map.tileSize.width;
+  // `layerId` is undefined when the active layer is not an object layer (e.g. a
+  // generated map's terrain tile layer is active). We intentionally do NOT bail
+  // here: passing `layerId: undefined` to placeObject() targets the first
+  // existing object layer or creates one, so an object is never silently
+  // dropped or persisted with an invalid tile layerId.
   const layerId = resolveObjectLayerId(context.map, context.activeLayerId);
-  if (!layerId) {
-    return { session: {}, result: {} };
-  }
-  if (context.brushIntent.kind === 'placeable' && context.resolvedBrush?.kind === 'placeObject') {
+  // A placeable brush stamps its placeable asset repeatedly (sticky).
+  if (
+    context.brushIntent.kind === 'placeable' &&
+    context.resolvedBrush?.kind === 'placeObject'
+  ) {
     const command = createObjectPlaceCommand(context.map, {
-      kind: 'placeable',
+      kind: PLACEABLE_OBJECT_TYPE_ID,
       x: point.tileX * tileSize,
       y: point.tileY * tileSize,
       layerId,
@@ -732,17 +989,29 @@ const applyObjectPlace = (
         assetId: Option.some(context.resolvedBrush.frame.assetId),
         tileId: Option.some(context.resolvedBrush.frame.tileId),
         gid: Option.none(),
+        ...(context.brushIntent.kind === 'placeable' && context.brushIntent.clipId !== undefined
+          ? { clipId: context.brushIntent.clipId }
+          : {}),
       }),
     });
     return { session: {}, result: { command } };
   }
-  const command = createObjectPlaceCommand(context.map, {
-    kind: context.stagedObjectKind,
-    x: point.tileX * tileSize,
-    y: point.tileY * tileSize,
-    layerId,
-  });
-  return { session: {}, result: { command } };
+  // A plugin-contributed marker brush (spawn point / loot crate / shrink anchor;
+  // future RPG spawn) stamps its abstract `objectKind` repeatedly (sticky). The
+  // editor never inspects the concrete kind — it just persists what the brush
+  // carries onto the resolved/auto-created object layer.
+  if (context.brushIntent.kind === 'plugin-object') {
+    const command = createObjectPlaceCommand(context.map, {
+      // The brush carries the plugin's abstract object-kind key; persist the
+      // catalog GameObjectTypeId it resolves to (definition vs instance).
+      kind: gameObjectTypeIdForKey(context.brushIntent.objectKind),
+      x: point.tileX * tileSize,
+      y: point.tileY * tileSize,
+      layerId,
+    });
+    return { session: {}, result: { command } };
+  }
+  return { session: {}, result: {} };
 };
 
 const applyCollisionPaint = (
@@ -785,8 +1054,14 @@ const rectSelection = (origin: PointerPoint, point: PointerPoint): Set<string> =
 };
 
 const brushPreviewForTool = (context: ToolContext, point: PointerPoint) => {
+  // The placeable footprint preview is keyed on the ACTIVE brush intent, not on
+  // `resolvedBrush` alone: a sizeless plugin-object marker (spawn point / shrink
+  // anchor) must never adopt a previously-selected placeable's size if a stale
+  // `placeObject` brush carries over. Requiring a `placeable` intent here makes
+  // the marker fall through to the 1x1 plugin-object branch below.
   if (
     (context.activeTool === 'tileBrush' || context.activeTool === 'objectPlace') &&
+    context.brushIntent.kind === 'placeable' &&
     context.resolvedBrush?.kind === 'placeObject'
   ) {
     const tileW = context.map.tileSize.width;
@@ -798,6 +1073,9 @@ const brushPreviewForTool = (context: ToolContext, point: PointerPoint) => {
       h: Math.max(1, Math.ceil(context.resolvedBrush.height / tileH)),
       tileIndex: 1,
     };
+  }
+  if (context.activeTool === 'objectPlace' && context.brushIntent.kind === 'plugin-object') {
+    return { x: point.tileX, y: point.tileY, w: 1, h: 1, tileIndex: 1 };
   }
   if (context.activeTool === 'tileBrush' || context.activeTool === 'collisionPaint') {
     return {

@@ -250,6 +250,20 @@ export function useTiledImportCancel() {
   });
 }
 
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.projects.update>[0]) =>
+      invokeIpc(() => window.tileborne.projects.update(input)),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.detail(input.project.id),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+    },
+  });
+}
+
 export function useUpdateMap() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -295,6 +309,17 @@ export function useDetectImportSource() {
   return useMutation({
     mutationFn: (input: { path: string }) =>
       invokeIpc(() => window.tileborne.assets.detectImportSource(input)),
+  });
+}
+
+export function useImportSpriteSheet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.assets.importSpriteSheet>[0]) =>
+      invokeIpc(() => window.tileborne.assets.importSpriteSheet(input)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
+    },
   });
 }
 

@@ -29,12 +29,14 @@ export {
   PROJECTILE_TEXTURE_ASSET_ID,
 } from "./renderer/bundled-assets.js";
 export type {
+  BattleRoyaleProjectorConfig,
   ClientFrameView,
   ClientInputFrame,
   FramePlayerUpdateView,
   InitialFrameInput,
   InitialFramePlayerView,
   InputDirection,
+  PlayerModelRenderData,
   ServerFrameView,
   ZoneView,
 } from "./renderer/battle-royale-projector.js";

@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Effect, Option } from 'effect';
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap, Tilemap, POINT_STRUCT_SIZE } from '@pixi/tilemap';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
 import {
   MapObject,
   MapObjectPlacement,
   ObjectLayer,
+  PLACEABLE_OBJECT_TYPE_ID,
   TileborneMap,
   TileLayer,
   makeAssetId,
@@ -29,7 +30,6 @@ import {
   TilesetPackLicense,
   UVRect,
 } from '@tileborne/sdk-tileset/schemas';
-import type { FrameIndex } from '@tileborne/sdk-tileset/renderer';
 
 import {
   EDITOR_GRID_OUTLINE_COLOR,
@@ -37,7 +37,31 @@ import {
   EditorViewportController,
   MISSING_TILE_TEXTURE_DIAGNOSTIC_COLOR,
   missingTileTextureDiagnosticColor,
+  type EditorViewportTileAtlas,
 } from './editor-viewport-controller.js';
+
+/** Builds index-derived placeable/asset atlas fields from synthetic packs. */
+const atlasFromPacks = (
+  packs: readonly TilesetPack[],
+  renderableAssetIdByPath: ReadonlyMap<string, number>,
+): EditorViewportTileAtlas => {
+  const assetPathByPackAndId = new Map<string, string>();
+  const assetPathById = new Map<string, string>();
+  for (const pack of packs) {
+    for (const asset of pack.assets) {
+      assetPathByPackAndId.set(`${pack.id}:${asset.id}`, asset.path);
+      assetPathById.set(String(asset.id), asset.path);
+    }
+  }
+  return {
+    placeables: packs.flatMap((pack) =>
+      (pack.placeables ?? []).map((placeable) => ({ packId: pack.id, placeable })),
+    ),
+    assetPathByPackAndId,
+    assetPathById,
+    renderableAssetIdByPath,
+  };
+};
 import { EditorLayerZIndex } from './layers.js';
 import { createTileEditCommand } from '../editor-commands.js';
 import { setLayerVisible, setTileIndex } from '../map-utils.js';
@@ -297,7 +321,7 @@ describe('EditorViewportController render batching', () => {
       objects: [
         new MapObject({
           id: objectId,
-          kind: 'placeable',
+          kind: PLACEABLE_OBJECT_TYPE_ID,
           x: 32,
           y: 64,
           width: Option.some(96),
@@ -322,10 +346,10 @@ describe('EditorViewportController render batching', () => {
       requestRender: vi.fn(() => Effect.void),
       textureForRenderableAssetId: vi.fn(() => Texture.WHITE),
     } as unknown as PixiRendererAdapter;
-    const controller = new EditorViewportController(adapter, {
-      pack,
-      renderableAssetIdByPath: new Map([['objects/statue.png', 1]]),
-    });
+    const controller = new EditorViewportController(
+      adapter,
+      atlasFromPacks([pack], new Map([['objects/statue.png', 1]])),
+    );
 
     controller.setMap(map);
 
@@ -410,7 +434,7 @@ describe('EditorViewportController render batching', () => {
       objects: [
         new MapObject({
           id: objectId,
-          kind: 'placeable',
+          kind: PLACEABLE_OBJECT_TYPE_ID,
           x: 32,
           y: 64,
           width: Option.some(96),
@@ -436,18 +460,165 @@ describe('EditorViewportController render batching', () => {
         requestRender: vi.fn(() => Effect.void),
         textureForRenderableAssetId,
       } as unknown as PixiRendererAdapter,
-      {
-        packs: [makePack(firstPackId, 'first/statue.png'), makePack(selectedPackId, 'selected/statue.png')],
-        renderableAssetIdByPath: new Map([
+      atlasFromPacks(
+        [makePack(firstPackId, 'first/statue.png'), makePack(selectedPackId, 'selected/statue.png')],
+        new Map([
           ['first/statue.png', 1],
           ['selected/statue.png', 2],
         ]),
-      },
+      ),
     );
 
     controller.setMap(map);
 
     expect(textureForRenderableAssetId).toHaveBeenCalledWith(2);
+  });
+
+  // Builds a tiny single-frame (static, non-animated) placeable object scene for
+  // exercising the initial map-load object render path.
+  const staticPlacementScene = () => {
+    const uuid = (suffix: string): Uuid =>
+      `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
+    const assetId = makeAssetId(uuid('51'));
+    const tileId = makeTileId(uuid('52'));
+    const placeableId = makePlaceableId(uuid('53'));
+    const layerId = makeLayerId(uuid('54'));
+    const objectId = makeObjectId(uuid('55'));
+    const pack = new TilesetPack({
+      schemaVersion: 1,
+      id: makePackId(uuid('56')),
+      name: 'Objects',
+      version: '1.0.0',
+      license: new TilesetPackLicense({
+        spdxId: 'CC0-1.0',
+        attribution: Option.none(),
+        sourceUrl: Option.none(),
+        notes: Option.none(),
+        redistributable: true,
+      }),
+      tilesets: [],
+      assets: [new TilesetPackAsset({ id: assetId, path: 'objects/statue.png', mime: 'image/png' })],
+      placeables: [
+        new Placeable({
+          id: placeableId,
+          name: 'Statue',
+          size: new PlaceableSize({ width: 96, height: 128 }),
+          frames: [
+            new PlaceableFrameRef({
+              assetId,
+              tileId,
+              uv: new UVRect({ x: 0, y: 0, w: 96, h: 128 }),
+              durationMs: Option.none(),
+            }),
+          ],
+          tags: ['prop'],
+          placementMode: 'object',
+          source: new TiledPlaceableSource({
+            format: 'tiled',
+            tilesetName: 'objects',
+            localTileId: 0,
+            image: Option.some('objects/statue.png'),
+            imageWidth: Option.some(96),
+            imageHeight: Option.some(128),
+            objectType: Option.none(),
+            objectClass: Option.some('statue'),
+            properties: {},
+          }),
+        }),
+      ],
+    });
+    const map = new TileborneMap({
+      id: makeMapId(uuid('57')),
+      schemaVersion: 1,
+      size: { width: 4, height: 4 },
+      tileSize: { width: 32, height: 32 },
+      layers: [
+        new ObjectLayer({
+          id: layerId,
+          name: 'objects',
+          visible: true,
+          opacity: 1,
+          objectIds: [objectId],
+        }),
+      ],
+      objects: [
+        new MapObject({
+          id: objectId,
+          kind: PLACEABLE_OBJECT_TYPE_ID,
+          x: 32,
+          y: 64,
+          width: Option.some(96),
+          height: Option.some(128),
+          layerId,
+          properties: {},
+          placement: new MapObjectPlacement({
+            packId: Option.some(pack.id),
+            placeableId,
+            source: 'manual',
+            assetId: Option.some(assetId),
+            tileId: Option.some(tileId),
+            gid: Option.none(),
+          }),
+        }),
+      ],
+      properties: {},
+    });
+    return { map, atlas: atlasFromPacks([pack], new Map([['objects/statue.png', 1]])) };
+  };
+
+  it('renders placement sprites from IPC-serialized option values', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const requestRender = vi.fn(() => Effect.void);
+    const { map, atlas } = staticPlacementScene();
+    const placeableEntry = atlas.placeables?.[0];
+    const frame = placeableEntry?.placeable.frames[0];
+    expect(placeableEntry).toBeDefined();
+    expect(frame).toBeDefined();
+    const serializedOptionMap = {
+      ...map,
+      objects: map.objects.map((object) => ({
+        ...object,
+        width: { value: 96 },
+        height: { value: 128 },
+        placement:
+          object.placement === undefined
+            ? undefined
+            : {
+                ...object.placement,
+                packId: { value: placeableEntry!.packId },
+                assetId: { value: frame!.assetId },
+                tileId: { value: frame!.tileId },
+                gid: {},
+              },
+      })),
+    } as unknown as TileborneMap;
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender,
+      textureForRenderableAssetId: vi.fn(() => Texture.WHITE),
+    } as unknown as PixiRendererAdapter;
+    const controller = new EditorViewportController(adapter, atlas);
+
+    controller.setMap(serializedOptionMap);
+    expect(callbacks).toHaveLength(1);
+
+    callbacks[0]?.(performance.now());
+    await Promise.resolve();
+    expect(requestRender).toHaveBeenCalledTimes(1);
+    expect(callbacks).toHaveLength(1);
+
+    const objectLayerRoot = worldRoot.children.find((child) => child.label === 'objects') as
+      | Container
+      | undefined;
+    const renderedObject = objectLayerRoot?.children[0] as Container | undefined;
+    expect(renderedObject?.children[0]).toBeInstanceOf(Sprite);
+    expect((renderedObject?.children[0] as Sprite | undefined)?.width).toBe(96);
   });
 });
 
@@ -563,25 +734,12 @@ describe('EditorViewportController tilemap chunks', () => {
 
   // Resolves tile index 1 → a 32x32 frame on a single shared atlas asset so the
   // controller batches real tiles instead of falling back to the diagnostic overlay.
-  const resolvableAtlas = () => {
+  const resolvableAtlas = (): EditorViewportTileAtlas => {
     const tileId = makeTileId(uuid('01'));
-    const assetId = makeAssetId(uuid('02'));
-    const frameIndex: FrameIndex = {
-      lookup: (id) =>
-        String(id) === String(tileId)
-          ? {
-              imageAssetId: assetId,
-              uv: new UVRect({ x: 0, y: 0, w: 32, h: 32 }),
-              sourceAssetPaths: ['ground.png'],
-            }
-          : undefined,
-      lookupWithVariant: () => undefined,
-      resolveVariantTileId: (id) => id,
-      getCompiledAnimation: () => undefined,
-    };
     return {
-      frameIndex,
-      tileIdByTileIndex: new Map([[1, tileId]]),
+      tileFramesByIndex: new Map([
+        [1, { tileId, assetPath: 'ground.png', x: 0, y: 0, width: 32, height: 32 }],
+      ]),
       renderableAssetIdByPath: new Map([['ground.png', 1]]),
     };
   };
@@ -650,5 +808,66 @@ describe('EditorViewportController tilemap chunks', () => {
     const rebuilt = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
     expect(rebuilt).toBeInstanceOf(CompositeTilemap);
     expect(tileCount(rebuilt!)).toBe(2);
+  });
+});
+
+describe('EditorViewportController debug overlay', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const debugText = (worldRoot: Container): Text | undefined => {
+    const debugLayer = worldRoot.children.find((child) => child.label === 'debug') as
+      | Container
+      | undefined;
+    return debugLayer?.children[0] as Text | undefined;
+  };
+
+  const setup = () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender: vi.fn(() => Effect.void),
+    } as unknown as PixiRendererAdapter;
+    const controller = new EditorViewportController(adapter);
+    controller.setMap(createTestMap());
+    return { worldRoot, controller };
+  };
+
+  it('leaves the debug text empty until the overlay is enabled', () => {
+    const { worldRoot, controller } = setup();
+
+    controller.tickDebugOverlay();
+
+    expect(debugText(worldRoot)?.text).toBe('');
+  });
+
+  it('refreshes the FPS readout from tickDebugOverlay alone (playtest render path)', () => {
+    // The playtest viewports drive the adapter directly via `renderFromEntities`
+    // and never call the controller's `renderNow`, so `tickDebugOverlay` is the
+    // only thing that keeps the debug/FPS readout live there.
+    const { worldRoot, controller } = setup();
+    controller.setShowDebug(true);
+
+    controller.tickDebugOverlay();
+
+    expect(debugText(worldRoot)?.text).toContain('FPS');
+  });
+
+  it('recomputes the FPS value once a sampling window elapses', () => {
+    let now = 1_000;
+    vi.stubGlobal('performance', { now: () => now } as Performance);
+    const { worldRoot, controller } = setup();
+    controller.setShowDebug(true);
+
+    for (let frame = 0; frame < 30; frame += 1) {
+      controller.tickDebugOverlay();
+    }
+    now += 500;
+    controller.tickDebugOverlay();
+
+    expect(debugText(worldRoot)?.text).toMatch(/FPS [1-9]\d*/);
   });
 });

@@ -1,4 +1,4 @@
-import { MapObject, TileChunk, TileLayer, makeAssetId, makeTileId, makeTileborneMap, type Uuid } from "@tileborne/core";
+import { MapObject, TileChunk, TileLayer, gameObjectTypeIdForKey, makeAssetId, makeTileId, makeTileborneMap, type Uuid } from "@tileborne/core";
 import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
 import {
   BitmaskCollisionMask,
@@ -52,7 +52,7 @@ const makeTestObject = (
 ): MapObject =>
   new MapObject({
     id,
-    kind,
+    kind: gameObjectTypeIdForKey(kind),
     x,
     y,
     width: Option.none(),

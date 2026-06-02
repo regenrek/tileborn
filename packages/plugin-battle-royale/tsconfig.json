@@ -5,9 +5,17 @@
     "outDir": "dist",
     "rootDir": "src",
     "composite": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../core" }, { "path": "../ipc-contracts" }, { "path": "../runtime" }]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../ipc-contracts" },
+    { "path": "../runtime" },
+    { "path": "../plugin-api" },
+    { "path": "../ui" },
+    { "path": "../game-client" }
+  ]
 }

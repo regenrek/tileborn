@@ -18,7 +18,6 @@ import {
   InputBatch,
   MatchEnd,
   Ping,
-  PlayerLoadouts,
   Pong,
   RuntimeMessage,
   ServerNotice,
@@ -304,5 +303,4 @@ const runtimeMessages: readonly RuntimeMessage[] = [
   new Chat({ text: "hello", playerId: Option.some("player-1") }),
   new MatchEnd({ winner: Option.some("player-1"), results: Option.some([{ playerId: "player-1", rank: 1 }]) }),
   new ServerNotice({ message: "Server restart in 60 s" }),
-  new PlayerLoadouts({ skinIds: ["skin-a", "skin-b"] }),
 ];

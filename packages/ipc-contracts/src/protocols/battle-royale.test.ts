@@ -147,6 +147,23 @@ describe("BattleRoyaleProtocol wire codec", () => {
     });
   });
 
+  it("round-trips a per-player modelId on PlayerSnapshot", () => {
+    const welcome = new WelcomeSnapshot({
+      tick: 7,
+      serverTimestampMs: 7,
+      seed: "seed",
+      players: [
+        { id: player("1"), x: 10, y: 20, health: 100, modelId: "model:hero" },
+        { id: player("2"), x: 30, y: 40, health: 100 },
+      ],
+      projectiles: [],
+      zone: { cx: 0, cy: 0, radius: 100 },
+    });
+    const decoded = decodeMessage(encodeMessage(welcome)) as WelcomeSnapshot;
+    expect(decoded.players[0]?.modelId).toBe("model:hero");
+    expect(decoded.players[1]?.modelId).toBeUndefined();
+  });
+
   it("decodes legacy snapshot frames by defaulting server timestamp from tick", () => {
     const welcome = decodeMessage(
       pack({

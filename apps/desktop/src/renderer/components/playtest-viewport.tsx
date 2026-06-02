@@ -8,6 +8,7 @@ import {
 import type { TileborneMap } from '@tileborne/core';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 import {
+  interpolateRenderableEntities,
   PixiRendererAdapter,
   SnapshotEntityStore,
   type RenderableEntity,
@@ -17,13 +18,16 @@ import { Effect } from 'effect';
 
 import { PlaytestOverlay } from '@/components/playtest-overlay';
 import { PlaytestHudOverlay } from '@/components/playtest-hud-overlay';
-import { SLICE_SERVER_TICK_MS } from '@/components/playtest-render-constants';
 import { EditorViewportController } from '@/editor/viewport/editor-viewport-controller';
 import {
   chainViewportDispose,
   startSerializedViewportMount,
 } from '@/editor/viewport/viewport-mount-lifecycle';
-import { loadViewportAssetManifest } from '@/editor/viewport/viewport-asset-manifest';
+import {
+  loadViewportAssetBundle,
+  viewportControllerAtlas,
+} from '@/editor/viewport/viewport-asset-manifest';
+import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { usePlaytestSessions } from '@/hooks/queries';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
 import {
@@ -36,6 +40,18 @@ import {
   resolvePlaytestPlugin,
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
+import {
+  assemblePlaytestPlayerModelConfig,
+  usePlaytestPlayerModels,
+} from '@/hooks/use-playtest-player-models';
+import type { BuiltPlayerModel } from '@/lib/player-model-render';
+import { useEditorUiStore } from '@/stores/editor-ui-store';
+
+const LOCAL_PLAYER_ID = 'player-1';
+
+// Positions are interpolated once in world space before projection, so the
+// renderer performs no second lerp (alpha 1, no previous-by-id map).
+const EMPTY_PREVIOUS: ReadonlyMap<string, RenderableEntity> = new Map();
 
 interface PlaytestViewportProps {
   readonly projectId: string;
@@ -77,12 +93,16 @@ function usePlaytestRuntimeMount({
   projectId,
   map,
   pluginId,
+  builtModels,
+  selectedModelId,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly projectId: string;
   readonly map: TileborneMap;
   readonly pluginId: string | undefined;
+  readonly builtModels: readonly BuiltPlayerModel[];
+  readonly selectedModelId: string | undefined;
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -93,38 +113,75 @@ function usePlaytestRuntimeMount({
       console.warn('[playtest] single-player viewport requires an active plugin id');
       return undefined;
     }
-    const plugin = resolvePlaytestPlugin(pluginId);
-    if (!plugin) {
+    const basePlugin = resolvePlaytestPlugin(pluginId);
+    if (!basePlugin) {
       console.warn(`[playtest] no projector for plugin ${pluginId}`);
       return undefined;
     }
+    // The configured plugin is resolved inside performMount once the chosen
+    // player-model atlases are fetched; onMounted reads this holder.
+    let resolved: ResolvedPlaytestPlugin = basePlugin;
 
     const adapter = new PixiRendererAdapter({
       applicationOptions: { autoStart: false, backgroundAlpha: 0 },
+      // Decode atlas bytes through an HTMLImageElement so blob/extensionless
+      // atlas URLs load instead of failing Pixi v8's URL-extension parser
+      // detection (mirrors map-editor-viewport.tsx).
+      textureFactory: pixiTextureFromBytes,
     });
 
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
-        await Effect.runPromise(
+        // Resolve the projector with the lobby-chosen player models so the
+        // chosen sprite (and its clip) renders+animates per player; the model
+        // atlases are loaded as runtime textures alongside the plugin defaults.
+        if (builtModels.length > 0) {
+          const playerModelIds = new Map<string, string>(
+            selectedModelId === undefined ? [] : [[LOCAL_PLAYER_ID, selectedModelId]],
+          );
+          try {
+            const playerModels = await assemblePlaytestPlayerModelConfig(
+              builtModels,
+              playerModelIds,
+              selectedModelId,
+            );
+            resolved = resolvePlaytestPlugin(pluginId, { playerModels }) ?? basePlugin;
+          } catch (error) {
+            console.error('[playtest] failed to load player-model atlases', error);
+            resolved = basePlugin;
+          }
+        }
+        // Load the full viewport bundle (not just the manifest) so the
+        // controller receives the tile-atlas lookups it needs to resolve real
+        // terrain textures; without them every tile falls back to the
+        // missing-texture diagnostic color.
+        const bundle = await Effect.runPromise(
           adapter.mount(container).pipe(
-            Effect.flatMap(() => loadViewportAssetManifest({ projectId, map })),
-            Effect.flatMap((manifest) => adapter.loadAssets(manifest)),
-            Effect.flatMap(() => adapter.loadBundledAssets(plugin.bundledAssets)),
+            Effect.flatMap(() => loadViewportAssetBundle({ projectId, map })),
+            Effect.tap((loaded) => adapter.loadAssets(loaded.manifest)),
+            Effect.tap(() => adapter.loadBundledAssets(resolved.bundledAssets)),
           ),
         );
-        return new EditorViewportController(adapter);
+        return new EditorViewportController(adapter, viewportControllerAtlas(bundle));
       },
       disposePendingMount: () => Effect.runPromise(adapter.dispose()),
       onMounted: (controller) => {
         runtimeRef.current = {
           adapter,
           controller,
-          projector: plugin.projector,
-          plugin,
-          fixedZoom: plugin.manifest.fixedZoom,
+          projector: resolved.projector,
+          plugin: resolved,
+          fixedZoom: resolved.manifest.fixedZoom,
         };
         controller.setMap(map);
-        controller.setShowGrid(true);
+        // Seed from the live store rather than the subscribed render values so a
+        // viewport-overlay toggle never re-runs this mount effect (which would
+        // remount the viewport); the dedicated effects below keep the controller
+        // in sync.
+        const ui = useEditorUiStore.getState();
+        controller.setShowGrid(ui.showGrid);
+        controller.setShowDebug(ui.showDebugOverlay);
+        controller.setShowCollision(ui.showCollisionOverlay);
         controller.resize(container.clientWidth, container.clientHeight);
       },
     });
@@ -151,7 +208,7 @@ function usePlaytestRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, pluginId, projectId, runtimeRef]);
+  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, selectedModelId]);
 }
 
 function usePlaytestSnapshotRenderer({
@@ -182,7 +239,6 @@ function usePlaytestSnapshotRenderer({
         ? { getFrameTimestamp: plugin.projector.getFrameTimestamp }
         : {}),
     });
-    let lastSnapshotAt = 0;
     let rafHandle = 0;
     const camera = { x: map.size.width / 2, y: map.size.height / 2 };
 
@@ -199,7 +255,6 @@ function usePlaytestSnapshotRenderer({
         return;
       }
       store.apply(decoded);
-      lastSnapshotAt = performance.now();
     });
 
     const renderTick = (): void => {
@@ -210,11 +265,24 @@ function usePlaytestSnapshotRenderer({
         return;
       }
       const interpolated = store.sampleInterpolatedFullState(performance.now());
-      const snapshot = interpolated?.current ?? store.getCurrentFullState();
-      if (snapshot === undefined) {
+      const currentSnapshot = interpolated?.current ?? store.getCurrentFullState();
+      if (currentSnapshot === undefined) {
         return;
       }
-      const entities = runtime.projector.project(snapshot);
+      // Interpolate world-space positions ONCE so the follow-camera and the
+      // sprites share the same smoothed position; anchoring the camera to the
+      // discrete latest snapshot reintroduces tick-rate stutter.
+      const currentEntities = runtime.projector.project(currentSnapshot);
+      const previousEntities =
+        interpolated?.previous === undefined
+          ? []
+          : runtime.projector.project(interpolated.previous);
+      const entities = interpolateRenderableEntities(
+        currentEntities,
+        previousEntities,
+        interpolated?.alpha ?? 1,
+      );
+
       const localEntity = findLocalPlayerEntity(entities);
       if (localEntity) {
         camera.x = localEntity.x;
@@ -232,21 +300,12 @@ function usePlaytestSnapshotRenderer({
       const projectedEntities = entities.map((entity) =>
         projectEntity(entity, camera.x, camera.y, cx, cy, fixedZoom),
       );
-      const previousSnapshot =
-        interpolated?.previous ?? store.getPreviousFullState();
-      const previousEntities =
-        previousSnapshot === undefined ? [] : runtime.projector.project(previousSnapshot);
-      const projectedPrev = new Map<string, RenderableEntity>();
-      for (const entity of previousEntities) {
-        const { id } = entity;
-        projectedPrev.set(id, projectEntity(entity, camera.x, camera.y, cx, cy, fixedZoom));
-      }
-
-      const alpha =
-        interpolated?.alpha ??
-        Math.min(1, (lastSnapshotAt === 0 ? 0 : performance.now() - lastSnapshotAt) / SLICE_SERVER_TICK_MS);
+      // This loop renders the adapter directly, bypassing the controller's
+      // `renderNow`, so advance the FPS counter / debug text here; otherwise the
+      // debug overlay stays frozen in playtest.
+      runtime.controller.tickDebugOverlay();
       void Effect.runPromise(
-        runtime.adapter.renderFromEntities(projectedEntities, projectedPrev, alpha),
+        runtime.adapter.renderFromEntities(projectedEntities, EMPTY_PREVIOUS, 1),
       );
     };
     rafHandle = requestAnimationFrame(renderTick);
@@ -372,6 +431,9 @@ export function PlaytestViewport({
 }: PlaytestViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<RuntimeBundle | null>(null);
+  const showGrid = useEditorUiStore((state) => state.showGrid);
+  const showDebugOverlay = useEditorUiStore((state) => state.showDebugOverlay);
+  const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
   const { stop, start, isStopping, isStarting } = usePlaytestControls();
   const playtestQuery = usePlaytestSessions({ refetchInterval: 500 });
   const session = playtestQuery.data?.sessions.find((entry) => entry.id === sessionId);
@@ -381,9 +443,31 @@ export function PlaytestViewport({
     [pluginId],
   );
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
+  const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
 
-  usePlaytestRuntimeMount({ containerRef, runtimeRef, projectId, map, pluginId });
+  usePlaytestRuntimeMount({
+    containerRef,
+    runtimeRef,
+    projectId,
+    map,
+    pluginId,
+    builtModels,
+    selectedModelId,
+  });
   usePlaytestSnapshotRenderer({ containerRef, runtimeRef, map, pluginId, sessionId });
+
+  useEffect(() => {
+    runtimeRef.current?.controller.setShowGrid(showGrid);
+  }, [showGrid]);
+
+  useEffect(() => {
+    runtimeRef.current?.controller.setShowDebug(showDebugOverlay);
+  }, [showDebugOverlay]);
+
+  useEffect(() => {
+    runtimeRef.current?.controller.setShowCollision(showCollisionOverlay);
+  }, [showCollisionOverlay]);
+
   usePlaytestInputBridge({
     containerRef,
     sessionId,

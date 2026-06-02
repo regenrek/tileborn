@@ -12,13 +12,22 @@ import {
   type WorkingPalette,
   type WorkingPaletteItem,
 } from '@tileborne/core';
+import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const selectBrushMock = vi.hoisted(() => vi.fn());
 const useWorkingPalettePreviewsMock = vi.hoisted(() => vi.fn());
 
+const usePluginsListMock = vi.hoisted(() =>
+  vi.fn(() => ({ data: { plugins: [] as readonly { id: string; enabled: boolean }[] } })),
+);
+
+const useTilesetPacksMock = vi.hoisted(() => vi.fn(() => [] as readonly { data?: unknown }[]));
+
 vi.mock('@/hooks/queries', () => ({
   useWorkingPalettePreviews: useWorkingPalettePreviewsMock,
+  useTilesetPacks: useTilesetPacksMock,
+  usePluginsList: usePluginsListMock,
 }));
 
 vi.mock('@/stores/app-notifications-store', () => ({
@@ -109,9 +118,11 @@ describe('WorkingPaletteSidebar', () => {
   beforeEach(() => {
     selectBrushMock.mockReset();
     useWorkingPalettePreviewsMock.mockReset();
+    usePluginsListMock.mockReturnValue({ data: { plugins: [] } });
     // Previews now come from the main process via IPC; the sidebar only renders
     // the curated items and looks previews up by ref key.
     useWorkingPalettePreviewsMock.mockReturnValue({ previewByKey: new Map(), isLoading: false });
+    useTilesetPacksMock.mockReturnValue([]);
     editorState = {
       brushIntent: { kind: 'eraser' },
       selectBrush: selectBrushMock,
@@ -200,6 +211,51 @@ describe('WorkingPaletteSidebar', () => {
     expect(screen.getByTestId('working-palette-sidebar-grid')).toBeTruthy();
     expect(screen.getAllByTestId(/^working-palette-sidebar-item-/)).toHaveLength(2);
     expect(screen.queryAllByTestId(/^working-palette-sidebar-remove-/)).toHaveLength(0);
+  });
+
+  it('omits the Markers & Tools group when no plugin contributes palette actions', () => {
+    render(
+      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+    );
+    expect(screen.queryByTestId('working-palette-markers-group')).toBeNull();
+  });
+
+  it('renders contributed markers as chips and selecting one sets the single plugin-object brush', () => {
+    usePluginsListMock.mockReturnValue({
+      data: { plugins: [{ id: PLUGIN_ID, enabled: true }] },
+    });
+    render(
+      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+    );
+
+    expect(screen.getByTestId('working-palette-markers-group')).toBeTruthy();
+    const spawn = screen.getByTestId('palette-action-battle-royale-spawn-point');
+    expect(spawn.getAttribute('data-active')).toBe('false');
+
+    fireEvent.click(spawn);
+    expect(selectBrushMock).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'plugin-object', objectKind: 'spawn-point' }),
+      'objectPlace',
+    );
+  });
+
+  it('highlights exactly the active plugin-object marker (single highlight)', () => {
+    usePluginsListMock.mockReturnValue({
+      data: { plugins: [{ id: PLUGIN_ID, enabled: true }] },
+    });
+    editorState = {
+      brushIntent: { kind: 'plugin-object', objectKind: 'spawn-point' } as never,
+      selectBrush: selectBrushMock,
+    };
+    render(
+      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+    );
+    expect(
+      screen.getByTestId('palette-action-battle-royale-spawn-point').getAttribute('data-active'),
+    ).toBe('true');
+    expect(
+      screen.getByTestId('palette-action-battle-royale-loot-crate').getAttribute('data-active'),
+    ).toBe('false');
   });
 
   it('humanises long internal identifiers in labels coming from the working palette', () => {

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { normalizeAndMigratePersistedMapJson } from "@tileborne/core";
 import { makeGameRuntime, makePluginHost, type RuntimePlugin } from "@tileborne/runtime";
 import { Effect } from "effect";
 
@@ -305,7 +306,14 @@ export const startPlaytestRuntimeHost = async (input: {
   await stopPlaytestRuntimeHost(input.sessionId);
 
   const mapPath = path.join(input.artifactDirectory, "map.json");
-  const mapPayload = JSON.parse(await readFile(mapPath, "utf8")) as Record<string, never>;
+  // Route through the single ADR-0019 plain-JSON load contract shared with the
+  // map services / CLI / IPC: migrate legacy free-string `MapObject.kind` to
+  // catalog GameObjectTypeIds AND fill the optional object/placement keys that
+  // on-disk JSON omits, so legacy maps cannot drift here. The plugin consumes
+  // plain JSON (not a decoded `TileborneMap` class). Idempotent.
+  const mapPayload = normalizeAndMigratePersistedMapJson(
+    JSON.parse(await readFile(mapPath, "utf8")),
+  ) as Record<string, never>;
 
   const pluginWorld = createPlaytestPluginWorld();
   const inputByPlayerId = new Map<string, PlaytestRuntimePlayerInput>();

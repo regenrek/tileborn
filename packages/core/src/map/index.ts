@@ -1,6 +1,16 @@
 import { Schema, SchemaGetter } from "effect";
 
-import { AssetId, LayerId, MapId, ObjectId, PackId, PlaceableId, TileId } from "../ids.js";
+import {
+  AssetId,
+  ClipId,
+  GameObjectTypeId,
+  LayerId,
+  MapId,
+  ObjectId,
+  PackId,
+  PlaceableId,
+  TileId,
+} from "../ids.js";
 import { JsonObject } from "../project/index.js";
 
 /** Size in tile or pixel units. */
@@ -134,12 +144,26 @@ export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObj
   tileId: Schema.OptionFromUndefinedOr(TileId),
   gid: Schema.OptionFromUndefinedOr(Schema.Int),
   transform: Schema.optional(TileTransform),
+  /** Active animation clip for this placement; absent uses the implicit default clip. */
+  clipId: Schema.optional(ClipId),
+  /** Whether the clip auto-plays on spawn (defaults to true at render time). */
+  autoplay: Schema.optional(Schema.Boolean),
+  /** Per-placement loop override; absent inherits the clip's `loop`. */
+  loop: Schema.optional(Schema.Boolean),
+  /** Playback speed multiplier (1 = clip-authored speed). */
+  speed: Schema.optional(Schema.Number),
 }) {}
 
 /** Placed object instance on a map. */
 export class MapObject extends Schema.Class<MapObject>("MapObject")({
   id: ObjectId,
-  kind: Schema.String,
+  /**
+   * Reference to the catalog {@link GameObjectType} definition this instance is
+   * an occurrence of (ADR-0019: instance vs definition). Persisted maps written
+   * before the catalog stored a free-string `kind`; load them through
+   * {@link migrateLegacyMapJson} which maps legacy kinds to catalog ids.
+   */
+  kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
   width: Schema.OptionFromUndefinedOr(Schema.Number),

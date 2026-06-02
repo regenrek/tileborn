@@ -5,6 +5,7 @@ import {
   ObjectLayer,
   TileLayer,
   TileTransform,
+  gameObjectTypeIdForKey,
   makeTileborneMap,
   type AssetId,
   type LayerId,
@@ -145,7 +146,10 @@ export const compileTileborneMap = (input: {
     objects.push(
       new MapObject({
         id: objectId,
-        kind: layer.class ?? layer.role,
+        // Tiled object class/role is a free string; resolve it to a catalog
+        // GameObjectTypeId via the shared deterministic derivation so imported
+        // objects reference the same catalog type a plugin registers for the key.
+        kind: gameObjectTypeIdForKey(layer.class ?? layer.role ?? "object"),
         x: layer.x,
         y: layer.y,
         width: layer.width === undefined ? Option.none() : Option.some(layer.width),

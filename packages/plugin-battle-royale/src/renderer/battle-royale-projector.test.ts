@@ -77,6 +77,119 @@ describe("BattleRoyaleProjector", () => {
     ]);
   });
 
+  it("resolves a per-player modelId to a renderable model with animation", () => {
+    const catalog = new Map([
+      [
+        "model:hero",
+        {
+          assetId: "playermodel:hero-atlas",
+          frames: [
+            { assetId: "playermodel:hero-atlas", uv: { x: 0, y: 0, w: 32, h: 32 }, durationMs: 100 },
+            { assetId: "playermodel:hero-atlas", uv: { x: 32, y: 0, w: 32, h: 32 }, durationMs: 100 },
+          ],
+          loop: true,
+          defaultDurationMs: 100,
+          anchor: { x: 0.5, y: 1 },
+        },
+      ],
+    ]);
+    const projector = createBattleRoyaleProjector({ catalog });
+    const playerId = BattleRoyaleProtocol.makePlayerId("player-1");
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 1000,
+      seed: 1,
+      players: [{ id: playerId, x: 10, y: 20, health: 100, modelId: "model:hero" }],
+      projectiles: [],
+      zone: { cx: 32, cy: 32, radius: 64 },
+    });
+    const full = projector.mergeFrame?.(undefined, welcome);
+    const [entity] = projector.project(full);
+    expect(entity?.assetId).toBe("playermodel:hero-atlas");
+    expect(entity?.anchor).toEqual({ x: 0.5, y: 1 });
+    expect(entity?.animation?.frames).toHaveLength(2);
+    expect(entity?.animation?.loop).toBe(true);
+  });
+
+  it("falls back to the default player model when modelId is unknown/absent", () => {
+    const projector = createBattleRoyaleProjector({ catalog: new Map() });
+    const playerId = BattleRoyaleProtocol.makePlayerId("player-1");
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 1000,
+      seed: 1,
+      players: [{ id: playerId, x: 0, y: 0, health: 100 }],
+      projectiles: [],
+      zone: { cx: 0, cy: 0, radius: 64 },
+    });
+    const full = projector.mergeFrame?.(undefined, welcome);
+    const [entity] = projector.project(full);
+    expect(entity?.assetId).toBe(PLAYER_TEXTURE_ASSET_ID);
+    expect(entity?.animation).toBeUndefined();
+  });
+
+  it("uses the injected playerModelIds fallback when the snapshot omits modelId", () => {
+    const catalog = new Map([
+      [
+        "model:hero",
+        {
+          assetId: "playermodel:hero-atlas",
+          frames: [
+            { assetId: "playermodel:hero-atlas", uv: { x: 0, y: 0, w: 32, h: 32 }, durationMs: 100 },
+            { assetId: "playermodel:hero-atlas", uv: { x: 32, y: 0, w: 32, h: 32 }, durationMs: 100 },
+          ],
+          loop: true,
+        },
+      ],
+    ]);
+    const projector = createBattleRoyaleProjector({
+      catalog,
+      playerModelIds: new Map([["player-1", "model:hero"]]),
+    });
+    const playerId = BattleRoyaleProtocol.makePlayerId("player-1");
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 1000,
+      seed: 1,
+      players: [{ id: playerId, x: 0, y: 0, health: 100 }],
+      projectiles: [],
+      zone: { cx: 0, cy: 0, radius: 64 },
+    });
+    const full = projector.mergeFrame?.(undefined, welcome);
+    const [entity] = projector.project(full);
+    expect(entity?.assetId).toBe("playermodel:hero-atlas");
+  });
+
+  it("applies defaultModelId to players without an explicit selection", () => {
+    const catalog = new Map([
+      [
+        "model:hero",
+        {
+          assetId: "playermodel:hero-atlas",
+          frames: [
+            { assetId: "playermodel:hero-atlas", uv: { x: 0, y: 0, w: 32, h: 32 }, durationMs: 100 },
+            { assetId: "playermodel:hero-atlas", uv: { x: 32, y: 0, w: 32, h: 32 }, durationMs: 100 },
+          ],
+          loop: true,
+        },
+      ],
+    ]);
+    const projector = createBattleRoyaleProjector({ catalog, defaultModelId: "model:hero" });
+    const playerId = BattleRoyaleProtocol.makePlayerId("player-1");
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 1000,
+      seed: 1,
+      players: [{ id: playerId, x: 0, y: 0, health: 100 }],
+      projectiles: [],
+      zone: { cx: 0, cy: 0, radius: 64 },
+    });
+    const full = projector.mergeFrame?.(undefined, welcome);
+    const [entity] = projector.project(full);
+    expect(entity?.assetId).toBe("playermodel:hero-atlas");
+    expect(entity?.animation?.frames).toHaveLength(2);
+  });
+
   it("exposes the plugin-owned render manifest", () => {
     const projector = createBattleRoyaleProjector();
 

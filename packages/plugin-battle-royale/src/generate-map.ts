@@ -16,7 +16,7 @@ import { SeededRng } from "./rng.js";
 
 const makeMapObject = (input: {
   readonly id: MapObjectType["id"];
-  readonly kind: string;
+  readonly kind: MapObjectType["kind"];
   readonly x: number;
   readonly y: number;
   readonly layerId: MapObjectType["layerId"];

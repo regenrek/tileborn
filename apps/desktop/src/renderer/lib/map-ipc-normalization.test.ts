@@ -1,4 +1,4 @@
-import { TileborneMap } from '@tileborne/core';
+import { PLACEABLE_OBJECT_TYPE_ID, TileborneMap } from '@tileborne/core';
 import { Option, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -25,7 +25,7 @@ const mapWithPlacement = () =>
     objects: [
       {
         id: 'object:00000000-0000-4000-8000-000000000043',
-        kind: 'placeable',
+        kind: PLACEABLE_OBJECT_TYPE_ID,
         x: 64,
         y: 96,
         width: 96,

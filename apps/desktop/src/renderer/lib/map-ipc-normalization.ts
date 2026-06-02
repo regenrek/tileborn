@@ -1,5 +1,9 @@
-import { Schema } from 'effect';
-import { TileborneMap, type MapLayer, type MapObject } from '@tileborne/core';
+import {
+  decodePersistedTileborneMapJson,
+  type MapLayer,
+  type MapObject,
+  type TileborneMap,
+} from '@tileborne/core';
 
 const optionValue = <A>(
   value: A | { readonly _tag: string; readonly value?: A } | undefined,
@@ -113,6 +117,8 @@ export const mapToIpcJson = (map: TileborneMap): unknown => ({
 
 export const normalizeMapForIpc = (map: TileborneMap): unknown => {
   const encoded = mapToIpcJson(map);
-  Schema.decodeUnknownSync(TileborneMap)(encoded);
+  // Validate the IPC payload through the single persisted-map decode boundary
+  // (ADR-0019) so this renderer path can never drift from the migration SSOT.
+  decodePersistedTileborneMapJson(encoded);
   return encoded;
 };

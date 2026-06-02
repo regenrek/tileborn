@@ -1,6 +1,21 @@
-export const SPAWN_POINT_KIND = "spawn-point";
-export const SHRINK_ZONE_ANCHOR_KIND = "shrink-zone-anchor";
-export const LOOT_CRATE_KIND = "loot-crate";
+import { gameObjectTypeIdForKey } from "@tileborne/core";
+
+/**
+ * Human-readable object-kind keys (stable across persistence / Tiled / palette
+ * brushes). These are the keys the catalog derives type ids from.
+ */
+export const SPAWN_POINT_KEY = "spawn-point";
+export const SHRINK_ZONE_ANCHOR_KEY = "shrink-zone-anchor";
+export const LOOT_CRATE_KEY = "loot-crate";
+
+/**
+ * Catalog {@link GameObjectTypeId}s for BR's object types. `MapObject.kind`
+ * stores these ids (ADR-0019), so all runtime/authoring comparisons key on them
+ * while user-facing copy uses the `*_KEY` strings above.
+ */
+export const SPAWN_POINT_KIND = gameObjectTypeIdForKey(SPAWN_POINT_KEY);
+export const SHRINK_ZONE_ANCHOR_KIND = gameObjectTypeIdForKey(SHRINK_ZONE_ANCHOR_KEY);
+export const LOOT_CRATE_KIND = gameObjectTypeIdForKey(LOOT_CRATE_KEY);
 
 export const MIN_SPAWN_POINTS = 4;
 export const REQUIRED_SHRINK_ANCHORS = 1;

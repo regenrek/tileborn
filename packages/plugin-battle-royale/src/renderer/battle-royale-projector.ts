@@ -8,6 +8,7 @@
  */
 import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
 import type {
+  RenderableAnimationFrame,
   RenderableEntity,
   RenderableEntityProjector,
   RuntimePluginRenderManifest,
@@ -31,6 +32,30 @@ interface PlayerProjectionState {
   readonly x: number;
   readonly y: number;
   readonly health: number;
+  readonly modelId?: string;
+}
+
+/**
+ * Plugin-agnostic render data for a resolved player model: the atlas asset id to
+ * render plus the per-frame animation (UV crops + durations) and pivot. Built by
+ * the shell from the per-project roster + loaded packs and injected into the
+ * projector so the projector only CONSUMES resolved refs (ADR-0014).
+ */
+export interface PlayerModelRenderData {
+  readonly assetId: string;
+  readonly frames: readonly RenderableAnimationFrame[];
+  readonly loop: boolean;
+  readonly defaultDurationMs?: number;
+  readonly anchor?: { readonly x: number; readonly y: number };
+}
+
+export interface BattleRoyaleProjectorConfig {
+  /** modelId -> resolved render data (atlas + animation frames + anchor). */
+  readonly catalog?: ReadonlyMap<string, PlayerModelRenderData>;
+  /** Fallback per-player model selection when the wire snapshot omits modelId. */
+  readonly playerModelIds?: ReadonlyMap<string, string>;
+  /** Final fallback model id applied to any player without a resolved selection. */
+  readonly defaultModelId?: string;
 }
 
 interface ProjectileProjectionState {
@@ -52,6 +77,7 @@ export interface InitialFramePlayerView {
   readonly x: number;
   readonly y: number;
   readonly health: number;
+  readonly modelId?: string;
 }
 
 export interface FramePlayerUpdateView {
@@ -140,6 +166,7 @@ const toPlayerState = (player: BattleRoyaleProtocol.PlayerSnapshot): PlayerProje
   x: player.x,
   y: player.y,
   health: player.health,
+  ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
 });
 
 const toProjectileState = (
@@ -182,6 +209,8 @@ export const mergeBattleRoyaleFrame = (
       x: optionOr(update.x, current.x),
       y: optionOr(update.y, current.y),
       health: optionOr(update.health, current.health),
+      // modelId is set at spawn (Welcome) and is stable; preserve across deltas.
+      ...(current.modelId === undefined ? {} : { modelId: current.modelId }),
     });
   }
 
@@ -215,21 +244,61 @@ export const mergeBattleRoyaleFrame = (
   } satisfies BattleRoyaleFullState;
 };
 
-export const projectBattleRoyaleFullState = (snapshot: unknown): readonly RenderableEntity[] => {
+/** Resolve a player's chosen model id from the snapshot, then the config fallback. */
+const resolvePlayerModelId = (
+  playerId: PlayerId,
+  player: PlayerProjectionState,
+  config: BattleRoyaleProjectorConfig | undefined,
+): string | undefined =>
+  player.modelId ?? config?.playerModelIds?.get(String(playerId)) ?? config?.defaultModelId;
+
+export const projectBattleRoyaleFullStateWith = (
+  config: BattleRoyaleProjectorConfig | undefined,
+  snapshot: unknown,
+): readonly RenderableEntity[] => {
   if (!isBattleRoyaleFullState(snapshot)) {
     return [];
   }
 
+  // A single shared clock so every player's clip advances frame-identically.
+  const clockMs = Date.now();
+
   const playerEntities = [...snapshot.players.entries()]
     .sort(([left], [right]) => String(left).localeCompare(String(right)))
-    .map(([id, player]): RenderableEntity => ({
-      id: `br:player:${id}`,
-      assetId: PLAYER_TEXTURE_ASSET_ID,
-      x: player.x,
-      y: player.y,
-      scale: 1,
-      layerIndex: 10,
-    }));
+    .map(([id, player]): RenderableEntity => {
+      const modelId = resolvePlayerModelId(id, player, config);
+      const model = modelId === undefined ? undefined : config?.catalog?.get(modelId);
+      if (model !== undefined && model.frames.length > 0) {
+        return {
+          id: `br:player:${id}`,
+          assetId: model.assetId,
+          x: player.x,
+          y: player.y,
+          scale: 1,
+          layerIndex: 10,
+          ...(model.anchor === undefined ? {} : { anchor: model.anchor }),
+          animation: {
+            ...(modelId === undefined ? {} : { clipId: modelId }),
+            frames: model.frames,
+            loop: model.loop,
+            ...(model.defaultDurationMs === undefined
+              ? {}
+              : { defaultDurationMs: model.defaultDurationMs }),
+            clockMs,
+          },
+        };
+      }
+      // Fallback: BR's DEFAULT player model (bundled default-pet) when no model
+      // is selected or its catalog entry/textures are unavailable.
+      return {
+        id: `br:player:${id}`,
+        assetId: PLAYER_TEXTURE_ASSET_ID,
+        x: player.x,
+        y: player.y,
+        scale: 1,
+        layerIndex: 10,
+      };
+    });
 
   const projectileEntities = [...snapshot.projectiles.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -246,8 +315,14 @@ export const projectBattleRoyaleFullState = (snapshot: unknown): readonly Render
   return [...playerEntities, ...projectileEntities];
 };
 
-export const createTypedBattleRoyaleProjector = (): RenderableEntityProjector<unknown> => ({
-  project: projectBattleRoyaleFullState,
+/** Back-compat: project with no model catalog (all players use the BR default). */
+export const projectBattleRoyaleFullState = (snapshot: unknown): readonly RenderableEntity[] =>
+  projectBattleRoyaleFullStateWith(undefined, snapshot);
+
+export const createTypedBattleRoyaleProjector = (
+  config?: BattleRoyaleProjectorConfig,
+): RenderableEntityProjector<unknown> => ({
+  project: (snapshot) => projectBattleRoyaleFullStateWith(config, snapshot),
   mergeFrame: mergeBattleRoyaleFrame,
   getFrameTimestamp: (frame) => {
     if ((isWelcomeFrame(frame) || isDeltaFrame(frame)) && Number.isFinite(frame.serverTimestampMs)) {
@@ -259,8 +334,10 @@ export const createTypedBattleRoyaleProjector = (): RenderableEntityProjector<un
   textureManifestForAtlas,
 });
 
-export const createBattleRoyaleProjector = (): RenderableEntityProjector<unknown> => {
-  return createTypedBattleRoyaleProjector();
+export const createBattleRoyaleProjector = (
+  config?: BattleRoyaleProjectorConfig,
+): RenderableEntityProjector<unknown> => {
+  return createTypedBattleRoyaleProjector(config);
 };
 
 export const textureManifestForAtlas = (): readonly {
@@ -291,12 +368,13 @@ export const createInitialFrame = (input: InitialFrameInput): unknown =>
     tick: input.tick,
     serverTimestampMs: 0,
     seed: 0,
-    players: input.players.map((player) => ({
-      id: BattleRoyaleProtocol.makePlayerId(player.playerId),
-      x: player.x,
-      y: player.y,
-      health: player.health,
-    })),
+      players: input.players.map((player) => ({
+        id: BattleRoyaleProtocol.makePlayerId(player.playerId),
+        x: player.x,
+        y: player.y,
+        health: player.health,
+        ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
+      })),
     projectiles: [],
     zone: input.zone,
   });
@@ -348,6 +426,7 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
         x: player.x,
         y: player.y,
         health: player.health,
+        ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
       })),
       zone: frame.zone,
     };

@@ -1,13 +1,25 @@
-import { PixiRendererAdapter } from '@tileborne/runtime';
-import type { LayerId, MapLayer, MapObject, TileborneMap } from '@tileborne/core';
+import { PixiRendererAdapter, type RuntimeAssetManifest } from '@tileborne/runtime';
+import { TRIGGER_REGION_OBJECT_TYPE_ID } from '@tileborne/core';
+import type { LayerId, MapLayer, MapObject, PackId, TileborneMap } from '@tileborne/core';
 import {
   cellsNeedingRefresh,
   neighborhoodForRule,
   type GridCell,
 } from '@tileborne/sdk-tileset/autotile';
 import { transitionCellsToRefresh } from '@tileborne/sdk-tileset/terrain';
-import { toPixiDescriptor, type FrameIndex } from '@tileborne/sdk-tileset/renderer';
-import type { CollisionMaskType, TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
+import {
+  compileClipTimeline,
+  resolveClipFrameIndex,
+  type CompiledClip,
+} from '@tileborne/sdk-tileset/animation';
+import type { EditorTileFrame } from '@tileborne/sdk-tileset/editor-index';
+import type {
+  AutotileRule,
+  CollisionMaskType,
+  Placeable,
+  PlaceableFrameRef,
+  TerrainTransition,
+} from '@tileborne/sdk-tileset/schemas';
 import { Effect } from 'effect';
 import { Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap } from '@pixi/tilemap';
@@ -53,12 +65,123 @@ const collisionMaskBlocksMovement = (mask: CollisionMaskType): boolean => {
 };
 
 const optionValue = <A>(
-  value: A | { readonly _tag: string; readonly value?: A } | undefined,
+  value: A | { readonly _tag?: string; readonly value?: A } | undefined,
 ): A | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
   if (typeof value === 'object' && value !== null && '_tag' in value) {
     return value._tag === 'Some' ? value.value : undefined;
   }
-  return value;
+  if (typeof value === 'object' && value !== null && 'value' in value) {
+    return value.value;
+  }
+  if (typeof value === 'object' && value !== null && Object.keys(value).length === 0) {
+    return undefined;
+  }
+  return value as A;
+};
+
+/** Resolved playback timeline for one animated object placement. */
+interface ActiveClip {
+  readonly frames: readonly PlaceableFrameRef[];
+  readonly loop: boolean;
+  readonly defaultDurationMs: number;
+}
+
+/** A live, ticker-driven object sprite whose texture swaps each animation frame. */
+interface AnimatedObjectSprite {
+  readonly sprite: Sprite;
+  readonly textures: readonly Texture[];
+  readonly clip: CompiledClip;
+  readonly speed: number;
+  readonly offsetMs: number;
+}
+
+const NAMED_ANCHOR_PIVOT: Record<string, { readonly x: number; readonly y: number }> = {
+  'top-left': { x: 0, y: 0 },
+  center: { x: 0.5, y: 0.5 },
+  'bottom-left': { x: 0, y: 1 },
+};
+
+/**
+ * Normalized pivot for a placeable, from its persisted anchor properties
+ * (numeric `tileborne.anchorX/Y`, else the named `tileborne.anchor`, else
+ * top-left). Mirrors the runtime/playtest pivot so the editor honors the same
+ * anchor a sprite renders with in playtest.
+ */
+const placeableAnchorPivot = (placeable: Placeable): { readonly x: number; readonly y: number } => {
+  const props = placeable.source.properties;
+  const x = props['tileborne.anchorX'];
+  const y = props['tileborne.anchorY'];
+  if (typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)) {
+    return { x, y };
+  }
+  const named = props['tileborne.anchor'];
+  if (typeof named === 'string' && named in NAMED_ANCHOR_PIVOT) {
+    return NAMED_ANCHOR_PIVOT[named]!;
+  }
+  return { x: 0, y: 0 };
+};
+
+/**
+ * Apply a placeable's anchor pivot to a placed-object sprite. Footprint-
+ * preserving: the sprite's rendered top-left stays at (object.x, object.y) so
+ * existing placements never shift, while the sprite transform now pivots at the
+ * authored anchor (consistent with the playtest renderer).
+ */
+const applyObjectAnchor = (
+  sprite: Sprite,
+  placeable: Placeable,
+  object: MapObject,
+  dimensions: { readonly width: number; readonly height: number },
+): void => {
+  const pivot = placeableAnchorPivot(placeable);
+  if (pivot.x === 0 && pivot.y === 0) {
+    return;
+  }
+  sprite.anchor.set(pivot.x, pivot.y);
+  sprite.x = object.x + pivot.x * dimensions.width;
+  sprite.y = object.y + pivot.y * dimensions.height;
+};
+
+/**
+ * Resolve the active clip for a placement: an explicit `clipId`, else the
+ * placeable's first named clip, else the implicit default `frames[]`. Per-frame
+ * `loop`/`defaultDurationMs` come from the clip; the placement can override loop.
+ */
+const activeClipForPlacement = (
+  placeable: Placeable,
+  placement: MapObject['placement'],
+): ActiveClip => {
+  const clips = placeable.clips ?? [];
+  const requestedClipId = optionValue(placement?.clipId);
+  const clip =
+    (requestedClipId === undefined
+      ? undefined
+      : clips.find((candidate) => String(candidate.id) === String(requestedClipId))) ??
+    clips[0];
+  if (clip !== undefined) {
+    return {
+      frames: clip.frames,
+      loop: placement?.loop ?? clip.loop,
+      defaultDurationMs: clip.defaultDurationMs,
+    };
+  }
+  return {
+    frames: placeable.frames,
+    loop: placement?.loop ?? true,
+    defaultDurationMs: 100,
+  };
+};
+
+/** Stable per-instance phase offset so identical sprites do not march in lockstep. */
+const offsetForObjectId = (objectId: string): number => {
+  let hash = 0;
+  for (let index = 0; index < objectId.length; index += 1) {
+    hash = (hash * 31 + objectId.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % 997;
 };
 
 const HIDDEN_LAYER_ALPHA = 0.18;
@@ -76,22 +199,32 @@ export interface ViewportPatch {
   readonly chunks?: readonly { readonly chunkX: number; readonly chunkY: number }[];
 }
 
-export interface EditorViewportTileAtlas {
-  readonly pack?: TilesetPack | undefined;
-  readonly packs?: readonly TilesetPack[] | undefined;
-  readonly frameIndex?: FrameIndex | undefined;
-  readonly tileIdByTileIndex?: ReadonlyMap<number, TileIdType> | undefined;
-  readonly collisionMaskByTileIndex?: ReadonlyMap<number, CollisionMaskType> | undefined;
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+export interface EditorViewportPlaceableEntry {
+  readonly packId: PackId;
+  readonly placeable: Placeable;
 }
 
-interface EditorViewportTileFrame {
-  readonly tileId: TileIdType;
-  readonly assetPath: string;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+export interface EditorViewportTileAtlas {
+  /** tileIndex → atlas frame, precomputed from the editor index. */
+  readonly tileFramesByIndex?: ReadonlyMap<number, EditorTileFrame> | undefined;
+  readonly collisionMaskByTileIndex?: ReadonlyMap<number, CollisionMaskType> | undefined;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  /** Placeables aggregated across the loaded packs (for object rendering). */
+  readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
+  readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
+  readonly assetPathById?: ReadonlyMap<string, string> | undefined;
+  /** Primary-pack autotile rules + terrain transitions (for brush-edit refresh). */
+  readonly autotileRules?: readonly AutotileRule[] | undefined;
+  readonly terrainTransitions?: readonly TerrainTransition[] | undefined;
+}
+
+/** Subset of a viewport asset bundle merged into a live controller post-mount. */
+export interface MergeableAssetBundle {
+  readonly manifest: RuntimeAssetManifest;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
+  readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
+  readonly assetPathById?: ReadonlyMap<string, string> | undefined;
 }
 
 export class EditorViewportController {
@@ -107,15 +240,18 @@ export class EditorViewportController {
   private readonly debugLayer: Container;
   private readonly debugText: Text;
   private readonly chunkTilemaps = new Map<string, CompositeTilemap>();
-  private readonly pack?: TilesetPack | undefined;
-  private readonly packs: readonly TilesetPack[];
+  // Brush-driven palette/placeable packs are merged in after mount (see
+  // `mergeAssetBundle`), so the aggregated, cross-pack lookups are mutable.
+  private placeables: readonly EditorViewportPlaceableEntry[];
+  private readonly autotileRules: readonly AutotileRule[];
+  private readonly terrainTransitions: readonly TerrainTransition[];
   private readonly collisionMaskByTileIndex: ReadonlyMap<number, CollisionMaskType>;
-  private readonly tileFramesByIndex = new Map<number, EditorViewportTileFrame>();
+  private readonly tileFramesByIndex: ReadonlyMap<number, EditorTileFrame>;
   private readonly tileTextureCache = new Map<number, Texture>();
   private readonly objectTextureCache = new Map<string, Texture>();
-  private readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
-  private readonly assetPathByPackAndId: ReadonlyMap<string, string>;
-  private readonly assetPathById: ReadonlyMap<string, string>;
+  private renderableAssetIdByPath: ReadonlyMap<string, number>;
+  private assetPathByPackAndId: ReadonlyMap<string, string>;
+  private assetPathById: ReadonlyMap<string, string>;
   private map: TileborneMap | undefined;
   private zoom = 1;
   private panX = 0;
@@ -134,44 +270,32 @@ export class EditorViewportController {
     w?: number;
     h?: number;
     tileIndex?: number;
+    variant?: 'paint' | 'select';
   } | null = null;
   private frameCount = 0;
   private lastFrameAt = performance.now();
   private fps = 0;
   private renderFrameHandle: number | undefined;
+  // Ticker-driven sprite animation. A single shared clock advances all animated
+  // object sprites; each computes its active frame by `(clock + offset) * speed`.
+  private animatedSprites: AnimatedObjectSprite[] = [];
+  private animationFrameHandle: number | undefined;
+  private animationClockMs = 0;
+  private lastAnimationTickAt: number | undefined;
 
   constructor(
     adapter: PixiRendererAdapter,
     atlas: EditorViewportTileAtlas = { renderableAssetIdByPath: new Map() },
   ) {
     this.adapter = adapter;
-    this.pack = atlas.pack;
-    this.packs = atlas.packs ?? (atlas.pack === undefined ? [] : [atlas.pack]);
+    this.placeables = atlas.placeables ?? [];
+    this.autotileRules = atlas.autotileRules ?? [];
+    this.terrainTransitions = atlas.terrainTransitions ?? [];
     this.collisionMaskByTileIndex = atlas.collisionMaskByTileIndex ?? new Map();
     this.renderableAssetIdByPath = atlas.renderableAssetIdByPath;
-    this.assetPathByPackAndId = new Map(
-      this.packs.flatMap((pack) =>
-        pack.assets.map((asset) => [`${pack.id}:${asset.id}`, asset.path] as const),
-      ),
-    );
-    this.assetPathById = new Map(
-      this.packs.flatMap((pack) => pack.assets.map((asset) => [String(asset.id), asset.path] as const)),
-    );
-    for (const [tileIndex, tileId] of atlas.tileIdByTileIndex ?? []) {
-      const frame = atlas.frameIndex?.lookup(tileId);
-      const assetPath = frame?.sourceAssetPaths[0];
-      if (frame !== undefined && assetPath !== undefined) {
-        const descriptor = toPixiDescriptor(frame);
-        this.tileFramesByIndex.set(tileIndex, {
-          tileId,
-          assetPath,
-          x: descriptor.frame.x,
-          y: descriptor.frame.y,
-          width: descriptor.frame.width,
-          height: descriptor.frame.height,
-        });
-      }
-    }
+    this.assetPathByPackAndId = atlas.assetPathByPackAndId ?? new Map();
+    this.assetPathById = atlas.assetPathById ?? new Map();
+    this.tileFramesByIndex = atlas.tileFramesByIndex ?? new Map();
     this.worldRoot = adapter.getEditorWorldRoot();
     this.tileLayerRoot = this.makeLayer('tiles', EditorLayerZIndex.tileChunks);
     this.objectLayerRoot = this.makeLayer('objects', EditorLayerZIndex.objectSprites);
@@ -206,6 +330,30 @@ export class EditorViewportController {
   /** Updates the authoritative map without rebuilding all viewport layers. */
   syncMapContent(map: TileborneMap): void {
     this.map = map;
+  }
+
+  /**
+   * Adds the renderable assets of a brush-driven palette/placeable bundle into
+   * the already-mounted viewport WITHOUT tearing down the adapter or rebuilding
+   * tile chunks. Switching the working-palette selection must never remount, so
+   * extra-pack atlases and selected-placeable frames stream in here instead of
+   * re-running the mount effect.
+   *
+   * The map pack is always the bundle's primary pack, so its atlas keeps stable
+   * renderable ids; only object sprites are rebuilt to pick up new textures.
+   */
+  async mergeAssetBundle(bundle: MergeableAssetBundle): Promise<void> {
+    await Effect.runPromise(this.adapter.loadAssets(bundle.manifest));
+    this.placeables = bundle.placeables ?? this.placeables;
+    this.renderableAssetIdByPath = bundle.renderableAssetIdByPath;
+    this.assetPathByPackAndId = bundle.assetPathByPackAndId ?? this.assetPathByPackAndId;
+    this.assetPathById = bundle.assetPathById ?? this.assetPathById;
+    // Texture instances were re-registered against the new bundle; drop derived
+    // sub-texture caches so the next render rebuilds them from current sources.
+    this.objectTextureCache.clear();
+    this.tileTextureCache.clear();
+    this.renderObjects();
+    this.requestRender();
   }
 
   patchChunk(layerId: LayerId, chunkX: number, chunkY: number, requestRender = true): void {
@@ -298,7 +446,14 @@ export class EditorViewportController {
   }
 
   setBrushPreview(
-    preview: { x: number; y: number; w?: number; h?: number; tileIndex?: number } | null,
+    preview: {
+      x: number;
+      y: number;
+      w?: number;
+      h?: number;
+      tileIndex?: number;
+      variant?: 'paint' | 'select';
+    } | null,
   ): void {
     if (
       this.brushPreview?.x === preview?.x &&
@@ -306,6 +461,7 @@ export class EditorViewportController {
       this.brushPreview?.w === preview?.w &&
       this.brushPreview?.h === preview?.h &&
       this.brushPreview?.tileIndex === preview?.tileIndex &&
+      this.brushPreview?.variant === preview?.variant &&
       (this.brushPreview !== null) === (preview !== null)
     ) {
       return;
@@ -329,6 +485,8 @@ export class EditorViewportController {
       cancelFrame(this.renderFrameHandle);
       this.renderFrameHandle = undefined;
     }
+    this.stopAnimationLoop();
+    this.animatedSprites = [];
     this.chunkTilemaps.clear();
     this.tileTextureCache.clear();
     this.map = undefined;
@@ -346,6 +504,76 @@ export class EditorViewportController {
   }
 
   private renderNow(): void {
+    this.tickDebugOverlay();
+    void Effect.runPromise(this.adapter.requestRender());
+  }
+
+  /**
+   * Advance the shared animation clock and swap each animated sprite's texture
+   * to the frame active at the current clock. Reused by both the sustained
+   * animation loop and the per-rebuild initial frame application.
+   */
+  private applyAnimationFrame(): void {
+    for (const animated of this.animatedSprites) {
+      const index = resolveClipFrameIndex(animated.clip, this.animationClockMs, {
+        speed: animated.speed,
+        offsetMs: animated.offsetMs,
+      });
+      const texture = animated.textures[index];
+      if (texture !== undefined && animated.sprite.texture !== texture) {
+        animated.sprite.texture = texture;
+      }
+    }
+  }
+
+  /**
+   * Sustains a single shared render loop while animated sprites are present.
+   * Stops automatically once no animated sprites remain so a static map never
+   * burns frames. This intentionally reuses one clock for all sprites rather
+   * than per-sprite Pixi tickers.
+   */
+  private ensureAnimationLoop(): void {
+    if (this.animatedSprites.length === 0) {
+      this.stopAnimationLoop();
+      return;
+    }
+    if (this.animationFrameHandle !== undefined) {
+      return;
+    }
+    this.lastAnimationTickAt = performance.now();
+    const tick = (): void => {
+      this.animationFrameHandle = scheduleFrame(() => {
+        const now = performance.now();
+        this.animationClockMs += now - (this.lastAnimationTickAt ?? now);
+        this.lastAnimationTickAt = now;
+        this.applyAnimationFrame();
+        void Effect.runPromise(this.adapter.requestRender());
+        if (this.animatedSprites.length > 0) {
+          tick();
+        } else {
+          this.animationFrameHandle = undefined;
+        }
+      });
+    };
+    tick();
+  }
+
+  private stopAnimationLoop(): void {
+    if (this.animationFrameHandle !== undefined) {
+      cancelFrame(this.animationFrameHandle);
+      this.animationFrameHandle = undefined;
+    }
+    this.lastAnimationTickAt = undefined;
+  }
+
+  /**
+   * Advances the FPS counter and refreshes the debug-overlay text for one
+   * rendered frame. The editor render loop runs this from `renderNow`. The
+   * playtest viewports drive the adapter directly via `renderFromEntities`,
+   * bypassing `renderNow`, so they must call this per frame — otherwise the
+   * debug layer is shown but its FPS/Draw/Hover readout never updates.
+   */
+  tickDebugOverlay(): void {
     this.frameCount += 1;
     const now = performance.now();
     if (now - this.lastFrameAt >= 500) {
@@ -354,7 +582,6 @@ export class EditorViewportController {
       this.lastFrameAt = now;
     }
     this.renderDebug();
-    void Effect.runPromise(this.adapter.requestRender());
   }
 
   private makeLayer(label: string, zIndex: number): Container {
@@ -513,8 +740,8 @@ export class EditorViewportController {
       cells.set(`${cell.x}:${cell.y}`, cell);
     };
 
-    const rules = this.pack?.tilesets.flatMap((tileset) => tileset.autotileRules) ?? [];
-    const transitions = this.pack?.tilesets.flatMap((tileset) => tileset.terrainTransitions) ?? [];
+    const rules = this.autotileRules;
+    const transitions = this.terrainTransitions;
     const ruleForId = (ruleId: (typeof rules)[number]['id']) =>
       rules.find((rule) => String(rule.id) === String(ruleId));
 
@@ -617,7 +844,11 @@ export class EditorViewportController {
 
   private renderObjects(): void {
     this.objectLayerRoot.removeChildren();
+    // Sprites are recreated below; drop the previous animation registry so it
+    // never references detached sprites.
+    this.animatedSprites = [];
     if (!this.map) {
+      this.ensureAnimationLoop();
       return;
     }
     const layerById = new Map(this.map.layers.map((layer) => [layer.id, layer] as const));
@@ -630,6 +861,8 @@ export class EditorViewportController {
       graphic.alpha = layerAlpha(objectLayer);
       this.objectLayerRoot.addChild(graphic);
     }
+    this.applyAnimationFrame();
+    this.ensureAnimationLoop();
   }
 
   private objectGraphic(object: MapObject): Container {
@@ -642,7 +875,7 @@ export class EditorViewportController {
     }
 
     const graphics = new Graphics();
-    if (object.kind === 'trigger-region') {
+    if (object.kind === TRIGGER_REGION_OBJECT_TYPE_ID) {
       graphics.rect(object.x, object.y, dimensions.width, dimensions.height);
       graphics.fill({ color: 0x5c7a8a, alpha: 0.25 });
       graphics.stroke({ width: 2, color: 0x5c7a8a, alpha: 0.8 });
@@ -664,9 +897,9 @@ export class EditorViewportController {
     const placeable =
       placement === undefined
         ? undefined
-        : this.packs
-            .filter((pack) => placementPackId === undefined || pack.id === placementPackId)
-            .flatMap((pack) => pack.placeables ?? [])
+        : this.placeables
+            .filter((entry) => placementPackId === undefined || entry.packId === placementPackId)
+            .map((entry) => entry.placeable)
             .find((candidate) => candidate.id === placement.placeableId);
     const tileW = this.map?.tileSize.width ?? 32;
     const tileH = this.map?.tileSize.height ?? 32;
@@ -691,37 +924,74 @@ export class EditorViewportController {
       return undefined;
     }
     const placementPackId = optionValue(placement.packId);
-    const placeableEntry = this.packs
-      .filter((pack) => placementPackId === undefined || pack.id === placementPackId)
-      .flatMap((pack) =>
-        (pack.placeables ?? []).map((placeable) => ({ packId: pack.id, placeable })),
-      )
+    const placeableEntry = this.placeables
+      .filter((entry) => placementPackId === undefined || entry.packId === placementPackId)
       .find((candidate) => candidate.placeable.id === placement.placeableId);
     if (placeableEntry === undefined) {
       return undefined;
     }
     const placeable = placeableEntry.placeable;
     const placeablePackId = placeableEntry.packId;
+
+    const textureForFrame = (frame: PlaceableFrameRef): Texture | undefined => {
+      const assetPath =
+        this.assetPathByPackAndId.get(`${placeablePackId}:${frame.assetId}`) ??
+        this.assetPathById.get(String(frame.assetId));
+      if (assetPath === undefined) {
+        return undefined;
+      }
+      const cacheKey = `${placeablePackId}:${frame.assetId}:${frame.tileId}:${frame.uv.x}:${frame.uv.y}:${frame.uv.w}:${frame.uv.h}`;
+      const cached = this.objectTextureCache.get(cacheKey);
+      return cached ?? this.textureForObjectFrame(cacheKey, assetPath, frame.uv);
+    };
+
+    const activeClip = activeClipForPlacement(placeable, placement);
+    const autoplay = placement.autoplay ?? true;
+    const animated = autoplay && activeClip.frames.length > 1;
+
+    if (animated) {
+      const textures: Texture[] = [];
+      for (const clipFrame of activeClip.frames) {
+        const texture = textureForFrame(clipFrame);
+        if (texture !== undefined) {
+          textures.push(texture);
+        }
+      }
+      if (textures.length > 1) {
+        const clip = compileClipTimeline(
+          activeClip.frames.map((clipFrame) => optionValue(clipFrame.durationMs)),
+          { loop: activeClip.loop, defaultDurationMs: activeClip.defaultDurationMs },
+        );
+        const offsetMs = offsetForObjectId(String(object.id));
+        const speed = placement.speed ?? 1;
+        const initialIndex = resolveClipFrameIndex(clip, this.animationClockMs, {
+          speed,
+          offsetMs,
+        });
+        const sprite = new Sprite({ texture: textures[initialIndex] ?? textures[0]! });
+        sprite.x = object.x;
+        sprite.y = object.y;
+        sprite.width = dimensions.width;
+        sprite.height = dimensions.height;
+        applyObjectAnchor(sprite, placeable, object, dimensions);
+        this.animatedSprites.push({ sprite, textures, clip, speed, offsetMs });
+        return sprite;
+      }
+    }
+
+    // Static fallback: respect the placement's pinned asset/tile selection.
     const placementAssetId = optionValue(placement.assetId);
     const placementTileId = optionValue(placement.tileId);
     const frame =
-      placeable.frames.find(
+      activeClip.frames.find(
         (candidate) =>
           (placementAssetId === undefined || candidate.assetId === placementAssetId) &&
           (placementTileId === undefined || candidate.tileId === placementTileId),
-      ) ?? placeable.frames[0];
+      ) ?? activeClip.frames[0] ?? placeable.frames[0];
     if (frame === undefined) {
       return undefined;
     }
-    const assetPath =
-      this.assetPathByPackAndId.get(`${placeablePackId}:${frame.assetId}`) ??
-      this.assetPathById.get(String(frame.assetId));
-    if (assetPath === undefined) {
-      return undefined;
-    }
-    const cacheKey = `${placeablePackId}:${frame.assetId}:${frame.tileId}:${frame.uv.x}:${frame.uv.y}:${frame.uv.w}:${frame.uv.h}`;
-    const cached = this.objectTextureCache.get(cacheKey);
-    const texture = cached ?? this.textureForObjectFrame(cacheKey, assetPath, frame.uv);
+    const texture = textureForFrame(frame);
     if (texture === undefined) {
       return undefined;
     }
@@ -730,6 +1000,7 @@ export class EditorViewportController {
     sprite.y = object.y;
     sprite.width = dimensions.width;
     sprite.height = dimensions.height;
+    applyObjectAnchor(sprite, placeable, object, dimensions);
     return sprite;
   }
 
@@ -820,8 +1091,15 @@ export class EditorViewportController {
     }
     const tileW = this.map.tileSize.width;
     const tileH = this.map.tileSize.height;
-    const { x, y, w = 1, h = 1, tileIndex = 1 } = this.brushPreview;
+    const { x, y, w = 1, h = 1, tileIndex = 1, variant = 'paint' } = this.brushPreview;
     this.brushPreviewLayer.rect(x * tileW, y * tileH, w * tileW, h * tileH);
+    if (variant === 'select') {
+      // Marquee for the select tool: mirror the committed-selection color so the
+      // dragged area reads as "what will be selected", not a paint fill.
+      this.brushPreviewLayer.fill({ color: 0xf08a3c, alpha: 0.2 });
+      this.brushPreviewLayer.stroke({ width: 2, color: 0xf08a3c });
+      return;
+    }
     this.brushPreviewLayer.fill({ color: tileColor(tileIndex), alpha: 0.45 });
     this.brushPreviewLayer.stroke({ width: 1, color: 0xffffff, alpha: 0.6 });
   }
@@ -831,7 +1109,8 @@ export class EditorViewportController {
       return;
     }
     const hover = this.hoverTile;
-    this.debugText.text = `FPS ${this.fps}\nDraw ${this.chunkTilemaps.size + this.map!.objects.length}\nHover ${hover ? `${hover.x},${hover.y}` : '—'}`;
+    const objectCount = this.map?.objects.length ?? 0;
+    this.debugText.text = `FPS ${this.fps}\nDraw ${this.chunkTilemaps.size + objectCount}\nHover ${hover ? `${hover.x},${hover.y}` : '—'}`;
   }
 }
 

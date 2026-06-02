@@ -61,6 +61,7 @@ export const AssetsImportPackResponse = Schema.Struct({
 export const AssetImportDetectedKind = Schema.Literals([
   "tileborne-pack",
   "tiled-source",
+  "image",
   "ambiguous",
   "zip",
   "unsupported",
@@ -68,6 +69,7 @@ export const AssetImportDetectedKind = Schema.Literals([
 export const AssetImportPreferredKind = Schema.Literals([
   "tileborne-pack",
   "tiled-source",
+  "image",
 ]);
 export const AssetsDetectImportSourceRequest = Schema.Struct({
   path: Schema.String,
@@ -84,6 +86,42 @@ export const AssetImportSourceDetection = Schema.Struct({
 });
 export const AssetsDetectImportSourceResponse = Schema.Struct({
   detection: AssetImportSourceDetection,
+});
+
+export const SpriteSheetSliceConfigSchema = Schema.Struct({
+  cellWidth: Schema.Int,
+  cellHeight: Schema.Int,
+  columns: Schema.optional(Schema.Int),
+  rows: Schema.optional(Schema.Int),
+  margin: Schema.optional(Schema.Int),
+  spacing: Schema.optional(Schema.Int),
+});
+
+export const SpriteSheetClipInputSchema = Schema.Struct({
+  name: Schema.String,
+  frameIndices: Schema.Array(Schema.Int),
+  loop: Schema.optional(Schema.Boolean),
+  defaultDurationMs: Schema.optional(Schema.Int),
+  frameDurationsMs: Schema.optional(Schema.Array(Schema.Int)),
+});
+
+export const AssetsImportSpriteSheetRequest = Schema.Struct({
+  /** Base64-encoded raw image bytes for the atlas asset. */
+  imageBase64: Schema.String,
+  imageFileName: Schema.String,
+  mime: Schema.String,
+  imageWidth: Schema.Int,
+  imageHeight: Schema.Int,
+  slice: SpriteSheetSliceConfigSchema,
+  spriteName: Schema.optional(Schema.String),
+  anchor: Schema.optional(Schema.Literals(["top-left", "center", "bottom-left"])),
+  packName: Schema.optional(Schema.String),
+  clips: Schema.optional(Schema.Array(SpriteSheetClipInputSchema)),
+  /** Raw Aseprite sidecar JSON text; drives slicing + clips when present. */
+  asepriteJson: Schema.optional(Schema.String),
+});
+export const AssetsImportSpriteSheetResponse = Schema.Struct({
+  packId: PackId,
 });
 
 export const AssetsRemovePackRequest = Schema.Struct({
@@ -159,6 +197,14 @@ export const AssetsDetectImportSourceContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const AssetsImportSpriteSheetContract = defineContract({
+  channel: "tileborne:assets:importSpriteSheet",
+  request: AssetsImportSpriteSheetRequest,
+  response: AssetsImportSpriteSheetResponse,
+  errors: IpcContractErrors,
+  meta: { timeoutMs: 120_000, requiresApproval: true },
+});
+
 export const AssetsRemovePackContract = defineContract({
   channel: "tileborne:assets:removePack",
   request: AssetsRemovePackRequest,
@@ -187,6 +233,7 @@ export const AssetsContracts = [
   AssetsDescribePackContract,
   AssetsDetectImportSourceContract,
   AssetsImportPackContract,
+  AssetsImportSpriteSheetContract,
   AssetsRemovePackContract,
   AssetsListPackAssetsContract,
   AssetsGetAssetDataUrlContract,

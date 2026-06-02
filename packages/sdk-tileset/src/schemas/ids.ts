@@ -1,9 +1,10 @@
 import { Schema } from "effect";
 
-import { PackId, PlaceableId, TileId } from "@tileborne/core";
+import { ClipId, PackId, PlaceableId, TileId } from "@tileborne/core";
 
-export { PackId, PlaceableId, TileId };
+export { ClipId, PackId, PlaceableId, TileId };
 export type {
+  ClipId as ClipIdType,
   PackId as PackIdType,
   PlaceableId as PlaceableIdType,
   TileId as TileIdType,

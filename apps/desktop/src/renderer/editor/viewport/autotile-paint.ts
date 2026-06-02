@@ -2,7 +2,6 @@ import type {
   AutotileRuleIdType,
   TerrainClassType,
   TileIdType,
-  TilesetPack,
 } from '@tileborne/sdk-tileset/schemas';
 import {
   cellsNeedingRefresh,
@@ -64,71 +63,74 @@ const tileIndexForTileId = (
 
 const brushTileIdByIndex = new WeakMap<AutotilePaintBrush, ReadonlyMap<number, TileIdType>>();
 
+export interface AutotilePaintResolverInput {
+  /** Autotile rules flattened across tilesets in pack order (index-decoded). */
+  readonly autotileRules: readonly AutotileRule[];
+  readonly tileIndexByTileId: ReadonlyMap<TileIdType, number>;
+  /** Last-tile-wins terrain class → tile index mapping (precomputed in the index). */
+  readonly directTileIndexByTerrainClass: ReadonlyMap<TerrainClassType, number>;
+}
+
+/**
+ * Build the autotile paint resolver from the editor index instead of a parsed
+ * `TilesetPack`. The rule iteration order, first-wins `brushByTerrainClass`/
+ * `brushByTileIndex` semantics, and `directTileIndexForTerrainClass` mapping are
+ * preserved exactly so painted autotile/terrain indices never drift.
+ */
 export const createAutotilePaintResolver = (
-  pack: TilesetPack | undefined,
-  tileIndexByTileId: ReadonlyMap<TileIdType, number>,
+  input: AutotilePaintResolverInput | undefined,
 ): AutotilePaintResolver | undefined => {
-  if (pack === undefined) {
+  if (input === undefined) {
     return undefined;
   }
+  const { autotileRules, tileIndexByTileId, directTileIndexByTerrainClass } = input;
 
   const tileIdByTileIndex = new Map<number, TileIdType>();
   for (const [tileId, tileIndex] of tileIndexByTileId.entries()) {
     tileIdByTileIndex.set(tileIndex, tileId);
   }
 
-  const directTileIndexByTerrainClass = new Map<TerrainClassType, number>();
   const brushByRuleId = new Map<AutotileRuleIdType, AutotilePaintBrush>();
   const brushByTerrainClass = new Map<TerrainClassType, AutotilePaintBrush>();
   const brushByTileIndex = new Map<number, AutotilePaintBrush>();
 
-  for (const tileset of pack.tilesets) {
-    for (const tile of tileset.tiles) {
-      const terrainClass = Option.getOrUndefined(tile.terrainClass);
-      const tileIndex = tileIndexByTileId.get(tile.id);
-      if (terrainClass !== undefined && tileIndex !== undefined) {
-        directTileIndexByTerrainClass.set(terrainClass, tileIndex);
+  for (const rule of autotileRules) {
+    const tileIndexes = new Set<number>();
+    for (const tileId of ruleTileIds(rule)) {
+      const tileIndex = tileIndexByTileId.get(tileId);
+      if (tileIndex !== undefined) {
+        tileIndexes.add(tileIndex);
       }
     }
+    if (tileIndexes.size === 0) {
+      continue;
+    }
 
-    for (const rule of tileset.autotileRules) {
-      const tileIndexes = new Set<number>();
-      for (const tileId of ruleTileIds(rule)) {
-        const tileIndex = tileIndexByTileId.get(tileId);
-        if (tileIndex !== undefined) {
-          tileIndexes.add(tileIndex);
-        }
-      }
-      if (tileIndexes.size === 0) {
-        continue;
-      }
+    const previewTileId = previewTileIdForRule(rule);
+    const previewTileIndex =
+      previewTileId === undefined ? undefined : tileIndexByTileId.get(previewTileId);
+    const firstTileIndex = tileIndexes.values().next().value as number | undefined;
+    if (firstTileIndex === undefined) {
+      continue;
+    }
 
-      const previewTileId = previewTileIdForRule(rule);
-      const previewTileIndex =
-        previewTileId === undefined ? undefined : tileIndexByTileId.get(previewTileId);
-      const firstTileIndex = tileIndexes.values().next().value as number | undefined;
-      if (firstTileIndex === undefined) {
-        continue;
+    const brush: AutotilePaintBrush = {
+      kind: 'paintAutotile',
+      ruleId: rule.id,
+      rule,
+      tileIndexes,
+      previewTileIndex: previewTileIndex ?? firstTileIndex,
+    };
+    brushTileIdByIndex.set(brush, tileIdByTileIndex);
+    brushByRuleId.set(rule.id, brush);
+    for (const terrainClass of rule.terrainClasses) {
+      if (!brushByTerrainClass.has(terrainClass)) {
+        brushByTerrainClass.set(terrainClass, brush);
       }
-
-      const brush: AutotilePaintBrush = {
-        kind: 'paintAutotile',
-        ruleId: rule.id,
-        rule,
-        tileIndexes,
-        previewTileIndex: previewTileIndex ?? firstTileIndex,
-      };
-      brushTileIdByIndex.set(brush, tileIdByTileIndex);
-      brushByRuleId.set(rule.id, brush);
-      for (const terrainClass of rule.terrainClasses) {
-        if (!brushByTerrainClass.has(terrainClass)) {
-          brushByTerrainClass.set(terrainClass, brush);
-        }
-      }
-      for (const tileIndex of tileIndexes) {
-        if (!brushByTileIndex.has(tileIndex)) {
-          brushByTileIndex.set(tileIndex, brush);
-        }
+    }
+    for (const tileIndex of tileIndexes) {
+      if (!brushByTileIndex.has(tileIndex)) {
+        brushByTileIndex.set(tileIndex, brush);
       }
     }
   }

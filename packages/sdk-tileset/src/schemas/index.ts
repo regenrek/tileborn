@@ -1,6 +1,7 @@
 export {
   AnimationId,
   AutotileRuleId,
+  ClipId,
   PackId,
   PlaceableId,
   TileId,
@@ -10,6 +11,7 @@ export {
 export type {
   AnimationId as AnimationIdType,
   AutotileRuleId as AutotileRuleIdType,
+  ClipId as ClipIdType,
   PackId as PackIdType,
   PlaceableId as PlaceableIdType,
   TileId as TileIdType,
@@ -39,6 +41,7 @@ export {
   PlaceableFrameRef,
   PlaceablePlacementMode,
   PlaceableSize,
+  SpriteClip,
   TiledPlaceableSource,
 } from "./placeable.js";
 export type { PlaceablePlacementMode as PlaceablePlacementModeType } from "./placeable.js";

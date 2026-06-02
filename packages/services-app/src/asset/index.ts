@@ -46,7 +46,7 @@ import {
   ProjectId,
   ProjectManifest,
   ProjectManifestSchema,
-  TileborneMapSchema,
+  decodePersistedTileborneMapJson,
   hashBytes,
   hashJsonStable,
 } from '@tileborne/core';
@@ -61,6 +61,13 @@ import {
 } from '@tileborne/services-foundation';
 import { Context, Effect, Layer, Option, PubSub, Result, Schema, Stream } from 'effect';
 import { importTiledSource } from '@tileborne/sdk-tileset/importers/tiled-source';
+import {
+  importSpriteSheet,
+  type ImportSpriteSheetInput,
+  type SpriteAnchorName,
+  type SpriteSheetClipInput,
+  type SpriteSheetSliceConfig,
+} from '@tileborne/sdk-tileset/importers/sprite-sheet';
 import { writeTilesetManifest, type ManifestProvenance } from '@tileborne/sdk-tileset/manifest';
 import type { TiledSourceInventory } from '@tileborne/sdk-tileset/tiled';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
@@ -157,6 +164,24 @@ export type AssetPackWithCapability = AssetPackManifest & {
   readonly capability: PackCapability;
 };
 
+/** Input for materializing a single sprite-sheet image into an installed pack. */
+export interface SpriteSheetImportInput {
+  /** Raw image bytes to persist as the atlas asset. */
+  readonly imageBytes: Uint8Array;
+  /** Image file name (relative path inside the pack, e.g. `hero.png`). */
+  readonly imageFileName: string;
+  readonly mime: string;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
+  readonly slice: SpriteSheetSliceConfig;
+  readonly spriteName?: string;
+  readonly anchor?: SpriteAnchorName;
+  readonly packName?: string;
+  readonly clips?: readonly SpriteSheetClipInput[];
+  /** Pre-decoded Aseprite JSON sidecar (drives slicing + clips when present). */
+  readonly aseprite?: unknown;
+}
+
 export interface PackCapabilityRefreshed {
   readonly packId: PackId;
   readonly capability: PackCapability;
@@ -169,6 +194,9 @@ export class AssetService extends Context.Service<
     readonly importPackNow: (source: AssetPackSource) => Effect.Effect<PackId, AssetServiceError>;
     readonly importTiledSourcePack: (sourceRoot: string) => Effect.Effect<JobId, AssetServiceError>;
     readonly importTiledSourcePackNow: (sourceRoot: string) => Effect.Effect<PackId, AssetServiceError>;
+    readonly importSpriteSheetPackNow: (
+      input: SpriteSheetImportInput,
+    ) => Effect.Effect<PackId, AssetServiceError>;
     readonly listPacks: () => Effect.Effect<readonly AssetPackWithCapability[], AssetServiceError>;
     readonly getPack: (packId: PackId) => Effect.Effect<AssetPackWithCapability, AssetServiceError>;
     readonly describePack: (packId: PackId) => Effect.Effect<
@@ -368,41 +396,6 @@ const missingSourceManifestError = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const normalizeMapPlacementJsonForDecode = (value: unknown): unknown => {
-  if (!isRecord(value)) {
-    return value;
-  }
-  return {
-    ...value,
-    assetId: 'assetId' in value ? value.assetId : undefined,
-    tileId: 'tileId' in value ? value.tileId : undefined,
-    gid: 'gid' in value ? value.gid : undefined,
-  };
-};
-
-const normalizeMapJsonForDecode = (value: unknown): unknown => {
-  if (!isRecord(value) || !Array.isArray(value.objects)) {
-    return value;
-  }
-  return {
-    ...value,
-    objects: value.objects.map((object) => {
-      if (!isRecord(object)) {
-        return object;
-      }
-      return {
-        ...object,
-        width: 'width' in object ? object.width : undefined,
-        height: 'height' in object ? object.height : undefined,
-        placement:
-          'placement' in object
-            ? normalizeMapPlacementJsonForDecode(object.placement)
-            : undefined,
-      };
-    }),
-  };
-};
 
 const rawLicenseIntegrityJson = (value: unknown): Record<string, unknown> => {
   if (!isRecord(value)) {
@@ -1012,6 +1005,93 @@ const stageTiledSourcePack = (
     });
   });
 
+const sanitizeImageFileName = (fileName: string): string => {
+  const base = fileName.replaceAll('\\', '/').split('/').pop() ?? fileName;
+  const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+/, '');
+  return cleaned.length === 0 ? 'sprite.png' : cleaned;
+};
+
+const stageSpriteSheetPack = (
+  input: SpriteSheetImportInput,
+  stagingDir: string,
+): Effect.Effect<void, AssetImportError> =>
+  Effect.gen(function* () {
+    const fileName = sanitizeImageFileName(input.imageFileName);
+    const imagePath = `atlases/${fileName}`;
+    const imported = importSpriteSheet({
+      imagePath,
+      imageWidth: input.imageWidth,
+      imageHeight: input.imageHeight,
+      mime: input.mime,
+      slice: input.slice,
+      ...(input.spriteName === undefined ? {} : { spriteName: input.spriteName }),
+      ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
+      ...(input.packName === undefined ? {} : { packName: input.packName }),
+      ...(input.clips === undefined ? {} : { clips: input.clips }),
+      ...(input.aseprite === undefined ? {} : { aseprite: input.aseprite }),
+      importedAt: new Date().toISOString(),
+    } satisfies ImportSpriteSheetInput);
+
+    const blocking = imported.diagnostics.find((diagnostic) => diagnostic.severity === 'error');
+    if (blocking !== undefined || imported.value === undefined) {
+      yield* new AssetImportError({
+        path: imagePath,
+        message: blocking?.message ?? 'Sprite sheet import failed.',
+      });
+      return;
+    }
+
+    yield* Effect.tryPromise({
+      try: () => mkdir(stagingDir, { recursive: true }),
+      catch: (cause) => new AssetImportError({ path: stagingDir, message: errorMessage(cause) }),
+    });
+
+    const manifest = writeTilesetManifest(imported.value.pack, {
+      provenance: imported.value.provenance,
+    }) as {
+      readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
+    } & Record<string, unknown>;
+
+    const assets: Array<Record<string, unknown>> = [];
+    for (const asset of manifest.assets ?? []) {
+      const destination = resolveContainedAssetPath(
+        stagingDir,
+        asset.path,
+        (message) => new AssetImportError({ path: asset.path, message }),
+      );
+      yield* Effect.tryPromise({
+        try: async () => {
+          await mkdir(path.dirname(destination), { recursive: true });
+          await writeFile(destination, input.imageBytes);
+        },
+        catch: (cause) => new AssetImportError({ path: destination, message: errorMessage(cause) }),
+      });
+      assets.push({
+        ...asset,
+        size: input.imageBytes.byteLength,
+        hash: hashBytes(input.imageBytes),
+        license: {
+          spdxId: imported.value.pack.license.spdxId,
+          redistributable: imported.value.pack.license.redistributable,
+        },
+      });
+    }
+
+    yield* Effect.tryPromise({
+      try: () =>
+        writeFile(
+          path.join(stagingDir, MANIFEST_FILENAME),
+          `${JSON.stringify({ ...manifest, assets }, null, 2)}\n`,
+          'utf8',
+        ),
+      catch: (cause) =>
+        new AssetImportError({
+          path: path.join(stagingDir, MANIFEST_FILENAME),
+          message: errorMessage(cause),
+        }),
+    });
+  });
+
 const importDirectoryPack = (
   assetsRoot: string,
   sourceRoot: string,
@@ -1162,7 +1242,7 @@ const clearMapPackSelection = (
       catch: (cause) => new ProjectValidationError({ path: mapFile, message: errorMessage(cause) }),
     });
     yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(TileborneMapSchema)(normalizeMapJsonForDecode(parsed)),
+      try: () => decodePersistedTileborneMapJson(parsed),
       catch: (cause) => new ProjectValidationError({ path: mapFile, message: errorMessage(cause) }),
     });
     if (
@@ -1177,7 +1257,7 @@ const clearMapPackSelection = (
     delete properties.tilesetProjection;
     const nextMap = { ...parsed, properties };
     yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(TileborneMapSchema)(normalizeMapJsonForDecode(nextMap)),
+      try: () => decodePersistedTileborneMapJson(nextMap),
       catch: (cause) => new ProjectValidationError({ path: mapFile, message: errorMessage(cause) }),
     });
     return { nextMap, changed: true };
@@ -1481,6 +1561,25 @@ export const AssetServiceLive = Layer.effect(
       return pack.id;
     });
 
+    const importSpriteSheetPackNow = Effect.fn(
+      'AssetService.importSpriteSheetPackNow',
+    )(function* (input: SpriteSheetImportInput) {
+      const staging = path.join(paths.cache, 'assets', 'sprite-sheet', randomUUID());
+      yield* stageSpriteSheetPack(input, staging);
+      const pack = yield* importDirectoryPack(paths.assets, staging).pipe(
+        Effect.ensuring(
+          Effect.promise(() => rm(staging, { recursive: true, force: true }).catch(() => undefined)),
+        ),
+      );
+      invalidateVerifiedPackCache();
+      yield* PubSub.publish(trigger, void 0);
+      yield* PubSub.publish(capabilityTrigger, {
+        packId: pack.id,
+        capability: pack.capability,
+      });
+      return pack.id;
+    });
+
     const importTiledSourcePack = Effect.fn(
       'AssetService.importTiledSourcePack',
     )(function* (sourceRoot: string) {
@@ -1615,6 +1714,7 @@ export const AssetServiceLive = Layer.effect(
       importPackNow,
       importTiledSourcePack,
       importTiledSourcePackNow,
+      importSpriteSheetPackNow,
       listPacks,
       listProjectPacks,
       getPack,

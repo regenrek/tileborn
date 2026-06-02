@@ -9,6 +9,7 @@ export {
   ManifestRpgmA2AutotileRule,
   ManifestRpgmA3AutotileRule,
   ManifestRpgmA4AutotileRule,
+  ManifestSpriteClip,
   ManifestTerrainTransition,
   ManifestTile,
   ManifestVariantFilter,

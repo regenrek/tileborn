@@ -1,6 +1,7 @@
 import { Button, ScrollArea, Skeleton, cn, typography } from '@tileborne/ui';
 import {
   EraserIcon,
+  FilmIcon,
   ImagesIcon,
   ShapesIcon,
   SproutIcon,
@@ -10,11 +11,18 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
+import { AnimatedPaletteThumb } from '@/components/asset-library/animated-palette-thumb';
 import { LibraryPreviewMosaic, LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
-import { useWorkingPalettePreviews } from '@/hooks/queries';
+import { useTilesetPacks, useWorkingPalettePreviews } from '@/hooks/queries';
+import { usePaletteActions } from '@/hooks/use-palette-actions';
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
+import { spriteClipPreviewFrames, type SpriteThumbnailFrames } from '@/lib/sprite-thumbnail-frames';
+import {
+  brushIntentMatchesPaletteAction,
+  paletteActionBrushIntent,
+} from '@/lib/palette-actions';
 import {
   brushIntentMatchesItem,
   workingPaletteItemKey,
@@ -42,6 +50,7 @@ const KIND_ICON: Record<PaletteItemKind, LucideIcon> = {
   autotile: ShapesIcon,
   terrain: SproutIcon,
   placeable: ImagesIcon,
+  sprite: FilmIcon,
 };
 
 const KIND_LABEL: Record<PaletteItemKind, string> = {
@@ -49,6 +58,7 @@ const KIND_LABEL: Record<PaletteItemKind, string> = {
   autotile: 'Autotile',
   terrain: 'Terrain class',
   placeable: 'Object',
+  sprite: 'Sprite',
 };
 
 const GRID_THUMB_PX = 32;
@@ -76,6 +86,43 @@ export function WorkingPaletteSidebar({
   const paletteRefs = useMemo(() => paletteItems.map((item) => item.ref), [paletteItems]);
   const { previewByKey, isLoading: previewsLoading } = useWorkingPalettePreviews(paletteRefs);
 
+  // Sprite/placeable items can animate their thumbnail: load the source packs
+  // (cheap, cached) and derive the clip frames so the thumbnail cycles frames
+  // via the shared animation clock instead of showing the static first frame.
+  const animatablePackIds = useMemo(
+    () => [
+      ...new Set(
+        paletteItems
+          .filter((item) => item.ref.kind === 'sprite' || item.ref.kind === 'placeable')
+          .map((item) => item.ref.packId),
+      ),
+    ],
+    [paletteItems],
+  );
+  const packResults = useTilesetPacks(animatablePackIds);
+  const animatedFramesByKey = useMemo(() => {
+    const packByPackId = new Map<string, (typeof packResults)[number]['data']>();
+    animatablePackIds.forEach((packId, index) => {
+      const data = packResults[index]?.data;
+      if (data !== undefined) {
+        packByPackId.set(packId, data);
+      }
+    });
+    const map = new Map<string, SpriteThumbnailFrames>();
+    for (const item of paletteItems) {
+      const pack = packByPackId.get(item.ref.packId);
+      if (pack === undefined) {
+        continue;
+      }
+      const frames = spriteClipPreviewFrames(pack, item.ref);
+      if (frames !== undefined && frames.frames.length > 1) {
+        map.set(workingPaletteItemKey(item), frames);
+      }
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paletteItems, animatablePackIds, packResults]);
+
   return (
     <section className="flex flex-col gap-2 px-1" data-testid="working-palette-sidebar">
       <div className="flex items-center gap-1 px-1">
@@ -88,6 +135,8 @@ export function WorkingPaletteSidebar({
           testId="working-palette-sidebar-switcher"
         />
       </div>
+
+      <MarkersAndToolsGroup />
 
       {activePalette === undefined ? (
         <SidebarEmptyState
@@ -134,6 +183,7 @@ export function WorkingPaletteSidebar({
                     item={item}
                     packLoading={preview === undefined && previewsLoading}
                     preview={preview}
+                    animatedFrames={animatedFramesByKey.get(key)}
                   />
                 );
               })}
@@ -161,14 +211,65 @@ export function WorkingPaletteSidebar({
   );
 }
 
+/**
+ * Plugin-contributed placement markers/tools (spawn point, loot crate, shrink
+ * anchor; future RPG spawn) rendered as icon chips. Selecting one sets the
+ * single active brush, which visually clears any tile/placeable selection
+ * because every brush is highlighted from the same `brushIntent` SSOT.
+ */
+function MarkersAndToolsGroup() {
+  const actions = usePaletteActions();
+  const brushIntent = useEditorUiStore((state) => state.brushIntent);
+  const selectBrush = useEditorUiStore((state) => state.selectBrush);
+
+  if (actions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 px-1" data-testid="working-palette-markers-group">
+      <p className={cn('px-1', typography.sectionLabelMicro)}>Markers &amp; Tools</p>
+      <div className="flex flex-wrap gap-1 px-1" role="group" aria-label="Markers and tools">
+        {actions.map((action) => {
+          const active = brushIntentMatchesPaletteAction(brushIntent, action);
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.id}
+              type="button"
+              data-testid={`palette-action-${action.id}`}
+              data-active={active ? 'true' : 'false'}
+              aria-pressed={active}
+              aria-label={action.label}
+              title={
+                action.description ? `${action.label} — ${action.description}` : action.label
+              }
+              onClick={() => selectBrush(paletteActionBrushIntent(action), 'objectPlace')}
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center rounded-md border bg-card transition-colors hover:border-primary/70 hover:bg-accent/20',
+                active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+              <span className="sr-only">{action.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function WorkingPaletteSidebarItem({
   item,
   packLoading,
   preview,
+  animatedFrames,
 }: {
   readonly item: WorkingPaletteItem;
   readonly packLoading: boolean;
   readonly preview: LibraryPreviewRef | undefined;
+  readonly animatedFrames: SpriteThumbnailFrames | undefined;
 }) {
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
@@ -194,6 +295,13 @@ function WorkingPaletteSidebarItem({
       >
         {packLoading ? (
           <Skeleton className="size-8" />
+        ) : animatedFrames !== undefined ? (
+          <AnimatedPaletteThumb
+            packId={item.ref.packId}
+            frames={animatedFrames}
+            sizePx={GRID_THUMB_PX}
+            testId="working-palette-sidebar-thumb"
+          />
         ) : preview === undefined ? (
           <span
             aria-hidden

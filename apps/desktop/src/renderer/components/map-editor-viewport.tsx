@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PackId, TileborneMap } from '@tileborne/core';
 import { PixiRendererAdapter } from '@tileborne/runtime';
-import { Effect, Option } from 'effect';
+import { Effect } from 'effect';
+import type {
+  ViewportAssetBundle,
+  ViewportPlaceableEntry,
+} from '@/editor/viewport/viewport-asset-manifest';
 
 import { MapEditorMinimap } from '@/components/map-editor-minimap';
 import { isEditableTarget } from '@/editor/is-editable-target';
@@ -9,9 +13,11 @@ import { resolveToolActiveLayerId } from '@/editor/layer-selection';
 import { useEditorCommands } from '@/editor/use-editor-commands';
 import { zoomCameraByWheel, wheelDeltaPixels } from '@/editor/viewport/viewport-navigation';
 import {
+  createFillSelectionCommand,
   dispatchPointerDown,
   dispatchPointerMove,
   dispatchPointerUp,
+  resolveLayerId,
   type ResolvedBrush,
   type ToolDispatchResult,
   type ToolSession,
@@ -26,13 +32,14 @@ import {
 } from '@/editor/viewport/viewport-mount-lifecycle';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { loadViewportAssetBundle } from '@/editor/viewport/viewport-asset-manifest';
+import { assertNever } from '@/lib/assert-never';
 import { useActiveWorkingPalette } from '@/hooks/use-working-palettes';
 import {
   createAutotilePaintResolver,
   type AutotilePaintResolver,
 } from '@/editor/viewport/autotile-paint';
 import { useEditorUiStore, type BrushIntent, type EditorTool } from '@/stores/editor-ui-store';
-import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
+import type { TerrainClassType, TileIdType } from '@tileborne/sdk-tileset/schemas';
 
 type ViewportPointerEvent = PointerEvent | React.PointerEvent<HTMLDivElement>;
 type ViewportWheelEvent = WheelEvent | React.WheelEvent<HTMLDivElement>;
@@ -67,46 +74,40 @@ export interface MapEditorViewportProps {
 
 export interface BrushActionContext {
   readonly brushIntent: BrushIntent;
-  readonly pack?: TilesetPack | undefined;
-  readonly packs?: readonly TilesetPack[] | undefined;
   readonly tileIndexByTileId: ReadonlyMap<TileIdType, number>;
+  /** First-tile-per-terrain-class representative (terrain brush fallback). */
+  readonly terrainFirstTileId: ReadonlyMap<TerrainClassType, TileIdType>;
+  readonly placeables: readonly ViewportPlaceableEntry[];
   readonly autotileResolver?: AutotilePaintResolver | undefined;
 }
 
 export const resolveBrushAction = ({
   brushIntent,
-  pack,
-  packs,
   tileIndexByTileId,
+  terrainFirstTileId,
+  placeables,
   autotileResolver,
 }: BrushActionContext): ResolvedBrush | undefined => {
-  const resolver = autotileResolver ?? createAutotilePaintResolver(pack, tileIndexByTileId);
   switch (brushIntent.kind) {
     case 'tile':
       return tileIndexByTileId.has(brushIntent.tileId)
         ? { kind: 'paintTile', tileIndex: tileIndexByTileId.get(brushIntent.tileId)! }
         : undefined;
     case 'autotile':
-      return resolver?.brushForRuleId(brushIntent.ruleId);
+      return autotileResolver?.brushForRuleId(brushIntent.ruleId);
     case 'terrain': {
-      const autotileBrush = resolver?.brushForTerrainClass(brushIntent.classId);
+      const autotileBrush = autotileResolver?.brushForTerrainClass(brushIntent.classId);
       if (autotileBrush !== undefined) {
         return autotileBrush;
       }
-      const tile = pack?.tilesets
-        .flatMap((tileset) => tileset.tiles)
-        .find((candidate) => Option.getOrUndefined(candidate.terrainClass) === brushIntent.classId);
-      const tileIndex = tile === undefined ? undefined : tileIndexByTileId.get(tile.id);
+      const tileId = terrainFirstTileId.get(brushIntent.classId);
+      const tileIndex = tileId === undefined ? undefined : tileIndexByTileId.get(tileId);
       return tileIndex === undefined ? undefined : { kind: 'paintTile', tileIndex };
     }
     case 'placeable': {
-      const candidatePacks = packs ?? (pack === undefined ? [] : [pack]);
-      const placeableEntry = candidatePacks
-        .filter((candidatePack) => brushIntent.packId === undefined || candidatePack.id === brushIntent.packId)
-        .flatMap((candidatePack) =>
-          (candidatePack.placeables ?? []).map((candidate) => ({ packId: candidatePack.id, placeable: candidate })),
-        )
-        .find((candidate) => candidate.placeable.id === brushIntent.placeableId);
+      const placeableEntry = placeables
+        .filter((entry) => brushIntent.packId === undefined || entry.packId === brushIntent.packId)
+        .find((entry) => entry.placeable.id === brushIntent.placeableId);
       const frame = placeableEntry?.placeable.frames[0];
       if (placeableEntry === undefined || frame === undefined) {
         return undefined;
@@ -124,9 +125,14 @@ export const resolveBrushAction = ({
         },
       };
     }
+    case 'plugin-object':
+      // Plugin-object marker brushes are placed by tool identity (objectPlace),
+      // not resolved into a paint/placeObject brush.
+      return undefined;
     case 'eraser':
       return undefined;
   }
+  return assertNever(brushIntent);
 };
 
 export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportProps) {
@@ -140,16 +146,21 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   const spaceDownRef = useRef(false);
   const panOriginRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const tileIndexByTileIdRef = useRef<ReadonlyMap<TileIdType, number>>(new Map());
-  const viewportPackRef = useRef<TilesetPack | undefined>(undefined);
-  const viewportPacksRef = useRef<readonly TilesetPack[]>([]);
+  const terrainFirstTileIdRef = useRef<ReadonlyMap<TerrainClassType, TileIdType>>(new Map());
+  const placeablesRef = useRef<readonly ViewportPlaceableEntry[]>([]);
   const autotileResolverRef = useRef<AutotilePaintResolver | undefined>(undefined);
   const localEditPendingRef = useRef(false);
+  // Tracks the asset bundle currently applied to the live controller so the
+  // incremental asset-load effect can skip work the mount already performed.
+  const appliedBundleRef = useRef<ViewportAssetBundle | null>(null);
+  // Bumped once the controller goes live so the incremental asset-load effect
+  // re-runs against the freshly mounted controller with the latest brush refs.
+  const [mountVersion, setMountVersion] = useState(0);
 
   const activeTool = useEditorUiStore((state) => state.activeTool);
   const camera = useEditorUiStore((state) => state.camera);
   const selection = useEditorUiStore((state) => state.selection);
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
-  const stagedObjectKind = useEditorUiStore((state) => state.stagedObjectKind);
   const activeLayerId = useEditorUiStore((state) => state.activeLayerId);
   const setActiveLayerId = useEditorUiStore((state) => state.setActiveLayerId);
   const showGrid = useEditorUiStore((state) => state.showGrid);
@@ -214,6 +225,28 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     },
   });
 
+  // Brush resolution reads tile/terrain/placeable lookups straight from refs so
+  // pointer handlers never re-subscribe; both mount and incremental asset loads
+  // refresh them from the latest bundle.
+  const applyBrushResolutionRefs = useCallback((bundle: ViewportAssetBundle) => {
+    tileIndexByTileIdRef.current = bundle.tileIndexByTileId;
+    terrainFirstTileIdRef.current = bundle.terrainFirstTileId;
+    placeablesRef.current = bundle.placeables;
+    autotileResolverRef.current = createAutotilePaintResolver(
+      bundle.hasPack
+        ? {
+            autotileRules: bundle.autotileRules,
+            tileIndexByTileId: bundle.tileIndexByTileId,
+            directTileIndexByTerrainClass: bundle.directTileIndexByTerrainClass,
+          }
+        : undefined,
+    );
+  }, []);
+
+  // Mounts the Pixi viewport once per stable map identity. Brush/palette
+  // selection must NEVER appear in this dependency array: re-running it would
+  // tear down the adapter and rebuild every chunk (a visible "map reload").
+  // Extra palette/placeable assets stream in via the incremental effect below.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -231,6 +264,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       textureFactory: pixiTextureFromBytes,
     });
 
+    let mountedBundle: ViewportAssetBundle | null = null;
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
         await Effect.runPromise(adapter.mount(container));
@@ -243,31 +277,32 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
         const bundle = await Effect.runPromise(
           loadViewportAssetBundle({ projectId, map, extraPackIds, renderablePlaceableRefs }),
         );
-        viewportPackRef.current = bundle.pack;
-        viewportPacksRef.current = bundle.packs;
-        tileIndexByTileIdRef.current = bundle.tileIndexByTileId;
-        autotileResolverRef.current = createAutotilePaintResolver(
-          bundle.pack,
-          bundle.tileIndexByTileId,
-        );
+        mountedBundle = bundle;
+        applyBrushResolutionRefs(bundle);
         await Effect.runPromise(adapter.loadAssets(bundle.manifest));
         return new EditorViewportController(adapter, {
-          pack: bundle.pack,
-          packs: bundle.packs,
-          frameIndex: bundle.frameIndex,
-          tileIdByTileIndex: bundle.tileIdByTileIndex,
+          tileFramesByIndex: bundle.tileFramesByIndex,
           collisionMaskByTileIndex: bundle.collisionMaskByTileIndex,
           renderableAssetIdByPath: bundle.renderableAssetIdByPath,
+          placeables: bundle.placeables,
+          assetPathByPackAndId: bundle.assetPathByPackAndId,
+          assetPathById: bundle.assetPathById,
+          autotileRules: bundle.autotileRules,
+          terrainTransitions: bundle.terrainTransitions,
         });
       },
       disposePendingMount: () => Effect.runPromise(adapter.dispose()),
       onMounted: (controller) => {
         controllerRef.current = controller;
+        appliedBundleRef.current = mountedBundle;
         // Seed canvas size and camera before the first setMap so chunk culling
         // builds only the in-view chunks instead of every chunk of a large map.
         controller.resize(container.clientWidth, container.clientHeight);
         controller.setCamera(camera.zoom, camera.panX, camera.panY);
         controller.setMap(currentMapRef.current);
+        // Re-run the incremental asset effect now that the controller is live so
+        // any brush refs that changed while mounting still stream their assets in.
+        setMountVersion((version) => version + 1);
       },
     });
     handle.settled.catch(console.error);
@@ -286,6 +321,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       observer.disconnect();
       const active = controllerRef.current;
       controllerRef.current = null;
+      appliedBundleRef.current = null;
       chainViewportDispose(async () => {
         // Wait for the mount step to fully settle (mount completed or its
         // cancellation-dispose ran) before tearing down anything that depended
@@ -300,7 +336,52 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
         }
       });
     };
-  }, [extraPackIdsKey, mapId, projectId, renderablePlaceableRefsKey]);
+    // Mount identity is the project + map only. Brush/palette-driven values are
+    // intentionally excluded so switching the working palette never remounts.
+  }, [mapId, projectId]);
+
+  // Incrementally streams the assets referenced by the current working palette /
+  // selected brush (extra packs + selected placeable frames) into the live
+  // controller without remounting. Skips the bundle the mount already applied.
+  useEffect(() => {
+    const controller = controllerRef.current;
+    if (!controller) {
+      return;
+    }
+    let cancelled = false;
+    void Effect.runPromise(
+      loadViewportAssetBundle({
+        projectId,
+        map: currentMapRef.current,
+        extraPackIds,
+        renderablePlaceableRefs,
+      }),
+    )
+      .then((bundle) => {
+        if (cancelled || controllerRef.current !== controller) {
+          return;
+        }
+        if (bundle === appliedBundleRef.current) {
+          return;
+        }
+        appliedBundleRef.current = bundle;
+        applyBrushResolutionRefs(bundle);
+        return controller.mergeAssetBundle(bundle);
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+    // `extraPackIds`/`renderablePlaceableRefs` are represented by their stable
+    // key strings; `mountVersion` re-runs this once the controller goes live.
+  }, [
+    applyBrushResolutionRefs,
+    extraPackIdsKey,
+    mapId,
+    mountVersion,
+    projectId,
+    renderablePlaceableRefsKey,
+  ]);
 
   useEffect(() => {
     if (resolvedActiveLayerId !== activeLayerId) {
@@ -348,6 +429,14 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     controllerRef.current?.setSelection(selection);
   }, [selection]);
 
+  // Drop the last-rendered brush preview whenever the active tool or brush
+  // intent changes so a previously-selected placeable's footprint cannot linger
+  // (e.g. switching a large placeable -> a 1x1 spawn/marker). The next pointer
+  // move recomputes the preview for the current brush from scratch.
+  useEffect(() => {
+    controllerRef.current?.setBrushPreview(null);
+  }, [activeTool, brushIntent]);
+
   useEffect(() => {
     const onUndo = () => {
       undo();
@@ -362,6 +451,36 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       window.removeEventListener('tileborne:editor-redo', onRedo);
     };
   }, [redo, undo]);
+
+  // Paints the active palette texture into the current tile selection (Enter).
+  // Reads live state from the store/refs so the keydown listener never needs to
+  // re-subscribe on every selection or brush change.
+  const fillSelectionWithActiveBrush = useCallback(() => {
+    const state = useEditorUiStore.getState();
+    const currentSelection = state.selection;
+    if (currentSelection.size === 0) {
+      return;
+    }
+    const resolved = resolveBrushAction({
+      brushIntent: state.brushIntent,
+      tileIndexByTileId: tileIndexByTileIdRef.current,
+      terrainFirstTileId: terrainFirstTileIdRef.current,
+      placeables: placeablesRef.current,
+      autotileResolver: autotileResolverRef.current,
+    });
+    if (!resolved) {
+      return;
+    }
+    const map = currentMapRef.current;
+    const layerId = resolveLayerId(map, state.activeLayerId ?? undefined);
+    if (!layerId) {
+      return;
+    }
+    const command = createFillSelectionCommand(map, layerId, currentSelection, resolved);
+    if (command) {
+      applyCommand(command, { history: 'push' });
+    }
+  }, [applyCommand]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -388,6 +507,11 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       if (event.key === 'Escape') {
         clearSelection();
       }
+      if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        fillSelectionWithActiveBrush();
+        return;
+      }
       const toolEntry = Object.entries({
         v: 'select',
         h: 'pan',
@@ -399,7 +523,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
         t: 'regionMark',
       } as const).find(([key]) => event.key.toLowerCase() === key);
       if (toolEntry && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        useEditorUiStore.getState().setActiveTool(toolEntry[1]);
+        useEditorUiStore.getState().selectTool(toolEntry[1]);
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -414,7 +538,7 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [clearSelection, redo, undo]);
+  }, [clearSelection, fillSelectionWithActiveBrush, redo, undo]);
 
   const pointerContext = useCallback(
     () => ({
@@ -423,18 +547,17 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
       brushIntent,
       resolvedBrush: resolveBrushAction({
         brushIntent,
-        pack: viewportPackRef.current,
-        packs: viewportPacksRef.current,
         tileIndexByTileId: tileIndexByTileIdRef.current,
+        terrainFirstTileId: terrainFirstTileIdRef.current,
+        placeables: placeablesRef.current,
         autotileResolver: autotileResolverRef.current,
       }),
       autotileResolver: autotileResolverRef.current,
-      stagedObjectKind,
       activeLayerId: resolvedActiveLayerId ?? undefined,
       selection,
       shiftKey: false,
     }),
-    [activeTool, brushIntent, resolvedActiveLayerId, selection, stagedObjectKind],
+    [activeTool, brushIntent, resolvedActiveLayerId, selection],
   );
 
   const toPoint = useCallback(

@@ -1,7 +1,7 @@
 import { useParams } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
 import { Button, Input, Kbd, cn, typography } from '@tileborne/ui';
-import { ImportIcon, SearchIcon } from 'lucide-react';
+import { FilmIcon, ImportIcon, SearchIcon } from 'lucide-react';
 
 import { AssetLibraryEmptyState } from '@/components/asset-library/asset-library-empty-state';
 import { AssetPackCard } from '@/components/asset-library/asset-pack-card';
@@ -20,6 +20,7 @@ export function AssetLibraryPage() {
   const activePalettePackId = useEditorUiStore((state) => state.activePalettePackId);
   const setAssetImportDialogOpen = useEditorUiStore((state) => state.setAssetImportDialogOpen);
   const setAssetImportSourcePath = useEditorUiStore((state) => state.setAssetImportSourcePath);
+  const setSpriteEditorOpen = useEditorUiStore((state) => state.setSpriteEditorOpen);
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
@@ -85,14 +86,24 @@ export function AssetLibraryPage() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       actions={
-        <Button
-          data-testid="asset-library-import-pack-header"
-          disabled={importPending}
-          onClick={() => openImportCenter()}
-        >
-          <ImportIcon data-icon="inline-start" />
-          Import…
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            data-testid="asset-library-open-sprite-studio"
+            onClick={() => setSpriteEditorOpen(true)}
+          >
+            <FilmIcon data-icon="inline-start" />
+            Sprite Studio…
+          </Button>
+          <Button
+            data-testid="asset-library-import-pack-header"
+            disabled={importPending}
+            onClick={() => openImportCenter()}
+          >
+            <ImportIcon data-icon="inline-start" />
+            Import…
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-wrap items-center gap-2">

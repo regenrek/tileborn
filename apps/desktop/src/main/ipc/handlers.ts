@@ -66,6 +66,7 @@ import type { TiledImportProfile } from '@tileborne/sdk-tileset/tiled';
 import { ipcCatchAll } from './errors.js';
 import {
   importSourceDialogFilters,
+  SPRITE_SHEET_IMAGE_EXTENSIONS,
   TILED_MAP_SOURCE_EXTENSIONS,
   TILED_TILESET_SOURCE_EXTENSIONS,
 } from './import-source-dialog.js';
@@ -90,6 +91,7 @@ const triggerPayload = {};
 const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
 const TILED_MAP_SOURCE_EXTENSION_SET = new Set(TILED_MAP_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
 const TILED_TILESET_SOURCE_EXTENSION_SET = new Set(TILED_TILESET_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
+const SPRITE_SHEET_IMAGE_EXTENSION_SET = new Set(SPRITE_SHEET_IMAGE_EXTENSIONS.map((extension) => `.${extension}`));
 
 const safeStat = async (candidatePath: string) => {
   try {
@@ -502,6 +504,21 @@ const buildHandlers = Effect.gen(function* () {
               const isTiledMap = TILED_MAP_SOURCE_EXTENSION_SET.has(extension);
               const isTiledTileset = TILED_TILESET_SOURCE_EXTENSION_SET.has(extension);
               const isTiledSource = isTiledMap || isTiledTileset;
+              const isImage = SPRITE_SHEET_IMAGE_EXTENSION_SET.has(extension);
+              if (isImage) {
+                return {
+                  detection: {
+                    kind: 'image' as const,
+                    path: resolved,
+                    detectedTypes: ['Sprite sheet image'],
+                    hasTileborneManifest: false,
+                    tiledMapCount: 0,
+                    tiledTilesetCount: 0,
+                    message: 'Detected a sprite sheet image. Open the Sprite/Animation Studio to slice it.',
+                    preferredKind: 'image' as const,
+                  },
+                };
+              }
               return {
                 detection: {
                   kind: isTiledSource ? ('tiled-source' as const) : ('unsupported' as const),
@@ -574,6 +591,58 @@ const buildHandlers = Effect.gen(function* () {
           .importPack({ _tag: 'directory', path: sourcePath })
           .pipe(Effect.map((jobId) => ({ jobId }))),
       ),
+    )
+    .add(
+      'tileborne:assets:importSpriteSheet',
+      ({
+        imageBase64,
+        imageFileName,
+        mime,
+        imageWidth,
+        imageHeight,
+        slice,
+        spriteName,
+        anchor,
+        packName,
+        clips,
+        asepriteJson,
+      }) =>
+        ipcCatchAll('tileborne:assets:importSpriteSheet')(
+          Effect.gen(function* () {
+            const imageBytes = yield* Effect.try({
+              try: () => new Uint8Array(Buffer.from(imageBase64, 'base64')),
+              catch: () => new Error('Invalid base64 image payload'),
+            });
+            const aseprite =
+              asepriteJson === undefined
+                ? undefined
+                : yield* Effect.try({
+                    try: (): unknown => JSON.parse(asepriteJson),
+                    catch: () => new Error('Invalid Aseprite sidecar JSON'),
+                  });
+            const packId = yield* assets.importSpriteSheetPackNow({
+              imageBytes,
+              imageFileName,
+              mime,
+              imageWidth,
+              imageHeight,
+              slice: {
+                cellWidth: slice.cellWidth,
+                cellHeight: slice.cellHeight,
+                ...(slice.columns === undefined ? {} : { columns: slice.columns }),
+                ...(slice.rows === undefined ? {} : { rows: slice.rows }),
+                ...(slice.margin === undefined ? {} : { margin: slice.margin }),
+                ...(slice.spacing === undefined ? {} : { spacing: slice.spacing }),
+              },
+              ...(spriteName === undefined ? {} : { spriteName }),
+              ...(anchor === undefined ? {} : { anchor }),
+              ...(packName === undefined ? {} : { packName }),
+              ...(clips === undefined ? {} : { clips }),
+              ...(aseprite === undefined ? {} : { aseprite }),
+            });
+            return { packId };
+          }),
+        ),
     )
     .add('tileborne:assets:removePack', ({ packId }) =>
       ipcCatchAll('tileborne:assets:removePack')(
@@ -652,6 +721,11 @@ const buildHandlers = Effect.gen(function* () {
         assetLibrary
           .resolvePreviews({ packId: request.packId, refs: request.refs })
           .pipe(Effect.map((result) => result)),
+      ),
+    )
+    .add('tileborne:asset-library:getEditorIndex', (request) =>
+      ipcCatchAll('tileborne:asset-library:getEditorIndex')(
+        assetLibrary.getEditorIndex({ packId: request.packId }).pipe(Effect.map((result) => result)),
       ),
     )
     .build();

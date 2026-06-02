@@ -24,6 +24,7 @@ import {
   TILESET_MANIFEST_SCHEMA_VERSION,
   type ManifestPlaceable,
   type ManifestPlaceableFrameRef,
+  type ManifestSpriteClip,
   type ManifestAssetSemanticRole,
   type ManifestTiledPlaceableSource,
   type TilesetManifestLicense,
@@ -33,6 +34,7 @@ import {
   Placeable,
   PlaceableFrameRef,
   PlaceableSize,
+  SpriteClip,
   TiledPlaceableSource,
 } from "../schemas/placeable.js";
 
@@ -56,6 +58,15 @@ const toPlaceableFrameRef = (frame: ManifestPlaceableFrameRef): PlaceableFrameRe
     durationMs: optionalToOption(frame.durationMs),
   });
 
+const toSpriteClip = (clip: ManifestSpriteClip): SpriteClip =>
+  new SpriteClip({
+    id: clip.id,
+    name: clip.name,
+    frames: clip.frames.map(toPlaceableFrameRef) as [PlaceableFrameRef, ...PlaceableFrameRef[]],
+    loop: clip.loop,
+    defaultDurationMs: clip.defaultDurationMs,
+  });
+
 const toTiledPlaceableSource = (source: ManifestTiledPlaceableSource): TiledPlaceableSource =>
   new TiledPlaceableSource({
     format: source.format,
@@ -75,6 +86,7 @@ const toPlaceable = (placeable: ManifestPlaceable): Placeable =>
     name: placeable.name,
     size: new PlaceableSize(placeable.size),
     frames: placeable.frames.map(toPlaceableFrameRef) as [PlaceableFrameRef, ...PlaceableFrameRef[]],
+    ...(placeable.clips === undefined ? {} : { clips: placeable.clips.map(toSpriteClip) }),
     tags: placeable.tags,
     placementMode: placeable.placementMode ?? "object",
     source: toTiledPlaceableSource(placeable.source),
@@ -519,6 +531,44 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
           h: frame.uv.h,
         });
       }
+    });
+
+    const seenClipIds = new Set<string>();
+    placeable.clips?.forEach((clip, clipIndex) => {
+      const clipId = String(clip.id);
+      if (seenClipIds.has(clipId)) {
+        diagnostics.push({
+          _tag: "InvalidManifestField",
+          path: `/placeables/${placeableIndex}/clips/${clipIndex}/id`,
+          message: "Duplicate clip id on placeable",
+          severity: "error",
+        });
+      }
+      seenClipIds.add(clipId);
+
+      clip.frames.forEach((frame, frameIndex) => {
+        if (!assetIds.has(String(frame.assetId))) {
+          diagnostics.push({
+            _tag: "InvalidManifestField",
+            path: `/placeables/${placeableIndex}/clips/${clipIndex}/frames/${frameIndex}/assetId`,
+            message: "Clip frame references an unknown asset",
+            severity: "error",
+          });
+        }
+
+        if (frame.uv.w <= 0 || frame.uv.h <= 0) {
+          diagnostics.push({
+            _tag: "InvalidUvRect",
+            path: `/placeables/${placeableIndex}/clips/${clipIndex}/frames/${frameIndex}/uv`,
+            message: "UV rect must have positive width and height",
+            severity: "error",
+            x: frame.uv.x,
+            y: frame.uv.y,
+            w: frame.uv.w,
+            h: frame.uv.h,
+          });
+        }
+      });
     });
   });
 

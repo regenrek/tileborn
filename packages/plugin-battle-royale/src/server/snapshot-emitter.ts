@@ -32,6 +32,7 @@ interface CapturedPlayerSnapshot {
   readonly x: number;
   readonly y: number;
   readonly health: number;
+  readonly modelId?: string;
 }
 
 interface CapturedProjectileSnapshot {
@@ -96,6 +97,7 @@ const captureSnapshot = (world: PluginWorld, tick: number): CapturedSnapshot => 
       x: position.x,
       y: position.y,
       health: protocolHealth(player.health),
+      ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
     });
   }
 
@@ -198,6 +200,7 @@ export const createBattleRoyaleSnapshotEmitter = (
           x: player.x,
           y: player.y,
           health: player.health,
+          ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
         })),
         projectiles: snapshot.projectiles.map((projectile) =>
           new ProjectileSnapshot({

@@ -50,7 +50,13 @@ const registerPlayerComponents = (world: PluginWorld): void => {
 export const spawnPlayersFromArtifact = (
   world: PluginWorld,
   artifact: ExportedArtifact,
-  options: { readonly playerHealth?: number } = {},
+  options: {
+    readonly playerHealth?: number;
+    /** Per-slot selected model ids (index-aligned with spawn slots); optional. */
+    readonly playerModelIds?: readonly (string | undefined)[];
+    /** Fallback model id applied to every player without a per-slot override. */
+    readonly defaultModelId?: string;
+  } = {},
 ): readonly number[] => {
   registerPlayerComponents(world);
 
@@ -68,11 +74,13 @@ export const spawnPlayersFromArtifact = (
     const entity = world.createEntity();
     positions.set(entity, { x: slot.x, y: slot.y });
     velocities.set(entity, { vx: 0, vy: 0 });
+    const modelId = options.playerModelIds?.[index] ?? options.defaultModelId;
     players.set(entity, {
       playerId: `player-${index + 1}`,
       health: options.playerHealth ?? DAMAGE.playerHealth,
       alive: 1,
       team: marker?.team ?? "solo",
+      ...(modelId === undefined ? {} : { modelId }),
     });
     stats.set(entity, { kills: 0, deaths: 0 });
     entities.push(entity);

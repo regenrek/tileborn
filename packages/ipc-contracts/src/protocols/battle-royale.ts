@@ -29,6 +29,12 @@ export const PlayerSnapshot = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
   health: Schema.Number,
+  /**
+   * Per-player selected player-model id (from the persisted lobby pick). Optional
+   * for back-compat; the client projector resolves it to a renderable model, and
+   * falls back to the BR default model when absent/unknown.
+   */
+  modelId: Schema.optional(Schema.String),
 });
 export type PlayerSnapshot = typeof PlayerSnapshot.Type;
 

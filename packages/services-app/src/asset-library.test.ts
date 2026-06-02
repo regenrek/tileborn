@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+
+import { decodeEditorTilesetIndex } from '@tileborne/sdk-tileset/editor-index';
 
 import {
   AssetLibraryReference,
@@ -8,6 +10,7 @@ import {
   MapObjectPlacement,
   TileborneMap,
   type Uuid,
+  gameObjectTypeIdForKey,
   makeObjectId,
   makePlaceableId,
   makeTileId,
@@ -29,6 +32,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const sampleFixture = path.join(repoRoot, 'packages/test-fixtures/fixtures/asset-packs/smoke-pack');
 const cacheSegment = (value: string): string => value.replace(/[^a-zA-Z0-9.-]/g, '_');
 const cacheDir = (home: string): string => path.join(home, 'cache/asset-library/index-metadata');
+const editorIndexDir = (home: string): string => path.join(home, 'cache/asset-library/editor-index');
+const editorIndexFiles = async (home: string): Promise<readonly string[]> => {
+  try {
+    return (await readdir(editorIndexDir(home))).filter((entry) => entry.endsWith('.json')).sort();
+  } catch {
+    return [];
+  }
+};
 const cacheFiles = async (home: string): Promise<readonly string[]> =>
   (await readdir(cacheDir(home))).filter((entry) => entry.endsWith('.json')).sort();
 const readCachePayload = async (home: string, fileName: string): Promise<Record<string, unknown>> =>
@@ -282,7 +293,7 @@ describe('AssetLibraryService', () => {
                 objects: [
                   new MapObject({
                     id: makeObjectId('00000000-0000-4000-8000-000000000091' as Uuid),
-                    kind: 'tree',
+                    kind: gameObjectTypeIdForKey('tree'),
                     x: 32,
                     y: 64,
                     width: Option.none(),
@@ -357,6 +368,77 @@ describe('AssetLibraryService', () => {
         );
         expect(reimported.packId).toBe(result.removedPackId);
         expect(reimported.packLibrary.groups.length).toBeGreaterThan(0);
+      }),
+    40_000,
+  );
+
+  it(
+    'builds, persists and serves a compact editor index that self-heals when deleted',
+    () =>
+      withTempHome(async (home) => {
+        const first = await runApp(
+          Effect.gen(function* () {
+            const assets = yield* AssetService;
+            const library = yield* AssetLibraryService;
+            const packId = yield* assets.importPackNow(
+              new DirectoryAssetPackSource({ path: sampleFixture }),
+            );
+            const pack = yield* assets.getPack(packId);
+            const result = yield* library.getEditorIndex({ packId });
+            return { packId, tileCount: pack.capability.tileCount, result };
+          }),
+        );
+
+        // The served index decodes into the same global tile-index ordering the
+        // renderer would otherwise derive from the full manifest.
+        const decodedFirst = decodeEditorTilesetIndex(JSON.parse(first.result.indexJson));
+        expect(first.result.schemaVersion).toBe(1);
+        expect(first.result.integrityHash).toMatch(/^sha256:/);
+        expect(decodedFirst.tileIndexByTileId.size).toBe(first.tileCount);
+        expect(decodedFirst.tileFramesByIndex.size).toBeGreaterThan(0);
+
+        // Persisted, content-addressed by integrity hash.
+        const cachedFiles = await editorIndexFiles(home);
+        expect(cachedFiles.length).toBe(1);
+        const onDisk = JSON.parse(
+          await readFile(path.join(editorIndexDir(home), cachedFiles[0]!), 'utf8'),
+        ) as Record<string, unknown>;
+        expect(onDisk['integrityHash']).toBe(first.result.integrityHash);
+        expect(onDisk['schemaVersion']).toBe(1);
+
+        // Deleting the cache file self-heals on the next request (regenerated).
+        await rm(path.join(editorIndexDir(home), cachedFiles[0]!), { force: true });
+        const second = await runApp(
+          Effect.gen(function* () {
+            const library = yield* AssetLibraryService;
+            return yield* library.getEditorIndex({ packId: first.packId });
+          }),
+        );
+        expect(second.indexJson).toBe(first.result.indexJson);
+        expect((await editorIndexFiles(home)).length).toBe(1);
+      }),
+    40_000,
+  );
+
+  it(
+    'removes the editor index cache when a pack is removed',
+    () =>
+      withTempHome(async (home) => {
+        const packId = await runApp(
+          Effect.gen(function* () {
+            const assets = yield* AssetService;
+            const library = yield* AssetLibraryService;
+            const importedPackId = yield* assets.importPackNow(
+              new DirectoryAssetPackSource({ path: sampleFixture }),
+            );
+            yield* library.getEditorIndex({ packId: importedPackId });
+            return importedPackId;
+          }),
+        );
+        expect((await editorIndexFiles(home)).length).toBe(1);
+
+        await runApp(removeAssetPack(packId).pipe(Effect.asVoid));
+        expect(await editorIndexFiles(home)).toEqual([]);
       }),
     40_000,
   );

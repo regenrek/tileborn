@@ -91,10 +91,6 @@ export class ServerNotice extends Schema.TaggedClass<ServerNotice>()("ServerNoti
   message: Schema.String,
 }) {}
 
-export class PlayerLoadouts extends Schema.TaggedClass<PlayerLoadouts>()("PlayerLoadouts", {
-  skinIds: Schema.Array(Schema.String),
-}) {}
-
 export const RuntimeMessage = Schema.Union([
   Welcome,
   ClientReady,
@@ -107,7 +103,6 @@ export const RuntimeMessage = Schema.Union([
   Chat,
   MatchEnd,
   ServerNotice,
-  PlayerLoadouts,
   PlayerJoined,
   PlayerLeft,
   WireInputCommand,

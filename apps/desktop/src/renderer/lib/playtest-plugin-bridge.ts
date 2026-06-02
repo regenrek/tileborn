@@ -23,14 +23,17 @@ import {
   serverFrameToView,
 } from '@tileborne/plugin-battle-royale';
 import type {
+  BattleRoyaleProjectorConfig,
   ClientFrameView,
   ClientInputFrame,
   InitialFrameInput,
   InputDirection,
+  PlayerModelRenderData,
   ServerFrameView,
   ZoneView,
 } from '@tileborne/plugin-battle-royale';
 import type {
+  BundledAssetSpec,
   RenderableEntityProjector,
   RuntimePluginRenderManifest,
   RegisteredBundledAsset,
@@ -59,9 +62,31 @@ export type {
   ClientInputFrame,
   InitialFrameInput,
   InputDirection,
+  PlayerModelRenderData,
   ServerFrameView,
   ZoneView,
 };
+
+/**
+ * Per-playtest player-model wiring resolved by the shell from the per-project
+ * roster + the lobby selection, then injected into the plugin projector. Kept
+ * here (the ADR-0014 boundary file) so the rest of the renderer never names a
+ * plugin id; the data itself is plugin-agnostic render data.
+ */
+export interface PlaytestPlayerModelConfig {
+  /** modelId -> resolved render data (atlas + animation frames + anchor). */
+  readonly catalog: ReadonlyMap<string, PlayerModelRenderData>;
+  /** Fallback per-player selection when the wire snapshot omits modelId. */
+  readonly playerModelIds: ReadonlyMap<string, string>;
+  /** Final fallback model id applied to any player without a resolved selection. */
+  readonly defaultModelId?: string;
+  /** Installed-pack atlas textures the runtime must load for the catalog models. */
+  readonly atlasAssets: readonly BundledAssetSpec[];
+}
+
+export interface ResolvePlaytestPluginOptions {
+  readonly playerModels?: PlaytestPlayerModelConfig;
+}
 
 export interface ResolvedPlaytestPlugin {
   readonly projector: RenderableEntityProjector<unknown>;
@@ -89,14 +114,31 @@ export interface ResolvedPlaytestPlugin {
   readonly decodeClientFrameView: (bytes: Uint8Array) => ClientFrameView | undefined;
 }
 
-export const resolvePlaytestPlugin = (pluginId: string): ResolvedPlaytestPlugin | undefined => {
+export const resolvePlaytestPlugin = (
+  pluginId: string,
+  options: ResolvePlaytestPluginOptions = {},
+): ResolvedPlaytestPlugin | undefined => {
   switch (pluginId) {
     case BATTLE_ROYALE_PLUGIN_ID: {
-      const projector = createBattleRoyaleProjector();
+      const projectorConfig: BattleRoyaleProjectorConfig | undefined =
+        options.playerModels === undefined
+          ? undefined
+          : {
+              catalog: options.playerModels.catalog,
+              playerModelIds: options.playerModels.playerModelIds,
+              ...(options.playerModels.defaultModelId === undefined
+                ? {}
+                : { defaultModelId: options.playerModels.defaultModelId }),
+            };
+      const projector = createBattleRoyaleProjector(projectorConfig);
       const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
+      const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
       return {
         projector,
-        bundledAssets: registerBundledAssets(createBattleRoyaleBundledAssets()),
+        bundledAssets: [
+          ...registerBundledAssets(createBattleRoyaleBundledAssets()),
+          ...modelAtlasAssets,
+        ],
         manifest,
         decodeServerFrame: (bytes) => {
           try {
@@ -119,7 +161,7 @@ export const resolvePlaytestPlugin = (pluginId: string): ResolvedPlaytestPlugin 
 };
 
 const registerBundledAssets = (
-  assets: ReturnType<typeof createBattleRoyaleBundledAssets>,
+  assets: readonly BundledAssetSpec[],
 ): readonly RegisteredBundledAsset[] => {
   const registry = createBundledAssetRegistry();
   for (const asset of assets) {

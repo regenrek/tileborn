@@ -1,0 +1,33 @@
+{
+  "name": "@tileborne/game-client-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --config eslint.config.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tileborne/core": "workspace:*",
+    "@tileborne/game-client": "workspace:*",
+    "@tileborne/plugin-battle-royale": "workspace:*",
+    "@tileborne/ui": "workspace:*",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.1",
+    "jsdom": "29.1.1",
+    "typescript": "6.0.3",
+    "vite": "8.0.12",
+    "vitest": "4.1.7"
+  }
+}

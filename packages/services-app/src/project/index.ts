@@ -367,6 +367,7 @@ export const updateProjectMaps = (
     plugins: [...project.plugins],
     assetPacks: [...project.assetPacks],
     maps: [...maps],
+    ...(project.settings === undefined ? {} : { settings: project.settings }),
   });
 
 const importRecordsPath = (projectDir: string): string =>

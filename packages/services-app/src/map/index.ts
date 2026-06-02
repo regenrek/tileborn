@@ -9,12 +9,13 @@ import {
   ProjectMapRef,
   TileLayer,
   TileborneMap,
-  TileborneMapSchema,
   Uuid,
+  decodePersistedTileborneMapJson,
   hashJsonStable,
   makeLayerId,
   makeMapId,
   makeTileborneMap,
+  normalizeAndMigratePersistedMapJson,
 } from '@tileborne/core';
 import {
   HomeService,
@@ -337,45 +338,6 @@ const placementToJson = (
   };
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const normalizePlacementJsonForDecode = (value: unknown): unknown => {
-  if (!isRecord(value)) {
-    return value;
-  }
-  return {
-    ...value,
-    packId: 'packId' in value ? value.packId : undefined,
-    assetId: 'assetId' in value ? value.assetId : undefined,
-    tileId: 'tileId' in value ? value.tileId : undefined,
-    gid: 'gid' in value ? value.gid : undefined,
-  };
-};
-
-const normalizeMapJsonForDecode = (value: unknown): unknown => {
-  if (!isRecord(value) || !Array.isArray(value.objects)) {
-    return value;
-  }
-  return {
-    ...value,
-    objects: value.objects.map((object) => {
-      if (!isRecord(object)) {
-        return object;
-      }
-      return {
-        ...object,
-        width: 'width' in object ? object.width : undefined,
-        height: 'height' in object ? object.height : undefined,
-        placement:
-          'placement' in object
-            ? normalizePlacementJsonForDecode(object.placement)
-            : undefined,
-      };
-    }),
-  };
-};
-
 const mapToJson = (map: TileborneMap): unknown => ({
   id: map.id,
   schemaVersion: map.schemaVersion,
@@ -455,14 +417,14 @@ const encodeMapJson = (filePath: string, map: TileborneMap): Effect.Effect<unkno
   Effect.try({
     try: () => {
       const encoded = mapToJson(map);
-      Schema.decodeUnknownSync(TileborneMapSchema)(normalizeMapJsonForDecode(encoded));
+      decodePersistedTileborneMapJson(encoded);
       return encoded;
     },
     catch: (cause) => new MapSaveError({ path: filePath, message: errorMessage(cause) }),
   });
 
 const mapToIpcView = (map: TileborneMap): TileborneMap =>
-  Schema.decodeUnknownSync(TileborneMap)(normalizeMapJsonForDecode(mapToJson(map)));
+  decodePersistedTileborneMapJson(mapToJson(map));
 
 const hashMap = (map: TileborneMap) => hashJsonStable(mapToJson(map));
 
@@ -470,7 +432,10 @@ const readMapFile = (
   filePath: string,
   projectId: ProjectId,
   mapId: MapId,
-): Effect.Effect<TileborneMap, MapNotFoundError | MapValidationError> =>
+): Effect.Effect<
+  { readonly map: TileborneMap; readonly integrityHash: ReturnType<typeof hashJsonStable> },
+  MapNotFoundError | MapValidationError
+> =>
   Effect.gen(function* () {
     const raw = yield* Effect.tryPromise({
       try: () => readFile(filePath, 'utf8'),
@@ -483,10 +448,14 @@ const readMapFile = (
       try: (): unknown => JSON.parse(raw),
       catch: (cause) => new MapValidationError({ path: filePath, message: errorMessage(cause) }),
     });
-    return yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(TileborneMapSchema)(normalizeMapJsonForDecode(parsed)),
+    // Integrity is verified against the bytes as written (pre-migration), so the
+    // read-time catalog `kind` migration never trips the lockfile hash.
+    const integrityHash = hashJsonStable(parsed);
+    const map = yield* Effect.try({
+      try: () => decodePersistedTileborneMapJson(parsed),
       catch: (cause) => new MapValidationError({ path: filePath, message: errorMessage(cause) }),
     });
+    return { map, integrityHash };
   });
 
 const writeMapFile = (filePath: string, map: TileborneMap): Effect.Effect<void, MapSaveError> =>
@@ -868,7 +837,7 @@ const readTilesetPackManifest = (
 export const toMapIpcView = (map: TileborneMap): TileborneMap => mapToIpcView(map);
 
 export const toMapIpcPayload = (map: TileborneMap): unknown =>
-  normalizeMapJsonForDecode(mapToJson(map));
+  normalizeAndMigratePersistedMapJson(mapToJson(map));
 
 export const readVerifiedMap = (
   projectDir: string,
@@ -888,7 +857,7 @@ export const readVerifiedMap = (
       yield* new MapNotFoundError({ projectId, mapId, message: `map not found: ${mapId}` });
     }
     const filePath = mapPath(projectDir, mapId);
-    const map = yield* readMapFile(filePath, projectId, mapId);
+    const { map, integrityHash } = yield* readMapFile(filePath, projectId, mapId);
     if (map.id !== mapId) {
       yield* new MapValidationError({
         path: filePath,
@@ -908,7 +877,7 @@ export const readVerifiedMap = (
       });
     }
     const lockedEntry = entry as MapIntegrityEntry;
-    const actual = hashMap(map);
+    const actual = integrityHash;
     if (lockedEntry.hash !== actual) {
       yield* new MapValidationError({
         path: filePath,

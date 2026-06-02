@@ -111,16 +111,6 @@ export class TiledImportProfileContribution extends Schema.Class<TiledImportProf
   transformPlan: Schema.Unknown,
 }) {}
 
-export class ObjectKindContribution extends Schema.TaggedClass<ObjectKindContribution>()(
-  "ObjectKindContribution",
-  {
-    id: ContributionId,
-    schema: JsonObject,
-    defaults: JsonObject,
-    display: Schema.OptionFromUndefinedOr(ContributionDisplay),
-  },
-) {}
-
 export const EditorTabContribution = defineHybridContributionSlot("EditorTab");
 export type EditorTabContribution = typeof EditorTabContribution.Type;
 
@@ -166,9 +156,6 @@ export type EditorSettingsPanelContribution = typeof EditorSettingsPanelContribu
 export const EditorMapKindContribution = defineDeclarativeContributionSlot("EditorMapKind");
 export type EditorMapKindContribution = typeof EditorMapKindContribution.Type;
 
-export const EditorObjectTypeContribution = defineDeclarativeContributionSlot("EditorObjectType");
-export type EditorObjectTypeContribution = typeof EditorObjectTypeContribution.Type;
-
 export const EditorPresetContribution = defineDeclarativeContributionSlot("EditorPreset");
 export type EditorPresetContribution = typeof EditorPresetContribution.Type;
 
@@ -187,6 +174,15 @@ export type EditorGeneratorContribution = typeof EditorGeneratorContribution.Typ
 export const EditorAssetMetadataContribution = defineDeclarativeContributionSlot("EditorAssetMetadata");
 export type EditorAssetMetadataContribution = typeof EditorAssetMetadataContribution.Type;
 
+/**
+ * Declares a game-mode's player-model POLICY (fixed single model vs a
+ * selectable model set). Mirrors the PaletteActionContribution precedent: the
+ * plugin declares the policy, the generic editor resolves it. The concrete
+ * model set + mode live in `data` (a JsonObject the consuming editor decodes).
+ */
+export const EditorPlayerModelPolicyContribution = defineDeclarativeContributionSlot("EditorPlayerModelPolicy");
+export type EditorPlayerModelPolicyContribution = typeof EditorPlayerModelPolicyContribution.Type;
+
 export class EditorContributions extends Schema.Class<EditorContributions>("EditorContributions")({
   tabs: Schema.OptionFromUndefinedOr(Schema.Array(EditorTabContribution)),
   tools: Schema.OptionFromUndefinedOr(Schema.Array(EditorToolContribution)),
@@ -203,13 +199,13 @@ export class EditorContributions extends Schema.Class<EditorContributions>("Edit
   inspectorPanels: Schema.OptionFromUndefinedOr(Schema.Array(EditorInspectorPanelContribution)),
   settingsPanels: Schema.OptionFromUndefinedOr(Schema.Array(EditorSettingsPanelContribution)),
   mapKinds: Schema.OptionFromUndefinedOr(Schema.Array(EditorMapKindContribution)),
-  objectTypes: Schema.OptionFromUndefinedOr(Schema.Array(EditorObjectTypeContribution)),
   presets: Schema.OptionFromUndefinedOr(Schema.Array(EditorPresetContribution)),
   panels: Schema.OptionFromUndefinedOr(Schema.Array(EditorPanelContribution)),
   validators: Schema.OptionFromUndefinedOr(Schema.Array(EditorValidatorContribution)),
   exporters: Schema.OptionFromUndefinedOr(Schema.Array(EditorExporterContribution)),
   generators: Schema.OptionFromUndefinedOr(Schema.Array(EditorGeneratorContribution)),
   assetMetadata: Schema.OptionFromUndefinedOr(Schema.Array(EditorAssetMetadataContribution)),
+  playerModelPolicies: Schema.OptionFromUndefinedOr(Schema.Array(EditorPlayerModelPolicyContribution)),
 }) {}
 
 export const RuntimeSystemContribution = defineExecutableContributionSlot("RuntimeSystem");
@@ -233,6 +229,43 @@ export type RuntimeHudWidgetContribution = typeof RuntimeHudWidgetContribution.T
 export const RuntimeLobbyPanelContribution = defineExecutableContributionSlot("RuntimeLobbyPanel");
 export type RuntimeLobbyPanelContribution = typeof RuntimeLobbyPanelContribution.Type;
 
+/**
+ * Named menu slots in the generic game-client shell (ADR-0022). Plugins and
+ * brands target these brand-neutral ids; the `@tileborne/game-client` shell
+ * renders contributed sections into the matching slot. Keep this list the
+ * single source of truth for menu slot ids.
+ */
+export const RuntimeMenuSlot = Schema.Literals([
+  "main.primaryActions",
+  "main.secondaryActions",
+  "main.tabs",
+  "settings.tabs",
+  "pause.actions",
+  "results.actions",
+]);
+export type RuntimeMenuSlot = typeof RuntimeMenuSlot.Type;
+
+/** All menu slot ids as a readonly tuple (for iteration/validation). */
+export const RUNTIME_MENU_SLOTS = RuntimeMenuSlot.literals;
+
+/**
+ * A plugin-contributed menu section mounted into a named menu slot of the
+ * generic shell. Executable (ships React per ADR-0004 for the shipped runtime
+ * client, distinct from the editor's declarative-only rule). Mirrors the
+ * `RuntimeLobbyPanelContribution` precedent but adds a `slot` + `order`.
+ */
+export class RuntimeMenuSectionContribution extends Schema.TaggedClass<RuntimeMenuSectionContribution>()(
+  "RuntimeMenuSectionContribution",
+  {
+    id: ContributionId,
+    kind: ExecutableKind,
+    slot: RuntimeMenuSlot,
+    display: Schema.OptionFromUndefinedOr(ContributionDisplay),
+    entry: Schema.String,
+    order: Schema.OptionFromUndefinedOr(Schema.Number),
+  },
+) {}
+
 export const RuntimeInputMapContribution = defineDeclarativeContributionSlot("RuntimeInputMap");
 export type RuntimeInputMapContribution = typeof RuntimeInputMapContribution.Type;
 
@@ -248,6 +281,19 @@ export type RuntimeInterpolatorContribution = typeof RuntimeInterpolatorContribu
 export const RuntimeErrorMapperContribution = defineDeclarativeContributionSlot("RuntimeErrorMapper");
 export type RuntimeErrorMapperContribution = typeof RuntimeErrorMapperContribution.Type;
 
+/**
+ * Public declarative slot for a plugin to register a game-object catalog content
+ * pack (ADR-0019). `data` is a `@tileborne/core` `GameObjectCatalog` (or an
+ * `{ indexPath }` pointing at one) which the catalog registry decodes, validates
+ * against the core schema, and merges with duplicate detection. Supersedes the
+ * removed JSON-Schema `ObjectKindContribution` / `EditorObjectType` path.
+ */
+export const RuntimeGameObjectCatalogContribution = defineDeclarativeContributionSlot(
+  "RuntimeGameObjectCatalog",
+);
+export type RuntimeGameObjectCatalogContribution =
+  typeof RuntimeGameObjectCatalogContribution.Type;
+
 export class RuntimeContributions extends Schema.Class<RuntimeContributions>("RuntimeContributions")({
   systems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeSystemContribution)),
   components: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeComponentContribution)),
@@ -256,12 +302,16 @@ export class RuntimeContributions extends Schema.Class<RuntimeContributions>("Ru
   clientSystems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeClientSystemContribution)),
   hudWidgets: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeHudWidgetContribution)),
   lobbyPanels: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeLobbyPanelContribution)),
+  menuSections: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeMenuSectionContribution)),
   inputMaps: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInputMapContribution)),
   audioBuses: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeAudioBusContribution)),
   cameras: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeCameraContribution)),
   interpolators: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInterpolatorContribution)),
   assetPacks: Schema.OptionFromUndefinedOr(Schema.Array(AssetPackContribution)),
   errorMappers: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeErrorMapperContribution)),
+  gameObjectCatalogs: Schema.OptionFromUndefinedOr(
+    Schema.Array(RuntimeGameObjectCatalogContribution),
+  ),
 }) {}
 
 export const ServerRuleContribution = defineHybridContributionSlot("ServerRule");
@@ -347,7 +397,6 @@ export class PluginContributions extends Schema.Class<PluginContributions>("Plug
   assetPacks: Schema.OptionFromUndefinedOr(Schema.Array(AssetPackContribution)),
   tilesetPacks: Schema.OptionFromUndefinedOr(Schema.Array(TilesetPackContribution)),
   tiledImportProfiles: Schema.optional(Schema.Array(TiledImportProfileContribution)),
-  objectKinds: Schema.OptionFromUndefinedOr(Schema.Array(ObjectKindContribution)),
   editor: Schema.OptionFromUndefinedOr(EditorContributions),
   runtime: Schema.OptionFromUndefinedOr(RuntimeContributions),
   server: Schema.OptionFromUndefinedOr(ServerContributions),

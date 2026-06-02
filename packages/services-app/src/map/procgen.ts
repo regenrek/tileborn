@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import { makeLayerId, TileChunk, TileLayer, type Uuid } from "@tileborne/core";
+import {
+  makeLayerId,
+  ObjectLayer,
+  TileChunk,
+  TileLayer,
+  type MapLayer,
+  type Uuid,
+} from "@tileborne/core";
 import {
   generatePresetTiles,
   MAP_GENERATE_PRESETS,
@@ -43,7 +50,7 @@ export const makeGeneratedLayers = (
   width: number,
   height: number,
   seed: number,
-): TileLayer[] => {
+): MapLayer[] => {
   const tiles = generatePresetTiles(preset, width, height, seed).map((tile) => tile + 1);
   return [
     new TileLayer({
@@ -53,19 +60,22 @@ export const makeGeneratedLayers = (
       opacity: 1,
       chunks: makeChunks(width, height, tiles),
     }),
-    new TileLayer({
+    // Props (trees/stones) and entities (spawns/loot) are MapObjects, which can
+    // only be rendered and placed on object layers. Generated maps therefore
+    // ship these as object layers so placeable brushes have a valid target.
+    new ObjectLayer({
       id: makeLayerId(randomUUID() as Uuid),
       name: "props",
       visible: true,
       opacity: 1,
-      chunks: [],
+      objectIds: [],
     }),
-    new TileLayer({
+    new ObjectLayer({
       id: makeLayerId(randomUUID() as Uuid),
       name: "entities",
       visible: true,
       opacity: 1,
-      chunks: [],
+      objectIds: [],
     }),
   ];
 };

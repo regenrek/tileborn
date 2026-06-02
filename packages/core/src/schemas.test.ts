@@ -12,6 +12,7 @@ import {
   makeTileId,
   makeTileSetId,
 } from "./ids.js";
+import { gameObjectTypeIdForKey } from "./catalog/well-known.js";
 import { PackCapability } from "./asset/index.js";
 import {
   BrandConfigSummary,
@@ -176,7 +177,7 @@ describe("schema round-trips", () => {
 
     roundTrip(MapObject, {
       id: objectId,
-      kind: "spawn",
+      kind: gameObjectTypeIdForKey("spawn"),
       x: 32,
       y: 64,
       width: undefined,
@@ -202,7 +203,7 @@ describe("schema round-trips", () => {
 
     roundTrip(MapObject, {
       id: objectId,
-      kind: "statue",
+      kind: gameObjectTypeIdForKey("statue"),
       x: 32,
       y: 96,
       width: 96,

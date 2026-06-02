@@ -100,6 +100,12 @@ export class ProjectManifest extends Schema.Class<ProjectManifest>("ProjectManif
   plugins: Schema.Array(ProjectPluginRef),
   assetPacks: Schema.Array(ProjectAssetPackRef),
   maps: Schema.Array(ProjectMapRef),
+  /**
+   * Project-level settings bag for game-mode authoring that is shared across all
+   * of the project's maps (e.g. the Battle Royale per-project player-model
+   * roster). Optional for back-compat with manifests written before this field.
+   */
+  settings: Schema.optional(JsonObject),
 }) {}
 
 /**

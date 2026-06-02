@@ -1,11 +1,14 @@
 import type { TileborneMap } from "@tileborne/core";
 
 import {
+  LOOT_CRATE_KEY,
   LOOT_CRATE_KIND,
   MIN_LOOT_CRATES,
   MIN_SPAWN_POINTS,
   REQUIRED_SHRINK_ANCHORS,
+  SHRINK_ZONE_ANCHOR_KEY,
   SHRINK_ZONE_ANCHOR_KIND,
+  SPAWN_POINT_KEY,
   SPAWN_POINT_KIND,
 } from "./constants.js";
 import type { ValidationIssue, ValidationResult } from "./types/artifact.js";
@@ -17,6 +20,7 @@ const countByKind = (map: TileborneMap): Map<string, number> => {
   }
   return counts;
 };
+
 
 const issue = (severity: ValidationIssue["severity"], message: string, location?: string): ValidationIssue => ({
   severity,
@@ -33,7 +37,7 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
     issues.push(
       issue(
         "error",
-        `Expected at least ${MIN_SPAWN_POINTS} ${SPAWN_POINT_KIND} objects, found ${spawnCount}`,
+        `Expected at least ${MIN_SPAWN_POINTS} ${SPAWN_POINT_KEY} objects, found ${spawnCount}`,
         "objects",
       ),
     );
@@ -44,7 +48,7 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
     issues.push(
       issue(
         "error",
-        `Expected exactly ${REQUIRED_SHRINK_ANCHORS} ${SHRINK_ZONE_ANCHOR_KIND}, found ${anchorCount}`,
+        `Expected exactly ${REQUIRED_SHRINK_ANCHORS} ${SHRINK_ZONE_ANCHOR_KEY}, found ${anchorCount}`,
         "objects",
       ),
     );
@@ -55,7 +59,7 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
     issues.push(
       issue(
         "error",
-        `Expected at least ${MIN_LOOT_CRATES} ${LOOT_CRATE_KIND} spawn region(s), found ${lootCount}`,
+        `Expected at least ${MIN_LOOT_CRATES} ${LOOT_CRATE_KEY} spawn region(s), found ${lootCount}`,
         "objects",
       ),
     );

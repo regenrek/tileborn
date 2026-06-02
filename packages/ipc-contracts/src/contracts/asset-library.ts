@@ -70,6 +70,19 @@ export const AssetLibraryResolvePreviewsResponse = Schema.Struct({
   previews: Schema.Array(AssetLibraryPreviewEntry),
 });
 
+export const AssetLibraryGetEditorIndexRequest = Schema.Struct({
+  packId: PackId,
+});
+
+export const AssetLibraryGetEditorIndexResponse = Schema.Struct({
+  packId: PackId,
+  integrityHash: ContentHash,
+  schemaVersion: Schema.Number,
+  // Serialized editor index JSON. Kept as an opaque string so the IPC boundary
+  // does not re-validate the ~30k-entry structure; the renderer `JSON.parse`s it.
+  indexJson: Schema.String,
+});
+
 export const AssetLibraryGetPackLibraryContract = defineContract({
   channel: 'tileborne:asset-library:getPackLibrary',
   request: AssetLibraryGetPackLibraryRequest,
@@ -98,11 +111,19 @@ export const AssetLibraryResolvePreviewsContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const AssetLibraryGetEditorIndexContract = defineContract({
+  channel: 'tileborne:asset-library:getEditorIndex',
+  request: AssetLibraryGetEditorIndexRequest,
+  response: AssetLibraryGetEditorIndexResponse,
+  errors: IpcContractErrors,
+});
+
 export const AssetLibraryContracts = [
   AssetLibraryGetPackLibraryContract,
   AssetLibraryGetPackCacheStatusContract,
   AssetLibraryReloadPackCacheContract,
   AssetLibraryResolvePreviewsContract,
+  AssetLibraryGetEditorIndexContract,
 ] as const;
 
 export const AssetLibraryIpcRegistry = createRegistry(AssetLibraryContracts);

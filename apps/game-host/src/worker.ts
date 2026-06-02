@@ -42,6 +42,29 @@ const authorizeWebSocketUpgrade = async (
   return null;
 };
 
+/**
+ * Serve the shipped game-client static bundle via the optional `ASSETS`
+ * binding (ADR-0022 decision #3). Falls back to `index.html` for SPA
+ * navigations so client-side routing works. Returns 404 when no assets binding
+ * is configured (e.g. playtest-only deployments).
+ */
+const serveStaticAsset = async (env: Env, request: Request): Promise<Response> => {
+  if (env.ASSETS === undefined) {
+    return new Response("not found", { status: 404 });
+  }
+  const response = await env.ASSETS.fetch(request);
+  if (response.status !== 404) {
+    return response;
+  }
+  const acceptsHtml = request.headers.get("Accept")?.includes("text/html") ?? false;
+  if (request.method === "GET" && acceptsHtml) {
+    const url = new URL(request.url);
+    url.pathname = "/index.html";
+    return env.ASSETS.fetch(new Request(url.toString(), { headers: request.headers }));
+  }
+  return response;
+};
+
 const buildConnectUrl = (origin: string, roomId: string, playerId: string, token: string, legacyPlaytest: boolean): string => {
   const path = legacyPlaytest ? `/playtest/${roomId}/ws` : `/rooms/${roomId}/connect`;
   const params = new URLSearchParams({
@@ -202,6 +225,10 @@ export const createWorkerApp = (manifest: BundledManifest = runtimeManifest): Ho
     url.searchParams.set("playtestId", playtestId);
     return stub.fetch(new Request(url.toString(), { headers: context.req.raw.headers }));
   });
+
+  // Anything not matched by an API/WS route falls through to the shipped
+  // game-client static assets (served by the `ASSETS` binding when present).
+  app.notFound((context) => serveStaticAsset(context.env, context.req.raw));
 
   return app;
 };

@@ -54,6 +54,50 @@ describe("game-host worker routes", () => {
     expect(body.timestamp.length).toBeGreaterThan(0);
   });
 
+  it("serves the game-client static assets for unmatched routes via the ASSETS binding", async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const assetEnv: Env = {
+      ...env,
+      ASSETS: {
+        fetch: async (request: Request) => {
+          const url = new URL(request.url);
+          if (url.pathname === "/assets/app.js") {
+            return new Response("console.log('client');", {
+              status: 200,
+              headers: { "content-type": "application/javascript" },
+            });
+          }
+          if (url.pathname === "/index.html") {
+            return new Response("<!doctype html><div id=root></div>", {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            });
+          }
+          return new Response("not found", { status: 404 });
+        },
+      },
+    };
+
+    const asset = await app.request("http://localhost/assets/app.js", {}, assetEnv);
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toContain("client");
+
+    // SPA navigation falls back to index.html.
+    const spa = await app.request(
+      "http://localhost/play",
+      { headers: { Accept: "text/html" } },
+      assetEnv,
+    );
+    expect(spa.status).toBe(200);
+    expect(await spa.text()).toContain("id=root");
+  });
+
+  it("returns 404 for unmatched routes when no ASSETS binding is configured", async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request("http://localhost/assets/missing.js", {}, env);
+    expect(response.status).toBe(404);
+  });
+
   it("GET /health returns 503 when signing key is invalid", async () => {
     const app = createWorkerApp(runtimeManifest);
     const response = await app.request("http://localhost/health", {}, { ...env, HANDOFF_SIGNING_KEY: "short" });

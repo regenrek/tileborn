@@ -3,11 +3,19 @@ import {
   Application,
   Assets,
   Container,
+  Rectangle,
   Sprite,
   Texture,
   type ApplicationOptions,
 } from "pixi.js";
 import { Effect, Option } from "effect";
+
+import {
+  compileClipTimeline,
+  resolveClipFrameIndex,
+  type CompiledClip,
+} from "../clip-timeline.js";
+import type { RenderableAnimationFrame } from "../../plugin/renderable-entity.js";
 
 import type { RegisteredBundledAsset } from "../../assets/bundled-asset.js";
 import { RuntimeAssetLoader, type LoadedAsset, type LoadedAssets } from "../../assets/runtime-asset-loader.js";
@@ -90,6 +98,11 @@ export class PixiRendererAdapter implements RendererAdapter {
   private readonly spritePoolByStringId = new Map<string, Sprite>();
   private readonly spriteLayers = new Map<number, Container>();
   private readonly texturesByRenderableAssetId = new Map<number | string, Texture>();
+  // Sub-rect frame textures for animated entities, keyed by asset+uv.
+  private readonly animationFrameTextureCache = new Map<string, Texture>();
+  // Compiled clip timelines keyed by clip id (or a frame-derived key) so the
+  // shared-clock frame lookup never recompiles per rendered frame.
+  private readonly compiledClipCache = new Map<string, CompiledClip>();
   private readonly objectUrls: string[] = [];
   private app: Application | undefined;
 
@@ -233,11 +246,28 @@ export class PixiRendererAdapter implements RendererAdapter {
           const previous = previousById.get(entity.id) ?? entity;
           sprite.position.set(lerp(previous.x, entity.x, alpha), lerp(previous.y, entity.y, alpha));
 
+          if (entity.anchor !== undefined) {
+            sprite.anchor.set(entity.anchor.x, entity.anchor.y);
+          }
           if (entity.rotation !== undefined) {
             sprite.rotation = entity.rotation;
           }
           if (entity.scale !== undefined) {
             sprite.scale.set(entity.scale, entity.scale);
+          }
+
+          const animation = entity.animation;
+          if (animation !== undefined && animation.frames.length > 1) {
+            const clip = this.compiledClipFor(animation);
+            const frameIndex = resolveClipFrameIndex(clip, animation.clockMs, {
+              ...(animation.speed === undefined ? {} : { speed: animation.speed }),
+              ...(animation.offsetMs === undefined ? {} : { offsetMs: animation.offsetMs }),
+            });
+            const frame = animation.frames[frameIndex] ?? animation.frames[0]!;
+            const texture = this.animationFrameTexture(frame);
+            if (texture !== undefined && sprite.texture !== texture) {
+              sprite.texture = texture;
+            }
           }
         }
 
@@ -308,6 +338,8 @@ export class PixiRendererAdapter implements RendererAdapter {
         this.spritePoolByStringId.clear();
         this.spriteLayers.clear();
         this.texturesByRenderableAssetId.clear();
+        this.animationFrameTextureCache.clear();
+        this.compiledClipCache.clear();
         for (const url of this.objectUrls.splice(0)) {
           URL.revokeObjectURL(url);
         }
@@ -327,6 +359,53 @@ export class PixiRendererAdapter implements RendererAdapter {
       throw new Error("Pixi renderer is not mounted");
     }
     return this.app;
+  }
+
+  private compiledClipFor(animation: {
+    readonly clipId?: string;
+    readonly frames: readonly RenderableAnimationFrame[];
+    readonly loop: boolean;
+    readonly defaultDurationMs?: number;
+  }): CompiledClip {
+    const key =
+      animation.clipId ??
+      `${animation.loop}:${animation.frames.map((frame) => frame.durationMs ?? "").join(",")}`;
+    const cached = this.compiledClipCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const compiled = compileClipTimeline(
+      animation.frames.map((frame) => frame.durationMs),
+      {
+        loop: animation.loop,
+        ...(animation.defaultDurationMs === undefined
+          ? {}
+          : { defaultDurationMs: animation.defaultDurationMs }),
+      },
+    );
+    this.compiledClipCache.set(key, compiled);
+    return compiled;
+  }
+
+  private animationFrameTexture(frame: RenderableAnimationFrame): Texture | undefined {
+    const base = this.texturesByRenderableAssetId.get(frame.assetId);
+    if (base === undefined) {
+      return undefined;
+    }
+    if (frame.uv === undefined) {
+      return base;
+    }
+    const key = `${frame.assetId}:${frame.uv.x}:${frame.uv.y}:${frame.uv.w}:${frame.uv.h}`;
+    const cached = this.animationFrameTextureCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const texture = new Texture({
+      source: base.source,
+      frame: new Rectangle(frame.uv.x, frame.uv.y, frame.uv.w, frame.uv.h),
+    });
+    this.animationFrameTextureCache.set(key, texture);
+    return texture;
   }
 
   private spriteFor(entity: EntityId, renderableAssetId: number, layerIndex: number): Sprite {

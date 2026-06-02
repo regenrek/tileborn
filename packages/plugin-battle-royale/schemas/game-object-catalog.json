@@ -1,0 +1,68 @@
+{
+  "id": "catalog:0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f60",
+  "schemaVersion": 1,
+  "objectTypes": [
+    {
+      "id": "gobj:e0e56b8c-aa3f-89be-8e2c-00c296acebf4",
+      "schemaVersion": 1,
+      "label": "Spawn Point",
+      "family": "spawn",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "spawn-point",
+          "data": { "defaultTeam": "solo" }
+        }
+      ],
+      "instanceDefaults": { "team": "solo", "weight": 1 }
+    },
+    {
+      "id": "gobj:7fa4f2e6-ea31-873b-8c6a-4cae28615f78",
+      "schemaVersion": 1,
+      "label": "Shrink Zone Anchor",
+      "family": "zone",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "interactable",
+          "kind": "shrink-zone-anchor",
+          "radiusPx": 0,
+          "parameters": {}
+        }
+      ],
+      "instanceDefaults": { "initialRadiusTiles": 48, "finalRadiusTiles": 4 }
+    },
+    {
+      "id": "gobj:9aeedc25-bee2-8d64-8f80-7a922d8cb826",
+      "schemaVersion": 1,
+      "label": "Loot Crate",
+      "family": "loot",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "loot-source",
+          "lootTableId": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+          "interactionMode": "tap",
+          "grants": {}
+        }
+      ],
+      "instanceDefaults": { "tier": "common", "respawnSeconds": 0 }
+    }
+  ],
+  "lootTables": [
+    {
+      "id": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "label": "Battle Royale Default Loot",
+      "entries": [
+        { "itemKind": "health-pack", "tier": "common", "weight": 40 },
+        { "itemKind": "ammo-box", "tier": "common", "weight": 35 },
+        { "itemKind": "armor-vest", "tier": "rare", "weight": 15 },
+        { "itemKind": "weapon-crate", "tier": "epic", "weight": 10 }
+      ]
+    }
+  ],
+  "items": []
+}

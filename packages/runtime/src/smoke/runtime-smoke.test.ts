@@ -147,7 +147,6 @@ describe("runtime smoke scenarios", () => {
                 Chat: () => "Chat",
                 MatchEnd: () => "MatchEnd",
                 ServerNotice: () => "ServerNotice",
-                PlayerLoadouts: () => "PlayerLoadouts",
               }),
             );
           }),

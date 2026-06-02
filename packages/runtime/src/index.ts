@@ -9,6 +9,7 @@ export * from "./loop/game-loop.js";
 export * from "./net/index.js";
 export * from "./plugin/index.js";
 export * from "./renderer/renderer-adapter.js";
+export * from "./renderer/interpolate-entities.js";
 export * from "./renderer/pixi/index.js";
 export * from "./runtime/game-runtime.js";
 export * from "./simulation/player-movement.js";

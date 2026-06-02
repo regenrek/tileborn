@@ -283,15 +283,19 @@ export function ImportWizard({
     detected: ImportSourceDetection,
     options: { readonly confirmAmbiguous: boolean },
   ) => {
-    if (detected.kind === 'zip' || detected.kind === 'unsupported') {
+    if (detected.kind === 'zip' || detected.kind === 'unsupported' || detected.kind === 'image') {
+      // Sprite-sheet images are handled by the Sprite/Animation Studio, not the Tiled wizard.
       return;
     }
     if (detected.kind === 'ambiguous' && !options.confirmAmbiguous) {
       return;
     }
     const nextKind =
-      detected.preferredKind ??
-      (detected.kind === 'tileborne-pack' ? 'tileborne-pack' : 'tiled-source');
+      detected.preferredKind === 'tileborne-pack' || detected.preferredKind === 'tiled-source'
+        ? detected.preferredKind
+        : detected.kind === 'tileborne-pack'
+          ? 'tileborne-pack'
+          : 'tiled-source';
     setSourceKind(nextKind);
     setScanResponse(undefined);
     setPlanResponse(undefined);

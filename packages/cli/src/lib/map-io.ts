@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { TileborneMap, TileborneMapSchema } from "@tileborne/core";
-import { Schema } from "effect";
+import { decodePersistedTileborneMapJson, type TileborneMap } from "@tileborne/core";
 
 import { CliValidationError } from "../render/errors.js";
 
@@ -9,7 +8,7 @@ export const readMapFile = async (filePath: string): Promise<TileborneMap> => {
   try {
     const raw = await readFile(filePath, "utf8");
     const parsed: unknown = JSON.parse(raw);
-    return Schema.decodeUnknownSync(TileborneMapSchema)(parsed);
+    return decodePersistedTileborneMapJson(parsed);
   } catch (cause) {
     throw new CliValidationError({
       message: cause instanceof Error ? cause.message : String(cause),

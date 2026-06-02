@@ -1,9 +1,9 @@
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+// The react plugin transforms the menu `.tsx` sections (automatic JSX runtime).
+// Node remains the default test environment; menu render tests opt into jsdom
+// via a per-file `// @vitest-environment jsdom` docblock.
 export default defineConfig({
-  test: {
-    environment: "node",
-    include: ["src/**/*.test.ts", "src/__tests__/**/*.test.ts"],
-    setupFiles: ["./src/test/setup.ts"],
-  },
+  plugins: [react()],
 });

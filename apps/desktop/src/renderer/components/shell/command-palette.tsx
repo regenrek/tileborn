@@ -79,7 +79,8 @@ function useCommandPaletteModel({
   const setCreateProjectDialogOpen = useEditorUiStore((s) => s.setCreateProjectDialogOpen);
   const setPluginInstallDialogOpen = useEditorUiStore((s) => s.setPluginInstallDialogOpen);
   const setAssetImportDialogOpen = useEditorUiStore((s) => s.setAssetImportDialogOpen);
-  const setActiveTool = useEditorUiStore((s) => s.setActiveTool);
+  const setSpriteEditorOpen = useEditorUiStore((s) => s.setSpriteEditorOpen);
+  const selectTool = useEditorUiStore((s) => s.selectTool);
   const setShowGrid = useEditorUiStore((s) => s.setShowGrid);
   const setShowCollisionOverlay = useEditorUiStore((s) => s.setShowCollisionOverlay);
   const setBottomDrawerOpen = useEditorUiStore((s) => s.setBottomDrawerOpen);
@@ -126,6 +127,11 @@ function useCommandPaletteModel({
         case 'file.import-asset-pack':
           runCommand(command.id, () => {
             setAssetImportDialogOpen(true);
+          });
+          return;
+        case 'file.open-sprite-studio':
+          runCommand(command.id, () => {
+            setSpriteEditorOpen(true);
           });
           return;
         case 'edit.undo':
@@ -224,7 +230,7 @@ function useCommandPaletteModel({
           if (command.id.startsWith('tool.')) {
             const tool = command.id.slice('tool.'.length) as EditorTool;
             runCommand(command.id, () => {
-              setActiveTool(tool);
+              selectTool(tool);
             });
           }
       }
@@ -235,9 +241,10 @@ function useCommandPaletteModel({
       navigate,
       projectId,
       runCommand,
-      setActiveTool,
+      selectTool,
       setBottomDrawerOpen,
       setAssetImportDialogOpen,
+      setSpriteEditorOpen,
       setCreateProjectDialogOpen,
       setGenerateMapDialogOpen,
       setPluginInstallDialogOpen,

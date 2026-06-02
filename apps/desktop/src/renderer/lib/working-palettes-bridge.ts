@@ -5,6 +5,7 @@ import type {
 } from '@tileborne/core';
 import type {
   AutotileRuleIdType,
+  ClipIdType,
   PlaceableIdType,
   TerrainClassType,
   TileIdType,
@@ -42,6 +43,13 @@ export const workingPaletteItemToBrushIntent = (item: WorkingPaletteItem): Brush
       return { kind: 'terrain', packId: item.ref.packId, classId: item.ref.refId as TerrainClassType };
     case 'placeable':
       return { kind: 'placeable', packId: item.ref.packId, placeableId: item.ref.refId as PlaceableIdType };
+    case 'sprite':
+      return {
+        kind: 'placeable',
+        packId: item.ref.packId,
+        placeableId: item.ref.refId as PlaceableIdType,
+        ...(item.ref.clipId === undefined ? {} : { clipId: item.ref.clipId as ClipIdType }),
+      };
   }
 };
 
@@ -69,6 +77,7 @@ export const brushIntentMatchesItem = (
         intent.classId === item.ref.refId
       );
     case 'placeable':
+    case 'sprite':
       return (
         intent.kind === 'placeable' &&
         (intent.packId === undefined || intent.packId === item.ref.packId) &&

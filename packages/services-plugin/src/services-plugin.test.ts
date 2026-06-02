@@ -1,8 +1,9 @@
 import { open, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { PluginId } from "@tileborne/core";
+import { gameObjectTypeIdForKey, PluginId } from "@tileborne/core";
 import { PluginManifest } from "@tileborne/plugin-api";
 import { Effect, Fiber, Option, Queue, Schema, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -53,12 +54,17 @@ const makeTempHome = async (): Promise<string> => {
 
 const pluginId = (id = "@tileborne-plugins/test"): PluginId => Schema.decodeUnknownSync(PluginId)(id);
 
+const servicesPluginSrcDir = path.dirname(fileURLToPath(import.meta.url));
+const battleRoyaleCatalogPath = path.resolve(
+  servicesPluginSrcDir,
+  "../../plugin-battle-royale/schemas/game-object-catalog.json",
+);
+
 const emptyContributes = {
   panels: undefined,
   tools: undefined,
   assetPacks: undefined,
   tilesetPacks: undefined,
-  objectKinds: undefined,
   editor: undefined,
   runtime: undefined,
   server: undefined,
@@ -607,6 +613,53 @@ describe.sequential("PluginLoaderService", () => {
       return yield* loader.loadDeclarative(pluginId());
     }).pipe(Effect.provide(PluginLoaderMainLayer)));
     expect(loaded.pluginId).toBe("@tileborne-plugins/test");
+  });
+
+  it("materializes a plugin's gameObjectCatalogs (indexPath) on load via loadDeclarative", async () => {
+    const home = await makeTempHome();
+    const id = "@tileborne-plugins/test";
+    const version = "0.1.0";
+    const extra = {
+      contributes: {
+        ...emptyContributes,
+        runtime: {
+          gameObjectCatalogs: [
+            {
+              _tag: "DeclarativeRuntimeGameObjectCatalogContribution",
+              id: "br-game-object-catalog",
+              kind: "declarative",
+              data: { indexPath: "./schemas/game-object-catalog.json" },
+            },
+          ],
+        },
+      },
+    };
+    const directory = path.join(home, "plugins", expectedPluginDirectoryName(id, version));
+    await writePluginSource(directory, id, version, extra);
+    // Ship the REAL Battle Royale catalog pack behind the contribution indexPath
+    // so loadDeclarative resolves + decodes it through the production path. The
+    // catalog file must exist before the lock is refreshed (integrity covers it).
+    const realCatalog = await readFile(battleRoyaleCatalogPath, "utf8");
+    await mkdir(path.join(directory, "schemas"), { recursive: true });
+    await writeFile(path.join(directory, "schemas", "game-object-catalog.json"), realCatalog);
+    await refreshInstalledLock(directory, id, version, extra);
+
+    const loaded = await Effect.runPromise(
+      Effect.gen(function* () {
+        const registry = yield* PluginRegistryService;
+        const loader = yield* PluginLoaderService;
+        yield* registry.discover();
+        return yield* loader.loadDeclarative(pluginId());
+      }).pipe(Effect.provide(PluginLoaderMainLayer)),
+    );
+
+    expect(loaded.gameObjectCatalogs).toHaveLength(1);
+    const materialized = loaded.gameObjectCatalogs[0];
+    expect(materialized?.contributionId).toBe("br-game-object-catalog");
+    const objectTypeIds = materialized?.catalog.objectTypes.map((type) => type.id) ?? [];
+    expect(objectTypeIds).toContain(gameObjectTypeIdForKey("spawn-point"));
+    expect(objectTypeIds).toContain(gameObjectTypeIdForKey("shrink-zone-anchor"));
+    expect(objectTypeIds).toContain(gameObjectTypeIdForKey("loot-crate"));
   });
 
   it("loads sidebar panel and tool contributions for enabled plugins", async () => {

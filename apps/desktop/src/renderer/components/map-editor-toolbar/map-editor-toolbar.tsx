@@ -61,7 +61,7 @@ export function MapEditorToolbar() {
   useMapEditorToolbarShortcuts();
 
   const activeTool = useEditorUiStore((state) => state.activeTool);
-  const setActiveTool = useEditorUiStore((state) => state.setActiveTool);
+  const selectTool = useEditorUiStore((state) => state.selectTool);
   const showGrid = useEditorUiStore((state) => state.showGrid);
   const setShowGrid = useEditorUiStore((state) => state.setShowGrid);
   const snapToGrid = useEditorUiStore((state) => state.snapToGrid);
@@ -88,7 +88,7 @@ export function MapEditorToolbar() {
           onValueChange={(value) => {
             const next = value.at(-1);
             if (next) {
-              setActiveTool(next as typeof activeTool);
+              selectTool(next as typeof activeTool);
             }
           }}
           orientation="horizontal"

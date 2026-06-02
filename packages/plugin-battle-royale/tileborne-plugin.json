@@ -79,7 +79,7 @@
         "order": 10,
         "capabilities": ["spawn", "paint"],
         "data": {
-          "objectTypeContributionId": "br-object-types"
+          "gameObjectCatalogId": "br-game-object-catalog"
         }
       }
     ],
@@ -96,20 +96,6 @@
       }
     ],
     "editor": {
-      "objectTypes": [
-        {
-          "_tag": "DeclarativeEditorObjectTypeContribution",
-          "id": "br-object-types",
-          "kind": "declarative",
-          "display": {
-            "label": "Battle Royale Object Types",
-            "description": "Spawn points, shrink anchors, and loot crates."
-          },
-          "data": {
-            "indexPath": "./schemas/object-types.json"
-          }
-        }
-      ],
       "presets": [
         {
           "_tag": "DeclarativeEditorPresetContribution",
@@ -225,6 +211,58 @@
             "label": "Battle Royale Runtime Adapter"
           },
           "entry": "./dist/runtime.js"
+        }
+      ],
+      "gameObjectCatalogs": [
+        {
+          "_tag": "DeclarativeRuntimeGameObjectCatalogContribution",
+          "id": "br-game-object-catalog",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Object Types",
+            "description": "Spawn points, shrink anchors, and loot crates."
+          },
+          "data": {
+            "indexPath": "./schemas/game-object-catalog.json"
+          }
+        }
+      ],
+      "menuSections": [
+        {
+          "_tag": "RuntimeMenuSectionContribution",
+          "id": "br-lobby",
+          "kind": "executable",
+          "slot": "main.primaryActions",
+          "display": { "label": "Battle Royale Quick Play" },
+          "entry": "./dist/menu.js",
+          "order": 10
+        },
+        {
+          "_tag": "RuntimeMenuSectionContribution",
+          "id": "br-loadout",
+          "kind": "executable",
+          "slot": "main.tabs",
+          "display": { "label": "Loadout" },
+          "entry": "./dist/menu.js",
+          "order": 20
+        },
+        {
+          "_tag": "RuntimeMenuSectionContribution",
+          "id": "br-private-room",
+          "kind": "executable",
+          "slot": "main.secondaryActions",
+          "display": { "label": "Private Room" },
+          "entry": "./dist/menu.js",
+          "order": 30
+        },
+        {
+          "_tag": "RuntimeMenuSectionContribution",
+          "id": "br-match-rules",
+          "kind": "executable",
+          "slot": "settings.tabs",
+          "display": { "label": "Match Rules" },
+          "entry": "./dist/menu.js",
+          "order": 40
         }
       ]
     },

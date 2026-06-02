@@ -1,23 +1,33 @@
 import {
+  hashBytes,
   makeAssetId,
   makePackId,
   PackId,
   PlaceableId,
   ProjectId,
+  type AssetId,
   type ContentHash,
   type TileborneMap,
 } from '@tileborne/core';
-import { buildFrameIndex, type FrameIndex } from '@tileborne/sdk-tileset/renderer';
-import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
-import { createRuntimeAssetManifest, type RuntimeAssetManifest } from '@tileborne/runtime';
 import {
-  buildRuntimeManifestFromTilesetPack,
-  collisionMaskByTileIndex,
-  loadTilesetPack,
-  tileIdByTileIndex,
-  tileIndexByTileId,
-} from '@/lib/tileset-pack';
+  decodeEditorTilesetIndex,
+  type DecodedEditorTilesetIndex,
+  type EditorIndexAsset,
+  type EditorIndexLicense,
+  type EditorTileFrame,
+  type EditorTilesetIndexJson,
+} from '@tileborne/sdk-tileset/editor-index';
+import type {
+  AutotileRule,
+  CollisionMaskType,
+  Placeable,
+  TerrainClassType,
+  TerrainTransition,
+  TileIdType,
+} from '@tileborne/sdk-tileset/schemas';
+import { createRuntimeAssetManifest, type RuntimeAssetManifest } from '@tileborne/runtime';
 import { assetProtocolUrl } from '@/lib/asset-url';
+import type { EditorViewportTileAtlas } from '@/editor/viewport/editor-viewport-controller';
 import { Effect, Option, Schema } from 'effect';
 
 /** 1×1 transparent PNG used when no pack is available for the viewport. */
@@ -37,16 +47,28 @@ export interface ViewportPlaceableRef {
   readonly placeableId: PlaceableId;
 }
 
+export interface ViewportPlaceableEntry {
+  readonly packId: PackId;
+  readonly placeable: Placeable;
+}
+
 export interface ViewportAssetBundle {
   readonly packId?: PackId;
-  readonly pack?: TilesetPack | undefined;
-  readonly packs: readonly TilesetPack[];
-  readonly frameIndex?: FrameIndex | undefined;
+  readonly hasPack: boolean;
   readonly manifest: RuntimeAssetManifest;
+  // Primary-pack derived lookups (match the previous `tileset-pack.ts` path).
   readonly tileIndexByTileId: ReadonlyMap<TileIdType, number>;
-  readonly tileIdByTileIndex: ReadonlyMap<number, TileIdType>;
-  readonly collisionMaskByTileIndex: ReturnType<typeof collisionMaskByTileIndex>;
+  readonly tileFramesByIndex: ReadonlyMap<number, EditorTileFrame>;
+  readonly collisionMaskByTileIndex: ReadonlyMap<number, CollisionMaskType>;
+  readonly terrainFirstTileId: ReadonlyMap<TerrainClassType, TileIdType>;
+  readonly directTileIndexByTerrainClass: ReadonlyMap<TerrainClassType, number>;
+  readonly autotileRules: readonly AutotileRule[];
+  readonly terrainTransitions: readonly TerrainTransition[];
+  // Aggregated across the loaded packs.
   readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly placeables: readonly ViewportPlaceableEntry[];
+  readonly assetPathByPackAndId: ReadonlyMap<string, string>;
+  readonly assetPathById: ReadonlyMap<string, string>;
 }
 
 const viewportAssetBundleCache = new Map<string, Promise<ViewportAssetBundle>>();
@@ -78,35 +100,6 @@ export const resolveViewportPackId = async (
   return packs[0]?.id;
 };
 
-export const buildRuntimeViewportManifest = (
-  packManifest: TilesetPack,
-  textureDataUrls: ReadonlyMap<string, string>,
-): RuntimeAssetManifest =>
-  buildRuntimeManifestFromTilesetPack(packManifest, textureDataUrls);
-
-const buildRuntimeViewportManifestForPacks = (
-  packs: readonly TilesetPack[],
-  textureDataUrls: ReadonlyMap<string, string>,
-): RuntimeAssetManifest => {
-  const primary = packs[0];
-  if (primary === undefined) {
-    return createBlankViewportManifest();
-  }
-  const manifests = packs.map((pack) => buildRuntimeManifestFromTilesetPack(pack, textureDataUrls));
-  return createRuntimeAssetManifest({
-    id: primary.id,
-    name: primary.name,
-    version: primary.version,
-    license: {
-      spdxId: primary.license.spdxId,
-      attribution: primary.license.attribution,
-      sourceUrl: primary.license.sourceUrl,
-      notes: primary.license.notes,
-    },
-    assets: manifests.flatMap((manifest) => manifest.assets),
-  });
-};
-
 export const createBlankViewportManifest = (): RuntimeAssetManifest =>
   createRuntimeAssetManifest({
     id: makePackId('00000000-0000-4000-8000-000000000097'),
@@ -126,10 +119,46 @@ export const createBlankViewportManifest = (): RuntimeAssetManifest =>
     ],
   });
 
+const emptyViewportAssetBundle = (): ViewportAssetBundle => ({
+  hasPack: false,
+  manifest: createBlankViewportManifest(),
+  tileIndexByTileId: new Map(),
+  tileFramesByIndex: new Map(),
+  collisionMaskByTileIndex: new Map(),
+  terrainFirstTileId: new Map(),
+  directTileIndexByTerrainClass: new Map(),
+  autotileRules: [],
+  terrainTransitions: [],
+  renderableAssetIdByPath: new Map(),
+  placeables: [],
+  assetPathByPackAndId: new Map(),
+  assetPathById: new Map(),
+});
+
 export const loadViewportAssetManifest = (
   request: ViewportAssetManifestRequest = {},
 ): Effect.Effect<RuntimeAssetManifest, never> =>
   loadViewportAssetBundle(request).pipe(Effect.map((bundle) => bundle.manifest));
+
+/**
+ * Projects a loaded viewport bundle into the tile-atlas options consumed by
+ * {@link EditorViewportTileAtlas}. Both the editor and the playtest viewports
+ * need the same per-pack lookups (tile frames, renderable ids, placeables,
+ * autotile rules) so the controller can resolve real atlas textures instead of
+ * falling back to the missing-texture diagnostic tiles.
+ */
+export const viewportControllerAtlas = (
+  bundle: ViewportAssetBundle,
+): EditorViewportTileAtlas => ({
+  tileFramesByIndex: bundle.tileFramesByIndex,
+  collisionMaskByTileIndex: bundle.collisionMaskByTileIndex,
+  renderableAssetIdByPath: bundle.renderableAssetIdByPath,
+  placeables: bundle.placeables,
+  assetPathByPackAndId: bundle.assetPathByPackAndId,
+  assetPathById: bundle.assetPathById,
+  autotileRules: bundle.autotileRules,
+  terrainTransitions: bundle.terrainTransitions,
+});
 
 export const loadViewportAssetBundle = (
   request: ViewportAssetManifestRequest = {},
@@ -141,18 +170,29 @@ export const loadViewportAssetBundle = (
     });
     if (packId === undefined) {
       console.info('[tileborne] no asset pack available for viewport; using blank texture fallback');
-      return {
-        manifest: createBlankViewportManifest(),
-        packs: [],
-        tileIndexByTileId: new Map(),
-        tileIdByTileIndex: new Map(),
-        collisionMaskByTileIndex: new Map(),
-        renderableAssetIdByPath: new Map(),
-      };
+      return emptyViewportAssetBundle();
     }
 
-    const packIds = [packId, ...(request.extraPackIds ?? []).filter((id) => id !== packId)];
     const renderablePlaceableRefs = resolveRenderablePlaceableRefs(request, packId);
+    // Object placeables can reference a pack that is neither the map's tileset
+    // pack nor part of the working palette (`extraPackIds`). Those packs must
+    // still be loaded so existing map objects resolve their placeable frames and
+    // atlas textures on map open instead of rendering blank. Primary pack stays
+    // first to keep `renderableAssetIdByPath` indices stable.
+    const packIds: PackId[] = [packId];
+    const seenPackIds = new Set<string>([String(packId)]);
+    for (const candidate of [
+      ...(request.extraPackIds ?? []),
+      ...renderablePlaceableRefs.flatMap((ref) =>
+        ref.packId === undefined ? [] : [ref.packId],
+      ),
+    ]) {
+      const key = String(candidate);
+      if (!seenPackIds.has(key)) {
+        seenPackIds.add(key);
+        packIds.push(candidate);
+      }
+    }
     const cacheKey = [
       packIds.map(String).join('|'),
       renderablePlaceableRefs
@@ -182,23 +222,23 @@ export const loadViewportAssetBundle = (
           '[tileborne] failed to load viewport asset pack; using blank texture fallback',
           error,
         );
-        return {
-          manifest: createBlankViewportManifest(),
-          packs: [],
-          tileIndexByTileId: new Map(),
-          tileIdByTileIndex: new Map(),
-          collisionMaskByTileIndex: new Map(),
-          renderableAssetIdByPath: new Map(),
-        };
+        return emptyViewportAssetBundle();
       }),
     ),
   );
 
-const loadViewportAssetBundleForPack = (packId: PackId): Effect.Effect<TilesetPack, Error> =>
-  Effect.tryPromise({
-    try: () => loadTilesetPack(packId),
-    catch: (cause) => new Error(String(cause)),
-  });
+const loadEditorIndexForPack = async (
+  packId: PackId,
+): Promise<DecodedEditorTilesetIndex | undefined> => {
+  try {
+    const { indexJson } = await window.tileborne.assetLibrary.getEditorIndex({ packId });
+    const json = JSON.parse(indexJson) as EditorTilesetIndexJson;
+    return decodeEditorTilesetIndex(json);
+  } catch (error) {
+    console.info('[tileborne] skipped unavailable viewport asset pack', { packId, error });
+    return undefined;
+  }
+};
 
 const resolveRenderablePlaceableRefs = (
   request: ViewportAssetManifestRequest,
@@ -225,20 +265,14 @@ const resolveRenderablePlaceableRefs = (
   return [...refs.values()];
 };
 
-const loadOptionalViewportAssetBundlePack = (
-  packId: PackId,
-): Effect.Effect<TilesetPack | undefined, never> =>
-  loadViewportAssetBundleForPack(packId).pipe(
-    Effect.catch((error: Error) =>
-      Effect.sync(() => {
-        console.info('[tileborne] skipped unavailable viewport asset pack', {
-          packId,
-          error,
-        });
-        return undefined;
-      }),
-    ),
-  );
+const licenseToInput = (license: EditorIndexLicense) => ({
+  spdxId: license.spdxId,
+  attribution: license.attribution === undefined ? Option.none() : Option.some(license.attribution),
+  sourceUrl: license.sourceUrl === undefined ? Option.none() : Option.some(license.sourceUrl),
+  notes: license.notes === undefined ? Option.none() : Option.some(license.notes),
+});
+
+const hashForUrl = (url: string): ContentHash => hashBytes(new TextEncoder().encode(url));
 
 const loadViewportAssetBundleForPacks = (
   packIds: readonly PackId[],
@@ -246,94 +280,110 @@ const loadViewportAssetBundleForPacks = (
 ): Effect.Effect<ViewportAssetBundle, Error> =>
   Effect.gen(function* () {
     if (packIds.length === 0) {
-      return {
-        manifest: createBlankViewportManifest(),
-        packs: [],
-        tileIndexByTileId: new Map(),
-        tileIdByTileIndex: new Map(),
-        collisionMaskByTileIndex: new Map(),
-        renderableAssetIdByPath: new Map(),
-      } satisfies ViewportAssetBundle;
+      return emptyViewportAssetBundle();
     }
 
-    const loadedPacks = yield* Effect.forEach(
+    const loaded = yield* Effect.forEach(
       packIds,
-      (packId) => loadOptionalViewportAssetBundlePack(packId),
-      {
-        concurrency: 4,
-      },
+      (packId) =>
+        Effect.tryPromise({
+          try: () => loadEditorIndexForPack(packId),
+          catch: (cause) => new Error(String(cause)),
+        }),
+      { concurrency: 4 },
     );
-    const packs: TilesetPack[] = loadedPacks.filter(
-      (entry): entry is TilesetPack => entry !== undefined,
+    const indexes = loaded.filter(
+      (entry): entry is DecodedEditorTilesetIndex => entry !== undefined,
     );
-    const pack = packs[0];
-    if (pack === undefined) {
-      return {
-        manifest: createBlankViewportManifest(),
-        packs: [],
-        tileIndexByTileId: new Map(),
-        tileIdByTileIndex: new Map(),
-        collisionMaskByTileIndex: new Map(),
-        renderableAssetIdByPath: new Map(),
-      } satisfies ViewportAssetBundle;
+    const primary = indexes[0];
+    if (primary === undefined) {
+      return emptyViewportAssetBundle();
     }
-    const frameIndex = buildFrameIndex(pack);
 
-    // Fetch paint atlases plus image-collection placeable frames. Do not fetch
-    // unrelated preview/sample art from large packs.
-    const renderablePlaceableIdsByPack = new Map<string, ReadonlySet<string>>();
-    for (const pack of packs) {
-      renderablePlaceableIdsByPack.set(
-        String(pack.id),
-        new Set(
-          renderablePlaceableRefs
-            .filter((ref) => ref.packId === pack.id)
-            .map((ref) => String(ref.placeableId)),
-        ),
+    // Renderable atlas + selected placeable-frame paths, in pack order, matching
+    // the previous `loadViewportAssetBundleForPacks` ordering so the 1-based
+    // `renderableAssetIdByPath` stays stable.
+    const renderableAssets: { readonly packId: PackId; readonly asset: EditorIndexAsset }[] = [];
+    for (const index of indexes) {
+      const selectedPlaceableIds = new Set(
+        renderablePlaceableRefs
+          .filter((ref) => (ref.packId ?? primary.packId) === index.packId)
+          .map((ref) => String(ref.placeableId)),
       );
+      const assetPathById = new Map(index.assets.map((asset) => [asset.id, asset.path]));
+      const renderablePaths = new Set<string>(index.atlasAssetPaths);
+      for (const placeable of index.placeables) {
+        if (!selectedPlaceableIds.has(String(placeable.id))) {
+          continue;
+        }
+        // Load every default-frame AND named-clip frame so ticker-driven
+        // animation can swap among all clip frames without a missing texture.
+        const clipFrames = (placeable.clips ?? []).flatMap((clip) => clip.frames);
+        for (const frame of [...placeable.frames, ...clipFrames]) {
+          const framePath = assetPathById.get(String(frame.assetId));
+          if (framePath !== undefined) {
+            renderablePaths.add(framePath);
+          }
+        }
+      }
+      for (const asset of index.assets) {
+        if (asset.mime.startsWith('image/') && renderablePaths.has(asset.path)) {
+          renderableAssets.push({ packId: index.packId, asset });
+        }
+      }
     }
 
-    const renderableAssets = packs.flatMap((entry) => {
-      const renderablePlaceableIds =
-        renderablePlaceableIdsByPack.get(String(entry.id)) ?? new Set<string>();
-      const renderableAssetIds = new Set([
-        ...entry.tilesets.map((tileset) => String(tileset.atlasAssetId)),
-        ...(entry.placeables ?? []).flatMap((placeable) =>
-          renderablePlaceableIds.has(String(placeable.id))
-            ? placeable.frames.map((frame) => String(frame.assetId))
-            : [],
-        ),
-      ]);
-      return entry.assets
-        .filter(
-          (asset) => asset.mime.startsWith('image/') && renderableAssetIds.has(String(asset.id)),
-        )
-        .map((asset) => ({ packId: entry.id, asset }));
-    });
     const renderableAssetIdByPath = new Map<string, number>();
-    renderableAssets.forEach(({ asset }, index) => {
-      renderableAssetIdByPath.set(asset.path, index + 1);
+    renderableAssets.forEach(({ asset }, position) => {
+      renderableAssetIdByPath.set(asset.path, position + 1);
     });
 
-    // Atlases are streamed via the `tileborne-asset` protocol and fetched by the
-    // runtime asset loader, so the renderer decodes them off the main thread
-    // without a base64-data-URL round-trip over IPC.
-    const textureDataUrls = new Map<string, string>(
-      renderableAssets.map(({ packId, asset }) => [
-        asset.path,
-        assetProtocolUrl(String(packId), asset.path),
-      ]),
+    // Atlases stream via the `tileborne-asset` protocol and are decoded off the
+    // main thread by the runtime asset loader (no base64 round-trip over IPC).
+    const manifest = createRuntimeAssetManifest({
+      id: primary.packId,
+      name: primary.packMeta.name,
+      version: primary.packMeta.version,
+      license: licenseToInput(primary.packMeta.license),
+      assets: renderableAssets.map(({ packId, asset }) => {
+        const url = assetProtocolUrl(String(packId), asset.path);
+        return {
+          id: asset.id as AssetId,
+          path: url,
+          mime: asset.mime,
+          size: url.length,
+          hash: hashForUrl(url),
+          license: Option.none(),
+        };
+      }),
+    });
+
+    const placeables: ViewportPlaceableEntry[] = indexes.flatMap((index) =>
+      index.placeables.map((placeable) => ({ packId: index.packId, placeable })),
     );
+    const assetPathByPackAndId = new Map<string, string>();
+    const assetPathById = new Map<string, string>();
+    for (const index of indexes) {
+      for (const asset of index.assets) {
+        assetPathByPackAndId.set(`${index.packId}:${asset.id}`, asset.path);
+        assetPathById.set(asset.id, asset.path);
+      }
+    }
 
     return {
-      packId: pack.id,
-      pack,
-      packs,
-      frameIndex,
-      manifest: buildRuntimeViewportManifestForPacks(packs, textureDataUrls),
-      tileIndexByTileId: tileIndexByTileId(pack),
-      tileIdByTileIndex: tileIdByTileIndex(pack),
-      collisionMaskByTileIndex: collisionMaskByTileIndex(pack),
+      packId: primary.packId,
+      hasPack: true,
+      manifest,
+      tileIndexByTileId: primary.tileIndexByTileId,
+      tileFramesByIndex: primary.tileFramesByIndex,
+      collisionMaskByTileIndex: primary.collisionMaskByTileIndex,
+      terrainFirstTileId: primary.terrainFirstTileId,
+      directTileIndexByTerrainClass: primary.directTileIndexByTerrainClass,
+      autotileRules: primary.autotileRules,
+      terrainTransitions: primary.terrainTransitions,
       renderableAssetIdByPath,
-    };
+      placeables,
+      assetPathByPackAndId,
+      assetPathById,
+    } satisfies ViewportAssetBundle;
   });

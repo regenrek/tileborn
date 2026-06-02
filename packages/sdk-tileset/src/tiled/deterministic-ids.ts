@@ -1,6 +1,7 @@
 import {
   hashBytes,
   makeAssetId,
+  makeClipId,
   makeLayerId,
   makeMapId,
   makeObjectId,
@@ -8,6 +9,7 @@ import {
   makePlaceableId,
   makeTileId,
   type AssetId,
+  type ClipId,
   type LayerId,
   type MapId,
   type ObjectId,
@@ -40,6 +42,7 @@ export const deterministicPackId = (seed: string): PackId => makePackId(uuidFrom
 export const deterministicAssetId = (seed: string): AssetId => makeAssetId(uuidFromSeed(seed));
 export const deterministicTileId = (seed: string): TileId => makeTileId(uuidFromSeed(seed));
 export const deterministicPlaceableId = (seed: string): PlaceableId => makePlaceableId(uuidFromSeed(seed));
+export const deterministicClipId = (seed: string): ClipId => makeClipId(uuidFromSeed(seed));
 export const deterministicMapId = (seed: string): MapId => makeMapId(uuidFromSeed(seed));
 export const deterministicLayerId = (seed: string): LayerId => makeLayerId(uuidFromSeed(seed));
 export const deterministicObjectId = (seed: string): ObjectId => makeObjectId(uuidFromSeed(seed));

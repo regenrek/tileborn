@@ -38,6 +38,10 @@
       "types": "./dist/manifest/index.d.ts",
       "import": "./dist/manifest/index.js"
     },
+    "./editor-index": {
+      "types": "./dist/editor-index/index.d.ts",
+      "import": "./dist/editor-index/index.js"
+    },
     "./ldtk": {
       "types": "./dist/ldtk/index.d.ts",
       "import": "./dist/ldtk/index.js"
@@ -65,6 +69,10 @@
     "./importers/tiled-source": {
       "types": "./dist/importers/tiled-source/index.d.ts",
       "import": "./dist/importers/tiled-source/index.js"
+    },
+    "./importers/sprite-sheet": {
+      "types": "./dist/importers/sprite-sheet/index.d.ts",
+      "import": "./dist/importers/sprite-sheet/index.js"
     }
   },
   "scripts": {

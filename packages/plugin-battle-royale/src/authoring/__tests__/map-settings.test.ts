@@ -1,5 +1,5 @@
-import { Option } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { Option } from "effect";
+import { describe, expect, it } from "vitest";
 import {
   MapObject,
   ObjectLayer,
@@ -7,27 +7,22 @@ import {
   makeMapId,
   makeObjectId,
   makeTileborneMap,
-} from '@tileborne/core';
-import {
-  DEFAULT_MAX_PLAYERS,
-  LOOT_CRATE_KIND,
-  SHRINK_ZONE_ANCHOR_KIND,
-  SPAWN_POINT_KIND,
-} from '@tileborne/plugin-battle-royale';
+} from "@tileborne/core";
 
+import { DEFAULT_MAX_PLAYERS, LOOT_CRATE_KIND, SHRINK_ZONE_ANCHOR_KIND, SPAWN_POINT_KIND } from "../../constants.js";
 import {
   applyBattleRoyaleAuthoringSettings,
   battleRoyaleObjectCounts,
   readBattleRoyaleAuthoringSettings,
-} from './battle-royale-authoring';
+} from "../map-settings.js";
 
 const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix}`;
-const objectLayerId = makeLayerId(uuid('446655440001'));
+const objectLayerId = makeLayerId(uuid("446655440001"));
 
-describe('battle royale authoring', () => {
-  it('counts authored battle royale objects', () => {
+describe("battle royale authoring", () => {
+  it("counts authored battle royale objects", () => {
     const map = makeTileborneMap({
-      id: makeMapId(uuid('446655440002')),
+      id: makeMapId(uuid("446655440002")),
       width: 32,
       height: 32,
       tileWidth: 32,
@@ -35,20 +30,20 @@ describe('battle royale authoring', () => {
       layers: [
         new ObjectLayer({
           id: objectLayerId,
-          name: 'objects',
+          name: "objects",
           visible: true,
           opacity: 1,
           objectIds: [
-            makeObjectId(uuid('446655440003')),
-            makeObjectId(uuid('446655440004')),
-            makeObjectId(uuid('446655440005')),
+            makeObjectId(uuid("446655440003")),
+            makeObjectId(uuid("446655440004")),
+            makeObjectId(uuid("446655440005")),
           ],
         }),
       ],
       objects: [
-        object(SPAWN_POINT_KIND, '446655440003'),
-        object(SHRINK_ZONE_ANCHOR_KIND, '446655440004'),
-        object(LOOT_CRATE_KIND, '446655440005'),
+        object(SPAWN_POINT_KIND, "446655440003"),
+        object(SHRINK_ZONE_ANCHOR_KIND, "446655440004"),
+        object(LOOT_CRATE_KIND, "446655440005"),
       ],
     });
 
@@ -59,9 +54,9 @@ describe('battle royale authoring', () => {
     });
   });
 
-  it('persists settings into the map properties consumed by playtest export', () => {
+  it("persists settings into the map properties consumed by playtest export", () => {
     const map = makeTileborneMap({
-      id: makeMapId(uuid('446655440006')),
+      id: makeMapId(uuid("446655440006")),
       width: 32,
       height: 32,
       tileWidth: 32,
@@ -97,7 +92,7 @@ describe('battle royale authoring', () => {
   });
 });
 
-const object = (kind: string, suffix: string): MapObject =>
+const object = (kind: MapObject["kind"], suffix: string): MapObject =>
   new MapObject({
     id: makeObjectId(uuid(suffix)),
     kind,

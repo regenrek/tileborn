@@ -6,8 +6,10 @@ describe("makeGeneratedLayers", () => {
   it("generates deterministic dungeon layouts for the same seed", () => {
     const first = makeGeneratedLayers("dungeon", 32, 32, 42);
     const second = makeGeneratedLayers("dungeon", 32, 32, 42);
-    const firstTiles = first[0]?.chunks[0]?.tiles ?? [];
-    const secondTiles = second[0]?.chunks[0]?.tiles ?? [];
+    const firstTerrain = first[0]?._tag === "tile" ? first[0] : undefined;
+    const secondTerrain = second[0]?._tag === "tile" ? second[0] : undefined;
+    const firstTiles = firstTerrain?.chunks[0]?.tiles ?? [];
+    const secondTiles = secondTerrain?.chunks[0]?.tiles ?? [];
     expect(firstTiles).toEqual(secondTiles);
     expect(firstTiles.some((tile) => tile === 1)).toBe(true);
     expect(firstTiles.some((tile) => tile === 2)).toBe(true);
@@ -18,7 +20,9 @@ describe("makeGeneratedLayers", () => {
       const layers = makeGeneratedLayers(preset, 16, 16, 7);
       expect(layers).toHaveLength(3);
       expect(layers.map((layer) => layer.name)).toEqual(["terrain", "props", "entities"]);
-      expect(layers[0]?.chunks[0]?.tiles).toHaveLength(16 * 16);
+      expect(layers.map((layer) => layer._tag)).toEqual(["tile", "object", "object"]);
+      const terrain = layers[0]?._tag === "tile" ? layers[0] : undefined;
+      expect(terrain?.chunks[0]?.tiles).toHaveLength(16 * 16);
     }
   });
 });

@@ -1,0 +1,171 @@
+/**
+ * Menu chassis styles for the generic game-client shell. All colors come from
+ * brand CSS variables emitted by `brandThemeVars()` (see theming/brand-theme.ts)
+ * so products restyle the menu purely through BrandConfig. No brand names here.
+ */
+
+.tb-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  font-family: var(--font-sans, Inter, system-ui, sans-serif);
+  color: var(--tb-menu-text, #f8fafc);
+  background: var(--tb-menu-bg, #0b1220);
+  overflow: hidden;
+}
+
+.tb-canvas-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.tb-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Translucent scrim used by menu/pause/results overlays. */
+.tb-scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: color-mix(in srgb, var(--tb-menu-bg, #0b1220) 82%, transparent);
+}
+
+.tb-panel {
+  width: 100%;
+  max-width: 28rem;
+  background: var(--tb-menu-surface, #141c2f);
+  border: 1px solid color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 25%, transparent);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+}
+
+.tb-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--tb-menu-text, #f8fafc);
+}
+
+.tb-tagline {
+  margin: 0.25rem 0 1.25rem;
+  color: var(--tb-menu-text-muted, #94a3b8);
+  font-size: 0.875rem;
+}
+
+.tb-section-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tb-menu-text-muted, #94a3b8);
+  margin: 1rem 0 0.5rem;
+}
+
+.tb-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tb-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tb-progress {
+  height: 0.5rem;
+  width: 16rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 30%, transparent);
+  overflow: hidden;
+}
+
+.tb-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--tb-menu-accent, #6ee7a8);
+  transition: width 150ms ease;
+}
+
+.tb-boot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.tb-hud-stub {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1;
+  font-size: 0.75rem;
+  color: var(--tb-menu-text-muted, #94a3b8);
+}
+
+.tb-error {
+  border-color: color-mix(in srgb, var(--tb-menu-accent-hostile, #f87171) 50%, transparent);
+}
+
+.tb-error .tb-title {
+  color: var(--tb-menu-accent-hostile, #f87171);
+}
+
+/*
+ * Baseline button styling so the chassis looks reasonable even when the host
+ * app does not compile @tileborne/ui's Tailwind layer. @tileborne/ui's Button
+ * sets `data-slot="button"`; we style by that attribute under the shell root.
+ */
+.tb-root [data-slot="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--tb-menu-accent, #6ee7a8);
+  color: var(--tb-menu-bg, #0b1220);
+  transition: filter 120ms ease, background 120ms ease;
+}
+
+.tb-root [data-slot="button"]:hover {
+  filter: brightness(1.08);
+}
+
+.tb-root [data-slot="button"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tb-root [data-slot="button"][aria-selected="true"],
+.tb-root [data-slot="button"][aria-pressed="true"] {
+  outline: 2px solid var(--tb-menu-accent, #6ee7a8);
+  outline-offset: 1px;
+}
+
+/* Outline / ghost variants render with the accent border on the surface. */
+.tb-root [data-slot="button"].border-border,
+.tb-root [data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  color: var(--tb-menu-text, #f8fafc);
+  border-color: color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 45%, transparent);
+}

@@ -17,6 +17,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 
 import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
 import { useTilesetPack } from '@/hooks/queries';
+import { assertNever } from '@/lib/assert-never';
 import { useEditorUiStore, type BrushIntent } from '@/stores/editor-ui-store';
 
 interface TilesetPaletteProps {
@@ -634,9 +635,13 @@ const isActiveBrush = (active: BrushIntent, next: BrushIntent): boolean => {
       return active.kind === 'terrain' && active.classId === next.classId;
     case 'placeable':
       return active.kind === 'placeable' && active.placeableId === next.placeableId;
+    case 'plugin-object':
+      // The tileset palette never contributes plugin-object brushes.
+      return active.kind === 'plugin-object' && active.objectKind === next.objectKind;
     case 'eraser':
       return true;
   }
+  return assertNever(next);
 };
 
 const autotileLabel = (rule: AutotileRuleType): string => displayNameFromIdentifier(rule.name);

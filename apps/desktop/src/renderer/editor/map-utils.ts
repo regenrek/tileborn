@@ -10,6 +10,8 @@ import {
   TileborneMap,
   TileChunk,
   TileLayer,
+  TRIGGER_REGION_OBJECT_TYPE_ID,
+  type GameObjectTypeId,
   type LayerId,
   type MapLayer,
   type ObjectId,
@@ -498,12 +500,12 @@ export const applyTileChanges = (
 export const placeObject = (
   map: TileborneMap,
   input: {
-    kind: string;
+    kind: GameObjectTypeId;
     x: number;
     y: number;
     width?: number | undefined;
     height?: number | undefined;
-    layerId?: LayerId;
+    layerId?: LayerId | undefined;
     placement?: MapObjectPlacement | undefined;
     properties?: Record<string, unknown>;
   },
@@ -601,7 +603,7 @@ export const addTriggerRegion = (
   const height = Math.abs(y2 - y1) + 1;
   const tileSize = map.tileSize.width;
   return placeObject(map, {
-    kind: 'trigger-region',
+    kind: TRIGGER_REGION_OBJECT_TYPE_ID,
     x: minX * tileSize,
     y: minY * tileSize,
     properties: {

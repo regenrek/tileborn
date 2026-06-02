@@ -1,4 +1,4 @@
-import type { LayerId, MapObjectPlacement, ObjectId } from '@tileborne/core';
+import type { GameObjectTypeId, LayerId, MapObjectPlacement, ObjectId } from '@tileborne/core';
 import { CollisionLayer, TileborneMap, makeLayerId } from '@tileborne/core';
 
 import type { TileCellChange } from './map-utils.js';
@@ -33,12 +33,12 @@ export interface EditorCommand {
 }
 
 export interface ObjectPlaceInput {
-  readonly kind: string;
+  readonly kind: GameObjectTypeId;
   readonly x: number;
   readonly y: number;
   readonly width?: number | undefined;
   readonly height?: number | undefined;
-  readonly layerId?: LayerId;
+  readonly layerId?: LayerId | undefined;
   readonly placement?: MapObjectPlacement | undefined;
 }
 

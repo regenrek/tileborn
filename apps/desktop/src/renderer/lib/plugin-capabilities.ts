@@ -19,7 +19,6 @@ export function listPluginCapabilities(contributes: Record<string, unknown>): re
 
   countArrayContribution('assetPacks', contributes.assetPacks, capabilities);
   countArrayContribution('tilesetPacks', contributes.tilesetPacks, capabilities);
-  countArrayContribution('objectKinds', contributes.objectKinds, capabilities);
 
   if (contributes.editor !== undefined && typeof contributes.editor === 'object') {
     walkContributionGroup('editor', contributes.editor as Record<string, unknown>, capabilities);

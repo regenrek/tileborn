@@ -18,6 +18,8 @@ export class PlayerComponent extends Schema.Class<PlayerComponent>("PlayerCompon
   health: Schema.Number,
   alive: Schema.Union([Schema.Literal(0), Schema.Literal(1)]),
   team: Schema.String,
+  /** Selected player-model id (from the persisted lobby pick); optional. */
+  modelId: Schema.optional(Schema.String),
 }) {}
 
 /** Per-player kill/death counters consumed by the HUD overlay. */

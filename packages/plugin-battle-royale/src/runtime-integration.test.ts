@@ -1,4 +1,4 @@
-import { MapObject, makeTileborneMap } from "@tileborne/core";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
 import { Option } from "effect";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -18,7 +18,7 @@ const makeTestObject = (
 ): MapObject =>
   new MapObject({
     id,
-    kind,
+    kind: gameObjectTypeIdForKey(kind),
     x,
     y,
     width: Option.none(),

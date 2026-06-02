@@ -65,7 +65,6 @@ const minimalContributions = {
   assetPacks: undefined,
   tilesetPacks: undefined,
   tiledImportProfiles: undefined,
-  objectKinds: undefined,
   editor: {
     tabs: undefined,
     tools: undefined,
@@ -82,13 +81,13 @@ const minimalContributions = {
     inspectorPanels: undefined,
     settingsPanels: undefined,
     mapKinds: undefined,
-    objectTypes: undefined,
     presets: undefined,
     panels: undefined,
     validators: undefined,
     exporters: undefined,
     generators: undefined,
     assetMetadata: undefined,
+    playerModelPolicies: undefined,
   },
   runtime: {
     systems: undefined,
@@ -98,12 +97,14 @@ const minimalContributions = {
     clientSystems: undefined,
     hudWidgets: undefined,
     lobbyPanels: undefined,
+    menuSections: undefined,
     inputMaps: undefined,
     audioBuses: undefined,
     cameras: undefined,
     interpolators: undefined,
     assetPacks: undefined,
     errorMappers: undefined,
+    gameObjectCatalogs: undefined,
   },
   server: {
     rules: undefined,
@@ -199,7 +200,7 @@ describe("PluginManifest", () => {
             order: 20,
             commandId: undefined,
             capabilities: ["spawn"],
-            data: { objectTypeContributionId: "br-object-types" },
+            data: { gameObjectCatalogId: "br-game-object-catalog" },
           },
         ],
         assetPacks: [
@@ -216,15 +217,6 @@ describe("PluginManifest", () => {
             id: "rpg-maker",
             displayName: "RPG Maker conventions",
             transformPlan: "editor.tiledImportProfiles.rpgMaker",
-          },
-        ],
-        objectKinds: [
-          {
-            _tag: "ObjectKindContribution",
-            id: "spawn",
-            schema: { type: "object", properties: { team: { type: "string" } } },
-            defaults: { team: "solo" },
-            display,
           },
         ],
         editor: {
@@ -303,7 +295,6 @@ describe("PluginManifest", () => {
             declarativeContribution("DeclarativeEditorSettingsPanelContribution", "br-settings"),
           ],
           mapKinds: [declarativeContribution("DeclarativeEditorMapKindContribution", "br-arena")],
-          objectTypes: [declarativeContribution("DeclarativeEditorObjectTypeContribution", "br-spawn")],
           presets: [declarativeContribution("DeclarativeEditorPresetContribution", "meadow")],
           panels: [declarativeContribution("DeclarativeEditorPanelContribution", "gameplay-panel")],
           validators: [
@@ -325,6 +316,9 @@ describe("PluginManifest", () => {
           ],
           assetMetadata: [
             declarativeContribution("DeclarativeEditorAssetMetadataContribution", "license-badges"),
+          ],
+          playerModelPolicies: [
+            declarativeContribution("DeclarativeEditorPlayerModelPolicyContribution", "br-models"),
           ],
         },
         runtime: {

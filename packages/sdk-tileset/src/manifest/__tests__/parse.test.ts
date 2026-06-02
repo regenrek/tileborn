@@ -106,6 +106,111 @@ describe("parseTilesetManifest", () => {
     expect(written).toMatchObject({ placeables: [placeable] });
   });
 
+  it("round-trips placeables with named animation clips", () => {
+    const clipFrame = (durationMs?: number) => ({
+      assetId: meadowPack.assets[0]!.id,
+      tileId: meadowPack.tiles[0]!.id,
+      uv: { x: 0, y: 0, w: 32, h: 32 },
+      ...(durationMs === undefined ? {} : { durationMs }),
+    });
+    const placeable = {
+      id: "placeable:62656465-0000-4000-8000-000000000020",
+      name: "Hero",
+      size: { width: 32, height: 32 },
+      frames: [clipFrame()],
+      clips: [
+        {
+          id: "clip:62656465-0000-4000-8000-000000000021",
+          name: "idle",
+          frames: [clipFrame(150), clipFrame(150)],
+          loop: true,
+          defaultDurationMs: 150,
+        },
+        {
+          id: "clip:62656465-0000-4000-8000-000000000022",
+          name: "run",
+          frames: [clipFrame(80), clipFrame(80), clipFrame(80)],
+          loop: true,
+          defaultDurationMs: 80,
+        },
+      ],
+      tags: ["sprite"],
+      placementMode: "object",
+      source: {
+        format: "tiled",
+        tilesetName: "Heroes",
+        localTileId: 0,
+        properties: {},
+      },
+    };
+
+    const first = parseTilesetManifest({ ...meadowPack, placeables: [placeable] });
+    expect(first.diagnostics).toEqual([]);
+    expect(first.value?.placeables?.[0]?.clips).toHaveLength(2);
+    expect(first.value?.placeables?.[0]?.clips?.[0]?.name).toBe("idle");
+    expect(first.value?.placeables?.[0]?.clips?.[1]?.frames).toHaveLength(3);
+
+    const written = writeTilesetManifest(first.value!, { provenance: meadowPack.provenance });
+    const second = parseTilesetManifest(written);
+
+    expect(second.diagnostics).toEqual([]);
+    expect(second.value?.placeables?.[0]).toEqual(first.value?.placeables?.[0]);
+    expect(written).toMatchObject({ placeables: [placeable] });
+  });
+
+  it("rejects clip frames that reference unknown assets", () => {
+    const result = parseTilesetManifest({
+      ...meadowPack,
+      placeables: [
+        {
+          id: "placeable:62656465-0000-4000-8000-000000000023",
+          name: "Broken Sprite",
+          size: { width: 32, height: 32 },
+          frames: [
+            {
+              assetId: meadowPack.assets[0]!.id,
+              tileId: meadowPack.tiles[0]!.id,
+              uv: { x: 0, y: 0, w: 32, h: 32 },
+            },
+          ],
+          clips: [
+            {
+              id: "clip:62656465-0000-4000-8000-000000000024",
+              name: "idle",
+              frames: [
+                {
+                  assetId: "asset:62656465-0000-4000-8000-000000009999",
+                  tileId: meadowPack.tiles[0]!.id,
+                  uv: { x: 0, y: 0, w: 32, h: 32 },
+                },
+              ],
+              loop: true,
+              defaultDurationMs: 100,
+            },
+          ],
+          tags: ["sprite"],
+          placementMode: "object",
+          source: {
+            format: "tiled",
+            tilesetName: "Heroes",
+            localTileId: 0,
+            properties: {},
+          },
+        },
+      ],
+    });
+
+    expect(result.value).toBeUndefined();
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _tag: "InvalidManifestField",
+          path: "/placeables/0/clips/0/frames/0/assetId",
+        }),
+      ]),
+    );
+  });
+
   it("rejects placeables with unknown frame assets", () => {
     const result = parseTilesetManifest({
       ...meadowPack,

@@ -27,6 +27,7 @@ import {
   TiledPlaceableSource,
   UVRect,
   Wang2EdgeAutotileRule,
+  type TileIdType,
 } from '@tileborne/sdk-tileset/schemas';
 import { Effect, Option, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -39,6 +40,8 @@ const setMapMock = vi.hoisted(() => vi.fn());
 const resizeMock = vi.hoisted(() => vi.fn());
 const setCameraMock = vi.hoisted(() => vi.fn());
 const disposeMock = vi.hoisted(() => vi.fn());
+const mergeAssetBundleMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+const controllerCtorMock = vi.hoisted(() => vi.fn());
 const loadViewportAssetBundleMock = vi.hoisted(() => vi.fn());
 const activePaletteMock = vi.hoisted(() => ({ current: undefined as unknown }));
 const editorStateMock = vi.hoisted(() => ({
@@ -47,7 +50,6 @@ const editorStateMock = vi.hoisted(() => ({
     camera: { zoom: 1, panX: 0, panY: 0 },
     selection: new Set<string>(),
     brushIntent: { kind: 'eraser' } as BrushIntent,
-    stagedObjectKind: 'prop',
     activeLayerId: null,
     showGrid: true,
     showCollisionOverlay: false,
@@ -58,7 +60,7 @@ const editorStateMock = vi.hoisted(() => ({
     clearSelection: vi.fn(),
     setHoverTile: vi.fn(),
     setActiveLayerId: vi.fn(),
-    setActiveTool: vi.fn(),
+    selectTool: vi.fn(),
   },
 }));
 
@@ -76,6 +78,9 @@ vi.mock('@/editor/viewport/viewport-asset-manifest', () => ({
 
 vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
   EditorViewportController: class EditorViewportController {
+    constructor() {
+      controllerCtorMock();
+    }
     setMap = setMapMock;
     resize = resizeMock;
     setCamera = setCameraMock;
@@ -88,6 +93,7 @@ vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
     setBrushPreview = vi.fn();
     syncMapContent = vi.fn();
     patchFromCommand = vi.fn();
+    mergeAssetBundle = mergeAssetBundleMock;
     dispose = disposeMock;
   },
   tileCoordsFromPointer: () => ({ x: 0, y: 0 }),
@@ -116,6 +122,7 @@ vi.mock('@/stores/editor-ui-store', () => {
 });
 
 import { MapEditorViewport, resolveBrushAction } from './map-editor-viewport';
+import { createAutotilePaintResolver } from '@/editor/viewport/autotile-paint';
 
 class ResizeObserverStub {
   observe = vi.fn();
@@ -123,12 +130,45 @@ class ResizeObserverStub {
 }
 
 const viewportBundle = {
+  hasPack: false,
   manifest: { assets: [] },
-  packs: [],
   tileIndexByTileId: new Map(),
-  tileIdByTileIndex: new Map(),
+  tileFramesByIndex: new Map(),
   collisionMaskByTileIndex: new Map(),
+  terrainFirstTileId: new Map(),
+  directTileIndexByTerrainClass: new Map(),
+  autotileRules: [],
+  terrainTransitions: [],
   renderableAssetIdByPath: new Map(),
+  placeables: [],
+  assetPathByPackAndId: new Map(),
+  assetPathById: new Map(),
+};
+
+/**
+ * Builds index-derived `resolveBrushAction` inputs from synthetic packs,
+ * mirroring how `viewport-asset-manifest` wires the bundle. `tileIndexByTileId`
+ * stays caller-controlled so paint-index assertions remain explicit.
+ */
+const brushContext = (input: {
+  readonly packs: readonly TilesetPack[];
+  readonly tileIndexByTileId?: ReadonlyMap<TileIdType, number>;
+}) => {
+  const tileIndexByTileId = input.tileIndexByTileId ?? new Map<TileIdType, number>();
+  const autotileRules = input.packs[0]?.tilesets.flatMap((tileset) => tileset.autotileRules) ?? [];
+  const placeables = input.packs.flatMap((pack) =>
+    (pack.placeables ?? []).map((placeable) => ({ packId: pack.id, placeable })),
+  );
+  return {
+    tileIndexByTileId,
+    terrainFirstTileId: new Map(),
+    placeables,
+    autotileResolver: createAutotilePaintResolver({
+      autotileRules,
+      tileIndexByTileId,
+      directTileIndexByTerrainClass: new Map(),
+    }),
+  };
 };
 
 const uuid = (suffix: string): Uuid =>
@@ -275,6 +315,9 @@ describe('MapEditorViewport initial map sync', () => {
     resizeMock.mockReset();
     setCameraMock.mockReset();
     disposeMock.mockReset();
+    mergeAssetBundleMock.mockReset();
+    mergeAssetBundleMock.mockResolvedValue(undefined);
+    controllerCtorMock.mockReset();
     loadViewportAssetBundleMock.mockReset();
     editorStateMock.current.setHoverTile.mockReset();
     activePaletteMock.current = undefined;
@@ -402,29 +445,146 @@ describe('MapEditorViewport initial map sync', () => {
   });
 });
 
+describe('MapEditorViewport mount lifecycle', () => {
+  // Returns a stable bundle object per request signature so the component's
+  // "already applied" identity guard behaves exactly as it does in production.
+  const makeBundleFor = () => {
+    const byKey = new Map<string, typeof viewportBundle>();
+    return (request: {
+      readonly extraPackIds?: readonly unknown[];
+      readonly renderablePlaceableRefs?: readonly {
+        readonly packId?: unknown;
+        readonly placeableId: unknown;
+      }[];
+    }) => {
+      const key = JSON.stringify({
+        extra: (request.extraPackIds ?? []).map(String),
+        refs: (request.renderablePlaceableRefs ?? []).map(
+          (ref) => `${ref.packId ?? ''}:${String(ref.placeableId)}`,
+        ),
+      });
+      let bundle = byKey.get(key);
+      if (bundle === undefined) {
+        bundle = { ...viewportBundle };
+        byKey.set(key, bundle);
+      }
+      return bundle;
+    };
+  };
+
+  beforeEach(() => {
+    setMapMock.mockReset();
+    resizeMock.mockReset();
+    setCameraMock.mockReset();
+    disposeMock.mockReset();
+    mergeAssetBundleMock.mockReset();
+    mergeAssetBundleMock.mockResolvedValue(undefined);
+    controllerCtorMock.mockReset();
+    loadViewportAssetBundleMock.mockReset();
+    activePaletteMock.current = undefined;
+    editorStateMock.current.brushIntent = { kind: 'eraser' };
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not remount the viewport when the working-palette brush changes', async () => {
+    const makeBundleForCall = makeBundleFor();
+    loadViewportAssetBundleMock.mockImplementation((request) =>
+      Effect.succeed(makeBundleForCall(request)),
+    );
+    activePaletteMock.current = {
+      id: makeWorkingPaletteId(uuid('40')),
+      projectId: 'project-1',
+      name: 'Props',
+      createdAt: '2026-05-27T00:00:00.000Z',
+      updatedAt: '2026-05-27T00:00:00.000Z',
+      items: [
+        {
+          id: makeWorkingPaletteItemId(uuid('41')),
+          ref: new AssetLibraryReference({
+            packId: placeablePack.id,
+            kind: 'placeable',
+            refId: placeableId,
+            tileId: placeableTileId,
+          }),
+          label: 'Statue',
+        },
+      ],
+    };
+    const map = { ...createTestMap(), properties: { tilesetPackId: paintablePack.id } };
+
+    const { rerender } = render(
+      <MapEditorViewport projectId="project-1" mapId="map-1" map={map} />,
+    );
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+    // The mount applied its own bundle; with no brush change there is nothing
+    // new to merge into the live controller yet.
+    expect(mergeAssetBundleMock).not.toHaveBeenCalled();
+
+    editorStateMock.current.brushIntent = {
+      kind: 'placeable',
+      packId: placeablePack.id,
+      placeableId,
+    };
+    rerender(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
+
+    // Selecting a placeable from another pack streams its textures into the
+    // EXISTING controller …
+    await waitFor(() => {
+      expect(mergeAssetBundleMock).toHaveBeenCalledTimes(1);
+    });
+    // … and must not have remounted the viewport (no second controller).
+    expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    expect(disposeMock).not.toHaveBeenCalled();
+  });
+
+  it('mounts a fresh viewport when the map id changes', async () => {
+    const makeBundleForCall = makeBundleFor();
+    loadViewportAssetBundleMock.mockImplementation((request) => Effect.succeed(makeBundleForCall(request)));
+
+    const { rerender } = render(
+      <MapEditorViewport projectId="project-1" mapId="map-1" map={createTestMap()} />,
+    );
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(<MapEditorViewport projectId="project-1" mapId="map-2" map={createTestMap()} />);
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
 describe('resolveBrushAction', () => {
   it('keeps autotile and terrain palette intents semantic for painting', () => {
     const tileIndexByTileId = new Map([[tileId, 9]]);
+    const context = brushContext({ packs: [paintablePack], tileIndexByTileId });
 
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'tile', tileId },
-        pack: paintablePack,
-        tileIndexByTileId,
+        ...context,
       }),
     ).toEqual({ kind: 'paintTile', tileIndex: 9 });
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'autotile', ruleId },
-        pack: paintablePack,
-        tileIndexByTileId,
+        ...context,
       }),
     ).toMatchObject({ kind: 'paintAutotile', ruleId, previewTileIndex: 9 });
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'terrain', classId: terrain },
-        pack: paintablePack,
-        tileIndexByTileId,
+        ...context,
       }),
     ).toMatchObject({ kind: 'paintAutotile', ruleId, previewTileIndex: 9 });
   });
@@ -433,8 +593,7 @@ describe('resolveBrushAction', () => {
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'autotile', ruleId: wallRuleId },
-        pack: wallRulePack,
-        tileIndexByTileId: new Map([[tileId, 9]]),
+        ...brushContext({ packs: [wallRulePack], tileIndexByTileId: new Map([[tileId, 9]]) }),
       }),
     ).toMatchObject({ kind: 'paintAutotile', ruleId: wallRuleId, previewTileIndex: 9 });
   });
@@ -443,9 +602,10 @@ describe('resolveBrushAction', () => {
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'placeable', placeableId },
-        pack: paintablePack,
-        packs: [paintablePack, placeablePack],
-        tileIndexByTileId: new Map([[tileId, 9]]),
+        ...brushContext({
+          packs: [paintablePack, placeablePack],
+          tileIndexByTileId: new Map([[tileId, 9]]),
+        }),
       }),
     ).toEqual({
       kind: 'placeObject',
@@ -490,9 +650,10 @@ describe('resolveBrushAction', () => {
     expect(
       resolveBrushAction({
         brushIntent: { kind: 'placeable', packId: otherPack.id, placeableId },
-        pack: paintablePack,
-        packs: [placeablePack, otherPack],
-        tileIndexByTileId: new Map([[tileId, 9]]),
+        ...brushContext({
+          packs: [placeablePack, otherPack],
+          tileIndexByTileId: new Map([[tileId, 9]]),
+        }),
       }),
     ).toEqual({
       kind: 'placeObject',

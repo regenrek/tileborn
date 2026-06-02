@@ -52,5 +52,14 @@ export const resolveToolActiveLayerId = (
       return activeLayer.id;
     }
   }
-  return map.layers.find((entry) => entry._tag === requiredKind)?.id ?? null;
+  const requiredLayerId = map.layers.find((entry) => entry._tag === requiredKind)?.id;
+  if (requiredLayerId !== undefined) {
+    return requiredLayerId;
+  }
+  // No layer of the required kind exists (e.g. a placeable brush on a map with
+  // no object layer). Do NOT force `null` — the layers panel resolves `null`
+  // back to the first layer, which would fight this resolver and spin an
+  // infinite activeLayerId update loop. Keep the current/first valid layer so
+  // both resolvers agree.
+  return resolveActiveLayerId(map, activeLayerId);
 };

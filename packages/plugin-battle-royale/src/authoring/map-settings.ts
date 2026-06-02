@@ -1,30 +1,13 @@
-import {
-  DEFAULT_MAX_PLAYERS,
-  LOOT_CRATE_KIND,
-  SHRINK_ZONE_ANCHOR_KIND,
-  SPAWN_POINT_KIND,
-  ZONE,
-} from '@tileborne/plugin-battle-royale';
-import { TileborneMap, type JsonObject } from '@tileborne/core';
+import { TileborneMap, type JsonObject } from "@tileborne/core";
 
-export const BATTLE_ROYALE_AUTHORING_OBJECTS = [
-  {
-    kind: SPAWN_POINT_KIND,
-    label: 'Spawn point',
-    description: 'Player start position',
-  },
-  {
-    kind: SHRINK_ZONE_ANCHOR_KIND,
-    label: 'Shrink anchor',
-    description: 'Safe-zone center',
-  },
-  {
-    kind: LOOT_CRATE_KIND,
-    label: 'Loot crate',
-    description: 'Supply source',
-  },
-] as const;
+import { DEFAULT_MAX_PLAYERS, LOOT_CRATE_KIND, SHRINK_ZONE_ANCHOR_KIND, SPAWN_POINT_KIND, ZONE } from "../constants.js";
 
+/**
+ * Per-map Battle Royale authoring settings (zone schedule + max players),
+ * read from / written to `map.properties`. Plugin-owned because these are BR
+ * product-domain defaults + the durable shape consumed by the playtest export;
+ * the editor's authoring panel reads/writes them through this contribution.
+ */
 export interface BattleRoyaleAuthoringSettings {
   readonly maxPlayers: number;
   readonly waitSec: number;
@@ -35,10 +18,10 @@ export interface BattleRoyaleAuthoringSettings {
 }
 
 const readPositiveNumber = (value: unknown, fallback: number): number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 
 const readBattleRoyaleObject = (value: unknown): JsonObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+  typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as JsonObject)
     : {};
 
@@ -66,6 +49,41 @@ export const battleRoyaleObjectCounts = (map: TileborneMap) => ({
   shrinkAnchors: map.objects.filter((object) => object.kind === SHRINK_ZONE_ANCHOR_KIND).length,
   lootCrates: map.objects.filter((object) => object.kind === LOOT_CRATE_KIND).length,
 });
+
+/**
+ * Declarative authoring-settings form contribution: the BR zone/max-player
+ * field set + per-field UI hints + draft (de)serialization and validation. This
+ * is the canonical owner of the BR settings FIELD policy; the editor inspector
+ * renders + validates the form generically from this declaration without naming
+ * any BR field.
+ */
+export const BATTLE_ROYALE_AUTHORING_SETTINGS_FORM = {
+  fields: [
+    { key: "maxPlayers", label: "Max players", min: 1, step: 1 },
+    { key: "waitSec", label: "Zone wait", min: 1, step: 1 },
+    { key: "shrinkSec", label: "Shrink time", min: 1, step: 1 },
+    { key: "holdSec", label: "Hold time", min: 1, step: 1 },
+    { key: "shrinkPhases", label: "Phases", min: 1, step: 1 },
+    { key: "damagePerSecOutside", label: "Zone DPS", min: 1, step: 0.5 },
+  ] as readonly { readonly key: string; readonly label: string; readonly min: number; readonly step: number }[],
+  toDraft: (settings: BattleRoyaleAuthoringSettings): Record<string, string> => ({
+    maxPlayers: String(settings.maxPlayers),
+    waitSec: String(settings.waitSec),
+    shrinkSec: String(settings.shrinkSec),
+    holdSec: String(settings.holdSec),
+    shrinkPhases: String(settings.shrinkPhases),
+    damagePerSecOutside: String(settings.damagePerSecOutside),
+  }),
+  parseDraft: (draft: Record<string, string>): BattleRoyaleAuthoringSettings | undefined => {
+    const parsed = Object.fromEntries(
+      Object.entries(draft).map(([key, value]) => [key, Number(value)]),
+    ) as Record<keyof BattleRoyaleAuthoringSettings, number>;
+    return Object.values(parsed).every((value) => Number.isFinite(value) && value > 0)
+      ? parsed
+      : undefined;
+  },
+  invalidMessage: "Battle Royale settings must be positive numbers.",
+};
 
 export const applyBattleRoyaleAuthoringSettings = (
   map: TileborneMap,

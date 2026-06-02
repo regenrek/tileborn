@@ -92,12 +92,23 @@ export interface PlaytestRoomNamespace {
   get(id: DurableObjectId): PlaytestRoomStub;
 }
 
+/**
+ * Static-assets fetcher (Cloudflare Workers `assets` binding). When present, the
+ * worker serves the shipped game-client bundle (apps/game-client `dist/`) for
+ * non-API/non-WS requests (ADR-0022 decision #3: the game-host serves the
+ * client static assets). Optional so existing playtest deployments keep working.
+ */
+export interface StaticAssetsFetcher {
+  fetch(request: Request): Promise<Response>;
+}
+
 export interface Env {
   readonly PLAYTEST_ROOM: PlaytestRoomNamespace;
   readonly HANDOFF_SIGNING_KEY?: string;
   readonly ROOM_IDLE_TIMEOUT_SECONDS?: number;
   readonly HEARTBEAT_TIMEOUT_SECONDS?: number | string;
   readonly SITE_NAME?: string;
+  readonly ASSETS?: StaticAssetsFetcher;
 }
 
 declare const __WORKER_VERSION__: string;

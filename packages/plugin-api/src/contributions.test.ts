@@ -9,6 +9,9 @@ import {
   PluginContributions,
   PluginPanelContribution,
   PluginToolContribution,
+  RUNTIME_MENU_SLOTS,
+  RuntimeMenuSectionContribution,
+  RuntimeMenuSlot,
   type InlineSchemaMigrationChainEntry,
   validatePluginContributions,
 } from "./contributions.js";
@@ -59,7 +62,6 @@ describe("PluginContributions", () => {
         },
       ],
       tilesetPacks: undefined,
-      objectKinds: undefined,
       editor: {
         tabs: [declarative("DeclarativeEditorTabContribution", "gameplay")],
         tools: [executable("ExecutableEditorToolContribution", "safe-zone-tool", "editor.tools.safeZone")],
@@ -88,7 +90,6 @@ describe("PluginContributions", () => {
           declarative("DeclarativeEditorSettingsPanelContribution", "br-settings"),
         ],
         mapKinds: [declarative("DeclarativeEditorMapKindContribution", "br-arena")],
-        objectTypes: [declarative("DeclarativeEditorObjectTypeContribution", "br-spawn")],
         presets: [declarative("DeclarativeEditorPresetContribution", "meadow")],
         panels: [declarative("DeclarativeEditorPanelContribution", "gameplay-panel")],
         validators: [
@@ -102,6 +103,9 @@ describe("PluginContributions", () => {
         ],
         assetMetadata: [
           declarative("DeclarativeEditorAssetMetadataContribution", "license-badges"),
+        ],
+        playerModelPolicies: [
+          declarative("DeclarativeEditorPlayerModelPolicyContribution", "br-models"),
         ],
       },
       runtime: {
@@ -120,6 +124,17 @@ describe("PluginContributions", () => {
         lobbyPanels: [
           executable("ExecutableRuntimeLobbyPanelContribution", "loadout", "runtime.lobby.loadout"),
         ],
+        menuSections: [
+          {
+            _tag: "RuntimeMenuSectionContribution",
+            id: "lobby-section",
+            kind: "executable",
+            slot: "main.primaryActions",
+            display,
+            entry: "runtime.menu.lobby",
+            order: 10,
+          },
+        ],
         inputMaps: [declarative("DeclarativeRuntimeInputMapContribution", "br-inputs")],
         audioBuses: [declarative("DeclarativeRuntimeAudioBusContribution", "gunfire")],
         cameras: [executable("ExecutableRuntimeCameraContribution", "killcam", "runtime.cameras.killcam")],
@@ -136,6 +151,9 @@ describe("PluginContributions", () => {
           },
         ],
         errorMappers: [declarative("DeclarativeRuntimeErrorMapperContribution", "build-mismatch")],
+        gameObjectCatalogs: [
+          declarative("DeclarativeRuntimeGameObjectCatalogContribution", "br-catalog"),
+        ],
       },
       server: {
         rules: [declarative("DeclarativeServerRuleContribution", "legacy-rules")],
@@ -215,7 +233,6 @@ describe("PluginContributions", () => {
       ],
       assetPacks: undefined,
       tilesetPacks: undefined,
-      objectKinds: undefined,
       editor: undefined,
       runtime: undefined,
       server: undefined,
@@ -296,13 +313,89 @@ describe("PluginContributions", () => {
       ],
       assetPacks: undefined,
       tilesetPacks: undefined,
-      objectKinds: undefined,
       editor: undefined,
       runtime: undefined,
       server: undefined,
     });
 
     expect(() => validatePluginContributions(pluginId, contributions)).toThrow(DuplicateContributionError);
+  });
+});
+
+describe("RuntimeMenuSectionContribution", () => {
+  it("exposes the canonical brand-neutral menu slot ids", () => {
+    expect([...RUNTIME_MENU_SLOTS]).toEqual([
+      "main.primaryActions",
+      "main.secondaryActions",
+      "main.tabs",
+      "settings.tabs",
+      "pause.actions",
+      "results.actions",
+    ]);
+  });
+
+  it("decodes an executable menu section targeting a named slot", () => {
+    const section = Schema.decodeUnknownSync(RuntimeMenuSectionContribution)({
+      _tag: "RuntimeMenuSectionContribution",
+      id: "lobby",
+      kind: "executable",
+      slot: "main.primaryActions",
+      display: { label: "Lobby", description: undefined, icon: undefined, order: undefined },
+      entry: "runtime.menu.lobby",
+      order: 10,
+    });
+    expect(section.slot).toBe("main.primaryActions");
+    expect(section.entry).toBe("runtime.menu.lobby");
+    expect(Option.isSome(section.order)).toBe(true);
+  });
+
+  it("rejects an unknown menu slot id", () => {
+    expect(() => Schema.decodeUnknownSync(RuntimeMenuSlot)("main.unknown")).toThrow();
+  });
+
+  it("threads menu sections through RuntimeContributions", () => {
+    const decoded = Schema.decodeUnknownSync(PluginContributions)({
+      panels: undefined,
+      tools: undefined,
+      assetPacks: undefined,
+      tilesetPacks: undefined,
+      editor: undefined,
+      runtime: {
+        systems: undefined,
+        components: undefined,
+        events: undefined,
+        assetLoaders: undefined,
+        clientSystems: undefined,
+        hudWidgets: undefined,
+        lobbyPanels: undefined,
+        menuSections: [
+          {
+            _tag: "RuntimeMenuSectionContribution",
+            id: "match-rules",
+            kind: "executable",
+            slot: "settings.tabs",
+            display: undefined,
+            entry: "runtime.menu.matchRules",
+            order: undefined,
+          },
+        ],
+        inputMaps: undefined,
+        audioBuses: undefined,
+        cameras: undefined,
+        interpolators: undefined,
+        assetPacks: undefined,
+        errorMappers: undefined,
+        gameObjectCatalogs: undefined,
+      },
+      server: undefined,
+    });
+    expect(Option.isSome(decoded.runtime)).toBe(true);
+    if (Option.isSome(decoded.runtime)) {
+      expect(Option.isSome(decoded.runtime.value.menuSections)).toBe(true);
+      if (Option.isSome(decoded.runtime.value.menuSections)) {
+        expect(decoded.runtime.value.menuSections.value[0]?.slot).toBe("settings.tabs");
+      }
+    }
   });
 });
 
@@ -405,7 +498,6 @@ describe("manifest migrations", () => {
         tools: undefined,
         assetPacks: undefined,
         tilesetPacks: undefined,
-        objectKinds: undefined,
         editor: undefined,
         runtime: undefined,
         server: undefined,

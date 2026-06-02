@@ -1,4 +1,4 @@
-import { ContentHash, PluginId } from "@tileborne/core";
+import { ContentHash, GameObjectCatalog, PluginId } from "@tileborne/core";
 import { MAX_PACK_BYTES } from "@tileborne/asset-pipeline";
 import { PluginContributions, PluginManifest } from "@tileborne/plugin-api";
 import { Schema } from "effect";
@@ -62,10 +62,30 @@ export class PluginRegistrySnapshot extends Schema.Class<PluginRegistrySnapshot>
   plugins: Schema.Array(InstalledPlugin),
 }) {}
 
+/**
+ * A `gameObjectCatalogs` contribution after the loader has resolved its
+ * `data.indexPath` (or inline data) and decoded it against the core
+ * {@link GameObjectCatalog} schema (ADR-0019). Carried per-plugin on
+ * {@link LoadedDeclarativePlugin}; cross-plugin merge into a runtime registry is
+ * deferred to the runtime-map-package capstone.
+ */
+export class MaterializedGameObjectCatalog extends Schema.Class<MaterializedGameObjectCatalog>(
+  "MaterializedGameObjectCatalog",
+)({
+  contributionId: Schema.String,
+  catalog: GameObjectCatalog,
+}) {}
+
 export class LoadedDeclarativePlugin extends Schema.Class<LoadedDeclarativePlugin>("LoadedDeclarativePlugin")({
   pluginId: PluginId,
   manifest: PluginManifest,
   contributions: PluginContributions,
+  /**
+   * The plugin's `gameObjectCatalogs` resolved + decoded at load time (ADR-0019),
+   * so consumers read materialized catalogs rather than raw `{ indexPath }`
+   * indirection. Empty when the plugin contributes none.
+   */
+  gameObjectCatalogs: Schema.Array(MaterializedGameObjectCatalog),
 }) {}
 
 export interface LoadedExecutablePlugin {

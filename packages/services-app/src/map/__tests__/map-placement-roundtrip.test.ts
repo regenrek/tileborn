@@ -7,6 +7,7 @@ import {
   ObjectLayer,
   TileTransform,
   TileborneMap,
+  gameObjectTypeIdForKey,
   type Uuid,
   makeAssetId,
   makeLayerId,
@@ -53,7 +54,7 @@ describe("MapService placement persistence", () => {
           });
           const object = new MapObject({
             id: objectId,
-            kind: "prop",
+            kind: gameObjectTypeIdForKey("prop"),
             x: 64,
             y: 96,
             width: Option.none(),
@@ -112,7 +113,7 @@ describe("MapService placement persistence", () => {
           });
           const object = new MapObject({
             id: ids.object,
-            kind: "placeable",
+            kind: gameObjectTypeIdForKey("placeable"),
             x: 64,
             y: 96,
             width: Option.some(96),
@@ -224,7 +225,7 @@ describe("MapService placement persistence", () => {
           });
           const object = new MapObject({
             id: ids.object,
-            kind: "placeable",
+            kind: gameObjectTypeIdForKey("placeable"),
             x: 64,
             y: 96,
             width: Option.some(96),

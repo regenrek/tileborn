@@ -12,7 +12,6 @@ import {
   InputBatch,
   MatchEnd,
   Ping,
-  PlayerLoadouts,
   Pong,
   ProtocolError,
   RuntimeMessage,
@@ -67,9 +66,6 @@ const sampleMessages: readonly RuntimeMessage[] = [
   }),
   new ServerNotice({
     message: "Server restart in 60 s",
-  }),
-  new PlayerLoadouts({
-    skinIds: ["skin-a", "skin-b"],
   }),
 ];
 

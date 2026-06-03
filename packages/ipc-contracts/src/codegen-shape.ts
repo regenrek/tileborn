@@ -119,6 +119,7 @@ export const TILEBORNE_IPC_DOMAIN_PREFIXES = {
   assets: 'tileborne:assets',
   assetLibrary: 'tileborne:asset-library',
   workingPalettes: 'tileborne:working-palettes',
+  catalog: 'tileborne:catalog',
   plugins: 'tileborne:plugins',
   jobs: 'tileborne:jobs',
   logs: 'tileborne:logs',

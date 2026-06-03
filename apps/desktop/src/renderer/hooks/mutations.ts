@@ -8,6 +8,8 @@ import type {
   AssetLibraryReloadPackCacheResponse,
   AssetPackRemoveResponse,
   AssetPacksListResponse,
+  CatalogExportResponse,
+  CatalogImportResponse,
   MapsImportTiledResponse,
   MapsGenerateResponse,
   MapsScanTiledResponse,
@@ -554,6 +556,54 @@ export function useDisablePlugin() {
         mutationMeta(context.meta),
       );
     },
+  });
+}
+
+/**
+ * Imports a catalog JSON fragment for a project via the `requiresApproval`
+ * `tileborne:catalog:import` IPC (ADR-0025 slice 7). The main service decodes +
+ * validates the pack and only persists when valid; on a successful (persisted)
+ * import we invalidate the `catalog:resolve` query so the catalog-driven palette
+ * (slice 4) and inspector (slice 5) reflect the imported fragment without a
+ * manual reload. A validation failure returns `{ imported: false, report }`
+ * (nothing persisted) — the caller surfaces the report.
+ */
+export function useImportCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CatalogImportResponse,
+    TileborneQueryError,
+    { readonly projectId: string; readonly catalogJson: unknown }
+  >({
+    mutationFn: ({ projectId, catalogJson }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.import({ projectId: projectId as ProjectId, catalogJson }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.imported) {
+        // Refresh both the resolve projection (palette/inspector, slice 4/5)
+        // and the validation report (drawer, slice 8) so the catalog-driven UI
+        // reflects the imported fragment without a manual reload.
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.catalog.resolve(input.projectId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.catalog.validate(input.projectId),
+        });
+      }
+    },
+  });
+}
+
+/**
+ * Exports the project-authored catalog fragment as a serialized
+ * `GameObjectCatalog` JSON pack via `tileborne:catalog:export` (read-only — no
+ * approval, no invalidation). The caller saves/copies the returned `catalogJson`.
+ */
+export function useExportCatalog() {
+  return useMutation<CatalogExportResponse, TileborneQueryError, { readonly projectId: string }>({
+    mutationFn: ({ projectId }) =>
+      invokeIpc(() => window.tileborne.catalog.export({ projectId: projectId as ProjectId })),
   });
 }
 

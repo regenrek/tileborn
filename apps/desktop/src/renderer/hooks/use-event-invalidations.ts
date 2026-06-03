@@ -46,6 +46,10 @@ export function useEventInvalidations() {
       }),
       window.tileborne.events.onPluginsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+        // The merged (plugin + project) catalog depends on which plugins are
+        // installed/enabled, so a plugin change must refresh both the resolve
+        // projection and the validation report (ADR-0025 slice 8).
+        void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.all });
       }),
       window.tileborne.events.onJobsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });

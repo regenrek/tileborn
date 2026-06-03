@@ -59,6 +59,52 @@ export function collectImports(sourceFile: ts.SourceFile): CollectedImport[] {
   return imports;
 }
 
+export type CollectedNamedImport = {
+  readonly name: string;
+  readonly moduleSpecifier: string;
+  readonly line: number;
+};
+
+/**
+ * Collect the locally-bound names of static `import` declarations (default,
+ * namespace, and named bindings) alongside their module specifier. Unlike
+ * {@link collectImports}, this lets boundary tests assert that a specific
+ * *symbol* (e.g. a removed hard-cut export) is never imported, regardless of
+ * which module it would come from.
+ */
+export function collectNamedImports(sourceFile: ts.SourceFile): CollectedNamedImport[] {
+  const named: CollectedNamedImport[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.importClause !== undefined
+    ) {
+      const moduleSpecifier = node.moduleSpecifier.text;
+      const line = lineNumber(sourceFile, node);
+      const clause = node.importClause;
+      if (clause.name !== undefined) {
+        named.push({ name: clause.name.text, moduleSpecifier, line });
+      }
+      const bindings = clause.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        named.push({ name: bindings.name.text, moduleSpecifier, line });
+      }
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          named.push({ name: element.name.text, moduleSpecifier, line });
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return named;
+}
+
 export function parseSourceFile(filePath: string): ts.SourceFile {
   const sourceText = fs.readFileSync(filePath, "utf8");
   return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath));

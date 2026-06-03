@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   brushIntentMatchesPaletteAction,
   paletteActionBrushIntent,
-  resolvePaletteActions,
-  type PaletteActionContribution,
   type PaletteActionIcon,
   type PaletteActionItem,
 } from '@/lib/palette-actions';
@@ -18,29 +16,6 @@ const action = (overrides: Partial<PaletteActionItem> = {}): PaletteActionItem =
   icon: StubIcon,
   placement: 'sticky',
   ...overrides,
-});
-
-describe('resolvePaletteActions', () => {
-  const battleRoyale: PaletteActionContribution = {
-    pluginId: 'plugin-a',
-    items: [action({ id: 'a-1', objectKind: 'spawn' })],
-  };
-  // A second, hypothetical game-mode plugin proving the mechanism is generic:
-  // the resolver never mentions any plugin by name.
-  const rpg: PaletteActionContribution = {
-    pluginId: 'plugin-rpg',
-    items: [action({ id: 'rpg-1', objectKind: 'rpg-spawn', label: 'Hero start' })],
-  };
-
-  it('returns only the items of enabled plugins', () => {
-    expect(resolvePaletteActions(['plugin-a'], [battleRoyale, rpg])).toEqual(battleRoyale.items);
-    expect(resolvePaletteActions(['plugin-rpg'], [battleRoyale, rpg])).toEqual(rpg.items);
-  });
-
-  it('returns nothing when no contributing plugin is enabled', () => {
-    expect(resolvePaletteActions(['other'], [battleRoyale, rpg])).toEqual([]);
-    expect(resolvePaletteActions([], [battleRoyale, rpg])).toEqual([]);
-  });
 });
 
 describe('paletteActionBrushIntent', () => {

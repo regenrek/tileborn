@@ -87,6 +87,11 @@ export const queryKeys = {
     manifest: (pluginId: string) => [...queryKeys.plugins.all, pluginId, 'manifest'] as const,
     contributions: () => [...queryKeys.plugins.all, 'contributions'] as const,
   },
+  catalog: {
+    all: ['catalog'] as const,
+    resolve: (projectId: string) => [...queryKeys.catalog.all, projectId, 'resolve'] as const,
+    validate: (projectId: string) => [...queryKeys.catalog.all, projectId, 'validate'] as const,
+  },
   jobs: {
     all: ['jobs'] as const,
     list: () => [...queryKeys.jobs.all, 'list'] as const,

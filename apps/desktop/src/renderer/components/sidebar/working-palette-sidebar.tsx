@@ -12,11 +12,13 @@ import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 
 import { AnimatedPaletteThumb } from '@/components/asset-library/animated-palette-thumb';
+import { CatalogImportExport } from '@/components/sidebar/catalog-import-export';
+import { CatalogValidationDrawer } from '@/components/sidebar/catalog-validation-drawer';
 import { LibraryPreviewMosaic, LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
 import { useTilesetPacks, useWorkingPalettePreviews } from '@/hooks/queries';
-import { usePaletteActions } from '@/hooks/use-palette-actions';
+import { useCatalogPaletteGroups } from '@/hooks/use-palette-actions';
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
 import { spriteClipPreviewFrames, type SpriteThumbnailFrames } from '@/lib/sprite-thumbnail-frames';
 import {
@@ -39,6 +41,8 @@ type PaletteItemKind = WorkingPaletteItem['ref']['kind'];
 
 interface WorkingPaletteSidebarProps {
   readonly projectId: string | null | undefined;
+  /** Open map, threaded to the validation drawer for navigate-to-object. */
+  readonly mapId?: string | null | undefined;
   readonly packId: string;
   readonly packName: string;
   /** Rendered as the primary CTA in empty states / footer link. */
@@ -75,6 +79,7 @@ const GRID_THUMB_PX = 32;
  */
 export function WorkingPaletteSidebar({
   projectId,
+  mapId,
   packId,
   packName,
   libraryLink,
@@ -136,7 +141,11 @@ export function WorkingPaletteSidebar({
         />
       </div>
 
-      <MarkersAndToolsGroup />
+      <ObjectsGroup projectId={projectId} />
+
+      <CatalogValidationDrawer projectId={projectId} mapId={mapId} />
+
+      <CatalogImportExport projectId={projectId} />
 
       {activePalette === undefined ? (
         <SidebarEmptyState
@@ -212,50 +221,61 @@ export function WorkingPaletteSidebar({
 }
 
 /**
- * Plugin-contributed placement markers/tools (spawn point, loot crate, shrink
- * anchor; future RPG spawn) rendered as icon chips. Selecting one sets the
- * single active brush, which visually clears any tile/placeable selection
- * because every brush is highlighted from the same `brushIntent` SSOT.
+ * Catalog-driven object types (projected from `tileborne:catalog:resolve`)
+ * rendered as icon chips, grouped by their open `family` tag. Selecting one sets
+ * the single active brush, which visually clears any tile/placeable selection
+ * because every brush is highlighted from the same `brushIntent` SSOT. The chip
+ * stamps the resolved `GameObjectTypeId` onto `MapObject.kind` via the existing
+ * sticky `plugin-object` placement flow.
  */
-function MarkersAndToolsGroup() {
-  const actions = usePaletteActions();
+function ObjectsGroup({ projectId }: { readonly projectId: string | null | undefined }) {
+  const groups = useCatalogPaletteGroups(projectId);
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
 
-  if (actions.length === 0) {
+  if (groups.length === 0) {
     return null;
   }
 
   return (
-    <div className="flex flex-col gap-1.5 px-1" data-testid="working-palette-markers-group">
-      <p className={cn('px-1', typography.sectionLabelMicro)}>Markers &amp; Tools</p>
-      <div className="flex flex-wrap gap-1 px-1" role="group" aria-label="Markers and tools">
-        {actions.map((action) => {
-          const active = brushIntentMatchesPaletteAction(brushIntent, action);
-          const Icon = action.icon;
-          return (
-            <button
-              key={action.id}
-              type="button"
-              data-testid={`palette-action-${action.id}`}
-              data-active={active ? 'true' : 'false'}
-              aria-pressed={active}
-              aria-label={action.label}
-              title={
-                action.description ? `${action.label} — ${action.description}` : action.label
-              }
-              onClick={() => selectBrush(paletteActionBrushIntent(action), 'objectPlace')}
-              className={cn(
-                'flex size-10 shrink-0 items-center justify-center rounded-md border bg-card transition-colors hover:border-primary/70 hover:bg-accent/20',
-                active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
-              )}
-            >
-              <Icon className="size-4" aria-hidden />
-              <span className="sr-only">{action.label}</span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex flex-col gap-1.5 px-1" data-testid="working-palette-objects-group">
+      <p className={cn('px-1', typography.sectionLabelMicro)}>Objects</p>
+      {groups.map((group) => (
+        <div key={group.id} className="flex flex-col gap-1" data-testid={`palette-group-${group.id}`}>
+          <p className={cn('px-1', typography.bodyMicro)}>{group.label}</p>
+          <div
+            className="flex flex-wrap gap-1 px-1"
+            role="group"
+            aria-label={`${group.label} objects`}
+          >
+            {group.items.map((action) => {
+              const active = brushIntentMatchesPaletteAction(brushIntent, action);
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-testid={`palette-action-${action.id}`}
+                  data-active={active ? 'true' : 'false'}
+                  aria-pressed={active}
+                  aria-label={action.label}
+                  title={
+                    action.description ? `${action.label} — ${action.description}` : action.label
+                  }
+                  onClick={() => selectBrush(paletteActionBrushIntent(action), 'objectPlace')}
+                  className={cn(
+                    'flex size-10 shrink-0 items-center justify-center rounded-md border bg-card transition-colors hover:border-primary/70 hover:bg-accent/20',
+                    active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  <span className="sr-only">{action.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

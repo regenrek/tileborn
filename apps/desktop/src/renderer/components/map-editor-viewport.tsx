@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PackId, TileborneMap } from '@tileborne/core';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CollisionFootprintComponent, PackId, TileborneMap } from '@tileborne/core';
 import { PixiRendererAdapter } from '@tileborne/runtime';
 import { Effect } from 'effect';
 import type {
@@ -34,6 +34,8 @@ import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes'
 import { loadViewportAssetBundle } from '@/editor/viewport/viewport-asset-manifest';
 import { assertNever } from '@/lib/assert-never';
 import { useActiveWorkingPalette } from '@/hooks/use-working-palettes';
+import { useResolvedCatalog } from '@/hooks/queries';
+import { findCollisionFootprint } from '@/lib/catalog-collision-footprint';
 import {
   createAutotilePaintResolver,
   type AutotilePaintResolver,
@@ -172,6 +174,20 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   const clearSelection = useEditorUiStore((state) => state.clearSelection);
   const setHoverTile = useEditorUiStore((state) => state.setHoverTile);
   const activePalette = useActiveWorkingPalette(projectId);
+  const catalogQuery = useResolvedCatalog(projectId);
+  // Project the resolved catalog into the footprint lookup the viewport overlay
+  // needs: GameObjectTypeId -> read-only CollisionFootprintComponent. Renderer
+  // consumes only the projected DTO, never `services-plugin` (ADR-0025 D2/D3).
+  const collisionFootprintByObjectType = useMemo(() => {
+    const footprints = new Map<string, CollisionFootprintComponent>();
+    for (const entry of catalogQuery.data?.objectTypes ?? []) {
+      const footprint = findCollisionFootprint(entry.objectType);
+      if (footprint !== undefined) {
+        footprints.set(String(entry.objectType.id), footprint);
+      }
+    }
+    return footprints;
+  }, [catalogQuery.data]);
   const brushPackId =
     brushIntent.kind === 'placeable' && brushIntent.packId !== map.properties.tilesetPackId
       ? brushIntent.packId
@@ -420,6 +436,12 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   useEffect(() => {
     controllerRef.current?.setShowCollision(showCollisionOverlay);
   }, [showCollisionOverlay]);
+
+  // Feed the resolved catalog footprints to the live controller (also re-runs
+  // once `mountVersion` bumps so a freshly mounted controller picks them up).
+  useEffect(() => {
+    controllerRef.current?.setCollisionFootprints(collisionFootprintByObjectType);
+  }, [collisionFootprintByObjectType, mountVersion]);
 
   useEffect(() => {
     controllerRef.current?.setShowDebug(showDebugOverlay);

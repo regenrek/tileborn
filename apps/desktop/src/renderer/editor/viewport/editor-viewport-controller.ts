@@ -1,6 +1,13 @@
 import { PixiRendererAdapter, type RuntimeAssetManifest } from '@tileborne/runtime';
 import { TRIGGER_REGION_OBJECT_TYPE_ID } from '@tileborne/core';
-import type { LayerId, MapLayer, MapObject, PackId, TileborneMap } from '@tileborne/core';
+import type {
+  CollisionFootprintComponent,
+  LayerId,
+  MapLayer,
+  MapObject,
+  PackId,
+  TileborneMap,
+} from '@tileborne/core';
 import {
   cellsNeedingRefresh,
   neighborhoodForRule,
@@ -25,6 +32,7 @@ import { Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap } from '@pixi/tilemap';
 
 import type { EntityId } from '@/stores/editor-ui-store';
+import { positionedFootprintRects } from '@/lib/catalog-collision-footprint';
 
 import { CHUNK_SIZE, findLayerById } from '../map-utils.js';
 import { EditorLayerZIndex } from './layers.js';
@@ -36,6 +44,12 @@ const TILE_COLORS = [
 const tileColor = (index: number): number => TILE_COLORS[index % TILE_COLORS.length] ?? 0x444444;
 export const EDITOR_GRID_OUTLINE_COLOR = 0x020617;
 export const EDITOR_GRID_STROKE_COLOR = 0xf8fafc;
+/** Shared collision-overlay red, used for both tile masks and object footprints. */
+export const COLLISION_OVERLAY_FILL_COLOR = 0xef5161;
+/** Object-footprint outline so a placed object's footprint reads distinctly from tile masks. */
+export const COLLISION_FOOTPRINT_STROKE_COLOR = 0xffd166;
+/** Label of the Pixi child that holds the placed-object collision footprints. */
+export const OBJECT_FOOTPRINT_LAYER_LABEL = 'object-footprints';
 export const MISSING_TILE_TEXTURE_DIAGNOSTIC_COLOR = 0xff3b8b;
 export const missingTileTextureDiagnosticColor = (index: number): number => {
   void index;
@@ -261,6 +275,11 @@ export class EditorViewportController {
   private showGrid = true;
   private showCollision = false;
   private showDebug = false;
+  // Read-only catalog footprints keyed by GameObjectTypeId (`object.kind`),
+  // projected from the `catalog:resolve` DTO. Drives the placed-object footprint
+  // overlay under the same "Collision" toggle as tile collision masks.
+  private collisionFootprintByObjectType: ReadonlyMap<string, CollisionFootprintComponent> =
+    new Map();
   private activeLayerId: LayerId | null = null;
   private selection = new Set<EntityId>();
   private hoverTile: { x: number; y: number } | null = null;
@@ -406,6 +425,21 @@ export class EditorViewportController {
 
   setShowCollision(show: boolean): void {
     this.showCollision = show;
+    this.renderCollision();
+    this.requestRender();
+  }
+
+  /**
+   * Supplies the read-only catalog collision footprints (keyed by
+   * `GameObjectTypeId`) projected from the `catalog:resolve` DTO. Placed objects
+   * whose type carries a `CollisionFootprintComponent` then draw their footprint
+   * in the viewport, gated by the same "Collision" overlay toggle as tile masks
+   * (ADR-0025 slice 6 / decisions `c-q83p`, `c-cgsd`).
+   */
+  setCollisionFootprints(
+    footprints: ReadonlyMap<string, CollisionFootprintComponent>,
+  ): void {
+    this.collisionFootprintByObjectType = footprints;
     this.renderCollision();
     this.requestRender();
   }
@@ -1046,11 +1080,51 @@ export class EditorViewportController {
               continue;
             }
             graphics.rect((chunk.x + localX) * tileW, (chunk.y + localY) * tileH, tileW, tileH);
-            graphics.fill({ color: 0xef5161, alpha: 0.35 });
+            graphics.fill({ color: COLLISION_OVERLAY_FILL_COLOR, alpha: 0.35 });
           }
         }
       }
     }
+    this.collisionLayerRoot.addChild(graphics);
+    this.renderObjectFootprints();
+  }
+
+  /**
+   * Draws each placed object's read-only catalog collision footprint, shifted by
+   * its per-instance offset. Shares the "Collision" overlay (callers gate on
+   * `showCollision` before this runs) and the collision red, but adds an outline
+   * so a footprint reads distinctly from a tile mask. Only visible object layers
+   * contribute, mirroring how tile masks honor layer visibility. The footprint
+   * child is added only when at least one footprint is drawn, so objects without
+   * a footprint component contribute nothing.
+   */
+  private renderObjectFootprints(): void {
+    if (!this.map || this.collisionFootprintByObjectType.size === 0) {
+      return;
+    }
+    const layerById = new Map(this.map.layers.map((layer) => [layer.id, layer] as const));
+    const graphics = new Graphics();
+    let drewFootprint = false;
+    for (const object of this.map.objects) {
+      const objectLayer = layerById.get(object.layerId);
+      if (objectLayer?._tag !== 'object' || !objectLayer.visible) {
+        continue;
+      }
+      const footprint = this.collisionFootprintByObjectType.get(String(object.kind));
+      if (footprint === undefined) {
+        continue;
+      }
+      for (const rect of positionedFootprintRects(object, footprint.parts)) {
+        graphics.rect(rect.x, rect.y, rect.width, rect.height);
+        graphics.fill({ color: COLLISION_OVERLAY_FILL_COLOR, alpha: 0.3 });
+        graphics.stroke({ width: 1, color: COLLISION_FOOTPRINT_STROKE_COLOR, alpha: 0.9 });
+        drewFootprint = true;
+      }
+    }
+    if (!drewFootprint) {
+      return;
+    }
+    graphics.label = OBJECT_FOOTPRINT_LAYER_LABEL;
     this.collisionLayerRoot.addChild(graphics);
   }
 

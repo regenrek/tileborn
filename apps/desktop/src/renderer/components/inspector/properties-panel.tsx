@@ -1,3 +1,4 @@
+import type { MapObject, TileborneMap } from '@tileborne/core';
 import {
   cn,
   typography,
@@ -5,14 +6,36 @@ import {
 } from '@tileborne/ui';
 import { SlidersHorizontalIcon } from 'lucide-react';
 
+import { CatalogObjectPanel } from '@/components/inspector/catalog-object-panel';
+
 interface PropertiesPanelProps {
   selectionCount: number;
   isLoading?: boolean;
+  /** The open project, required to resolve the catalog for a selected object. */
+  projectId?: string | undefined;
+  /** The open map, the source of placed objects + the object-edit persist path. */
+  map?: TileborneMap | undefined;
+  /** Currently selected entity ids (placed object ids). */
+  selectedObjectIds?: readonly string[] | undefined;
 }
+
+const findSelectedObject = (
+  map: TileborneMap | undefined,
+  selectedObjectIds: readonly string[] | undefined,
+): MapObject | undefined => {
+  if (map === undefined || selectedObjectIds === undefined || selectedObjectIds.length !== 1) {
+    return undefined;
+  }
+  const [objectId] = selectedObjectIds;
+  return map.objects.find((object) => object.id === objectId);
+};
 
 export function PropertiesPanel({
   selectionCount,
   isLoading = false,
+  projectId,
+  map,
+  selectedObjectIds,
 }: PropertiesPanelProps) {
   if (isLoading) {
     return (
@@ -38,6 +61,11 @@ export function PropertiesPanel({
         </div>
       </div>
     );
+  }
+
+  const selectedObject = findSelectedObject(map, selectedObjectIds);
+  if (selectedObject !== undefined && projectId !== undefined && map !== undefined) {
+    return <CatalogObjectPanel projectId={projectId} map={map} object={selectedObject} />;
   }
 
   return (

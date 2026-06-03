@@ -1,8 +1,8 @@
 import type { PlayerModelRef, ProjectManifest, TileborneMap } from '@tileborne/core';
 
 /**
- * Player-model policy resolution, mirroring the {@link resolvePaletteActions}
- * precedent in `palette-actions.ts`: a game-mode plugin DECLARES whether the
+ * Player-model policy resolution, mirroring the catalog-driven palette
+ * projection precedent: a game-mode plugin DECLARES whether the
  * playable avatar is a single fixed model or a selectable set, and the generic
  * editor/shell RESOLVES the declared models for the active map. The resolver
  * keys purely on the abstract policy shape — no plugin-specific identity — so a

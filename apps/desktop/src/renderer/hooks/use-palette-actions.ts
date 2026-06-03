@@ -1,20 +1,29 @@
 import { useMemo } from 'react';
 
-import { usePluginsList } from '@/hooks/queries';
-import { PLUGIN_PALETTE_CONTRIBUTIONS } from '@/lib/plugin-palette-contributions';
-import { resolvePaletteActions, type PaletteActionItem } from '@/lib/palette-actions';
+import { useResolvedCatalog } from '@/hooks/queries';
+import {
+  groupCatalogPaletteActions,
+  type CatalogPaletteGroup,
+} from '@/lib/catalog-palette-projection';
+
+const EMPTY_GROUPS: readonly CatalogPaletteGroup[] = [];
 
 /**
- * Palette action items contributed by the currently enabled plugins. Returns
- * an empty list while plugins load or when none contribute, so the Working
- * Palette can omit the "Markers & Tools" group entirely.
+ * Object-type palette actions projected from the resolved merged catalog
+ * (`tileborne:catalog:resolve`), grouped by their open `family` tag. This is the
+ * catalog-driven replacement for the former hardcoded `PLUGIN_PALETTE_CONTRIBUTIONS`
+ * plugin import (ADR-0025 slice 4): object kinds now flow from the public catalog
+ * contribution slot, so a new game-mode plugin surfaces objects with zero editor
+ * edits. Returns no groups while the catalog loads or when it is empty, so the
+ * Working Palette can omit the "Objects" group entirely.
  */
-export function usePaletteActions(): readonly PaletteActionItem[] {
-  const pluginsQuery = usePluginsList();
-  return useMemo(() => {
-    const enabledPluginIds = (pluginsQuery.data?.plugins ?? [])
-      .filter((plugin) => plugin.enabled)
-      .map((plugin) => plugin.id);
-    return resolvePaletteActions(enabledPluginIds, PLUGIN_PALETTE_CONTRIBUTIONS);
-  }, [pluginsQuery.data?.plugins]);
+export function useCatalogPaletteGroups(
+  projectId: string | null | undefined,
+): readonly CatalogPaletteGroup[] {
+  const catalogQuery = useResolvedCatalog(projectId ?? undefined);
+  const objectTypes = catalogQuery.data?.objectTypes;
+  return useMemo(
+    () => (objectTypes === undefined ? EMPTY_GROUPS : groupCatalogPaletteActions(objectTypes)),
+    [objectTypes],
+  );
 }

@@ -1,6 +1,7 @@
 export * from './asset-library.js';
 export * from './assets.js';
 export * from './builds.js';
+export * from './catalog.js';
 export * from './common.js';
 export * from './tiled-source-rules.js';
 export * from './exports.js';

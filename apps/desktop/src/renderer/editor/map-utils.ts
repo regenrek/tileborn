@@ -590,6 +590,40 @@ export const moveObject = (
   };
 };
 
+/**
+ * Replace a placed object's `properties` bag (its per-instance overrides),
+ * reusing the canonical map-rebuild path. Returns the map unchanged when the
+ * object is absent, so callers can persist via the standard `useUpdateMap`
+ * flow without inventing a parallel object-edit path (ADR-0025 slice 5).
+ */
+export const setObjectProperties = (
+  map: TileborneMap,
+  objectId: ObjectId,
+  properties: MapObject['properties'],
+): TileborneMap => {
+  const target = map.objects.find((entry) => entry.id === objectId);
+  if (!target) {
+    return map;
+  }
+  return rebuildMap(map, {
+    objects: map.objects.map((entry) =>
+      entry.id === objectId
+        ? new MapObject({
+            id: entry.id,
+            kind: entry.kind,
+            x: entry.x,
+            y: entry.y,
+            width: entry.width,
+            height: entry.height,
+            layerId: entry.layerId,
+            properties: { ...properties },
+            placement: entry.placement,
+          })
+        : entry,
+    ),
+  });
+};
+
 export const addTriggerRegion = (
   map: TileborneMap,
   x1: number,

@@ -28,6 +28,8 @@ import type {
   AssetLibraryResolvePreviewsResponse,
   AssetPackGetResponse,
   AssetPacksListResponse,
+  CatalogResolveResponse,
+  CatalogValidateResponse,
   HomePathsResponse,
   JobsListResponse,
   LogsListRecentResponse,
@@ -513,6 +515,43 @@ export function usePluginsList() {
     queryFn: () => invokeIpc(() => window.tileborne.plugins.list({})),
     staleTime: 0,
     refetchOnMount: 'always',
+  });
+}
+
+/**
+ * Resolves the merged (plugin + project) game-object catalog for a project via
+ * the slice-3 `tileborne:catalog:resolve` IPC. The renderer browses/places
+ * object types purely from this projected DTO — it never imports
+ * `services-plugin` or runs the catalog merge itself (ADR-0025 D2/D3).
+ */
+export function useResolvedCatalog(
+  projectId: string | undefined,
+): UseQueryResult<CatalogResolveResponse> {
+  return useQuery<CatalogResolveResponse>({
+    queryKey: queryKeys.catalog.resolve(projectId ?? ''),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.catalog.resolve({ projectId: projectId! as ProjectId })),
+    enabled: projectId !== undefined && projectId.length > 0,
+  });
+}
+
+/**
+ * Runs the slice-3 `tileborne:catalog:validate` IPC for a project and returns
+ * the structured {@link CatalogValidationReport} (the project fragment merged
+ * with plugin catalogs). Mirrors {@link useResolvedCatalog}: the renderer reads
+ * only the projected report DTO — it never imports `services-plugin`, runs the
+ * merge, or calls `validateCatalog` itself (ADR-0025 D2/D3). The navigable
+ * validation drawer (slice 8) consumes this; refreshes follow the same
+ * invalidation as resolve (import success + plugin changes).
+ */
+export function useValidateCatalog(
+  projectId: string | undefined,
+): UseQueryResult<CatalogValidateResponse> {
+  return useQuery<CatalogValidateResponse>({
+    queryKey: queryKeys.catalog.validate(projectId ?? ''),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.catalog.validate({ projectId: projectId! as ProjectId })),
+    enabled: projectId !== undefined && projectId.length > 0,
   });
 }
 

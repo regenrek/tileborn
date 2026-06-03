@@ -1,38 +1,118 @@
 // @vitest-environment jsdom
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import {
   AssetLibraryReference,
+  GameObjectType,
+  SpawnPointComponent,
+  LootSourceComponent,
+  makeGameObjectTypeId,
   makePackId,
   makePlaceableId,
   makeProjectId,
   makeTileId,
   makeWorkingPaletteId,
   makeWorkingPaletteItemId,
+  type Uuid,
   type WorkingPalette,
   type WorkingPaletteItem,
 } from '@tileborne/core';
-import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
+import { Option } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const selectBrushMock = vi.hoisted(() => vi.fn());
 const useWorkingPalettePreviewsMock = vi.hoisted(() => vi.fn());
 
-const usePluginsListMock = vi.hoisted(() =>
-  vi.fn(() => ({ data: { plugins: [] as readonly { id: string; enabled: boolean }[] } })),
+const useResolvedCatalogMock = vi.hoisted(() =>
+  vi.fn(
+    (): {
+      readonly data: {
+        readonly objectTypes: readonly unknown[];
+        readonly lootTables: readonly unknown[];
+        readonly items: readonly unknown[];
+      };
+    } => ({ data: { objectTypes: [], lootTables: [], items: [] } }),
+  ),
 );
 
 const useTilesetPacksMock = vi.hoisted(() => vi.fn(() => [] as readonly { data?: unknown }[]));
 
+const useValidateCatalogMock = vi.hoisted(() =>
+  vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+);
+const useMapMock = vi.hoisted(() => vi.fn(() => ({ data: undefined })));
+
 vi.mock('@/hooks/queries', () => ({
   useWorkingPalettePreviews: useWorkingPalettePreviewsMock,
   useTilesetPacks: useTilesetPacksMock,
-  usePluginsList: usePluginsListMock,
+  useResolvedCatalog: useResolvedCatalogMock,
+  useValidateCatalog: useValidateCatalogMock,
+  useMap: useMapMock,
 }));
+
+const SPAWN_TYPE_ID = makeGameObjectTypeId('660e8400-e29b-41d4-a716-446655440001' as Uuid);
+const LOOT_TYPE_ID = makeGameObjectTypeId('660e8400-e29b-41d4-a716-446655440002' as Uuid);
+
+const catalogObjectType = (input: {
+  id: GameObjectType['id'];
+  label: string;
+  family: string;
+  components: GameObjectType['components'];
+}): GameObjectType =>
+  new GameObjectType({
+    id: input.id,
+    schemaVersion: 1,
+    label: input.label,
+    family: input.family as GameObjectType['family'],
+    category: Option.none() as GameObjectType['category'],
+    layerHint: Option.none(),
+    components: input.components,
+    instanceDefaults: {},
+  });
+
+const catalogWithObjectTypes = () => ({
+  data: {
+    objectTypes: [
+      {
+        objectType: catalogObjectType({
+          id: SPAWN_TYPE_ID,
+          label: 'Spawn Point',
+          family: 'spawn',
+          components: [new SpawnPointComponent({ data: {} })],
+        }),
+        origin: 'plugin' as const,
+      },
+      {
+        objectType: catalogObjectType({
+          id: LOOT_TYPE_ID,
+          label: 'Loot Crate',
+          family: 'loot',
+          components: [
+            new LootSourceComponent({
+              lootTableId: Option.none(),
+              interactionMode: 'tap',
+              grants: {},
+            }),
+          ],
+        }),
+        origin: 'plugin' as const,
+      },
+    ],
+    lootTables: [],
+    items: [],
+  },
+});
 
 vi.mock('@/stores/app-notifications-store', () => ({
   notifySuccess: vi.fn(),
+  notifyError: vi.fn(),
 }));
+
+// The sidebar now mounts the catalog import/export controls, which set up
+// TanStack mutations and therefore require a QueryClient in scope.
+const makeTestClient = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 // We render the real working-palettes-store (zustand) but stub the editor UI
 // store so the sidebar can read brushIntent / selectBrush deterministically.
@@ -118,7 +198,9 @@ describe('WorkingPaletteSidebar', () => {
   beforeEach(() => {
     selectBrushMock.mockReset();
     useWorkingPalettePreviewsMock.mockReset();
-    usePluginsListMock.mockReturnValue({ data: { plugins: [] } });
+    useResolvedCatalogMock.mockReturnValue({
+      data: { objectTypes: [], lootTables: [], items: [] },
+    });
     // Previews now come from the main process via IPC; the sidebar only renders
     // the curated items and looks previews up by ref key.
     useWorkingPalettePreviewsMock.mockReturnValue({ previewByKey: new Map(), isLoading: false });
@@ -138,11 +220,13 @@ describe('WorkingPaletteSidebar', () => {
 
   it('shows the empty state when no working palette exists', () => {
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     expect(screen.getAllByText(/No working palette/i).length).toBeGreaterThan(0);
   });
@@ -151,11 +235,13 @@ describe('WorkingPaletteSidebar', () => {
     bridgePalettes = [makePalette([tileItem(1), tileItem(2)])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     const itemButtons = screen.getAllByTestId(/^working-palette-sidebar-item-/);
     expect(itemButtons).toHaveLength(2);
@@ -165,11 +251,13 @@ describe('WorkingPaletteSidebar', () => {
     bridgePalettes = [makePalette([tileItem(1), tileItem(2), tileItem(3)])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     const refs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly { refId: string }[];
     expect(refs).toHaveLength(3);
@@ -181,11 +269,13 @@ describe('WorkingPaletteSidebar', () => {
     bridgePalettes = [makePalette([item])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     const button = screen.getByTestId(
       `working-palette-sidebar-item-placeable:${packId}:${item.ref.refId}:`,
@@ -202,59 +292,65 @@ describe('WorkingPaletteSidebar', () => {
     bridgePalettes = [makePalette([tileItem(1), tileItem(2)])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     expect(screen.getByTestId('working-palette-sidebar-grid')).toBeTruthy();
     expect(screen.getAllByTestId(/^working-palette-sidebar-item-/)).toHaveLength(2);
     expect(screen.queryAllByTestId(/^working-palette-sidebar-remove-/)).toHaveLength(0);
   });
 
-  it('omits the Markers & Tools group when no plugin contributes palette actions', () => {
+  it('omits the Objects group when the resolved catalog has no object types', () => {
     render(
-      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
+      </QueryClientProvider>,
     );
-    expect(screen.queryByTestId('working-palette-markers-group')).toBeNull();
+    expect(screen.queryByTestId('working-palette-objects-group')).toBeNull();
   });
 
-  it('renders contributed markers as chips and selecting one sets the single plugin-object brush', () => {
-    usePluginsListMock.mockReturnValue({
-      data: { plugins: [{ id: PLUGIN_ID, enabled: true }] },
-    });
+  it('renders catalog object types as chips and selecting one sets the single plugin-object brush carrying the resolved id', () => {
+    useResolvedCatalogMock.mockReturnValue(catalogWithObjectTypes());
     render(
-      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
+      </QueryClientProvider>,
     );
 
-    expect(screen.getByTestId('working-palette-markers-group')).toBeTruthy();
-    const spawn = screen.getByTestId('palette-action-battle-royale-spawn-point');
+    expect(screen.getByTestId('working-palette-objects-group')).toBeTruthy();
+    const spawn = screen.getByTestId(`palette-action-${SPAWN_TYPE_ID}`);
     expect(spawn.getAttribute('data-active')).toBe('false');
 
     fireEvent.click(spawn);
+    // The brush carries the resolved GameObjectTypeId verbatim — placement stamps
+    // it directly onto MapObject.kind.
     expect(selectBrushMock).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'plugin-object', objectKind: 'spawn-point' }),
+      expect.objectContaining({ kind: 'plugin-object', objectKind: SPAWN_TYPE_ID }),
       'objectPlace',
     );
   });
 
-  it('highlights exactly the active plugin-object marker (single highlight)', () => {
-    usePluginsListMock.mockReturnValue({
-      data: { plugins: [{ id: PLUGIN_ID, enabled: true }] },
-    });
+  it('highlights exactly the active catalog-object chip (single highlight)', () => {
+    useResolvedCatalogMock.mockReturnValue(catalogWithObjectTypes());
     editorState = {
-      brushIntent: { kind: 'plugin-object', objectKind: 'spawn-point' } as never,
+      brushIntent: { kind: 'plugin-object', objectKind: SPAWN_TYPE_ID } as never,
       selectBrush: selectBrushMock,
     };
     render(
-      <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
+      </QueryClientProvider>,
     );
     expect(
-      screen.getByTestId('palette-action-battle-royale-spawn-point').getAttribute('data-active'),
+      screen.getByTestId(`palette-action-${SPAWN_TYPE_ID}`).getAttribute('data-active'),
     ).toBe('true');
     expect(
-      screen.getByTestId('palette-action-battle-royale-loot-crate').getAttribute('data-active'),
+      screen.getByTestId(`palette-action-${LOOT_TYPE_ID}`).getAttribute('data-active'),
     ).toBe('false');
   });
 
@@ -262,11 +358,13 @@ describe('WorkingPaletteSidebar', () => {
     bridgePalettes = [makePalette([{ ...tileItem(1), label: 'Grass Terrain' }])];
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
-      <WorkingPaletteSidebar
-        projectId={projectId}
-        packId={packId}
-        packName="Test pack"
-      />,
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar
+          projectId={projectId}
+          packId={packId}
+          packName="Test pack"
+        />
+      </QueryClientProvider>,
     );
     expect(screen.getByRole('button', { name: /Grass Terrain/i })).toBeTruthy();
   });

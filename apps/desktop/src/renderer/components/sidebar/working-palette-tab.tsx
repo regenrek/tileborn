@@ -116,6 +116,7 @@ export function WorkingPaletteTab({ projectId, mapId }: WorkingPaletteTabProps) 
         ) : (
           <WorkingPaletteSidebar
             projectId={projectId ?? null}
+            mapId={mapId ?? null}
             packId={activePack.id}
             packName={activePack.name}
             libraryLink={

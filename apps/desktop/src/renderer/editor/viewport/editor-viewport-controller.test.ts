@@ -4,6 +4,8 @@ import { Container, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap, Tilemap, POINT_STRUCT_SIZE } from '@pixi/tilemap';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
 import {
+  CollisionFootprintComponent,
+  CollisionFootprintPart,
   MapObject,
   MapObjectPlacement,
   ObjectLayer,
@@ -11,6 +13,7 @@ import {
   TileborneMap,
   TileLayer,
   makeAssetId,
+  makeGameObjectTypeId,
   makeLayerId,
   makeMapId,
   makeObjectId,
@@ -18,6 +21,7 @@ import {
   makePlaceableId,
   makeTileId,
   makeTileborneMap,
+  type GameObjectTypeId,
   type Uuid,
 } from '@tileborne/core';
 import {
@@ -36,6 +40,7 @@ import {
   EDITOR_GRID_STROKE_COLOR,
   EditorViewportController,
   MISSING_TILE_TEXTURE_DIAGNOSTIC_COLOR,
+  OBJECT_FOOTPRINT_LAYER_LABEL,
   missingTileTextureDiagnosticColor,
   type EditorViewportTileAtlas,
 } from './editor-viewport-controller.js';
@@ -869,5 +874,121 @@ describe('EditorViewportController debug overlay', () => {
     controller.tickDebugOverlay();
 
     expect(debugText(worldRoot)?.text).toMatch(/FPS [1-9]\d*/);
+  });
+});
+
+describe('EditorViewportController collision footprint overlay', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const uuid = (suffix: string): Uuid =>
+    `666f6f74-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
+
+  const FOOTPRINT_TYPE_ID = makeGameObjectTypeId(uuid('01'));
+
+  const footprintComponent = (): CollisionFootprintComponent =>
+    new CollisionFootprintComponent({
+      source: 'manual',
+      reviewed: true,
+      parts: [
+        new CollisionFootprintPart({
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
+          blocksMovement: true,
+          blocksProjectiles: false,
+          blocksVision: false,
+        }),
+      ],
+    });
+
+  // A single placed object (no placement sprite) on a visible object layer,
+  // stamped with `kind`, so the footprint lookup can key on `object.kind`.
+  const sceneWithObject = (kind: GameObjectTypeId): TileborneMap => {
+    const layerId = makeLayerId(uuid('02'));
+    const objectId = makeObjectId(uuid('03'));
+    return new TileborneMap({
+      id: makeMapId(uuid('04')),
+      schemaVersion: 1,
+      size: { width: 4, height: 4 },
+      tileSize: { width: 32, height: 32 },
+      layers: [
+        new ObjectLayer({
+          id: layerId,
+          name: 'objects',
+          visible: true,
+          opacity: 1,
+          objectIds: [objectId],
+        }),
+      ],
+      objects: [
+        new MapObject({
+          id: objectId,
+          kind,
+          x: 32,
+          y: 64,
+          width: Option.some(32),
+          height: Option.some(32),
+          layerId,
+          properties: {},
+        }),
+      ],
+      properties: {},
+    });
+  };
+
+  const setup = () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const worldRoot = new Container();
+    const adapter = {
+      getEditorWorldRoot: () => worldRoot,
+      requestRender: vi.fn(() => Effect.void),
+    } as unknown as PixiRendererAdapter;
+    return { worldRoot, controller: new EditorViewportController(adapter) };
+  };
+
+  const footprintLayer = (worldRoot: Container): Container | undefined => {
+    const collisionLayerRoot = worldRoot.children.find((child) => child.label === 'collision') as
+      | Container
+      | undefined;
+    return collisionLayerRoot?.children.find(
+      (child) => child.label === OBJECT_FOOTPRINT_LAYER_LABEL,
+    ) as Container | undefined;
+  };
+
+  it('draws the footprint of a placed object whose type carries the component', () => {
+    const { worldRoot, controller } = setup();
+    controller.setMap(sceneWithObject(FOOTPRINT_TYPE_ID));
+    controller.setCollisionFootprints(new Map([[FOOTPRINT_TYPE_ID, footprintComponent()]]));
+    controller.setShowCollision(true);
+
+    expect(footprintLayer(worldRoot)).toBeDefined();
+  });
+
+  it('draws no footprint for a placed object whose type has no footprint component', () => {
+    const { worldRoot, controller } = setup();
+    controller.setMap(sceneWithObject(FOOTPRINT_TYPE_ID));
+    // Catalog footprints exist but for a DIFFERENT type, so this object matches none.
+    controller.setCollisionFootprints(
+      new Map([[makeGameObjectTypeId(uuid('99')), footprintComponent()]]),
+    );
+    controller.setShowCollision(true);
+
+    expect(footprintLayer(worldRoot)).toBeUndefined();
+  });
+
+  it('hides object footprints when the Collision overlay toggle is off', () => {
+    const { worldRoot, controller } = setup();
+    controller.setMap(sceneWithObject(FOOTPRINT_TYPE_ID));
+    controller.setCollisionFootprints(new Map([[FOOTPRINT_TYPE_ID, footprintComponent()]]));
+
+    controller.setShowCollision(true);
+    expect(footprintLayer(worldRoot)).toBeDefined();
+
+    controller.setShowCollision(false);
+    expect(footprintLayer(worldRoot)).toBeUndefined();
   });
 });

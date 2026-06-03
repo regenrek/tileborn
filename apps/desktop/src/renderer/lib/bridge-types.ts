@@ -10,6 +10,10 @@ import {
   AssetsGetPackResponse,
   AssetsListPacksResponse,
   AssetsRemovePackResponse,
+  CatalogExportResponse,
+  CatalogImportResponse,
+  CatalogResolveResponse,
+  CatalogValidateResponse,
   JobsListResponse,
   LogsListRecentResponse,
   MapsGetResponse,
@@ -78,6 +82,11 @@ export type WorkingPalettesGetActiveResponse = Schema.Schema.Type<
 export type WorkingPalettesPaletteResponse = Schema.Schema.Type<
   typeof WorkingPalettesPaletteResponse
 >;
+
+export type CatalogResolveResponse = Schema.Schema.Type<typeof CatalogResolveResponse>;
+export type CatalogValidateResponse = Schema.Schema.Type<typeof CatalogValidateResponse>;
+export type CatalogImportResponse = Schema.Schema.Type<typeof CatalogImportResponse>;
+export type CatalogExportResponse = Schema.Schema.Type<typeof CatalogExportResponse>;
 
 export type PluginsListResponse = Schema.Schema.Type<typeof PluginsListResponse>;
 export type PluginsInstallResponse = Schema.Schema.Type<typeof PluginsInstallResponse>;

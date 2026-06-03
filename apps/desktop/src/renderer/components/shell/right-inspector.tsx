@@ -64,6 +64,7 @@ export function RightInspector() {
   }
 
   const selectionCount = selection.size;
+  const selectedObjectIds = [...selection];
 
   return (
     <aside
@@ -98,6 +99,9 @@ export function RightInspector() {
               <PropertiesPanel
                 selectionCount={selectionCount}
                 isLoading={mapQuery.isLoading && Boolean(mapId)}
+                projectId={projectId}
+                map={mapQuery.data?.map}
+                selectedObjectIds={selectedObjectIds}
               />
             </section>
 

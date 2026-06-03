@@ -2,6 +2,7 @@ import { createRegistry, type IpcRegistry } from '../registry.js';
 import { AssetLibraryContracts } from './asset-library.js';
 import { AssetsContracts } from './assets.js';
 import { BuildsContracts } from './builds.js';
+import { CatalogContracts } from './catalog.js';
 import { TiledSourceRulesContracts } from './tiled-source-rules.js';
 import { ExportsContracts } from './exports.js';
 import { JobsContracts } from './jobs.js';
@@ -23,6 +24,7 @@ export const MainIpcContracts = [
   ...AssetsContracts,
   ...AssetLibraryContracts,
   ...WorkingPalettesContracts,
+  ...CatalogContracts,
   ...PluginsContracts,
   ...JobsContracts,
   ...LogsContracts,

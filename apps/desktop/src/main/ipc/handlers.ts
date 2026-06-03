@@ -81,6 +81,7 @@ import {
   startPlaytestRuntimeHost,
   stopPlaytestRuntimeHost,
 } from '../playtest-runtime-host.js';
+import { CatalogService } from '../catalog/index.js';
 import { startDesktopLocalGameHost, stopDesktopLocalGameHost } from '../local-game-host-manager.js';
 import { invokePluginEditorCommand } from '../plugin-editor-command.js';
 import { BATTLE_ROYALE_PLUGIN_ID, resolveBattleRoyalePluginPath } from '../battle-royale-path.js';
@@ -275,6 +276,7 @@ const buildHandlers = Effect.gen(function* () {
   const assets = yield* AssetService;
   const assetLibrary = yield* AssetLibraryService;
   const workingPalettes = yield* WorkingPaletteService;
+  const catalog = yield* CatalogService;
   const registry = yield* PluginRegistryService;
   const installer = yield* PluginInstallerService;
   const jobs = yield* JobService;
@@ -775,6 +777,21 @@ const buildHandlers = Effect.gen(function* () {
       ipcCatchAll('tileborne:working-palettes:reorderItems')(
         workingPalettes.reorderItems(request).pipe(Effect.map((palette) => ({ palette }))),
       ),
+    )
+    .build();
+
+  const catalogHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:catalog:resolve', ({ projectId }) =>
+      ipcCatchAll('tileborne:catalog:resolve')(catalog.resolve(projectId)),
+    )
+    .add('tileborne:catalog:validate', ({ projectId }) =>
+      ipcCatchAll('tileborne:catalog:validate')(catalog.validate(projectId)),
+    )
+    .add('tileborne:catalog:import', ({ projectId, catalogJson }) =>
+      ipcCatchAll('tileborne:catalog:import')(catalog.importCatalog(projectId, catalogJson)),
+    )
+    .add('tileborne:catalog:export', ({ projectId }) =>
+      ipcCatchAll('tileborne:catalog:export')(catalog.exportCatalog(projectId)),
     )
     .build();
 
@@ -1319,6 +1336,7 @@ const buildHandlers = Effect.gen(function* () {
     ...assetHandlers,
     ...assetLibraryHandlers,
     ...workingPaletteHandlers,
+    ...catalogHandlers,
     ...pluginHandlers,
     ...jobHandlers,
     ...logsHandlers,

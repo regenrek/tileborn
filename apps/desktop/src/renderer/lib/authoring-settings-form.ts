@@ -1,6 +1,6 @@
 /**
  * Generic mechanism for plugin-contributed authoring settings forms. Mirrors the
- * {@link resolvePaletteActions} / player-model policy precedent: a game-mode
+ * catalog-driven palette projection / player-model policy precedent: a game-mode
  * plugin DECLARES its settings fields + how to (de)serialize and validate a
  * draft, and the generic editor inspector RENDERS the form purely from that
  * declaration — never naming any plugin-specific field. The plugin owns the

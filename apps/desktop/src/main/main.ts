@@ -52,6 +52,12 @@ if (!gotSingleInstanceLock) {
   const startupReporter = createStartupReporter(startupStatus);
   let startupController: DesktopStartupController | undefined;
   let quitting = false;
+  let exited = false;
+
+  // Hard cap on shutdown. A stuck cleanup must never keep the process — and the
+  // dev CDP remote-debugging port (e.g. 9323) — alive as an orphan that a later
+  // `dev:cdp` start cannot rebind (t-wk7b). After this, force a clean exit.
+  const SHUTDOWN_TIMEOUT_MS = 5_000;
 
   const registerStartupIpc = (status: StartupStatusStore): (() => void) => {
     ipcMain.handle(STARTUP_STATUS_GET_CHANNEL, () => status.getSnapshot());
@@ -131,24 +137,58 @@ if (!gotSingleInstanceLock) {
     }
   });
 
+  // Exit exactly once and release OS resources (the CDP port is freed with the
+  // process). Used by both the normal shutdown path and the timeout safety net.
+  const finalizeExit = (code: number): void => {
+    if (exited) {
+      return;
+    }
+    exited = true;
+    unregisterStartupIpc();
+    app.exit(code);
+  };
+
   app.on("before-quit", (event) => {
     if (quitting) {
       return;
     }
     quitting = true;
     event.preventDefault();
+
+    const forceExit = setTimeout(() => {
+      console.warn(
+        "[tileborne:start] Shutdown timed out; forcing exit to release resources (port)",
+      );
+      finalizeExit(0);
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceExit.unref?.();
+
     void (startupController?.shutdown() ?? Promise.resolve()).then(
       () => {
-        unregisterStartupIpc();
-        app.exit(0);
+        clearTimeout(forceExit);
+        finalizeExit(0);
       },
       (cause) => {
-        console.error("[tileborne:start] Shutdown failed", cause);
-        unregisterStartupIpc();
-        app.exit(1);
+        // Shutdown is designed not to reject (see startup.ts / runtime.ts), but
+        // never strand the process if it somehow does — exit cleanly so the
+        // CDP port is released instead of leaving an orphan.
+        console.error("[tileborne:start] Shutdown error (exiting cleanly anyway)", cause);
+        clearTimeout(forceExit);
+        finalizeExit(0);
       },
     );
   });
+
+  // Translate process signals (e.g. electron-forge `rs` restart sends SIGTERM,
+  // a terminal Ctrl+C sends SIGINT) into a graceful `app.quit()` so cleanup runs
+  // and the process reliably exits, releasing the CDP debugging port instead of
+  // orphaning it (t-wk7b).
+  const requestQuitOnSignal = (signal: NodeJS.Signals): void => {
+    console.warn(`[tileborne:start] Received ${signal}; shutting down`);
+    app.quit();
+  };
+  process.once("SIGTERM", () => requestQuitOnSignal("SIGTERM"));
+  process.once("SIGINT", () => requestQuitOnSignal("SIGINT"));
 
   process.on("uncaughtException", (error) => {
     console.error("[tileborne:start] Uncaught main-process exception", error);

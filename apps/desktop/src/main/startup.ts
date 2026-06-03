@@ -157,6 +157,12 @@ export const createDesktopStartupController = ({
   };
 
   const shutdown = async (): Promise<void> => {
+    // Run domain cleanup ON the managed runtime. Any failure here — including
+    // fiber interruption raised while shutting things down — must never block a
+    // clean process exit, so every cause is swallowed: the window is already
+    // going away. Crucially, this effect no longer disposes the runtime it is
+    // running on (that self-interrupt surfaced as
+    // "All fibers interrupted without error" and failed every quit; t-wk7b).
     await runEffect(
       Effect.gen(function* () {
         const jobs = yield* JobService;
@@ -178,10 +184,14 @@ export const createDesktopStartupController = ({
           try: () => stopDesktopLocalGameHost(),
           catch: () => new Error("stop local host failed"),
         }).pipe(Effect.match({ onFailure: () => Effect.void, onSuccess: () => Effect.void }));
-        yield* disposeRuntime;
         yield* logger.info("Tileborne desktop main shut down");
-      }).pipe(Effect.orDie),
-    );
+      }).pipe(Effect.catchCause(() => Effect.void)),
+    ).catch(() => undefined);
+
+    // Release layer resources AFTER cleanup, from outside the runtime's own
+    // fiber scope (see runtime.ts disposeRuntime) so disposal does not
+    // self-interrupt. This resolves cleanly so `before-quit` can exit(0).
+    await disposeRuntime();
   };
 
   return { start, shutdown };

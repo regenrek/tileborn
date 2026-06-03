@@ -14,6 +14,29 @@ const packageJson = JSON.parse(
   readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf8"),
 ) as { version: string };
 
+// Internal @tileborne/* packages change their export surface constantly during
+// monorepo dev. Vite's dep optimizer snapshots a package's named exports into
+// node_modules/.vite/deps and keys that cache off lockfile/config — not the
+// workspace dist content — so a new export on e.g. @tileborne/core gets served
+// stale ("does not provide an export named X") and blanks the renderer.
+// Excluding a package keeps it out of the optimizer (served live), which is the
+// correct monorepo dev boundary and the real fix for t-vups (replacing the
+// blunt "clear .vite on every start" hack).
+//
+// IMPORTANT: only packages with a *pure browser* dependency graph may be
+// excluded. Excluding a package serves its whole import graph live, so any
+// transitive Node code reaches the browser and throws ("node:fs/promises has
+// been externalized") => blank. The other internal packages (plugin-api,
+// runtime, plugin-battle-royale, ipc-contracts, services-*) transitively pull
+// @tileborne/asset-pipeline (Node/fs); they MUST stay pre-bundled so esbuild
+// tree-shakes that Node-only code out. The predev:cdp workspace build keeps
+// their pre-bundled export surface fresh on restart.
+const browserSafeInternalPackages = [
+  "@tileborne/core",
+  "@tileborne/sdk-tileset",
+  "@tileborne/ui",
+] as const;
+
 function resolveGitCommit(): string {
   try {
     return execSync("git rev-parse --short HEAD", {
@@ -41,8 +64,10 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   optimizeDeps: {
-    // @tileborne/ui stays excluded for workspace CSS/HMR; Base UI's CJS shims must be prebundled.
-    exclude: ["@tileborne/ui"],
+    // Browser-safe internal packages served live (never pre-bundled) so their
+    // changing dev export surfaces are always current; Base UI's CJS shims below
+    // must still be prebundled. See browserSafeInternalPackages above (t-vups).
+    exclude: [...browserSafeInternalPackages],
     include: [
       "@base-ui/react",
       "@base-ui/react/dialog",

@@ -1,16 +1,18 @@
 import { Option } from 'effect';
 
 import { DamageIgnored, resolveDamage, type DamageOutcome, type DamageSource } from './damage.js';
+import type { CombatBlocker, Vec2 } from './geometry.js';
 import type { HealthComponent } from './health.js';
 import type { HitResolutionPolicy } from './hit-policy.js';
 import { type CombatEntityId, type TeamId } from './ids.js';
 
 /**
  * Minimal neutral world port the combat systems read/write through, mirroring
- * the runtime's `PluginWorld` abstraction. Slice 1 exposes only the vitality +
- * team surface needed for damage resolution; later slices (projectile/LOS)
- * extend it with positions and spawn/destroy. Implementors must enumerate
- * entities in a stable order so replays are deterministic.
+ * the runtime's `PluginWorld` abstraction. Slice 1 exposed the vitality + team
+ * surface for damage resolution; Slice 3 (delivery families) extends it with the
+ * spatial reads its resolvers need — entity positions and the blocking geometry
+ * for line-of-sight / projectile blocking. Implementors must enumerate entities
+ * in a stable order so replays are deterministic.
  */
 export interface CombatWorldView {
   /** All combat entities, in a stable iteration order. */
@@ -21,6 +23,13 @@ export interface CombatWorldView {
   readonly setHealth: (entity: CombatEntityId, health: HealthComponent) => void;
   /** Open team identity of an entity, or `None`. */
   readonly getTeam: (entity: CombatEntityId) => Option.Option<TeamId>;
+  /** World-space position of an entity, or `None` if it is not placed. */
+  readonly getPosition: (entity: CombatEntityId) => Option.Option<Vec2>;
+  /**
+   * Blocking geometry for line-of-sight and projectile/beam blocking, derived by
+   * the runtime/plugin from catalog `CollisionFootprintComponent`s. Stable order.
+   */
+  readonly blockers: () => Iterable<CombatBlocker>;
 }
 
 /**
@@ -58,23 +67,30 @@ export interface CombatActorSeed {
   readonly entity: CombatEntityId;
   readonly health: HealthComponent;
   readonly team?: TeamId;
+  readonly position?: Vec2;
 }
 
 /**
  * In-memory {@link CombatWorldView} backed by `Map`s. A neutral reference
  * adapter for tests and headless simulation; iterates entities in ascending id
- * order for determinism.
+ * order for determinism. `blockers` is fixed at construction time (the reference
+ * adapter has no dynamic geometry).
  */
 export const createInMemoryCombatWorld = (
   seed: readonly CombatActorSeed[] = [],
+  blockers: readonly CombatBlocker[] = [],
 ): CombatWorldView => {
   const healthByEntity = new Map<CombatEntityId, HealthComponent>();
   const teamByEntity = new Map<CombatEntityId, TeamId>();
+  const positionByEntity = new Map<CombatEntityId, Vec2>();
 
   for (const actor of seed) {
     healthByEntity.set(actor.entity, actor.health);
     if (actor.team !== undefined) {
       teamByEntity.set(actor.entity, actor.team);
+    }
+    if (actor.position !== undefined) {
+      positionByEntity.set(actor.entity, actor.position);
     }
   }
 
@@ -85,5 +101,7 @@ export const createInMemoryCombatWorld = (
       healthByEntity.set(entity, health);
     },
     getTeam: (entity) => Option.fromUndefinedOr(teamByEntity.get(entity)),
+    getPosition: (entity) => Option.fromUndefinedOr(positionByEntity.get(entity)),
+    blockers: () => blockers,
   };
 };

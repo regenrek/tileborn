@@ -157,6 +157,7 @@ const optionalContributionKeys = {
     "assetPacks",
     "errorMappers",
     "gameObjectCatalogs",
+    "weaponCatalogs",
   ],
   server: [
     "rules",
@@ -165,7 +166,6 @@ const optionalContributionKeys = {
     "matchmaking",
     "serverSystems",
     "roomRules",
-    "weaponCatalog",
     "mapValidators",
     "matchPhases",
     "replayWriters",

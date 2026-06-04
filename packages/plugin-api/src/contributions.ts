@@ -294,6 +294,22 @@ export const RuntimeGameObjectCatalogContribution = defineDeclarativeContributio
 export type RuntimeGameObjectCatalogContribution =
   typeof RuntimeGameObjectCatalogContribution.Type;
 
+/**
+ * Public declarative slot for a plugin to register a neutral weapon-content pack
+ * (ADR-0018 Slice 5). `data` is decoded + validated against the
+ * `@tileborne/simulation` schemas (`WeaponDefinition` + `DamageDelivery` family,
+ * with status-effect ids) by {@link decodeWeaponCatalog} / {@link mergeWeaponCatalogs}
+ * in `weapon-catalog-registry.ts`: the engine owns the *shape*, plugins supply the
+ * balance *numbers*. Mirrors {@link RuntimeGameObjectCatalogContribution} and
+ * supersedes the removed untyped `JsonObject` weapon-catalog path.
+ * Ability/status *definition* catalogs are deferred to P1 (`t-p1-status-abilities-plan`),
+ * where their `@tileborne/simulation` schemas land.
+ */
+export const RuntimeWeaponCatalogContribution = defineDeclarativeContributionSlot(
+  "RuntimeWeaponCatalog",
+);
+export type RuntimeWeaponCatalogContribution = typeof RuntimeWeaponCatalogContribution.Type;
+
 export class RuntimeContributions extends Schema.Class<RuntimeContributions>("RuntimeContributions")({
   systems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeSystemContribution)),
   components: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeComponentContribution)),
@@ -311,6 +327,9 @@ export class RuntimeContributions extends Schema.Class<RuntimeContributions>("Ru
   errorMappers: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeErrorMapperContribution)),
   gameObjectCatalogs: Schema.OptionFromUndefinedOr(
     Schema.Array(RuntimeGameObjectCatalogContribution),
+  ),
+  weaponCatalogs: Schema.OptionFromUndefinedOr(
+    Schema.Array(RuntimeWeaponCatalogContribution),
   ),
 }) {}
 
@@ -332,9 +351,6 @@ export type ServerSystemContribution = typeof ServerSystemContribution.Type;
 export const ServerRoomRuleContribution = defineDeclarativeContributionSlot("ServerRoomRule");
 export type ServerRoomRuleContribution = typeof ServerRoomRuleContribution.Type;
 
-export const ServerWeaponCatalogContribution = defineDeclarativeContributionSlot("ServerWeaponCatalog");
-export type ServerWeaponCatalogContribution = typeof ServerWeaponCatalogContribution.Type;
-
 export const ServerMapValidatorContribution = defineExecutableContributionSlot("ServerMapValidator");
 export type ServerMapValidatorContribution = typeof ServerMapValidatorContribution.Type;
 
@@ -351,7 +367,6 @@ export class ServerContributions extends Schema.Class<ServerContributions>("Serv
   matchmaking: Schema.OptionFromUndefinedOr(Schema.Array(ServerMatchmakingContribution)),
   serverSystems: Schema.OptionFromUndefinedOr(Schema.Array(ServerSystemContribution)),
   roomRules: Schema.OptionFromUndefinedOr(Schema.Array(ServerRoomRuleContribution)),
-  weaponCatalog: Schema.OptionFromUndefinedOr(Schema.Array(ServerWeaponCatalogContribution)),
   mapValidators: Schema.OptionFromUndefinedOr(Schema.Array(ServerMapValidatorContribution)),
   matchPhases: Schema.OptionFromUndefinedOr(Schema.Array(ServerMatchPhaseContribution)),
   replayWriters: Schema.OptionFromUndefinedOr(Schema.Array(ServerReplayWriterContribution)),

@@ -105,6 +105,7 @@ const minimalContributions = {
     assetPacks: undefined,
     errorMappers: undefined,
     gameObjectCatalogs: undefined,
+    weaponCatalogs: undefined,
   },
   server: {
     rules: undefined,
@@ -113,7 +114,6 @@ const minimalContributions = {
     matchmaking: undefined,
     serverSystems: undefined,
     roomRules: undefined,
-    weaponCatalog: undefined,
     mapValidators: undefined,
     matchPhases: undefined,
     replayWriters: undefined,
@@ -380,6 +380,9 @@ describe("PluginManifest", () => {
           errorMappers: [
             declarativeContribution("DeclarativeRuntimeErrorMapperContribution", "build-mismatch"),
           ],
+          weaponCatalogs: [
+            declarativeContribution("DeclarativeRuntimeWeaponCatalogContribution", "weapons"),
+          ],
         },
         server: {
           ...minimalContributions.server,
@@ -397,7 +400,6 @@ describe("PluginManifest", () => {
             ),
           ],
           roomRules: [declarativeContribution("DeclarativeServerRoomRuleContribution", "br-room")],
-          weaponCatalog: [declarativeContribution("DeclarativeServerWeaponCatalogContribution", "weapons")],
           mapValidators: [
             executableContribution(
               "ExecutableServerMapValidatorContribution",

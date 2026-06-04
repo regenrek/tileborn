@@ -154,6 +154,9 @@ describe("PluginContributions", () => {
         gameObjectCatalogs: [
           declarative("DeclarativeRuntimeGameObjectCatalogContribution", "br-catalog"),
         ],
+        weaponCatalogs: [
+          declarative("DeclarativeRuntimeWeaponCatalogContribution", "weapons"),
+        ],
       },
       server: {
         rules: [declarative("DeclarativeServerRuleContribution", "legacy-rules")],
@@ -164,7 +167,6 @@ describe("PluginContributions", () => {
           executable("ExecutableServerSystemContribution", "safe-zone-damage", "server.systems.safeZoneDamage"),
         ],
         roomRules: [declarative("DeclarativeServerRoomRuleContribution", "br-room")],
-        weaponCatalog: [declarative("DeclarativeServerWeaponCatalogContribution", "weapons")],
         mapValidators: [
           executable("ExecutableServerMapValidatorContribution", "spawn-count", "server.validators.spawnCount"),
         ],
@@ -386,6 +388,7 @@ describe("RuntimeMenuSectionContribution", () => {
         assetPacks: undefined,
         errorMappers: undefined,
         gameObjectCatalogs: undefined,
+        weaponCatalogs: undefined,
       },
       server: undefined,
     });

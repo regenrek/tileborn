@@ -6,3 +6,4 @@ export * from "./manifest.js";
 export * from "./permissions.js";
 export * from "./primitives.js";
 export * from "./registry.js";
+export * from "./weapon-catalog-registry.js";

@@ -1,5 +1,10 @@
 import { Option } from 'effect';
 
+import {
+  createUniformGridBroadphase,
+  type BroadphaseEntry,
+  type CombatBroadphase,
+} from './broadphase.js';
 import { DamageIgnored, resolveDamage, type DamageOutcome, type DamageSource } from './damage.js';
 import type { CombatBlocker, Vec2 } from './geometry.js';
 import type { HealthComponent } from './health.js';
@@ -30,6 +35,16 @@ export interface CombatWorldView {
    * the runtime/plugin from catalog `CollisionFootprintComponent`s. Stable order.
    */
   readonly blockers: () => Iterable<CombatBlocker>;
+  /**
+   * Optional deterministic spatial index over positioned entities. When present,
+   * delivery resolvers query it to narrow candidates near a point/segment/box
+   * before the precise geometry test, instead of scanning every entity. It must
+   * return a *superset* of the entities `entities()` would yield for the region,
+   * in ascending id order — so results are byte-for-byte identical to the scan.
+   * Absent ⇒ resolvers fall back to the brute-force `entities()` scan (the
+   * semantic reference); an adapter need not implement it.
+   */
+  readonly broadphase?: () => CombatBroadphase;
 }
 
 /**
@@ -94,6 +109,25 @@ export const createInMemoryCombatWorld = (
     }
   }
 
+  // The index is built lazily and memoized: positions are fixed at construction
+  // (this reference adapter never moves an entity), and only the entities that
+  // appear in `entities()` *and* carry a position are candidates — matching the
+  // brute-force scan, which skipped position-less entities via `getPosition`.
+  let index: CombatBroadphase | undefined;
+  const broadphase = (): CombatBroadphase => {
+    if (index === undefined) {
+      const entries: BroadphaseEntry[] = [];
+      for (const entity of healthByEntity.keys()) {
+        const position = positionByEntity.get(entity);
+        if (position !== undefined) {
+          entries.push({ entity, position });
+        }
+      }
+      index = createUniformGridBroadphase(entries);
+    }
+    return index;
+  };
+
   return {
     entities: () => [...healthByEntity.keys()].sort((a, b) => a - b),
     getHealth: (entity) => Option.fromUndefinedOr(healthByEntity.get(entity)),
@@ -103,5 +137,6 @@ export const createInMemoryCombatWorld = (
     getTeam: (entity) => Option.fromUndefinedOr(teamByEntity.get(entity)),
     getPosition: (entity) => Option.fromUndefinedOr(positionByEntity.get(entity)),
     blockers: () => blockers,
+    broadphase,
   };
 };

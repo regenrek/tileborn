@@ -41,6 +41,7 @@ export * from './clock.js';
 export * from './world.js';
 export * from './weapon.js';
 export * from './geometry.js';
+export * from './broadphase.js';
 export * from './falloff.js';
 export * from './delivery.js';
 export * from './status.js';

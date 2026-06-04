@@ -1,5 +1,6 @@
 import { Option, Schema } from 'effect';
 
+import { excludeFromBroadphase } from './broadphase.js';
 import { SimulationClock } from './clock.js';
 import {
   DamageApplied,
@@ -198,20 +199,29 @@ const damageDealt = (outcome: DamageOutcome): boolean =>
  * BR's owner-exclusion in `findHitPlayer`). Health/position reads + writes still
  * delegate to the underlying world; only `entities()` is filtered.
  */
-const viewExcluding = (world: CombatWorldView, excluded: CombatEntityId): CombatWorldView => ({
-  entities: function* () {
-    for (const entity of world.entities()) {
-      if (entity !== excluded) {
-        yield entity;
+const viewExcluding = (world: CombatWorldView, excluded: CombatEntityId): CombatWorldView => {
+  // Forward the broadphase too (filtering out the wielder), so spatial delivery
+  // resolvers keep their fast candidate path while honouring owner-exclusion;
+  // the narrowed set stays identical to a brute-force scan of `entities()`.
+  const baseBroadphase = world.broadphase;
+  return {
+    entities: function* () {
+      for (const entity of world.entities()) {
+        if (entity !== excluded) {
+          yield entity;
+        }
       }
-    }
-  },
-  getHealth: world.getHealth,
-  setHealth: world.setHealth,
-  getTeam: world.getTeam,
-  getPosition: world.getPosition,
-  blockers: world.blockers,
-});
+    },
+    getHealth: world.getHealth,
+    setHealth: world.setHealth,
+    getTeam: world.getTeam,
+    getPosition: world.getPosition,
+    blockers: world.blockers,
+    ...(baseBroadphase === undefined
+      ? {}
+      : { broadphase: () => excludeFromBroadphase(baseBroadphase(), excluded) }),
+  };
+};
 
 /**
  * Pure, deterministic single-tick combat orchestrator over a

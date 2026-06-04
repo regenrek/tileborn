@@ -333,6 +333,25 @@ interface RayCandidate {
 const damageDealt = (outcome: DamageOutcome): boolean =>
   outcome._tag === 'DamageApplied' || outcome._tag === 'EntityDefeated';
 
+/**
+ * Candidate entities whose position may fall in the axis-aligned box
+ * `[minX, maxX] × [minY, maxY]`, in ascending id order. Uses the world's
+ * {@link CombatBroadphase} to skip the O(entities) scan when one is present, and
+ * falls back to the full `entities()` enumeration otherwise (the semantic
+ * reference). The caller always re-runs the precise geometry test on each
+ * candidate, so the box only *narrows* the set and never changes a result.
+ */
+const candidatesInBox = (
+  world: CombatWorldView,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): Iterable<CombatEntityId> => {
+  const index = world.broadphase?.();
+  return index === undefined ? world.entities() : index.queryAabb(minX, minY, maxX, maxY);
+};
+
 /** Apply one hit through Slice 1's resolver, recording outcome + knockback. */
 const applyHit = (
   ctx: DeliveryContext,
@@ -360,8 +379,22 @@ const rayCandidates = (
   range: number,
   hitRadius: number,
 ): RayCandidate[] => {
+  // The precise test (`rayHitDistance`) accepts a point only when its projection
+  // onto the ray is in `[0, range]` and its perpendicular distance is within
+  // `hitRadius`. Every such point therefore lies within `hitRadius` of the
+  // segment `origin → origin + dir·range`, so that segment's box grown by
+  // `hitRadius` is a faithful superset to pre-filter on.
+  const dir = normalizeVec(direction);
+  const endX = origin.x + dir.x * range;
+  const endY = origin.y + dir.y * range;
   const candidates: RayCandidate[] = [];
-  for (const entity of ctx.world.entities()) {
+  for (const entity of candidatesInBox(
+    ctx.world,
+    Math.min(origin.x, endX) - hitRadius,
+    Math.min(origin.y, endY) - hitRadius,
+    Math.max(origin.x, endX) + hitRadius,
+    Math.max(origin.y, endY) + hitRadius,
+  )) {
     const position = ctx.world.getPosition(entity);
     if (Option.isNone(position)) {
       continue;
@@ -478,7 +511,15 @@ const resolveProjectile = (
     }
 
     let best: RayCandidate | undefined;
-    for (const entity of ctx.world.entities()) {
+    // The swept hit accepts a point within `radius` of the segment `current →
+    // next`; that segment's box grown by `radius` bounds every such point.
+    for (const entity of candidatesInBox(
+      ctx.world,
+      Math.min(current.x, next.x) - d.radius,
+      Math.min(current.y, next.y) - d.radius,
+      Math.max(current.x, next.x) + d.radius,
+      Math.max(current.y, next.y) + d.radius,
+    )) {
       const position = ctx.world.getPosition(entity);
       if (Option.isNone(position)) {
         continue;
@@ -569,7 +610,16 @@ const resolveExplosive = (
   out: MutableResolution,
   d: ExplosiveDelivery,
 ): void => {
-  for (const entity of ctx.world.entities()) {
+  // Targets within the blast `radius` of the center all lie in the center's
+  // box grown by `radius`; iterate the broadphase candidates in id order so the
+  // emitted outcomes keep their id-sorted sequence.
+  for (const entity of candidatesInBox(
+    ctx.world,
+    ctx.origin.x - d.radius,
+    ctx.origin.y - d.radius,
+    ctx.origin.x + d.radius,
+    ctx.origin.y + d.radius,
+  )) {
     const position = ctx.world.getPosition(entity);
     if (Option.isNone(position)) {
       continue;
@@ -589,7 +639,15 @@ const resolveExplosive = (
 const resolveMelee = (ctx: DeliveryContext, out: MutableResolution, d: MeleeDelivery): void => {
   const aim = normalizeVec(ctx.aim);
   const halfArc = d.arc / 2;
-  for (const entity of ctx.world.entities()) {
+  // A target within melee `range` lies in the origin's box grown by `range`;
+  // iterate candidates in id order to preserve the id-sorted outcome sequence.
+  for (const entity of candidatesInBox(
+    ctx.world,
+    ctx.origin.x - d.range,
+    ctx.origin.y - d.range,
+    ctx.origin.x + d.range,
+    ctx.origin.y + d.range,
+  )) {
     const position = ctx.world.getPosition(entity);
     if (Option.isNone(position)) {
       continue;

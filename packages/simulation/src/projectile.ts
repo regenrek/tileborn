@@ -143,7 +143,21 @@ const nearestSweptHit = (
   travelled: number,
 ): SweptHit | undefined => {
   let best: SweptHit | undefined;
-  for (const entity of world.entities()) {
+  // Narrow to entities near the per-tick segment `from → to` (grown by `radius`)
+  // via the world's broadphase when present; the box bounds every point the
+  // precise `pointToSegmentDistance` test could accept, so the nearest hit is
+  // unchanged. Without an index this is the original `entities()` scan.
+  const index = world.broadphase?.();
+  const candidates =
+    index === undefined
+      ? world.entities()
+      : index.queryAabb(
+          Math.min(from.x, to.x) - radius,
+          Math.min(from.y, to.y) - radius,
+          Math.max(from.x, to.x) + radius,
+          Math.max(from.y, to.y) + radius,
+        );
+  for (const entity of candidates) {
     const position = world.getPosition(entity);
     if (Option.isNone(position)) {
       continue;

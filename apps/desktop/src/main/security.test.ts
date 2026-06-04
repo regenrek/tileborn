@@ -34,10 +34,11 @@ describe("buildContentSecurityPolicy (prod)", () => {
   const policy = buildContentSecurityPolicy(PROD);
   const dirs = directives(policy);
 
-  it("blocks inline scripts and external script origins in prod", () => {
-    // 'unsafe-eval' is required by Pixi v8 until the renderer adopts
-    // pixi.js/unsafe-eval (documented follow-up); inline scripts stay blocked.
-    expect(dirs.get("script-src")).toBe("'self' 'unsafe-eval'");
+  it("blocks eval, inline scripts, and external script origins in prod", () => {
+    // The renderer installs pixi.js/unsafe-eval so Pixi compiles shaders without
+    // `new Function`; prod must therefore drop 'unsafe-eval' (regression guard).
+    expect(dirs.get("script-src")).toBe("'self'");
+    expect(dirs.get("script-src")).not.toContain("'unsafe-eval'");
     expect(dirs.get("script-src")).not.toContain("'unsafe-inline'");
   });
 

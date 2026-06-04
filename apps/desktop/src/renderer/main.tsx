@@ -1,3 +1,11 @@
+// Install Pixi v8's eval-free program system BEFORE any Pixi renderer is
+// created/used (the runtime's PixiRendererAdapter does `new Application()` at
+// mount). This side-effect import patches Pixi's shader/UBO/uniform/particle
+// systems to compile programs without `new Function`, so the renderer runs
+// under the strict prod CSP (no 'unsafe-eval'). Must stay the first import so
+// it executes before any module that touches pixi.js classes.
+import 'pixi.js/unsafe-eval';
+
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { RouterProvider } from '@tanstack/react-router';

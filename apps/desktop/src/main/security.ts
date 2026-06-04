@@ -53,13 +53,13 @@ const httpOriginToWebSocket = (origin: string): string =>
 /**
  * Build the Content-Security-Policy string for the renderer document.
  *
- * Prod: scripts only from the app's own `file://` origin (`'self'`) plus
- * `'unsafe-eval'`. The `'unsafe-eval'` is NOT optional today: Pixi v8's default
- * renderer generates shader programs via `new Function`, and without eval it
- * throws "RendererInitError: ... does not allow unsafe-eval" and the map canvas
- * never mounts. The eval-free fix lives in the renderer (import
- * `pixi.js/unsafe-eval` and install its no-eval program system); once that lands
- * `'unsafe-eval'` can be dropped from prod. See window.ts / report follow-up.
+ * Prod: scripts only from the app's own `file://` origin (`'self'`) — no
+ * `'unsafe-eval'`. Pixi v8's default renderer would generate shader programs via
+ * `new Function` (which a strict CSP blocks, throwing "RendererInitError: ...
+ * does not allow unsafe-eval" and blanking the map canvas), but the renderer
+ * bootstrap installs Pixi's eval-free program system (`import
+ * 'pixi.js/unsafe-eval'` in renderer/main.tsx), so Pixi compiles shaders without
+ * eval and no `'unsafe-eval'` script source is needed.
  * `'unsafe-inline'` is kept for *styles* only (Base UI / Pixi set inline
  * `style` attributes at runtime); the prod bundle ships scripts/CSS as external
  * files (verified: no inline bootstrap script), so inline *scripts* stay blocked.
@@ -71,12 +71,13 @@ export const buildContentSecurityPolicy = (context: SecurityContext): string => 
   const devOrigin = context.isDev ? context.devServerOrigin : undefined;
   const devWebSocket = devOrigin ? httpOriginToWebSocket(devOrigin) : undefined;
 
-  // 'unsafe-eval' is required by Pixi v8's default GenerateProgram path until the
-  // renderer adopts pixi.js/unsafe-eval (follow-up). Inline scripts remain
-  // blocked in prod (none are emitted) and are only relaxed for Vite dev below.
-  const scriptSrc = ["'self'", "'unsafe-eval'"];
+  // Prod needs neither 'unsafe-eval' (the renderer installs pixi.js/unsafe-eval,
+  // so Pixi compiles shaders without `new Function`) nor 'unsafe-inline' (no
+  // inline scripts are emitted). Both are only relaxed for Vite dev below, which
+  // legitimately needs inline scripts and eval for HMR.
+  const scriptSrc = ["'self'"];
   if (devOrigin) {
-    scriptSrc.push("'unsafe-inline'", devOrigin);
+    scriptSrc.push("'unsafe-inline'", "'unsafe-eval'", devOrigin);
   }
 
   const styleSrc = ["'self'", "'unsafe-inline'"];

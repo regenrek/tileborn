@@ -7,8 +7,14 @@
  * concrete plugin id literal. Everything else in the renderer treats the
  * resolved projector as an opaque `RenderableEntityProjector<unknown>`.
  *
- * When a second plugin appears, reconsider whether this should become a lazy
- * id-list discovery layer instead of growing the switch. (ADR-0014 Risks #5.)
+ * Discovery (ADR-0023 section B): resolution is now a **registry lookup**, not
+ * a `switch (pluginId)`. Each built-in mode provider registers its projector +
+ * frame codecs keyed by plugin id; `resolvePlaytestPlugin` resolves the active
+ * mode's plugin id against that registry. A new genre plugin becomes resolvable
+ * by registering a provider here — no per-id `case` to grow. The renderer can't
+ * execute plugin code (ADR-0004), so the projector code is still bundled and
+ * registered in this one boundary file; WHICH plugin is the active mode is
+ * discovered from the manifest upstream (`discoverGameModes`).
  */
 import {
   PLUGIN_ID,
@@ -114,51 +120,66 @@ export interface ResolvedPlaytestPlugin {
   readonly decodeClientFrameView: (bytes: Uint8Array) => ClientFrameView | undefined;
 }
 
+/**
+ * Builds a {@link ResolvedPlaytestPlugin} for one mode provider. Registered by
+ * plugin id in {@link MODE_RENDER_PROVIDERS}; this is the discovery seam a
+ * second genre plugin slots into (no `switch` to grow).
+ */
+type ModeRenderProvider = (options: ResolvePlaytestPluginOptions) => ResolvedPlaytestPlugin;
+
+const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
+  const projectorConfig: BattleRoyaleProjectorConfig | undefined =
+    options.playerModels === undefined
+      ? undefined
+      : {
+          catalog: options.playerModels.catalog,
+          playerModelIds: options.playerModels.playerModelIds,
+          ...(options.playerModels.defaultModelId === undefined
+            ? {}
+            : { defaultModelId: options.playerModels.defaultModelId }),
+        };
+  const projector = createBattleRoyaleProjector(projectorConfig);
+  const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
+  const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
+  return {
+    projector,
+    bundledAssets: [
+      ...registerBundledAssets(createBattleRoyaleBundledAssets()),
+      ...modelAtlasAssets,
+    ],
+    manifest,
+    decodeServerFrame: (bytes) => {
+      try {
+        return decodeServerFrame(bytes);
+      } catch {
+        return undefined;
+      }
+    },
+    serverFrameToView,
+    createInitialFrame,
+    encodeClientInputFrame,
+    encodeHeartbeatFrame,
+    encodeServerFrame,
+    decodeClientFrameView,
+  };
+};
+
+/**
+ * Registry of built-in mode render providers keyed by plugin id. Battle Royale
+ * is the first registered mode (ADR-0023: BR is one discovered mode, not a
+ * hardcoded `case`). Adding a genre = registering another provider here.
+ */
+const MODE_RENDER_PROVIDERS: ReadonlyMap<string, ModeRenderProvider> = new Map([
+  [BATTLE_ROYALE_PLUGIN_ID, createBattleRoyalePlaytestPlugin],
+]);
+
+/** Plugin ids that have a bundled render provider (id-list discovery surface). */
+export const KNOWN_PLAYTEST_MODE_IDS: readonly string[] = [...MODE_RENDER_PROVIDERS.keys()];
+
 export const resolvePlaytestPlugin = (
   pluginId: string,
   options: ResolvePlaytestPluginOptions = {},
-): ResolvedPlaytestPlugin | undefined => {
-  switch (pluginId) {
-    case BATTLE_ROYALE_PLUGIN_ID: {
-      const projectorConfig: BattleRoyaleProjectorConfig | undefined =
-        options.playerModels === undefined
-          ? undefined
-          : {
-              catalog: options.playerModels.catalog,
-              playerModelIds: options.playerModels.playerModelIds,
-              ...(options.playerModels.defaultModelId === undefined
-                ? {}
-                : { defaultModelId: options.playerModels.defaultModelId }),
-            };
-      const projector = createBattleRoyaleProjector(projectorConfig);
-      const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
-      const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
-      return {
-        projector,
-        bundledAssets: [
-          ...registerBundledAssets(createBattleRoyaleBundledAssets()),
-          ...modelAtlasAssets,
-        ],
-        manifest,
-        decodeServerFrame: (bytes) => {
-          try {
-            return decodeServerFrame(bytes);
-          } catch {
-            return undefined;
-          }
-        },
-        serverFrameToView,
-        createInitialFrame,
-        encodeClientInputFrame,
-        encodeHeartbeatFrame,
-        encodeServerFrame,
-        decodeClientFrameView,
-      };
-    }
-    default:
-      return undefined;
-  }
-};
+): ResolvedPlaytestPlugin | undefined => MODE_RENDER_PROVIDERS.get(pluginId)?.(options);
 
 const registerBundledAssets = (
   assets: readonly BundledAssetSpec[],

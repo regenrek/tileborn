@@ -455,7 +455,19 @@ describe("PlaytestService", () => {
           entry: { editor: "./node.js", runtime: "./runtime.js" },
           permissions: [],
           dependsOn: [],
-          contributes: {},
+          contributes: {
+            runtime: {
+              systems: [
+                {
+                  _tag: "ExecutableRuntimeSystemContribution",
+                  id: "battle-royale-runtime",
+                  kind: "executable",
+                  display: { label: "Battle Royale Runtime Adapter" },
+                  entry: "./runtime.js",
+                },
+              ],
+            },
+          },
         }),
       );
       await writeFile(

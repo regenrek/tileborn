@@ -14,8 +14,23 @@ vi.mock('@/hooks/queries', () => ({
     isLoading: false,
     data: { map: { id: 'map-1', layers: [], objects: [], properties: {} } },
   }),
-  usePluginsList: () => ({
-    data: { plugins: [{ id: battleRoyalePluginId, enabled: true }] },
+  // ADR-0023: the inspector mounts the active mode's authoring panel by
+  // manifest discovery (the `gameModes` IPC projection), not a literal id check.
+  usePluginContributions: () => ({
+    data: {
+      panels: [],
+      tools: [],
+      gameModes: [
+        {
+          modeId: battleRoyalePluginId,
+          pluginId: battleRoyalePluginId,
+          label: 'Battle Royale Settings',
+          runtimeSystemId: 'battle-royale-runtime',
+          authoringSettingsPanelId: 'battle-royale-settings',
+          hasAuthoringPanel: true,
+        },
+      ],
+    },
   }),
 }));
 

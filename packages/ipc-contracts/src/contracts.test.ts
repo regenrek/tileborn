@@ -24,7 +24,7 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('main IPC contracts', () => {
   it('exports the main IPC registry', () => {
-    expect(MainIpcContracts).toHaveLength(62);
+    expect(MainIpcContracts).toHaveLength(93);
     expect(MainIpcRegistry.byChannel['tileborne:projects:get']).toBe(ProjectsGetContract);
     expect(MainIpcRegistry.byChannel['tileborne:maps:setMapTilesetPack']).toBe(
       MapsSetMapTilesetPackContract,
@@ -86,6 +86,16 @@ describe('main IPC contracts', () => {
           zone: 'working-palette',
           title: 'Battle Royale Spawn Tools',
           capabilities: ['spawn'],
+        },
+      ],
+      gameModes: [
+        {
+          modeId: '@tileborne-plugins/battle-royale',
+          pluginId: '@tileborne-plugins/battle-royale',
+          label: 'Battle Royale Settings',
+          runtimeSystemId: 'battle-royale-runtime',
+          authoringSettingsPanelId: 'battle-royale-settings',
+          hasAuthoringPanel: true,
         },
       ],
     });

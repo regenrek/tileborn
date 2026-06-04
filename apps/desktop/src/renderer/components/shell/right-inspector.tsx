@@ -16,10 +16,9 @@ import { LayersSection } from '@/components/inspector/layers-section';
 import { PropertiesPanel } from '@/components/inspector/properties-panel';
 import { SelectionSummary } from '@/components/inspector/selection-summary';
 import { ViewportOverlaysSection } from '@/components/inspector/viewport-overlays-section';
-import { BattleRoyaleAuthoringPanel } from '@/components/plugins/battle-royale-authoring-panel';
+import { resolveModeAuthoringPanel } from '@/components/plugins/mode-authoring-panels';
 import { PluginSlot } from '@/components/plugins/plugin-slot';
-import { useMap, usePluginsList } from '@/hooks/queries';
-import { BATTLE_ROYALE_PLUGIN_ID } from '@/lib/battle-royale-plugin';
+import { useMap, usePluginContributions } from '@/hooks/queries';
 import { PLUGIN_SLOTS } from '@/lib/plugin-slots';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
@@ -30,11 +29,17 @@ export function RightInspector() {
   const selection = useEditorUiStore((s) => s.selection);
   const activeTool = useEditorUiStore((s) => s.activeTool);
   const mapQuery = useMap(projectId, mapId);
-  const pluginsQuery = usePluginsList();
-  const battleRoyaleEnabled =
-    pluginsQuery.data?.plugins.some(
-      (plugin) => plugin.id === BATTLE_ROYALE_PLUGIN_ID && plugin.enabled,
-    ) ?? false;
+  const contributionsQuery = usePluginContributions();
+  // ADR-0023 section B: mount the ACTIVE game mode's authoring panel by manifest
+  // discovery (a plugin declaring a runtime system + settings panel), resolving
+  // the bundled panel component by plugin id — not a `battleRoyaleEnabled`
+  // literal-id check. Defaults to the first discovered mode (selection seam:
+  // a per-project `ActiveGameMode` chooses among multiple modes).
+  const activeMode = contributionsQuery.data?.gameModes?.[0];
+  const ActiveModePanel =
+    activeMode?.hasAuthoringPanel === true
+      ? resolveModeAuthoringPanel(activeMode.pluginId)
+      : undefined;
 
   if (inspectorCollapsed) {
     return (
@@ -123,8 +128,10 @@ export function RightInspector() {
               <h3 id="inspector-plugins-title" className={typography.subsectionLabel}>
                 Plugins
               </h3>
-              {battleRoyaleEnabled && projectId !== undefined && mapQuery.data?.map !== undefined ? (
-                <BattleRoyaleAuthoringPanel projectId={projectId} map={mapQuery.data.map} />
+              {ActiveModePanel !== undefined &&
+              projectId !== undefined &&
+              mapQuery.data?.map !== undefined ? (
+                <ActiveModePanel projectId={projectId} map={mapQuery.data.map} />
               ) : null}
               <PluginSlot
                 id={PLUGIN_SLOTS.inspectorRight}

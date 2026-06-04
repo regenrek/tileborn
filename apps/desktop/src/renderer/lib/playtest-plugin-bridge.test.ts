@@ -1,9 +1,19 @@
 import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
 import { describe, expect, it } from 'vitest';
 
-import { BATTLE_ROYALE_PLUGIN_ID, resolvePlaytestPlugin } from './playtest-plugin-bridge';
+import {
+  BATTLE_ROYALE_PLUGIN_ID,
+  KNOWN_PLAYTEST_MODE_IDS,
+  resolvePlaytestPlugin,
+} from './playtest-plugin-bridge';
 
 describe('playtest-plugin-bridge', () => {
+  it('resolves modes from a registry (no hardcoded switch) and returns undefined for unknown ids', () => {
+    expect(KNOWN_PLAYTEST_MODE_IDS).toContain(BATTLE_ROYALE_PLUGIN_ID);
+    expect(resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID)).toBeDefined();
+    expect(resolvePlaytestPlugin('@tileborne-plugins/not-installed')).toBeUndefined();
+  });
+
   it('resolves the canonical battle royale manifest id and exposes decoding', () => {
     const plugin = resolvePlaytestPlugin(PLUGIN_ID);
 

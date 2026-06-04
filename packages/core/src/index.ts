@@ -9,6 +9,7 @@ export * from './versioning/index.js';
 export * from './asset/index.js';
 export * from './asset/library.js';
 export * from './branding/index.js';
+export * from './game-mode/active-mode.js';
 export * from './project/index.js';
 export * from './catalog/index.js';
 export * from './map/index.js';

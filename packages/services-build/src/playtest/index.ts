@@ -1,6 +1,11 @@
 import path from "node:path";
 
-import { MapId, ProjectId } from "@tileborne/core";
+import { type GameModeId, MapId, ProjectId } from "@tileborne/core";
+import {
+  discoverGameModes,
+  type GameModeManifest,
+  resolveActiveGameMode,
+} from "@tileborne/plugin-api";
 import { MapService } from "@tileborne/services-app";
 import { HomeService } from "@tileborne/services-foundation";
 import type { PluginInstallerServiceError } from "@tileborne/services-plugin";
@@ -31,14 +36,44 @@ import {
   writeVerifiedJson,
 } from "../internal/persistence.js";
 
+/**
+ * The bundled battle-royale plugin id. Retained ONLY as a test fixture / assertion
+ * literal (see `services-build.test.ts`); it is deliberately NOT used by the
+ * playtest selection logic below, which is manifest-driven (ADR-0023).
+ */
 export const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
 
-export const activeBattleRoyalePlaytestPluginIds = (
-  plugins: readonly { readonly id: string; readonly enabled: boolean }[],
-): readonly string[] =>
-  plugins
-    .filter((plugin) => plugin.enabled && plugin.id === BATTLE_ROYALE_PLUGIN_ID)
-    .map((plugin) => plugin.id);
+/**
+ * A plugin candidate for playtest mode selection: its manifest (id + decoded
+ * {@link GameModeManifest} contributions) paired with whether the project has it
+ * enabled.
+ */
+export interface PlaytestModeCandidate extends GameModeManifest {
+  readonly enabled: boolean;
+}
+
+/**
+ * Manifest-driven playtest mode selection (ADR-0023 section B).
+ *
+ * Discovers the selectable game modes from the ENABLED plugins' decoded
+ * contributions ({@link discoverGameModes}: a plugin is a mode when it declares a
+ * runtime system) and activates the resolved active mode
+ * ({@link resolveActiveGameMode}, defaulting to the first discovered mode while
+ * no explicit selection is threaded). There is NO hardcoded plugin id: a new
+ * genre plugin that declares a runtime system becomes the active playtest mode
+ * with zero engine edits. Battle royale stays selected only because it declares
+ * a runtime system, just like any other mode.
+ */
+export const activePlaytestPluginIds = (
+  candidates: readonly PlaytestModeCandidate[],
+  selection?: GameModeId | undefined,
+): readonly string[] => {
+  const manifests = candidates
+    .filter((candidate) => candidate.enabled)
+    .map(({ pluginId, contributions }): GameModeManifest => ({ pluginId, contributions }));
+  const active = resolveActiveGameMode(discoverGameModes(manifests), selection);
+  return active === undefined ? [] : [active.pluginId];
+};
 
 export interface AssemblePlaytestInput {
   readonly projectId: ProjectId;
@@ -288,7 +323,14 @@ export const PlaytestServiceLive = Layer.effect(
       yield* Ref.update(sessions, (current) => [...current, session]);
       yield* PubSub.publish(events, void 0);
 
-      const enabledPlugins = activeBattleRoyalePlaytestPluginIds(yield* registry.list());
+      const installed = yield* registry.list();
+      const enabledPlugins = activePlaytestPluginIds(
+        installed.map((plugin) => ({
+          pluginId: plugin.id,
+          enabled: plugin.enabled,
+          contributions: plugin.manifest.contributes,
+        })),
+      );
       const artifact = yield* assembleArtifact({
         projectId,
         mapId,

@@ -85,10 +85,26 @@ export const PluginsGetManifestResponse = Schema.Struct({
   manifest: PluginManifestView,
 });
 
+/**
+ * A discovered game mode projected to the renderer (ADR-0023 section B). The
+ * main process runs `discoverGameModes` over the enabled plugin manifests; the
+ * renderer consumes this list to mount the active mode's authoring panel and to
+ * resolve playtest — by discovery, never by a hardcoded plugin-id literal.
+ */
+export const GameModeView = Schema.Struct({
+  modeId: Schema.String,
+  pluginId: PluginId,
+  label: Schema.String,
+  runtimeSystemId: Schema.optional(Schema.String),
+  authoringSettingsPanelId: Schema.optional(Schema.String),
+  hasAuthoringPanel: Schema.Boolean,
+});
+
 export const PluginsListContributionsRequest = Schema.Struct({});
 export const PluginsListContributionsResponse = Schema.Struct({
   panels: Schema.Array(PluginPanelContributionView),
   tools: Schema.Array(PluginToolContributionView),
+  gameModes: Schema.Array(GameModeView),
 });
 
 export const PluginsListContract = defineContract({

@@ -54,6 +54,8 @@ import {
 } from '@tileborne/services-plugin';
 import {
   PluginContributions,
+  discoverGameModes,
+  type GameModeDescriptor,
   type PluginPanelContribution,
   type PluginToolContribution,
 } from '@tileborne/plugin-api';
@@ -210,6 +212,15 @@ const toPluginToolContributionView = (
   ...optionalField('commandId', Option.getOrUndefined(contribution.commandId)),
   ...optionalField('capabilities', Option.getOrUndefined(contribution.capabilities)),
   ...optionalField('data', Option.getOrUndefined(contribution.data)),
+});
+
+const toGameModeView = (descriptor: GameModeDescriptor) => ({
+  modeId: descriptor.modeId,
+  pluginId: descriptor.pluginId,
+  label: descriptor.label,
+  hasAuthoringPanel: descriptor.hasAuthoringPanel,
+  ...optionalField('runtimeSystemId', descriptor.runtimeSystemId),
+  ...optionalField('authoringSettingsPanelId', descriptor.authoringSettingsPanelId),
 });
 
 const formatPluginPermission = (permission: { readonly _tag: string }): string => permission._tag;
@@ -871,6 +882,12 @@ const buildHandlers = Effect.gen(function* () {
         registry.list().pipe(
           Effect.map((plugins) => {
             const enabledPlugins = plugins.filter((plugin) => plugin.enabled);
+            const gameModes = discoverGameModes(
+              enabledPlugins.map((plugin) => ({
+                pluginId: plugin.id,
+                contributions: plugin.manifest.contributes,
+              })),
+            ).map(toGameModeView);
             return {
               panels: enabledPlugins.flatMap((plugin) =>
                 Option.getOrElse(plugin.manifest.contributes.panels, () => []).map((contribution) =>
@@ -882,6 +899,7 @@ const buildHandlers = Effect.gen(function* () {
                   toPluginToolContributionView(plugin, contribution)
                 )
               ),
+              gameModes,
             };
           }),
         ),

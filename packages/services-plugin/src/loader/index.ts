@@ -5,7 +5,7 @@ import { PluginId } from "@tileborne/core";
 import { PluginManifest, validatePluginContributions } from "@tileborne/plugin-api";
 import { Context, Effect, Layer, Option, Ref, Schema } from "effect";
 
-import { resolvePluginGameObjectCatalogs } from "../catalog.js";
+import { resolvePluginGameObjectCatalogs, resolvePluginWeaponCatalogs } from "../catalog.js";
 import {
   hashPluginDirectory,
   readInstalledLock,
@@ -18,6 +18,7 @@ import {
   InstalledPlugin,
   LoadedDeclarativePlugin,
   MaterializedGameObjectCatalog,
+  MaterializedWeaponCatalog,
   type LoadedExecutablePlugin,
   PLUGIN_MANIFEST_FILE,
   PluginExecutionContext,
@@ -160,10 +161,12 @@ export const PluginLoaderServiceLive = Layer.effect(
             : new PluginInstallError({ path: plugin.rootPath, message: toMessage(cause) }),
       });
       // Resolve + decode the plugin's catalog contributions at load time
-      // (ADR-0019) so the loaded plugin carries materialized catalogs instead of
-      // raw `{ indexPath }` indirection. Cross-plugin merge stays deferred to the
-      // runtime-map-package capstone.
+      // (ADR-0019 game objects, ADR-0018 Slice 5 weapons) so the loaded plugin
+      // carries materialized catalogs instead of raw `{ indexPath }` indirection.
+      // Cross-plugin merge stays deferred to the caller (`mergeGameObjectCatalogs`
+      // / `mergeWeaponCatalogs`).
       const resolvedCatalogs = yield* resolvePluginGameObjectCatalogs(plugin.rootPath, plugin.manifest);
+      const resolvedWeaponCatalogs = yield* resolvePluginWeaponCatalogs(plugin.rootPath, plugin.manifest);
       const loaded = new LoadedDeclarativePlugin({
         pluginId,
         manifest: plugin.manifest,
@@ -171,6 +174,13 @@ export const PluginLoaderServiceLive = Layer.effect(
         gameObjectCatalogs: resolvedCatalogs.map(
           (entry) =>
             new MaterializedGameObjectCatalog({
+              contributionId: entry.contributionId,
+              catalog: entry.catalog,
+            }),
+        ),
+        weaponCatalogs: resolvedWeaponCatalogs.map(
+          (entry) =>
+            new MaterializedWeaponCatalog({
               contributionId: entry.contributionId,
               catalog: entry.catalog,
             }),

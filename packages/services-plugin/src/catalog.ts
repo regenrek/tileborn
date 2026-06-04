@@ -3,8 +3,11 @@ import { readFile } from "node:fs/promises";
 import {
   type CatalogContributionInput,
   decodeGameObjectCatalog,
+  decodeWeaponCatalog,
   type PluginManifest,
   type RuntimeGameObjectCatalogContribution,
+  type RuntimeWeaponCatalogContribution,
+  type WeaponCatalogContributionInput,
 } from "@tileborne/plugin-api";
 import { Effect, Option, Result } from "effect";
 
@@ -17,19 +20,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * Materialize the raw catalog JSON a `gameObjectCatalogs` contribution points
- * at (ADR-0019). Following the ADR-0015 bundled-data precedent, declarative
- * contribution `data` may either embed the catalog inline or carry an
- * `{ indexPath }` that resolves to a JSON file relative to the plugin root —
- * resolved through {@link resolvePluginManifestPath} so it can never escape the
- * plugin sandbox.
+ * Materialize the raw catalog JSON a declarative catalog contribution's `data`
+ * points at (ADR-0019 / ADR-0018 Slice 5). Following the ADR-0015 bundled-data
+ * precedent, declarative contribution `data` may either embed the content pack
+ * inline or carry an `{ indexPath }` that resolves to a JSON file relative to the
+ * plugin root — resolved through {@link resolvePluginManifestPath} so it can never
+ * escape the plugin sandbox. Shared by the game-object and weapon catalog
+ * resolvers since both contribution slots carry the same `data` shape.
  */
-const materializeCatalogData = (
+const materializeContributionData = (
   rootPath: string,
-  contribution: RuntimeGameObjectCatalogContribution,
+  data: unknown,
 ): Effect.Effect<unknown, PluginValidationError> =>
   Effect.gen(function* () {
-    const data: unknown = contribution.data;
     const indexPath =
       isRecord(data) && typeof data.indexPath === "string" ? data.indexPath : undefined;
     if (indexPath === undefined) {
@@ -68,7 +71,7 @@ export const resolveGameObjectCatalogContributions = (
   Effect.gen(function* () {
     const resolved: CatalogContributionInput[] = [];
     for (const contribution of contributions) {
-      const materialized = yield* materializeCatalogData(rootPath, contribution);
+      const materialized = yield* materializeContributionData(rootPath, contribution.data);
       const decoded = decodeGameObjectCatalog(contribution.id, materialized);
       if (Result.isFailure(decoded)) {
         return yield* new PluginValidationError({
@@ -99,4 +102,53 @@ export const resolvePluginGameObjectCatalogs = (
     return Effect.succeed([]);
   }
   return resolveGameObjectCatalogContributions(rootPath, catalogs.value);
+};
+
+/**
+ * Resolve a plugin's `RuntimeWeaponCatalog` contributions into decoded
+ * {@link WeaponCatalogContributionInput}s ready for `mergeWeaponCatalogs`
+ * (ADR-0018 Slice 5). Mirrors {@link resolveGameObjectCatalogContributions}: it
+ * resolves each contribution's `data.indexPath` (or inline data) relative to
+ * `rootPath`, then decodes it against the `@tileborne/simulation`-backed
+ * `WeaponCatalog` schema via {@link decodeWeaponCatalog}.
+ */
+export const resolveWeaponCatalogContributions = (
+  rootPath: string,
+  contributions: readonly RuntimeWeaponCatalogContribution[],
+): Effect.Effect<readonly WeaponCatalogContributionInput[], PluginValidationError> =>
+  Effect.gen(function* () {
+    const resolved: WeaponCatalogContributionInput[] = [];
+    for (const contribution of contributions) {
+      const materialized = yield* materializeContributionData(rootPath, contribution.data);
+      const decoded = decodeWeaponCatalog(contribution.id, materialized);
+      if (Result.isFailure(decoded)) {
+        return yield* new PluginValidationError({
+          path: rootPath,
+          message: decoded.failure.message,
+        });
+      }
+      resolved.push({ contributionId: contribution.id, catalog: decoded.success });
+    }
+    return resolved;
+  });
+
+/**
+ * Extract and resolve the `weaponCatalogs` contributions from a decoded plugin
+ * manifest (ADR-0018 Slice 5). Returns an empty list when the plugin contributes
+ * none. The caller merges the result across plugins with `mergeWeaponCatalogs`.
+ * Mirrors {@link resolvePluginGameObjectCatalogs}.
+ */
+export const resolvePluginWeaponCatalogs = (
+  rootPath: string,
+  manifest: PluginManifest,
+): Effect.Effect<readonly WeaponCatalogContributionInput[], PluginValidationError> => {
+  const runtime = manifest.contributes.runtime;
+  if (Option.isNone(runtime)) {
+    return Effect.succeed([]);
+  }
+  const catalogs = runtime.value.weaponCatalogs;
+  if (Option.isNone(catalogs)) {
+    return Effect.succeed([]);
+  }
+  return resolveWeaponCatalogContributions(rootPath, catalogs.value);
 };

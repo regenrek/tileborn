@@ -4,8 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { gameObjectTypeIdForKey, PluginId } from "@tileborne/core";
-import { PluginManifest } from "@tileborne/plugin-api";
-import { Effect, Fiber, Option, Queue, Schema, Stream } from "effect";
+import { mergeWeaponCatalogs, PluginManifest } from "@tileborne/plugin-api";
+import { Effect, Fiber, Option, Queue, Result, Schema, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -660,6 +660,79 @@ describe.sequential("PluginLoaderService", () => {
     expect(objectTypeIds).toContain(gameObjectTypeIdForKey("spawn-point"));
     expect(objectTypeIds).toContain(gameObjectTypeIdForKey("shrink-zone-anchor"));
     expect(objectTypeIds).toContain(gameObjectTypeIdForKey("loot-crate"));
+  });
+
+  it("materializes a plugin's weaponCatalogs (inline data) on load and merges them", async () => {
+    const home = await makeTempHome();
+    const id = "@tileborne-plugins/test";
+    const version = "0.1.0";
+    const weaponId = "weapon:0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f60";
+    const extra = {
+      contributes: {
+        ...emptyContributes,
+        runtime: {
+          weaponCatalogs: [
+            {
+              _tag: "DeclarativeRuntimeWeaponCatalogContribution",
+              id: "test-weapon-catalog",
+              kind: "declarative",
+              data: {
+                schemaVersion: 1,
+                weapons: [
+                  {
+                    weapon: {
+                      id: weaponId,
+                      damage: 25,
+                      cooldownTicks: 8,
+                      magazineSize: 1,
+                      reloadTicks: 0,
+                    },
+                    delivery: {
+                      _tag: "ProjectileDelivery",
+                      damage: 25,
+                      speed: 20,
+                      ttlTicks: 40,
+                      radius: 16,
+                      falloff: { _tag: "NoFalloff" },
+                      knockback: 0,
+                    },
+                    appliesStatus: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    };
+    const directory = path.join(home, "plugins", expectedPluginDirectoryName(id, version));
+    await writePluginSource(directory, id, version, extra);
+    await refreshInstalledLock(directory, id, version, extra);
+
+    const loaded = await Effect.runPromise(
+      Effect.gen(function* () {
+        const registry = yield* PluginRegistryService;
+        const loader = yield* PluginLoaderService;
+        yield* registry.discover();
+        return yield* loader.loadDeclarative(pluginId());
+      }).pipe(Effect.provide(PluginLoaderMainLayer)),
+    );
+
+    expect(loaded.weaponCatalogs).toHaveLength(1);
+    const materialized = loaded.weaponCatalogs[0];
+    expect(materialized?.contributionId).toBe("test-weapon-catalog");
+    expect(materialized?.catalog.weapons[0]?.weapon.id).toBe(weaponId);
+
+    const merged = mergeWeaponCatalogs(
+      loaded.weaponCatalogs.map((entry) => ({
+        contributionId: entry.contributionId,
+        catalog: entry.catalog,
+      })),
+    );
+    expect(Result.isSuccess(merged)).toBe(true);
+    if (Result.isSuccess(merged)) {
+      expect(merged.success.byId.has(weaponId)).toBe(true);
+    }
   });
 
   it("loads sidebar panel and tool contributions for enabled plugins", async () => {

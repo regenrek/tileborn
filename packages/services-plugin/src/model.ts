@@ -1,6 +1,6 @@
 import { ContentHash, GameObjectCatalog, PluginId } from "@tileborne/core";
 import { MAX_PACK_BYTES } from "@tileborne/asset-pipeline";
-import { PluginContributions, PluginManifest } from "@tileborne/plugin-api";
+import { PluginContributions, PluginManifest, WeaponCatalog } from "@tileborne/plugin-api";
 import { Schema } from "effect";
 
 export const PLUGIN_MANIFEST_FILE = "tileborne-plugin.json";
@@ -76,6 +76,21 @@ export class MaterializedGameObjectCatalog extends Schema.Class<MaterializedGame
   catalog: GameObjectCatalog,
 }) {}
 
+/**
+ * A `weaponCatalogs` contribution after the loader has resolved its
+ * `data.indexPath` (or inline data) and decoded it against the
+ * `@tileborne/simulation`-backed {@link WeaponCatalog} schema (ADR-0018 Slice 5).
+ * Carried per-plugin on {@link LoadedDeclarativePlugin}; cross-plugin merge into a
+ * runtime registry is performed via `mergeWeaponCatalogs`, mirroring
+ * {@link MaterializedGameObjectCatalog} / ADR-0019.
+ */
+export class MaterializedWeaponCatalog extends Schema.Class<MaterializedWeaponCatalog>(
+  "MaterializedWeaponCatalog",
+)({
+  contributionId: Schema.String,
+  catalog: WeaponCatalog,
+}) {}
+
 export class LoadedDeclarativePlugin extends Schema.Class<LoadedDeclarativePlugin>("LoadedDeclarativePlugin")({
   pluginId: PluginId,
   manifest: PluginManifest,
@@ -86,6 +101,13 @@ export class LoadedDeclarativePlugin extends Schema.Class<LoadedDeclarativePlugi
    * indirection. Empty when the plugin contributes none.
    */
   gameObjectCatalogs: Schema.Array(MaterializedGameObjectCatalog),
+  /**
+   * The plugin's `weaponCatalogs` resolved + decoded at load time (ADR-0018
+   * Slice 5), mirroring {@link MaterializedGameObjectCatalog}. Empty when the
+   * plugin contributes none. Cross-plugin merge stays deferred to the caller
+   * via `mergeWeaponCatalogs`.
+   */
+  weaponCatalogs: Schema.Array(MaterializedWeaponCatalog),
 }) {}
 
 export interface LoadedExecutablePlugin {

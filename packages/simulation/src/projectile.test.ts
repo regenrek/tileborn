@@ -8,11 +8,13 @@ import { alwaysHostile } from './hit-policy.js';
 import { makeCombatEntityId, makeProjectileId } from './ids.js';
 import {
   advanceProjectile,
+  createProjectileFromDelivery,
   Projectile,
   ProjectileExpired,
   ProjectileMoved,
   ProjectileSpawned,
 } from './projectile.js';
+import { ProjectileDelivery } from './delivery.js';
 import { createInMemoryCombatWorld, type CombatActorSeed } from './world.js';
 
 const shooter = makeCombatEntityId(1);
@@ -38,6 +40,31 @@ const makeProjectile = (
   });
 
 const worldWith = (...actors: readonly CombatActorSeed[]) => createInMemoryCombatWorld(actors, []);
+
+describe('createProjectileFromDelivery', () => {
+  it('uses ProjectileDelivery.speed as the canonical per-tick velocity', () => {
+    const projectile = createProjectileFromDelivery({
+      id: makeProjectileId(2),
+      source: shooter,
+      origin: vec2(10, 20),
+      direction: vec2(0, 5),
+      delivery: new ProjectileDelivery({
+        damage: 10,
+        speed: 7,
+        ttlTicks: 12,
+        radius: 3,
+        falloff: new NoFalloff(),
+        knockback: 0,
+      }),
+    });
+
+    expect(projectile.x).toBe(10);
+    expect(projectile.y).toBe(20);
+    expect(projectile.vx).toBeCloseTo(0);
+    expect(projectile.vy).toBeCloseTo(7);
+    expect(projectile.ttlRemaining).toBe(12);
+  });
+});
 
 describe('advanceProjectile', () => {
   it('moves forward and decrements ttl when nothing is hit', () => {

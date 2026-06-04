@@ -56,6 +56,7 @@ import {
 import { resolveBattleRoyaleWeaponEntry } from '../weapon-catalog.js';
 import { exportArtifact } from '../export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
+import { createBattleRoyaleSnapshotEmitter } from '../server/snapshot-emitter.js';
 import { createTestPluginWorld } from '../test-plugin-world.js';
 import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
 
@@ -63,6 +64,7 @@ const DT = 1 / MOVEMENT.tickRate;
 const TILE_SIZE = 32;
 const CONFIG = DEFAULT_BATTLE_ROYALE_CONFIG;
 const WEAPON_ENTRY = resolveBattleRoyaleWeaponEntry(CONFIG);
+const PROJECTILE_MUZZLE_OFFSET = WEAPON_ENTRY.delivery.radius + 1;
 
 const uuid = (suffix: string): Uuid =>
   `660e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
@@ -125,9 +127,7 @@ const makeContext = (
   ...(options.getPlayerInput ? { getPlayerInput: options.getPlayerInput } : {}),
   mapBounds: options.mapBounds ?? openMapBounds(),
   weaponSlotCount: CONFIG.projectile.weaponSlotCount,
-  projectileSpeedPerSecond: CONFIG.projectile.speed,
   projectileBoundsRadius: CONFIG.projectile.radius,
-  dt: DT,
 });
 
 const shooterInput = (
@@ -146,10 +146,15 @@ const inputForPlayer =
 const countProjectiles = (world: ReturnType<typeof createTestPluginWorld>): number =>
   [...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()].length;
 
+const projectileEntries = (
+  world: ReturnType<typeof createTestPluginWorld>,
+): readonly [number, Projectile][] =>
+  [...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()].sort(
+    ([left], [right]) => left - right,
+  );
+
 const projectiles = (world: ReturnType<typeof createTestPluginWorld>): readonly Projectile[] =>
-  [...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([, projectile]) => projectile);
+  projectileEntries(world).map(([, projectile]) => projectile);
 
 const makeCollisionTilesetPack = (): TilesetPack =>
   new TilesetPack({
@@ -273,6 +278,38 @@ describe('combat system (neutral engine)', () => {
     ]);
   });
 
+  it('spawns from an aim-directed muzzle before the first projectile advance', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 10, 10);
+    const ctx = makeContext(world, createDamageSystemState(), {
+      getPlayerInput: inputForPlayer('player-1', shooterInput({ aimDeg: 90 })),
+    });
+
+    runCombatSystem(world, ctx, createCombatSystemState());
+
+    const positions = world.getComponent<Position>(POSITION_COMPONENT);
+    const entry = projectileEntries(world)[0];
+    expect(entry).toBeDefined();
+    const [projectileEntity, projectile] = entry!;
+    const visiblePosition = positions.get(projectileEntity)!;
+    const spawnOrigin = {
+      x: visiblePosition.x - projectile.dirX * projectile.speed,
+      y: visiblePosition.y - projectile.dirY * projectile.speed,
+    };
+
+    expect(projectile).toEqual(
+      expect.objectContaining({
+        dirX: expect.closeTo(0),
+        dirY: expect.closeTo(1),
+        speed: expect.closeTo(WEAPON_ENTRY.delivery.speed),
+      }),
+    );
+    expect(spawnOrigin.x).toBeCloseTo(10);
+    expect(spawnOrigin.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET);
+    expect(visiblePosition.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed);
+  });
+
   it('uses weapon-slot-only input while falling back to last facing direction', () => {
     const world = createTestPluginWorld();
     registerStores(world);
@@ -316,7 +353,7 @@ describe('combat system (neutral engine)', () => {
     expect(projectiles(world)).toEqual([expect.objectContaining({ weaponSlot: 1 })]);
   });
 
-  it('moves projectiles at the configured per-second speed', () => {
+  it('advances projectiles by exactly the delivery per-tick speed', () => {
     const world = createTestPluginWorld();
     registerStores(world);
     spawnPlayer(world, 'player-1', 0, 0);
@@ -328,26 +365,62 @@ describe('combat system (neutral engine)', () => {
     runCombatSystem(world, ctx, state);
     expect(countProjectiles(world)).toBe(1);
     const positions = world.getComponent<Position>(POSITION_COMPONENT);
-    const projectileStore = world.getComponent<Projectile>(PROJECTILE_COMPONENT);
-    const [projectileEntity] = [...projectileStore.entries()][0] as [number, Projectile];
+    const entry = projectileEntries(world)[0];
+    expect(entry).toBeDefined();
+    const [projectileEntity, projectile] = entry!;
     const start = positions.get(projectileEntity)!;
 
     const noInputCtx = makeContext(world, createDamageSystemState(), {});
     runCombatSystem(world, noInputCtx, state);
     const end = positions.get(projectileEntity)!;
 
-    expect(end.x - start.x).toBeCloseTo(PROJECTILE.speed * DT);
+    expect(projectile.speed).toBeCloseTo(WEAPON_ENTRY.delivery.speed);
+    expect(WEAPON_ENTRY.delivery.speed).toBeCloseTo(PROJECTILE.speed * DT);
+    expect(end.x - start.x).toBeCloseTo(WEAPON_ENTRY.delivery.speed);
     expect(end.y).toBeCloseTo(start.y);
   });
 
-  it('damages another player, enqueues a kill, and removes the projectile', () => {
+  it('emits the advanced projectile position and heading in snapshots', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 0, 0);
+    const state = createCombatSystemState();
+    const ctx = makeContext(world, createDamageSystemState(), {
+      getPlayerInput: inputForPlayer('player-1'),
+    });
+
+    runCombatSystem(world, ctx, state);
+    runCombatSystem(world, makeContext(world, createDamageSystemState(), {}), state);
+
+    const positions = world.getComponent<Position>(POSITION_COMPONENT);
+    const entry = projectileEntries(world)[0];
+    expect(entry).toBeDefined();
+    const [projectileEntity] = entry!;
+    const position = positions.get(projectileEntity)!;
+    const frame = createBattleRoyaleSnapshotEmitter().buildWelcome(world, 2);
+    const snapshot = BattleRoyaleProtocol.decodeMessage(frame);
+
+    expect(snapshot._tag).toBe('WelcomeSnapshot');
+    if (snapshot._tag === 'WelcomeSnapshot') {
+      expect(snapshot.projectiles).toHaveLength(1);
+      expect(snapshot.projectiles[0]).toMatchObject({
+        x: expect.closeTo(position.x),
+        y: expect.closeTo(position.y),
+        vx: expect.closeTo(WEAPON_ENTRY.delivery.speed),
+        vy: expect.closeTo(0),
+        rotation: expect.closeTo(0),
+      });
+    }
+  });
+
+  it('damages a target downrange, enqueues a kill, and removes the projectile', () => {
     const world = createTestPluginWorld();
     registerStores(world);
     spawnPlayer(world, 'player-1', 0, 0);
     const victim = spawnPlayer(
       world,
       'player-2',
-      MOVEMENT.radius * 2 + PROJECTILE.radius,
+      PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed / 2,
       0,
       PROJECTILE.damage,
     );
@@ -371,6 +444,28 @@ describe('combat system (neutral engine)', () => {
       victim: BattleRoyaleProtocol.makePlayerId('player-2'),
       tick: 1,
     });
+  });
+
+  it('is blocked by projectile-blocking geometry downrange', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 0, 0);
+    const blocker = new CombatBlocker({
+      minX: PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed / 2,
+      minY: -2,
+      maxX: PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed / 2 + 1,
+      maxY: 2,
+      blocksProjectiles: true,
+      blocksVision: false,
+    });
+    const ctx = makeContext(world, createDamageSystemState(), {
+      getPlayerInput: inputForPlayer('player-1'),
+      blockers: [blocker],
+    });
+
+    runCombatSystem(world, ctx, createCombatSystemState());
+
+    expect(countProjectiles(world)).toBe(0);
   });
 
   it('never strikes the projectile owner', () => {

@@ -11,7 +11,7 @@ const PLAYER_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAb0lEQVR42mNgGAxATkPjPzZMNUP9FvRgxWRbRshgXBYRbTixBmOziGaGE7SE1GAhObioYTheX9DUArxJUUSEPDlkSwhZgMsgvHLEWkCVYBq1gCopCRsePPmALkUFzQs7uhTXdKlw6FJl0qXSpxYAAN21YA78JZyoAAAAAElFTkSuQmCC";
 
 const PROJECTILE_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAYAAADgzO9IAAAAIklEQVR42mNggIL/lzT+gzADMoAJokiiC8IlcUrgNAqX5QDpekdBel9GHgAAAABJRU5ErkJggg==";
+  "iVBORw0KGgoAAAANSUhEUgAAABgAAAAICAYAAADjoT9jAAAAkklEQVR42r3RsQrCMBDG8dBaWqtoldYigotSXDoVxKWLi5OLSxdBXJz7ZJl8Jh/B9fxHgnQW0oMfWe7ug4tSfZXowoOPAQKEiDBEjBHGmGCKBDPMkSLDAnlXNyC2g6Z5iTU22KFEhQNqHHHCGRc0uOKOh8hLvi+UtOntRxcrbO3Cvbyf8hcTYLkPcH6i3j7ZVX0ASHRJ2m7mbvoAAAAASUVORK5CYII=";
 
 const dataUrl = (base64: string): string => `data:image/png;base64,${base64}`;
 
@@ -33,7 +33,7 @@ export const createBattleRoyaleBundledAssets = (): readonly BundledAssetSpec[] =
     assetId: PROJECTILE_TEXTURE_ASSET_ID,
     path: dataUrl(PROJECTILE_PNG_BASE64),
     mime: "image/png",
-    width: 6,
-    height: 6,
+    width: 24,
+    height: 8,
   },
 ];

@@ -34,6 +34,7 @@ describe("createBattleRoyaleBundledAssets", () => {
     const [player, projectile] = createBattleRoyaleBundledAssets();
     expect(player?.assetId).toBe(PLAYER_TEXTURE_ASSET_ID);
     expect(projectile?.assetId).toBe(PROJECTILE_TEXTURE_ASSET_ID);
+    expect(projectile).toMatchObject({ width: 24, height: 8 });
     for (const asset of createBattleRoyaleBundledAssets()) {
       expect(asset.mime).toBe("image/png");
       expect(asset.path.startsWith("data:image/png;base64,")).toBe(true);

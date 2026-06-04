@@ -1,7 +1,7 @@
 import { Option, Schema } from 'effect';
 
 import { type DamageOutcome, type DamageSource } from './damage.js';
-import { KnockbackImpulse } from './delivery.js';
+import { KnockbackImpulse, type ProjectileDelivery } from './delivery.js';
 import { evaluateFalloff, FalloffSpec } from './falloff.js';
 import {
   distance,
@@ -54,6 +54,41 @@ export class Projectile extends Schema.Class<Projectile>('Projectile')({
   /** Distance travelled so far, fed to falloff on impact. */
   travelled: Schema.Number,
 }) {}
+
+export interface ProjectileFromDeliveryInput {
+  readonly id: ProjectileId;
+  readonly source: CombatEntityId;
+  readonly sourceTeam?: TeamId;
+  readonly origin: Vec2Like;
+  readonly direction: Vec2Like;
+  readonly delivery: ProjectileDelivery;
+  readonly ttlRemaining?: number;
+  readonly travelled?: number;
+}
+
+/**
+ * Create the neutral in-flight projectile for a delivery spawn. `delivery.speed`
+ * is the canonical per-tick travel distance; plugins should convert any
+ * per-second balance numbers before they build the delivery.
+ */
+export const createProjectileFromDelivery = (input: ProjectileFromDeliveryInput): Projectile => {
+  const direction = normalizeVec(input.direction);
+  return new Projectile({
+    id: input.id,
+    source: input.source,
+    ...(input.sourceTeam === undefined ? {} : { sourceTeam: input.sourceTeam }),
+    x: input.origin.x,
+    y: input.origin.y,
+    vx: direction.x * input.delivery.speed,
+    vy: direction.y * input.delivery.speed,
+    ttlRemaining: input.ttlRemaining ?? input.delivery.ttlTicks,
+    damage: input.delivery.damage,
+    radius: input.delivery.radius,
+    falloff: input.delivery.falloff,
+    knockback: input.delivery.knockback,
+    travelled: input.travelled ?? 0,
+  });
+};
 
 // ---------------------------------------------------------------------------
 // Lifecycle result values

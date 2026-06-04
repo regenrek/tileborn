@@ -72,6 +72,7 @@ describe("BattleRoyaleProjector", () => {
         x: 13,
         y: 22,
         rotation: 0.75,
+        anchor: { x: 0.5, y: 0.5 },
         layerIndex: 20,
       }),
     ]);
@@ -257,6 +258,7 @@ describe("BattleRoyaleProjector", () => {
         expect.objectContaining({
           id: "br:projectile:projectile-1",
           assetId: PROJECTILE_TEXTURE_ASSET_ID,
+          anchor: { x: 0.5, y: 0.5 },
         }),
       ]),
     );

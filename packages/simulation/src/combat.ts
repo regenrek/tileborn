@@ -15,11 +15,12 @@ import {
   resolveDelivery,
   type DeliveryContext,
 } from './delivery.js';
-import { normalizeVec, type Vec2Like } from './geometry.js';
+import type { Vec2Like } from './geometry.js';
 import type { HitResolutionPolicy } from './hit-policy.js';
 import { CombatEntityId, makeProjectileId, StatusEffectId, WeaponDefinitionId } from './ids.js';
 import {
   advanceProjectile,
+  createProjectileFromDelivery,
   Projectile,
   ProjectileExpired,
   ProjectileMoved,
@@ -291,36 +292,25 @@ export const runCombatTick = (input: CombatTickInput): CombatTickResult => {
 
     if (equipped.delivery._tag === 'ProjectileDelivery') {
       const delivery = equipped.delivery;
-      const direction = normalizeVec(intent.aim);
       const id = makeProjectileId(nextProjectileId);
       nextProjectileId += 1;
-      const vx = direction.x * delivery.speed;
-      const vy = direction.y * delivery.speed;
-      spawnedProjectiles.push(
-        new Projectile({
-          id,
-          source: intent.entity,
-          sourceTeam,
-          x: origin.x,
-          y: origin.y,
-          vx,
-          vy,
-          ttlRemaining: delivery.ttlTicks,
-          damage: delivery.damage,
-          radius: delivery.radius,
-          falloff: delivery.falloff,
-          knockback: delivery.knockback,
-          travelled: 0,
-        }),
-      );
+      const projectile = createProjectileFromDelivery({
+        id,
+        source: intent.entity,
+        ...(sourceTeam === undefined ? {} : { sourceTeam }),
+        origin,
+        direction: intent.aim,
+        delivery,
+      });
+      spawnedProjectiles.push(projectile);
       results.push(
         new ProjectileSpawned({
           projectile: id,
           source: intent.entity,
           x: origin.x,
           y: origin.y,
-          vx,
-          vy,
+          vx: projectile.vx,
+          vy: projectile.vy,
         }),
       );
       continue;

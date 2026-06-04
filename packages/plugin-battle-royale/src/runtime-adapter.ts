@@ -148,9 +148,7 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
           getPlayerInput: (playerId) => host.getPlayerInput?.(playerId),
           mapBounds,
           weaponSlotCount: config.projectile.weaponSlotCount,
-          projectileSpeedPerSecond: config.projectile.speed,
           projectileBoundsRadius: config.projectile.radius,
-          dt,
         },
         combatState,
       );

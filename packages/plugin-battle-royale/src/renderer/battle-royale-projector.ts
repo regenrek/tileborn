@@ -138,6 +138,8 @@ const renderManifest: RuntimePluginRenderManifest = {
   hudInsets: { top: 0, right: 0, bottom: 0, left: 0 },
 };
 
+const PROJECTILE_ANCHOR = { x: 0.5, y: 0.5 } as const;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -308,6 +310,7 @@ export const projectBattleRoyaleFullStateWith = (
       x: projectile.x,
       y: projectile.y,
       rotation: projectile.rot,
+      anchor: PROJECTILE_ANCHOR,
       scale: 1,
       layerIndex: 20,
     }));

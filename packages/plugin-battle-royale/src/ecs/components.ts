@@ -39,6 +39,7 @@ export class ProjectileComponent extends Schema.Class<ProjectileComponent>("Proj
   weaponSlot: Schema.Int,
   dirX: Schema.Number,
   dirY: Schema.Number,
+  /** World units travelled per simulation tick. */
   speed: Schema.Number,
   damage: Schema.Number,
   ttlTicks: Schema.Int,

@@ -1,8 +1,8 @@
 import {
-  Projectile as EngineProjectile,
   advanceProjectile,
   advanceWeaponTick,
   applyDamageToEntity,
+  createProjectileFromDelivery,
   environmentSource,
   fireWeapon,
   initialWeaponState,
@@ -98,12 +98,11 @@ export interface CombatSystemContext {
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly mapBounds?: MapBounds;
   readonly weaponSlotCount: number;
-  /** Projectile travel speed in world units **per second** (BR snapshot units). */
-  readonly projectileSpeedPerSecond: number;
   /** Projectile own collision radius, used only for the map-bounds cull. */
   readonly projectileBoundsRadius: number;
-  readonly dt: number;
 }
+
+const PROJECTILE_MUZZLE_PADDING = 1;
 
 const registerCombatComponents = (world: PluginWorld): void => {
   world.registerComponent<LastFacing>(LAST_FACING_COMPONENT);
@@ -177,6 +176,21 @@ const recordDefeat = (
 const isDefeat = (outcome: DamageOutcome): outcome is EntityDefeated =>
   outcome._tag === 'EntityDefeated';
 
+const projectileMuzzleOffset = (delivery: ProjectileDelivery): number =>
+  delivery.radius + PROJECTILE_MUZZLE_PADDING;
+
+const projectileOrigin = (
+  position: Position,
+  direction: { readonly x: number; readonly y: number },
+  delivery: ProjectileDelivery,
+): Position => {
+  const offset = projectileMuzzleOffset(delivery);
+  return {
+    x: position.x + direction.x * offset,
+    y: position.y + direction.y * offset,
+  };
+};
+
 const ensureWeaponState = (
   ctx: CombatSystemContext,
   state: CombatSystemState,
@@ -223,13 +237,14 @@ const spawnProjectile = (
   weaponSlot: number,
 ): void => {
   const entity = world.createEntity();
-  world.getComponent<Position>(POSITION_COMPONENT).set(entity, { x: position.x, y: position.y });
+  const origin = projectileOrigin(position, direction, ctx.delivery);
+  world.getComponent<Position>(POSITION_COMPONENT).set(entity, origin);
   world.getComponent<EcsProjectile>(PROJECTILE_COMPONENT).set(entity, {
     ownerId: owner.playerId,
     weaponSlot,
     dirX: direction.x,
     dirY: direction.y,
-    speed: ctx.projectileSpeedPerSecond,
+    speed: ctx.delivery.speed,
     damage: ctx.delivery.damage,
     ttlTicks: ctx.delivery.ttlTicks,
   });
@@ -312,20 +327,14 @@ const advanceProjectiles = (
     }
 
     const sourcePlayer = world.getComponent<Player>(PLAYER_COMPONENT).get(source);
-    const engineProjectile = new EngineProjectile({
+    const engineProjectile = createProjectileFromDelivery({
       id: makeProjectileId(entity),
       source,
       ...(sourcePlayer === undefined ? {} : { sourceTeam: makeTeamId(sourcePlayer.team) }),
-      x: position.x,
-      y: position.y,
-      vx: projectile.dirX * ctx.projectileSpeedPerSecond * ctx.dt,
-      vy: projectile.dirY * ctx.projectileSpeedPerSecond * ctx.dt,
+      origin: position,
+      direction: { x: projectile.dirX, y: projectile.dirY },
+      delivery: ctx.delivery,
       ttlRemaining: projectile.ttlTicks,
-      damage: projectile.damage,
-      radius: ctx.delivery.radius,
-      falloff: ctx.delivery.falloff,
-      knockback: ctx.delivery.knockback,
-      travelled: 0,
     });
 
     const step = advanceProjectile(

@@ -77,6 +77,7 @@ describe("resolveBattleRoyaleInputIntent (action→intent adapter)", () => {
       actionState({ digital: [[CORE_ACTIONS.PrimaryAction, pressed]] }),
     );
     expect(intent.shoot).toBe(true);
+    expect(intent.dir).toBeUndefined();
   });
 
   it("maps the Move vector to the 8-way direction and aim pointer to aimDeg", () => {

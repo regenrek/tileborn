@@ -136,6 +136,9 @@ const resolveShootDirection = (
 const isValidAimDeg = (value: number | undefined): value is number =>
   value !== undefined && Number.isInteger(value) && value >= 0 && value <= 359;
 
+const isValidDirection8 = (value: number | undefined): value is Direction8 =>
+  value !== undefined && Number.isInteger(value) && value >= 0 && value <= 7;
+
 const isValidWeaponSlot = (slot: number | undefined, slotCount: number): slot is number =>
   slot !== undefined && Number.isInteger(slot) && slot >= 1 && slot <= slotCount;
 
@@ -277,9 +280,11 @@ const processShootInput = (
       state.activeWeaponSlotByPlayerId.set(player.playerId, input.weaponSlot);
     }
 
-    const currentFacing = lastFacings.get(entity);
-    if (!currentFacing || currentFacing.dir !== input.dir) {
-      lastFacings.set(entity, { dir: input.dir as Direction8 });
+    if (isValidDirection8(input.dir)) {
+      const currentFacing = lastFacings.get(entity);
+      if (!currentFacing || currentFacing.dir !== input.dir) {
+        lastFacings.set(entity, { dir: input.dir });
+      }
     }
 
     if (!input.shoot) {

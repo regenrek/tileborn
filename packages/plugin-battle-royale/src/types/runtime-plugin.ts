@@ -25,7 +25,7 @@ export type RuntimeAdapterConfig = BattleRoyaleConfigInput;
 export interface RuntimePlayerInput {
   readonly tick: number;
   readonly seq: number;
-  readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
   readonly aimDeg?: number;
   readonly weaponSlot?: number;

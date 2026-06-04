@@ -133,13 +133,22 @@ const makeContext = (
 const shooterInput = (
   overrides: Partial<{
     readonly aimDeg: number;
+    readonly dir: RuntimePlayerInput['dir'];
     readonly weaponSlot: number;
     readonly shoot: boolean;
   }> = {},
-) => ({ tick: 1, seq: 1, dir: 0 as const, shoot: true, ...overrides });
+): RuntimePlayerInput => ({ tick: 1, seq: 1, dir: 0, shoot: true, ...overrides });
+
+const idleShooterInput = (
+  overrides: Partial<{
+    readonly aimDeg: number;
+    readonly weaponSlot: number;
+    readonly shoot: boolean;
+  }> = {},
+): RuntimePlayerInput => ({ tick: 1, seq: 1, shoot: true, ...overrides });
 
 const inputForPlayer =
-  (playerId: string, input: ReturnType<typeof shooterInput> = shooterInput()) =>
+  (playerId: string, input: RuntimePlayerInput = shooterInput()) =>
   (id: string) =>
     id === playerId ? input : undefined;
 
@@ -308,6 +317,48 @@ describe('combat system (neutral engine)', () => {
     expect(spawnOrigin.x).toBeCloseTo(10);
     expect(spawnOrigin.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET);
     expect(visiblePosition.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed);
+  });
+
+  it('keeps the shooter stationary when firing with and without movement direction', () => {
+    const cases: readonly {
+      readonly input: RuntimePlayerInput;
+      readonly expectedDirX: number;
+      readonly expectedDirY: number;
+    }[] = [
+      { input: shooterInput(), expectedDirX: 1, expectedDirY: 0 },
+      { input: idleShooterInput({ aimDeg: 90 }), expectedDirX: 0, expectedDirY: 1 },
+    ];
+
+    for (const testCase of cases) {
+      const world = createTestPluginWorld();
+      registerStores(world);
+      const playerEntity = spawnPlayer(world, 'player-1', 10, 10);
+      const positions = world.getComponent<Position>(POSITION_COMPONENT);
+      const initialPlayerPosition = { ...positions.get(playerEntity)! };
+      const ctx = makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1', testCase.input),
+      });
+
+      runCombatSystem(world, ctx, createCombatSystemState());
+
+      expect(positions.get(playerEntity)).toEqual(initialPlayerPosition);
+      const entry = projectileEntries(world)[0];
+      expect(entry).toBeDefined();
+      const [projectileEntity, projectile] = entry!;
+      const visiblePosition = positions.get(projectileEntity)!;
+      const spawnOrigin = {
+        x: visiblePosition.x - projectile.dirX * projectile.speed,
+        y: visiblePosition.y - projectile.dirY * projectile.speed,
+      };
+      expect(projectile.dirX).toBeCloseTo(testCase.expectedDirX);
+      expect(projectile.dirY).toBeCloseTo(testCase.expectedDirY);
+      expect(spawnOrigin.x).toBeCloseTo(
+        initialPlayerPosition.x + testCase.expectedDirX * PROJECTILE_MUZZLE_OFFSET,
+      );
+      expect(spawnOrigin.y).toBeCloseTo(
+        initialPlayerPosition.y + testCase.expectedDirY * PROJECTILE_MUZZLE_OFFSET,
+      );
+    }
   });
 
   it('uses weapon-slot-only input while falling back to last facing direction', () => {

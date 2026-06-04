@@ -20,6 +20,7 @@ import {
   createBattleRoyaleHitPolicy,
 } from './ecs/combat-world-view.js';
 import { PLAYER_COMPONENT, type Player } from './ecs/components.js';
+import type { Direction8 } from './ecs/movement.js';
 import { resolveSpawnSlots, spawnPlayersFromArtifact } from './ecs/spawn-players.js';
 import { runZoneSystem } from './ecs/zone-system.js';
 import { initZoneFromArtifact } from './ecs/zone.js';
@@ -89,6 +90,9 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
     zoneInitialized = true;
   };
 
+  const isDirection8 = (dir: number | undefined): dir is Direction8 =>
+    dir !== undefined && Number.isInteger(dir) && dir >= 0 && dir <= 7;
+
   const buildMovementInputs = (world: PluginWorld) => {
     const players = world.getComponent<Player>(PLAYER_COMPONENT);
     const inputs = new Map<
@@ -101,7 +105,7 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
 
     for (const [, player] of alivePlayers) {
       const input = host.getPlayerInput?.(player.playerId);
-      if (input) {
+      if (input && isDirection8(input.dir)) {
         inputs.set(player.playerId, { dir: input.dir, shoot: input.shoot });
       }
     }

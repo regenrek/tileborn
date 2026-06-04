@@ -255,6 +255,23 @@ describe("applyMovementTick", () => {
     expect(positions.get("player-2")?.x).toBeCloseTo(30);
     expect(positions.get("player-2")?.y).toBeCloseTo(40 + MOVEMENT.speed * DT);
   });
+
+  it("keeps a player stationary while holding PrimaryAction without movement input", () => {
+    const world = createTestPluginWorld();
+    const artifact = spawnTwoPlayerArtifact();
+    const plugin = createRuntimeAdapter({
+      getArtifact: () => artifact,
+      getPlayerInput: (playerId) =>
+        playerId === "player-1" ? { tick: 1, seq: 1, shoot: true, aimDeg: 0 } : undefined,
+    });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+    plugin.onTick?.(world, DT, 1);
+
+    const positions = positionsByPlayerId(world);
+    expect(positions.get("player-1")?.x).toBeCloseTo(10);
+    expect(positions.get("player-1")?.y).toBeCloseTo(20);
+  });
 });
 
 describe("DEFAULT_TICK_DT", () => {

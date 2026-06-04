@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, cn, typography } from '@tileborne/ui';
-import { SaveIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Button, cn, typography } from '@tileborne/ui';
+import { Trash2Icon, UserPlusIcon } from 'lucide-react';
 import { gameObjectTypeIdForKey } from '@tileborne/core';
-import type { TileborneMap } from '@tileborne/core';
+import type { JsonObject } from '@tileborne/core';
 import type { PackId, ProjectId } from '@tileborne/core';
 
 import { useUpdateMap, useUpdateProject } from '@/hooks/mutations';
 import { useProject, useTilesetPack } from '@/hooks/queries';
 import {
   applyBattleRoyaleAuthoringSettings,
-  BATTLE_ROYALE_AUTHORING_SETTINGS_FORM,
   BATTLE_ROYALE_PALETTE_ACTIONS,
   readBattleRoyaleAuthoringSettings,
 } from '@tileborne/plugin-battle-royale/authoring';
@@ -19,7 +18,6 @@ import {
   upsertBattleRoyalePlayerModel,
 } from '@tileborne/plugin-battle-royale/player-models';
 import { buildPlayerModelRefFromPlaceable } from '@/lib/promote-player-model';
-import type { AuthoringSettingsForm } from '@/lib/authoring-settings-form';
 import {
   resolveSelectedModelId,
   writeLobbyModelSelection,
@@ -28,22 +26,19 @@ import { brushIntentMatchesPaletteAction } from '@/lib/palette-actions';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
-interface BattleRoyaleAuthoringPanelProps {
-  readonly projectId: string;
-  readonly map: TileborneMap;
-}
+import type { ModeAuthoringPanelProps } from './mode-authoring-panels';
+import { GameSettingsForm } from './game-settings-form';
 
-type BattleRoyaleSettings = ReturnType<typeof readBattleRoyaleAuthoringSettings>;
-
-// The BR field set + draft (de)serialization/validation policy is plugin-owned;
-// the panel renders + validates it purely through the generic mechanism shape.
-const settingsForm: AuthoringSettingsForm<BattleRoyaleSettings> =
-  BATTLE_ROYALE_AUTHORING_SETTINGS_FORM;
-
-export function BattleRoyaleAuthoringPanel({ projectId, map }: BattleRoyaleAuthoringPanelProps) {
+export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: ModeAuthoringPanelProps) {
   const updateMap = useUpdateMap();
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
-  const settings = useMemo(() => readBattleRoyaleAuthoringSettings(map), [map]);
+  // BR translates the generic FLAT settings values into its durable nested
+  // `BattleRoyaleConfig` override (persisted under `map.properties.<pluginId>`);
+  // the form values it feeds the generic renderer are the flattened fields.
+  const settingsValues = useMemo<JsonObject>(
+    () => ({ ...readBattleRoyaleAuthoringSettings(map) }),
+    [map],
+  );
   // Live placement counts per contributed marker kind, used purely for status
   // (this panel no longer owns a parallel selection mode — markers are selected
   // from the Working Palette's "Markers & Tools" group).
@@ -57,22 +52,23 @@ export function BattleRoyaleAuthoringPanel({ projectId, map }: BattleRoyaleAutho
       })),
     [map.objects],
   );
-  const [draft, setDraft] = useState(() => settingsForm.toDraft(settings));
 
-  useEffect(() => {
-    setDraft(settingsForm.toDraft(settings));
-  }, [settings]);
-
-  const parsed = settingsForm.parseDraft(draft);
-  const saveSettings = async () => {
-    if (!parsed) {
-      notifyError(settingsForm.invalidMessage);
-      return;
-    }
+  const saveSettings = async (values: Record<string, number>) => {
+    // The generic form guarantees every declared field key is present + valid;
+    // fall back to the current settings per field to stay type-safe under
+    // `noUncheckedIndexedAccess` without changing behavior.
+    const current = readBattleRoyaleAuthoringSettings(map);
     try {
       await updateMap.mutateAsync({
         projectId: projectId as ProjectId,
-        map: applyBattleRoyaleAuthoringSettings(map, parsed),
+        map: applyBattleRoyaleAuthoringSettings(map, {
+          maxPlayers: values.maxPlayers ?? current.maxPlayers,
+          waitSec: values.waitSec ?? current.waitSec,
+          shrinkSec: values.shrinkSec ?? current.shrinkSec,
+          holdSec: values.holdSec ?? current.holdSec,
+          shrinkPhases: values.shrinkPhases ?? current.shrinkPhases,
+          damagePerSecOutside: values.damagePerSecOutside ?? current.damagePerSecOutside,
+        }),
       });
       notifySuccess('Battle Royale settings saved');
     } catch (error) {
@@ -110,35 +106,17 @@ export function BattleRoyaleAuthoringPanel({ projectId, map }: BattleRoyaleAutho
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {settingsForm.fields.map((field) => (
-          <label key={field.key} className="min-w-0 space-y-1">
-            <span className={cn('block truncate', typography.rowMeta)}>{field.label}</span>
-            <Input
-              type="number"
-              min={field.min}
-              step={field.step}
-              value={draft[field.key] ?? ''}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, [field.key]: event.target.value }))
-              }
-              data-testid={`br-setting-${field.key}`}
-            />
-          </label>
-        ))}
-      </div>
-
-      <Button
-        type="button"
-        size="sm"
-        className="w-full"
-        disabled={updateMap.isPending || parsed === undefined}
-        onClick={() => void saveSettings()}
-        data-testid="br-settings-save"
-      >
-        <SaveIcon className="size-3.5" aria-hidden />
-        Save BR settings
-      </Button>
+      {settingsForm !== undefined ? (
+        <GameSettingsForm
+          form={settingsForm}
+          values={settingsValues}
+          disabled={updateMap.isPending}
+          saveLabel="Save BR settings"
+          testIdPrefix="br-setting"
+          onSave={saveSettings}
+          onInvalid={notifyError}
+        />
+      ) : null}
 
       <PlayerModelsSection projectId={projectId} />
     </div>

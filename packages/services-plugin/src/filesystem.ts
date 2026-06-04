@@ -140,6 +140,7 @@ const optionalContributionKeys = {
     "generators",
     "assetMetadata",
     "playerModelPolicies",
+    "gameSettingsForms",
   ],
   runtime: [
     "systems",

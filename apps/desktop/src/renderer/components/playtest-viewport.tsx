@@ -336,6 +336,14 @@ function usePlaytestInputBridge({
     if (pluginId === undefined) {
       return undefined;
     }
+    // Remap-apply policy (ADR-0024): a keybind remap is persisted by the
+    // Controls UI (a separate player-settings surface) to the shared overlay
+    // store; the desktop playtest has no in-session Controls UI to wire a live
+    // `handle.setEffectiveMap` to, so remaps apply on the NEXT playtest session.
+    // `resolvePlaytestPlugin` reloads the LATEST persisted overlay every time
+    // this effect (re)runs — i.e. on each capture-attach — so a session always
+    // starts on the freshest saved bindings. The live `setEffectiveMap` seam
+    // stays available for a future same-surface remap UI.
     const plugin = resolvePlaytestPlugin(pluginId);
     if (!plugin) {
       return undefined;

@@ -38,6 +38,19 @@ export { RuntimeRoot, type RuntimeRootProps } from "./components/runtime-root.js
 export { MenuShell, type MenuShellProps } from "./components/menu-shell.js";
 export { MainMenu, type MainMenuProps } from "./components/main-menu.js";
 export { SettingsDialog, type SettingsDialogProps } from "./components/settings-dialog.js";
+export { ControlsTab, type ControlsTabConfig } from "./components/controls-tab.js";
+
+// Input remap (Controls tab) model + persistence (ADR-0024)
+export {
+  USER_INPUT_OVERLAY_STORAGE_KEY,
+  USER_OVERLAY_BINDING_SET_ID,
+  createLocalStorageBindingsStore,
+  effectiveBindingsForAction,
+  rebindActionTrigger,
+  resetActionInScheme,
+  triggerLabel,
+  type UserInputBindingsStore,
+} from "./input/user-bindings.js";
 export { PauseOverlay, type PauseOverlayProps } from "./components/pause-overlay.js";
 export {
   ResultsScreen,

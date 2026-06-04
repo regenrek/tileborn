@@ -10,6 +10,7 @@ import {
   ZONE,
 } from "./constants.js";
 import { decodeBattleRoyaleConfigOverride } from "./battle-royale-config.js";
+import { readBattleRoyaleMapSettings } from "./authoring/map-settings.js";
 import type {
   BattleRoyaleArtifact,
   CollisionChunkArtifact,
@@ -90,7 +91,15 @@ const extractCollisionArtifact = (
 export const exportArtifact = (map: TileborneMap, opts: ExportArtifactOptions = {}): ExportedArtifact => {
   const shrinkIntervalMs = opts.shrinkIntervalMs ?? ZONE.shrinkIntervalMs;
   const damagePerSecond = opts.damagePerSecond ?? ZONE.damagePerSecond;
-  const battleRoyale = decodeBattleRoyaleConfigOverride(map.properties.battleRoyale);
+  // ADR-0023 A: read BR settings from the neutral `map.properties.<pluginId>`
+  // namespace (with load-time migration from the legacy `battleRoyale` +
+  // `maxPlayers` keys). `maxPlayers` is folded into the namespaced object, so
+  // strip it before decoding the `BattleRoyaleConfig` override; an empty
+  // override decodes to `undefined` (artifact omits `battleRoyale`) as before.
+  const settings = readBattleRoyaleMapSettings(map);
+  const { maxPlayers: settingsMaxPlayers, ...override } = settings;
+  const battleRoyale =
+    Object.keys(override).length > 0 ? decodeBattleRoyaleConfigOverride(override) : undefined;
 
   const spawnPoints = map.objects
     .filter((object) => object.kind === SPAWN_POINT_KIND)
@@ -129,7 +138,7 @@ export const exportArtifact = (map: TileborneMap, opts: ExportArtifactOptions = 
     properties: { ...object.properties },
   }));
 
-  const maxPlayers = readNumber(map.properties.maxPlayers, DEFAULT_MAX_PLAYERS);
+  const maxPlayers = readNumber(settingsMaxPlayers, DEFAULT_MAX_PLAYERS);
   const collision = extractCollisionArtifact(map, opts.tilesetPack);
 
   const artifact: BattleRoyaleArtifact = {

@@ -183,6 +183,20 @@ export type EditorAssetMetadataContribution = typeof EditorAssetMetadataContribu
 export const EditorPlayerModelPolicyContribution = defineDeclarativeContributionSlot("EditorPlayerModelPolicy");
 export type EditorPlayerModelPolicyContribution = typeof EditorPlayerModelPolicyContribution.Type;
 
+/**
+ * Declares a game-mode's authoring SETTINGS FORM as manifest-discovered data
+ * (ADR-0023 section A). `data` is a `GameSettingsFormDeclaration` (scope +
+ * schema'd field descriptors + validation policy) decoded by
+ * {@link decodeGameSettingsForm} in `game-settings-form.ts`; the editor renders
+ * + validates the form generically and persists VALUES under the neutral
+ * per-plugin namespace (`map.properties.<pluginId>` / `project.settings.<pluginId>`).
+ * Promotes the TS-only `AuthoringSettingsForm` precedent; the same declaration
+ * also rides on the mode's discovered settings panel `data` so the renderer can
+ * decode it without a closed plugin-id literal.
+ */
+export const EditorGameSettingsFormContribution = defineDeclarativeContributionSlot("EditorGameSettingsForm");
+export type EditorGameSettingsFormContribution = typeof EditorGameSettingsFormContribution.Type;
+
 export class EditorContributions extends Schema.Class<EditorContributions>("EditorContributions")({
   tabs: Schema.OptionFromUndefinedOr(Schema.Array(EditorTabContribution)),
   tools: Schema.OptionFromUndefinedOr(Schema.Array(EditorToolContribution)),
@@ -206,6 +220,7 @@ export class EditorContributions extends Schema.Class<EditorContributions>("Edit
   generators: Schema.OptionFromUndefinedOr(Schema.Array(EditorGeneratorContribution)),
   assetMetadata: Schema.OptionFromUndefinedOr(Schema.Array(EditorAssetMetadataContribution)),
   playerModelPolicies: Schema.OptionFromUndefinedOr(Schema.Array(EditorPlayerModelPolicyContribution)),
+  gameSettingsForms: Schema.OptionFromUndefinedOr(Schema.Array(EditorGameSettingsFormContribution)),
 }) {}
 
 export const RuntimeSystemContribution = defineExecutableContributionSlot("RuntimeSystem");

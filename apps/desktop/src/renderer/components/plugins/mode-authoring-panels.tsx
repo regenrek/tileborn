@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 
 import type { TileborneMap } from '@tileborne/core';
+import type { MaterializedGameSettingsForm } from '@tileborne/plugin-api';
 
 import { BATTLE_ROYALE_PLUGIN_ID } from '@/lib/playtest-plugin-bridge';
 
@@ -10,11 +11,14 @@ import { BattleRoyaleAuthoringPanel } from './battle-royale-authoring-panel';
  * Props every mode authoring panel receives from the inspector. The inspector
  * mounts the ACTIVE mode's panel by discovery (ADR-0023 section B) — it no
  * longer hardcodes `<BattleRoyaleAuthoringPanel>` behind a `battleRoyaleEnabled`
- * literal-id check.
+ * literal-id check. `settingsForm` is the active mode's manifest-discovered
+ * `EditorGameSettingsForm` declaration (ADR-0023 section A), decoded from its
+ * settings panel `data`; a panel renders it generically via `GameSettingsForm`.
  */
 export interface ModeAuthoringPanelProps {
   readonly projectId: string;
   readonly map: TileborneMap;
+  readonly settingsForm: MaterializedGameSettingsForm | undefined;
 }
 
 /**

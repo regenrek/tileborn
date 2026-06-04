@@ -88,6 +88,7 @@ const minimalContributions = {
     generators: undefined,
     assetMetadata: undefined,
     playerModelPolicies: undefined,
+    gameSettingsForms: undefined,
   },
   runtime: {
     systems: undefined,

@@ -3,9 +3,11 @@
  *
  * This subpath (`@tileborne/plugin-battle-royale/authoring`) owns the BR
  * authoring policy the desktop editor used to house: the object-kind palette
- * presentation, the per-map zone/max-player settings (read/apply/counts), and
- * the declarative settings FIELD form. The editor keeps only the generic
- * palette + settings-form rendering mechanisms, which reference these exports.
+ * presentation and the per-map zone/max-player settings (read/apply/counts).
+ * The settings FIELD form is now manifest-discovered data (ADR-0023 section A:
+ * the `EditorGameSettingsForm` declaration on BR's settings panel), so the
+ * editor renders it generically; these exports own only the namespace-backed
+ * read/apply translation + the migration from the legacy `battleRoyale` key.
  *
  * Player-model concerns live in the sibling `./player-models` entry.
  */
@@ -14,6 +16,6 @@ export {
   applyBattleRoyaleAuthoringSettings,
   battleRoyaleObjectCounts,
   readBattleRoyaleAuthoringSettings,
-  BATTLE_ROYALE_AUTHORING_SETTINGS_FORM,
+  readBattleRoyaleMapSettings,
   type BattleRoyaleAuthoringSettings,
 } from "./map-settings.js";

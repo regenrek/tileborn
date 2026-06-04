@@ -12,6 +12,7 @@ export * from './branding/index.js';
 export * from './game-mode/active-mode.js';
 export * from './input/index.js';
 export * from './project/index.js';
+export * from './settings/plugin-settings.js';
 export * from './catalog/index.js';
 export * from './map/index.js';
 export * from './map/decode.js';

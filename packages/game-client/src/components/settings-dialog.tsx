@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 
 import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
 import { SETTINGS_TABS, type SettingsTab } from "../state/menu-machine.js";
+import { ControlsTab, type ControlsTabConfig } from "./controls-tab.js";
 import { SlotHost } from "./slot-host.js";
 
 export interface SettingsDialogProps {
@@ -12,6 +13,13 @@ export interface SettingsDialogProps {
   readonly activeTab: SettingsTab;
   readonly onSelectTab: (tab: SettingsTab) => void;
   readonly onBack: () => void;
+  /**
+   * Wiring for the Controls remap editor (ADR-0024). When provided, the Controls
+   * tab renders the live keybind editor (over the active mode's input map +
+   * persistence store) instead of the static blurb. Omitted in surfaces that do
+   * not run the engine input pipeline (the blurb remains).
+   */
+  readonly controls?: ControlsTabConfig;
 }
 
 const TAB_LABELS: Record<SettingsTab, string> = {
@@ -35,7 +43,9 @@ export function SettingsDialog({
   activeTab,
   onSelectTab,
   onBack,
+  controls,
 }: SettingsDialogProps): ReactElement {
+  const showControlsEditor = activeTab === "controls" && controls !== undefined;
   return (
     <div className="tb-scrim">
       <div className="tb-panel" role="dialog" aria-label="Settings" data-testid="settings-dialog">
@@ -55,9 +65,13 @@ export function SettingsDialog({
             </Button>
           ))}
         </div>
-        <p className="tb-tagline" data-testid="settings-tab-body">
-          {TAB_BLURB[activeTab]}
-        </p>
+        {showControlsEditor && controls !== undefined ? (
+          <ControlsTab {...controls} />
+        ) : (
+          <p className="tb-tagline" data-testid="settings-tab-body">
+            {TAB_BLURB[activeTab]}
+          </p>
+        )}
 
         <SlotHost
           slot="settings.tabs"

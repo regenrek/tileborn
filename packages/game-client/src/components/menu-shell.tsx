@@ -10,6 +10,7 @@ import { MainMenu } from "./main-menu.js";
 import { PauseOverlay } from "./pause-overlay.js";
 import { ResultsScreen, type MatchResults } from "./results-screen.js";
 import { SettingsDialog } from "./settings-dialog.js";
+import type { ControlsTabConfig } from "./controls-tab.js";
 
 export interface MenuShellProps {
   readonly state: MenuState;
@@ -19,6 +20,8 @@ export interface MenuShellProps {
   readonly results?: MatchResults | undefined;
   readonly bootProgress?: number | undefined;
   readonly onQuit?: (() => void) | undefined;
+  /** Controls-tab remap editor wiring (ADR-0024); see {@link SettingsDialog}. */
+  readonly controls?: ControlsTabConfig | undefined;
 }
 
 function CreditsView({ brand, onBack }: { brand: BrandConfig; onBack: () => void }): ReactElement {
@@ -52,6 +55,7 @@ export function MenuShell({
   results,
   bootProgress,
   onQuit,
+  controls,
 }: MenuShellProps): ReactElement | null {
   const selectTab = (tab: SettingsTab) => dispatch({ type: "SET_SETTINGS_TAB", tab });
 
@@ -73,6 +77,7 @@ export function MenuShell({
             activeTab={state.settingsTab}
             onSelectTab={selectTab}
             onBack={() => dispatch({ type: "BACK" })}
+            {...(controls ? { controls } : {})}
           />
         );
       }

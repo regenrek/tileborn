@@ -16,9 +16,11 @@ import { LayersSection } from '@/components/inspector/layers-section';
 import { PropertiesPanel } from '@/components/inspector/properties-panel';
 import { SelectionSummary } from '@/components/inspector/selection-summary';
 import { ViewportOverlaysSection } from '@/components/inspector/viewport-overlays-section';
+import { GenericModeSettingsPanel } from '@/components/plugins/generic-mode-settings-panel';
 import { resolveModeAuthoringPanel } from '@/components/plugins/mode-authoring-panels';
 import { PluginSlot } from '@/components/plugins/plugin-slot';
 import { useMap, usePluginContributions } from '@/hooks/queries';
+import { materializeSettingsFormFromPanelData } from '@/lib/authoring-settings-form';
 import { PLUGIN_SLOTS } from '@/lib/plugin-slots';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
@@ -40,6 +42,17 @@ export function RightInspector() {
     activeMode?.hasAuthoringPanel === true
       ? resolveModeAuthoringPanel(activeMode.pluginId)
       : undefined;
+  // ADR-0023 section A: decode the active mode's `EditorGameSettingsForm` from
+  // its discovered settings panel `data` so the inspector renders the form
+  // generically — a custom panel (Battle Royale) receives it as a prop, and a
+  // mode without a bespoke panel falls back to the generic settings panel.
+  const settingsPanel = contributionsQuery.data?.panels?.find(
+    (panel) => panel.id === activeMode?.authoringSettingsPanelId,
+  );
+  const activeModeSettingsForm =
+    settingsPanel === undefined
+      ? undefined
+      : materializeSettingsFormFromPanelData(settingsPanel.id, settingsPanel.data);
 
   if (inspectorCollapsed) {
     return (
@@ -128,10 +141,22 @@ export function RightInspector() {
               <h3 id="inspector-plugins-title" className={typography.subsectionLabel}>
                 Plugins
               </h3>
-              {ActiveModePanel !== undefined &&
-              projectId !== undefined &&
-              mapQuery.data?.map !== undefined ? (
-                <ActiveModePanel projectId={projectId} map={mapQuery.data.map} />
+              {projectId !== undefined && mapQuery.data?.map !== undefined ? (
+                ActiveModePanel !== undefined ? (
+                  <ActiveModePanel
+                    projectId={projectId}
+                    map={mapQuery.data.map}
+                    settingsForm={activeModeSettingsForm}
+                  />
+                ) : activeMode !== undefined && activeModeSettingsForm !== undefined ? (
+                  <GenericModeSettingsPanel
+                    projectId={projectId}
+                    map={mapQuery.data.map}
+                    pluginId={activeMode.pluginId}
+                    label={activeMode.label}
+                    form={activeModeSettingsForm}
+                  />
+                ) : null
               ) : null}
               <PluginSlot
                 id={PLUGIN_SLOTS.inspectorRight}

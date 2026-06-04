@@ -107,6 +107,9 @@ describe("PluginContributions", () => {
         playerModelPolicies: [
           declarative("DeclarativeEditorPlayerModelPolicyContribution", "br-models"),
         ],
+        gameSettingsForms: [
+          declarative("DeclarativeEditorGameSettingsFormContribution", "br-settings-form"),
+        ],
       },
       runtime: {
         systems: [executable("ExecutableRuntimeSystemContribution", "legacy-system", "runtime.systems.legacy")],

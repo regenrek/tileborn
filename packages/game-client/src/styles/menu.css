@@ -125,6 +125,52 @@
   color: var(--tb-menu-accent-hostile, #f87171);
 }
 
+/* Controls remap editor (Settings → Controls). */
+.tb-controls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.tb-controls-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 10%, transparent);
+}
+
+.tb-controls-action {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--tb-menu-text, #f8fafc);
+}
+
+.tb-controls-binding {
+  font-size: 0.8125rem;
+  color: var(--tb-menu-text-muted, #94a3b8);
+  text-align: right;
+}
+
+.tb-controls-actions {
+  display: inline-flex;
+  gap: 0.375rem;
+}
+
+.tb-controls-readonly {
+  font-size: 0.6875rem;
+  color: var(--tb-menu-text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /*
  * Baseline button styling so the chassis looks reasonable even when the host
  * app does not compile @tileborne/ui's Tailwind layer. @tileborne/ui's Button

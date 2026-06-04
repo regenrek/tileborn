@@ -53,7 +53,16 @@
         "order": 10,
         "capabilities": ["settings"],
         "data": {
-          "indexPath": "./panels/index.json"
+          "scope": "map",
+          "invalidMessage": "Battle Royale settings must be positive numbers.",
+          "fields": [
+            { "key": "maxPlayers", "label": "Max players", "min": 1, "step": 1, "default": 32 },
+            { "key": "waitSec", "label": "Zone wait", "min": 1, "step": 1, "default": 60 },
+            { "key": "shrinkSec", "label": "Shrink time", "min": 1, "step": 1, "default": 30 },
+            { "key": "holdSec", "label": "Hold time", "min": 1, "step": 1, "default": 30 },
+            { "key": "shrinkPhases", "label": "Phases", "min": 1, "step": 1, "default": 3 },
+            { "key": "damagePerSecOutside", "label": "Zone DPS", "min": 1, "step": 0.5, "default": 5 }
+          ]
         }
       },
       {

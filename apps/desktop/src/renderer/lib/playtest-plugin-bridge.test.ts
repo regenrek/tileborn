@@ -1,4 +1,6 @@
+import { CORE_ACTIONS, InputMap } from '@tileborne/core';
 import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
+import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -41,5 +43,45 @@ describe('playtest-plugin-bridge', () => {
       fixedZoom: 4,
       hudInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     });
+  });
+
+  it('uses the BR plugin defaults when no user overlay is injected (Space + mouse bound)', () => {
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    expect(plugin?.inputCaptureProfile.boundKeyCodes.has('Space')).toBe(true);
+    expect(plugin?.inputCaptureProfile.usesMouseButtons).toBe(true);
+  });
+
+  it('applies an injected user overlay (PrimaryAction Space→KeyF) to the effective map', () => {
+    // Headline ADR-0024 remap: rebind PrimaryAction off Space onto a different
+    // key. The overlay is a partial InputMap; resolveEffectiveInputMap layers it
+    // non-destructively so PrimaryAction now binds ONLY the new trigger while the
+    // unremapped Move/Reload/etc. keep their plugin defaults.
+    const overlay = Schema.decodeUnknownSync(InputMap)({
+      id: 'user-overlay',
+      actions: [{ action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' }],
+      schemeDefaults: {
+        'keyboard-mouse': [
+          {
+            _tag: 'InputBinding',
+            action: CORE_ACTIONS.PrimaryAction,
+            trigger: { _tag: 'key', code: 'KeyF' },
+          },
+        ],
+      },
+    });
+
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { userInputOverlay: overlay });
+    const scheme = plugin?.controlScheme;
+    const bindings = scheme === undefined ? [] : (plugin?.inputMap.schemeDefaults[scheme] ?? []);
+    const primary = bindings.filter((binding) => binding.action === CORE_ACTIONS.PrimaryAction);
+
+    // PrimaryAction now resolves to the remapped key only (Space + mouse dropped).
+    expect(primary).toHaveLength(1);
+    expect(primary[0]?.trigger._tag).toBe('key');
+    expect(plugin?.inputCaptureProfile.boundKeyCodes.has('KeyF')).toBe(true);
+    expect(plugin?.inputCaptureProfile.boundKeyCodes.has('Space')).toBe(false);
+    expect(plugin?.inputCaptureProfile.usesMouseButtons).toBe(false);
+    // Unremapped Move keeps its default WASD bindings.
+    expect(bindings.some((binding) => binding.action === CORE_ACTIONS.Move)).toBe(true);
   });
 });

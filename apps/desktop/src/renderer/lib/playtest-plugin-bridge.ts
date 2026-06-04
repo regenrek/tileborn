@@ -43,6 +43,7 @@ import {
   type InputCaptureProfile,
   type ResolvedInputIntent,
 } from './playtest-input';
+import { loadUserInputOverlay } from './playtest-user-bindings';
 import type {
   BattleRoyaleProjectorConfig,
   ClientFrameView,
@@ -107,6 +108,16 @@ export interface PlaytestPlayerModelConfig {
 
 export interface ResolvePlaytestPluginOptions {
   readonly playerModels?: PlaytestPlayerModelConfig;
+  /**
+   * The user's persisted keybind remap overlay (ADR-0024). When provided it is
+   * layered on the plugin defaults via `resolveEffectiveInputMap`; when omitted
+   * the overlay is loaded from the renderer prefs store
+   * ({@link loadUserInputOverlay}). Pass `undefined` explicitly is treated the
+   * same as omitting (the store still loads) — to force "no overlay" in a test,
+   * run with an empty store. The effective map the resolver consumes is always
+   * `pluginDefault ⊕ overlay`, deterministic + non-destructive.
+   */
+  readonly userInputOverlay?: InputMap;
 }
 
 export interface ResolvedPlaytestPlugin {
@@ -135,8 +146,9 @@ export interface ResolvedPlaytestPlugin {
   readonly decodeClientFrameView: (bytes: Uint8Array) => ClientFrameView | undefined;
   /**
    * The plugin's EFFECTIVE neutral input map (ADR-0024): its default bindings
-   * with the user remap overlay applied (no overlay yet — that is the
-   * `t-gae-input-remap` slice). The engine resolver maps raw input through this.
+   * with the user remap overlay applied (`resolveEffectiveInputMap(pluginDefault,
+   * userOverlay)`). The overlay is the player's persisted rebindings loaded from
+   * the renderer prefs store. The engine resolver maps raw input through this.
    */
   readonly inputMap: InputMap;
   /** The active control scheme the resolver resolves against (keyboard-mouse today). */
@@ -175,11 +187,14 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
   const projector = createBattleRoyaleProjector(projectorConfig);
   const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
   const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
-  // Build the effective input map = BR plugin defaults ⊕ (future) user overlay.
-  // No overlay is loaded yet; `resolveEffectiveInputMap(map, undefined)` is the
-  // seam the remap/persistence slice plugs its loaded overlay into.
+  // Build the effective input map = BR plugin defaults ⊕ user remap overlay
+  // (ADR-0024). The overlay is the player's persisted rebindings; when none is
+  // injected we load it from the renderer prefs store. `resolveEffectiveInputMap`
+  // keeps it deterministic + non-destructive (defaults remain the base), so a
+  // remapped PrimaryAction (e.g. Space→mouse) resolves through the new trigger.
   const scheme = controlScheme(CONTROL_SCHEMES.KeyboardMouse);
-  const inputMap = resolveEffectiveInputMap(battleRoyaleDefaultInputMap());
+  const userOverlay = options.userInputOverlay ?? loadUserInputOverlay();
+  const inputMap = resolveEffectiveInputMap(battleRoyaleDefaultInputMap(), userOverlay);
   return {
     projector,
     bundledAssets: [

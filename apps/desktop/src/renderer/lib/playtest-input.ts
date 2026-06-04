@@ -70,6 +70,15 @@ export interface PlaytestInputCaptureOptions {
 }
 
 export interface PlaytestInputCaptureHandle {
+  /**
+   * Live-swap the effective input map (ADR-0024 remap seam): apply a freshly
+   * resolved `pluginDefault ⊕ userOverlay` map to the running resolver
+   * (`InputResolver.setEffectiveMap`) and re-derive which raw keys/buttons the
+   * capture reacts to, so a rebind applies WITHOUT tearing down + recreating the
+   * capture (which would drop held key/mouse state). The control scheme is
+   * unchanged.
+   */
+  setEffectiveMap(inputMap: InputMap): void;
   dispose(): void;
 }
 
@@ -85,6 +94,10 @@ export const attachPlaytestInputCapture = (
 ): PlaytestInputCaptureHandle => {
   const { container, inputMap, controlScheme, profile, resolveIntent, onIntent } = options;
   const resolver = new InputResolver(inputMap, controlScheme);
+  // The capture profile (which raw keys/buttons we react to) is derived from the
+  // effective map and re-derived on a live remap (`setEffectiveMap`), so it is
+  // mutable rather than a fixed destructured value.
+  let currentProfile = profile;
   const heldKeys = new Set<string>();
   // Mouse buttons we have seen pressed in-viewport but not yet released. The
   // release listener lives on `window` (below) so a press that starts in the
@@ -108,7 +121,7 @@ export const attachPlaytestInputCapture = (
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!profile.boundKeyCodes.has(event.code)) {
+    if (!currentProfile.boundKeyCodes.has(event.code)) {
       return;
     }
     event.preventDefault();
@@ -121,7 +134,7 @@ export const attachPlaytestInputCapture = (
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
-    if (!profile.boundKeyCodes.has(event.code)) {
+    if (!currentProfile.boundKeyCodes.has(event.code)) {
       return;
     }
     event.preventDefault();
@@ -142,7 +155,7 @@ export const attachPlaytestInputCapture = (
   };
 
   const onMouseDown = (event: MouseEvent): void => {
-    if (!profile.usesMouseButtons) {
+    if (!currentProfile.usesMouseButtons) {
       return;
     }
     event.preventDefault();
@@ -156,7 +169,7 @@ export const attachPlaytestInputCapture = (
   // only react to buttons we actually saw pressed so unrelated clicks elsewhere
   // are ignored (and we never `preventDefault` a release we are not handling).
   const onMouseUp = (event: MouseEvent): void => {
-    if (!profile.usesMouseButtons || !heldMouseButtons.delete(event.button)) {
+    if (!currentProfile.usesMouseButtons || !heldMouseButtons.delete(event.button)) {
       return;
     }
     event.preventDefault();
@@ -171,6 +184,10 @@ export const attachPlaytestInputCapture = (
   container?.addEventListener('mousedown', onMouseDown);
 
   return {
+    setEffectiveMap: (nextMap: InputMap): void => {
+      resolver.setEffectiveMap(nextMap);
+      currentProfile = deriveInputCaptureProfile(nextMap, controlScheme);
+    },
     dispose: (): void => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);

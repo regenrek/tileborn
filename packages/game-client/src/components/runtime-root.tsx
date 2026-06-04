@@ -11,6 +11,7 @@ import {
 import { useMenuMachine } from "../state/use-menu-machine.js";
 import { brandThemeVars } from "../theming/brand-theme.js";
 import { MenuShell } from "./menu-shell.js";
+import type { ControlsTabConfig } from "./controls-tab.js";
 import type { MatchResults } from "./results-screen.js";
 
 export interface RuntimeRootProps {
@@ -32,6 +33,13 @@ export interface RuntimeRootProps {
   readonly initialState?: MenuState;
   /** 0..1 boot progress for the splash. */
   readonly bootProgress?: number;
+  /**
+   * Controls-tab keybind remap editor wiring (ADR-0024). The app supplies the
+   * active mode's default `InputMap`, control scheme, and a persistence store;
+   * the Settings → Controls tab then renders a live remap editor. Omit to keep
+   * the static Controls blurb.
+   */
+  readonly controls?: ControlsTabConfig;
 }
 
 /**
@@ -50,6 +58,7 @@ export function RuntimeRoot({
   onQuit,
   initialState = initialMenuState,
   bootProgress,
+  controls,
 }: RuntimeRootProps): ReactElement {
   const { state, dispatch } = useMenuMachine(initialState);
 
@@ -131,6 +140,7 @@ export function RuntimeRoot({
           results={results}
           bootProgress={bootProgress}
           onQuit={onQuit}
+          {...(controls ? { controls } : {})}
         />
       </div>
     </div>

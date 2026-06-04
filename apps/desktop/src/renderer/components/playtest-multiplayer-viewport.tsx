@@ -296,6 +296,10 @@ function useMultiplayerInputBridge({
     if (!client) {
       return undefined;
     }
+    // Remap-apply policy (ADR-0024): remaps persisted by the Controls UI apply
+    // on the NEXT playtest session. `resolvePlaytestPlugin` reloads the LATEST
+    // persisted overlay on each capture-attach (effect run), so a session always
+    // starts on the freshest saved bindings; no live cross-surface wiring here.
     const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
     if (!plugin) {
       return undefined;

@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 import { CatalogId, GameObjectTypeId, ItemDefinitionId, LootTableId } from "../ids.js";
 import { JsonObject } from "../project/index.js";
-import { GameObjectComponent } from "./components.js";
+import { GameObjectComponent, GrantRef, OpenTag } from "./components.js";
 
 /**
  * Open family classification (branded string, NOT a closed enum) so that
@@ -48,11 +48,20 @@ export class LootTable extends Schema.Class<LootTable>("LootTable")({
  * Data shape for an item *definition* (content data only). Combat tuning numbers
  * live in ADR-0018 / plugin data and reference this by id; they are not part of
  * the catalog structure.
+ *
+ * `equippableSlot` (open tag, ADR-0023 C) names the slot this item occupies when
+ * equipped; it stays an open branded string so plugins introduce slots without
+ * engine edits. `grants` is the optional typed join for an item that, when
+ * collected/equipped, confers another item or a weapon *by id* (e.g. a holster
+ * item that grants a weapon). The render identity stays decoupled via the
+ * owning object-type's {@link VisualRefComponent}.
  */
 export class ItemDefinition extends Schema.Class<ItemDefinition>("ItemDefinition")({
   id: ItemDefinitionId,
   label: Schema.String,
   category: Schema.OptionFromUndefinedOr(CategoryTag),
+  equippableSlot: Schema.optional(OpenTag),
+  grants: Schema.optional(GrantRef),
   data: JsonObject,
 }) {}
 

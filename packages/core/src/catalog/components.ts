@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { AssetId, LootTableId, PlaceableId } from "../ids.js";
+import { AssetId, ItemDefinitionId, LootTableId, PlaceableId, WeaponDefinitionId } from "../ids.js";
 import { JsonObject } from "../project/index.js";
 
 /**
@@ -63,15 +63,53 @@ export class SpawnPointComponent extends Schema.TaggedClass<SpawnPointComponent>
   data: JsonObject,
 }) {}
 
+/**
+ * A pickup grant that references an {@link ItemDefinitionId} *by id* — never an
+ * embedded item. The referenced definition is a `catalog.items` entry (or
+ * resolves via an injected cross-pack resolver at validation time).
+ */
+export class ItemGrant extends Schema.TaggedClass<ItemGrant>()("item-grant", {
+  itemId: ItemDefinitionId,
+}) {}
+
+/**
+ * A pickup grant that references a {@link WeaponDefinitionId} *by id* — never an
+ * embedded weapon. The weapon definition itself (firing structure + plugin
+ * balance data) is owned by ADR-0018 weapon content and resolved by id at
+ * validation time; the catalog only carries the reference.
+ */
+export class WeaponGrant extends Schema.TaggedClass<WeaponGrant>()("weapon-grant", {
+  weaponId: WeaponDefinitionId,
+}) {}
+
+/**
+ * The typed "pickup grants `<id>`" reference (ADR-0023 section C): what an
+ * object/item confers on collection, always *by id* (item or weapon), never an
+ * inline definition. The render identity is referenced independently through
+ * {@link VisualRefComponent}, so the same asset is reusable as a plain sprite,
+ * an equipped weapon visual, and a world pickup with no gameplay role hard-bound
+ * to it. Runtime grant application (and any balance numbers) belong to ADR-0018
+ * / the inventory-loot runtime, not the catalog structure.
+ */
+export const GrantRef = Schema.Union([ItemGrant, WeaponGrant]);
+export type GrantRef = ItemGrant | WeaponGrant;
+
 /** How a loot source is collected. */
 export const LootInteractionMode = Schema.Literals(["auto", "tap", "hold"]);
 export type LootInteractionMode = typeof LootInteractionMode.Type;
 
-/** An object that grants loot when interacted with. */
+/**
+ * An object that grants loot when interacted with.
+ *
+ * `grantRefs` is the first-class, typed pickup → item/weapon join (ADR-0023 C):
+ * each entry references what collecting the pickup grants, *by id*. `grants`
+ * remains the open per-instance authoring toggle bag and carries no id refs.
+ */
 export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>()("loot-source", {
   lootTableId: Schema.OptionFromUndefinedOr(LootTableId),
   interactionMode: LootInteractionMode,
   grants: Schema.Record(Schema.String, Schema.Boolean),
+  grantRefs: Schema.optional(Schema.Array(GrantRef)),
 }) {}
 
 /** An object that can be destroyed, optionally dropping a loot table. */

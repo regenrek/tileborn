@@ -1,7 +1,8 @@
 import { Option, Result, Schema } from "effect";
 
-import { CatalogId, GameObjectTypeId, LootTableId } from "../ids.js";
-import type { GameObjectCatalog, GameObjectType } from "./object-type.js";
+import type { ItemDefinitionId, LootTableId, WeaponDefinitionId } from "../ids.js";
+import { CatalogId, GameObjectTypeId } from "../ids.js";
+import type { GameObjectCatalog, GameObjectType, ItemDefinition } from "./object-type.js";
 
 /** Two object types in a catalog share the same id. */
 export class DuplicateObjectTypeError extends Schema.TaggedErrorClass<DuplicateObjectTypeError>()(
@@ -12,11 +13,17 @@ export class DuplicateObjectTypeError extends Schema.TaggedErrorClass<DuplicateO
   },
 ) {}
 
-/** A component references an id (loot table, asset, …) absent from the pack. */
+/**
+ * A reference (loot table, asset, granted item/weapon id, …) points at an id
+ * absent from the pack and from every injected resolver. `from` is the id of the
+ * referencing definition — a {@link GameObjectTypeId} for component refs, or an
+ * `ItemDefinitionId` for `ItemDefinition.grants` — held as a plain string so a
+ * single error type covers both sources.
+ */
 export class UnknownReferenceError extends Schema.TaggedErrorClass<UnknownReferenceError>()(
   "UnknownReferenceError",
   {
-    from: GameObjectTypeId,
+    from: Schema.String,
     refKind: Schema.String,
     missingId: Schema.String,
     message: Schema.String,
@@ -38,7 +45,51 @@ export interface ValidateCatalogDeps {
   readonly resolveLootTable?: (id: LootTableId) => boolean;
   /** Returns true when the asset id resolves outside this pack. */
   readonly resolveAsset?: (id: string) => boolean;
+  /**
+   * Returns true when a granted {@link ItemDefinitionId} resolves outside this
+   * pack (e.g. in another contributed catalog). In-pack `items` always resolve
+   * without this resolver.
+   */
+  readonly resolveItem?: (id: ItemDefinitionId) => boolean;
+  /**
+   * Returns true when a granted {@link WeaponDefinitionId} resolves. Weapons are
+   * never declared in the catalog (ADR-0018 owns weapon content), so a weapon
+   * grant only resolves through this injected resolver.
+   */
+  readonly resolveWeapon?: (id: WeaponDefinitionId) => boolean;
 }
+
+/** A normalized, typed view of one "pickup grants `<id>`" reference. */
+type GrantReference =
+  | { readonly refKind: string; readonly kind: "item"; readonly id: ItemDefinitionId }
+  | { readonly refKind: string; readonly kind: "weapon"; readonly id: WeaponDefinitionId };
+
+const grantRefsFor = (objectType: GameObjectType): readonly GrantReference[] => {
+  const refs: GrantReference[] = [];
+  for (const component of objectType.components) {
+    if (component._tag !== "loot-source" || component.grantRefs === undefined) {
+      continue;
+    }
+    for (const grant of component.grantRefs) {
+      if (grant._tag === "item-grant") {
+        refs.push({ refKind: "loot-source.grantRefs.item", kind: "item", id: grant.itemId });
+      } else {
+        refs.push({ refKind: "loot-source.grantRefs.weapon", kind: "weapon", id: grant.weaponId });
+      }
+    }
+  }
+  return refs;
+};
+
+const itemGrantRefFor = (item: ItemDefinition): GrantReference | undefined => {
+  if (item.grants === undefined) {
+    return undefined;
+  }
+  if (item.grants._tag === "item-grant") {
+    return { refKind: "item.grants.item", kind: "item", id: item.grants.itemId };
+  }
+  return { refKind: "item.grants.weapon", kind: "weapon", id: item.grants.weaponId };
+};
 
 const lootTableRefsFor = (
   objectType: GameObjectType,
@@ -75,6 +126,9 @@ const assetRefsFor = (
  * - that `loot-source`/`breakable` table refs resolve in-pack (or via
  *   `deps.resolveLootTable`),
  * - that `visual-ref` asset refs resolve via `deps.resolveAsset` when provided,
+ * - that pickup → grant refs (`loot-source.grantRefs`, `ItemDefinition.grants`)
+ *   resolve: item grants in-pack `items` or via `deps.resolveItem`; weapon
+ *   grants via `deps.resolveWeapon` (ADR-0023 section C, structure only),
  * - per-type component coherence (no duplicate component tags).
  */
 export const validateCatalog = (
@@ -99,6 +153,33 @@ export const validateCatalog = (
   const localLootTableIds = new Set<string>(
     Option.getOrElse(catalog.lootTables, () => []).map((table) => table.id),
   );
+
+  const items = Option.getOrElse(catalog.items, () => []);
+  const localItemIds = new Set<string>(items.map((item) => item.id));
+
+  const grantUnresolved = (from: string, ref: GrantReference): string | undefined => {
+    if (ref.kind === "item") {
+      const resolved = localItemIds.has(ref.id) || (deps.resolveItem?.(ref.id) ?? false);
+      if (resolved) {
+        return undefined;
+      }
+      return new UnknownReferenceError({
+        from,
+        refKind: ref.refKind,
+        missingId: ref.id,
+        message: `${from}: ${ref.refKind} references unknown item ${ref.id}`,
+      }).message;
+    }
+    if (deps.resolveWeapon?.(ref.id) ?? false) {
+      return undefined;
+    }
+    return new UnknownReferenceError({
+      from,
+      refKind: ref.refKind,
+      missingId: ref.id,
+      message: `${from}: ${ref.refKind} references unknown weapon ${ref.id}`,
+    }).message;
+  };
 
   for (const objectType of catalog.objectTypes) {
     const tags = new Set<string>();
@@ -139,6 +220,24 @@ export const validateCatalog = (
           );
         }
       }
+    }
+
+    for (const ref of grantRefsFor(objectType)) {
+      const issue = grantUnresolved(objectType.id, ref);
+      if (issue !== undefined) {
+        issues.push(issue);
+      }
+    }
+  }
+
+  for (const item of items) {
+    const ref = itemGrantRefFor(item);
+    if (ref === undefined) {
+      continue;
+    }
+    const issue = grantUnresolved(item.id, ref);
+    if (issue !== undefined) {
+      issues.push(issue);
     }
   }
 

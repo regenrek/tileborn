@@ -266,6 +266,17 @@ export class RuntimeMenuSectionContribution extends Schema.TaggedClass<RuntimeMe
   },
 ) {}
 
+/**
+ * Public declarative slot for a plugin to declare its neutral input map (ADR-0024).
+ * `data` is a `@tileborne/core` `InputMap` (the actions it uses + each action's
+ * value kind + default bindings per control scheme) which {@link decodeInputMap}
+ * in `input-map-registry.ts` decodes + validates against the core schema, then
+ * {@link resolveEffectiveInputMap} overlays the user's persisted remaps before the
+ * runtime `InputResolver` consumes the effective map. The engine owns the resolver,
+ * remap UI, and persistence; the plugin ships only defaults + vocabulary. Mirrors
+ * {@link RuntimeWeaponCatalogContribution} and hard-cuts the previously-unconsumed
+ * untyped `JsonObject` path (the slot was never decoded before).
+ */
 export const RuntimeInputMapContribution = defineDeclarativeContributionSlot("RuntimeInputMap");
 export type RuntimeInputMapContribution = typeof RuntimeInputMapContribution.Type;
 

@@ -18,6 +18,7 @@
  */
 import {
   PLUGIN_ID,
+  battleRoyaleDefaultInputMap,
   createBattleRoyaleBundledAssets,
   createInitialFrame,
   createBattleRoyaleProjector,
@@ -26,8 +27,22 @@ import {
   encodeClientInputFrame,
   encodeHeartbeatFrame,
   encodeServerFrame,
+  resolveBattleRoyaleInputIntent,
   serverFrameToView,
 } from '@tileborne/plugin-battle-royale';
+import {
+  controlScheme,
+  CONTROL_SCHEMES,
+  type ActionState,
+  type ControlScheme,
+  type InputMap,
+} from '@tileborne/core';
+import { resolveEffectiveInputMap } from '@tileborne/plugin-api';
+import {
+  deriveInputCaptureProfile,
+  type InputCaptureProfile,
+  type ResolvedInputIntent,
+} from './playtest-input';
 import type {
   BattleRoyaleProjectorConfig,
   ClientFrameView,
@@ -118,6 +133,25 @@ export interface ResolvedPlaytestPlugin {
   readonly encodeHeartbeatFrame: (tick: number) => Uint8Array;
   readonly encodeServerFrame: (frame: unknown) => Uint8Array;
   readonly decodeClientFrameView: (bytes: Uint8Array) => ClientFrameView | undefined;
+  /**
+   * The plugin's EFFECTIVE neutral input map (ADR-0024): its default bindings
+   * with the user remap overlay applied (no overlay yet — that is the
+   * `t-gae-input-remap` slice). The engine resolver maps raw input through this.
+   */
+  readonly inputMap: InputMap;
+  /** The active control scheme the resolver resolves against (keyboard-mouse today). */
+  readonly controlScheme: ControlScheme;
+  /** Which key codes / mouse buttons are bound in the active scheme. */
+  readonly inputCaptureProfile: InputCaptureProfile;
+  /**
+   * The plugin's action→intent adapter: maps a neutral `ActionState` into the
+   * `{ dir, shoot, aimDeg, weaponSlot }` wire intent the runtime + BR expect.
+   * This is the ONLY place the renderer learns what an action "does".
+   */
+  readonly resolveInputIntent: (
+    actions: ActionState,
+    context: { aimOrigin?: { x: number; y: number } },
+  ) => ResolvedInputIntent;
 }
 
 /**
@@ -141,6 +175,11 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
   const projector = createBattleRoyaleProjector(projectorConfig);
   const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
   const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
+  // Build the effective input map = BR plugin defaults ⊕ (future) user overlay.
+  // No overlay is loaded yet; `resolveEffectiveInputMap(map, undefined)` is the
+  // seam the remap/persistence slice plugs its loaded overlay into.
+  const scheme = controlScheme(CONTROL_SCHEMES.KeyboardMouse);
+  const inputMap = resolveEffectiveInputMap(battleRoyaleDefaultInputMap());
   return {
     projector,
     bundledAssets: [
@@ -161,6 +200,10 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
     encodeHeartbeatFrame,
     encodeServerFrame,
     decodeClientFrameView,
+    inputMap,
+    controlScheme: scheme,
+    inputCaptureProfile: deriveInputCaptureProfile(inputMap, scheme),
+    resolveInputIntent: (actions, context) => resolveBattleRoyaleInputIntent(actions, context),
   };
 };
 

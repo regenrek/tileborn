@@ -45,6 +45,14 @@ export type {
   RuntimeClientFrameView,
   RuntimeClientInputFrame,
 } from "./host-protocol-bridge.js";
+export {
+  BR_INPUT_MAP_CONTRIBUTION_ID,
+  BR_INPUT_MAP_ID,
+  battleRoyaleDefaultInputMap,
+  buildBattleRoyaleInputMapData,
+  resolveBattleRoyaleInputIntent,
+} from "./input-map.js";
+export type { BattleRoyaleAimContext, BattleRoyaleInputIntent } from "./input-map.js";
 export { PLUGIN_ID } from "./constants.js";
 export {
   DEFAULT_MAX_PLAYERS,

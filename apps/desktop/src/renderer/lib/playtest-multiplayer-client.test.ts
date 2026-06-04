@@ -75,6 +75,10 @@ const makePlugin = (views: Record<number, ServerFrameView> = {}): ResolvedPlayte
   encodeHeartbeatFrame: vi.fn(() => new Uint8Array([2])),
   encodeServerFrame: vi.fn(() => new Uint8Array([3])),
   decodeClientFrameView: () => undefined,
+  inputMap: { id: 'test', actions: [], schemeDefaults: {} } as unknown as ResolvedPlaytestPlugin['inputMap'],
+  controlScheme: 'keyboard-mouse' as unknown as ResolvedPlaytestPlugin['controlScheme'],
+  inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
+  resolveInputIntent: () => ({ dir: undefined, shoot: false }),
 });
 
 describe('PlaytestMultiplayerClient', () => {

@@ -27,15 +27,11 @@ import {
   viewportControllerAtlas,
 } from '@/editor/viewport/viewport-asset-manifest';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
-import {
-  computeAimDeg,
-  isPlaytestMovementKey,
-  movementKeysToDirection,
-  parseWeaponSlotKey,
-} from '@/lib/playtest-input';
+import { attachPlaytestInputCapture } from '@/lib/playtest-input';
 import {
   BATTLE_ROYALE_PLUGIN_ID,
   resolvePlaytestPlugin,
+  type InputDirection,
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
 import {
@@ -52,8 +48,6 @@ interface PlaytestMultiplayerViewportProps {
   readonly projectId: string;
   readonly map: TileborneMap;
 }
-
-const SHOOT_KEY = 'Space';
 
 interface RuntimeBundle {
   readonly adapter: PixiRendererAdapter;
@@ -302,85 +296,27 @@ function useMultiplayerInputBridge({
     if (!client) {
       return undefined;
     }
-    const container = containerRef.current;
-    const pressedKeys = new Set<string>();
-    const pointer = { x: 0, y: 0, hasMoved: false };
-    let pendingWeaponSlot: number | undefined;
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
+    if (!plugin) {
+      return undefined;
+    }
 
-    const computeAimDegFromPointer = (): number | undefined => {
-      const liveContainer = containerRef.current;
-      if (!liveContainer || !pointer.hasMoved) {
-        return undefined;
-      }
-      const cx = liveContainer.clientWidth / 2;
-      const cy = liveContainer.clientHeight / 2;
-      return computeAimDeg(pointer.x, pointer.y, cx, cy);
-    };
-
-    const syncInput = (): void => {
-      const aimDeg = computeAimDegFromPointer();
-      const weaponSlot = pendingWeaponSlot;
-      client.sendInput(
-        movementKeysToDirection(pressedKeys),
-        pressedKeys.has(SHOOT_KEY),
-        {
-          ...(aimDeg !== undefined ? { aimDeg } : {}),
-          ...(weaponSlot !== undefined ? { weaponSlot } : {}),
-        },
-      );
-      pendingWeaponSlot = undefined;
-    };
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const isShoot = event.code === SHOOT_KEY;
-      const isMove = isPlaytestMovementKey(event.code);
-      const weaponSlot = parseWeaponSlotKey(event.code);
-      if (!isMove && !isShoot && weaponSlot === undefined) {
-        return;
-      }
-      event.preventDefault();
-      if (weaponSlot !== undefined) {
-        pendingWeaponSlot = weaponSlot;
-        syncInput();
-        return;
-      }
-      if (pressedKeys.has(event.code)) {
-        return;
-      }
-      pressedKeys.add(event.code);
-      syncInput();
-    };
-
-    const onKeyUp = (event: KeyboardEvent): void => {
-      const isShoot = event.code === SHOOT_KEY;
-      const isMove = isPlaytestMovementKey(event.code);
-      if (!isMove && !isShoot) {
-        return;
-      }
-      event.preventDefault();
-      pressedKeys.delete(event.code);
-      syncInput();
-    };
-
-    const onPointerMove = (event: PointerEvent): void => {
-      const target = container;
-      if (!target) {
-        return;
-      }
-      const rect = target.getBoundingClientRect();
-      pointer.x = event.clientX - rect.left;
-      pointer.y = event.clientY - rect.top;
-      pointer.hasMoved = true;
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    container?.addEventListener('pointermove', onPointerMove);
+    const handle = attachPlaytestInputCapture({
+      container: containerRef.current,
+      inputMap: plugin.inputMap,
+      controlScheme: plugin.controlScheme,
+      profile: plugin.inputCaptureProfile,
+      resolveIntent: plugin.resolveInputIntent,
+      onIntent: (intent) => {
+        client.sendInput(intent.dir as InputDirection | undefined, intent.shoot, {
+          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
+          ...(intent.weaponSlot === undefined ? {} : { weaponSlot: intent.weaponSlot }),
+        });
+      },
+    });
 
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      container?.removeEventListener('pointermove', onPointerMove);
+      handle.dispose();
     };
   }, [client, containerRef]);
 }

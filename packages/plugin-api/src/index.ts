@@ -3,6 +3,7 @@ export * from "./catalog-registry.js";
 export * from "./contributions.js";
 export * from "./errors.js";
 export * from "./game-mode.js";
+export * from "./input-map-registry.js";
 export * from "./manifest.js";
 export * from "./permissions.js";
 export * from "./primitives.js";

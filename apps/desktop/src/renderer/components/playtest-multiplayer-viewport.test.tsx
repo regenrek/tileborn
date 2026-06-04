@@ -47,6 +47,27 @@ vi.mock('@tileborne/runtime', () => ({
     getCurrentFullState = vi.fn(() => undefined);
     getPreviousFullState = vi.fn(() => undefined);
   },
+  // Neutral input-resolver stubs (ADR-0024): the input bridge constructs an
+  // InputResolver + raw-event values; these overlay tests do not dispatch input.
+  InputResolver: class InputResolver {
+    apply = vi.fn();
+    resolve = vi.fn(() => ({ digital: new Map(), analog: new Map(), pointer: new Map() }));
+  },
+  KeyInputEvent: class KeyInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
+  MouseMoveInputEvent: class MouseMoveInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
+  MouseButtonInputEvent: class MouseButtonInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
   // Real interpolation (not identity) so the render-loop test can assert the
   // camera follows the INTERPOLATED local entity, mirroring the runtime helper.
   interpolateRenderableEntities: (
@@ -104,6 +125,10 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => ({
     bundledAssets: [],
     manifest: { fixedZoom: 4, hudInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
     decodeServerFrame: vi.fn(() => undefined),
+    inputMap: { id: 'test', actions: [], schemeDefaults: {} },
+    controlScheme: 'keyboard-mouse',
+    inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
+    resolveInputIntent: vi.fn(() => ({ dir: undefined, shoot: false })),
   })),
 }));
 

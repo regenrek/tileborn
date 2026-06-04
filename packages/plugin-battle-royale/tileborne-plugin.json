@@ -262,6 +262,59 @@
           }
         }
       ],
+      "inputMaps": [
+        {
+          "_tag": "DeclarativeRuntimeInputMapContribution",
+          "id": "br-input-map",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Controls",
+            "description": "Neutral input map: default keyboard-mouse bindings (Space/mouse-0 fire, WASD move, R reload, 1-5 slots, pointer aim)."
+          },
+          "data": {
+            "id": "br-default-bindings",
+            "actions": [
+              { "action": "core.Move", "valueKind": "analog2d" },
+              { "action": "core.Aim", "valueKind": "pointer" },
+              { "action": "core.PrimaryAction", "valueKind": "digital" },
+              { "action": "core.Reload", "valueKind": "digital" },
+              { "action": "core.Interact", "valueKind": "digital" },
+              { "action": "core.Slot1", "valueKind": "digital" },
+              { "action": "core.Slot2", "valueKind": "digital" },
+              { "action": "core.Slot3", "valueKind": "digital" },
+              { "action": "core.Slot4", "valueKind": "digital" },
+              { "action": "core.Slot5", "valueKind": "digital" }
+            ],
+            "schemeDefaults": {
+              "keyboard-mouse": [
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyW" }, "axisRole": "y-" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowUp" }, "axisRole": "y-" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyS" }, "axisRole": "y+" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowDown" }, "axisRole": "y+" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyA" }, "axisRole": "x-" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowLeft" }, "axisRole": "x-" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyD" }, "axisRole": "x+" },
+                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowRight" }, "axisRole": "x+" },
+                { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "key", "code": "Space" } },
+                { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "mouseButton", "button": 0 } },
+                { "_tag": "InputBinding", "action": "core.Reload", "trigger": { "_tag": "key", "code": "KeyR" } },
+                { "_tag": "InputBinding", "action": "core.Interact", "trigger": { "_tag": "key", "code": "KeyE" } },
+                { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
+                { "_tag": "InputBinding", "action": "core.Slot1", "trigger": { "_tag": "key", "code": "Digit1" } },
+                { "_tag": "InputBinding", "action": "core.Slot1", "trigger": { "_tag": "key", "code": "Numpad1" } },
+                { "_tag": "InputBinding", "action": "core.Slot2", "trigger": { "_tag": "key", "code": "Digit2" } },
+                { "_tag": "InputBinding", "action": "core.Slot2", "trigger": { "_tag": "key", "code": "Numpad2" } },
+                { "_tag": "InputBinding", "action": "core.Slot3", "trigger": { "_tag": "key", "code": "Digit3" } },
+                { "_tag": "InputBinding", "action": "core.Slot3", "trigger": { "_tag": "key", "code": "Numpad3" } },
+                { "_tag": "InputBinding", "action": "core.Slot4", "trigger": { "_tag": "key", "code": "Digit4" } },
+                { "_tag": "InputBinding", "action": "core.Slot4", "trigger": { "_tag": "key", "code": "Numpad4" } },
+                { "_tag": "InputBinding", "action": "core.Slot5", "trigger": { "_tag": "key", "code": "Digit5" } },
+                { "_tag": "InputBinding", "action": "core.Slot5", "trigger": { "_tag": "key", "code": "Numpad5" } }
+              ]
+            }
+          }
+        }
+      ],
       "menuSections": [
         {
           "_tag": "RuntimeMenuSectionContribution",

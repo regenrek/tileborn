@@ -30,12 +30,7 @@ import {
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { usePlaytestSessions } from '@/hooks/queries';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
-import {
-  computeAimDeg,
-  isPlaytestMovementKey,
-  movementKeysToDirection,
-  parseWeaponSlotKey,
-} from '@/lib/playtest-input';
+import { attachPlaytestInputCapture } from '@/lib/playtest-input';
 import {
   resolvePlaytestPlugin,
   type ResolvedPlaytestPlugin,
@@ -48,6 +43,7 @@ import type { BuiltPlayerModel } from '@/lib/player-model-render';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 const LOCAL_PLAYER_ID = 'player-1';
+const LOCAL_PLAYER_INPUT_ID = 'player-1';
 
 // Positions are interpolated once in world space before projection, so the
 // renderer performs no second lerp (alpha 1, no previous-by-id map).
@@ -59,8 +55,6 @@ interface PlaytestViewportProps {
   readonly sessionId: string;
   readonly activePlugins: readonly string[];
 }
-
-const SHOOT_KEY = 'Space';
 
 interface RuntimeBundle {
   readonly adapter: PixiRendererAdapter;
@@ -319,108 +313,63 @@ function usePlaytestSnapshotRenderer({
 
 function usePlaytestInputBridge({
   containerRef,
+  pluginId,
   sessionId,
   tickCount,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
+  readonly pluginId: string | undefined;
   readonly sessionId: string;
   readonly tickCount: number | undefined;
 }) {
+  // The capture/resolver lifecycle MUST NOT depend on `tickCount`: a tick refresh
+  // tearing down + recreating the resolver would drop held mouse/key state (a
+  // held mouse has no repeat `mousedown`, so PrimaryAction/`shoot` would silently
+  // clear on the next tick). Keep the latest tick in a ref the emit path reads so
+  // outgoing frames carry the current tick without re-running the effect.
+  const tickCountRef = useRef(tickCount);
   useEffect(() => {
-    const container = containerRef.current;
-    const pressedKeys = new Set<string>();
-    const pointer = { x: 0, y: 0, hasMoved: false };
-    let pendingWeaponSlot: number | undefined;
+    tickCountRef.current = tickCount;
+  }, [tickCount]);
+
+  useEffect(() => {
+    if (pluginId === undefined) {
+      return undefined;
+    }
+    const plugin = resolvePlaytestPlugin(pluginId);
+    if (!plugin) {
+      return undefined;
+    }
     let seq = 0;
 
-    const computeAimDegFromPointer = (): number | undefined => {
-      const liveContainer = containerRef.current;
-      if (!liveContainer || !pointer.hasMoved) {
-        return undefined;
-      }
-      const cx = liveContainer.clientWidth / 2;
-      const cy = liveContainer.clientHeight / 2;
-      return computeAimDeg(pointer.x, pointer.y, cx, cy);
-    };
-
-    const sendInput = (dir: ReturnType<typeof movementKeysToDirection>): void => {
-      seq += 1;
-      const aimDeg = computeAimDegFromPointer();
-      const weaponSlot = pendingWeaponSlot;
-      const payload = {
-        sessionId: sessionId as PlaytestSessionId,
-        playerId: 'player-1',
-        tick: tickCount ?? 0,
-        seq,
-        dir: (dir ?? 0) as 0,
-        shoot: pressedKeys.has(SHOOT_KEY),
-        ...(aimDeg === undefined ? {} : { aimDeg }),
-        ...(weaponSlot === undefined ? {} : { weaponSlot }),
-      };
-      if (dir === undefined && !pressedKeys.has(SHOOT_KEY) && weaponSlot === undefined) {
-        void window.tileborne.runtime.playtestInput({ ...payload, active: false });
-        return;
-      }
-      void window.tileborne.runtime.playtestInput(payload);
-      pendingWeaponSlot = undefined;
-    };
-
-    const syncInput = (): void => {
-      sendInput(movementKeysToDirection(pressedKeys));
-    };
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const isMove = isPlaytestMovementKey(event.code);
-      const isShoot = event.code === SHOOT_KEY;
-      const weaponSlot = parseWeaponSlotKey(event.code);
-      if (!isMove && !isShoot && weaponSlot === undefined) {
-        return;
-      }
-      if (pressedKeys.has(event.code)) {
-        return;
-      }
-      event.preventDefault();
-      if (weaponSlot !== undefined) {
-        pendingWeaponSlot = weaponSlot;
-        syncInput();
-        return;
-      }
-      pressedKeys.add(event.code);
-      syncInput();
-    };
-
-    const onKeyUp = (event: KeyboardEvent): void => {
-      const isMove = isPlaytestMovementKey(event.code);
-      const isShoot = event.code === SHOOT_KEY;
-      if (!isMove && !isShoot) {
-        return;
-      }
-      event.preventDefault();
-      pressedKeys.delete(event.code);
-      syncInput();
-    };
-
-    const onPointerMove = (event: PointerEvent): void => {
-      const target = container;
-      if (!target) {
-        return;
-      }
-      const rect = target.getBoundingClientRect();
-      pointer.x = event.clientX - rect.left;
-      pointer.y = event.clientY - rect.top;
-      pointer.hasMoved = true;
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    container?.addEventListener('pointermove', onPointerMove);
+    const handle = attachPlaytestInputCapture({
+      container: containerRef.current,
+      inputMap: plugin.inputMap,
+      controlScheme: plugin.controlScheme,
+      profile: plugin.inputCaptureProfile,
+      resolveIntent: plugin.resolveInputIntent,
+      onIntent: (intent) => {
+        seq += 1;
+        const idle = intent.dir === undefined && !intent.shoot && intent.weaponSlot === undefined;
+        const payload = {
+          sessionId: sessionId as PlaytestSessionId,
+          playerId: LOCAL_PLAYER_INPUT_ID,
+          tick: tickCountRef.current ?? 0,
+          seq,
+          dir: (intent.dir ?? 0) as 0,
+          shoot: intent.shoot,
+          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
+          ...(intent.weaponSlot === undefined ? {} : { weaponSlot: intent.weaponSlot }),
+          ...(idle ? { active: false } : {}),
+        };
+        void window.tileborne.runtime.playtestInput(payload);
+      },
+    });
 
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      container?.removeEventListener('pointermove', onPointerMove);
+      handle.dispose();
     };
-  }, [containerRef, sessionId, tickCount]);
+  }, [containerRef, pluginId, sessionId]);
 }
 
 export function PlaytestViewport({
@@ -470,6 +419,7 @@ export function PlaytestViewport({
 
   usePlaytestInputBridge({
     containerRef,
+    pluginId,
     sessionId,
     tickCount: session?.runtimeMetrics?.tickCount,
   });

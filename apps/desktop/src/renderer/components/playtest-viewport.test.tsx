@@ -24,43 +24,53 @@ const renderFromEntitiesSpy = vi.hoisted(() => vi.fn());
 const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const projectMock = vi.hoisted(() => vi.fn<(snapshot: unknown) => unknown[]>());
 
-vi.mock('@tileborne/runtime', () => ({
-  PixiRendererAdapter: class PixiRendererAdapter {
-    mount = vi.fn(() => Effect.succeed(undefined));
-    loadAssets = vi.fn(() => Effect.succeed(new Map()));
-    loadBundledAssets = vi.fn(() => Effect.succeed(undefined));
-    renderFromEntities = vi.fn((...args: unknown[]) => {
-      renderFromEntitiesSpy(...args);
-      return Effect.succeed(undefined);
-    });
-    dispose = vi.fn(() => Effect.succeed(undefined));
-  },
-  SnapshotEntityStore: class SnapshotEntityStore {
-    apply = vi.fn();
-    sampleInterpolatedFullState = sampleInterpolatedMock;
-    getCurrentFullState = vi.fn(() => undefined);
-    getPreviousFullState = vi.fn(() => undefined);
-  },
-  // Real interpolation (not identity) so the render-loop test can assert the
-  // camera follows the INTERPOLATED local entity, mirroring the runtime helper.
-  interpolateRenderableEntities: (
-    current: readonly { id: string; x: number; y: number }[],
-    previous: readonly { id: string; x: number; y: number }[],
-    alpha: number,
-  ) => {
-    const resolved = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 1;
-    if (previous.length === 0 || resolved >= 1) {
-      return [...current];
-    }
-    const previousById = new Map(previous.map((value) => [value.id, value] as const));
-    return current.map((value) => {
-      const prior = previousById.get(value.id);
-      return prior === undefined
-        ? value
-        : { ...value, x: prior.x + (value.x - prior.x) * resolved, y: prior.y + (value.y - prior.y) * resolved };
-    });
-  },
-}));
+vi.mock('@tileborne/runtime', async () => {
+  // Use the REAL neutral input resolver + raw-event classes so the input-bridge
+  // lifecycle test exercises actual PrimaryAction resolution (held mouse → shoot)
+  // rather than a stub. Pixi/Snapshot/interpolation stay stubbed below.
+  const actual = await vi.importActual<typeof import('@tileborne/runtime')>('@tileborne/runtime');
+  return {
+    // Keep every real export (InputResolver, raw-event classes, schemas pulled
+    // in transitively by the BR plugin) and only override the Pixi/Snapshot/
+    // interpolation surface the overlay + camera tests stub.
+    ...actual,
+    PixiRendererAdapter: class PixiRendererAdapter {
+      mount = vi.fn(() => Effect.succeed(undefined));
+      loadAssets = vi.fn(() => Effect.succeed(new Map()));
+      loadBundledAssets = vi.fn(() => Effect.succeed(undefined));
+      renderFromEntities = vi.fn((...args: unknown[]) => {
+        renderFromEntitiesSpy(...args);
+        return Effect.succeed(undefined);
+      });
+      dispose = vi.fn(() => Effect.succeed(undefined));
+    },
+    SnapshotEntityStore: class SnapshotEntityStore {
+      apply = vi.fn();
+      sampleInterpolatedFullState = sampleInterpolatedMock;
+      getCurrentFullState = vi.fn(() => undefined);
+      getPreviousFullState = vi.fn(() => undefined);
+    },
+    // Real interpolation (not identity) so the render-loop test can assert the
+    // camera follows the INTERPOLATED local entity, mirroring the runtime helper.
+    interpolateRenderableEntities: (
+      current: readonly { id: string; x: number; y: number }[],
+      previous: readonly { id: string; x: number; y: number }[],
+      alpha: number,
+    ) => {
+      const resolved = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 1;
+      if (previous.length === 0 || resolved >= 1) {
+        return [...current];
+      }
+      const previousById = new Map(previous.map((value) => [value.id, value] as const));
+      return current.map((value) => {
+        const prior = previousById.get(value.id);
+        return prior === undefined
+          ? value
+          : { ...value, x: prior.x + (value.x - prior.x) * resolved, y: prior.y + (value.y - prior.y) * resolved };
+      });
+    },
+  };
+});
 
 vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
   EditorViewportController: class EditorViewportController {
@@ -87,25 +97,53 @@ vi.mock('@/editor/viewport/pixi-texture-from-bytes', () => ({
   pixiTextureFromBytes: vi.fn(),
 }));
 
-vi.mock('@/lib/playtest-plugin-bridge', async () => ({
-  BATTLE_ROYALE_PLUGIN_ID: (
-    await vi.importActual<typeof import('@tileborne/plugin-battle-royale/constants')>(
-      '@tileborne/plugin-battle-royale/constants',
-    )
-  ).PLUGIN_ID,
-  resolvePlaytestPlugin: vi.fn(() => ({
-    projector: { mergeFrame: vi.fn(), project: projectMock },
-    bundledAssets: [],
-    manifest: { fixedZoom: 4, hudInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
-    decodeServerFrame: vi.fn(() => undefined),
-  })),
-}));
+vi.mock('@/lib/playtest-plugin-bridge', async () => {
+  // Real BR input map + action→intent adapter so the input bridge resolves
+  // PrimaryAction (Space / mouse-0 → shoot) for real; only the renderer-side
+  // projector/manifest stays stubbed for the overlay + camera tests.
+  const core = await vi.importActual<typeof import('@tileborne/core')>('@tileborne/core');
+  const br = await vi.importActual<typeof import('@tileborne/plugin-battle-royale')>(
+    '@tileborne/plugin-battle-royale',
+  );
+  const inputMap = br.battleRoyaleDefaultInputMap();
+  const scheme = core.controlScheme(core.CONTROL_SCHEMES.KeyboardMouse);
+  const bindings = inputMap.schemeDefaults[scheme] ?? [];
+  const boundKeyCodes = new Set<string>();
+  let usesMouseButtons = false;
+  for (const binding of bindings) {
+    if (binding.trigger._tag === 'key') {
+      boundKeyCodes.add(binding.trigger.code);
+    } else if (binding.trigger._tag === 'mouseButton') {
+      usesMouseButtons = true;
+    }
+  }
+  return {
+    BATTLE_ROYALE_PLUGIN_ID: (
+      await vi.importActual<typeof import('@tileborne/plugin-battle-royale/constants')>(
+        '@tileborne/plugin-battle-royale/constants',
+      )
+    ).PLUGIN_ID,
+    resolvePlaytestPlugin: vi.fn(() => ({
+      projector: { mergeFrame: vi.fn(), project: projectMock },
+      bundledAssets: [],
+      manifest: { fixedZoom: 4, hudInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
+      decodeServerFrame: vi.fn(() => undefined),
+      inputMap,
+      controlScheme: scheme,
+      inputCaptureProfile: { boundKeyCodes, usesMouseButtons },
+      resolveInputIntent: br.resolveBattleRoyaleInputIntent,
+    })),
+  };
+});
 
 vi.mock('@/components/playtest-overlay', () => ({ PlaytestOverlay: () => null }));
 vi.mock('@/components/playtest-hud-overlay', () => ({ PlaytestHudOverlay: () => null }));
 
+const sessionsMock = vi.hoisted(() => ({
+  current: { data: { sessions: [] as { id: string; runtimeMetrics?: { tickCount: number } }[] } },
+}));
 vi.mock('@/hooks/queries', () => ({
-  usePlaytestSessions: () => ({ data: { sessions: [] } }),
+  usePlaytestSessions: () => sessionsMock.current,
 }));
 
 const stablePlayerModels = vi.hoisted(() => ({
@@ -172,6 +210,7 @@ describe('PlaytestViewport overlay wiring', () => {
     sampleInterpolatedMock.mockReturnValue(undefined);
     projectMock.mockReset();
     projectMock.mockReturnValue([]);
+    sessionsMock.current = { data: { sessions: [] } };
     editorStateMock.current = {
       showGrid: true,
       showDebugOverlay: false,
@@ -302,5 +341,59 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(projected).toEqual([
       { id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scale: 4 },
     ]);
+  });
+
+  // Regression lock for the capture-lifecycle decoupling: a held mouse button
+  // (PrimaryAction → shoot) must survive a `tickCount` change. If the capture
+  // effect re-ran on tickCount it would tear down + recreate the resolver,
+  // dropping the held button (no repeat mousedown), so the next bound input
+  // would resolve shoot:false.
+  it('keeps a held-mouse shoot true across a tickCount change (capture not recreated)', async () => {
+    const playtestInput = (
+      window as unknown as { tileborne: { runtime: { playtestInput: ReturnType<typeof vi.fn> } } }
+    ).tileborne.runtime.playtestInput;
+
+    sessionsMock.current = {
+      data: { sessions: [{ id: 'session-1', runtimeMetrics: { tickCount: 5 } }] },
+    };
+
+    const { rerender } = renderViewport();
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+
+    const container = document.querySelector<HTMLDivElement>(
+      '[data-testid="playtest-viewport"]',
+    );
+    expect(container).not.toBeNull();
+
+    // Hold mouse button 0 inside the viewport → PrimaryAction shoot.
+    container!.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+    const afterPress = playtestInput.mock.calls.at(-1)?.[0] as { shoot: boolean; tick: number };
+    expect(afterPress.shoot).toBe(true);
+    expect(afterPress.tick).toBe(5);
+
+    // A live tick refresh arrives (session metrics update). The capture must NOT
+    // be recreated, so the resolver keeps the held mouse button.
+    sessionsMock.current = {
+      data: { sessions: [{ id: 'session-1', runtimeMetrics: { tickCount: 6 } }] },
+    };
+    rerender(viewport());
+
+    // The mouse is still physically held (no new mousedown); a different bound
+    // input (movement key) emits the next frame. Shoot must still be true and the
+    // frame must carry the refreshed tick from the ref.
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    const afterTick = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      tick: number;
+      dir: number;
+    };
+    expect(afterTick.shoot).toBe(true);
+    expect(afterTick.dir).toBe(0);
+    expect(afterTick.tick).toBe(6);
+    // The capture was set up once and never torn down by the tick change.
+    expect(controllerCtorMock).toHaveBeenCalledTimes(1);
   });
 });

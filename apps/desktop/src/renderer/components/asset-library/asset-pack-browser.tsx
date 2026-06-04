@@ -38,13 +38,12 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
-  type UIEvent,
 } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { LibraryPreviewMosaic, LibraryPreviewThumb } from './library-preview-thumb';
 import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
@@ -494,6 +493,19 @@ function AssetLibraryCachePanel({
   );
 }
 
+/**
+ * Vertically virtualizes the asset-library group cards with
+ * `@tanstack/react-virtual` so very large packs (thousands of groups) only
+ * mount the cards currently in (or near) the viewport. Group cards are a fixed
+ * row height, so we use a constant `estimateSize`. Sizing is driven entirely by
+ * the scroll element's measured rect (TanStack wires up its own
+ * ResizeObserver), which keeps it correct inside the resizable sidebar.
+ *
+ * The original behaviour is preserved exactly: same scroll container, same
+ * `data-testid`s, the spacer keeps the full scroll height, and the
+ * `onNearEnd` prefetch fires once the last rendered row approaches the end of
+ * the loaded page so the next page is prefetched before the Load-more button.
+ */
 function VirtualizedGroupList({
   groups,
   heightClassName,
@@ -508,52 +520,29 @@ function VirtualizedGroupList({
   readonly onNearEnd: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
 
-  const updateViewportHeight = useCallback(() => {
-    setViewportHeight(viewportRef.current?.clientHeight ?? 0);
-  }, []);
+  const virtualizer = useVirtualizer({
+    count: groups.length,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: () => VIRTUAL_ROW_HEIGHT_PX,
+    overscan: VIRTUAL_OVERSCAN_ROWS,
+  });
 
-  useLayoutEffect(() => {
-    updateViewportHeight();
-    const node = viewportRef.current;
-    if (node === null || typeof ResizeObserver === 'undefined') {
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastRenderedIndex = virtualItems.at(-1)?.index;
+
+  useEffect(() => {
+    if (lastRenderedIndex === undefined) {
       return;
     }
-    const observer = new ResizeObserver(updateViewportHeight);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [updateViewportHeight]);
-
-  const handleScroll = useCallback(
-    (event: UIEvent<HTMLDivElement>) => {
-      const target = event.currentTarget;
-      setScrollTop(target.scrollTop);
-      if (
-        target.scrollHeight - (target.scrollTop + target.clientHeight) <
-        VIRTUAL_ROW_HEIGHT_PX * 4
-      ) {
-        onNearEnd();
-      }
-    },
-    [onNearEnd],
-  );
-
-  const effectiveViewportHeight = viewportHeight || VIRTUAL_ROW_HEIGHT_PX * 8;
-  const startIndex = Math.max(
-    0,
-    Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT_PX) - VIRTUAL_OVERSCAN_ROWS,
-  );
-  const visibleCount =
-    Math.ceil(effectiveViewportHeight / VIRTUAL_ROW_HEIGHT_PX) + VIRTUAL_OVERSCAN_ROWS * 2;
-  const endIndex = Math.min(groups.length, startIndex + visibleCount);
-  const visibleGroups = groups.slice(startIndex, endIndex);
+    if (lastRenderedIndex >= groups.length - VIRTUAL_OVERSCAN_ROWS) {
+      onNearEnd();
+    }
+  }, [groups.length, lastRenderedIndex, onNearEnd]);
 
   return (
     <div
       ref={viewportRef}
-      onScroll={handleScroll}
       className={cn(
         heightClassName,
         'overflow-y-auto rounded-md border border-border/60 bg-card/30',
@@ -563,21 +552,27 @@ function VirtualizedGroupList({
       <div className="p-3">
         <div
           className="relative"
-          style={{ height: groups.length * VIRTUAL_ROW_HEIGHT_PX }}
+          style={{ height: virtualizer.getTotalSize() }}
           data-testid="asset-pack-browser-virtual-spacer"
         >
-          {visibleGroups.map((group, index) => (
-            <div
-              key={group.id}
-              className="absolute left-0 right-0"
-              style={{
-                height: VIRTUAL_ROW_HEIGHT_PX,
-                transform: `translateY(${(startIndex + index) * VIRTUAL_ROW_HEIGHT_PX}px)`,
-              }}
-            >
-              {renderGroup(group)}
-            </div>
-          ))}
+          {virtualItems.map((virtualItem) => {
+            const group = groups[virtualItem.index];
+            if (group === undefined) {
+              return null;
+            }
+            return (
+              <div
+                key={group.id}
+                className="absolute left-0 right-0"
+                style={{
+                  height: VIRTUAL_ROW_HEIGHT_PX,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                {renderGroup(group)}
+              </div>
+            );
+          })}
         </div>
         {footer === null ? null : <div className="pt-3">{footer}</div>}
       </div>

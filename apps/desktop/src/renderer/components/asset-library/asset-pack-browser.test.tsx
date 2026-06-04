@@ -330,7 +330,26 @@ const imageCollectionOnlyPackJson = {
 };
 
 describe('AssetPackBrowser', () => {
+  let originalOffsetHeight: PropertyDescriptor | undefined;
+  let originalOffsetWidth: PropertyDescriptor | undefined;
+
   beforeEach(() => {
+    // jsdom reports offsetWidth/offsetHeight as 0 for every element, which makes
+    // @tanstack/react-virtual measure the scroll viewport as 0px tall and render
+    // zero rows (its range is null when the measured outer size is 0). Give every
+    // element a stable non-zero box so the virtualizer computes a real window and
+    // mounts the leading group cards the assertions below rely on.
+    originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+    originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 600,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 320,
+    });
+
     editorState = {
       brushIntent: { kind: 'eraser' },
       selectBrush: vi.fn(),
@@ -391,7 +410,19 @@ describe('AssetPackBrowser', () => {
     useWorkingPalettesStore.getState().__resetForTests();
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    if (originalOffsetHeight !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeight);
+    } else {
+      delete (HTMLElement.prototype as { offsetHeight?: number }).offsetHeight;
+    }
+    if (originalOffsetWidth !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    } else {
+      delete (HTMLElement.prototype as { offsetWidth?: number }).offsetWidth;
+    }
+    cleanup();
+  });
 
   it('shows loading skeleton while pack data is being fetched', () => {
     useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: true, isError: false });
@@ -585,10 +616,24 @@ describe('AssetPackBrowser', () => {
       <AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />,
     );
 
-    expect(
-      container.querySelectorAll('[data-testid^="asset-pack-browser-group-"]').length,
-    ).toBeLessThan(40);
+    // jsdom reports zero layout height, so @tanstack/react-virtual only mounts
+    // the first overscan window. Only a small slice of the 1,000 group cards is
+    // in the DOM, while the off-screen tail (e.g. the final group) is absent.
+    const renderedCards = container.querySelectorAll(
+      '[data-testid^="asset-pack-browser-group-"]',
+    );
+    expect(renderedCards.length).toBeGreaterThan(0);
+    expect(renderedCards.length).toBeLessThan(40);
     expect(screen.queryByText('Large Tileset 999')).toBeNull();
+    // The leading group still renders so painting/selection stays interactive.
+    expect(screen.getByText('Large Tileset 0')).toBeTruthy();
+
+    // The virtualizer reserves the full scroll height for all 1,000 rows even
+    // though only the window is mounted — this is the spacer that drives the
+    // scrollbar. Asserting it ties the test to the useVirtualizer wiring rather
+    // than to a hand-rolled window so the test cannot pass vacuously.
+    const spacer = screen.getByTestId('asset-pack-browser-virtual-spacer');
+    expect(spacer.style.height).toBe(`${largeGroups.length * 306}px`);
   });
 
   it('renders cache status controls and calls the reload mutation', () => {

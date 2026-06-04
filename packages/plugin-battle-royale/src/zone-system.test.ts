@@ -1,23 +1,37 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
-import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
-import { Option } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
+import { Option } from 'effect';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { DAMAGE, SPAWN_POINT_KIND } from "./constants.js";
-import { PLAYER_COMPONENT, POSITION_COMPONENT, VELOCITY_COMPONENT, type Player } from "./ecs/components.js";
-import { createDamageSystemState, recordMatchStarters, runDamageSystem } from "./ecs/damage-system.js";
-import { runZoneSystem } from "./ecs/zone-system.js";
+import { DAMAGE, SPAWN_POINT_KIND } from './constants.js';
+import {
+  PLAYER_COMPONENT,
+  POSITION_COMPONENT,
+  VELOCITY_COMPONENT,
+  type Player,
+} from './ecs/components.js';
+import {
+  DEFAULT_ROOM_RULES,
+  createDamageSystemState,
+  recordMatchStarters,
+  runDamageSystem,
+} from './ecs/damage-system.js';
+import {
+  createBattleRoyaleCombatWorldView,
+  createBattleRoyaleHitPolicy,
+} from './ecs/combat-world-view.js';
+import { runZoneSystem } from './ecs/zone-system.js';
 import {
   DEFAULT_ZONE_SCHEDULE,
   getZone,
   initZoneFromArtifact,
   resetZoneSingleton,
   type ZoneScheduleConfig,
-} from "./ecs/zone.js";
-import { exportArtifact } from "./export-artifact.js";
-import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
-import { createRuntimeAdapter } from "./runtime-adapter.js";
-import { createTestPluginWorld } from "./test-plugin-world.js";
+} from './ecs/zone.js';
+import { exportArtifact } from './export-artifact.js';
+import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
+import { createRuntimeAdapter } from './runtime-adapter.js';
+import { createTestPluginWorld } from './test-plugin-world.js';
 
 const TICK_DT = 1 / DEFAULT_ZONE_SCHEDULE.tickRate;
 
@@ -49,7 +63,7 @@ const makeFixtureArtifact = () =>
       objects: [
         makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16),
         makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 4, 4),
-        makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
       ],
     }),
   );
@@ -83,12 +97,17 @@ const runZoneTick = (
   schedule: ZoneScheduleConfig,
   msgOut: { push: (frame: Uint8Array) => void },
 ): void => {
-  runZoneSystem(
+  const worldView = createBattleRoyaleCombatWorldView(
     world,
-    TICK_DT,
-    tick,
-    { damageState, schedule },
+    { maxHealth: DAMAGE.playerHealth, footprintOffsetY: 0 },
+    [],
   );
+  runZoneSystem(world, TICK_DT, tick, {
+    damageState,
+    schedule,
+    worldView,
+    policy: createBattleRoyaleHitPolicy(DEFAULT_ROOM_RULES),
+  });
   runDamageSystem(world, tick, { msgOut }, damageState);
 };
 
@@ -102,8 +121,8 @@ const registerPlayerStores = (world: ReturnType<typeof createTestPluginWorld>): 
   world.registerComponent(PLAYER_COMPONENT);
 };
 
-describe("zone damage", () => {
-  it("does not damage players inside the zone", () => {
+describe('zone damage', () => {
+  it('does not damage players inside the zone', () => {
     const world = createTestPluginWorld();
     const artifact = makeFixtureArtifact();
     initZoneFromArtifact(world, artifact, { damagePerSecOutside: 50 });
@@ -112,19 +131,19 @@ describe("zone damage", () => {
     const inside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(inside, { x: 16, y: 16 });
     world.getComponent(PLAYER_COMPONENT).set(inside, {
-      playerId: "player-inside-a",
+      playerId: 'player-inside-a',
       health: DAMAGE.playerHealth,
       alive: 1,
-      team: "solo",
+      team: 'solo',
     });
 
     const alsoInside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(alsoInside, { x: 15, y: 15 });
     world.getComponent(PLAYER_COMPONENT).set(alsoInside, {
-      playerId: "player-inside-b",
+      playerId: 'player-inside-b',
       health: DAMAGE.playerHealth,
       alive: 1,
-      team: "solo",
+      team: 'solo',
     });
 
     const collector = createMsgCollector();
@@ -143,7 +162,7 @@ describe("zone damage", () => {
     expect(collector.decodeAll()).toEqual([]);
   });
 
-  it("damages players outside the zone at the configured rate", () => {
+  it('damages players outside the zone at the configured rate', () => {
     const world = createTestPluginWorld();
     const artifact = makeFixtureArtifact();
     initZoneFromArtifact(world, artifact, { damagePerSecOutside: 100 });
@@ -152,10 +171,10 @@ describe("zone damage", () => {
     const entity = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(entity, { x: 100, y: 100 });
     world.getComponent(PLAYER_COMPONENT).set(entity, {
-      playerId: "player-outside",
+      playerId: 'player-outside',
       health: DAMAGE.playerHealth,
       alive: 1,
-      team: "solo",
+      team: 'solo',
     });
 
     const collector = createMsgCollector();
@@ -177,8 +196,8 @@ describe("zone damage", () => {
   });
 });
 
-describe("zone shrink schedule", () => {
-  it("shrinks monotonically through each configured phase", () => {
+describe('zone shrink schedule', () => {
+  it('shrinks monotonically through each configured phase', () => {
     const world = createTestPluginWorld();
     const artifact = makeFixtureArtifact();
     initZoneFromArtifact(world, artifact);
@@ -209,8 +228,8 @@ describe("zone shrink schedule", () => {
   });
 });
 
-describe("last-man-standing", () => {
-  it("emits GameOver when one player remains alive", () => {
+describe('last-man-standing', () => {
+  it('emits GameOver when one player remains alive', () => {
     const world = createTestPluginWorld();
     const artifact = makeFixtureArtifact();
     initZoneFromArtifact(world, artifact, { damagePerSecOutside: 1_000 });
@@ -219,19 +238,19 @@ describe("last-man-standing", () => {
     const inside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(inside, { x: 16, y: 16 });
     world.getComponent(PLAYER_COMPONENT).set(inside, {
-      playerId: "player-inside",
+      playerId: 'player-inside',
       health: DAMAGE.playerHealth,
       alive: 1,
-      team: "solo",
+      team: 'solo',
     });
 
     const outside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(outside, { x: 100, y: 100 });
     world.getComponent(PLAYER_COMPONENT).set(outside, {
-      playerId: "player-outside",
+      playerId: 'player-outside',
       health: DAMAGE.playerHealth,
       alive: 1,
-      team: "solo",
+      team: 'solo',
     });
 
     const collector = createMsgCollector();
@@ -244,22 +263,22 @@ describe("last-man-standing", () => {
     }
 
     const messages = collector.decodeAll();
-    const kill = messages.find((message) => message._tag === "PlayerKilled");
-    const gameOver = messages.find((message) => message._tag === "GameOver");
+    const kill = messages.find((message) => message._tag === 'PlayerKilled');
+    const gameOver = messages.find((message) => message._tag === 'GameOver');
 
-    expect(kill?._tag).toBe("PlayerKilled");
-    if (kill?._tag === "PlayerKilled") {
-      expect(kill.killer).toBe(BattleRoyaleProtocol.makePlayerId("zone"));
-      expect(kill.victim).toBe(BattleRoyaleProtocol.makePlayerId("player-outside"));
+    expect(kill?._tag).toBe('PlayerKilled');
+    if (kill?._tag === 'PlayerKilled') {
+      expect(kill.killer).toBe(BattleRoyaleProtocol.makePlayerId('zone'));
+      expect(kill.victim).toBe(BattleRoyaleProtocol.makePlayerId('player-outside'));
     }
 
-    expect(gameOver?._tag).toBe("GameOver");
-    if (gameOver?._tag === "GameOver") {
-      expect(gameOver.winner).toBe(BattleRoyaleProtocol.makePlayerId("player-inside"));
+    expect(gameOver?._tag).toBe('GameOver');
+    if (gameOver?._tag === 'GameOver') {
+      expect(gameOver.winner).toBe(BattleRoyaleProtocol.makePlayerId('player-inside'));
     }
   });
 
-  it("routes zone ticks through the runtime adapter msgOut queue", () => {
+  it('routes zone ticks through the runtime adapter msgOut queue', () => {
     const artifact = makeFixtureArtifact();
     const world = createTestPluginWorld();
     const collector = createMsgCollector();
@@ -286,6 +305,6 @@ describe("last-man-standing", () => {
     }
 
     expect(collector.frames.length).toBeGreaterThan(0);
-    expect(collector.decodeAll().some((message) => message._tag === "PlayerKilled")).toBe(true);
+    expect(collector.decodeAll().some((message) => message._tag === 'PlayerKilled')).toBe(true);
   });
 });

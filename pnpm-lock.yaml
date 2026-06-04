@@ -737,6 +737,9 @@ importers:
       '@tileborne/sdk-tileset':
         specifier: workspace:*
         version: link:../sdk-tileset
+      '@tileborne/simulation':
+        specifier: workspace:*
+        version: link:../simulation
       '@tileborne/ui':
         specifier: workspace:*
         version: link:../ui

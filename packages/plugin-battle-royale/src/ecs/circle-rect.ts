@@ -1,4 +1,4 @@
-import type { CollisionRect } from "./rect.js";
+import type { CollisionRect } from './rect.js';
 
 /** Lifted from `@tileborne/runtime` collision parity helper. */
 export const resolveCircleRect = (
@@ -34,17 +34,5 @@ export const resolveCircleRect = (
   player.y += (dy / distance) * push;
 };
 
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
-
-export const circleOverlapsRect = (
-  centerX: number,
-  centerY: number,
-  radius: number,
-  rect: CollisionRect,
-): boolean => {
-  const closestX = clamp(centerX, rect.x, rect.x + rect.width);
-  const closestY = clamp(centerY, rect.y, rect.y + rect.height);
-  const dx = centerX - closestX;
-  const dy = centerY - closestY;
-  return dx * dx + dy * dy < radius * radius;
-};
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));

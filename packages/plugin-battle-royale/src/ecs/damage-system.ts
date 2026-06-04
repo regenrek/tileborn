@@ -1,9 +1,9 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
 
 const { encodeMessage, GameOver, makePlayerId, PlayerKilled } = BattleRoyaleProtocol;
 
-import { DAMAGE, RESPAWN } from "../constants.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+import { DAMAGE, RESPAWN } from '../constants.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 import {
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
@@ -11,20 +11,20 @@ import {
   type Player,
   type PlayerStats,
   type Position,
-} from "./components.js";
-import type { SpawnSlot } from "./spawn-players.js";
-import { countAllPlayers } from "./spawn-players.js";
+} from './components.js';
+import type { SpawnSlot } from './spawn-players.js';
+import { countAllPlayers } from './spawn-players.js';
 
 export interface RoomRulesConfig {
   readonly respawnEnabled: boolean;
   readonly friendlyFire: boolean;
-  readonly matchMode: "solo" | "duo" | "squad";
+  readonly matchMode: 'solo' | 'duo' | 'squad';
 }
 
 export const DEFAULT_ROOM_RULES: RoomRulesConfig = {
   respawnEnabled: false,
   friendlyFire: false,
-  matchMode: "solo",
+  matchMode: 'solo',
 };
 
 export interface DamageSystemContext {
@@ -83,29 +83,6 @@ const findPlayerEntityById = (world: PluginWorld, playerId: string): number | un
   return undefined;
 };
 
-const isFriendlyFireBlocked = (
-  world: PluginWorld,
-  killerId: string,
-  victim: Player,
-  roomRules: RoomRulesConfig,
-): boolean => {
-  if (roomRules.matchMode === "solo" || roomRules.friendlyFire || killerId === "zone") {
-    return false;
-  }
-
-  const killerEntity = findPlayerEntityById(world, killerId);
-  if (killerEntity === undefined) {
-    return false;
-  }
-
-  const killer = world.getComponent<Player>(PLAYER_COMPONENT).get(killerEntity);
-  if (!killer) {
-    return false;
-  }
-
-  return killer.team === victim.team;
-};
-
 const ensurePlayerStats = (world: PluginWorld, entity: number): void => {
   const stats = world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
   if (!stats.has(entity)) {
@@ -133,50 +110,10 @@ export const recordMatchStarters = (world: PluginWorld, state: DamageSystemState
   state.starterCount = countAllPlayers(world);
 };
 
-export const applyDamage = (
-  world: PluginWorld,
-  victimEntity: number,
-  damage: number,
-  killerId: string,
-  state: DamageSystemState,
-  roomRules: RoomRulesConfig = DEFAULT_ROOM_RULES,
-): void => {
-  if (!state.componentsRegistered) {
-    registerDamageComponents(world);
-    state.componentsRegistered = true;
-  }
-
-  const players = world.getComponent<Player>(PLAYER_COMPONENT);
-  const player = players.get(victimEntity);
-  if (!player || player.alive !== 1) {
-    return;
-  }
-
-  if (isFriendlyFireBlocked(world, killerId, player, roomRules)) {
-    return;
-  }
-
-  const nextHealth = Math.max(0, player.health - damage);
-  const nextAlive = nextHealth > 0 ? 1 : 0;
-  players.set(victimEntity, {
-    ...player,
-    health: nextHealth,
-    alive: nextAlive,
-  });
-
-  if (nextAlive === 0) {
-    state.pendingKills.push({
-      victimEntity,
-      victimPlayerId: player.playerId,
-      killerId,
-    });
-  }
-};
-
 const incrementPlayerStats = (
   world: PluginWorld,
   entity: number,
-  field: "kills" | "deaths",
+  field: 'kills' | 'deaths',
 ): void => {
   ensurePlayerStats(world, entity);
   const stats = world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
@@ -215,12 +152,12 @@ const emitPendingKills = (
       ),
     );
 
-    incrementPlayerStats(world, kill.victimEntity, "deaths");
+    incrementPlayerStats(world, kill.victimEntity, 'deaths');
 
-    if (kill.killerId !== "zone") {
+    if (kill.killerId !== 'zone') {
       const killerEntity = findPlayerEntityById(world, kill.killerId);
       if (killerEntity !== undefined) {
-        incrementPlayerStats(world, killerEntity, "kills");
+        incrementPlayerStats(world, killerEntity, 'kills');
       }
     }
 
@@ -305,7 +242,11 @@ const emitGameOverIfNeeded = (
   }
 
   if (aliveCount !== 1 || lastAlivePlayerId === undefined) {
-    if (aliveCount !== 0 || state.lastEliminatedPlayerIds.length === 0 || state.scheduledRespawns.length > 0) {
+    if (
+      aliveCount !== 0 ||
+      state.lastEliminatedPlayerIds.length === 0 ||
+      state.scheduledRespawns.length > 0
+    ) {
       return;
     }
     lastAlivePlayerId = [...state.lastEliminatedPlayerIds].sort((left, right) =>

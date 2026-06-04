@@ -227,6 +227,41 @@
           }
         }
       ],
+      "weaponCatalogs": [
+        {
+          "_tag": "DeclarativeRuntimeWeaponCatalogContribution",
+          "id": "br-weapon-catalog",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Weapons",
+            "description": "Neutral weapon-content pack: BR's primary projectile weapon balance numbers."
+          },
+          "data": {
+            "schemaVersion": 1,
+            "weapons": [
+              {
+                "weapon": {
+                  "id": "weapon:00000000-0000-4000-8000-000000000001",
+                  "damage": 25,
+                  "cooldownTicks": 8,
+                  "magazineSize": 1,
+                  "reloadTicks": 0
+                },
+                "delivery": {
+                  "_tag": "ProjectileDelivery",
+                  "damage": 25,
+                  "speed": 20,
+                  "ttlTicks": 40,
+                  "radius": 16,
+                  "falloff": { "_tag": "NoFalloff" },
+                  "knockback": 0
+                },
+                "appliesStatus": []
+              }
+            ]
+          }
+        }
+      ],
       "menuSections": [
         {
           "_tag": "RuntimeMenuSectionContribution",

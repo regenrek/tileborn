@@ -1,8 +1,8 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from "./constants.js";
+import { MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from './constants.js';
 import {
   LAST_FACING_COMPONENT,
   PLAYER_COMPONENT,
@@ -11,11 +11,11 @@ import {
   VELOCITY_COMPONENT,
   type Position,
   type Projectile,
-} from "./ecs/components.js";
-import { exportArtifact } from "./export-artifact.js";
-import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
-import { createRuntimeAdapter } from "./runtime-adapter.js";
-import { createTestPluginWorld } from "./test-plugin-world.js";
+} from './ecs/components.js';
+import { exportArtifact } from './export-artifact.js';
+import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
+import { createRuntimeAdapter } from './runtime-adapter.js';
+import { createTestPluginWorld } from './test-plugin-world.js';
 
 const OVERRIDE_PROJECTILE_SPEED = 600;
 const DT = 1 / MOVEMENT.tickRate;
@@ -37,6 +37,9 @@ const makeTestObject = (
     properties: {},
   });
 
+// A single spawn point isolates one shooter so the fired projectile flies
+// unobstructed (no neighbor for the neutral engine's swept hit-test to strike),
+// keeping this a focused test of projectile-speed config propagation.
 const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
   makeTileborneMap({
     id: TEST_MAP_ID,
@@ -46,15 +49,13 @@ const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
     tileHeight: 32,
     objects: [
       makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
     ],
     ...(battleRoyale ? { properties: { battleRoyale } } : {}),
   });
 
-describe("BattleRoyaleConfig overrides", () => {
-  it("propagates host projectile.speed override through createRuntimeAdapter", () => {
+describe('BattleRoyaleConfig overrides', () => {
+  it('propagates host projectile.speed override through createRuntimeAdapter', () => {
     const artifact = exportArtifact(makeSpawnFixtureMap());
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
@@ -86,7 +87,7 @@ describe("BattleRoyaleConfig overrides", () => {
     expect(end.x - start.x).not.toBeCloseTo(PROJECTILE.speed * DT);
   });
 
-  it("merges map.properties.battleRoyale.projectile.speed at adapter init", () => {
+  it('merges map.properties.battleRoyale.projectile.speed at adapter init', () => {
     const artifact = exportArtifact(
       makeSpawnFixtureMap({
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },

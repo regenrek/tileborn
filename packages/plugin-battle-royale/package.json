@@ -43,6 +43,7 @@
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/runtime": "workspace:*",
+    "@tileborne/simulation": "workspace:*",
     "@tileborne/sdk-tileset": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "effect": "4.0.0-beta.70",

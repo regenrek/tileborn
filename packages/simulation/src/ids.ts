@@ -58,3 +58,14 @@ export const makeCombatEntityId = (value: number): CombatEntityId => value as Co
 export const TeamId = Schema.String.pipe(Schema.brand('CombatTeamId'));
 export type TeamId = typeof TeamId.Type;
 export const makeTeamId = (value: string): TeamId => value as TeamId;
+
+/**
+ * Identity of an in-flight projectile persisted across ticks by the
+ * {@link runCombatTick} orchestrator (Slice 4). Neutral integer handle, stable
+ * and sortable so the projectile lifecycle replays in a deterministic order;
+ * the orchestrator allocates ids from a monotonically increasing counter held
+ * in its tick state.
+ */
+export const ProjectileId = Schema.Int.pipe(Schema.brand('ProjectileId'));
+export type ProjectileId = typeof ProjectileId.Type;
+export const makeProjectileId = (value: number): ProjectileId => value as ProjectileId;

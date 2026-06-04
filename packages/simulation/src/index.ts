@@ -18,6 +18,14 @@
  * line-of-sight / projectile blocking, and knockback impulse outputs. Spread
  * sampling consumes the injected `SeededRng` — the slice where RNG enters.
  *
+ * Slice 4: the neutral combat **result-value set** (`WeaponFired` / `DamageApplied`
+ * / `EntityDefeated` / projectile lifecycle `ProjectileSpawned` / `ProjectileMoved`
+ * / `ProjectileExpired` / the `StatusApplied` P0 hook) and the deterministic
+ * `runCombatTick` orchestrator over `CombatWorldView`. It wires weapon firing
+ * (Slice 2) → delivery resolution (Slice 3) → damage application (Slice 1) for a
+ * single fixed tick, carrying weapon firing state + in-flight projectiles forward
+ * in a returned `CombatTickState`; a fixed seed + input log replays bit-identically.
+ *
  * This package is React-free, Electron-free, Node-free, Pixi-free and
  * worker-safe; it depends only on `@tileborne/core` and never on
  * `@tileborne/runtime` or any plugin. It owns combat *algorithms + schemas*,
@@ -35,3 +43,6 @@ export * from './weapon.js';
 export * from './geometry.js';
 export * from './falloff.js';
 export * from './delivery.js';
+export * from './status.js';
+export * from './projectile.js';
+export * from './combat.js';

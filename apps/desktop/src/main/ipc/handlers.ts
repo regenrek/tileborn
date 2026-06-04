@@ -86,7 +86,7 @@ import {
 import { CatalogService } from '../catalog/index.js';
 import { startDesktopLocalGameHost, stopDesktopLocalGameHost } from '../local-game-host-manager.js';
 import { invokePluginEditorCommand } from '../plugin-editor-command.js';
-import { BATTLE_ROYALE_PLUGIN_ID, resolveBattleRoyalePluginPath } from '../battle-royale-path.js';
+import { BATTLE_ROYALE_PLUGIN_ID, bundledPluginSpec, resolveBundledPluginPath } from '../bundled-plugins.js';
 import { appRuntime } from '../runtime.js';
 import { createPlaytestJoinWindow } from '../window.js';
 
@@ -830,8 +830,14 @@ const buildHandlers = Effect.gen(function* () {
             const plugin = existing.enabled ? existing : yield* registry.enable(existing.id);
             return { plugin: toPluginSummary(plugin) };
           }
+          const spec = bundledPluginSpec(BATTLE_ROYALE_PLUGIN_ID);
+          if (spec === undefined) {
+            return yield* Effect.die(
+              new Error(`bundled plugin spec missing for ${BATTLE_ROYALE_PLUGIN_ID}`),
+            );
+          }
           const plugin = yield* installer.install(
-            new LocalPluginSource({ path: resolveBattleRoyalePluginPath() }),
+            new LocalPluginSource({ path: resolveBundledPluginPath(spec) }),
           );
           const enabled = plugin.enabled ? plugin : yield* registry.enable(plugin.id);
           return { plugin: toPluginSummary(enabled) };

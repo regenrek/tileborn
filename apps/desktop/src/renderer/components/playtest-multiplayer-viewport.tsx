@@ -29,11 +29,11 @@ import {
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
 import {
-  BATTLE_ROYALE_PLUGIN_ID,
   resolvePlaytestPlugin,
   type InputDirection,
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
+import { usePluginContributions } from '@/hooks/queries';
 import {
   assemblePlaytestPlayerModelConfig,
   usePlaytestPlayerModels,
@@ -79,6 +79,7 @@ function useMultiplayerRuntimeMount({
   runtimeRef,
   projectId,
   map,
+  activeModePluginId,
   builtModels,
   selectedModelId,
 }: {
@@ -86,6 +87,7 @@ function useMultiplayerRuntimeMount({
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly projectId: string;
   readonly map: TileborneMap;
+  readonly activeModePluginId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
   readonly selectedModelId: string | undefined;
 }) {
@@ -94,10 +96,15 @@ function useMultiplayerRuntimeMount({
     if (!container) {
       return undefined;
     }
-
-    const basePlugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
+    // ADR-0023 section B: resolve the ACTIVE game mode by manifest discovery
+    // (the `gameModes` IPC), not a hardcoded battle-royale id. The bridge maps
+    // that mode's plugin id to its registered projector (MODE_RENDER_PROVIDERS).
+    if (activeModePluginId === undefined) {
+      return undefined;
+    }
+    const basePlugin = resolvePlaytestPlugin(activeModePluginId);
     if (!basePlugin) {
-      console.error(`[playtest] no projector for plugin ${BATTLE_ROYALE_PLUGIN_ID}`);
+      console.error(`[playtest] no projector for plugin ${activeModePluginId}`);
       return undefined;
     }
     let resolved: ResolvedPlaytestPlugin = basePlugin;
@@ -121,7 +128,7 @@ function useMultiplayerRuntimeMount({
               new Map<string, string>(),
               selectedModelId,
             );
-            resolved = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID, { playerModels }) ?? basePlugin;
+            resolved = resolvePlaytestPlugin(activeModePluginId, { playerModels }) ?? basePlugin;
           } catch (error) {
             console.error('[playtest] failed to load player-model atlases', error);
             resolved = basePlugin;
@@ -183,7 +190,7 @@ function useMultiplayerRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, projectId, runtimeRef, builtModels, selectedModelId]);
+  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, selectedModelId]);
 }
 
 function useMultiplayerSnapshotRenderer({
@@ -191,17 +198,19 @@ function useMultiplayerSnapshotRenderer({
   containerRef,
   runtimeRef,
   map,
+  activeModePluginId,
 }: {
   readonly client: PlaytestMultiplayerClient | null;
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly map: TileborneMap;
+  readonly activeModePluginId: string | undefined;
 }) {
   useEffect(() => {
-    if (!client) {
+    if (!client || activeModePluginId === undefined) {
       return undefined;
     }
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(activeModePluginId);
     if (!plugin) {
       return undefined;
     }
@@ -282,25 +291,27 @@ function useMultiplayerSnapshotRenderer({
       cancelAnimationFrame(rafHandle);
       unsubscribe();
     };
-  }, [client, containerRef, map.size.height, map.size.width, runtimeRef]);
+  }, [client, containerRef, map.size.height, map.size.width, runtimeRef, activeModePluginId]);
 }
 
 function useMultiplayerInputBridge({
   client,
   containerRef,
+  activeModePluginId,
 }: {
   readonly client: PlaytestMultiplayerClient | null;
   readonly containerRef: RefObject<HTMLDivElement | null>;
+  readonly activeModePluginId: string | undefined;
 }) {
   useEffect(() => {
-    if (!client) {
+    if (!client || activeModePluginId === undefined) {
       return undefined;
     }
     // Remap-apply policy (ADR-0024): remaps persisted by the Controls UI apply
     // on the NEXT playtest session. `resolvePlaytestPlugin` reloads the LATEST
     // persisted overlay on each capture-attach (effect run), so a session always
     // starts on the freshest saved bindings; no live cross-surface wiring here.
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(activeModePluginId);
     if (!plugin) {
       return undefined;
     }
@@ -322,7 +333,7 @@ function useMultiplayerInputBridge({
     return () => {
       handle.dispose();
     };
-  }, [client, containerRef]);
+  }, [client, containerRef, activeModePluginId]);
 }
 
 export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultiplayerViewportProps) {
@@ -334,19 +345,33 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const sessionState = usePlaytestMultiplayerStore((state) => state.sessionState);
   const client = usePlaytestMultiplayerStore((state) => state.client);
   const stopHosting = usePlaytestMultiplayerStore((state) => state.stopHosting);
+  // ADR-0023 section B: the active game mode is discovered from the enabled
+  // plugins' manifests (the `gameModes` IPC), defaulting to the first discovered
+  // mode — mirroring the inspector + single-player playtest. No battle-royale id
+  // literal selects the mode here.
+  const contributionsQuery = usePluginContributions();
+  const activeModePluginId = contributionsQuery.data?.gameModes?.[0]?.pluginId;
   // Resolve the active plugin once to expose its render manifest (fixedZoom,
   // hudInsets) to the JSX layer without piping it through refs. The render
   // loop re-resolves inside its own effect for lifecycle reasons.
   const resolvedPlugin = useMemo(
-    () => resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID),
-    [],
+    () => (activeModePluginId === undefined ? undefined : resolvePlaytestPlugin(activeModePluginId)),
+    [activeModePluginId],
   );
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
   const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
 
-  useMultiplayerRuntimeMount({ containerRef, runtimeRef, projectId, map, builtModels, selectedModelId });
-  useMultiplayerSnapshotRenderer({ client, containerRef, runtimeRef, map });
-  useMultiplayerInputBridge({ client, containerRef });
+  useMultiplayerRuntimeMount({
+    containerRef,
+    runtimeRef,
+    projectId,
+    map,
+    activeModePluginId,
+    builtModels,
+    selectedModelId,
+  });
+  useMultiplayerSnapshotRenderer({ client, containerRef, runtimeRef, map, activeModePluginId });
+  useMultiplayerInputBridge({ client, containerRef, activeModePluginId });
 
   useEffect(() => {
     runtimeRef.current?.controller.setShowGrid(showGrid);
@@ -371,7 +396,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     >
       <PlaytestOverlay
         sessionId={sessionId}
-        activePlugins={[BATTLE_ROYALE_PLUGIN_ID]}
+        activePlugins={activeModePluginId === undefined ? [] : [activeModePluginId]}
         session={multiplayerStateToConnectionInput(sessionState)}
         isStopping={false}
         onStop={stopHosting}

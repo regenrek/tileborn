@@ -114,12 +114,19 @@ vi.mock('@/editor/viewport/pixi-texture-from-bytes', () => ({
   pixiTextureFromBytes: vi.fn(),
 }));
 
-vi.mock('@/lib/playtest-plugin-bridge', async () => ({
-  BATTLE_ROYALE_PLUGIN_ID: (
-    await vi.importActual<typeof import('@tileborne/plugin-battle-royale/constants')>(
-      '@tileborne/plugin-battle-royale/constants',
-    )
-  ).PLUGIN_ID,
+const activeModePluginId = ['@tileborne-plugins', 'battle-royale'].join('/');
+
+// The viewport discovers the active game mode from the `gameModes` IPC
+// projection (ADR-0023 section B) rather than a hardcoded battle-royale id.
+vi.mock('@/hooks/queries', () => ({
+  usePluginContributions: () => ({
+    data: { panels: [], tools: [], gameModes: [{ pluginId: activeModePluginId }] },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+vi.mock('@/lib/playtest-plugin-bridge', () => ({
   resolvePlaytestPlugin: vi.fn(() => ({
     projector: { mergeFrame: vi.fn(), project: projectMock },
     bundledAssets: [],

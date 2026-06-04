@@ -32,12 +32,15 @@ import {
 } from '@tileborne/plugin-battle-royale';
 import {
   controlScheme,
+  coreActionId,
   CONTROL_SCHEMES,
+  CORE_ACTIONS,
   type ActionState,
   type ControlScheme,
   type InputMap,
 } from '@tileborne/core';
-import { resolveEffectiveInputMap } from '@tileborne/plugin-api';
+import { decodeInputMap, resolveEffectiveInputMap } from '@tileborne/plugin-api';
+import { Result } from 'effect';
 import {
   deriveInputCaptureProfile,
   type InputCaptureProfile,
@@ -223,12 +226,114 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
 };
 
 /**
+ * The example arena plugin id. Named here in the ADR-0014 boundary file (the one
+ * place the renderer may name concrete plugin ids), so the rest of the renderer
+ * resolves arena as the active mode purely by manifest discovery.
+ */
+export const EXAMPLE_ARENA_PLUGIN_ID = '@tileborne-plugins/example-arena';
+
+const ARENA_INPUT_MAP_CONTRIBUTION_ID = 'arena-input-map';
+
+/**
+ * The arena mode's default bindings as plain DATA (mirrors the arena manifest's
+ * `runtime.inputMaps` slot): WASD move, pointer aim, mouse-0 melee, Shift dash.
+ * Decoded against the engine `InputMap` schema like any other mode.
+ */
+const ARENA_INPUT_MAP_DATA = {
+  id: 'arena-default-bindings',
+  actions: [
+    { action: CORE_ACTIONS.Move, valueKind: 'analog2d' },
+    { action: CORE_ACTIONS.Aim, valueKind: 'pointer' },
+    { action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' },
+    { action: CORE_ACTIONS.Dash, valueKind: 'digital' },
+  ],
+  schemeDefaults: {
+    'keyboard-mouse': [
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyW' }, axisRole: 'y-' },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyS' }, axisRole: 'y+' },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyA' }, axisRole: 'x-' },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyD' }, axisRole: 'x+' },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Aim, trigger: { _tag: 'pointer' } },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.PrimaryAction, trigger: { _tag: 'mouseButton', button: 0 } },
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Dash, trigger: { _tag: 'key', code: 'ShiftLeft' } },
+    ],
+  },
+};
+
+const ARENA_MOVE_ACTION = coreActionId(CORE_ACTIONS.Move);
+const ARENA_PRIMARY_ACTION = coreActionId(CORE_ACTIONS.PrimaryAction);
+
+/** Quantize a move analog vector into the neutral 8-way direction (or idle). */
+const arenaMoveVectorToDirection = (x: number, y: number): number | undefined => {
+  const dx = Math.sign(x);
+  const dy = Math.sign(y);
+  if (dx === 0 && dy === 0) {
+    return undefined;
+  }
+  if (dx === 1 && dy === 0) return 0;
+  if (dx === 1 && dy === 1) return 1;
+  if (dx === 0 && dy === 1) return 2;
+  if (dx === -1 && dy === 1) return 3;
+  if (dx === -1 && dy === 0) return 4;
+  if (dx === -1 && dy === -1) return 5;
+  if (dx === 0 && dy === -1) return 6;
+  return 7;
+};
+
+/**
+ * Minimal, skeletal render provider for the example arena mode (ADR-0023
+ * proof). The arena package proves genre-neutral DISCOVERY + contract decode,
+ * but it defines no server-frame WIRE codec yet, so the multiplayer snapshot
+ * path decodes nothing (`decodeServerFrame` → undefined) and the projector emits
+ * no entities. This provider exists so that SELECTING arena resolves a projector
+ * (no crash) and wires the neutral arena input map; full arena entity rendering
+ * is deferred until the arena defines a wire frame. It touches no engine code.
+ */
+const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
+  const projector: RenderableEntityProjector<unknown> = {
+    project: () => [],
+    mergeFrame: (_previousFullState, frame) => frame,
+    getRenderManifest: () => FALLBACK_RENDER_MANIFEST,
+  };
+  const scheme = controlScheme(CONTROL_SCHEMES.KeyboardMouse);
+  const decoded = decodeInputMap(ARENA_INPUT_MAP_CONTRIBUTION_ID, ARENA_INPUT_MAP_DATA);
+  // Static, schema-valid data (covered by the arena package proof test); the
+  // BR-default fallback only guards an impossible decode failure with a valid map.
+  const baseInputMap = Result.isSuccess(decoded) ? decoded.success : battleRoyaleDefaultInputMap();
+  const userOverlay = options.userInputOverlay ?? loadUserInputOverlay();
+  const inputMap = resolveEffectiveInputMap(baseInputMap, userOverlay);
+  return {
+    projector,
+    bundledAssets: [],
+    manifest: FALLBACK_RENDER_MANIFEST,
+    decodeServerFrame: () => undefined,
+    serverFrameToView: () => undefined,
+    createInitialFrame: (input) => input,
+    encodeClientInputFrame: () => new Uint8Array(),
+    encodeHeartbeatFrame: () => new Uint8Array(),
+    encodeServerFrame: () => new Uint8Array(),
+    decodeClientFrameView: () => undefined,
+    inputMap,
+    controlScheme: scheme,
+    inputCaptureProfile: deriveInputCaptureProfile(inputMap, scheme),
+    resolveInputIntent: (actions) => {
+      const move = actions.analog.get(ARENA_MOVE_ACTION);
+      const dir = move === undefined ? undefined : arenaMoveVectorToDirection(move.x, move.y);
+      const shoot = actions.digital.get(ARENA_PRIMARY_ACTION)?.pressed ?? false;
+      return { dir, shoot };
+    },
+  };
+};
+
+/**
  * Registry of built-in mode render providers keyed by plugin id. Battle Royale
  * is the first registered mode (ADR-0023: BR is one discovered mode, not a
- * hardcoded `case`). Adding a genre = registering another provider here.
+ * hardcoded `case`); the example arena is the second, proving the registry
+ * extends to a new genre. Adding a genre = registering another provider here.
  */
 const MODE_RENDER_PROVIDERS: ReadonlyMap<string, ModeRenderProvider> = new Map([
   [BATTLE_ROYALE_PLUGIN_ID, createBattleRoyalePlaytestPlugin],
+  [EXAMPLE_ARENA_PLUGIN_ID, createExampleArenaPlaytestPlugin],
 ]);
 
 /** Plugin ids that have a bundled render provider (id-list discovery surface). */

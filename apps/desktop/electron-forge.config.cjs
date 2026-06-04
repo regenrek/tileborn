@@ -10,16 +10,31 @@ const packagerTmp = path.join(
 );
 fs.mkdirSync(packagerTmp, { recursive: true });
 
-const bundledBattleRoyalePluginName = "battle-royale";
 const bundledPluginsDirectoryName = "bundled-plugins";
-const battleRoyaleSourceRoot = path.resolve(__dirname, "../../packages/plugin-battle-royale");
-const battleRoyaleRequiredFiles = [
-  "tileborne-plugin.json",
-  "dist/server.js",
-  "dist/runtime.js",
-  "dist/index.js",
+// The set of bundled example plugins copied into resources/bundled-plugins/<dir>.
+// Mirrors apps/desktop/src/main/bundled-plugins.ts (BUNDLED_PLUGINS): a new
+// bundled genre is added in BOTH places.
+const bundledPlugins = [
+  {
+    bundledDirName: "battle-royale",
+    packageDir: "plugin-battle-royale",
+    buildHint: "pnpm --filter @tileborne/plugin-battle-royale build",
+    requiredFiles: [
+      "tileborne-plugin.json",
+      "dist/server.js",
+      "dist/runtime.js",
+      "dist/index.js",
+    ],
+  },
+  {
+    bundledDirName: "example-arena",
+    packageDir: "plugin-example-arena",
+    buildHint: "pnpm --filter @tileborne/plugin-example-arena build",
+    requiredFiles: ["tileborne-plugin.json", "dist/runtime.js"],
+  },
 ];
-const battleRoyaleRuntimeEntries = new Set([
+// Optional runtime entries copied when present (skipped silently when absent).
+const bundledPluginRuntimeEntries = new Set([
   "tileborne-plugin.json",
   "package.json",
   "LICENSE",
@@ -35,13 +50,14 @@ const iconAssetsRoot = path.resolve(__dirname, "assets");
 const appIconPath = path.join(iconAssetsRoot, "icon");
 const runtimeIconPath = path.join(iconAssetsRoot, "icon.png");
 
-const copyBundledBattleRoyalePlugin = (buildPath) => {
-  for (const relativePath of battleRoyaleRequiredFiles) {
-    const candidate = path.join(battleRoyaleSourceRoot, relativePath);
+const copyBundledPlugin = (buildPath, plugin) => {
+  const sourceRoot = path.resolve(__dirname, "../../packages", plugin.packageDir);
+  for (const relativePath of plugin.requiredFiles) {
+    const candidate = path.join(sourceRoot, relativePath);
     if (!fs.existsSync(candidate)) {
       throw new Error(
-        `Battle Royale packaged plugin is missing ${relativePath}. Run ` +
-          "`pnpm --filter @tileborne/plugin-battle-royale build` before desktop packaging.",
+        `Bundled plugin ${plugin.packageDir} is missing ${relativePath}. Run ` +
+          `\`${plugin.buildHint}\` before desktop packaging.`,
       );
     }
   }
@@ -50,13 +66,13 @@ const copyBundledBattleRoyalePlugin = (buildPath) => {
   const destinationRoot = path.join(
     resourcesPath,
     bundledPluginsDirectoryName,
-    bundledBattleRoyalePluginName,
+    plugin.bundledDirName,
   );
   fs.rmSync(destinationRoot, { recursive: true, force: true });
   fs.mkdirSync(destinationRoot, { recursive: true });
 
-  for (const entry of battleRoyaleRuntimeEntries) {
-    const sourcePath = path.join(battleRoyaleSourceRoot, entry);
+  for (const entry of bundledPluginRuntimeEntries) {
+    const sourcePath = path.join(sourceRoot, entry);
     if (!fs.existsSync(sourcePath)) {
       continue;
     }
@@ -64,6 +80,12 @@ const copyBundledBattleRoyalePlugin = (buildPath) => {
       recursive: true,
       dereference: true,
     });
+  }
+};
+
+const copyBundledPlugins = (buildPath) => {
+  for (const plugin of bundledPlugins) {
+    copyBundledPlugin(buildPath, plugin);
   }
 };
 
@@ -81,7 +103,7 @@ module.exports = {
   rebuildConfig: {},
   hooks: {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
-      copyBundledBattleRoyalePlugin(buildPath);
+      copyBundledPlugins(buildPath);
     },
   },
   makers: [

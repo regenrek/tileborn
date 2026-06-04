@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BATTLE_ROYALE_PLUGIN_ID,
+  EXAMPLE_ARENA_PLUGIN_ID,
   KNOWN_PLAYTEST_MODE_IDS,
   resolvePlaytestPlugin,
 } from './playtest-plugin-bridge';
@@ -14,6 +15,17 @@ describe('playtest-plugin-bridge', () => {
     expect(KNOWN_PLAYTEST_MODE_IDS).toContain(BATTLE_ROYALE_PLUGIN_ID);
     expect(resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID)).toBeDefined();
     expect(resolvePlaytestPlugin('@tileborne-plugins/not-installed')).toBeUndefined();
+  });
+
+  it('resolves a NON-battle-royale mode (the example arena) to a projector', () => {
+    expect(KNOWN_PLAYTEST_MODE_IDS).toContain(EXAMPLE_ARENA_PLUGIN_ID);
+    const arena = resolvePlaytestPlugin(EXAMPLE_ARENA_PLUGIN_ID);
+    expect(arena).toBeDefined();
+    expect(arena?.projector).toBeDefined();
+    // Arena binds melee to mouse-0 only (no Space) — a distinct, decoded map.
+    expect(arena?.inputCaptureProfile.usesMouseButtons).toBe(true);
+    expect(arena?.inputCaptureProfile.boundKeyCodes.has('Space')).toBe(false);
+    expect(arena?.inputCaptureProfile.boundKeyCodes.has('ShiftLeft')).toBe(true);
   });
 
   it('resolves the canonical battle royale manifest id and exposes decoding', () => {

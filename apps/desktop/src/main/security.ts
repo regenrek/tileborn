@@ -96,7 +96,12 @@ export const buildContentSecurityPolicy = (context: SecurityContext): string => 
 
   const mediaSrc = ["'self'", "blob:", "data:", ASSET_SCHEME_SOURCE];
 
-  const connectSrc = ["'self'", ASSET_SCHEME_SOURCE, ...LOCAL_GAME_HOST_SOURCES];
+  // `data:`/`blob:` are required in connect-src (not just img-src): Pixi's asset
+  // loader FETCHES bundled textures supplied as `data:image/png` / blob URLs
+  // (e.g. bundled player-model + projectile textures in playtest), and a fetch
+  // is governed by connect-src — without these it fails with "Failed to fetch"
+  // and entities fall back to missing textures.
+  const connectSrc = ["'self'", "data:", "blob:", ASSET_SCHEME_SOURCE, ...LOCAL_GAME_HOST_SOURCES];
   if (devOrigin) {
     connectSrc.push(devOrigin);
   }

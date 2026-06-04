@@ -53,6 +53,14 @@ describe("buildContentSecurityPolicy (prod)", () => {
     expect(dirs.get("connect-src")).toContain("ws://localhost:*");
   });
 
+  it("allows data:/blob: in connect-src so Pixi can fetch bundled textures", () => {
+    // Pixi's asset loader fetches bundled data:/blob: texture URLs; connect-src
+    // (not img-src) governs fetch, so these must be present or playtest entity
+    // textures fail with "Failed to fetch".
+    expect(dirs.get("connect-src")).toContain("data:");
+    expect(dirs.get("connect-src")).toContain("blob:");
+  });
+
   it("does not reference any dev server origin", () => {
     expect(policy).not.toContain("5173");
   });

@@ -125,7 +125,6 @@ export function WorkingPaletteSidebar({
       }
     }
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paletteItems, animatablePackIds, packResults]);
 
   return (

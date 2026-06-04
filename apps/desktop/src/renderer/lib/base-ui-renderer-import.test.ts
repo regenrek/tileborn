@@ -1,9 +1,48 @@
 import { describe, expect, it } from 'vitest';
+import type { ConfigEnv, UserConfig } from 'vite';
 
 import rendererConfig from '../../../vite.renderer.config';
 
 const importModule = (specifier: string): Promise<Record<string, unknown>> =>
   import(specifier) as Promise<Record<string, unknown>>;
+
+const browserSafeInternalPackages = [
+  '@tileborne/core',
+  '@tileborne/sdk-tileset',
+  '@tileborne/ui',
+] as const;
+
+const nodeGraphInternalPackages = [
+  '@tileborne/runtime',
+  '@tileborne/plugin-api',
+  '@tileborne/ipc-contracts',
+  '@tileborne/plugin-battle-royale',
+  '@tileborne/services-app',
+  '@tileborne/services-build',
+  '@tileborne/services-foundation',
+  '@tileborne/services-plugin',
+  '@tileborne/asset-pipeline',
+] as const;
+
+type RendererConfigExport =
+  | UserConfig
+  | Promise<UserConfig>
+  | ((env: ConfigEnv) => UserConfig | Promise<UserConfig>);
+
+const resolveRendererConfig = async (): Promise<UserConfig> => {
+  const configExport = rendererConfig as RendererConfigExport;
+  const config =
+    typeof configExport === 'function'
+      ? configExport({
+          command: 'serve',
+          mode: 'development',
+          isSsrBuild: false,
+          isPreview: false,
+        })
+      : configExport;
+
+  return Promise.resolve(config);
+};
 
 describe('Base UI renderer dependency boundary', () => {
   it('loads the Base UI entries and CJS shims used by the renderer graph', async () => {
@@ -23,11 +62,8 @@ describe('Base UI renderer dependency boundary', () => {
     expect(selectorShim.useSyncExternalStoreWithSelector).toBeTypeOf('function');
   });
 
-  it('keeps renderer dep optimization explicit for Base UI CJS interop', () => {
-    const config = rendererConfig as {
-      optimizeDeps?: { exclude?: string[]; include?: string[] };
-      resolve?: { dedupe?: string[] };
-    };
+  it('keeps renderer dep optimization explicit for Base UI CJS interop', async () => {
+    const config = await resolveRendererConfig();
 
     expect(config.resolve?.dedupe).toEqual(expect.arrayContaining(['react', 'react-dom']));
     expect(config.optimizeDeps?.exclude).toContain('@tileborne/ui');
@@ -40,5 +76,18 @@ describe('Base UI renderer dependency boundary', () => {
         'use-sync-external-store/shim/with-selector',
       ]),
     );
+  });
+
+  it('only excludes browser-safe internal packages from renderer dep optimization', async () => {
+    const config = await resolveRendererConfig();
+    const exclude = config.optimizeDeps?.exclude ?? [];
+
+    // Pure-browser packages can be served live; Node-graph packages must remain
+    // pre-bundled so esbuild can tree-shake Node-only imports out of renderer code.
+    expect(exclude).toEqual([...browserSafeInternalPackages]);
+
+    for (const packageName of nodeGraphInternalPackages) {
+      expect(exclude).not.toContain(packageName);
+    }
   });
 });

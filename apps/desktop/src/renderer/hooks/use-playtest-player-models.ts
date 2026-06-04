@@ -61,7 +61,6 @@ export function usePlaytestPlayerModels(
       }
     }
     return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models, packIds, packResults]);
 
   // `useTilesetPacks` (useQueries) returns a fresh array every render, so `built`

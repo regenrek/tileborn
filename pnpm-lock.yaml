@@ -962,6 +962,22 @@ importers:
         specifier: 4.1.7
         version: 4.1.7(@types/node@22.19.19)(jsdom@29.1.1(@noble/hashes@1.8.0))(msw@2.14.6(@types/node@22.19.19)(typescript@6.0.3))(vite@8.0.12(@types/node@22.19.19)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.47.1)(yaml@2.9.0))
 
+  packages/simulation:
+    dependencies:
+      '@tileborne/core':
+        specifier: workspace:*
+        version: link:../core
+      effect:
+        specifier: 4.0.0-beta.70
+        version: 4.0.0-beta.70
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.7
+        version: 4.1.7(@types/node@24.12.4)(jsdom@29.1.1(@noble/hashes@1.8.0))(msw@2.14.6(@types/node@24.12.4)(typescript@6.0.3))(vite@8.0.12(@types/node@24.12.4)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.47.1)(yaml@2.9.0))
+
   packages/test-fixtures:
     devDependencies:
       '@types/node':

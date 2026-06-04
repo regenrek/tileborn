@@ -78,6 +78,9 @@ packages/runtime-wasm/src/**/*.js.map
 *.BASE.*
 *.LOCAL.*
 *.REMOTE.*
+# tsconfig.base.json is a real tracked config (the whole monorepo extends it),
+# not a merge artifact — the case-insensitive *.BASE.* glob matches it on macOS.
+!tsconfig.base.json
 
 
 .plandb

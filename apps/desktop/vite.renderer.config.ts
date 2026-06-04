@@ -29,8 +29,9 @@ const packageJson = JSON.parse(
 // been externalized") => blank. The other internal packages (plugin-api,
 // runtime, plugin-battle-royale, ipc-contracts, services-*) transitively pull
 // @tileborne/asset-pipeline (Node/fs); they MUST stay pre-bundled so esbuild
-// tree-shakes that Node-only code out. The predev:cdp workspace build keeps
-// their pre-bundled export surface fresh on restart.
+// tree-shakes that Node-only code out. If a new renderer-used export on a
+// pre-bundled package serves stale, run:
+// pnpm --filter @tileborne/desktop clean:vite-deps
 const browserSafeInternalPackages = [
   "@tileborne/core",
   "@tileborne/sdk-tileset",
@@ -66,7 +67,8 @@ export default defineConfig({
   optimizeDeps: {
     // Browser-safe internal packages served live (never pre-bundled) so their
     // changing dev export surfaces are always current; Base UI's CJS shims below
-    // must still be prebundled. See browserSafeInternalPackages above (t-vups).
+    // and Node-graph internal packages must still be prebundled. See
+    // browserSafeInternalPackages above (t-vups).
     exclude: [...browserSafeInternalPackages],
     include: [
       "@base-ui/react",

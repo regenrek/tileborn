@@ -15,3 +15,4 @@ export * from "./tsj-parse.js";
 export * from "./tsx-parse.js";
 export * from "./tmj-parse.js";
 export * from "./tmx-parse.js";
+export * from "./export-tmj.js";

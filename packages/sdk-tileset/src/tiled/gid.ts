@@ -25,6 +25,16 @@ export const decodeTiledGid = (raw: number): DecodedTiledGid => {
   };
 };
 
+/** Inverse of {@link decodeTiledGid}: re-apply flip/rotation flags to a masked gid. */
+export const encodeTiledGid = (decoded: DecodedTiledGid): number => {
+  let raw = decoded.gid & TILED_GID_MASK;
+  if (decoded.transform.flippedHorizontal) raw |= TILED_FLIPPED_HORIZONTALLY_FLAG;
+  if (decoded.transform.flippedVertical) raw |= TILED_FLIPPED_VERTICALLY_FLAG;
+  if (decoded.transform.flippedDiagonal) raw |= TILED_FLIPPED_DIAGONALLY_FLAG;
+  if (decoded.transform.rotatedHexagonal120) raw |= TILED_ROTATED_HEXAGONAL_120_FLAG;
+  return raw >>> 0;
+};
+
 export const isIdentityTiledTransform = (transform: TiledGidTransform): boolean =>
   !transform.flippedHorizontal &&
   !transform.flippedVertical &&
@@ -64,4 +74,24 @@ export const tileborneTileIndexForTiledGid = (
   const located = locateTiledGid(raw, windows);
   if (located === null || located.localId >= located.window.tileborneTileCount) return 0;
   return located.window.tileborneTileIndexOffset + located.localId + 1;
+};
+
+/**
+ * Inverse of {@link tileborneTileIndexForTiledGid}: map a 1-based Tileborne tile
+ * index back to the bare Tiled gid (without flip flags). Returns 0 for the empty
+ * tile index (0) or indices that fall outside any tileset window.
+ */
+export const tiledGidForTileborneTileIndex = (
+  tileIndex: number,
+  windows: readonly TiledTilesetWindow[],
+): number => {
+  if (tileIndex <= 0) return 0;
+  for (const window of windows) {
+    const start = window.tileborneTileIndexOffset + 1;
+    const end = window.tileborneTileIndexOffset + window.tileborneTileCount;
+    if (tileIndex >= start && tileIndex <= end) {
+      return window.firstgid + (tileIndex - start);
+    }
+  }
+  return 0;
 };

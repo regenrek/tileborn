@@ -3,6 +3,7 @@ import {
   Application,
   Assets,
   Container,
+  Culler,
   Rectangle,
   Sprite,
   Texture,
@@ -178,6 +179,10 @@ export class PixiRendererAdapter implements RendererAdapter {
         const app = this.requireApp();
         const tilemap = new CompositeTilemap();
         tilemap.zIndex = layer.layerIndex;
+        // Layer-level viewport culling: skip the whole tilemap when its global
+        // bounds fall entirely outside the visible screen rect. Per-chunk culling
+        // inside CompositeTilemap is left as a follow-up (see cullStage).
+        tilemap.cullable = true;
         for (const tile of layer.tiles) {
           const texture = this.texturesByRenderableAssetId.get(tile.assetId);
           if (!texture) {
@@ -223,6 +228,7 @@ export class PixiRendererAdapter implements RendererAdapter {
             this.spritePool.delete(entity);
           }
         }
+        this.cullStage();
         app.render();
       },
       catch: (cause) => rendererRenderError("failed to render Pixi frame", cause),
@@ -277,6 +283,7 @@ export class PixiRendererAdapter implements RendererAdapter {
             this.spritePoolByStringId.delete(entityId);
           }
         }
+        this.cullStage();
         app.render();
       },
       catch: (cause) => rendererRenderError("failed to render Pixi entities", cause),
@@ -361,6 +368,43 @@ export class PixiRendererAdapter implements RendererAdapter {
     return this.app;
   }
 
+  /**
+   * The visible world rect used for viewport culling. With the identity stage
+   * transform used by the game render paths this equals the screen rect; the
+   * Culler maps it through each object's global transform, so it stays correct
+   * even if a camera pan/zoom is later applied to the stage.
+   */
+  private visibleViewRect(): Rectangle | undefined {
+    const app = this.app;
+    if (!app) {
+      return undefined;
+    }
+    const screen =
+      (app as { readonly screen?: Rectangle }).screen ??
+      (app.renderer as { readonly screen?: Rectangle } | undefined)?.screen;
+    if (!screen || typeof screen.width !== "number" || typeof screen.height !== "number") {
+      return undefined;
+    }
+    return screen;
+  }
+
+  /**
+   * Pixi v8 viewport culling: marks cullable objects (sprites and tilemap
+   * layers) whose global bounds fall entirely outside the visible screen rect
+   * as `culled`, so the renderer skips them. Visible objects keep `culled =
+   * false` and render identically — z-order, interpolation and object-pool
+   * semantics are untouched. Runs before `render()` with
+   * `skipUpdateTransform = false` so bounds reflect the freshly set sprite
+   * positions rather than the previous frame.
+   */
+  private cullStage(): void {
+    const view = this.visibleViewRect();
+    if (!view) {
+      return;
+    }
+    Culler.shared.cull(this.requireApp().stage, view, false);
+  }
+
   private compiledClipFor(animation: {
     readonly clipId?: string;
     readonly frames: readonly RenderableAnimationFrame[];
@@ -419,6 +463,7 @@ export class PixiRendererAdapter implements RendererAdapter {
     }
     const sprite = new Sprite({ texture });
     sprite.zIndex = layerIndex;
+    sprite.cullable = true;
     this.layerFor(layerIndex).addChild(sprite);
     this.spritePool.set(entity, sprite);
     return sprite;
@@ -435,6 +480,7 @@ export class PixiRendererAdapter implements RendererAdapter {
     }
     const sprite = new Sprite({ texture });
     sprite.zIndex = layerIndex;
+    sprite.cullable = true;
     this.layerFor(layerIndex).addChild(sprite);
     this.spritePoolByStringId.set(entityId, sprite);
     return sprite;

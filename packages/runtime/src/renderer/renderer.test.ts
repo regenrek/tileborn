@@ -4,7 +4,7 @@ import { Effect, Option } from "effect";
 import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Container, Texture } from "pixi.js";
+import { Container, Rectangle, Sprite, Texture, TextureSource } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { PositionComponent, RenderableComponent, VelocityComponent } from "../ecs/components.js";
@@ -290,6 +290,60 @@ describe("PixiRendererAdapter", () => {
       ),
     );
     expect([...internals.spritePoolByStringId.keys()]).toEqual(["player-1"]);
+  });
+
+  it("culls entities outside the viewport while keeping in-view entities renderable", async () => {
+    const adapter = new PixiRendererAdapter();
+    const internals = adapter as unknown as {
+      app: { readonly stage: Container; readonly render: () => void; readonly screen: Rectangle };
+      readonly texturesByRenderableAssetId: Map<AssetId, Texture>;
+      readonly spritePoolByStringId: Map<string, Sprite>;
+    };
+    // A sized texture gives culled sprites meaningful (non-empty) global bounds.
+    const sizedTexture = new Texture({ source: new TextureSource({ width: 32, height: 32 }) });
+    internals.app = { stage: new Container(), render: vi.fn(), screen: new Rectangle(0, 0, 800, 600) };
+    internals.texturesByRenderableAssetId.set(ASSET_A, sizedTexture);
+    internals.texturesByRenderableAssetId.set(ASSET_B, sizedTexture);
+
+    const entities: readonly RenderableEntity[] = [
+      { id: "in-view", assetId: ASSET_A, x: 100, y: 100 },
+      { id: "off-screen", assetId: ASSET_B, x: 10_000, y: 10_000 },
+    ];
+    await Effect.runPromise(adapter.renderFromEntities(entities, new Map(), 1));
+
+    const inView = internals.spritePoolByStringId.get("in-view")!;
+    const offScreen = internals.spritePoolByStringId.get("off-screen")!;
+
+    expect(inView.cullable).toBe(true);
+    expect(offScreen.cullable).toBe(true);
+    expect(inView.culled).toBe(false);
+    expect(inView.isRenderable).toBe(true);
+    expect(offScreen.culled).toBe(true);
+    expect(offScreen.isRenderable).toBe(false);
+  });
+
+  it("re-includes a culled entity once it scrolls back into the viewport", async () => {
+    const adapter = new PixiRendererAdapter();
+    const internals = adapter as unknown as {
+      app: { readonly stage: Container; readonly render: () => void; readonly screen: Rectangle };
+      readonly texturesByRenderableAssetId: Map<AssetId, Texture>;
+      readonly spritePoolByStringId: Map<string, Sprite>;
+    };
+    const sizedTexture = new Texture({ source: new TextureSource({ width: 32, height: 32 }) });
+    internals.app = { stage: new Container(), render: vi.fn(), screen: new Rectangle(0, 0, 800, 600) };
+    internals.texturesByRenderableAssetId.set(ASSET_A, sizedTexture);
+
+    await Effect.runPromise(
+      adapter.renderFromEntities([{ id: "rover", assetId: ASSET_A, x: 5_000, y: 5_000 }], new Map(), 1),
+    );
+    const rover = internals.spritePoolByStringId.get("rover")!;
+    expect(rover.culled).toBe(true);
+
+    await Effect.runPromise(
+      adapter.renderFromEntities([{ id: "rover", assetId: ASSET_A, x: 200, y: 200 }], new Map(), 1),
+    );
+    expect(rover.culled).toBe(false);
+    expect(rover.isRenderable).toBe(true);
   });
 });
 

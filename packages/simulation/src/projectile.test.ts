@@ -63,6 +63,8 @@ describe('advanceProjectile', () => {
   });
 
   it('expires on blocking geometry without dealing damage', () => {
+    // The wall straddles the center flight line (y ∈ [-5, 5]), so it blocks
+    // regardless of radius; the grazing case below covers the radius-aware path.
     const wall = new CombatBlocker({
       minX: 1,
       minY: -5,
@@ -81,6 +83,39 @@ describe('advanceProjectile', () => {
     if (step.events[0]?._tag === 'ProjectileExpired') {
       expect(step.events[0].reason).toBe('blocked');
     }
+  });
+
+  it('culls a projectile grazing a wall within its radius, but not beyond it', () => {
+    // Regression for ADR-0018 Slice 7 review: blocking now sweeps the projectile
+    // *radius* against walls (Minkowski-style), matching the radius-aware entity
+    // hit test. The center path runs along y = 0 and never enters the wall
+    // (minY = 2), but a radius-3 body overlaps it — the pre-fix center-only test
+    // let such a shot tunnel through.
+    const wall = new CombatBlocker({
+      minX: 1,
+      minY: 2,
+      maxX: 2,
+      maxY: 10,
+      blocksProjectiles: true,
+      blocksVision: false,
+    });
+    const world = createInMemoryCombatWorld(
+      [{ entity: target, health: fullHealth(100), position: vec2(100, 0) }],
+      [wall],
+    );
+
+    const grazing = advanceProjectile(world, makeProjectile({ radius: 3 }), alwaysHostile);
+    expect(grazing.alive).toBeUndefined();
+    expect(grazing.events).toHaveLength(1);
+    if (grazing.events[0]?._tag === 'ProjectileExpired') {
+      expect(grazing.events[0].reason).toBe('blocked');
+    }
+
+    // A radius-1 body leaves a clear 2-unit gap to the wall, so the same shot
+    // passes — proving the cull is driven by the radius, not the wall position.
+    const clears = advanceProjectile(world, makeProjectile({ radius: 1 }), alwaysHostile);
+    expect(clears.alive).toBeDefined();
+    expect(clears.events.map((e) => e._tag)).toEqual(['ProjectileMoved']);
   });
 
   it('expires on the tick ttl reaches zero, emitting move then expiry', () => {

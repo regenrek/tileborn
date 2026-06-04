@@ -99,12 +99,26 @@ const blockerStops = (blocker: CombatBlocker, channel: BlockingChannel): boolean
 /**
  * Whether the segment `a → b` enters an axis-aligned box (slab method). Touching
  * the boundary counts as an intersection so flush walls reliably block.
+ *
+ * `expand` grows the box by that margin on all sides (Minkowski-style): testing
+ * a *center* segment against a box grown by a swept circle's radius is the
+ * equivalent of sweeping the circle itself, so a body of that radius grazing the
+ * box within the margin is detected even though its center never enters. The
+ * default `0` is the exact point/segment test used for line-of-sight and the
+ * ray delivery families (which carry no swept body). The corners are squared
+ * rather than rounded — a conservative, deterministic over-approximation.
  */
 export const segmentIntersectsAabb = (
   a: Vec2Like,
   b: Vec2Like,
   blocker: CombatBlocker,
+  expand = 0,
 ): boolean => {
+  const minX = blocker.minX - expand;
+  const minY = blocker.minY - expand;
+  const maxX = blocker.maxX + expand;
+  const maxY = blocker.maxY + expand;
+
   const dx = b.x - a.x;
   const dy = b.y - a.y;
 
@@ -113,12 +127,12 @@ export const segmentIntersectsAabb = (
 
   // X slab.
   if (dx === 0) {
-    if (a.x < blocker.minX || a.x > blocker.maxX) {
+    if (a.x < minX || a.x > maxX) {
       return false;
     }
   } else {
-    const t1 = (blocker.minX - a.x) / dx;
-    const t2 = (blocker.maxX - a.x) / dx;
+    const t1 = (minX - a.x) / dx;
+    const t2 = (maxX - a.x) / dx;
     tMin = Math.max(tMin, Math.min(t1, t2));
     tMax = Math.min(tMax, Math.max(t1, t2));
     if (tMin > tMax) {
@@ -128,12 +142,12 @@ export const segmentIntersectsAabb = (
 
   // Y slab.
   if (dy === 0) {
-    if (a.y < blocker.minY || a.y > blocker.maxY) {
+    if (a.y < minY || a.y > maxY) {
       return false;
     }
   } else {
-    const t1 = (blocker.minY - a.y) / dy;
-    const t2 = (blocker.maxY - a.y) / dy;
+    const t1 = (minY - a.y) / dy;
+    const t2 = (maxY - a.y) / dy;
     tMin = Math.max(tMin, Math.min(t1, t2));
     tMax = Math.min(tMax, Math.max(t1, t2));
     if (tMin > tMax) {

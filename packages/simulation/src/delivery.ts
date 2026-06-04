@@ -407,9 +407,19 @@ const rayCandidates = (
   return candidates.sort((a, b) => a.along - b.along || a.entity - b.entity);
 };
 
-const projectileBlocked = (ctx: DeliveryContext, from: Vec2Like, to: Vec2Like): boolean => {
+// `expand` grows each blocker by the swept body's radius (Minkowski-style). The
+// ray families (hitscan / beam / pierce / pellet) carry no body and pass the
+// default `0` — an exact origin→target line-of-sight test, unchanged. Only the
+// projectile family, whose shot has a collision radius, passes a non-zero
+// expansion so a projectile grazing a wall within its radius is culled.
+const projectileBlocked = (
+  ctx: DeliveryContext,
+  from: Vec2Like,
+  to: Vec2Like,
+  expand = 0,
+): boolean => {
   for (const blocker of ctx.world.blockers()) {
-    if (blocker.blocksProjectiles && segmentIntersectsAabb(from, to, blocker)) {
+    if (blocker.blocksProjectiles && segmentIntersectsAabb(from, to, blocker, expand)) {
       return true;
     }
   }
@@ -506,7 +516,7 @@ const resolveProjectile = (
 
   for (let tick = 0; tick < d.ttlTicks; tick += 1) {
     const next = addVec(current, step);
-    if (projectileBlocked(ctx, current, next)) {
+    if (projectileBlocked(ctx, current, next, d.radius)) {
       return;
     }
 

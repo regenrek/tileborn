@@ -284,6 +284,49 @@ describe('projectile delivery (integrated flight)', () => {
     const { outcomes } = scenario(delivery, { actors: [target(2, vec2(10, 0))], blockers: [wall] });
     expect(outcomes).toHaveLength(0);
   });
+
+  it('is stopped by a wall its radius grazes even when its center misses', () => {
+    // ADR-0018 Slice 7 review: the projectile family sweeps its radius against
+    // walls. The center flight line runs along y = 0 and never enters the wall
+    // (minY = 1.5), but the radius-2 shot grazes it within its body and is
+    // culled, so the target behind cover takes no damage.
+    const grazingDelivery = new ProjectileDelivery({
+      damage: 25,
+      speed: 4,
+      ttlTicks: 10,
+      radius: 2,
+      falloff: noFalloff,
+      knockback: 0,
+    });
+    const wall = new CombatBlocker({
+      minX: 5,
+      minY: 1.5,
+      maxX: 6,
+      maxY: 10,
+      blocksProjectiles: true,
+      blocksVision: false,
+    });
+    const grazed = scenario(grazingDelivery, {
+      actors: [target(2, vec2(10, 0))],
+      blockers: [wall],
+    });
+    expect(grazed.outcomes).toHaveLength(0);
+
+    // A radius-1 shot clears the 1.5-unit gap and reaches the target.
+    const clearDelivery = new ProjectileDelivery({
+      damage: 25,
+      speed: 4,
+      ttlTicks: 10,
+      radius: 1,
+      falloff: noFalloff,
+      knockback: 0,
+    });
+    const cleared = scenario(clearDelivery, {
+      actors: [target(2, vec2(10, 0))],
+      blockers: [wall],
+    });
+    expect(cleared.outcomes).toHaveLength(1);
+  });
 });
 
 describe('pierce delivery (penetrate N targets)', () => {

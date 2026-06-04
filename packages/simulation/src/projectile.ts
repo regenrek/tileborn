@@ -125,9 +125,19 @@ interface SweptHit {
   readonly along: number;
 }
 
-const blockedAlong = (world: CombatWorldView, from: Vec2Like, to: Vec2Like): boolean => {
+const blockedAlong = (
+  world: CombatWorldView,
+  from: Vec2Like,
+  to: Vec2Like,
+  radius: number,
+): boolean => {
   for (const blocker of world.blockers()) {
-    if (blocker.blocksProjectiles && segmentIntersectsAabb(from, to, blocker)) {
+    // Test the swept *center* segment against each blocker grown by the
+    // projectile radius (Minkowski-style), so a shot whose body overlaps a wall
+    // is culled even when its center passes just beside it — matching the
+    // radius-aware swept-entity hit test below. A center-only check let a
+    // projectile tunnel through a wall it physically overlaps.
+    if (blocker.blocksProjectiles && segmentIntersectsAabb(from, to, blocker, radius)) {
       return true;
     }
   }
@@ -192,7 +202,7 @@ export const advanceProjectile = (
   const from: Vec2Like = { x: projectile.x, y: projectile.y };
   const to: Vec2Like = { x: projectile.x + projectile.vx, y: projectile.y + projectile.vy };
 
-  if (blockedAlong(world, from, to)) {
+  if (blockedAlong(world, from, to, projectile.radius)) {
     return {
       alive: undefined,
       events: [

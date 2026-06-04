@@ -1,7 +1,13 @@
 import path from "node:path";
 import process from "node:process";
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, shell } from "electron";
+
+import {
+  installContentSecurityPolicy,
+  installNavigationGuards,
+  type SecurityContext,
+} from "./security.js";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -31,17 +37,44 @@ export interface CreateMainWindowOptions extends MainWindowLifecycleHooks {
   readonly initialRoutePath?: string;
 }
 
-const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
+const resolveDevServerUrl = (): string | undefined => {
   const devServerUrl =
     typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === "undefined"
       ? undefined
       : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  // Smoke runs load the packaged-style bundle (loadFile) even though the dev
+  // server constant may be defined, so it is not "dev" for security purposes.
+  if (!devServerUrl || process.env.TILEBORNE_SMOKE === "true") {
+    return undefined;
+  }
+  return devServerUrl;
+};
+
+/**
+ * Resolve the renderer trust context: dev (Vite dev server origin, permissive
+ * CSP + HMR) vs prod/smoke (packaged `file://` bundle, strict CSP). Mirrors the
+ * dev-vs-packaged branch in {@link loadRendererRoute}.
+ */
+const resolveSecurityContext = (): SecurityContext => {
+  const devServerUrl = resolveDevServerUrl();
+  if (devServerUrl === undefined) {
+    return { isDev: false, devServerOrigin: undefined };
+  }
+  try {
+    return { isDev: true, devServerOrigin: new URL(devServerUrl).origin };
+  } catch {
+    return { isDev: false, devServerOrigin: undefined };
+  }
+};
+
+const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
+  const devServerUrl = resolveDevServerUrl();
   const rendererName =
     typeof MAIN_WINDOW_VITE_NAME === "undefined"
       ? DEFAULT_RENDERER_WINDOW_NAME
       : MAIN_WINDOW_VITE_NAME;
 
-  if (devServerUrl && process.env.TILEBORNE_SMOKE !== "true") {
+  if (devServerUrl) {
     const url = new URL(routePath, devServerUrl);
     void window.loadURL(url.toString());
     return;
@@ -70,9 +103,18 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // Preload bundle transitively imports node:crypto (Effect / ipc-contracts).
-      // Sandboxed preloads cannot load node:crypto, so preload fails and window.tileborne
-      // is never exposed. contextIsolation + nodeIntegration:false remains secure.
+      // sandbox stays OFF (follow-up to re-enable). The preload bridge
+      // (preload.ts -> @tileborne/ipc-contracts `buildTileborneBridge` + Effect)
+      // bundles a dependency graph that *eagerly* `require()`s Node core modules
+      // at module top: `node:path`, `node:fs/promises`, `stream`, `module`
+      // (verified in .vite/build/preload.cjs lines 3-7; further lazy requires of
+      // `fs`/`os`/`child_process`/`node:url` exist deeper). A sandboxed preload
+      // can only require `electron` + a tiny polyfilled subset, so those eager
+      // requires throw and window.tileborne is never exposed. node:crypto is NOT
+      // the blocker (core derives UUIDs via a pure in-repo SHA-256). Re-enabling
+      // sandbox needs an Effect/ipc-contracts preload entry with a pure-browser
+      // graph — invasive, so deferred. contextIsolation + nodeIntegration:false
+      // (+ the navigation allowlist and CSP below) keep the boundary secure.
       sandbox: false,
       preload: path.join(__dirname, "preload.cjs"),
     },
@@ -81,6 +123,16 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
   if (process.platform === "darwin" && !app.isPackaged) {
     app.dock?.setIcon(iconPath);
   }
+
+  // ADR-0003 trust boundary: lock down navigation, contain window.open, and set
+  // a Content-Security-Policy on the renderer document. The CSP is applied to
+  // the window's session (shared default session; re-registration is
+  // idempotent) and the navigation guards to this window's webContents.
+  const securityContext = resolveSecurityContext();
+  installContentSecurityPolicy(mainWindow.webContents.session, securityContext);
+  installNavigationGuards(mainWindow.webContents, securityContext, (url) => {
+    void shell.openExternal(url);
+  });
 
   mainWindow.webContents.once("did-start-loading", () => {
     resolvedOptions.onRendererLoadStart?.();

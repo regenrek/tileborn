@@ -248,7 +248,6 @@ const spawnProjectile = (
     dirX: direction.x,
     dirY: direction.y,
     speed: ctx.delivery.speed,
-    damage: ctx.delivery.damage,
     ttlTicks: ctx.delivery.ttlTicks,
   });
   state.projectileSourceByEntity.set(entity, makeCombatEntityId(ownerEntity));

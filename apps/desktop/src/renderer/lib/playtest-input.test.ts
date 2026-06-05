@@ -98,6 +98,45 @@ describe('attachPlaytestInputCapture (neutral pipeline, no hardcoded SHOOT_KEY)'
     expect(intents.at(-1)?.shoot).toBe(false);
   });
 
+  it('releases held mouse buttons and keys on window blur', () => {
+    const { intents, container } = attach();
+    container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(intents.at(-1)).toMatchObject({ shoot: true, dir: 0 });
+
+    window.dispatchEvent(new FocusEvent('blur'));
+    expect(intents.at(-1)?.shoot).toBe(false);
+    expect(intents.at(-1)?.dir).toBeUndefined();
+
+    const releasedCount = intents.length;
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+    expect(intents).toHaveLength(releasedCount);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(intents.at(-1)?.dir).toBe(0);
+  });
+
+  it('releases held mouse buttons and keys when the document becomes hidden', () => {
+    const { intents, container } = attach();
+    container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(intents.at(-1)).toMatchObject({ shoot: true, dir: 0 });
+
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    hidden.mockRestore();
+
+    expect(intents.at(-1)?.shoot).toBe(false);
+    expect(intents.at(-1)?.dir).toBeUndefined();
+
+    const releasedCount = intents.length;
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+    expect(intents).toHaveLength(releasedCount);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(intents.at(-1)?.dir).toBe(0);
+  });
+
   it('ignores a window mouse release for a button that was never pressed in-viewport', () => {
     const { intents, container } = attach();
     container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));

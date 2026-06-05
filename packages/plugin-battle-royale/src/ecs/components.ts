@@ -39,9 +39,12 @@ export class ProjectileComponent extends Schema.Class<ProjectileComponent>("Proj
   weaponSlot: Schema.Int,
   dirX: Schema.Number,
   dirY: Schema.Number,
-  /** World units travelled per simulation tick. */
+  /**
+   * Snapshot read-model speed in world units per simulation tick. Combat
+   * reconstruction uses the resolved `ProjectileDelivery` as the combat SSOT;
+   * snapshots multiply this by direction to emit renderer velocity.
+   */
   speed: Schema.Number,
-  damage: Schema.Number,
   ttlTicks: Schema.Int,
 }) {}
 

@@ -177,9 +177,36 @@ export const attachPlaytestInputCapture = (
     emit();
   };
 
+  const releaseHeldInputs = (): void => {
+    if (heldKeys.size === 0 && heldMouseButtons.size === 0) {
+      return;
+    }
+    for (const code of heldKeys) {
+      resolver.apply(new KeyInputEvent({ tick: 0, code, pressed: false }));
+    }
+    for (const button of heldMouseButtons) {
+      resolver.apply(new MouseButtonInputEvent({ tick: 0, button, pressed: false }));
+    }
+    heldKeys.clear();
+    heldMouseButtons.clear();
+    emit();
+  };
+
+  const onWindowBlur = (): void => {
+    releaseHeldInputs();
+  };
+
+  const onVisibilityChange = (): void => {
+    if (document.hidden) {
+      releaseHeldInputs();
+    }
+  };
+
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('blur', onWindowBlur);
+  document.addEventListener('visibilitychange', onVisibilityChange);
   container?.addEventListener('pointermove', onPointerMove);
   container?.addEventListener('mousedown', onMouseDown);
 
@@ -192,6 +219,8 @@ export const attachPlaytestInputCapture = (
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('blur', onWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       container?.removeEventListener('pointermove', onPointerMove);
       container?.removeEventListener('mousedown', onMouseDown);
     },

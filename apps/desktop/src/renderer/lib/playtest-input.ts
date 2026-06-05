@@ -20,7 +20,7 @@ import {
 /** The wire intent the runtime + BR expect, produced by a plugin action→intent adapter. */
 export interface ResolvedInputIntent {
   /** 8-way movement direction, or `undefined` when idle. */
-  readonly dir: number | undefined;
+  readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | undefined;
   readonly shoot: boolean;
   readonly aimDeg?: number;
   readonly weaponSlot?: number;

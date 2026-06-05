@@ -364,7 +364,7 @@ function usePlaytestInputBridge({
           playerId: LOCAL_PLAYER_INPUT_ID,
           tick: tickCountRef.current ?? 0,
           seq,
-          dir: (intent.dir ?? 0) as 0,
+          ...(intent.dir === undefined ? {} : { dir: intent.dir }),
           shoot: intent.shoot,
           ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
           ...(intent.weaponSlot === undefined ? {} : { weaponSlot: intent.weaponSlot }),

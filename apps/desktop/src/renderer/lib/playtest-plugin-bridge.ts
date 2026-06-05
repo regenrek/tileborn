@@ -174,8 +174,9 @@ export interface ResolvedPlaytestPlugin {
   readonly inputCaptureProfile: InputCaptureProfile;
   /**
    * The plugin's action→intent adapter: maps a neutral `ActionState` into the
-   * `{ dir, shoot, aimDeg, weaponSlot }` wire intent the runtime + BR expect.
-   * This is the ONLY place the renderer learns what an action "does".
+   * `{ dir, shoot, aimDeg, weaponSlot }` intent the runtime expects, with
+   * `dir` omitted when there is no movement. This is the ONLY place the
+   * renderer learns what an action "does".
    */
   readonly resolveInputIntent: (
     actions: ActionState,
@@ -250,7 +251,7 @@ const ARENA_MOVE_ACTION = coreActionId(CORE_ACTIONS.Move);
 const ARENA_PRIMARY_ACTION = coreActionId(CORE_ACTIONS.PrimaryAction);
 
 /** Quantize a move analog vector into the neutral 8-way direction (or idle). */
-const arenaMoveVectorToDirection = (x: number, y: number): number | undefined => {
+const arenaMoveVectorToDirection = (x: number, y: number): InputDirection | undefined => {
   const dx = Math.sign(x);
   const dy = Math.sign(y);
   if (dx === 0 && dy === 0) {

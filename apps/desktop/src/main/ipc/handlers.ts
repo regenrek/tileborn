@@ -1175,7 +1175,7 @@ const buildHandlers = Effect.gen(function* () {
               setPlaytestRuntimeInput(sessionId, resolvedPlayerId, {
                 tick,
                 seq,
-                dir,
+                ...(dir !== undefined ? { dir } : {}),
                 shoot,
                 ...(aimDeg !== undefined ? { aimDeg } : {}),
                 ...(weaponSlot !== undefined ? { weaponSlot } : {}),

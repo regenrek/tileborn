@@ -120,7 +120,7 @@ const encodeBrInputFrame = (
     new BattleRoyaleProtocol.PlayerInput({
       tick: input.tick,
       seq: input.seq,
-      dir: input.dir,
+      dir: Option.some(input.dir),
       shoot: input.shoot ?? false,
       aimDeg: Option.none(),
       weaponSlot: Option.none(),

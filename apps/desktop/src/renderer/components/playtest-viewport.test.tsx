@@ -370,9 +370,14 @@ describe('PlaytestViewport overlay wiring', () => {
 
     // Hold mouse button 0 inside the viewport → PrimaryAction shoot.
     container!.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
-    const afterPress = playtestInput.mock.calls.at(-1)?.[0] as { shoot: boolean; tick: number };
+    const afterPress = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      tick: number;
+      dir?: number;
+    };
     expect(afterPress.shoot).toBe(true);
     expect(afterPress.tick).toBe(5);
+    expect(afterPress).not.toHaveProperty('dir');
 
     // A live tick refresh arrives (session metrics update). The capture must NOT
     // be recreated, so the resolver keeps the held mouse button.

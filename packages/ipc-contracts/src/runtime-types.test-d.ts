@@ -67,6 +67,9 @@ export type LogsAppendedPayloadIsTriggerOnly = Assert<
 >;
 
 export type RuntimePlaytestInputRequest = (typeof RuntimePlaytestInputContract.request)["Type"];
+export type RuntimePlaytestDirIsOptionalDirection = Assert<
+  Equal<RuntimePlaytestInputRequest["dir"], 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | undefined>
+>;
 export type RuntimePlaytestAimDegIsOptionalInt = Assert<
   Equal<RuntimePlaytestInputRequest["aimDeg"], number | undefined>
 >;

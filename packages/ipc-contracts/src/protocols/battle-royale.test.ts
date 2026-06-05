@@ -27,7 +27,7 @@ const sampleMessages: readonly Schema.Schema.Type<typeof BattleRoyaleMessage>[] 
   new PlayerInput({
     tick: 12,
     seq: 3,
-    dir: 2,
+    dir: Option.some(2),
     shoot: true,
     aimDeg: Option.some(90),
     weaponSlot: Option.some(2),
@@ -140,10 +140,29 @@ describe("BattleRoyaleProtocol wire codec", () => {
     expect(decoded).toMatchObject({
       tick: 12,
       seq: 3,
-      dir: 2,
+      dir: Option.some(2),
       shoot: true,
       aimDeg: Option.none(),
       weaponSlot: Option.none(),
+    });
+  });
+
+  it("round-trips shoot-only PlayerInput without movement direction", () => {
+    const input = new PlayerInput({
+      tick: 13,
+      seq: 4,
+      dir: Option.none(),
+      shoot: true,
+      aimDeg: Option.none(),
+      weaponSlot: Option.none(),
+    });
+
+    const decoded = decodeMessage(encodeMessage(input));
+
+    expect(decoded).toEqual(input);
+    expect(decoded).toMatchObject({
+      dir: Option.none(),
+      shoot: true,
     });
   });
 

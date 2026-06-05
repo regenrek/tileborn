@@ -121,7 +121,7 @@ export interface InitialFrameInput {
 export interface ClientInputFrame {
   readonly tick: number;
   readonly seq: number;
-  readonly dir: InputDirection;
+  readonly dir?: InputDirection;
   readonly shoot: boolean;
   readonly aimDeg?: number;
   readonly weaponSlot?: number;
@@ -390,7 +390,7 @@ export const encodeClientInputFrame = (input: ClientInputFrame): Uint8Array =>
     new BattleRoyaleProtocol.PlayerInput({
       tick: input.tick,
       seq: input.seq,
-      dir: input.dir,
+      dir: input.dir === undefined ? Option.none() : Option.some(input.dir),
       shoot: input.shoot,
       aimDeg: input.aimDeg === undefined ? Option.none() : Option.some(input.aimDeg),
       weaponSlot: input.weaponSlot === undefined ? Option.none() : Option.some(input.weaponSlot),
@@ -407,7 +407,7 @@ export const decodeClientFrameView = (bytes: Uint8Array): ClientFrameView | unde
       kind: "input",
       tick: frame.tick,
       seq: frame.seq,
-      dir: frame.dir,
+      ...(Option.isSome(frame.dir) ? { dir: frame.dir.value } : {}),
       shoot: frame.shoot,
       ...(Option.isSome(frame.aimDeg) ? { aimDeg: frame.aimDeg.value } : {}),
       ...(Option.isSome(frame.weaponSlot) ? { weaponSlot: frame.weaponSlot.value } : {}),

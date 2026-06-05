@@ -23,7 +23,6 @@ describe("arena runtime adapter", () => {
       tick: 1,
       seq: 1,
       shoot: true,
-      aimDeg: 0,
     };
     const runtime = createRuntimeAdapter({
       getPlayerInput: () => input,
@@ -40,6 +39,32 @@ describe("arena runtime adapter", () => {
     const player = snapshot.entities.find((entity) => entity.id === "player-1");
 
     expect(player?.health).toBe(100);
+    expect(player?.x).toBe(0);
+    expect(player?.y).toBe(0);
     expect(dummy?.health).toBe(85);
+  });
+
+  it("moves the player when a movement direction is present", () => {
+    const frames: Uint8Array[] = [];
+    const input: ArenaRuntimeInput = {
+      tick: 1,
+      seq: 1,
+      dir: 0,
+      shoot: false,
+    };
+    const runtime = createRuntimeAdapter({
+      getPlayerInput: () => input,
+      msgOut: { push: (frame) => frames.push(frame) },
+      seed: 1,
+    });
+
+    runtime.onInit?.({ pluginId: runtime.id }, world);
+    runtime.onTick?.(world, 1 / 20, 1);
+
+    const snapshot = snapshotFrom(frames.at(-1) ?? new Uint8Array());
+    const player = snapshot.entities.find((entity) => entity.id === "player-1");
+
+    expect(player?.x).toBeCloseTo(2);
+    expect(player?.y).toBe(0);
   });
 });

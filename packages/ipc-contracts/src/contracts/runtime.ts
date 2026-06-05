@@ -37,7 +37,7 @@ export const RuntimePlaytestInputRequest = Schema.Struct({
   playerId: Schema.optional(Schema.String),
   tick: Schema.Int,
   seq: Schema.Int,
-  dir: Direction8,
+  dir: Schema.optional(Direction8),
   shoot: Schema.Boolean,
   aimDeg: Schema.optional(Schema.Int),
   weaponSlot: Schema.optional(Schema.Int),

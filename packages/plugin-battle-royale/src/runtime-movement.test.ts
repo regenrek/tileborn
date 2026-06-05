@@ -14,7 +14,14 @@ import { Option, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { MOVEMENT, SPAWN_POINT_KIND } from "./constants.js";
-import { PLAYER_COMPONENT, POSITION_COMPONENT, type Player, type Position } from "./ecs/components.js";
+import {
+  PLAYER_COMPONENT,
+  POSITION_COMPONENT,
+  PROJECTILE_COMPONENT,
+  type Player,
+  type Position,
+  type Projectile,
+} from "./ecs/components.js";
 import {
   applyMovementTick,
   buildCollisionEnvironment,
@@ -271,6 +278,7 @@ describe("applyMovementTick", () => {
     const positions = positionsByPlayerId(world);
     expect(positions.get("player-1")?.x).toBeCloseTo(10);
     expect(positions.get("player-1")?.y).toBeCloseTo(20);
+    expect([...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()]).toHaveLength(1);
   });
 });
 

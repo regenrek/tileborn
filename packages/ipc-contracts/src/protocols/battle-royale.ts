@@ -73,7 +73,7 @@ export class ProjectileUpdate extends Schema.Class<ProjectileUpdate>("Projectile
 export class PlayerInput extends Schema.TaggedClass<PlayerInput>()("PlayerInput", {
   tick: Schema.Int,
   seq: Schema.Int,
-  dir: Direction8,
+  dir: Schema.OptionFromOptional(Direction8),
   shoot: Schema.Boolean,
   aimDeg: Schema.OptionFromOptional(Schema.Int),
   weaponSlot: Schema.OptionFromOptional(Schema.Int),

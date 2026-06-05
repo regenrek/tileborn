@@ -179,9 +179,8 @@ const moveVectorToDirection = (x: number, y: number): Direction8 | undefined => 
 /**
  * The BR action→intent adapter (ADR-0024). Maps a neutral {@link ActionState}
  * into BR's `{ dir, shoot, aimDeg, weaponSlot }` intent so the renderer/host can
- * encode the existing `ClientInputFrame` with NO change to BR's wire format or
- * projectile math. PrimaryAction→shoot, Move→dir, Aim(pointer)→aimDeg, the first
- * just-pressed SlotN→weaponSlot.
+ * encode the current `ClientInputFrame` shape. PrimaryAction→shoot, Move→dir,
+ * Aim(pointer)→aimDeg, the first just-pressed SlotN→weaponSlot.
  */
 export const resolveBattleRoyaleInputIntent = (
   actions: ActionState,

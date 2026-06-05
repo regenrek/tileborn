@@ -103,6 +103,7 @@ export interface CombatSystemContext {
 }
 
 const PROJECTILE_MUZZLE_PADDING = 1;
+const DEFAULT_FACING_DIRECTION: Direction8 = 0;
 
 const registerCombatComponents = (world: PluginWorld): void => {
   world.registerComponent<LastFacing>(LAST_FACING_COMPONENT);
@@ -129,8 +130,7 @@ const resolveShootDirection = (
   if (velocity && (velocity.vx !== 0 || velocity.vy !== 0)) {
     return normalizeVector(velocity.vx, velocity.vy);
   }
-  const dir = lastFacing?.dir ?? 0;
-  return direction8ToUnitVector(dir);
+  return direction8ToUnitVector(lastFacing === undefined ? DEFAULT_FACING_DIRECTION : lastFacing.dir);
 };
 
 const isValidAimDeg = (value: number | undefined): value is number =>

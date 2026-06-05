@@ -123,6 +123,21 @@ describe('PlaytestMultiplayerClient', () => {
     });
   });
 
+  it('omits movement direction for shoot-only frames', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const plugin = makePlugin();
+    const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
+
+    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    client.sendInput(undefined, true);
+
+    expect(plugin.encodeClientInputFrame).toHaveBeenCalledWith({
+      tick: 0,
+      seq: 1,
+      shoot: true,
+    });
+  });
+
   it('omits aimDeg/weaponSlot from the encoded frame when not provided', () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const plugin = makePlugin();

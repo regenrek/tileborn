@@ -412,11 +412,10 @@ export class PlaytestMultiplayerClient {
       return;
     }
     this.seq += 1;
-    const resolvedDir = dir ?? 0;
     const brFrame = this.plugin.encodeClientInputFrame({
       tick: this.tick,
       seq: this.seq,
-      dir: resolvedDir,
+      ...(dir === undefined ? {} : { dir }),
       shoot,
       ...(options?.aimDeg !== undefined ? { aimDeg: options.aimDeg } : {}),
       ...(options?.weaponSlot !== undefined ? { weaponSlot: options.weaponSlot } : {}),

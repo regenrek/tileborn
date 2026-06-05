@@ -4,7 +4,7 @@ import { Option } from "effect";
 export interface RuntimeClientInputFrame {
   readonly tick: number;
   readonly seq: number;
-  readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
   readonly aimDeg?: number;
   readonly weaponSlot?: number;
@@ -39,7 +39,7 @@ export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrame
     const input: RuntimeClientInputFrame = {
       tick: frame.tick,
       seq: frame.seq,
-      dir: frame.dir,
+      ...(Option.isSome(frame.dir) ? { dir: frame.dir.value } : {}),
       shoot: frame.shoot,
       ...(Option.isSome(frame.aimDeg) ? { aimDeg: frame.aimDeg.value } : {}),
       ...(Option.isSome(frame.weaponSlot) ? { weaponSlot: frame.weaponSlot.value } : {}),

@@ -48,4 +48,13 @@ describe("runtime IPC contracts", () => {
       shoot: true,
     });
   });
+
+  it("accepts shoot-only playtest input without movement direction", () => {
+    roundTrip(RuntimePlaytestInputRequest, {
+      sessionId: "playtest:550e8400-e29b-41d4-a716-446655440000",
+      tick: 14,
+      seq: 5,
+      shoot: true,
+    });
+  });
 });

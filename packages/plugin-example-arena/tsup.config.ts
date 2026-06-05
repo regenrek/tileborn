@@ -26,7 +26,12 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     dts: false,
-    noExternal: ['@tileborne/core', '@tileborne/simulation', 'msgpackr'],
+    // Keep msgpackr external (mirrors plugin-battle-royale): inlining it at
+    // platform:node bundles its native prebuild loader (detect-libc), whose
+    // unguarded `process.*` access crashes the renderer that imports this barrel
+    // ("ReferenceError: process is not defined"). External msgpackr resolves to
+    // its browser build under Vite and to the real package under Node.
+    noExternal: ['@tileborne/core', '@tileborne/simulation'],
   },
   {
     entry: { constants: 'src/constants.ts' },

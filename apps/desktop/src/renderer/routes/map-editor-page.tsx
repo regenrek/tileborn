@@ -1,5 +1,5 @@
 import { Link, useParams, useSearch } from '@tanstack/react-router';
-import { decodePersistedTileborneMapJson, type ProjectId } from '@tileborne/core';
+import { decodePersistedTileborneMapJson, type ProjectId, type TileborneMap } from '@tileborne/core';
 import { Button, Skeleton } from '@tileborne/ui';
 import { MapIcon } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
@@ -66,17 +66,24 @@ export function MapEditorPage() {
     [],
   );
 
-  // The maps IPC returns the persisted (kind-tagged) map JSON; decode it through
-  // the canonical persisted-map boundary (ADR-0019) into a runtime `TileborneMap`
-  // (with `_tag` layers + Option fields) before handing it to the Pixi viewports.
-  // Memoized so a stable identity doesn't retrigger viewport remounts each render.
-  const map = useMemo(
-    () =>
-      mapQuery.data?.map === undefined
-        ? undefined
-        : decodePersistedTileborneMapJson(mapQuery.data.map),
-    [mapQuery.data?.map],
-  );
+  // The viewports consume a runtime `TileborneMap` (`_tag` layers + Option fields).
+  // The maps cache may hold EITHER the persisted IPC shape (layers keyed by
+  // `kind`, e.g. a fresh `maps.get` fetch) OR an already-decoded runtime map (an
+  // optimistic/in-memory write). Decode only the persisted shape through the
+  // canonical boundary (ADR-0019); pass an already-decoded map through unchanged
+  // so we never double-decode. Memoized to keep a stable identity across renders.
+  const map = useMemo(() => {
+    const raw = mapQuery.data?.map;
+    if (raw === undefined) {
+      return undefined;
+    }
+    const firstLayer = (raw as { readonly layers?: ReadonlyArray<Record<string, unknown>> })
+      .layers?.[0];
+    if (firstLayer !== undefined && '_tag' in firstLayer && !('kind' in firstLayer)) {
+      return raw as TileborneMap;
+    }
+    return decodePersistedTileborneMapJson(raw);
+  }, [mapQuery.data?.map]);
 
   if (mapQuery.isLoading) {
     return (

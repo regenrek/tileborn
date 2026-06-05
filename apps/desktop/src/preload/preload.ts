@@ -1,13 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { Effect, Option } from "effect";
 
 import {
-  buildTileborneBridge,
-  IpcTransportError,
-  MainEventRegistry,
-  MainIpcRegistry,
-  type IpcClientTransport,
-} from "@tileborne/ipc-contracts";
+  buildTilebornePreloadBridge,
+  type PreloadIpcTransport,
+} from "./browser-bridge.js";
 
 import {
   STARTUP_STATUS_CHANGED_CHANNEL,
@@ -16,17 +12,8 @@ import {
   type TileborneStartupBridge,
 } from "../shared/startup-status.js";
 
-const electronClientTransport: IpcClientTransport = {
-  invoke: (channel, payload) =>
-    Effect.tryPromise({
-      try: () => ipcRenderer.invoke(channel, payload),
-      catch: (cause) =>
-        new IpcTransportError({
-          channel: Option.none(),
-          message: `IPC transport invocation failed for ${channel}`,
-          cause: Option.some(String(cause)),
-        }),
-    }),
+const electronPreloadTransport: PreloadIpcTransport = {
+  invoke: (channel, payload) => ipcRenderer.invoke(channel, payload) as Promise<unknown>,
   subscribe: (channel, onPayload) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
       onPayload(payload);
@@ -38,12 +25,7 @@ const electronClientTransport: IpcClientTransport = {
   },
 };
 
-const tileborne = buildTileborneBridge(
-  MainIpcRegistry,
-  MainEventRegistry,
-  electronClientTransport,
-  (effect) => Effect.runPromise(effect),
-);
+const tileborne = buildTilebornePreloadBridge(electronPreloadTransport);
 
 const tileborneStartup: TileborneStartupBridge = {
   getStatus: () => ipcRenderer.invoke(STARTUP_STATUS_GET_CHANNEL) as Promise<StartupStatusSnapshot>,

@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import importPlugin from 'eslint-plugin-import';
+import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -33,6 +34,7 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: {
       import: importPlugin,
+      'react-hooks': reactHooks,
     },
     settings: {
       'import/resolver': {

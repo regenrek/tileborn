@@ -103,19 +103,10 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // sandbox stays OFF (follow-up to re-enable). The preload bridge
-      // (preload.ts -> @tileborne/ipc-contracts `buildTileborneBridge` + Effect)
-      // bundles a dependency graph that *eagerly* `require()`s Node core modules
-      // at module top: `node:path`, `node:fs/promises`, `stream`, `module`
-      // (verified in .vite/build/preload.cjs lines 3-7; further lazy requires of
-      // `fs`/`os`/`child_process`/`node:url` exist deeper). A sandboxed preload
-      // can only require `electron` + a tiny polyfilled subset, so those eager
-      // requires throw and window.tileborne is never exposed. node:crypto is NOT
-      // the blocker (core derives UUIDs via a pure in-repo SHA-256). Re-enabling
-      // sandbox needs an Effect/ipc-contracts preload entry with a pure-browser
-      // graph — invasive, so deferred. contextIsolation + nodeIntegration:false
-      // (+ the navigation allowlist and CSP below) keep the boundary secure.
-      sandbox: false,
+      // The preload bridge is a pure browser-safe adapter: it imports Electron
+      // only, exposes the reviewed channel/event surface, and leaves schema
+      // validation in the main IPC boundary.
+      sandbox: true,
       preload: path.join(__dirname, "preload.cjs"),
     },
   });

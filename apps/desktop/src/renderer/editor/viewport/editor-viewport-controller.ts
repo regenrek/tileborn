@@ -1,6 +1,7 @@
 import { PixiRendererAdapter, type RuntimeAssetManifest } from '@tileborne/runtime';
 import { TRIGGER_REGION_OBJECT_TYPE_ID } from '@tileborne/core';
 import type {
+  AssetId,
   CollisionFootprintComponent,
   LayerId,
   MapLayer,
@@ -222,7 +223,7 @@ export interface EditorViewportTileAtlas {
   /** tileIndex → atlas frame, precomputed from the editor index. */
   readonly tileFramesByIndex?: ReadonlyMap<number, EditorTileFrame> | undefined;
   readonly collisionMaskByTileIndex?: ReadonlyMap<number, CollisionMaskType> | undefined;
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   /** Placeables aggregated across the loaded packs (for object rendering). */
   readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
   readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
@@ -235,7 +236,7 @@ export interface EditorViewportTileAtlas {
 /** Subset of a viewport asset bundle merged into a live controller post-mount. */
 export interface MergeableAssetBundle {
   readonly manifest: RuntimeAssetManifest;
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
   readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
   readonly assetPathById?: ReadonlyMap<string, string> | undefined;
@@ -263,7 +264,7 @@ export class EditorViewportController {
   private readonly tileFramesByIndex: ReadonlyMap<number, EditorTileFrame>;
   private readonly tileTextureCache = new Map<number, Texture>();
   private readonly objectTextureCache = new Map<string, Texture>();
-  private renderableAssetIdByPath: ReadonlyMap<string, number>;
+  private renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   private assetPathByPackAndId: ReadonlyMap<string, string>;
   private assetPathById: ReadonlyMap<string, string>;
   private map: TileborneMap | undefined;

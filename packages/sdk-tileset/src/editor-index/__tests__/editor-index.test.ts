@@ -165,6 +165,63 @@ describe("editor tileset index golden parity", () => {
     expect(new Map(decoded.directTileIndexByTerrainClass)).toEqual(expectedDirectTileIndex);
   });
 
+  it("derives representative terrain tiles from autotile rule classes when per-tile classes are absent", () => {
+    const firstTileId = meadowPack.tiles[0]!.id;
+    const secondTileId = meadowPack.tiles[1]!.id;
+    const rulesOnlyPack = parsePack({
+      ...meadowPack,
+      terrainClasses: ["auto-grass", "auto-wall"],
+      tiles: meadowPack.tiles.map((tile) => ({
+        id: tile.id,
+        tilesetId: tile.tilesetId,
+        uv: tile.uv,
+        tags: tile.tags,
+        ...(tile.animationId === undefined ? {} : { animationId: tile.animationId }),
+      })),
+      autotileRules: [
+        {
+          _tag: "wang2corner",
+          tilesetId: meadowPack.tilesets[0]!.id,
+          id: "autotile-rule:62656465-0000-4000-8000-000000000041",
+          name: "auto grass",
+          terrainClasses: ["auto-grass"],
+          maskToTileIds: {
+            "0001": [firstTileId],
+          },
+        },
+        {
+          _tag: "wang2corner",
+          tilesetId: meadowPack.tilesets[0]!.id,
+          id: "autotile-rule:62656465-0000-4000-8000-000000000042",
+          name: "auto wall",
+          terrainClasses: ["auto-wall"],
+          maskToTileIds: {
+            "0001": [secondTileId],
+          },
+        },
+      ],
+      variantFilters: [],
+      terrainTransitions: [],
+    });
+    const rulesOnlyIndex = buildEditorTilesetIndex(rulesOnlyPack, "sha256:rules-only");
+    const rulesOnlyDecoded = decodeEditorTilesetIndex(
+      JSON.parse(JSON.stringify(rulesOnlyIndex)) as typeof rulesOnlyIndex,
+    );
+
+    expect(new Map(rulesOnlyDecoded.terrainFirstTileId)).toEqual(
+      new Map([
+        ["auto-grass", firstTileId as TileId],
+        ["auto-wall", secondTileId as TileId],
+      ]),
+    );
+    expect(new Map(rulesOnlyDecoded.directTileIndexByTerrainClass)).toEqual(
+      new Map([
+        ["auto-grass", 1],
+        ["auto-wall", 2],
+      ]),
+    );
+  });
+
   it("preserves placeable frames and sizes", () => {
     expect(decoded.placeables).toEqual(pack.placeables ?? []);
     const decodedPlaceable = decoded.placeables[0]!;

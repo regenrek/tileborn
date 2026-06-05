@@ -142,6 +142,7 @@ const fakeTilesetPack = new TilesetPack({
 });
 
 const sampleTileId = fakeTilesetPack.tilesets[0]!.tiles[0]!.id;
+const sampleAssetId = fakeTilesetPack.assets[0]!.id;
 
 describe('viewport asset manifest', () => {
   beforeEach(() => {
@@ -202,7 +203,7 @@ describe('viewport asset manifest', () => {
     });
     expect(bundle.tileIndexByTileId.get(sampleTileId)).toBe(1);
     expect(bundle.collisionMaskByTileIndex.get(1)?._tag).toBe('bitmask');
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
     // The renderer no longer parses the full manifest: it fetches the compact
     // editor index exactly once per pack.
     expect(getEditorIndex).toHaveBeenCalledTimes(1);
@@ -231,7 +232,7 @@ describe('viewport asset manifest', () => {
 
     const bundle = await Effect.runPromise(loadViewportAssetBundle());
     expect(bundle.renderableAssetIdByPath.get('props/decoy-sprite.png')).toBeUndefined();
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
     expect(bundle.manifest.assets.map((asset) => asset.path)).toEqual([
       assetProtocolUrl(packWithDecoy.id, 'tiles/sample.png'),
     ]);
@@ -308,8 +309,8 @@ describe('viewport asset manifest', () => {
         renderablePlaceableRefs: [{ packId: packWithPlaceables.id, placeableId: selectedPlaceableId }],
       }),
     );
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
-    expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(2);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
+    expect(bundle.renderableAssetIdByPath.get('props/selected.png')).toBe(selectedAssetId);
     expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
   });
 
@@ -378,7 +379,7 @@ describe('viewport asset manifest', () => {
         (entry) => entry.packId === objectPackId && entry.placeable.id === objectPlaceableId,
       ),
     ).toBe(true);
-    expect(bundle.renderableAssetIdByPath.get('props/object.png')).toBeDefined();
+    expect(bundle.renderableAssetIdByPath.get('props/object.png')).toBe(objectAssetId);
   });
 
   it('keeps the primary map pack renderable when an optional palette pack is stale', async () => {
@@ -391,7 +392,7 @@ describe('viewport asset manifest', () => {
 
     expect(bundle.packId).toBe(fakeTilesetPack.id);
     expect(bundle.manifest.assets).toHaveLength(1);
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
   });
 
   it('loads an extra palette pack when the primary map pack is stale', async () => {
@@ -404,7 +405,7 @@ describe('viewport asset manifest', () => {
 
     expect(bundle.packId).toBe(fakeTilesetPack.id);
     expect(bundle.manifest.name).toBe(fakeTilesetPack.name);
-    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
   });
 
   it('reuses the viewport asset bundle for repeated loads of the same pack', async () => {
@@ -452,6 +453,6 @@ describe('viewport asset manifest', () => {
     expect(atlas.assetPathById).toBe(bundle.assetPathById);
     expect(atlas.autotileRules).toBe(bundle.autotileRules);
     expect(atlas.terrainTransitions).toBe(bundle.terrainTransitions);
-    expect(atlas.renderableAssetIdByPath.get('tiles/sample.png')).toBe(1);
+    expect(atlas.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
   });
 });

@@ -1,8 +1,8 @@
 import { Link, useParams, useSearch } from '@tanstack/react-router';
-import type { ProjectId } from '@tileborne/core';
+import { decodePersistedTileborneMapJson, type ProjectId } from '@tileborne/core';
 import { Button, Skeleton } from '@tileborne/ui';
 import { MapIcon } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { MapEditorViewport } from '@/components/map-editor-viewport';
 import { MapEditorToolbar } from '@/components/map-editor-toolbar';
@@ -66,6 +66,18 @@ export function MapEditorPage() {
     [],
   );
 
+  // The maps IPC returns the persisted (kind-tagged) map JSON; decode it through
+  // the canonical persisted-map boundary (ADR-0019) into a runtime `TileborneMap`
+  // (with `_tag` layers + Option fields) before handing it to the Pixi viewports.
+  // Memoized so a stable identity doesn't retrigger viewport remounts each render.
+  const map = useMemo(
+    () =>
+      mapQuery.data?.map === undefined
+        ? undefined
+        : decodePersistedTileborneMapJson(mapQuery.data.map),
+    [mapQuery.data?.map],
+  );
+
   if (mapQuery.isLoading) {
     return (
       <div
@@ -123,7 +135,9 @@ export function MapEditorPage() {
     );
   }
 
-  const map = mapQuery.data.map;
+  if (map === undefined) {
+    return null;
+  }
   const showSinglePlaytest = playtestActive && playtestMode === 'single' && playtestSessionId;
   const showMultiplayerPlaytest = playtestActive && playtestMode === 'multiplayer';
 

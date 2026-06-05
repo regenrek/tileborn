@@ -65,7 +65,7 @@ export interface ViewportAssetBundle {
   readonly autotileRules: readonly AutotileRule[];
   readonly terrainTransitions: readonly TerrainTransition[];
   // Aggregated across the loaded packs.
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId>;
   readonly placeables: readonly ViewportPlaceableEntry[];
   readonly assetPathByPackAndId: ReadonlyMap<string, string>;
   readonly assetPathById: ReadonlyMap<string, string>;
@@ -300,9 +300,9 @@ const loadViewportAssetBundleForPacks = (
       return emptyViewportAssetBundle();
     }
 
-    // Renderable atlas + selected placeable-frame paths, in pack order, matching
-    // the previous `loadViewportAssetBundleForPacks` ordering so the 1-based
-    // `renderableAssetIdByPath` stays stable.
+    // Renderable atlas + selected placeable-frame paths, in pack order. The
+    // controller resolves by original asset path, then asks the Pixi adapter for
+    // the manifest asset id that `loadAssets` registers as a loaded texture key.
     const renderableAssets: { readonly packId: PackId; readonly asset: EditorIndexAsset }[] = [];
     for (const index of indexes) {
       const selectedPlaceableIds = new Set(
@@ -333,9 +333,9 @@ const loadViewportAssetBundleForPacks = (
       }
     }
 
-    const renderableAssetIdByPath = new Map<string, number>();
-    renderableAssets.forEach(({ asset }, position) => {
-      renderableAssetIdByPath.set(asset.path, position + 1);
+    const renderableAssetIdByPath = new Map<string, AssetId>();
+    renderableAssets.forEach(({ asset }) => {
+      renderableAssetIdByPath.set(asset.path, asset.id as AssetId);
     });
 
     // Atlases stream via the `tileborne-asset` protocol and are decoded off the

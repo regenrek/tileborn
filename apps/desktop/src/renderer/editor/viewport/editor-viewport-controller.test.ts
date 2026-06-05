@@ -4,6 +4,7 @@ import { Container, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap, Tilemap, POINT_STRUCT_SIZE } from '@pixi/tilemap';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
 import {
+  type AssetId,
   CollisionFootprintComponent,
   CollisionFootprintPart,
   MapObject,
@@ -48,7 +49,7 @@ import {
 /** Builds index-derived placeable/asset atlas fields from synthetic packs. */
 const atlasFromPacks = (
   packs: readonly TilesetPack[],
-  renderableAssetIdByPath: ReadonlyMap<string, number>,
+  renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>,
 ): EditorViewportTileAtlas => {
   const assetPathByPackAndId = new Map<string, string>();
   const assetPathById = new Map<string, string>();
@@ -741,11 +742,12 @@ describe('EditorViewportController tilemap chunks', () => {
   // controller batches real tiles instead of falling back to the diagnostic overlay.
   const resolvableAtlas = (): EditorViewportTileAtlas => {
     const tileId = makeTileId(uuid('01'));
+    const assetId = makeAssetId(uuid('02'));
     return {
       tileFramesByIndex: new Map([
         [1, { tileId, assetPath: 'ground.png', x: 0, y: 0, width: 32, height: 32 }],
       ]),
-      renderableAssetIdByPath: new Map([['ground.png', 1]]),
+      renderableAssetIdByPath: new Map([['ground.png', assetId]]),
     };
   };
 
@@ -762,13 +764,14 @@ describe('EditorViewportController tilemap chunks', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
+    const textureForRenderableAssetId = vi.fn(() => Texture.WHITE);
     const adapter = {
       getEditorWorldRoot: () => worldRoot,
       requestRender: vi.fn(() => Effect.void),
-      textureForRenderableAssetId: vi.fn(() => Texture.WHITE),
+      textureForRenderableAssetId,
     } as unknown as PixiRendererAdapter;
     const controller = new EditorViewportController(adapter, resolvableAtlas());
-    return { worldRoot, controller };
+    return { worldRoot, controller, textureForRenderableAssetId };
   };
 
   const chunkAt = (worldRoot: Container, key: string): CompositeTilemap | undefined => {
@@ -795,6 +798,18 @@ describe('EditorViewportController tilemap chunks', () => {
     const chunk = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
     expect(chunk).toBeInstanceOf(CompositeTilemap);
     expect(tileCount(chunk!)).toBe(2);
+  });
+
+  it('resolves tile frame atlas textures by loaded asset id', () => {
+    const { worldRoot, controller, textureForRenderableAssetId } = setup();
+    const map = setTileIndex(createTestMap(), TEST_TILE_LAYER_ID, 2, 3, 1);
+
+    controller.setMap(map);
+
+    const chunk = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
+    expect(chunk).toBeInstanceOf(CompositeTilemap);
+    expect(tileCount(chunk!)).toBe(1);
+    expect(textureForRenderableAssetId).toHaveBeenCalledWith(makeAssetId(uuid('02')));
   });
 
   it('rebuilds the chunk tilemap when patchChunk applies a new edit', () => {

@@ -1,4 +1,4 @@
-import { PluginId } from "@tileborne/core";
+import { gameModeIdFromPluginId, PluginId } from "@tileborne/core";
 import { PluginContributions } from "@tileborne/plugin-api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
@@ -99,5 +99,29 @@ describe("playtest manifest-driven mode selection", () => {
     expect(
       activePlaytestPluginIds([candidate("@tileborne-plugins/editor-only", true, editorOnly())]),
     ).toEqual([]);
+  });
+
+  it("honors an explicit selected mode instead of the first discovered mode", () => {
+    expect(
+      activePlaytestPluginIds(
+        [
+          candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
+          candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+        ],
+        gameModeIdFromPluginId(pluginId("@tileborne-plugins/example-arena")),
+      ),
+    ).toEqual(["@tileborne-plugins/example-arena"]);
+  });
+
+  it("falls back to the first discovered mode when the selection is unavailable", () => {
+    expect(
+      activePlaytestPluginIds(
+        [
+          candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
+          candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+        ],
+        gameModeIdFromPluginId(pluginId("@tileborne-plugins/missing-mode")),
+      ),
+    ).toEqual([BATTLE_ROYALE_PLUGIN_ID]);
   });
 });

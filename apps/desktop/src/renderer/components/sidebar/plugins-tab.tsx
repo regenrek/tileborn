@@ -11,6 +11,7 @@ import {
 } from '@tileborne/ui';
 import { PuzzleIcon } from 'lucide-react';
 
+import { ActiveGameModePicker } from '@/components/sidebar/active-game-mode-picker';
 import { SidebarPluginContributions } from '@/components/sidebar/plugin-contribution-zone';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
@@ -40,6 +41,8 @@ export function PluginsTab({ projectId }: PluginsTabProps) {
             </Badge>
           ) : null}
         </div>
+
+        <ActiveGameModePicker projectId={projectId} />
 
         <SidebarPluginContributions zone="plugins" title="Plugin settings" />
 

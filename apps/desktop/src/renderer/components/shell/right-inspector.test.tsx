@@ -4,12 +4,20 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const battleRoyalePluginId = ['@tileborne-plugins', 'battle-royale'].join('/');
+const arenaPluginId = ['@tileborne-plugins', 'example-arena'].join('/');
+
+const hoisted = vi.hoisted(() => ({
+  projectSettings: { current: undefined as { readonly activeGameMode?: string } | undefined },
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ projectId: 'project-1', mapId: 'map-1' }),
 }));
 
 vi.mock('@/hooks/queries', () => ({
+  useProject: () => ({
+    data: { project: { settings: hoisted.projectSettings.current } },
+  }),
   useMap: () => ({
     isLoading: false,
     data: { map: { id: 'map-1', layers: [], objects: [], properties: {} } },
@@ -18,7 +26,6 @@ vi.mock('@/hooks/queries', () => ({
   // manifest discovery (the `gameModes` IPC projection), not a literal id check.
   usePluginContributions: () => ({
     data: {
-      panels: [],
       tools: [],
       gameModes: [
         {
@@ -28,6 +35,25 @@ vi.mock('@/hooks/queries', () => ({
           runtimeSystemId: 'battle-royale-runtime',
           authoringSettingsPanelId: 'battle-royale-settings',
           hasAuthoringPanel: true,
+        },
+        {
+          modeId: arenaPluginId,
+          pluginId: arenaPluginId,
+          label: 'Example Arena',
+          runtimeSystemId: 'arena-runtime',
+          authoringSettingsPanelId: 'arena-settings',
+          hasAuthoringPanel: true,
+        },
+      ],
+      panels: [
+        {
+          pluginId: arenaPluginId,
+          pluginName: 'Example Arena',
+          id: 'arena-settings',
+          zone: 'plugins',
+          title: 'Example Arena Settings',
+          capabilities: ['settings'],
+          data: { scope: 'map', fields: [] },
         },
       ],
     },
@@ -54,6 +80,19 @@ vi.mock('@/components/plugins/battle-royale-authoring-panel', () => ({
   ),
 }));
 
+vi.mock('@/components/plugins/mode-authoring-panels', () => ({
+  resolveModeAuthoringPanel: (pluginId: string) =>
+    pluginId === battleRoyalePluginId
+      ? () => <section data-testid="battle-royale-authoring-panel">Battle Royale Settings</section>
+      : undefined,
+}));
+
+vi.mock('@/components/plugins/generic-mode-settings-panel', () => ({
+  GenericModeSettingsPanel: ({ label }: { readonly label: string }) => (
+    <section data-testid="generic-mode-settings-panel">{label}</section>
+  ),
+}));
+
 vi.mock('@/components/plugins/plugin-slot', () => ({
   PluginSlot: () => <section data-testid="plugin-slot">Plugin slot</section>,
 }));
@@ -76,6 +115,7 @@ import { RightInspector } from '@/components/shell/right-inspector';
 
 describe('RightInspector', () => {
   afterEach(() => {
+    hoisted.projectSettings.current = undefined;
     cleanup();
   });
 
@@ -85,5 +125,14 @@ describe('RightInspector', () => {
     expect(screen.getByTestId('selection-summary').textContent).toContain('1 selected');
     expect(screen.getByTestId('battle-royale-authoring-panel')).toBeTruthy();
     expect(screen.getByText('Property editing for 1 selected object is coming soon.')).toBeTruthy();
+  });
+
+  it('mounts the selected non-default mode settings panel', () => {
+    hoisted.projectSettings.current = { activeGameMode: arenaPluginId };
+
+    render(<RightInspector />);
+
+    expect(screen.queryByTestId('battle-royale-authoring-panel')).toBeNull();
+    expect(screen.getByTestId('generic-mode-settings-panel').textContent).toBe('Example Arena');
   });
 });

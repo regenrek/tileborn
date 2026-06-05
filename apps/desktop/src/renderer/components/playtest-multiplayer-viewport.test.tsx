@@ -25,6 +25,11 @@ const multiplayerStateMock = vi.hoisted(() => ({
     stopHosting: vi.fn(),
   },
 }));
+const projectStateMock = vi.hoisted(() => ({
+  current: {
+    settings: undefined as { readonly activeGameMode?: string } | undefined,
+  },
+}));
 const setCameraMock = vi.hoisted(() => vi.fn());
 const renderFromEntitiesSpy = vi.hoisted(() => vi.fn());
 const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
@@ -115,12 +120,31 @@ vi.mock('@/editor/viewport/pixi-texture-from-bytes', () => ({
 }));
 
 const activeModePluginId = ['@tileborne-plugins', 'battle-royale'].join('/');
+const arenaModePluginId = ['@tileborne-plugins', 'example-arena'].join('/');
 
 // The viewport discovers the active game mode from the `gameModes` IPC
 // projection (ADR-0023 section B) rather than a hardcoded battle-royale id.
 vi.mock('@/hooks/queries', () => ({
+  useProject: () => ({ data: { project: projectStateMock.current } }),
   usePluginContributions: () => ({
-    data: { panels: [], tools: [], gameModes: [{ pluginId: activeModePluginId }] },
+    data: {
+      panels: [],
+      tools: [],
+      gameModes: [
+        {
+          modeId: activeModePluginId,
+          pluginId: activeModePluginId,
+          label: 'Battle Royale',
+          hasAuthoringPanel: true,
+        },
+        {
+          modeId: arenaModePluginId,
+          pluginId: arenaModePluginId,
+          label: 'Example Arena',
+          hasAuthoringPanel: true,
+        },
+      ],
+    },
     isLoading: false,
     isError: false,
   }),
@@ -169,6 +193,7 @@ vi.mock('@/stores/editor-ui-store', () => {
   };
 });
 
+import { resolvePlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import { PlaytestMultiplayerViewport } from './playtest-multiplayer-viewport';
 
 class ResizeObserverStub {
@@ -207,6 +232,8 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
       client: null,
       stopHosting: vi.fn(),
     };
+    projectStateMock.current = { settings: undefined };
+    vi.mocked(resolvePlaytestPlugin).mockClear();
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -262,6 +289,16 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
 
     await waitFor(() => {
       expect(setShowCollisionMock).toHaveBeenCalledWith(true);
+    });
+  });
+
+  it('uses the project-selected non-default game mode for projector resolution', async () => {
+    projectStateMock.current = { settings: { activeGameMode: arenaModePluginId } };
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(resolvePlaytestPlugin).toHaveBeenCalledWith(arenaModePluginId);
     });
   });
 

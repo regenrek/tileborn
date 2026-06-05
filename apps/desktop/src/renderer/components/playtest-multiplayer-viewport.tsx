@@ -33,11 +33,12 @@ import {
   type InputDirection,
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
-import { usePluginContributions } from '@/hooks/queries';
+import { usePluginContributions, useProject } from '@/hooks/queries';
 import {
   assemblePlaytestPlayerModelConfig,
   usePlaytestPlayerModels,
 } from '@/hooks/use-playtest-player-models';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
 import type { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
 import { multiplayerStateToConnectionInput } from '@/lib/playtest-multiplayer-status';
@@ -346,11 +347,16 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const client = usePlaytestMultiplayerStore((state) => state.client);
   const stopHosting = usePlaytestMultiplayerStore((state) => state.stopHosting);
   // ADR-0023 section B: the active game mode is discovered from the enabled
-  // plugins' manifests (the `gameModes` IPC), defaulting to the first discovered
-  // mode — mirroring the inspector + single-player playtest. No battle-royale id
-  // literal selects the mode here.
+  // plugins' manifests (the `gameModes` IPC), then resolved through the
+  // per-project active selection (falling back to first discovered). No
+  // battle-royale id literal selects the mode here.
   const contributionsQuery = usePluginContributions();
-  const activeModePluginId = contributionsQuery.data?.gameModes?.[0]?.pluginId;
+  const projectQuery = useProject(projectId);
+  const activeMode = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  );
+  const activeModePluginId = activeMode?.pluginId;
   // Resolve the active plugin once to expose its render manifest (fixedZoom,
   // hudInsets) to the JSX layer without piping it through refs. The render
   // loop re-resolves inside its own effect for lifecycle reasons.

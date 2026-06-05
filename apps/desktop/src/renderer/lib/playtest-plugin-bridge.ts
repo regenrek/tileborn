@@ -31,6 +31,20 @@ import {
   serverFrameToView,
 } from '@tileborne/plugin-battle-royale';
 import {
+  ARENA_INPUT_MAP_CONTRIBUTION_ID,
+  ARENA_PLUGIN_ID,
+  buildArenaInputMapData,
+  createArenaBundledAssets,
+  createArenaProjector,
+  createInitialFrame as createArenaInitialFrame,
+  decodeClientFrameView as decodeArenaClientFrameView,
+  decodeServerFrame as decodeArenaServerFrame,
+  encodeClientInputFrame as encodeArenaClientInputFrame,
+  encodeHeartbeatFrame as encodeArenaHeartbeatFrame,
+  encodeServerFrame as encodeArenaServerFrame,
+  serverFrameToView as arenaServerFrameToView,
+} from '@tileborne/plugin-example-arena';
+import {
   controlScheme,
   coreActionId,
   CONTROL_SCHEMES,
@@ -230,35 +244,7 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
  * place the renderer may name concrete plugin ids), so the rest of the renderer
  * resolves arena as the active mode purely by manifest discovery.
  */
-export const EXAMPLE_ARENA_PLUGIN_ID = '@tileborne-plugins/example-arena';
-
-const ARENA_INPUT_MAP_CONTRIBUTION_ID = 'arena-input-map';
-
-/**
- * The arena mode's default bindings as plain DATA (mirrors the arena manifest's
- * `runtime.inputMaps` slot): WASD move, pointer aim, mouse-0 melee, Shift dash.
- * Decoded against the engine `InputMap` schema like any other mode.
- */
-const ARENA_INPUT_MAP_DATA = {
-  id: 'arena-default-bindings',
-  actions: [
-    { action: CORE_ACTIONS.Move, valueKind: 'analog2d' },
-    { action: CORE_ACTIONS.Aim, valueKind: 'pointer' },
-    { action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' },
-    { action: CORE_ACTIONS.Dash, valueKind: 'digital' },
-  ],
-  schemeDefaults: {
-    'keyboard-mouse': [
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyW' }, axisRole: 'y-' },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyS' }, axisRole: 'y+' },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyA' }, axisRole: 'x-' },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Move, trigger: { _tag: 'key', code: 'KeyD' }, axisRole: 'x+' },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Aim, trigger: { _tag: 'pointer' } },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.PrimaryAction, trigger: { _tag: 'mouseButton', button: 0 } },
-      { _tag: 'InputBinding', action: CORE_ACTIONS.Dash, trigger: { _tag: 'key', code: 'ShiftLeft' } },
-    ],
-  },
-};
+export const EXAMPLE_ARENA_PLUGIN_ID = ARENA_PLUGIN_ID;
 
 const ARENA_MOVE_ACTION = coreActionId(CORE_ACTIONS.Move);
 const ARENA_PRIMARY_ACTION = coreActionId(CORE_ACTIONS.PrimaryAction);
@@ -280,23 +266,11 @@ const arenaMoveVectorToDirection = (x: number, y: number): number | undefined =>
   return 7;
 };
 
-/**
- * Minimal, skeletal render provider for the example arena mode (ADR-0023
- * proof). The arena package proves genre-neutral DISCOVERY + contract decode,
- * but it defines no server-frame WIRE codec yet, so the multiplayer snapshot
- * path decodes nothing (`decodeServerFrame` → undefined) and the projector emits
- * no entities. This provider exists so that SELECTING arena resolves a projector
- * (no crash) and wires the neutral arena input map; full arena entity rendering
- * is deferred until the arena defines a wire frame. It touches no engine code.
- */
 const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
-  const projector: RenderableEntityProjector<unknown> = {
-    project: () => [],
-    mergeFrame: (_previousFullState, frame) => frame,
-    getRenderManifest: () => FALLBACK_RENDER_MANIFEST,
-  };
+  const projector = createArenaProjector();
+  const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
   const scheme = controlScheme(CONTROL_SCHEMES.KeyboardMouse);
-  const decoded = decodeInputMap(ARENA_INPUT_MAP_CONTRIBUTION_ID, ARENA_INPUT_MAP_DATA);
+  const decoded = decodeInputMap(ARENA_INPUT_MAP_CONTRIBUTION_ID, buildArenaInputMapData());
   // Static, schema-valid data (covered by the arena package proof test); the
   // BR-default fallback only guards an impossible decode failure with a valid map.
   const baseInputMap = Result.isSuccess(decoded) ? decoded.success : battleRoyaleDefaultInputMap();
@@ -304,15 +278,22 @@ const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
   const inputMap = resolveEffectiveInputMap(baseInputMap, userOverlay);
   return {
     projector,
-    bundledAssets: [],
-    manifest: FALLBACK_RENDER_MANIFEST,
-    decodeServerFrame: () => undefined,
-    serverFrameToView: () => undefined,
-    createInitialFrame: (input) => input,
-    encodeClientInputFrame: () => new Uint8Array(),
-    encodeHeartbeatFrame: () => new Uint8Array(),
-    encodeServerFrame: () => new Uint8Array(),
-    decodeClientFrameView: () => undefined,
+    bundledAssets: registerBundledAssets(createArenaBundledAssets()),
+    manifest,
+    decodeServerFrame: (bytes) => {
+      try {
+        return decodeArenaServerFrame(bytes);
+      } catch {
+        return undefined;
+      }
+    },
+    serverFrameToView: (frame) => arenaServerFrameToView(frame) as ServerFrameView | undefined,
+    createInitialFrame: createArenaInitialFrame,
+    encodeClientInputFrame: encodeArenaClientInputFrame,
+    encodeHeartbeatFrame: encodeArenaHeartbeatFrame,
+    encodeServerFrame: encodeArenaServerFrame,
+    decodeClientFrameView: (bytes) =>
+      decodeArenaClientFrameView(bytes) as ClientFrameView | undefined,
     inputMap,
     controlScheme: scheme,
     inputCaptureProfile: deriveInputCaptureProfile(inputMap, scheme),

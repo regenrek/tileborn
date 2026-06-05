@@ -19,7 +19,8 @@ import { ViewportOverlaysSection } from '@/components/inspector/viewport-overlay
 import { GenericModeSettingsPanel } from '@/components/plugins/generic-mode-settings-panel';
 import { resolveModeAuthoringPanel } from '@/components/plugins/mode-authoring-panels';
 import { PluginSlot } from '@/components/plugins/plugin-slot';
-import { useMap, usePluginContributions } from '@/hooks/queries';
+import { useMap, usePluginContributions, useProject } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { materializeSettingsFormFromPanelData } from '@/lib/authoring-settings-form';
 import { PLUGIN_SLOTS } from '@/lib/plugin-slots';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -31,13 +32,17 @@ export function RightInspector() {
   const selection = useEditorUiStore((s) => s.selection);
   const activeTool = useEditorUiStore((s) => s.activeTool);
   const mapQuery = useMap(projectId, mapId);
+  const projectQuery = useProject(projectId);
   const contributionsQuery = usePluginContributions();
   // ADR-0023 section B: mount the ACTIVE game mode's authoring panel by manifest
   // discovery (a plugin declaring a runtime system + settings panel), resolving
   // the bundled panel component by plugin id — not a `battleRoyaleEnabled`
-  // literal-id check. Defaults to the first discovered mode (selection seam:
-  // a per-project `ActiveGameMode` chooses among multiple modes).
-  const activeMode = contributionsQuery.data?.gameModes?.[0];
+  // literal-id check. Defaults to the first discovered mode until the project
+  // stores an explicit `project.settings.activeGameMode` selection.
+  const activeMode = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  );
   const ActiveModePanel =
     activeMode?.hasAuthoringPanel === true
       ? resolveModeAuthoringPanel(activeMode.pluginId)

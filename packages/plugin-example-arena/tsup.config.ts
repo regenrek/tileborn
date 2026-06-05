@@ -15,7 +15,7 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     dts: false,
-    noExternal: ['@tileborne/core', '@tileborne/simulation', 'effect'],
+    noExternal: ['@tileborne/core', '@tileborne/simulation', 'effect', 'msgpackr'],
   },
   {
     entry: { index: 'src/index.ts' },
@@ -26,7 +26,7 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     dts: false,
-    noExternal: ['@tileborne/core', '@tileborne/simulation'],
+    noExternal: ['@tileborne/core', '@tileborne/simulation', 'msgpackr'],
   },
   {
     entry: { constants: 'src/constants.ts' },

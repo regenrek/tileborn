@@ -1,7 +1,10 @@
 import {
+  DamageDelivery,
+  validateDamageDelivery,
   WeaponDefinition,
   WeaponDefinitionId,
   makeWeaponDefinition,
+  type MeleeDelivery,
 } from "@tileborne/simulation";
 import { Option, Result, Schema } from "effect";
 
@@ -80,4 +83,29 @@ export const resolveArenaWeapon = (): WeaponDefinition => {
     throw new ArenaWeaponCatalogError("arena weapon id did not round-trip");
   }
   return validated.success;
+};
+
+export interface ArenaWeaponEntry {
+  readonly weapon: WeaponDefinition;
+  readonly delivery: MeleeDelivery;
+}
+
+export const resolveArenaWeaponEntry = (): ArenaWeaponEntry => {
+  const raw = buildArenaWeaponCatalogData().weapons[0] as {
+    readonly weapon?: unknown;
+    readonly delivery?: unknown;
+  };
+  const weapon = resolveArenaWeapon();
+  const decodedDelivery = Schema.decodeUnknownOption(DamageDelivery)(raw.delivery);
+  if (Option.isNone(decodedDelivery)) {
+    throw new ArenaWeaponCatalogError("arena weapon entry is not a valid DamageDelivery");
+  }
+  const validatedDelivery = validateDamageDelivery(decodedDelivery.value);
+  if (Result.isFailure(validatedDelivery)) {
+    throw new ArenaWeaponCatalogError(validatedDelivery.failure.message);
+  }
+  if (validatedDelivery.success._tag !== "MeleeDelivery") {
+    throw new ArenaWeaponCatalogError("arena weapon delivery is not melee");
+  }
+  return { weapon, delivery: validatedDelivery.success };
 };

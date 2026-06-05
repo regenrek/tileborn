@@ -2,6 +2,7 @@ import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { ProjectManifest } from "@tileborne/core";
 import { PluginManifest } from "@tileborne/plugin-api";
 import { MapService, ProjectService } from "@tileborne/services-app";
 import { ConfigLayer, HomeServiceLive, JobService, JobServiceLive } from "@tileborne/services-foundation";
@@ -56,6 +57,7 @@ const pluginLayer = Layer.mergeAll(PluginLoaderMainLayer, PluginInstallerLayer).
   Layer.provideMerge(foundationLayer),
 );
 const testLayer = ServicesBuildLayer.pipe(Layer.provideMerge(pluginLayer), Layer.provideMerge(foundationLayer));
+const EXAMPLE_ARENA_PLUGIN_ID = "@tileborne-plugins/example-arena";
 
 const waitForJob = (jobId: string) =>
   Effect.gen(function* () {
@@ -125,6 +127,56 @@ const installExportPlugin = (entryBody: string) =>
     const installer = yield* PluginInstallerService;
     yield* installer.install(new LocalPluginSource({ path: source }));
     Schema.decodeUnknownSync(PluginManifest)(manifestInput);
+    return source;
+  });
+
+const installRuntimePlugin = (input: {
+  readonly pluginId: string;
+  readonly runtimeSystemId: string;
+  readonly runtimeLabel: string;
+}) =>
+  Effect.gen(function* () {
+    const source = yield* Effect.promise(() => mkdtemp(path.join(tmpdir(), "tileborne-runtime-plugin-")));
+    const manifest = Schema.decodeUnknownSync(PluginManifest)(
+      materializePluginManifestInput({
+        schemaVersion: 1,
+        id: input.pluginId,
+        name: input.pluginId,
+        version: "0.0.1",
+        displayName: input.runtimeLabel,
+        description: "Runtime fixture plugin",
+        author: "Tileborne",
+        license: "MIT",
+        engines: { tileborne: "^0.1.0" },
+        entry: { editor: "./node.js", runtime: "./runtime.js" },
+        permissions: [],
+        dependsOn: [],
+        contributes: {
+          runtime: {
+            systems: [
+              {
+                _tag: "ExecutableRuntimeSystemContribution",
+                id: input.runtimeSystemId,
+                kind: "executable",
+                display: { label: input.runtimeLabel },
+                entry: "./runtime.js",
+              },
+            ],
+          },
+        },
+      }),
+    );
+    yield* Effect.promise(async () => {
+      await mkdir(source, { recursive: true });
+      await writeFile(
+        path.join(source, "tileborne-plugin.json"),
+        `${JSON.stringify(Schema.encodeSync(PluginManifest)(manifest), null, 2)}\n`,
+      );
+      await writeFile(path.join(source, "node.js"), "export {};\n");
+      await writeFile(path.join(source, "runtime.js"), "export {};\n");
+    });
+    const installer = yield* PluginInstallerService;
+    yield* installer.install(new LocalPluginSource({ path: source }));
     return source;
   });
 
@@ -489,6 +541,40 @@ describe("PlaytestService", () => {
       expect(session.activePlugins).toContain(BATTLE_ROYALE_PLUGIN_ID);
       const artifactDirectory = Option.getOrThrow(session.artifactDirectory);
       expect(await fileExists(path.join(artifactDirectory, "map.json"))).toBe(true);
+    }));
+
+  it("assembles artifact with the selected active game mode plugin on start", () =>
+    withTempHome(async () => {
+      const session = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject("Arena");
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: "battle-royale-runtime",
+            runtimeLabel: "Battle Royale Runtime Adapter",
+          });
+          yield* installRuntimePlugin({
+            pluginId: EXAMPLE_ARENA_PLUGIN_ID,
+            runtimeSystemId: "arena-runtime",
+            runtimeLabel: "Example Arena Runtime Adapter",
+          });
+          const projects = yield* ProjectService;
+          const project = yield* projects.open(projectId);
+          yield* projects.save(
+            new ProjectManifest({
+              ...project,
+              settings: {
+                ...(project.settings ?? {}),
+                activeGameMode: EXAMPLE_ARENA_PLUGIN_ID,
+              },
+            }),
+          );
+          const playtest = yield* PlaytestService;
+          return yield* playtest.start(projectId, mapId);
+        }).pipe(Effect.provide(testLayer)),
+      );
+
+      expect(session.activePlugins).toEqual([EXAMPLE_ARENA_PLUGIN_ID]);
     }));
 
   it("stops a running session", () =>

@@ -7,25 +7,38 @@
  */
 
 /** One tick of resolved player intent the host feeds the adapter. */
-export interface ArenaPlayerInput {
-  /** Horizontal move axis in [-1, 1]. */
-  readonly moveX: number;
-  /** Vertical move axis in [-1, 1]. */
-  readonly moveY: number;
-  /** Whether the melee swing (PrimaryAction) is pressed this tick. */
-  readonly attack: boolean;
+export interface ArenaRuntimeInput {
+  readonly tick: number;
+  readonly seq: number;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly shoot: boolean;
+  readonly aimDeg?: number;
+}
+
+export interface ArenaRuntimeMessageOut {
+  readonly push: (frame: Uint8Array) => void;
 }
 
 export interface ArenaRuntimeHost {
   /** Deterministic seed (unused by this skeleton, kept for parity). */
-  readonly seed?: number;
+  readonly seed?: string | number;
   /** Resolved player intent for the current tick, when available. */
-  readonly getPlayerInput?: () => ArenaPlayerInput | undefined;
+  readonly getPlayerInput?: (playerId: string) => ArenaRuntimeInput | undefined;
+  readonly msgOut?: ArenaRuntimeMessageOut;
+  readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+}
+
+export interface ArenaRuntimePluginContext {
+  readonly pluginId: string;
+}
+
+export interface ArenaPluginWorld {
+  readonly createEntity: () => number;
 }
 
 export interface ArenaRuntimePlugin {
   readonly id: string;
-  readonly onInit?: () => void;
-  readonly onTick?: (dt: number, tick: number) => void;
+  readonly onInit?: (ctx: ArenaRuntimePluginContext, world: ArenaPluginWorld) => void;
+  readonly onTick?: (world: ArenaPluginWorld, dt: number, tick: number) => void;
   readonly onShutdown?: () => void;
 }

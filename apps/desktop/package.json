@@ -34,6 +34,7 @@
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/plugin-battle-royale": "workspace:*",
+    "@tileborne/plugin-example-arena": "workspace:*",
     "@tileborne/runtime": "workspace:*",
     "@tileborne/sdk-tileset": "workspace:*",
     "@tileborne/services-app": "workspace:*",

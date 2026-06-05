@@ -6,7 +6,7 @@ import {
   type GameModeManifest,
   resolveActiveGameMode,
 } from "@tileborne/plugin-api";
-import { MapService } from "@tileborne/services-app";
+import { MapService, ProjectService } from "@tileborne/services-app";
 import { HomeService } from "@tileborne/services-foundation";
 import type { PluginInstallerServiceError } from "@tileborne/services-plugin";
 import { PluginRegistryService } from "@tileborne/services-plugin";
@@ -35,6 +35,7 @@ import {
   writeTextFile,
   writeVerifiedJson,
 } from "../internal/persistence.js";
+import { readProjectActiveGameModeId } from "./active-game-mode-selection.js";
 
 /**
  * The bundled battle-royale plugin id. Retained ONLY as a test fixture / assertion
@@ -248,6 +249,7 @@ export const PlaytestServiceLive = Layer.effect(
   Effect.gen(function* () {
     const home = yield* HomeService;
     const maps = yield* MapService;
+    const projects = yield* ProjectService;
     const registry = yield* PluginRegistryService;
     const paths = yield* home.init();
     const playtestRoot = path.join(paths.cache, "playtest");
@@ -323,6 +325,7 @@ export const PlaytestServiceLive = Layer.effect(
       yield* Ref.update(sessions, (current) => [...current, session]);
       yield* PubSub.publish(events, void 0);
 
+      const project = yield* projects.open(projectId);
       const installed = yield* registry.list();
       const enabledPlugins = activePlaytestPluginIds(
         installed.map((plugin) => ({
@@ -330,6 +333,7 @@ export const PlaytestServiceLive = Layer.effect(
           enabled: plugin.enabled,
           contributions: plugin.manifest.contributes,
         })),
+        readProjectActiveGameModeId(project),
       );
       const artifact = yield* assembleArtifact({
         projectId,

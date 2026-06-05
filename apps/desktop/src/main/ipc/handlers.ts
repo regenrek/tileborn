@@ -221,6 +221,8 @@ const toGameModeView = (descriptor: GameModeDescriptor) => ({
   hasAuthoringPanel: descriptor.hasAuthoringPanel,
   ...optionalField('runtimeSystemId', descriptor.runtimeSystemId),
   ...optionalField('authoringSettingsPanelId', descriptor.authoringSettingsPanelId),
+  ...optionalField('gameSettingsFormId', descriptor.gameSettingsFormId),
+  ...optionalField('gameSettingsForm', descriptor.gameSettingsForm),
 });
 
 const formatPluginPermission = (permission: { readonly _tag: string }): string => permission._tag;

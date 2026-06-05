@@ -29,15 +29,7 @@
         "description": "Per-map arena tuning fields.",
         "group": "gameplay",
         "order": 10,
-        "capabilities": ["settings"],
-        "data": {
-          "scope": "map",
-          "invalidMessage": "Arena settings must be valid numbers within range.",
-          "fields": [
-            { "key": "arenaRadius", "label": "Arena radius", "min": 4, "max": 256, "step": 1, "default": 32 },
-            { "key": "enemyCount", "label": "Enemy count", "min": 0, "max": 64, "step": 1, "default": 8 }
-          ]
-        }
+        "capabilities": ["settings"]
       }
     ],
     "editor": {

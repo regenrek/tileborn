@@ -34,6 +34,21 @@ vi.mock('@/hooks/queries', () => ({
           label: 'Battle Royale Settings',
           runtimeSystemId: 'battle-royale-runtime',
           authoringSettingsPanelId: 'battle-royale-settings',
+          gameSettingsFormId: 'battle-royale-settings-form',
+          gameSettingsForm: {
+            scope: 'map',
+            invalidMessage: 'Battle Royale settings must be positive numbers.',
+            fields: [
+              {
+                key: 'maxPlayers',
+                label: 'Max players',
+                min: 1,
+                max: undefined,
+                step: 1,
+                default: 32,
+              },
+            ],
+          },
           hasAuthoringPanel: true,
         },
         {
@@ -42,20 +57,33 @@ vi.mock('@/hooks/queries', () => ({
           label: 'Example Arena',
           runtimeSystemId: 'arena-runtime',
           authoringSettingsPanelId: 'arena-settings',
+          gameSettingsFormId: 'arena-settings-form',
+          gameSettingsForm: {
+            scope: 'map',
+            invalidMessage: 'Arena settings must be valid numbers within range.',
+            fields: [
+              {
+                key: 'arenaRadius',
+                label: 'Arena radius',
+                min: 4,
+                max: 256,
+                step: 1,
+                default: 32,
+              },
+              {
+                key: 'enemyCount',
+                label: 'Enemy count',
+                min: 0,
+                max: 64,
+                step: 1,
+                default: 8,
+              },
+            ],
+          },
           hasAuthoringPanel: true,
         },
       ],
-      panels: [
-        {
-          pluginId: arenaPluginId,
-          pluginName: 'Example Arena',
-          id: 'arena-settings',
-          zone: 'plugins',
-          title: 'Example Arena Settings',
-          capabilities: ['settings'],
-          data: { scope: 'map', fields: [] },
-        },
-      ],
+      panels: [],
     },
   }),
 }));

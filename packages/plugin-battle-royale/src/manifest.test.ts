@@ -40,6 +40,7 @@ describe("tileborne-plugin.json", () => {
 
     expect(editor).toBeDefined();
     if (editor) {
+      expect(Option.getOrElse(editor.gameSettingsForms, () => [])).toHaveLength(1);
       expect(Option.getOrElse(editor.generators, () => [])).toHaveLength(1);
       expect(Option.getOrElse(editor.validators, () => []).length).toBeGreaterThan(0);
       expect(Option.getOrElse(editor.assetMetadata, () => [])).toHaveLength(1);

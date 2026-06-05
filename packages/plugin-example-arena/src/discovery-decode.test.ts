@@ -55,17 +55,6 @@ const readRuntimeContributionData = (
   return entry.data;
 };
 
-const readSettingsPanelData = (manifestPath: string, panelId: string): unknown => {
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-    contributes?: { panels?: readonly { readonly id: string; readonly data: unknown }[] };
-  };
-  const panel = manifest.contributes?.panels?.find((p) => p.id === panelId);
-  if (panel === undefined) {
-    throw new Error(`arena manifest is missing the ${panelId} panel`);
-  }
-  return panel.data;
-};
-
 describe("example-arena proves genre-neutral extensibility", () => {
   describe("discovery (same generic discoverGameModes path as BR)", () => {
     it("discovers TWO game modes — battle royale and the example arena", () => {
@@ -86,6 +75,11 @@ describe("example-arena proves genre-neutral extensibility", () => {
       expect(arenaMode?.runtimeSystemId).toBe("arena-runtime");
       expect(arenaMode?.hasAuthoringPanel).toBe(true);
       expect(arenaMode?.authoringSettingsPanelId).toBe("arena-settings");
+      expect(arenaMode?.gameSettingsFormId).toBe("arena-settings-form");
+      expect(arenaMode?.gameSettingsForm?.fields.map((field) => field.label)).toEqual([
+        "Arena radius",
+        "Enemy count",
+      ]);
       expect(arenaMode?.label).toBe("Arena Settings");
     });
   });
@@ -157,24 +151,7 @@ describe("example-arena proves genre-neutral extensibility", () => {
       expect(Result.isSuccess(merged)).toBe(true);
     });
 
-    it("settings form decodes via decodeGameSettingsForm + materializes", () => {
-      const decoded = decodeGameSettingsForm(
-        "arena-settings",
-        readSettingsPanelData(arenaManifestPath, "arena-settings"),
-      );
-      expect(Result.isSuccess(decoded)).toBe(true);
-      if (Result.isFailure(decoded)) {
-        return;
-      }
-      const form = materializeGameSettingsForm(decoded.success);
-      expect(form.scope).toBe("map");
-      expect(form.fields.map((field) => field.key)).toEqual(["arenaRadius", "enemyCount"]);
-      // Neutral fields — NOT zone/maxPlayers (BR-specific).
-      expect(form.fields.map((field) => field.key)).not.toContain("maxPlayers");
-      expect(gameSettingsDefaults(form)).toEqual({ arenaRadius: 32, enemyCount: 8 });
-    });
-
-    it("the SAME settings declaration also rides the EditorGameSettingsForm slot", () => {
+    it("settings form decodes from the EditorGameSettingsForm slot", () => {
       const manifest = readManifest(arenaManifestPath);
       const editor = Option.getOrUndefined(manifest.contributes.editor);
       const forms = editor === undefined ? [] : Option.getOrElse(editor.gameSettingsForms, () => []);
@@ -185,6 +162,15 @@ describe("example-arena proves genre-neutral extensibility", () => {
       }
       const decoded = decodeGameSettingsForm("arena-settings-form", form.data);
       expect(Result.isSuccess(decoded)).toBe(true);
+      if (Result.isFailure(decoded)) {
+        return;
+      }
+      const materialized = materializeGameSettingsForm(decoded.success);
+      expect(materialized.scope).toBe("map");
+      expect(materialized.fields.map((field) => field.key)).toEqual(["arenaRadius", "enemyCount"]);
+      // Neutral fields — NOT zone/maxPlayers (BR-specific).
+      expect(materialized.fields.map((field) => field.key)).not.toContain("maxPlayers");
+      expect(gameSettingsDefaults(materialized)).toEqual({ arenaRadius: 32, enemyCount: 8 });
     });
   });
 });

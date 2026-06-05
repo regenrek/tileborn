@@ -95,6 +95,21 @@ describe('main IPC contracts', () => {
           label: 'Battle Royale Settings',
           runtimeSystemId: 'battle-royale-runtime',
           authoringSettingsPanelId: 'battle-royale-settings',
+          gameSettingsFormId: 'battle-royale-settings-form',
+          gameSettingsForm: {
+            scope: 'map',
+            invalidMessage: 'Battle Royale settings must be positive numbers.',
+            fields: [
+              {
+                key: 'maxPlayers',
+                label: 'Max players',
+                min: 1,
+                max: undefined,
+                step: 1,
+                default: 32,
+              },
+            ],
+          },
           hasAuthoringPanel: true,
         },
       ],

@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { materializeGameSettingsForm } from '@tileborne/plugin-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GameSettingsForm } from '@/components/plugins/game-settings-form';
-import { materializeSettingsFormFromPanelData } from '@/lib/authoring-settings-form';
 
-// A manifest `EditorGameSettingsForm` declaration as it rides on a discovered
-// settings panel's `data` (decoded generically — no plugin-specific TS import).
-const manifestPanelData = {
-  scope: 'map',
+// A materialized `EditorGameSettingsForm` declaration as projected on the
+// discovered game mode (no plugin-specific TS import).
+const manifestFormData = {
+  scope: 'map' as const,
   invalidMessage: 'Settings must be positive numbers.',
   fields: [
     { key: 'maxPlayers', label: 'Max players', min: 1, step: 1, default: 32 },
@@ -17,13 +17,7 @@ const manifestPanelData = {
   ],
 };
 
-const materialize = () => {
-  const form = materializeSettingsFormFromPanelData('mode-settings', manifestPanelData);
-  if (form === undefined) {
-    throw new Error('expected a valid settings form declaration');
-  }
-  return form;
-};
+const materialize = () => materializeGameSettingsForm(manifestFormData);
 
 describe('GameSettingsForm (generic, manifest-driven)', () => {
   afterEach(() => {

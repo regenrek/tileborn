@@ -41,6 +41,32 @@ const RUNTIME_DEFAULTS = {
   weaponCatalogs: undefined,
 } as const;
 
+const EDITOR_DEFAULTS = {
+  tabs: undefined,
+  tools: undefined,
+  inspectors: undefined,
+  commands: undefined,
+  menus: undefined,
+  settings: undefined,
+  paletteCategories: undefined,
+  paletteSubFilters: undefined,
+  paletteItemActions: undefined,
+  viewportActions: undefined,
+  toolDock: undefined,
+  overlays: undefined,
+  inspectorPanels: undefined,
+  settingsPanels: undefined,
+  mapKinds: undefined,
+  presets: undefined,
+  panels: undefined,
+  validators: undefined,
+  exporters: undefined,
+  generators: undefined,
+  assetMetadata: undefined,
+  playerModelPolicies: undefined,
+  gameSettingsForms: undefined,
+} as const;
+
 const CONTRIBUTIONS_DEFAULTS = {
   panels: undefined,
   tools: undefined,
@@ -68,13 +94,30 @@ const runtimeSystem = (id: string, label: string) => ({
   entry: "./dist/runtime.js",
 });
 
+const gameSettingsForm = (id: string) => ({
+  _tag: "DeclarativeEditorGameSettingsFormContribution" as const,
+  id,
+  kind: "declarative" as const,
+  display: display("Mode Settings"),
+  data: {
+    scope: "map",
+    invalidMessage: "Settings must be valid.",
+    fields: [{ key: "maxPlayers", label: "Max players", min: 1, step: 1, default: 32 }],
+  },
+});
+
 const contributions = (parts: {
   readonly panels?: readonly unknown[];
   readonly systems?: readonly unknown[];
+  readonly gameSettingsForms?: readonly unknown[];
 }): PluginContributions =>
   decodeContributions({
     ...CONTRIBUTIONS_DEFAULTS,
     panels: parts.panels,
+    editor:
+      parts.gameSettingsForms === undefined
+        ? undefined
+        : { ...EDITOR_DEFAULTS, gameSettingsForms: parts.gameSettingsForms },
     runtime: parts.systems === undefined ? undefined : { ...RUNTIME_DEFAULTS, systems: parts.systems },
   });
 
@@ -85,6 +128,7 @@ const BR_PLUGIN_ID = pluginId("@tileborne-plugins/battle-royale");
 const brContributions = contributions({
   panels: [panel({ id: "battle-royale-settings", zone: "plugins", title: "Battle Royale Settings", capabilities: ["settings"] })],
   systems: [runtimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")],
+  gameSettingsForms: [gameSettingsForm("battle-royale-settings-form")],
 });
 
 describe("game-mode discovery", () => {
@@ -96,6 +140,8 @@ describe("game-mode discovery", () => {
     expect(descriptor?.runtimeSystemId).toBe("battle-royale-runtime");
     expect(descriptor?.hasAuthoringPanel).toBe(true);
     expect(descriptor?.authoringSettingsPanelId).toBe("battle-royale-settings");
+    expect(descriptor?.gameSettingsFormId).toBe("battle-royale-settings-form");
+    expect(descriptor?.gameSettingsForm?.fields.map((field) => field.key)).toEqual(["maxPlayers"]);
     expect(descriptor?.label).toBe("Battle Royale Settings");
   });
 
@@ -117,6 +163,21 @@ describe("game-mode discovery", () => {
     expect(descriptor?.hasAuthoringPanel).toBe(false);
     expect(descriptor?.authoringSettingsPanelId).toBeUndefined();
     expect(descriptor?.label).toBe("Top-Down Shooter");
+  });
+
+  it("discovers a first-class settings form without reading panel data", () => {
+    const formOnly = contributions({
+      systems: [runtimeSystem("arena-runtime", "Arena Runtime")],
+      gameSettingsForms: [gameSettingsForm("arena-settings-form")],
+    });
+    const descriptor = describeGameMode({
+      pluginId: pluginId("@tileborne-plugins/example-arena"),
+      contributions: formOnly,
+    });
+    expect(descriptor?.hasAuthoringPanel).toBe(true);
+    expect(descriptor?.authoringSettingsPanelId).toBeUndefined();
+    expect(descriptor?.gameSettingsFormId).toBe("arena-settings-form");
+    expect(descriptor?.gameSettingsForm?.fields[0]?.label).toBe("Max players");
   });
 
   it("ignores a settings panel outside the plugins zone", () => {

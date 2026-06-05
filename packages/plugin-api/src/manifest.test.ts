@@ -321,6 +321,9 @@ describe("PluginManifest", () => {
           playerModelPolicies: [
             declarativeContribution("DeclarativeEditorPlayerModelPolicyContribution", "br-models"),
           ],
+          gameSettingsForms: [
+            declarativeContribution("DeclarativeEditorGameSettingsFormContribution", "br-settings-form"),
+          ],
         },
         runtime: {
           ...minimalContributions.runtime,

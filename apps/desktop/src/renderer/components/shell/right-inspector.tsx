@@ -21,7 +21,6 @@ import { resolveModeAuthoringPanel } from '@/components/plugins/mode-authoring-p
 import { PluginSlot } from '@/components/plugins/plugin-slot';
 import { useMap, usePluginContributions, useProject } from '@/hooks/queries';
 import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
-import { materializeSettingsFormFromPanelData } from '@/lib/authoring-settings-form';
 import { PLUGIN_SLOTS } from '@/lib/plugin-slots';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
@@ -47,17 +46,10 @@ export function RightInspector() {
     activeMode?.hasAuthoringPanel === true
       ? resolveModeAuthoringPanel(activeMode.pluginId)
       : undefined;
-  // ADR-0023 section A: decode the active mode's `EditorGameSettingsForm` from
-  // its discovered settings panel `data` so the inspector renders the form
-  // generically — a custom panel (Battle Royale) receives it as a prop, and a
-  // mode without a bespoke panel falls back to the generic settings panel.
-  const settingsPanel = contributionsQuery.data?.panels?.find(
-    (panel) => panel.id === activeMode?.authoringSettingsPanelId,
-  );
-  const activeModeSettingsForm =
-    settingsPanel === undefined
-      ? undefined
-      : materializeSettingsFormFromPanelData(settingsPanel.id, settingsPanel.data);
+  // ADR-0023 section A: consume the active mode's first-class
+  // `EditorGameSettingsForm` IPC projection. The renderer does not read forms
+  // from settings-panel `data`.
+  const activeModeSettingsForm = activeMode?.gameSettingsForm;
 
   if (inspectorCollapsed) {
     return (

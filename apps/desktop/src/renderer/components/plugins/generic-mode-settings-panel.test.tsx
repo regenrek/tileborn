@@ -10,6 +10,7 @@ import {
   type ProjectManifest,
   type TileborneMap,
 } from '@tileborne/core';
+import { materializeGameSettingsForm } from '@tileborne/plugin-api';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,24 +42,18 @@ vi.mock('@/stores/app-notifications-store', () => ({
 }));
 
 import { GenericModeSettingsPanel } from '@/components/plugins/generic-mode-settings-panel';
-import { materializeSettingsFormFromPanelData } from '@/lib/authoring-settings-form';
 
 const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix}`;
 const PLUGIN_ID = '@example/mode';
 
 const FIELDS = [{ key: 'maxPlayers', label: 'Max players', min: 1, step: 1, default: 32 }];
 
-const materialize = (scope: 'map' | 'project') => {
-  const form = materializeSettingsFormFromPanelData('mode-settings', {
+const materialize = (scope: 'map' | 'project') =>
+  materializeGameSettingsForm({
     scope,
     invalidMessage: 'Settings must be positive numbers.',
     fields: FIELDS,
   });
-  if (form === undefined) {
-    throw new Error('expected a valid settings form declaration');
-  }
-  return form;
-};
 
 const sampleMap = (): TileborneMap =>
   makeTileborneMap({

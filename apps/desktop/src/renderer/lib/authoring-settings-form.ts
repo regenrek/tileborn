@@ -1,10 +1,3 @@
-import { Result } from 'effect';
-import {
-  decodeGameSettingsForm,
-  materializeGameSettingsForm,
-  type MaterializedGameSettingsForm,
-} from '@tileborne/plugin-api';
-
 /**
  * Generic mechanism for plugin-contributed authoring settings forms. Mirrors the
  * catalog-driven palette projection / player-model policy precedent: a game-mode
@@ -35,22 +28,3 @@ export interface AuthoringSettingsForm<TSettings> {
   /** Message shown when {@link parseDraft} rejects the current draft. */
   readonly invalidMessage: string;
 }
-
-/**
- * Decode a manifest-discovered `EditorGameSettingsForm` declaration (carried on
- * a game mode's settings panel `data`) into a renderer-ready
- * {@link MaterializedGameSettingsForm}, or `undefined` when the data is absent
- * or not a valid declaration (ADR-0023 section A). This is the seam that lets
- * the inspector render a settings form for the ACTIVE mode generically from
- * manifest data — never from a TS import naming a plugin-specific field.
- */
-export const materializeSettingsFormFromPanelData = (
-  contributionId: string,
-  data: unknown,
-): MaterializedGameSettingsForm | undefined => {
-  if (data === undefined) {
-    return undefined;
-  }
-  const result = decodeGameSettingsForm(contributionId, data);
-  return Result.isSuccess(result) ? materializeGameSettingsForm(result.success) : undefined;
-};

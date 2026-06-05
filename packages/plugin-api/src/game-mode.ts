@@ -1,17 +1,23 @@
 import { type GameModeId, gameModeIdFromPluginId, type PluginId } from "@tileborne/core";
-import { Option } from "effect";
+import { Option, Result } from "effect";
 
 import type { PluginContributions } from "./contributions.js";
+import {
+  decodeGameSettingsForm,
+  materializeGameSettingsForm,
+  type MaterializedGameSettingsForm,
+} from "./game-settings-form.js";
 
 /**
  * Manifest-driven game-mode discovery (ADR-0023 section B).
  *
  * The engine owns DISCOVERY as data: a plugin declares it provides a game mode
- * via its manifest contributions (a runtime system + an authoring settings
- * panel), and the engine resolves it into a {@link GameModeDescriptor} that the
- * renderer playtest, inspector, and game-host boot consume. This replaces the
- * hardcoded `switch (pluginId)` / `battleRoyaleEnabled` literal-id paths: a new
- * genre plugin becomes a selectable mode with ZERO engine edits.
+ * via its manifest contributions (a runtime system plus optional authoring
+ * panel/form data), and the engine resolves it into a
+ * {@link GameModeDescriptor} that the renderer playtest, inspector, and
+ * game-host boot consume. This replaces the hardcoded `switch (pluginId)` /
+ * `battleRoyaleEnabled` literal-id paths: a new genre plugin becomes a
+ * selectable mode with ZERO engine edits.
  *
  * This module is renderer-safe: it only reads already-decoded
  * {@link PluginContributions} values (no Node, no asset-pipeline runtime). The
@@ -34,8 +40,9 @@ export interface GameModeManifest {
 /**
  * A discovered, selectable game mode resolved from a plugin manifest. Carries
  * the neutral mode id, the owning plugin, a human label, and the discovered
- * contribution ids (runtime system + authoring settings panel) the renderer
- * needs to wire playtest + inspector — all by discovery, never by id literal.
+ * contribution ids/data (runtime system + authoring settings panel/form) the
+ * renderer needs to wire playtest + inspector — all by discovery, never by id
+ * literal.
  */
 export interface GameModeDescriptor {
   readonly modeId: GameModeId;
@@ -45,18 +52,42 @@ export interface GameModeDescriptor {
   readonly runtimeSystemId: string | undefined;
   /** The authoring settings-panel contribution id, when the plugin declares one. */
   readonly authoringSettingsPanelId: string | undefined;
-  /** Whether the mode declares an authoring settings panel the inspector mounts. */
+  /** The game settings-form contribution id, when the plugin declares one. */
+  readonly gameSettingsFormId: string | undefined;
+  /** The decoded, renderer-ready settings form declared by `editor.gameSettingsForms`. */
+  readonly gameSettingsForm: MaterializedGameSettingsForm | undefined;
+  /** Whether the mode declares authoring UI the inspector mounts. */
   readonly hasAuthoringPanel: boolean;
 }
 
 const optionalArray = <A>(option: Option.Option<readonly A[]>): readonly A[] =>
   Option.getOrElse(option, () => []);
 
+const discoverGameSettingsForm = (
+  contributions: PluginContributions,
+): {
+  readonly id: string | undefined;
+  readonly form: MaterializedGameSettingsForm | undefined;
+} => {
+  const editor = Option.getOrUndefined(contributions.editor);
+  const forms = editor === undefined ? [] : optionalArray(editor.gameSettingsForms);
+  const contribution = forms[0];
+  if (contribution === undefined) {
+    return { id: undefined, form: undefined };
+  }
+  const decoded = decodeGameSettingsForm(contribution.id, contribution.data);
+  return {
+    id: contribution.id,
+    form: Result.isSuccess(decoded) ? materializeGameSettingsForm(decoded.success) : undefined,
+  };
+};
+
 /**
  * Describe a single plugin as a game mode, or `undefined` when it does not
  * provide one. The manifest signal for "this plugin is a game mode" is a
- * declared runtime system contribution (it owns runtime simulation); the
- * authoring panel is the settings-capable panel in the `plugins` zone.
+ * declared runtime system contribution (it owns runtime simulation); authoring
+ * UI is discovered from the settings-capable panel in the `plugins` zone and/or
+ * the first-class `EditorGameSettingsForm` contribution.
  */
 export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor | undefined => {
   const { pluginId, contributions } = manifest;
@@ -72,6 +103,7 @@ export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor
       panel.zone === SETTINGS_PANEL_ZONE &&
       optionalArray(panel.capabilities).includes(SETTINGS_CAPABILITY),
   );
+  const gameSettingsForm = discoverGameSettingsForm(contributions);
   const systemLabel = firstSystem === undefined
     ? undefined
     : Option.getOrUndefined(firstSystem.display)?.label;
@@ -81,7 +113,9 @@ export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor
     label: settingsPanel?.title ?? systemLabel ?? pluginId,
     runtimeSystemId: firstSystem?.id,
     authoringSettingsPanelId: settingsPanel?.id,
-    hasAuthoringPanel: settingsPanel !== undefined,
+    gameSettingsFormId: gameSettingsForm.id,
+    gameSettingsForm: gameSettingsForm.form,
+    hasAuthoringPanel: settingsPanel !== undefined || gameSettingsForm.form !== undefined,
   };
 };
 

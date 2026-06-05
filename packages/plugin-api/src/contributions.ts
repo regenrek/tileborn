@@ -190,9 +190,9 @@ export type EditorPlayerModelPolicyContribution = typeof EditorPlayerModelPolicy
  * {@link decodeGameSettingsForm} in `game-settings-form.ts`; the editor renders
  * + validates the form generically and persists VALUES under the neutral
  * per-plugin namespace (`map.properties.<pluginId>` / `project.settings.<pluginId>`).
- * Promotes the TS-only `AuthoringSettingsForm` precedent; the same declaration
- * also rides on the mode's discovered settings panel `data` so the renderer can
- * decode it without a closed plugin-id literal.
+ * Promotes the TS-only `AuthoringSettingsForm` precedent; game-mode discovery
+ * projects this declaration as first-class IPC data so the renderer never reads
+ * a form from settings-panel `data`.
  */
 export const EditorGameSettingsFormContribution = defineDeclarativeContributionSlot("EditorGameSettingsForm");
 export type EditorGameSettingsFormContribution = typeof EditorGameSettingsFormContribution.Type;

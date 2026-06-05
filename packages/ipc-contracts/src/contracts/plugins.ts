@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 import { JsonObject, MapId, PluginId, ProjectId } from "@tileborne/core";
-import { ContributionId, PluginContributionZone } from "@tileborne/plugin-api";
+import { ContributionId, GameSettingsScope, PluginContributionZone } from "@tileborne/plugin-api";
 
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";
@@ -46,6 +46,21 @@ export const PluginPanelContributionView = Schema.Struct(PluginContributionBaseV
 export const PluginToolContributionView = Schema.Struct({
   ...PluginContributionBaseView,
   commandId: Schema.optional(ContributionId),
+});
+
+export const GameSettingsFieldView = Schema.Struct({
+  key: Schema.String,
+  label: Schema.String,
+  min: Schema.UndefinedOr(Schema.Number),
+  max: Schema.UndefinedOr(Schema.Number),
+  step: Schema.UndefinedOr(Schema.Number),
+  default: Schema.Number,
+});
+
+export const GameSettingsFormView = Schema.Struct({
+  scope: GameSettingsScope,
+  fields: Schema.Array(GameSettingsFieldView),
+  invalidMessage: Schema.String,
 });
 
 export const PluginsListRequest = Schema.Struct({});
@@ -97,6 +112,8 @@ export const GameModeView = Schema.Struct({
   label: Schema.String,
   runtimeSystemId: Schema.optional(Schema.String),
   authoringSettingsPanelId: Schema.optional(Schema.String),
+  gameSettingsFormId: Schema.optional(Schema.String),
+  gameSettingsForm: Schema.optional(GameSettingsFormView),
   hasAuthoringPanel: Schema.Boolean,
 });
 

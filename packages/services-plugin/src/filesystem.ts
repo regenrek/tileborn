@@ -17,6 +17,7 @@ import {
   MAX_PLUGIN_FILES,
   PLUGIN_LOCK_FILE,
   PLUGIN_MANIFEST_FILE,
+  PLUGIN_SEED_FINGERPRINT_FILE,
   PluginInstallError,
   PluginIntegrityError,
   PluginValidationError,
@@ -345,7 +346,7 @@ export const hashPluginDirectory = async (rootPath: string): Promise<ContentHash
   const visit = async (current: string): Promise<void> => {
     const stat = await lstat(current);
     const relative = path.relative(rootPath, current).split(path.sep).join("/");
-    if (relative === PLUGIN_LOCK_FILE) {
+    if (relative === PLUGIN_LOCK_FILE || relative === PLUGIN_SEED_FINGERPRINT_FILE) {
       return;
     }
     if (stat.isDirectory()) {

@@ -20,6 +20,7 @@ import {
   PluginLoaderMainLayer,
   PluginLoaderRendererLayer,
   PluginLoaderService,
+  PLUGIN_SEED_FINGERPRINT_FILE,
   PluginRegistryLayer,
   PluginRegistryService,
   PluginRegistrySnapshot,
@@ -229,6 +230,19 @@ describe.sequential("PluginRegistryService", () => {
       const registry = yield* PluginRegistryService;
       return yield* registry.discover();
     }))).rejects.toBeInstanceOf(PluginIntegrityError);
+  });
+
+  it("ignores the bundled seed fingerprint marker when verifying installed plugin integrity", async () => {
+    const home = await makeTempHome();
+    const root = await writeInstalledPlugin(home);
+    await writeFile(path.join(root, PLUGIN_SEED_FINGERPRINT_FILE), `sha256:${"1".repeat(64)}\n`);
+
+    const plugins = await runWithRegistry(Effect.gen(function* () {
+      const registry = yield* PluginRegistryService;
+      return yield* registry.discover();
+    }));
+
+    expect(plugins.map((plugin) => plugin.id)).toEqual(["@tileborne-plugins/test"]);
   });
 
   it("rejects installed plugins when the lock integrity is changed", async () => {

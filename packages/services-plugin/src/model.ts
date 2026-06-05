@@ -5,6 +5,7 @@ import { Schema } from "effect";
 
 export const PLUGIN_MANIFEST_FILE = "tileborne-plugin.json";
 export const PLUGIN_LOCK_FILE = "lock.json";
+export const PLUGIN_SEED_FINGERPRINT_FILE = ".tileborne-seed-fingerprint";
 export const MAX_PLUGIN_BYTES = Math.min(MAX_PACK_BYTES, 100 * 1024 * 1024);
 export const MAX_PLUGIN_FILES = 10_000;
 

@@ -13,7 +13,7 @@ export * from "./loader/index.js";
 export * from "./scaffold.js";
 export * from "./catalog.js";
 export * from "./manifest-version.js";
-export { materializePluginManifestInput, resolvePluginManifestPath } from "./filesystem.js";
+export { hashPluginDirectory, materializePluginManifestInput, resolvePluginManifestPath } from "./filesystem.js";
 
 export const PluginRegistryLayer = PluginRegistryServiceLive.pipe(Layer.provideMerge(ConfigLayer));
 

@@ -1,6 +1,19 @@
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+
 import { Effect, Schema } from "effect";
 
-import { LocalPluginSource, PluginInstallerService, PluginRegistryService } from "@tileborne/services-plugin";
+import { ContentHash, type PluginId } from "@tileborne/core";
+import {
+  hashPluginDirectory,
+  type InstalledPlugin,
+  LocalPluginSource,
+  type PluginInstallerServiceError,
+  PluginInstallerService,
+  PLUGIN_SEED_FINGERPRINT_FILE,
+  type PluginRegistryServiceError,
+  PluginRegistryService,
+} from "@tileborne/services-plugin";
 
 import { BUNDLED_PLUGINS, type BundledPluginSpec, resolveBundledPluginPath } from "./bundled-plugins.js";
 
@@ -21,29 +34,102 @@ export class BundledPluginResolveError extends Schema.TaggedErrorClass<BundledPl
 const toMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
+const isNotFound = (cause: unknown): boolean =>
+  typeof cause === "object" &&
+  cause !== null &&
+  "code" in cause &&
+  (cause as { readonly code?: unknown }).code === "ENOENT";
+
+const seedFingerprintPath = (rootPath: string): string =>
+  path.join(rootPath, PLUGIN_SEED_FINGERPRINT_FILE);
+
+const readSeedFingerprint = (rootPath: string) =>
+  Effect.promise(async (): Promise<ContentHash | undefined> => {
+    try {
+      const raw = await readFile(seedFingerprintPath(rootPath), "utf8");
+      return Schema.decodeUnknownSync(ContentHash)(raw.trim());
+    } catch (cause) {
+      if (isNotFound(cause)) {
+        return undefined;
+      }
+      return undefined;
+    }
+  });
+
+const writeSeedFingerprint = (rootPath: string, fingerprint: ContentHash) =>
+  Effect.tryPromise({
+    try: () => writeFile(seedFingerprintPath(rootPath), `${fingerprint}\n`, "utf8"),
+    catch: (cause) => new Error(`failed to write bundled plugin seed fingerprint: ${toMessage(cause)}`),
+  });
+
+const hashBundledSource = (spec: BundledPluginSpec, sourcePath: string) =>
+  Effect.tryPromise({
+    try: () => hashPluginDirectory(sourcePath),
+    catch: (cause) =>
+      new BundledPluginResolveError({
+        pluginId: spec.id,
+        message: `failed to fingerprint bundled plugin at ${sourcePath}: ${toMessage(cause)}`,
+      }),
+  });
+
+interface BundledPluginSeedServices {
+  readonly registry: {
+    readonly list: () => Effect.Effect<readonly InstalledPlugin[], PluginRegistryServiceError>;
+    readonly enable: (pluginId: PluginId) => Effect.Effect<InstalledPlugin, PluginRegistryServiceError>;
+  };
+  readonly installer: {
+    readonly install: (source: LocalPluginSource) => Effect.Effect<InstalledPlugin, PluginInstallerServiceError>;
+  };
+}
+
 /**
  * Install (or re-enable) a single bundled plugin from its resolved on-disk root.
- * Idempotent: an already-installed plugin is enabled if needed, never
- * re-installed.
+ * Idempotent: an already-installed plugin is enabled if needed, and
+ * re-installed only when the bundled source fingerprint changes.
  */
-export const installBundledPlugin = (spec: BundledPluginSpec) =>
+export const installBundledPluginWithServices = (
+  spec: BundledPluginSpec,
+  { registry, installer }: BundledPluginSeedServices,
+) =>
   Effect.gen(function* () {
-    const registry = yield* PluginRegistryService;
-    const installer = yield* PluginInstallerService;
-    const installed = yield* registry.list();
-    const existing = installed.find((plugin) => plugin.id === spec.id);
-    if (existing) {
-      return existing.enabled ? existing : yield* registry.enable(existing.id);
-    }
     const sourcePath = yield* Effect.try({
       try: () => resolveBundledPluginPath(spec),
       catch: (cause) => new BundledPluginResolveError({ pluginId: spec.id, message: toMessage(cause) }),
     });
+    const sourceFingerprint = yield* hashBundledSource(spec, sourcePath);
+    const installed = yield* registry.list();
+    const existing = installed.find((plugin) => plugin.id === spec.id);
+    const ensureEnabled = (plugin: InstalledPlugin) =>
+      plugin.enabled ? Effect.succeed(plugin) : registry.enable(plugin.id);
+    if (existing) {
+      const installedFingerprint = yield* readSeedFingerprint(existing.rootPath);
+      if (installedFingerprint === sourceFingerprint) {
+        yield* Effect.logInfo(
+          `[tileborne:start] ${spec.id} bundled plugin up-to-date (fingerprint unchanged) -> skipping`,
+        );
+        return yield* ensureEnabled(existing);
+      }
+      yield* Effect.logInfo(
+        `[tileborne:start] ${spec.id} content drift detected (fingerprint changed) -> reinstalling`,
+      );
+      const plugin = yield* installer.install(new LocalPluginSource({ path: sourcePath }));
+      yield* writeSeedFingerprint(plugin.rootPath, sourceFingerprint);
+      return yield* ensureEnabled(plugin);
+    }
+    yield* Effect.logInfo(`[tileborne:start] ${spec.id} bundled plugin not installed -> installing`);
     const plugin = yield* installer.install(new LocalPluginSource({ path: sourcePath }));
+    yield* writeSeedFingerprint(plugin.rootPath, sourceFingerprint);
     if (!plugin.enabled) {
       return yield* registry.enable(plugin.id);
     }
     return plugin;
+  });
+
+export const installBundledPlugin = (spec: BundledPluginSpec) =>
+  Effect.gen(function* () {
+    const registry = yield* PluginRegistryService;
+    const installer = yield* PluginInstallerService;
+    return yield* installBundledPluginWithServices(spec, { registry, installer });
   });
 
 /**

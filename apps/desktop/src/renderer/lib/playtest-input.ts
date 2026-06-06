@@ -192,7 +192,18 @@ export const attachPlaytestInputCapture = (
     emit();
   };
 
+  const documentStillHasFocus = (): boolean => {
+    try {
+      return document.hasFocus();
+    } catch {
+      return false;
+    }
+  };
+
   const onWindowBlur = (): void => {
+    if (documentStillHasFocus()) {
+      return;
+    }
     releaseHeldInputs();
   };
 

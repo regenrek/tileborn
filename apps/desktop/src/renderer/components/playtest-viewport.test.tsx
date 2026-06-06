@@ -343,6 +343,35 @@ describe('PlaytestViewport overlay wiring', () => {
     ]);
   });
 
+  it('sends WASD movement frames with a dir value', async () => {
+    const playtestInput = (
+      window as unknown as { tileborne: { runtime: { playtestInput: ReturnType<typeof vi.fn> } } }
+    ).tileborne.runtime.playtestInput;
+
+    sessionsMock.current = {
+      data: { sessions: [{ id: 'session-1', runtimeMetrics: { tickCount: 5 } }] },
+    };
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+
+    const payload = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      tick: number;
+      dir: number;
+      active?: boolean;
+    };
+    expect(payload.shoot).toBe(false);
+    expect(payload.dir).toBe(0);
+    expect(payload.tick).toBe(5);
+    expect(payload).not.toHaveProperty('active');
+  });
+
   // Regression lock for the capture-lifecycle decoupling: a held mouse button
   // (PrimaryAction → shoot) must survive a `tickCount` change. If the capture
   // effect re-ran on tickCount it would tear down + recreate the resolver,

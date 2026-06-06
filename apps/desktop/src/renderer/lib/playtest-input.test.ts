@@ -116,6 +116,21 @@ describe('attachPlaytestInputCapture (neutral pipeline, no hardcoded SHOOT_KEY)'
     expect(intents.at(-1)?.dir).toBe(0);
   });
 
+  it('does not release held inputs for a focused blur event', () => {
+    const { intents, container } = attach();
+    container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(intents.at(-1)).toMatchObject({ shoot: true, dir: 0 });
+
+    const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const beforeCount = intents.length;
+    window.dispatchEvent(new FocusEvent('blur'));
+    focused.mockRestore();
+
+    expect(intents).toHaveLength(beforeCount);
+    expect(intents.at(-1)).toMatchObject({ shoot: true, dir: 0 });
+  });
+
   it('releases held mouse buttons and keys when the document becomes hidden', () => {
     const { intents, container } = attach();
     container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));

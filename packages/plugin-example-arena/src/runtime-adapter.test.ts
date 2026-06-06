@@ -41,10 +41,13 @@ describe("arena runtime adapter", () => {
     expect(player?.health).toBe(100);
     expect(player?.x).toBe(0);
     expect(player?.y).toBe(0);
+    expect(player?.attacking).toBe(true);
+    expect(player?.attackTick).toBe(1);
     expect(dummy?.health).toBe(85);
+    expect(dummy?.hitTick).toBe(1);
   });
 
-  it("moves the player when a movement direction is present", () => {
+  it("paces movement snapshots instead of emitting every tick", () => {
     const frames: Uint8Array[] = [];
     const input: ArenaRuntimeInput = {
       tick: 1,
@@ -60,11 +63,36 @@ describe("arena runtime adapter", () => {
 
     runtime.onInit?.({ pluginId: runtime.id }, world);
     runtime.onTick?.(world, 1 / 20, 1);
+    runtime.onTick?.(world, 1 / 20, 2);
+    runtime.onTick?.(world, 1 / 20, 3);
+    runtime.onTick?.(world, 1 / 20, 4);
 
     const snapshot = snapshotFrom(frames.at(-1) ?? new Uint8Array());
     const player = snapshot.entities.find((entity) => entity.id === "player-1");
 
-    expect(player?.x).toBeCloseTo(2);
+    expect(frames.map((frame) => snapshotFrom(frame).tick)).toEqual([0, 2, 4]);
+    expect(player?.x).toBeCloseTo(8);
     expect(player?.y).toBe(0);
+  });
+
+  it("does not refresh replay frames on every idle tick", () => {
+    const replayFrames: Uint8Array[][] = [];
+    const runtime = createRuntimeAdapter({
+      setReplayFrames: (frames) => replayFrames.push([...frames]),
+      seed: 1,
+    });
+
+    runtime.onInit?.({ pluginId: runtime.id }, world);
+    for (let tick = 1; tick <= 9; tick += 1) {
+      runtime.onTick?.(world, 1 / 20, tick);
+    }
+    expect(replayFrames.map((frames) => snapshotFrom(frames[0] ?? new Uint8Array()).tick)).toEqual([0]);
+
+    runtime.onTick?.(world, 1 / 20, 10);
+
+    expect(replayFrames.map((frames) => snapshotFrom(frames[0] ?? new Uint8Array()).tick)).toEqual([
+      0,
+      10,
+    ]);
   });
 });

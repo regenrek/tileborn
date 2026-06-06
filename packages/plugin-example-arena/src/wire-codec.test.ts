@@ -21,6 +21,8 @@ describe("arena wire codec", () => {
           health: 100,
           maxHealth: 100,
           headingDeg: 0,
+          attacking: true,
+          attackTick: 7,
         }),
         new ArenaEntitySnapshot({
           id: "dummy-1",
@@ -30,6 +32,7 @@ describe("arena wire codec", () => {
           health: 85,
           maxHealth: 100,
           headingDeg: 180,
+          hitTick: 7,
         }),
       ],
     });
@@ -41,8 +44,8 @@ describe("arena wire codec", () => {
       tick: 7,
       serverTimestampMs: 1234,
       entities: [
-        { id: "player-1", kind: "player", health: 100 },
-        { id: "dummy-1", kind: "dummy", health: 85 },
+        { id: "player-1", kind: "player", health: 100, attacking: true, attackTick: 7 },
+        { id: "dummy-1", kind: "dummy", health: 85, hitTick: 7 },
       ],
     });
   });

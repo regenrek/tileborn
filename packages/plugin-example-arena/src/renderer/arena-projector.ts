@@ -18,6 +18,8 @@ import {
 import {
   ARENA_DUMMY_TEXTURE_ASSET_ID,
   ARENA_HEALTH_BAR_TEXTURE_ASSET_ID,
+  ARENA_HIT_FLASH_TEXTURE_ASSET_ID,
+  ARENA_MELEE_SWING_TEXTURE_ASSET_ID,
   ARENA_PLAYER_TEXTURE_ASSET_ID,
   createArenaBundledAssets,
 } from "./bundled-assets.js";
@@ -25,6 +27,8 @@ import {
 export {
   ARENA_DUMMY_TEXTURE_ASSET_ID,
   ARENA_HEALTH_BAR_TEXTURE_ASSET_ID,
+  ARENA_HIT_FLASH_TEXTURE_ASSET_ID,
+  ARENA_MELEE_SWING_TEXTURE_ASSET_ID,
   ARENA_PLAYER_TEXTURE_ASSET_ID,
   createArenaBundledAssets,
 } from "./bundled-assets.js";
@@ -78,6 +82,9 @@ const DEFAULT_ZONE: ZoneView = { cx: 0, cy: 0, radius: 64 };
 const DEFAULT_DUMMY_OFFSET_X = 20;
 const ENTITY_ANCHOR = { x: 0.5, y: 0.5 } as const;
 const HEALTH_ANCHOR = { x: 0, y: 0.5 } as const;
+const MELEE_SWING_ANCHOR = { x: 0.5, y: 0.5 } as const;
+const MELEE_SWING_OFFSET = 10;
+const HIT_FLASH_ANCHOR = { x: 0.5, y: 0.5 } as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -104,13 +111,14 @@ export const projectArenaSnapshot = (snapshot: unknown): readonly RenderableEnti
 
   return snapshot.entities
     .flatMap((entity): readonly RenderableEntity[] => {
+      const headingRad = (entity.headingDeg * Math.PI) / 180;
       const sprite: RenderableEntity = {
         id: `arena:${entity.kind}:${entity.id}`,
         assetId:
           entity.kind === "player" ? ARENA_PLAYER_TEXTURE_ASSET_ID : ARENA_DUMMY_TEXTURE_ASSET_ID,
         x: entity.x,
         y: entity.y,
-        rotation: (entity.headingDeg * Math.PI) / 180,
+        rotation: headingRad,
         scale: 1,
         layerIndex: entity.kind === "player" ? 10 : 9,
         anchor: ENTITY_ANCHOR,
@@ -124,7 +132,31 @@ export const projectArenaSnapshot = (snapshot: unknown): readonly RenderableEnti
         layerIndex: 30,
         anchor: HEALTH_ANCHOR,
       };
-      return [sprite, bar];
+      const extras: RenderableEntity[] = [];
+      if (entity.attacking === true) {
+        extras.push({
+          id: `arena:attack:${entity.id}`,
+          assetId: ARENA_MELEE_SWING_TEXTURE_ASSET_ID,
+          x: entity.x + Math.cos(headingRad) * MELEE_SWING_OFFSET,
+          y: entity.y + Math.sin(headingRad) * MELEE_SWING_OFFSET,
+          rotation: headingRad - Math.PI / 4,
+          scale: 1,
+          layerIndex: 20,
+          anchor: MELEE_SWING_ANCHOR,
+        });
+      }
+      if (entity.hitTick !== undefined) {
+        extras.push({
+          id: `arena:hit:${entity.id}`,
+          assetId: ARENA_HIT_FLASH_TEXTURE_ASSET_ID,
+          x: entity.x,
+          y: entity.y,
+          scale: 1,
+          layerIndex: 21,
+          anchor: HIT_FLASH_ANCHOR,
+        });
+      }
+      return [sprite, bar, ...extras];
     })
     .sort((left, right) => left.id.localeCompare(right.id));
 };
@@ -174,6 +206,7 @@ export const createInitialFrame = (input: InitialFrameInput): unknown => {
         health: player.health,
         maxHealth: Math.max(1, player.health),
         headingDeg: 0,
+        attacking: false,
       },
       {
         id: "dummy-1",
@@ -183,6 +216,7 @@ export const createInitialFrame = (input: InitialFrameInput): unknown => {
         health: 100,
         maxHealth: 100,
         headingDeg: 180,
+        attacking: false,
       },
     ],
   });

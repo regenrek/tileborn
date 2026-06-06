@@ -145,18 +145,21 @@ export function MapEditorPage() {
   if (map === undefined) {
     return null;
   }
-  const showSinglePlaytest = playtestActive && playtestMode === 'single' && playtestSessionId;
+  const singlePlaytestSessionId =
+    playtestActive && playtestMode === 'single' ? playtestSessionId : null;
+  const showSinglePlaytest = singlePlaytestSessionId !== null;
   const showMultiplayerPlaytest = playtestActive && playtestMode === 'multiplayer';
+  const showEditorViewport = !showSinglePlaytest && !showMultiplayerPlaytest;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <MapEditorViewport projectId={projectId} mapId={mapId} map={map} />
+      {showEditorViewport ? <MapEditorViewport projectId={projectId} mapId={mapId} map={map} /> : null}
       {!playtestActive ? <MapEditorToolbar /> : null}
       {showSinglePlaytest ? (
         <PlaytestViewport
           projectId={projectId}
           map={map}
-          sessionId={playtestSessionId}
+          sessionId={singlePlaytestSessionId}
           activePlugins={playtestActivePlugins}
         />
       ) : null}

@@ -15,6 +15,9 @@ export class ArenaEntitySnapshot extends Schema.Class<ArenaEntitySnapshot>("Aren
   health: Schema.Number,
   maxHealth: Schema.Number,
   headingDeg: Schema.Number,
+  attacking: Schema.optional(Schema.Boolean),
+  attackTick: Schema.optional(Schema.Int),
+  hitTick: Schema.optional(Schema.Int),
 }) {}
 
 export class ArenaPlayerInput extends Schema.TaggedClass<ArenaPlayerInput>()("ArenaPlayerInput", {

@@ -34,6 +34,12 @@ const DUMMY_ENTITY = makeCombatEntityId(2);
 const PLAYER_MAX_HEALTH = 100;
 const DUMMY_MAX_HEALTH = 100;
 const MOVE_SPEED = 40;
+const HOST_TICK_RATE = 20;
+const HOST_TICK_MS = 1000 / HOST_TICK_RATE;
+const SNAPSHOT_INTERVAL_TICKS = 2;
+const IDLE_HEARTBEAT_TICKS = 10;
+const ATTACK_VISUAL_TICKS = 4;
+const HIT_FLASH_TICKS = 4;
 
 interface ArenaActorState {
   readonly id: string;
@@ -43,6 +49,10 @@ interface ArenaActorState {
   y: number;
   headingDeg: number;
   health: HealthComponent;
+  lastAttackTick?: number;
+  attackUntilTick: number;
+  lastHitTick?: number;
+  hitFlashUntilTick: number;
 }
 
 const seedNumber = (seed: string | number | undefined): number =>
@@ -86,8 +96,8 @@ const aimVector = (headingDeg: number): Vec2 => {
 };
 
 /**
- * Tiny stand-and-shoot arena runtime: one player, one stationary dummy, full
- * snapshots every tick, and melee damage resolved by `@tileborne/simulation`.
+ * Tiny stand-and-shoot arena runtime: one player, one stationary dummy,
+ * paced snapshots, and melee damage resolved by `@tileborne/simulation`.
  */
 export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin => {
   const { weapon, delivery } = resolveArenaWeaponEntry();
@@ -101,6 +111,8 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
     y: 0,
     headingDeg: 0,
     health: fullHealth(PLAYER_MAX_HEALTH),
+    attackUntilTick: -1,
+    hitFlashUntilTick: -1,
   };
   const dummy: ArenaActorState = {
     id: DUMMY_ID,
@@ -110,7 +122,13 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
     y: 0,
     headingDeg: 180,
     health: fullHealth(DUMMY_MAX_HEALTH),
+    attackUntilTick: -1,
+    hitFlashUntilTick: -1,
   };
+  let lastSnapshotTick = Number.NEGATIVE_INFINITY;
+  let lastSnapshotSignature = "";
+  let dirtySinceSnapshot = true;
+  let lastSnapshotHadTransientVisual = false;
 
   const actorForEntity = (entity: CombatEntityId): ArenaActorState | undefined => {
     if (entity === PLAYER_ENTITY) return player;
@@ -135,13 +153,39 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
     blockers: () => [],
   };
 
+  const isAttacking = (actor: ArenaActorState, tick: number): boolean =>
+    actor.attackUntilTick >= tick;
+
+  const isHitFlashing = (actor: ArenaActorState, tick: number): boolean =>
+    actor.hitFlashUntilTick >= tick;
+
+  const hasTransientVisual = (tick: number): boolean =>
+    [player, dummy].some((actor) => isAttacking(actor, tick) || isHitFlashing(actor, tick));
+
+  const snapshotSignature = (tick: number): string =>
+    [player, dummy]
+      .map((actor) =>
+        [
+          actor.id,
+          actor.x.toFixed(3),
+          actor.y.toFixed(3),
+          actor.headingDeg.toFixed(3),
+          actor.health.current,
+          isAttacking(actor, tick) ? (actor.lastAttackTick ?? "") : "",
+          isHitFlashing(actor, tick) ? (actor.lastHitTick ?? "") : "",
+        ].join(":"),
+      )
+      .join("|");
+
   const buildSnapshot = (tick: number): ArenaSnapshot =>
     new ArenaSnapshot({
       tick,
-      serverTimestampMs: tick,
+      serverTimestampMs: tick * HOST_TICK_MS,
       entities: [player, dummy].map(
-        (actor) =>
-          new ArenaEntitySnapshot({
+        (actor) => {
+          const attacking = isAttacking(actor, tick);
+          const hitFlashing = isHitFlashing(actor, tick);
+          return new ArenaEntitySnapshot({
             id: actor.id,
             kind: actor.kind,
             x: actor.x,
@@ -149,7 +193,12 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
             health: actor.health.current,
             maxHealth: actor.health.max,
             headingDeg: actor.headingDeg,
-          }),
+            ...(attacking && actor.lastAttackTick !== undefined
+              ? { attacking: true, attackTick: actor.lastAttackTick }
+              : {}),
+            ...(hitFlashing && actor.lastHitTick !== undefined ? { hitTick: actor.lastHitTick } : {}),
+          });
+        },
       ),
     });
 
@@ -157,6 +206,32 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
     const bytes = encodeArenaServerMessage(buildSnapshot(tick));
     host.msgOut?.push(bytes);
     host.setReplayFrames?.([bytes]);
+    lastSnapshotTick = tick;
+    lastSnapshotSignature = snapshotSignature(tick);
+    dirtySinceSnapshot = false;
+    lastSnapshotHadTransientVisual = hasTransientVisual(tick);
+  };
+
+  const maybeEmitSnapshot = (tick: number, options: { readonly force?: boolean } = {}): void => {
+    if (lastSnapshotHadTransientVisual && !hasTransientVisual(tick)) {
+      dirtySinceSnapshot = true;
+    }
+    const ticksSinceLastSnapshot = tick - lastSnapshotTick;
+    if (options.force !== true) {
+      if (dirtySinceSnapshot) {
+        if (ticksSinceLastSnapshot < SNAPSHOT_INTERVAL_TICKS) {
+          return;
+        }
+      } else if (ticksSinceLastSnapshot < IDLE_HEARTBEAT_TICKS) {
+        return;
+      }
+      const signature = snapshotSignature(tick);
+      if (signature === lastSnapshotSignature && ticksSinceLastSnapshot < IDLE_HEARTBEAT_TICKS) {
+        dirtySinceSnapshot = false;
+        return;
+      }
+    }
+    emitSnapshot(tick);
   };
 
   return {
@@ -179,14 +254,19 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
           player.x += move.x * MOVE_SPEED * dt;
           player.y += move.y * MOVE_SPEED * dt;
           player.headingDeg = directionToHeadingDeg(input.dir);
+          dirtySinceSnapshot = true;
         }
-        if (input.aimDeg !== undefined) {
+        if (input.aimDeg !== undefined && player.headingDeg !== input.aimDeg) {
           player.headingDeg = input.aimDeg;
+          dirtySinceSnapshot = true;
         }
         if (input.shoot) {
           const fired = fireWeapon(weapon, weaponState);
           weaponState = fired.state;
           if (fired.outcome._tag === "WeaponFired") {
+            const dummyHealthBefore = dummy.health.current;
+            player.lastAttackTick = tick;
+            player.attackUntilTick = tick + ATTACK_VISUAL_TICKS;
             resolveDelivery(delivery, {
               world,
               source: entitySource(PLAYER_ENTITY),
@@ -195,11 +275,18 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
               policy: arenaHitPolicy,
               rng,
             });
+            if (dummy.health.current < dummyHealthBefore) {
+              dummy.lastHitTick = tick;
+              dummy.hitFlashUntilTick = tick + HIT_FLASH_TICKS;
+            }
+            dirtySinceSnapshot = true;
+            maybeEmitSnapshot(tick, { force: true });
+            return;
           }
         }
       }
 
-      emitSnapshot(tick);
+      maybeEmitSnapshot(tick);
     },
   };
 };

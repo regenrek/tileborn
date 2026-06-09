@@ -7,6 +7,11 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   Input,
   Progress,
   Skeleton,
@@ -26,6 +31,7 @@ import { Option } from 'effect';
 import {
   CheckIcon,
   LayersIcon,
+  Maximize2Icon,
   PaintbrushIcon,
   PlusIcon,
   PuzzleIcon,
@@ -86,9 +92,9 @@ interface AssetPackBrowserProps {
 const GRID_THUMB_PX = 40;
 const GROUP_THUMB_PX = 36;
 const PREVIEW_REF_RENDER_LIMIT = 4;
-const GROUP_GRID_INITIAL_LIMIT = 32;
-const GROUP_GRID_INCREMENT = 16;
-const GROUP_GRID_MAX_LIMIT = 64;
+const GROUP_GRID_CELL_PX = 48;
+const GROUP_GRID_GAP_PX = 6;
+const GROUP_GRID_ROW_PX = GROUP_GRID_CELL_PX + GROUP_GRID_GAP_PX;
 const VIRTUAL_ROW_HEIGHT_PX = 306;
 const VIRTUAL_OVERSCAN_ROWS = 4;
 
@@ -580,6 +586,118 @@ function VirtualizedGroupList({
   );
 }
 
+interface GroupPreviewEntry {
+  readonly id: string;
+  readonly actionRef: AssetLibraryReference;
+  readonly previewRef: AssetLibraryReference;
+  readonly preview: ReturnType<typeof libraryGroupPreviews>[number] | undefined;
+  readonly label: string;
+}
+
+/**
+ * Row-virtualized thumbnail grid. All entries of a group are addressable via
+ * the scrollbar, but only the rows in (or near) the viewport are mounted, so
+ * groups with thousands of textures stay cheap. Thumbnails themselves are
+ * additionally in-view gated by `LibraryPreviewThumb`, so offscreen cells never
+ * issue thumbnail requests.
+ */
+function VirtualizedPreviewGrid({
+  entries,
+  className,
+  testId,
+  renderCell,
+}: {
+  readonly entries: readonly GroupPreviewEntry[];
+  readonly className?: string | undefined;
+  readonly testId: string;
+  readonly renderCell: (entry: GroupPreviewEntry) => ReactNode;
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [columns, setColumns] = useState(1);
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (node === null) {
+      return;
+    }
+    const measure = () => {
+      const width = node.clientWidth || node.offsetWidth;
+      setColumns(
+        Math.max(1, Math.floor((width + GROUP_GRID_GAP_PX) / (GROUP_GRID_CELL_PX + GROUP_GRID_GAP_PX))),
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const rowCount = Math.ceil(entries.length / columns);
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: () => GROUP_GRID_ROW_PX,
+    overscan: VIRTUAL_OVERSCAN_ROWS,
+  });
+
+  return (
+    <div
+      ref={viewportRef}
+      className={cn('min-h-0 flex-1 overflow-y-auto pr-1', className)}
+      data-testid={testId}
+    >
+      <div
+        className="relative"
+        style={{ height: virtualizer.getTotalSize() }}
+        data-testid={`${testId}-spacer`}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const start = virtualRow.index * columns;
+          return (
+            <div
+              key={virtualRow.index}
+              className="absolute left-0 right-0 flex"
+              style={{
+                height: GROUP_GRID_ROW_PX,
+                gap: GROUP_GRID_GAP_PX,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              {entries.slice(start, start + columns).map((entry) => renderCell(entry))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const buildGroupPreviewEntries = (
+  group: AssetLibraryGroup,
+  previewIndex: ReturnType<typeof buildLibraryPreviewIndex> | undefined,
+): readonly GroupPreviewEntry[] =>
+  libraryGroupPreviewRefs(group, previewIndex).map((previewRef, index) => {
+    const actionRef =
+      group.kind === 'terrain' || group.kind === 'autotile'
+        ? (group.primaryRef ?? previewRef)
+        : previewRef;
+    return {
+      id: `${actionRef.kind}:${actionRef.refId}:${actionRef.tileId ?? ''}:${index}`,
+      actionRef,
+      previewRef,
+      preview: previewIndex?.previewForRef(previewRef),
+      label:
+        group.kind === 'tileset'
+          ? `${group.label} tile ${index + 1}`
+          : group.kind === 'source'
+            ? `${group.label} object ${index + 1}`
+            : group.label,
+    };
+  });
+
 function BrowserGroup({
   packId,
   group,
@@ -604,45 +722,50 @@ function BrowserGroup({
   readonly addedItemKeys: ReadonlySet<string>;
   readonly integrityHash?: string | undefined;
 }) {
-  const [visibleLimit, setVisibleLimit] = useState(GROUP_GRID_INITIAL_LIMIT);
-  const displayRefs = libraryGroupPreviewRefs(group, previewIndex, {
-    limit: GROUP_GRID_MAX_LIMIT,
-  });
-  const previewEntries = displayRefs.map((previewRef, index) => {
-    const actionRef =
-      group.kind === 'terrain' || group.kind === 'autotile'
-        ? (group.primaryRef ?? previewRef)
-        : previewRef;
-    return {
-      id: `${actionRef.kind}:${actionRef.refId}:${actionRef.tileId ?? ''}:${index}`,
-      actionRef,
-      previewRef,
-      preview: previewIndex?.previewForRef(previewRef),
-      label:
-        group.kind === 'tileset'
-          ? `${group.label} tile ${index + 1}`
-          : group.kind === 'source'
-            ? `${group.label} object ${index + 1}`
-            : group.label,
-    };
-  });
-  const visibleEntries = previewEntries.slice(0, visibleLimit);
-  const groupDrafts =
-    group.primaryRef === undefined && displayRefs.length > 0
-      ? displayRefs.map((ref) => ({ ref, label: group.label }))
-      : libraryGroupToPaletteDrafts(group);
+  const [expanded, setExpanded] = useState(false);
+  const entries = useMemo(
+    () => buildGroupPreviewEntries(group, previewIndex),
+    [group, previewIndex],
+  );
+  const groupDrafts = useMemo(
+    () =>
+      group.primaryRef === undefined && entries.length > 0
+        ? entries.map((entry) => ({ ref: entry.previewRef, label: group.label }))
+        : libraryGroupToPaletteDrafts(group),
+    [entries, group],
+  );
   const added =
     groupDrafts.length > 0 &&
     groupDrafts.every((draft) => {
       return addedItemKeys.has(assetLibraryReferenceKey(draft.ref));
     });
-  const previews = visibleEntries
-    .flatMap((entry) => (entry.preview === undefined ? [] : [entry.preview]))
-    .slice(0, PREVIEW_REF_RENDER_LIMIT);
-  const canLoadMore =
-    visibleLimit < previewEntries.length && visibleLimit < GROUP_GRID_MAX_LIMIT;
-  const shownCount = Math.min(visibleEntries.length, previewEntries.length);
-  const hiddenCount = Math.max(0, group.count - shownCount);
+  const previews = useMemo(() => {
+    const found: NonNullable<GroupPreviewEntry['preview']>[] = [];
+    for (const entry of entries) {
+      if (entry.preview !== undefined) {
+        found.push(entry.preview);
+        if (found.length === PREVIEW_REF_RENDER_LIMIT) {
+          break;
+        }
+      }
+    }
+    return found;
+  }, [entries]);
+  const renderCell = useCallback(
+    (entry: GroupPreviewEntry) => (
+      <BrowserPreviewCell
+        key={entry.id}
+        packId={packId}
+        label={entry.label}
+        preview={entry.preview}
+        added={addedItemKeys.has(assetLibraryReferenceKey(entry.actionRef))}
+        testId={`asset-pack-browser-item-${group.id}`}
+        onAdd={() => onAddReference(group, entry.actionRef, entry.label)}
+        integrityHash={integrityHash}
+      />
+    ),
+    [addedItemKeys, group, integrityHash, onAddReference, packId],
+  );
   return (
     <Card className="h-[294px] gap-2 py-2" data-testid={`asset-pack-browser-group-${group.id}`}>
       <CardHeader className="flex-row items-start justify-between gap-3 px-3 py-0">
@@ -667,67 +790,72 @@ function BrowserGroup({
             </CardDescription>
           </div>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid={`asset-pack-browser-add-group-${group.id}`}
-          disabled={groupDrafts.length === 0}
-          onClick={() => onAddGroup(group, groupDrafts)}
-          title={`${added ? 'Remove' : 'Add'} ${group.label} ${added ? 'from' : 'to'} working palette`}
-        >
-          {added ? <CheckIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
-          {added ? 'Remove group' : 'Add group'}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid={`asset-pack-browser-add-group-${group.id}`}
+            disabled={groupDrafts.length === 0}
+            onClick={() => onAddGroup(group, groupDrafts)}
+            title={`${added ? 'Remove' : 'Add'} ${group.label} ${added ? 'from' : 'to'} working palette`}
+          >
+            {added ? <CheckIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
+            {added ? 'Remove group' : 'Add group'}
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            data-testid={`asset-pack-browser-expand-group-${group.id}`}
+            onClick={() => setExpanded(true)}
+            aria-label={`Expand ${group.label}`}
+            title={`Browse all ${group.count} ${group.kind === 'source' ? 'objects' : 'items'} in a larger view`}
+          >
+            <Maximize2Icon aria-hidden />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-0">
-        {visibleEntries.length === 0 ? (
+        {entries.length === 0 ? (
           <BrowserPreviewPlaceholder
             testId={`asset-pack-browser-item-${group.id}`}
             label={group.label}
           />
         ) : (
-          <div
-            className="grid content-start gap-1.5 overflow-hidden"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(3rem, 3rem))' }}
-            data-testid={`asset-pack-browser-grid-${group.id}`}
-          >
-            {visibleEntries.map((entry) => (
-              <BrowserPreviewCell
-                key={entry.id}
-                packId={packId}
-                label={entry.label}
-                preview={entry.preview}
-                added={addedItemKeys.has(assetLibraryReferenceKey(entry.actionRef))}
-                testId={`asset-pack-browser-item-${group.id}`}
-                onAdd={() => onAddReference(group, entry.actionRef, entry.label)}
-                integrityHash={integrityHash}
-              />
-            ))}
-          </div>
+          <VirtualizedPreviewGrid
+            entries={entries}
+            testId={`asset-pack-browser-grid-${group.id}`}
+            renderCell={renderCell}
+          />
         )}
       </CardContent>
-      <CardFooter className="flex-wrap justify-between gap-2 px-3 py-0">
-        <Badge variant="muted">
-          Showing {shownCount} of {group.count}
-        </Badge>
-        {canLoadMore ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() =>
-              setVisibleLimit((current) =>
-                Math.min(GROUP_GRID_MAX_LIMIT, current + GROUP_GRID_INCREMENT),
-              )
-            }
-            data-testid={`asset-pack-browser-load-more-group-${group.id}`}
-          >
-            Load more
-            {hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}
-          </Button>
-        ) : null}
-      </CardFooter>
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent
+          className="flex h-[85vh] flex-col gap-3 sm:max-w-[min(72rem,calc(100vw-4rem))]"
+          data-testid={`asset-pack-browser-expanded-${group.id}`}
+        >
+          <DialogHeader>
+            <DialogTitle>{group.label}</DialogTitle>
+            <DialogDescription>
+              {group.count} {group.kind === 'source' ? 'objects' : 'items'} · click a texture to
+              add or remove it from the working palette
+            </DialogDescription>
+          </DialogHeader>
+          {entries.length === 0 ? (
+            <BrowserPreviewPlaceholder
+              testId={`asset-pack-browser-expanded-item-${group.id}`}
+              label={group.label}
+            />
+          ) : (
+            <VirtualizedPreviewGrid
+              entries={entries}
+              testId={`asset-pack-browser-expanded-grid-${group.id}`}
+              renderCell={renderCell}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

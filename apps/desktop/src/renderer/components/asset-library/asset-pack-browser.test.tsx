@@ -524,31 +524,33 @@ describe('AssetPackBrowser', () => {
     ).toHaveLength(2);
   });
 
-  it('keeps per-group thumbnail rendering capped behind Load more', () => {
-    const manyPreviewRefs = Array.from(
-      { length: 96 },
-      (_, index) => {
-        const generatedTileId = makeTileId(
-          `550e8400-e29b-41d4-a716-${String(446655441000 + index).padStart(12, '0')}`,
-        );
-        return new AssetLibraryReference({
-          packId,
-          kind: 'tile',
-          refId: generatedTileId,
-          tileId: generatedTileId,
-        });
-      },
-    );
-    const largeGroup = new AssetLibraryGroup({
+  const buildLargePreviewGroup = (length: number) => {
+    const manyPreviewRefs = Array.from({ length }, (_, index) => {
+      const generatedTileId = makeTileId(
+        `550e8400-e29b-41d4-a716-${String(446655441000 + index).padStart(12, '0')}`,
+      );
+      return new AssetLibraryReference({
+        packId,
+        kind: 'tile',
+        refId: generatedTileId,
+        tileId: generatedTileId,
+      });
+    });
+    return new AssetLibraryGroup({
       id: 'tileset:large-preview-group',
       packId,
       kind: 'tileset',
       label: 'Large Preview Group',
-      count: 96,
+      count: length,
       metadata: {},
       searchText: 'large preview group',
       previewRefs: manyPreviewRefs,
     });
+  };
+
+  it('virtualizes large per-group thumbnail grids instead of paging behind Load more', () => {
+    const totalRefs = 2_000;
+    const largeGroup = buildLargePreviewGroup(totalRefs);
     useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: false, isError: false });
     useAssetPackLibraryPagesMock.mockReturnValue({
       data: {
@@ -565,22 +567,56 @@ describe('AssetPackBrowser', () => {
     render(<AssetPackBrowser packId={packId} packName="Tiled source" projectId={projectId} />);
 
     const group = screen.getByTestId('asset-pack-browser-group-tileset:large-preview-group');
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(32);
 
-    fireEvent.click(within(group).getByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'));
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(48);
-
-    fireEvent.click(within(group).getByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'));
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(64);
+    // The per-group Load-more button is gone: every ref is reachable by
+    // scrolling the virtualized grid instead of clicking through pages.
     expect(
       within(group).queryByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'),
     ).toBeNull();
+
+    // Only the rows near the (mocked 600px tall) viewport are mounted.
+    const renderedItems = within(group).getAllByTestId(
+      'asset-pack-browser-item-tileset:large-preview-group',
+    );
+    expect(renderedItems.length).toBeGreaterThan(0);
+    expect(renderedItems.length).toBeLessThan(totalRefs / 4);
+
+    // The spacer reserves the full scroll height for all rows: with the mocked
+    // 320px offsetWidth the grid lays out 6 columns of 48px cells + 6px gap,
+    // each virtual row being 54px tall.
+    const columns = Math.floor((320 + 6) / (48 + 6));
+    const spacer = screen.getByTestId('asset-pack-browser-grid-tileset:large-preview-group-spacer');
+    expect(spacer.style.height).toBe(`${Math.ceil(totalRefs / columns) * 54}px`);
+  });
+
+  it('opens an expanded dialog with the full virtualized grid for a group', async () => {
+    const largeGroup = buildLargePreviewGroup(96);
+    useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    useAssetPackLibraryPagesMock.mockReturnValue({
+      data: {
+        packId,
+        total: 1,
+        offset: 0,
+        limit: 64,
+        groups: [largeGroup],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<AssetPackBrowser packId={packId} packName="Tiled source" projectId={projectId} />);
+
+    fireEvent.click(
+      screen.getByTestId('asset-pack-browser-expand-group-tileset:large-preview-group'),
+    );
+
+    const expandedGrid = await screen.findByTestId(
+      'asset-pack-browser-expanded-grid-tileset:large-preview-group',
+    );
+    expect(
+      within(expandedGrid).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group')
+        .length,
+    ).toBeGreaterThan(0);
   });
 
   it('virtualizes large asset libraries instead of rendering every group card', () => {

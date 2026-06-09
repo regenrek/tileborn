@@ -1,3 +1,5 @@
+import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
+
 import type { BattleRoyaleConfigInput } from "../battle-royale-config.js";
 import type { ExportedArtifact } from "./artifact.js";
 
@@ -27,12 +29,17 @@ export interface RuntimePlayerInput {
   readonly seq: number;
   readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 export interface RuntimePluginHost {
   readonly getArtifact: () => ExportedArtifact;
+  readonly getPlayerIds?: () => readonly string[];
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly msgOut?: RuntimeMessageOut;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;

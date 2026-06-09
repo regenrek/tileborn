@@ -210,10 +210,14 @@ export const generateBundledModules = async (options = {}) => {
     `export interface RuntimeClientInputFrame {
   readonly tick: number;
   readonly seq: number;
-  readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly ("dash" | "shield-burst" | "scan-pulse" | "trap" | "decoy")[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 export type RuntimeClientFrameView =
@@ -246,10 +250,14 @@ export declare function createRuntimeAdapter(host: {
   readonly getPlayerInput?: (playerId: string) => {
     readonly tick: number;
     readonly seq: number;
-    readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+    readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
     readonly shoot: boolean;
+    readonly reload: boolean;
+    readonly interact: boolean;
+    readonly drop: boolean;
+    readonly abilities: readonly ("dash" | "shield-burst" | "scan-pulse" | "trap" | "decoy")[];
     readonly aimDeg?: number;
-    readonly weaponSlot?: number;
+    readonly swapSlot?: number;
   } | undefined;
   readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;

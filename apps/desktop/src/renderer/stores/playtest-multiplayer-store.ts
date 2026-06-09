@@ -10,7 +10,9 @@ import {
   startPlaytestJoinSession,
   type LocalMultiplayerRoomReady,
 } from '@/lib/playtest-room-url';
+import { readLobbyModelSelection } from '@/lib/lobby-model-selection';
 import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
+import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore, type LocalHostSession } from '@/stores/editor-ui-store';
 
 export type PlaytestMultiplayerFlowPhase =
@@ -31,7 +33,7 @@ interface PlaytestMultiplayerStoreState {
 
 interface PlaytestMultiplayerStoreActions {
   reset: () => void;
-  hostLocalMatch: (mapId: string) => Promise<void>;
+  hostLocalMatch: (projectId: string, mapId: string) => Promise<void>;
   joinFromInput: (
     input: string,
     mapId: string,
@@ -121,13 +123,23 @@ export const usePlaytestMultiplayerStore = create<
     useEditorUiStore.getState().resetMultiplayerPlaytest();
   },
 
-  hostLocalMatch: async (mapId) => {
+  hostLocalMatch: async (projectId, mapId) => {
     set({ flowPhase: 'starting-host' });
     useEditorUiStore.getState().setPlaytestHostModalOpen(true);
     try {
+      await useEditorCommandsBridge.getState().flushPersist?.();
+      const selectedPlayerModelId = readLobbyModelSelection(projectId);
+      const prepared = await window.tileborne.runtime.prepareLocalRoomArtifact({
+        projectId: projectId as never,
+        mapId: mapId as never,
+        ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
+      });
       const host = await window.tileborne.runtime.startLocalHost({});
       useEditorUiStore.getState().setLocalHostSession(host);
-      const room = await createLocalMultiplayerRoom(host.baseUrl, mapId, { maxPlayers: 8 });
+      const room = await createLocalMultiplayerRoom(host.baseUrl, mapId, {
+        maxPlayers: 8,
+        runtimeArtifact: prepared.runtimeArtifact,
+      });
       const merged: LocalHostSession = { ...host, ...room };
       useEditorUiStore.getState().setLocalHostSession(merged);
       set({ roomReady: room, flowPhase: 'host-ready' });

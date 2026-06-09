@@ -11,6 +11,7 @@ import {
   SPAWN_POINT_KEY,
   SPAWN_POINT_KIND,
 } from "./constants.js";
+import { MIN_SPAWN_CLEARANCE, findClosestSpawnPair } from "./spawn-layout.js";
 import type { ValidationIssue, ValidationResult } from "./types/artifact.js";
 
 const countByKind = (map: TileborneMap): Map<string, number> => {
@@ -21,6 +22,8 @@ const countByKind = (map: TileborneMap): Map<string, number> => {
   return counts;
 };
 
+const objectsByKind = (map: TileborneMap, kind: string) =>
+  map.objects.filter((object) => object.kind === kind);
 
 const issue = (severity: ValidationIssue["severity"], message: string, location?: string): ValidationIssue => ({
   severity,
@@ -38,6 +41,19 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
       issue(
         "error",
         `Expected at least ${MIN_SPAWN_POINTS} ${SPAWN_POINT_KEY} objects, found ${spawnCount}`,
+        "objects",
+      ),
+    );
+  }
+  const spawnObjects = objectsByKind(map, SPAWN_POINT_KIND);
+  const closestSpawnPair = findClosestSpawnPair(spawnObjects);
+  if (closestSpawnPair !== undefined && closestSpawnPair.distance < MIN_SPAWN_CLEARANCE) {
+    issues.push(
+      issue(
+        "warning",
+        `Closest spawn points are ${closestSpawnPair.distance.toFixed(
+          1,
+        )} world units apart; keep at least ${MIN_SPAWN_CLEARANCE} for player clearance`,
         "objects",
       ),
     );
@@ -65,5 +81,5 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
     );
   }
 
-  return { ok: issues.length === 0, issues };
+  return { ok: issues.every((entry) => entry.severity !== "error"), issues };
 };

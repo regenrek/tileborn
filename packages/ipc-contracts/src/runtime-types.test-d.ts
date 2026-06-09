@@ -73,6 +73,12 @@ export type RuntimePlaytestDirIsOptionalDirection = Assert<
 export type RuntimePlaytestAimDegIsOptionalInt = Assert<
   Equal<RuntimePlaytestInputRequest["aimDeg"], number | undefined>
 >;
-export type RuntimePlaytestWeaponSlotIsOptionalInt = Assert<
-  Equal<RuntimePlaytestInputRequest["weaponSlot"], number | undefined>
+export type RuntimePlaytestSwapSlotIsOptionalInt = Assert<
+  Equal<RuntimePlaytestInputRequest["swapSlot"], number | undefined>
+>;
+export type RuntimePlaytestReloadIsBoolean = Assert<Equal<RuntimePlaytestInputRequest["reload"], boolean>>;
+export type RuntimePlaytestInteractIsBoolean = Assert<Equal<RuntimePlaytestInputRequest["interact"], boolean>>;
+export type RuntimePlaytestDropIsBoolean = Assert<Equal<RuntimePlaytestInputRequest["drop"], boolean>>;
+export type RuntimePlaytestAbilitiesIsArray = Assert<
+  Equal<RuntimePlaytestInputRequest["abilities"], readonly ("dash" | "shield-burst" | "scan-pulse" | "trap" | "decoy")[]>
 >;

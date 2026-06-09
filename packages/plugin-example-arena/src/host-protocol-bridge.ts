@@ -17,6 +17,7 @@ export interface RuntimeClientInputFrame {
 
 export type RuntimeClientFrameView =
   | { readonly kind: "heartbeat"; readonly tick: number }
+  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
   | {
       readonly kind: "input";
       readonly input: RuntimeClientInputFrame;
@@ -41,6 +42,9 @@ export const decodeHostClientFrameView = (
   const frame = decodeArenaClientMessage(bytes);
   if (frame._tag === "ArenaHeartbeat") {
     return { kind: "heartbeat", tick: frame.tick };
+  }
+  if (frame._tag === "ArenaSnapshotAck") {
+    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
   if (frame._tag === "ArenaPlayerInput") {
     const input: RuntimeClientInputFrame = {

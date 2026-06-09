@@ -111,6 +111,7 @@ const applyZoneDamage = (
   world: PluginWorld,
   zone: Zone,
   dt: number,
+  tick: number,
   ctx: ZoneSystemContext,
 ): void => {
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
@@ -133,6 +134,7 @@ const applyZoneDamage = (
       ctx.damageState,
       entity,
       zone.damagePerSecOutside * dt,
+      tick,
     );
   }
 };
@@ -157,5 +159,5 @@ export const runZoneSystem = (
   const zones = world.getComponent<Zone>(ZONE_COMPONENT);
   const updated = updateZoneRadius(zone, tick, schedule);
   zones.set(zoneEntity, updated);
-  applyZoneDamage(world, updated, dt, ctx);
+  applyZoneDamage(world, updated, dt, tick, ctx);
 };

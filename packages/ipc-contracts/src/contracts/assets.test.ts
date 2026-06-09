@@ -8,6 +8,7 @@ import {
   AssetsDescribePackContract,
   AssetsContracts,
   AssetsGetPackContract,
+  AssetsImportSpriteSheetContract,
   AssetsListPacksContract,
   AssetsRemovePackContract,
 } from "../../dist/contracts/assets.js";
@@ -59,6 +60,22 @@ describe("asset IPC contracts", () => {
     roundTrip(AssetsListPacksContract.response, { packs: [pack] });
     roundTrip(AssetsGetPackContract.response, { pack });
     roundTrip(AssetsDescribePackContract.request, { packId });
+    roundTrip(AssetsImportSpriteSheetContract.request, {
+      imageBase64: "AA==",
+      imageFileName: "hero.png",
+      mime: "image/png",
+      imageWidth: 288,
+      imageHeight: 32,
+      slice: { cellWidth: 32, cellHeight: 32, columns: 9, rows: 1 },
+      spriteName: "Hero",
+      anchor: "bottom-left",
+      clips: [{ name: "idle", frameIndices: [0], loop: true, defaultDurationMs: 100 }],
+      playerModel: {
+        renderScale: 1.5,
+        hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+        muzzle: { x: 0.75, y: 0.45 },
+      },
+    });
     roundTrip(AssetsRemovePackContract.request, { packId });
     roundTrip(AssetsRemovePackContract.response, {
       removedPackId: packId,

@@ -4,9 +4,11 @@ import {
   broadcastBinaryFrame,
   createRoomMeta,
   parsePlaytestInitBody,
+  toPlaytestSessionMetrics,
   toPlaytestSummary,
   type BinarySocket,
 } from "./room.js";
+import { emptyRoomStorage } from "./rooms/storage-schema.js";
 import { installWorkerGlobals } from "./test-helpers/do-fake.js";
 
 const TEST_KEY = "test-handoff-signing-key-32-bytes!!";
@@ -19,6 +21,22 @@ describe("PlaytestRoom stub helpers", () => {
     expect(parsed.seed).toBe(42);
   });
 
+  it("parsePlaytestInitBody preserves runtimeArtifact outside scalar room options", () => {
+    const parsed = parsePlaytestInitBody(
+      JSON.stringify({
+        mapId: "map:1",
+        runtimeArtifact: { schemaVersion: 1, objectPlacements: [{ objectId: "object:1" }] },
+        options: { maxPlayers: 8 },
+      }),
+    );
+
+    expect(parsed.runtimeArtifact).toEqual({
+      schemaVersion: 1,
+      objectPlacements: [{ objectId: "object:1" }],
+    });
+    expect(parsed.options).toEqual({ maxPlayers: 8 });
+  });
+
   it("createRoomMeta stores mapId and timestamps", () => {
     const meta = createRoomMeta("map:fixture", "seed-a");
     expect(meta.mapId).toBe("map:fixture");
@@ -28,9 +46,21 @@ describe("PlaytestRoom stub helpers", () => {
   });
 
   it("toPlaytestSummary exposes connected client count", () => {
-    const summary = toPlaytestSummary("id-1", createRoomMeta("map:1"), 2);
+    const storage = emptyRoomStorage("map:1", 42, {}, undefined, "2026-01-01T00:00:00.000Z");
+    const metrics = toPlaytestSessionMetrics({ storage, connectedClients: 2, generatedAt: "2026-01-01T00:00:01.000Z" });
+    const summary = toPlaytestSummary("id-1", createRoomMeta("map:1"), metrics);
     expect(summary.playtestId).toBe("id-1");
     expect(summary.connectedClients).toBe(2);
+    expect(summary.metrics).toMatchObject({
+      lifecyclePhase: "lobby",
+      tick: 0,
+      playerCount: 0,
+      connectedClients: 2,
+      transport: {
+        trackedClients: 0,
+        maxPendingSnapshotLagTicks: 0,
+      },
+    });
   });
 
   it("broadcastBinaryFrame sends binary payload to every socket", () => {

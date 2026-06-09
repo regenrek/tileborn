@@ -9,6 +9,7 @@ import { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
   hashJsonStable,
   type ContentHash,
+  type GameModeId,
   type JsonObject,
   type TileborneMap,
 } from '@tileborne/core';
@@ -40,6 +41,7 @@ import {
   PlaytestService,
   RuntimeDeployService,
   RuntimeDeployTarget,
+  activePlaytestPluginIds,
   SupportService,
   type PlaytestSession,
 } from '@tileborne/services-build';
@@ -58,6 +60,7 @@ import {
   type PluginPanelContribution,
   type PluginToolContribution,
 } from '@tileborne/plugin-api';
+import { resolveBattleRoyalePlayerModels } from '@tileborne/plugin-battle-royale/player-models';
 import {
   compileTiledSourceRulePipeline,
   projectTiledSourceRuleApplication,
@@ -74,6 +77,7 @@ import {
 import { createElectronIpcServerTransport } from './transport.js';
 import {
   clearPlaytestRuntimeInput,
+  exportPlaytestRuntimeArtifact,
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
   setPlaytestRuntimeChangedNotifier,
@@ -87,6 +91,7 @@ import { startDesktopLocalGameHost, stopDesktopLocalGameHost } from '../local-ga
 import { invokePluginEditorCommand } from '../plugin-editor-command.js';
 import { BATTLE_ROYALE_PLUGIN_ID, bundledPluginSpec } from '../bundled-plugins.js';
 import { installBundledPluginWithServices } from '../seed-plugins.js';
+import { seedBundledPluginAssetPacksWithServices } from '../seed-plugins.js';
 import { appRuntime } from '../runtime.js';
 import { createPlaytestJoinWindow } from '../window.js';
 
@@ -138,6 +143,11 @@ const detectTiledSources = async (
 const toJsonObject = (value: unknown): JsonObject => {
   const encoded = JSON.stringify(value ?? {});
   return JSON.parse(encoded === undefined ? '{}' : encoded) as JsonObject;
+};
+
+const readActiveGameModeSetting = (settings: JsonObject | undefined): string | undefined => {
+  const value = settings?.activeGameMode;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 };
 
 const toJobView = (job: JobState) => ({
@@ -223,6 +233,8 @@ const toGameModeView = (descriptor: GameModeDescriptor) => ({
   ...optionalField('authoringSettingsPanelId', descriptor.authoringSettingsPanelId),
   ...optionalField('gameSettingsFormId', descriptor.gameSettingsFormId),
   ...optionalField('gameSettingsForm', descriptor.gameSettingsForm),
+  ...optionalField('hudLayoutContributionId', descriptor.hudLayoutContributionId),
+  ...optionalField('hudLayout', descriptor.hudLayout),
 });
 
 const formatPluginPermission = (permission: { readonly _tag: string }): string => permission._tag;
@@ -620,6 +632,7 @@ const buildHandlers = Effect.gen(function* () {
         anchor,
         packName,
         clips,
+        playerModel,
         asepriteJson,
       }) =>
         ipcCatchAll('tileborne:assets:importSpriteSheet')(
@@ -653,6 +666,7 @@ const buildHandlers = Effect.gen(function* () {
               ...(anchor === undefined ? {} : { anchor }),
               ...(packName === undefined ? {} : { packName }),
               ...(clips === undefined ? {} : { clips }),
+              ...(playerModel === undefined ? {} : { playerModel }),
               ...(aseprite === undefined ? {} : { aseprite }),
             });
             return { packId };
@@ -833,6 +847,7 @@ const buildHandlers = Effect.gen(function* () {
             );
           }
           const plugin = yield* installBundledPluginWithServices(spec, { registry, installer });
+          yield* seedBundledPluginAssetPacksWithServices({ registry, assets });
           return { plugin: toPluginSummary(plugin) };
         }),
       ),
@@ -1085,7 +1100,7 @@ const buildHandlers = Effect.gen(function* () {
     .build();
 
   const playtestHandlers = handlerBuilder(MainIpcRegistry)
-    .add('tileborne:playtest:start', ({ projectId, mapId }) =>
+    .add('tileborne:playtest:start', ({ projectId, mapId, selectedPlayerModelId }) =>
       ipcCatchAll('tileborne:playtest:start')(
         Effect.gen(function* () {
           const session = yield* playtest.start(projectId, mapId);
@@ -1097,19 +1112,51 @@ const buildHandlers = Effect.gen(function* () {
               return plugin ? [{ pluginId, rootPath: plugin.rootPath }] : [];
             });
             if (pluginInstalls.length > 0) {
+              const project = yield* projects.open(projectId);
+              const playerModels = session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)
+                ? resolveBattleRoyalePlayerModels(project)
+                : [];
+              const objectTypes = session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)
+                ? (yield* catalog.resolve(projectId)).objectTypes.map((entry) => entry.objectType)
+                : [];
+              if (session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)) {
+                if (playerModels.length === 0) {
+                  yield* playtest.stop(session.id).pipe(Effect.catch(() => Effect.void));
+                  yield* Effect.fail(new Error('Battle Royale playtest requires at least one valid player model.'));
+                }
+                if (
+                  selectedPlayerModelId !== undefined &&
+                  !playerModels.some((model) => model.id === selectedPlayerModelId)
+                ) {
+                  yield* playtest.stop(session.id).pipe(Effect.catch(() => Effect.void));
+                  yield* Effect.fail(
+                    new Error(`Selected Battle Royale player model does not exist: ${selectedPlayerModelId}`),
+                  );
+                }
+              }
               yield* Effect.tryPromise({
                 try: () =>
                   startPlaytestRuntimeHost({
                     sessionId: session.id,
                     artifactDirectory,
                     pluginInstalls,
+                    ...(playerModels.length === 0 ? {} : { playerModels }),
+                    ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
+                    ...(objectTypes.length === 0 ? {} : { objectTypes }),
                     logger: {
                       info: (message, fields) => Effect.runPromise(logger.info(message, fields)),
                       error: (message, fields) => Effect.runPromise(logger.error(message, fields)),
                     },
                   }),
                 catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
-              });
+              }).pipe(
+                Effect.catch((error) =>
+                  playtest.stop(session.id).pipe(
+                    Effect.catch(() => Effect.void),
+                    Effect.flatMap(() => Effect.fail(error)),
+                  ),
+                ),
+              );
             }
           }
           return { session: toPlaytestSessionView(session) };
@@ -1156,9 +1203,79 @@ const buildHandlers = Effect.gen(function* () {
         }).pipe(Effect.as({})),
       ),
     )
+    .add('tileborne:runtime:prepareLocalRoomArtifact', ({ projectId, mapId, selectedPlayerModelId }) =>
+      ipcCatchAll('tileborne:runtime:prepareLocalRoomArtifact')(
+        Effect.gen(function* () {
+          const project = yield* projects.open(projectId);
+          const installed = yield* registry.list();
+          const activePlugins = activePlaytestPluginIds(
+            installed.map((plugin) => ({
+              pluginId: plugin.id,
+              enabled: plugin.enabled,
+              contributions: plugin.manifest.contributes,
+            })),
+            readActiveGameModeSetting(project.settings) as GameModeId | undefined,
+          );
+          if (activePlugins.length !== 1) {
+            return yield* Effect.fail(
+              new Error('Select one active game mode before hosting a multiplayer playtest.'),
+            );
+          }
+          const activePluginId = activePlugins[0];
+          if (activePluginId === undefined) {
+            return yield* Effect.fail(
+              new Error('Select one active game mode before hosting a multiplayer playtest.'),
+            );
+          }
+          if (activePluginId !== BATTLE_ROYALE_PLUGIN_ID) {
+            return yield* Effect.fail(
+              new Error(`Local multiplayer host supports Battle Royale runtime only, not ${activePluginId}.`),
+            );
+          }
+          const plugin = installed.find((entry) => entry.id === activePluginId);
+          if (!plugin) {
+            return yield* Effect.fail(new Error(`Active game-mode plugin is not installed: ${activePluginId}`));
+          }
+          const activePlugin = plugin;
+          const playerModels = resolveBattleRoyalePlayerModels(project);
+          if (playerModels.length === 0) {
+            return yield* Effect.fail(new Error('Battle Royale playtest requires at least one valid player model.'));
+          }
+          if (
+            selectedPlayerModelId !== undefined &&
+            !playerModels.some((model) => model.id === selectedPlayerModelId)
+          ) {
+            return yield* Effect.fail(
+              new Error(`Selected Battle Royale player model does not exist: ${selectedPlayerModelId}`),
+            );
+          }
+          const artifact = yield* playtest.assembleArtifact({
+            projectId,
+            mapId,
+            plugins: activePlugins,
+          });
+          const objectTypes = (yield* catalog.resolve(projectId)).objectTypes.map((entry) => entry.objectType);
+          const runtimeArtifact = yield* Effect.tryPromise({
+            try: () =>
+              exportPlaytestRuntimeArtifact({
+                artifactDirectory: artifact.directory,
+                pluginRootPath: activePlugin.rootPath,
+                playerModels,
+                ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
+                objectTypes,
+              }),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+          return {
+            mapId,
+            runtimeArtifact: toJsonObject(runtimeArtifact),
+          };
+        }),
+      ),
+    )
     .add(
       'tileborne:runtime:playtestInput',
-      ({ sessionId, playerId, tick, seq, dir, shoot, aimDeg, weaponSlot, active }) =>
+      ({ sessionId, playerId, tick, seq, dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot, active }) =>
         ipcCatchAll('tileborne:runtime:playtestInput')(
           Effect.sync(() => {
             const resolvedPlayerId = playerId ?? 'player-1';
@@ -1170,8 +1287,12 @@ const buildHandlers = Effect.gen(function* () {
                 seq,
                 ...(dir !== undefined ? { dir } : {}),
                 shoot,
+                reload,
+                interact,
+                drop,
+                abilities,
                 ...(aimDeg !== undefined ? { aimDeg } : {}),
-                ...(weaponSlot !== undefined ? { weaponSlot } : {}),
+                ...(swapSlot !== undefined ? { swapSlot } : {}),
               });
             }
             return {};

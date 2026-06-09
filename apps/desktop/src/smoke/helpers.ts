@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { gameObjectTypeIdForKey } from '@tileborne/core';
 import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
 
 const smokeDir = path.dirname(fileURLToPath(import.meta.url));
@@ -158,6 +159,75 @@ export async function readProjectManifest(tileborneHome: string, projectId: stri
 export async function readMapJson(tileborneHome: string, projectId: string, mapId: string) {
   const filePath = path.join(tileborneHome, 'projects', projectId, 'maps', `${mapId}.json`);
   return JSON.parse(await readFile(filePath, 'utf8')) as Record<string, unknown>;
+}
+
+export async function addBattleRoyaleSpawnAnchors(
+  page: Page,
+  projectId: string,
+  mapId: string,
+  count = 4,
+): Promise<void> {
+  const spawnKind = gameObjectTypeIdForKey('spawn-point');
+  await page.evaluate(
+    async ({ pid, mid, kind, anchorCount }) => {
+      type PersistedLayer = {
+        readonly id: string;
+        readonly kind?: string;
+        readonly _tag?: string;
+        readonly objectIds?: readonly string[];
+      };
+      type PersistedMap = {
+        readonly layers: readonly PersistedLayer[];
+        readonly objects: readonly Record<string, unknown>[];
+        readonly properties: Record<string, unknown>;
+      };
+      try {
+        const { map } = await window.tileborne.maps.get({ projectId: pid, mapId: mid });
+        const persisted = map as unknown as PersistedMap;
+        const objectLayer =
+          persisted.layers.find((layer) => layer.kind === 'object' || layer._tag === 'object') ??
+          persisted.layers[0];
+        if (!objectLayer) {
+          throw new Error('Map has no layer for BR spawn anchors');
+        }
+        const anchors = Array.from({ length: anchorCount }, (_, index) => {
+          const uuid = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+          return {
+            id: `object:${uuid}`,
+            kind,
+            x: 64 + index * 48,
+            y: 80 + index * 32,
+            width: undefined,
+            height: undefined,
+            layerId: objectLayer.id,
+            properties: { team: 'solo', weight: 1 },
+          };
+        });
+        const anchorIds = new Set(anchors.map((anchor) => anchor.id));
+        const nextLayers = persisted.layers.map((layer) =>
+          layer.id === objectLayer.id && Array.isArray(layer.objectIds)
+            ? { ...layer, objectIds: [...layer.objectIds.filter((id) => !anchorIds.has(id)), ...anchorIds] }
+            : layer,
+        );
+        await window.tileborne.maps.update({
+          projectId: pid,
+          map: {
+            ...persisted,
+            layers: nextLayers,
+            objects: [
+              ...persisted.objects.filter((object) => !anchorIds.has(String(object.id))),
+              ...anchors,
+            ],
+            properties: { ...persisted.properties, maxPlayers: anchorCount },
+          } as unknown as Parameters<typeof window.tileborne.maps.update>[0]['map'],
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : JSON.stringify(error);
+        throw new Error(message, { cause: error });
+      }
+    },
+    { pid: projectId, mid: mapId, kind: spawnKind, anchorCount: count },
+  );
 }
 
 export function pluginInstallDirectory(tileborneHome: string): string {

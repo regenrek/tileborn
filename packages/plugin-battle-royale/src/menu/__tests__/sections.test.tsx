@@ -7,6 +7,7 @@ import {
   BattleRoyaleLoadoutSection,
   BattleRoyaleMatchRulesSection,
 } from "../sections.js";
+import { DEFAULT_BATTLE_ROYALE_MODELS } from "../../player-models/models.js";
 
 const noopProps = { onPlay: () => undefined, onBack: () => undefined, title: "Test Game" };
 
@@ -45,9 +46,15 @@ describe("battleRoyaleMenuSections", () => {
   it("selects a loadout model on click (persistence covered by model-selection unit test)", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
+    const selectedModelId = DEFAULT_BATTLE_ROYALE_MODELS[1]?.id;
+    if (selectedModelId === undefined) {
+      throw new Error("expected a second default model for selection coverage");
+    }
+
     render(<BattleRoyaleLoadoutSection {...noopProps} />);
-    expect(screen.getByTestId("br-model-tank").getAttribute("aria-pressed")).toBe("false");
-    await user.click(screen.getByTestId("br-model-tank"));
-    expect(screen.getByTestId("br-model-tank").getAttribute("aria-pressed")).toBe("true");
+    const button = screen.getByTestId(`br-model-${selectedModelId}`);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    await user.click(button);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
   });
 });

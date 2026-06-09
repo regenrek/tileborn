@@ -1,4 +1,5 @@
 import { coreActionId, CORE_ACTIONS, type ActionState, type DigitalActionState } from "@tileborne/core";
+import { BattleRoyaleAbility } from "@tileborne/ipc-contracts/protocols/battle-royale";
 import { decodeInputMap, findUndeclaredBoundActions } from "@tileborne/plugin-api";
 import { Result } from "effect";
 import { readFileSync } from "node:fs";
@@ -92,17 +93,57 @@ describe("resolveBattleRoyaleInputIntent (action→intent adapter)", () => {
     expect(intent.aimDeg).toBe(0); // pointer due-east of the origin
   });
 
-  it("maps a just-pressed slot selector to its weapon slot", () => {
+  it("maps a just-pressed slot selector to its swap slot", () => {
     const intent = resolveBattleRoyaleInputIntent(
       actionState({ digital: [[CORE_ACTIONS.Slot3, pressed]] }),
     );
-    expect(intent.weaponSlot).toBe(3);
+    expect(intent.swapSlot).toBe(3);
+  });
+
+  it("maps one-shot BR actions to drop and ability ids", () => {
+    const intent = resolveBattleRoyaleInputIntent(
+      actionState({
+        digital: [
+          ["battle-royale.DropItem", pressed],
+          [CORE_ACTIONS.Dash, pressed],
+          [CORE_ACTIONS.SecondaryAction, pressed],
+          ["battle-royale.ScanPulse", pressed],
+          ["battle-royale.PlaceTrap", pressed],
+          ["battle-royale.DeployDecoy", pressed],
+        ],
+      }),
+    );
+    expect(intent.drop).toBe(true);
+    expect(intent.abilities).toEqual([
+      BattleRoyaleAbility.dash,
+      BattleRoyaleAbility.shieldBurst,
+      BattleRoyaleAbility.scanPulse,
+      BattleRoyaleAbility.trap,
+      BattleRoyaleAbility.decoy,
+    ]);
+  });
+
+  it("maps Reload and Interact into explicit runtime action flags", () => {
+    const intent = resolveBattleRoyaleInputIntent(
+      actionState({
+        digital: [
+          [CORE_ACTIONS.Reload, pressed],
+          [CORE_ACTIONS.Interact, pressed],
+        ],
+      }),
+    );
+    expect(intent.reload).toBe(true);
+    expect(intent.interact).toBe(true);
   });
 
   it("reports idle (dir undefined, no shoot) when nothing is pressed", () => {
     const intent = resolveBattleRoyaleInputIntent(actionState({ analog: [[CORE_ACTIONS.Move, { x: 0, y: 0 }]] }));
     expect(intent.dir).toBeUndefined();
     expect(intent.shoot).toBe(false);
-    expect(intent.weaponSlot).toBeUndefined();
+    expect(intent.reload).toBe(false);
+    expect(intent.interact).toBe(false);
+    expect(intent.drop).toBe(false);
+    expect(intent.abilities).toEqual([]);
+    expect(intent.swapSlot).toBeUndefined();
   });
 });

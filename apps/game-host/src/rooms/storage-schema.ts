@@ -1,5 +1,19 @@
-import type { RoomLifecycleStatus } from "../types.js";
 import { ROOM_SCHEMA_VERSION } from "./room-config.js";
+import type { JsonObject } from "@tileborne/core";
+
+export const ROOM_LIFECYCLE_PHASES = ["lobby", "countdown", "active", "finished", "archived"] as const;
+
+export type RoomLifecyclePhase = (typeof ROOM_LIFECYCLE_PHASES)[number];
+
+export interface RoomLifecycleState {
+  readonly phase: RoomLifecyclePhase;
+  readonly enteredAt: string;
+  readonly countdownEndsAt?: string;
+  readonly activeStartedAt?: string;
+  readonly finishedAt?: string;
+  readonly archivedAt?: string;
+  readonly reason?: string;
+}
 
 export interface RoomPlayerRecord {
   readonly id: string;
@@ -8,12 +22,12 @@ export interface RoomPlayerRecord {
   readonly displayName?: string;
 }
 
-export interface RoomStorageV1 {
-  readonly schemaVersion: typeof ROOM_SCHEMA_VERSION;
+interface RoomStorageLegacyV1 {
+  readonly schemaVersion: 1;
   readonly mapId: string;
   readonly seed: string | number;
   readonly createdAt: string;
-  readonly status: RoomLifecycleStatus;
+  readonly status: "lobby" | "running" | "finished" | "archived";
   readonly options: Record<string, string | number | boolean | null>;
   readonly players: Record<string, RoomPlayerRecord>;
   readonly tick: number;
@@ -25,7 +39,26 @@ export interface RoomStorageV1 {
   readonly simState: Record<string, string | number | boolean | null>;
 }
 
-export type RoomStorage = RoomStorageV1;
+export interface RoomStorageV2 {
+  readonly schemaVersion: typeof ROOM_SCHEMA_VERSION;
+  readonly mapId: string;
+  readonly seed: string | number;
+  readonly createdAt: string;
+  readonly runtimeArtifact?: JsonObject;
+  readonly lifecycle: RoomLifecycleState;
+  readonly options: Record<string, string | number | boolean | null>;
+  readonly players: Record<string, RoomPlayerRecord>;
+  readonly tick: number;
+  readonly baseTick: number;
+  readonly lastPersistedTick: number;
+  readonly lastTickAt: string | null;
+  readonly idempotencyKey?: string;
+  readonly emptySince: string | null;
+  readonly simState: Record<string, string | number | boolean | null>;
+}
+
+export type PersistedRoomStorage = RoomStorageLegacyV1 | RoomStorageV2;
+export type RoomStorage = RoomStorageV2;
 
 export const STORAGE_KEY = "state";
 
@@ -34,12 +67,18 @@ export const emptyRoomStorage = (
   seed: string | number,
   options: Record<string, string | number | boolean | null> = {},
   idempotencyKey?: string,
-): RoomStorageV1 => ({
+  createdAt = new Date().toISOString(),
+  runtimeArtifact?: JsonObject,
+): RoomStorageV2 => ({
   schemaVersion: ROOM_SCHEMA_VERSION,
   mapId,
   seed,
-  createdAt: new Date().toISOString(),
-  status: "lobby",
+  createdAt,
+  ...(runtimeArtifact === undefined ? {} : { runtimeArtifact }),
+  lifecycle: {
+    phase: "lobby",
+    enteredAt: createdAt,
+  },
   options,
   players: {},
   tick: 0,
@@ -51,23 +90,61 @@ export const emptyRoomStorage = (
   simState: {},
 });
 
-export interface RoomStorageMigrator {
-  readonly fromVersion: number;
-  readonly toVersion: number;
-  readonly migrate: (value: RoomStorage) => RoomStorage;
-}
-
-export const roomStorageMigrators: readonly RoomStorageMigrator[] = [];
-
-export const migrateRoomStorage = (value: RoomStorage): RoomStorage => {
-  let current = value;
-  for (const migrator of roomStorageMigrators) {
-    if (current.schemaVersion === migrator.fromVersion) {
-      current = migrator.migrate(current) as RoomStorage;
-    }
+const legacyLifecycle = (value: RoomStorageLegacyV1): RoomLifecycleState => {
+  const enteredAt = value.lastTickAt ?? value.emptySince ?? value.createdAt;
+  if (value.status === "running") {
+    return {
+      phase: "active",
+      enteredAt,
+      activeStartedAt: enteredAt,
+    };
   }
-  if (current.schemaVersion !== ROOM_SCHEMA_VERSION) {
-    throw new Error(`unsupported room storage schema version ${String(current.schemaVersion)}`);
+  if (value.status === "finished") {
+    return {
+      phase: "finished",
+      enteredAt,
+      finishedAt: enteredAt,
+      reason: "legacy-finished",
+    };
   }
-  return current;
+  if (value.status === "archived") {
+    return {
+      phase: "archived",
+      enteredAt,
+      archivedAt: enteredAt,
+      reason: "legacy-archived",
+    };
+  }
+  return {
+    phase: "lobby",
+    enteredAt: value.createdAt,
+  };
+};
+
+const migrateLegacyV1 = (value: RoomStorageLegacyV1): RoomStorageV2 => ({
+  schemaVersion: ROOM_SCHEMA_VERSION,
+  mapId: value.mapId,
+  seed: value.seed,
+  createdAt: value.createdAt,
+  lifecycle: legacyLifecycle(value),
+  options: value.options,
+  players: value.players,
+  tick: value.tick,
+  baseTick: value.baseTick,
+  lastPersistedTick: value.lastPersistedTick,
+  lastTickAt: value.lastTickAt,
+  ...(value.idempotencyKey === undefined ? {} : { idempotencyKey: value.idempotencyKey }),
+  emptySince: value.emptySince,
+  simState: value.simState,
+});
+
+export const migrateRoomStorage = (value: PersistedRoomStorage): RoomStorage => {
+  if (value.schemaVersion === 1) {
+    return migrateLegacyV1(value);
+  }
+  const schemaVersion: number = value.schemaVersion;
+  if (schemaVersion !== ROOM_SCHEMA_VERSION) {
+    throw new Error(`unsupported room storage schema version ${String(schemaVersion)}`);
+  }
+  return value;
 };

@@ -24,17 +24,32 @@ import { CombatBlocker, createSeededRng, type ProjectileDelivery } from '@tilebo
 import { Option, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { DAMAGE, MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from '../constants.js';
+import { DAMAGE, INVENTORY, LOOT_PICKUP_RADIUS, MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from '../constants.js';
 import { DEFAULT_BATTLE_ROYALE_CONFIG } from '../battle-royale-config.js';
 import {
-  LAST_FACING_COMPONENT,
+  AMMO_RESERVE_COMPONENT,
+  BREAKABLE_COMPONENT,
+  COLLISION_BODY_COMPONENT,
+  DAMAGE_INDICATOR_COMPONENT,
+  FACING_COMPONENT,
+  INTERACTABLE_COMPONENT,
+  LOOT_SOURCE_COMPONENT,
+  PICKUP_COMPONENT,
+  PICKUP_PROMPT_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
   PROJECTILE_COMPONENT,
+  RELOAD_STATE_COMPONENT,
+  TEAM_COMPONENT,
   VELOCITY_COMPONENT,
+  WEAPON_RUNTIME_STATE_COMPONENT,
+  type AmmoReserve,
+  type DamageIndicator,
   type Player,
   type Position,
   type Projectile,
+  type ReloadState,
+  type WeaponRuntimeState,
 } from './components.js';
 import { PluginCollisionEnvironment } from './collision.js';
 import {
@@ -49,6 +64,10 @@ import {
   type MapBounds,
 } from './combat-system.js';
 import {
+  createInventoryLootSystemState,
+  runInventoryLootSystem,
+} from './inventory-loot-system.js';
+import {
   createDamageSystemState,
   runDamageSystem,
   type DamageSystemState,
@@ -58,6 +77,7 @@ import { exportArtifact } from '../export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
 import { createBattleRoyaleSnapshotEmitter } from '../server/snapshot-emitter.js';
 import { createTestPluginWorld } from '../test-plugin-world.js';
+import type { ExportedArtifact } from '../types/artifact.js';
 import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
 
 const DT = 1 / MOVEMENT.tickRate;
@@ -82,8 +102,15 @@ const registerStores = (world: ReturnType<typeof createTestPluginWorld>): void =
   world.registerComponent(POSITION_COMPONENT);
   world.registerComponent(VELOCITY_COMPONENT);
   world.registerComponent(PLAYER_COMPONENT);
-  world.registerComponent(LAST_FACING_COMPONENT);
+  world.registerComponent(FACING_COMPONENT);
+  world.registerComponent(TEAM_COMPONENT);
   world.registerComponent(PROJECTILE_COMPONENT);
+  world.registerComponent(BREAKABLE_COMPONENT);
+  world.registerComponent(COLLISION_BODY_COMPONENT);
+  world.registerComponent(INTERACTABLE_COMPONENT);
+  world.registerComponent(LOOT_SOURCE_COMPONENT);
+  world.registerComponent(PICKUP_COMPONENT);
+  world.registerComponent(PICKUP_PROMPT_COMPONENT);
 };
 
 const spawnPlayer = (
@@ -98,7 +125,8 @@ const spawnPlayer = (
   world.getComponent<Position>(POSITION_COMPONENT).set(entity, { x, y });
   world.getComponent(VELOCITY_COMPONENT).set(entity, { vx: 0, vy: 0 });
   world.getComponent<Player>(PLAYER_COMPONENT).set(entity, { playerId, health, alive: 1, team });
-  world.getComponent(LAST_FACING_COMPONENT).set(entity, { dir: 0 });
+  world.getComponent(FACING_COMPONENT).set(entity, { dir: 0 });
+  world.getComponent(TEAM_COMPONENT).set(entity, { team });
   return entity;
 };
 
@@ -107,6 +135,7 @@ interface CtxOptions {
   readonly mapBounds?: MapBounds;
   readonly blockers?: ReturnType<typeof buildCombatBlockers>;
   readonly roomRules?: Parameters<typeof createBattleRoyaleHitPolicy>[0];
+  readonly tick?: number;
 }
 
 const makeContext = (
@@ -127,25 +156,48 @@ const makeContext = (
   ...(options.getPlayerInput ? { getPlayerInput: options.getPlayerInput } : {}),
   mapBounds: options.mapBounds ?? openMapBounds(),
   weaponSlotCount: CONFIG.projectile.weaponSlotCount,
+  initialAmmoReserve: CONFIG.projectile.initialAmmoReserve,
   projectileBoundsRadius: CONFIG.projectile.radius,
+  ...(options.tick === undefined ? {} : { tick: options.tick }),
 });
 
 const shooterInput = (
-  overrides: Partial<{
-    readonly aimDeg: number;
-    readonly dir: RuntimePlayerInput['dir'];
-    readonly weaponSlot: number;
-    readonly shoot: boolean;
-  }> = {},
-): RuntimePlayerInput => ({ tick: 1, seq: 1, dir: 0, shoot: true, ...overrides });
+	  overrides: Partial<{
+	    readonly aimDeg: number;
+	    readonly dir: RuntimePlayerInput['dir'];
+	    readonly swapSlot: number;
+	    readonly shoot: boolean;
+	    readonly reload: boolean;
+	    readonly interact: boolean;
+	  }> = {},
+): RuntimePlayerInput => ({
+  tick: 1,
+  seq: 1,
+  dir: 0,
+	  shoot: true,
+	  reload: false,
+	  interact: false,
+	  drop: false,
+	  abilities: [],
+	  ...overrides,
+	});
 
 const idleShooterInput = (
-  overrides: Partial<{
-    readonly aimDeg: number;
-    readonly weaponSlot: number;
-    readonly shoot: boolean;
-  }> = {},
-): RuntimePlayerInput => ({ tick: 1, seq: 1, shoot: true, ...overrides });
+	  overrides: Partial<{
+	    readonly aimDeg: number;
+	    readonly swapSlot: number;
+	    readonly shoot: boolean;
+	  }> = {},
+): RuntimePlayerInput => ({
+  tick: 1,
+  seq: 1,
+	  shoot: true,
+	  reload: false,
+	  interact: false,
+	  drop: false,
+	  abilities: [],
+	  ...overrides,
+	});
 
 const inputForPlayer =
   (playerId: string, input: RuntimePlayerInput = shooterInput()) =>
@@ -154,6 +206,48 @@ const inputForPlayer =
 
 const countProjectiles = (world: ReturnType<typeof createTestPluginWorld>): number =>
   [...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()].length;
+
+const reserveAmount = (
+  world: ReturnType<typeof createTestPluginWorld>,
+  playerEntity: number,
+): number =>
+  world
+    .getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT)
+    .get(playerEntity)
+    ?.stacks.find((stack) => stack.ammoKind === String(WEAPON_ENTRY.weapon.id))?.amount ?? 0;
+
+const reloadState = (
+  world: ReturnType<typeof createTestPluginWorld>,
+  playerEntity: number,
+): ReloadState | undefined =>
+  world.getComponent<ReloadState>(RELOAD_STATE_COMPONENT).get(playerEntity);
+
+const weaponRuntimeState = (
+  world: ReturnType<typeof createTestPluginWorld>,
+  playerEntity: number,
+): WeaponRuntimeState | undefined =>
+  world.getComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT).get(playerEntity);
+
+const runUntilProjectileCount = (
+  world: ReturnType<typeof createTestPluginWorld>,
+  state: ReturnType<typeof createCombatSystemState>,
+  playerId: string,
+  expectedCount: number,
+  maxTicks = 80,
+): void => {
+  const damageState = createDamageSystemState();
+  for (let tick = 0; tick < maxTicks; tick += 1) {
+    runCombatSystem(
+      world,
+      makeContext(world, damageState, { getPlayerInput: inputForPlayer(playerId) }),
+      state,
+    );
+    if (countProjectiles(world) >= expectedCount) {
+      return;
+    }
+  }
+  expect(countProjectiles(world)).toBeGreaterThanOrEqual(expectedCount);
+};
 
 const projectileEntries = (
   world: ReturnType<typeof createTestPluginWorld>,
@@ -272,6 +366,120 @@ describe('combat system (neutral engine)', () => {
     expect(countProjectiles(world)).toBe(2);
   });
 
+  it('stops firing when the magazine is empty instead of topping ammo back up', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 0, 0);
+    const state = createCombatSystemState();
+
+    runUntilProjectileCount(world, state, 'player-1', CONFIG.projectile.magazineSize);
+
+    expect(countProjectiles(world)).toBe(CONFIG.projectile.magazineSize);
+    for (let tick = 0; tick < PROJECTILE.shootCooldownTicks + 2; tick += 1) {
+      runCombatSystem(
+        world,
+        makeContext(world, createDamageSystemState(), {
+          getPlayerInput: inputForPlayer('player-1'),
+        }),
+        state,
+      );
+    }
+
+    expect(countProjectiles(world)).toBe(CONFIG.projectile.magazineSize);
+  });
+
+  it('reloads from reserve, consumes reserve rounds, and fires again after reload timing completes', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    const playerEntity = spawnPlayer(world, 'player-1', 0, 0);
+    const state = createCombatSystemState();
+
+    runUntilProjectileCount(world, state, 'player-1', CONFIG.projectile.magazineSize);
+
+    runCombatSystem(
+      world,
+      makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1', shooterInput({ shoot: false, reload: true })),
+      }),
+      state,
+    );
+
+    expect(reserveAmount(world, playerEntity)).toBe(
+      CONFIG.projectile.initialAmmoReserve - CONFIG.projectile.magazineSize,
+    );
+    expect(reloadState(world, playerEntity)).toEqual({
+      active: true,
+      weaponId: String(WEAPON_ENTRY.weapon.id),
+      remainingTicks: CONFIG.projectile.reloadTicks,
+    });
+    expect(weaponRuntimeState(world, playerEntity)).toMatchObject({
+      weaponId: String(WEAPON_ENTRY.weapon.id),
+      slot: 1,
+      ammoInMagazine: 0,
+      magazineSize: CONFIG.projectile.magazineSize,
+      reloadRemainingTicks: CONFIG.projectile.reloadTicks,
+      reloadTotalTicks: CONFIG.projectile.reloadTicks,
+    });
+
+    for (let tick = 0; tick < CONFIG.projectile.reloadTicks; tick += 1) {
+      runCombatSystem(world, makeContext(world, createDamageSystemState()), state);
+    }
+
+    runCombatSystem(
+      world,
+      makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1'),
+      }),
+      state,
+    );
+
+    expect(countProjectiles(world)).toBe(CONFIG.projectile.magazineSize + 1);
+    expect(reloadState(world, playerEntity)).toEqual({
+      active: false,
+      weaponId: String(WEAPON_ENTRY.weapon.id),
+      remainingTicks: 0,
+    });
+    expect(weaponRuntimeState(world, playerEntity)).toMatchObject({
+      ammoInMagazine: CONFIG.projectile.magazineSize - 1,
+      reloadRemainingTicks: 0,
+    });
+  });
+
+  it('does not reload or fire with an empty magazine and no reserve', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    const playerEntity = spawnPlayer(world, 'player-1', 0, 0);
+    const state = createCombatSystemState();
+
+    runUntilProjectileCount(world, state, 'player-1', CONFIG.projectile.magazineSize);
+    world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT).set(playerEntity, {
+      stacks: [{ ammoKind: String(WEAPON_ENTRY.weapon.id), amount: 0 }],
+    });
+
+    runCombatSystem(
+      world,
+      makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1', shooterInput({ shoot: false, reload: true })),
+      }),
+      state,
+    );
+    runCombatSystem(
+      world,
+      makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1'),
+      }),
+      state,
+    );
+
+    expect(countProjectiles(world)).toBe(CONFIG.projectile.magazineSize);
+    expect(reloadState(world, playerEntity)).toEqual({
+      active: false,
+      weaponId: String(WEAPON_ENTRY.weapon.id),
+      remainingTicks: 0,
+    });
+    expect(reserveAmount(world, playerEntity)).toBe(0);
+  });
+
   it('uses aim-only input for projectile direction', () => {
     const world = createTestPluginWorld();
     registerStores(world);
@@ -366,7 +574,7 @@ describe('combat system (neutral engine)', () => {
     registerStores(world);
     spawnPlayer(world, 'player-1', 10, 10);
     const ctx = makeContext(world, createDamageSystemState(), {
-      getPlayerInput: inputForPlayer('player-1', shooterInput({ weaponSlot: 2 })),
+      getPlayerInput: inputForPlayer('player-1', shooterInput({ swapSlot: 2 })),
     });
 
     runCombatSystem(world, ctx, createCombatSystemState());
@@ -381,7 +589,7 @@ describe('combat system (neutral engine)', () => {
     registerStores(world);
     spawnPlayer(world, 'player-1', 10, 10);
     const ctx = makeContext(world, createDamageSystemState(), {
-      getPlayerInput: inputForPlayer('player-1', shooterInput({ aimDeg: 180, weaponSlot: 3 })),
+      getPlayerInput: inputForPlayer('player-1', shooterInput({ aimDeg: 180, swapSlot: 3 })),
     });
 
     runCombatSystem(world, ctx, createCombatSystemState());
@@ -396,7 +604,7 @@ describe('combat system (neutral engine)', () => {
     registerStores(world);
     spawnPlayer(world, 'player-1', 10, 10);
     const ctx = makeContext(world, createDamageSystemState(), {
-      getPlayerInput: inputForPlayer('player-1', shooterInput({ weaponSlot: 99 })),
+      getPlayerInput: inputForPlayer('player-1', shooterInput({ swapSlot: 99 })),
     });
 
     runCombatSystem(world, ctx, createCombatSystemState());
@@ -477,7 +685,7 @@ describe('combat system (neutral engine)', () => {
     );
     const damageState = createDamageSystemState();
     const collector = createMsgCollector();
-    const ctx = makeContext(world, damageState, { getPlayerInput: inputForPlayer('player-1') });
+    const ctx = makeContext(world, damageState, { getPlayerInput: inputForPlayer('player-1'), tick: 7 });
 
     runCombatSystem(world, ctx, createCombatSystemState());
     runDamageSystem(world, 1, { msgOut: collector.msgOut }, damageState);
@@ -487,6 +695,12 @@ describe('combat system (neutral engine)', () => {
       alive: 0,
     });
     expect(countProjectiles(world)).toBe(0);
+    expect(world.getComponent<DamageIndicator>(DAMAGE_INDICATOR_COMPONENT).get(victim)).toEqual({
+      sourceId: 'player-1',
+      angleDeg: 180,
+      amount: PROJECTILE.damage,
+      tick: 7,
+    });
 
     const kills = collector.decodeAll().filter((message) => message._tag === 'PlayerKilled');
     expect(kills).toHaveLength(1);
@@ -517,6 +731,107 @@ describe('combat system (neutral engine)', () => {
     runCombatSystem(world, ctx, createCombatSystemState());
 
     expect(countProjectiles(world)).toBe(0);
+  });
+
+  it('damages shot loot crates and lets the loot system drop their rolled pickup', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 0, 0);
+    const crateObjectId = 'object:00000000-0000-4000-8000-000000000777';
+    const crate = world.createEntity();
+    const crateX = PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed / 2;
+    world.getComponent<Position>(POSITION_COMPONENT).set(crate, { x: crateX, y: 0 });
+    world.getComponent(PICKUP_COMPONENT).set(crate, {
+      itemKind: 'supply-crate',
+      tier: 'common',
+      quantity: 1,
+      available: true,
+    });
+    world.getComponent(LOOT_SOURCE_COMPONENT).set(crate, {
+      tableId: crateObjectId,
+      tier: 'common',
+      weight: 1,
+      collected: false,
+    });
+    world.getComponent(INTERACTABLE_COMPONENT).set(crate, {
+      action: 'pickup-loot',
+      radius: LOOT_PICKUP_RADIUS,
+      enabled: true,
+    });
+    world.getComponent(BREAKABLE_COMPONENT).set(crate, {
+      health: WEAPON_ENTRY.delivery.damage,
+      maxHealth: WEAPON_ENTRY.delivery.damage,
+      destroyed: false,
+    });
+    world.getComponent(COLLISION_BODY_COMPONENT).set(crate, {
+      objectId: crateObjectId,
+      x: crateX - 16,
+      y: -16,
+      width: 32,
+      height: 32,
+      blocksMovement: true,
+      blocksProjectiles: true,
+      blocksVision: true,
+    });
+
+    const damageState = createDamageSystemState();
+    runCombatSystem(
+      world,
+      makeContext(world, damageState, { getPlayerInput: inputForPlayer('player-1') }),
+      createCombatSystemState(),
+    );
+
+    expect(countProjectiles(world)).toBe(0);
+    expect(world.getComponent(BREAKABLE_COMPONENT).get(crate)).toMatchObject({
+      health: 0,
+      destroyed: false,
+    });
+
+    runInventoryLootSystem(
+      world,
+      {
+        artifact: {
+          schemaVersion: 1,
+          maxPlayers: 1,
+          spawnPoints: [{ x: 0, y: 0, team: 'solo', weight: 1 }],
+          spawnAnchors: [{ x: 0, y: 0, team: 'solo', weight: 1 }],
+          shrinkSchedule: {
+            centerX: 0,
+            centerY: 0,
+            startRadiusTiles: 16,
+            endRadiusTiles: 4,
+            shrinkIntervalMs: 30_000,
+            damagePerSecond: 5,
+          },
+          lootTables: [{ itemKind: 'ammo-box', tier: 'common', weight: 1 }],
+          objectPlacements: [],
+        } as ExportedArtifact,
+        getPlayerInput: () => undefined,
+        weaponId: String(WEAPON_ENTRY.weapon.id),
+        pickupRadius: LOOT_PICKUP_RADIUS,
+        ammoPickupAmount: INVENTORY.ammoPickupAmount,
+        healthPackAmount: INVENTORY.healthPackAmount,
+        playerHealth: CONFIG.damage.playerHealth,
+      },
+      createInventoryLootSystemState(1),
+    );
+
+    expect(world.getComponent(LOOT_SOURCE_COMPONENT).get(crate)).toMatchObject({
+      collected: true,
+    });
+    expect(world.getComponent(BREAKABLE_COMPONENT).get(crate)).toMatchObject({
+      destroyed: true,
+    });
+    expect(world.getComponent(COLLISION_BODY_COMPONENT).get(crate)).toMatchObject({
+      blocksMovement: false,
+      blocksProjectiles: false,
+      blocksVision: false,
+    });
+    expect(
+      [...world.getComponent(PICKUP_COMPONENT).entries()]
+        .map(([, pickup]) => pickup)
+        .filter((pickup) => pickup.available),
+    ).toEqual([{ itemKind: 'ammo-box', tier: 'common', quantity: 1, available: true }]);
   });
 
   it('never strikes the projectile owner', () => {

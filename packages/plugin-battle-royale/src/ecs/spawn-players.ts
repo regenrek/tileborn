@@ -1,14 +1,21 @@
-import { DAMAGE, DEFAULT_MAX_PLAYERS } from "../constants.js";
+import { DAMAGE } from "../constants.js";
+import { spreadOrderSpawnPoints } from "../spawn-layout.js";
 import type { ExportedArtifact, SpawnPointArtifact } from "../types/artifact.js";
 import type { PluginWorld } from "../types/runtime-plugin.js";
 import {
+  ANIMATION_STATE_COMPONENT,
+  FACING_COMPONENT,
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
   POSITION_COMPONENT,
+  TEAM_COMPONENT,
   VELOCITY_COMPONENT,
+  type AnimationState,
+  type Facing,
   type Player,
   type PlayerStats,
   type Position,
+  type Team,
   type Velocity,
 } from "./components.js";
 
@@ -17,72 +24,116 @@ export interface SpawnSlot {
   readonly y: number;
 }
 
+interface ResolvedSpawnSlot extends SpawnSlot {
+  readonly team: string;
+}
+
+export interface SpawnPlayersOptions {
+  readonly playerHealth?: number;
+  readonly playerIds?: readonly string[];
+  readonly existingPlayerIds?: ReadonlySet<string>;
+}
+
 const compareSpawnPoints = (left: SpawnPointArtifact, right: SpawnPointArtifact): number =>
   left.y - right.y || left.x - right.x || left.team.localeCompare(right.team);
 
-export const resolveSpawnSlots = (artifact: ExportedArtifact): readonly SpawnSlot[] => {
-  const markers = [...artifact.spawnAnchors].sort(compareSpawnPoints);
-
-  if (markers.length === 0) {
-    return [
-      {
-        x: artifact.shrinkSchedule.centerX,
-        y: artifact.shrinkSchedule.centerY,
-      },
-    ];
-  }
-
-  const maxPlayers =
-    typeof artifact.maxPlayers === "number" && Number.isFinite(artifact.maxPlayers)
-      ? artifact.maxPlayers
-      : DEFAULT_MAX_PLAYERS;
-  const spawnCount = Math.min(maxPlayers, markers.length);
-  return markers.slice(0, spawnCount).map((marker) => ({ x: marker.x, y: marker.y }));
+const resolveSpawnAssignments = (artifact: ExportedArtifact): readonly ResolvedSpawnSlot[] => {
+  const sortedMarkers = [...artifact.spawnAnchors].sort(compareSpawnPoints);
+  const spawnCount = Math.min(artifact.maxPlayers, sortedMarkers.length);
+  const markers =
+    spawnCount < sortedMarkers.length
+      ? spreadOrderSpawnPoints(sortedMarkers, compareSpawnPoints).slice(0, spawnCount)
+      : sortedMarkers;
+  return markers.map((marker) => ({
+    x: marker.x,
+    y: marker.y,
+    team: marker.team,
+  }));
 };
+
+export const resolveSpawnSlots = (artifact: ExportedArtifact): readonly SpawnSlot[] =>
+  resolveSpawnAssignments(artifact).map((marker) => ({ x: marker.x, y: marker.y }));
 
 const registerPlayerComponents = (world: PluginWorld): void => {
   world.registerComponent<Position>(POSITION_COMPONENT);
   world.registerComponent<Velocity>(VELOCITY_COMPONENT);
   world.registerComponent<Player>(PLAYER_COMPONENT);
+  world.registerComponent<AnimationState>(ANIMATION_STATE_COMPONENT);
   world.registerComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
+  world.registerComponent<Team>(TEAM_COMPONENT);
+  world.registerComponent<Facing>(FACING_COMPONENT);
+};
+
+const resolvePlayerModelId = (artifact: ExportedArtifact, playerId: string): string => {
+  const selected = artifact.playerModelSelections?.find((entry) => entry.playerId === playerId);
+  const modelId = selected?.modelId ?? artifact.defaultPlayerModelId;
+  if (modelId === undefined) {
+    throw new Error("runtime artifact is missing defaultPlayerModelId");
+  }
+  return modelId;
+};
+
+const resolveSpawnPlayerIds = (
+  slots: readonly SpawnSlot[],
+  playerIds: readonly string[] | undefined,
+): readonly string[] => {
+  if (playerIds === undefined) {
+    return slots.map((_, index) => `player-${index + 1}`);
+  }
+  const seen = new Set<string>();
+  const resolved: string[] = [];
+  for (const playerId of playerIds) {
+    if (playerId.length === 0 || seen.has(playerId)) {
+      continue;
+    }
+    seen.add(playerId);
+    resolved.push(playerId);
+    if (resolved.length >= slots.length) {
+      break;
+    }
+  }
+  return resolved;
 };
 
 export const spawnPlayersFromArtifact = (
   world: PluginWorld,
   artifact: ExportedArtifact,
-  options: {
-    readonly playerHealth?: number;
-    /** Per-slot selected model ids (index-aligned with spawn slots); optional. */
-    readonly playerModelIds?: readonly (string | undefined)[];
-    /** Fallback model id applied to every player without a per-slot override. */
-    readonly defaultModelId?: string;
-  } = {},
+  options: SpawnPlayersOptions = {},
 ): readonly number[] => {
   registerPlayerComponents(world);
 
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
   const velocities = world.getComponent<Velocity>(VELOCITY_COMPONENT);
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
+  const animations = world.getComponent<AnimationState>(ANIMATION_STATE_COMPONENT);
   const stats = world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
-  const markers = [...artifact.spawnAnchors].sort(compareSpawnPoints);
-  const slots = resolveSpawnSlots(artifact);
+  const teams = world.getComponent<Team>(TEAM_COMPONENT);
+  const facings = world.getComponent<Facing>(FACING_COMPONENT);
+  const slots = resolveSpawnAssignments(artifact);
+  const playerIds = resolveSpawnPlayerIds(slots, options.playerIds);
   const entities: number[] = [];
 
-  for (let index = 0; index < slots.length; index += 1) {
+  for (let index = 0; index < playerIds.length; index += 1) {
+    const playerId = playerIds[index]!;
+    if (options.existingPlayerIds?.has(playerId)) {
+      continue;
+    }
     const slot = slots[index]!;
-    const marker = markers[index];
     const entity = world.createEntity();
     positions.set(entity, { x: slot.x, y: slot.y });
     velocities.set(entity, { vx: 0, vy: 0 });
-    const modelId = options.playerModelIds?.[index] ?? options.defaultModelId;
+    const modelId = resolvePlayerModelId(artifact, playerId);
     players.set(entity, {
-      playerId: `player-${index + 1}`,
+      playerId,
       health: options.playerHealth ?? DAMAGE.playerHealth,
       alive: 1,
-      team: marker?.team ?? "solo",
-      ...(modelId === undefined ? {} : { modelId }),
+      team: slot.team,
+      modelId,
     });
+    animations.set(entity, { modelId, clipKey: "idle", facingDeg: 0, moving: false });
     stats.set(entity, { kills: 0, deaths: 0 });
+    teams.set(entity, { team: slot.team });
+    facings.set(entity, { dir: 0 });
     entities.push(entity);
   }
 

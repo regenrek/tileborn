@@ -3,6 +3,7 @@ export type { BattleRoyaleConfigInput, ResolvedBattleRoyaleConfig } from "./batt
 export { createSimulationRules, defaultPickupRadius } from "./simulation-rules.js";
 export { validateMap } from "./validate-map.js";
 export { generateMap } from "./generate-map.js";
+export { createBattleRoyaleSampleMaps } from "./sample-maps.js";
 export { exportArtifact } from "./export-artifact.js";
 export {
   createInitialFrame,
@@ -12,8 +13,10 @@ export {
   decodeServerFrame,
   encodeClientInputFrame,
   encodeHeartbeatFrame,
+  encodeSnapshotAckFrame,
   encodeServerFrame,
   mergeBattleRoyaleFrame,
+  requiredBattleRoyaleRenderableAssetIds,
   serverFrameToView,
   textureManifestForAtlas,
 } from "./renderer/battle-royale-projector.js";
@@ -25,8 +28,16 @@ export {
 } from "./host-protocol-bridge.js";
 export {
   createBattleRoyaleBundledAssets,
+  IMPACT_BURST_TEXTURE_ASSET_ID,
+  LOOT_CRATE_TEXTURE_ASSET_ID,
   PLAYER_TEXTURE_ASSET_ID,
   PROJECTILE_TEXTURE_ASSET_ID,
+  SCAN_PULSE_TEXTURE_ASSET_ID,
+  SHADOW_TEXTURE_ASSET_ID,
+  SHIELD_TEXTURE_ASSET_ID,
+  TRAP_TEXTURE_ASSET_ID,
+  UI_PIXEL_TEXTURE_ASSET_ID,
+  WEAPON_RIFLE_TEXTURE_ASSET_ID,
 } from "./renderer/bundled-assets.js";
 export type {
   BattleRoyaleProjectorConfig,
@@ -36,8 +47,10 @@ export type {
   InitialFrameInput,
   InitialFramePlayerView,
   InputDirection,
+  PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
+  VisualRoleRenderData,
   ZoneView,
 } from "./renderer/battle-royale-projector.js";
 export type {
@@ -53,13 +66,41 @@ export {
   resolveBattleRoyaleInputIntent,
 } from "./input-map.js";
 export type { BattleRoyaleAimContext, BattleRoyaleInputIntent } from "./input-map.js";
+export {
+  BR_HUD_LAYOUT_CONTRIBUTION_ID,
+  BR_HUD_LAYOUT_ID,
+  battleRoyaleDefaultHudLayout,
+  buildBattleRoyaleHudLayoutData,
+} from "./hud-layout.js";
+export {
+  BATTLE_ROYALE_PLACEHOLDER_WEAPON_VISUAL_ASSET_IDS,
+  BATTLE_ROYALE_REQUIRED_WEAPON_VISUAL_ROLE_KINDS,
+  BattleRoyaleWeaponVisualError,
+  resolveBattleRoyaleWeaponVisualBinding,
+  validateBattleRoyaleWeaponRenderableAssetIds,
+} from "./weapon-visuals.js";
+export type { BattleRoyaleWeaponRenderableAssetIds } from "./weapon-visuals.js";
 export { PLUGIN_ID } from "./constants.js";
 export {
+  BATTLE_ROYALE_CORE_PACK_ID,
+  BATTLE_ROYALE_CORE_PACK_VERSION,
+  DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS,
+} from "./content-assets.js";
+export {
+  BARRIER_KIND,
   DEFAULT_MAX_PLAYERS,
+  DECOY_KIND,
   LOOT_CRATE_KIND,
   SHRINK_ZONE_ANCHOR_KIND,
   SPAWN_POINT_KIND,
+  TRAP_KIND,
   ZONE,
 } from "./constants.js";
+export {
+  BattleRoyaleArtifactSchema,
+  assertBattleRoyaleArtifact,
+  decodeBattleRoyaleArtifact,
+  validateBattleRoyaleArtifact,
+} from "./types/artifact.js";
 export type { ExportedArtifact, GenerateMapOptions, ValidationResult } from "./types/artifact.js";
 export type { RuntimePlugin, RuntimePluginHost } from "./types/runtime-plugin.js";

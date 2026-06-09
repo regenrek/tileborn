@@ -61,6 +61,57 @@ export class PlayerModelAnchor extends Schema.Class<PlayerModelAnchor>('PlayerMo
   y: Schema.Number,
 }) {}
 
+export const REQUIRED_PLAYER_MODEL_CLIP_KEYS = [
+  'idle',
+  'walk',
+  'run',
+  'shoot',
+  'reload',
+  'hit',
+  'death',
+  'dash',
+  'pickup',
+] as const;
+
+export type PlayerModelClipKey = (typeof REQUIRED_PLAYER_MODEL_CLIP_KEYS)[number];
+
+export class PlayerModelClipSet extends Schema.Class<PlayerModelClipSet>('PlayerModelClipSet')({
+  idle: ClipId,
+  walk: ClipId,
+  run: ClipId,
+  shoot: ClipId,
+  reload: ClipId,
+  hit: ClipId,
+  death: ClipId,
+  dash: ClipId,
+  pickup: ClipId,
+}) {}
+
+/**
+ * Normalized rectangle in sprite-local space (0..1, origin top-left). Runtime
+ * slices convert this to pixels once concrete frame dimensions are known.
+ */
+export class PlayerModelHitbox extends Schema.Class<PlayerModelHitbox>('PlayerModelHitbox')({
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+}) {}
+
+/** Normalized sprite-local point used for projectile/effect spawn origins. */
+export class PlayerModelPoint extends Schema.Class<PlayerModelPoint>('PlayerModelPoint')({
+  x: Schema.Number,
+  y: Schema.Number,
+}) {}
+
+/** Sprite-independent world footprint used by renderers to size model frames. */
+export class PlayerModelWorldSize extends Schema.Class<PlayerModelWorldSize>(
+  'PlayerModelWorldSize',
+)({
+  width: Schema.Number,
+  height: Schema.Number,
+}) {}
+
 /** Asset-library reference kinds that can back a player model (renderable sprites). */
 export const PlayerModelRefableKinds = ['sprite', 'placeable'] as const;
 
@@ -71,19 +122,124 @@ export class PlayerModelRef extends Schema.Class<PlayerModelRef>('PlayerModelRef
   label: Schema.String,
   /** Underlying sprite/placeable reference (kind must be 'sprite' or 'placeable'). */
   ref: AssetLibraryReference,
-  /** Animation clip to play; falls back to `ref.clipId` when omitted. */
+  /** Animation clip to play; falls back to `ref.clipId`, then the required idle clip. */
   defaultClipId: Schema.optional(ClipId),
+  /** Required production animation clips by semantic action/state. */
+  clips: PlayerModelClipSet,
   /** Normalized pivot (0..1, origin top-left). */
   anchor: PlayerModelAnchor,
+  /** Normalized collision/damage hitbox in sprite-local coordinates. */
+  hitbox: PlayerModelHitbox,
+  /** Normalized muzzle origin used by shooter runtime/effects. */
+  muzzle: PlayerModelPoint,
+  /** Optional authored render multiplier. When omitted, pack/import defaults may apply. */
+  renderScale: Schema.optional(Schema.Number),
+  /** Optional authored world footprint in runtime world units. */
+  worldSize: Schema.optional(PlayerModelWorldSize),
 }) {}
 
 /** True when an asset-library reference kind can be promoted to a player model. */
 export const isPlayerModelRefable = (kind: AssetLibraryReferenceKind): boolean =>
   (PlayerModelRefableKinds as readonly string[]).includes(kind);
 
-/** Resolve the effective clip id for a player model (explicit default, else ref clip). */
+/** Resolve the effective clip id for a player model (explicit default, ref clip, else idle). */
 export const resolvePlayerModelClipId = (model: PlayerModelRef): ClipId | undefined =>
-  model.defaultClipId ?? model.ref.clipId;
+  model.defaultClipId ?? model.ref.clipId ?? model.clips.idle;
+
+export interface PlayerModelValidationIssue {
+  readonly path: string;
+  readonly message: string;
+}
+
+const isFiniteNumber = (value: number): boolean => Number.isFinite(value);
+
+const normalizedPointIssues = (
+  path: string,
+  point: { readonly x: number; readonly y: number },
+): readonly PlayerModelValidationIssue[] => {
+  const issues: PlayerModelValidationIssue[] = [];
+  if (!isFiniteNumber(point.x) || point.x < 0 || point.x > 1) {
+    issues.push({ path: `${path}.x`, message: 'must be a finite number between 0 and 1' });
+  }
+  if (!isFiniteNumber(point.y) || point.y < 0 || point.y > 1) {
+    issues.push({ path: `${path}.y`, message: 'must be a finite number between 0 and 1' });
+  }
+  return issues;
+};
+
+const normalizedHitboxIssues = (
+  path: string,
+  hitbox: PlayerModelHitbox,
+): readonly PlayerModelValidationIssue[] => {
+  const issues: PlayerModelValidationIssue[] = [];
+  issues.push(...normalizedPointIssues(path, hitbox));
+  if (!isFiniteNumber(hitbox.width) || hitbox.width <= 0 || hitbox.width > 1) {
+    issues.push({ path: `${path}.width`, message: 'must be a finite number greater than 0 and at most 1' });
+  }
+  if (!isFiniteNumber(hitbox.height) || hitbox.height <= 0 || hitbox.height > 1) {
+    issues.push({ path: `${path}.height`, message: 'must be a finite number greater than 0 and at most 1' });
+  }
+  if (isFiniteNumber(hitbox.x) && isFiniteNumber(hitbox.width) && hitbox.x + hitbox.width > 1) {
+    issues.push({ path, message: 'x + width must not exceed 1' });
+  }
+  if (isFiniteNumber(hitbox.y) && isFiniteNumber(hitbox.height) && hitbox.y + hitbox.height > 1) {
+    issues.push({ path, message: 'y + height must not exceed 1' });
+  }
+  return issues;
+};
+
+/** Validate production player-model invariants that are semantic, not just shape. */
+export const validatePlayerModelRef = (
+  model: PlayerModelRef,
+): readonly PlayerModelValidationIssue[] => {
+  const issues: PlayerModelValidationIssue[] = [];
+  if (model.id.trim().length === 0) {
+    issues.push({ path: 'id', message: 'must not be empty' });
+  }
+  if (model.label.trim().length === 0) {
+    issues.push({ path: 'label', message: 'must not be empty' });
+  }
+  if (!isPlayerModelRefable(model.ref.kind)) {
+    issues.push({ path: 'ref.kind', message: 'must be sprite or placeable' });
+  }
+  issues.push(...normalizedPointIssues('anchor', model.anchor));
+  issues.push(...normalizedPointIssues('muzzle', model.muzzle));
+  issues.push(...normalizedHitboxIssues('hitbox', model.hitbox));
+  if (
+    model.renderScale !== undefined &&
+    (!isFiniteNumber(model.renderScale) || model.renderScale <= 0)
+  ) {
+    issues.push({ path: 'renderScale', message: 'must be a finite number greater than 0' });
+  }
+  if (model.worldSize !== undefined) {
+    if (!isFiniteNumber(model.worldSize.width) || model.worldSize.width <= 0) {
+      issues.push({ path: 'worldSize.width', message: 'must be a finite number greater than 0' });
+    }
+    if (!isFiniteNumber(model.worldSize.height) || model.worldSize.height <= 0) {
+      issues.push({ path: 'worldSize.height', message: 'must be a finite number greater than 0' });
+    }
+  }
+
+  const allowedClipIds = new Set(
+    REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => String(model.clips[key])),
+  );
+  if (model.ref.clipId !== undefined && !allowedClipIds.has(String(model.ref.clipId))) {
+    issues.push({
+      path: 'ref.clipId',
+      message: 'must reference one of the required player-model clips',
+    });
+  }
+  if (model.defaultClipId !== undefined && !allowedClipIds.has(String(model.defaultClipId))) {
+    issues.push({
+      path: 'defaultClipId',
+      message: 'must reference one of the required player-model clips',
+    });
+  }
+  return issues;
+};
+
+export const isValidPlayerModelRef = (model: PlayerModelRef): boolean =>
+  validatePlayerModelRef(model).length === 0;
 
 export const AssetLibraryGroupKind = Schema.Literals([
   'tileset',

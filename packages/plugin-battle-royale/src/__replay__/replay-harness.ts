@@ -17,6 +17,7 @@ import { getZone, resetZoneSingleton } from "../ecs/zone.js";
 import { exportArtifact } from "../export-artifact.js";
 import type { ExportedArtifact } from "../types/artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
+import { TEST_PLAYER_MODELS } from "../test-player-model.js";
 import { createRuntimeAdapter } from "../runtime-adapter.js";
 import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
 import { createTestPluginWorld } from "../test-plugin-world.js";
@@ -94,7 +95,8 @@ export const makeReplayFixtureMap = () =>
     properties: { maxPlayers: REPLAY_MAX_PLAYERS },
   });
 
-export const exportReplayArtifact = (): ExportedArtifact => exportArtifact(makeReplayFixtureMap());
+export const exportReplayArtifact = (): ExportedArtifact =>
+  exportArtifact(makeReplayFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
 
 const buildInputLookup = (
   inputLog: readonly InputLogEntry[],
@@ -107,6 +109,10 @@ const buildInputLookup = (
       seq: 0,
       dir: entry.dir,
       shoot: entry.shoot,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
     });
     byTick.set(entry.tick, tickInputs);
   }

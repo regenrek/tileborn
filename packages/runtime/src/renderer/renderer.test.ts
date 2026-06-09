@@ -4,7 +4,7 @@ import { Effect, Option } from "effect";
 import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Container, Rectangle, Sprite, Texture, TextureSource } from "pixi.js";
+import { Assets, Container, Rectangle, Sprite, Texture, TextureSource } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { PositionComponent, RenderableComponent, VelocityComponent } from "../ecs/components.js";
@@ -17,6 +17,7 @@ import {
   type LoadedAssets,
   type RuntimeAssetManifest,
 } from "../assets/runtime-asset-loader.js";
+import type { BundledAssetId } from "../assets/bundled-asset.js";
 import {
   capturePreviousPositions,
   previousPositionFor,
@@ -261,6 +262,39 @@ describe("PixiRendererAdapter", () => {
     expect(adapter.spritePoolSize()).toBe(0);
   });
 
+  it("loads PNG data bundled assets through a decoded image source", async () => {
+    const adapter = new PixiRendererAdapter();
+    const bitmap = {} as ImageBitmap;
+    const fetchMock = vi.fn(async () => ({
+      blob: async () => new Blob([new Uint8Array([1])], { type: "image/png" }),
+    }));
+    const createImageBitmapMock = vi.fn(async () => bitmap);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("createImageBitmap", createImageBitmapMock);
+    const textureFrom = vi.spyOn(Texture, "from").mockReturnValue(Texture.EMPTY);
+    const assetsLoad = vi.spyOn(Assets, "load");
+    try {
+      await Effect.runPromise(
+        adapter.loadBundledAssets([
+          {
+            assetId: "test:ui-pixel" as BundledAssetId,
+            path: "data:image/png;base64,AA==",
+            mime: "image/png",
+          },
+        ]),
+      );
+      expect(fetchMock).toHaveBeenCalledWith("data:image/png;base64,AA==");
+      expect(createImageBitmapMock).toHaveBeenCalledTimes(1);
+      expect(textureFrom).toHaveBeenCalledWith(bitmap);
+      expect(assetsLoad).not.toHaveBeenCalled();
+      expect(adapter.textureForRenderableAssetId("test:ui-pixel")).toBe(Texture.EMPTY);
+    } finally {
+      textureFrom.mockRestore();
+      assetsLoad.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("renderFromEntities grows and shrinks the string-keyed sprite pool", async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
@@ -290,6 +324,87 @@ describe("PixiRendererAdapter", () => {
       ),
     );
     expect([...internals.spritePoolByStringId.keys()]).toEqual(["player-1"]);
+  });
+
+  it("applies renderable alpha, tint, non-uniform scale, and resets pooled sprite transforms", async () => {
+    const adapter = new PixiRendererAdapter();
+    const internals = adapter as unknown as {
+      app: { readonly stage: Container; readonly render: () => void };
+      readonly texturesByRenderableAssetId: Map<AssetId, Texture>;
+      readonly spritePoolByStringId: Map<string, Sprite>;
+    };
+    internals.app = { stage: new Container(), render: vi.fn() };
+    internals.texturesByRenderableAssetId.set(ASSET_A, Texture.EMPTY);
+
+    await Effect.runPromise(
+      adapter.renderFromEntities(
+        [{
+          id: "status-ring",
+          assetId: ASSET_A,
+          x: 0,
+          y: 0,
+          rotation: 1,
+          scaleX: 2,
+          scaleY: 0.5,
+          opacity: 0.4,
+          tint: 0xffcc00,
+          anchor: { x: 0.5, y: 0.5 },
+        }],
+        new Map(),
+        1,
+      ),
+    );
+    const sprite = internals.spritePoolByStringId.get("status-ring")!;
+    expect(sprite.rotation).toBe(1);
+    expect(sprite.scale.x).toBe(2);
+    expect(sprite.scale.y).toBe(0.5);
+    expect(sprite.alpha).toBe(0.4);
+    expect(sprite.tint).toBe(0xffcc00);
+    expect(sprite.anchor.x).toBe(0.5);
+
+    await Effect.runPromise(
+      adapter.renderFromEntities([{ id: "status-ring", assetId: ASSET_A, x: 0, y: 0 }], new Map(), 1),
+    );
+    expect(sprite.rotation).toBe(0);
+    expect(sprite.scale.x).toBe(1);
+    expect(sprite.scale.y).toBe(1);
+    expect(sprite.alpha).toBe(1);
+    expect(sprite.tint).toBe(0xffffff);
+    expect(sprite.anchor.x).toBe(0);
+  });
+
+  it("applies atlas UVs for one-frame renderable animations", async () => {
+    const adapter = new PixiRendererAdapter();
+    const internals = adapter as unknown as {
+      app: { readonly stage: Container; readonly render: () => void };
+      readonly texturesByRenderableAssetId: Map<AssetId, Texture>;
+      readonly spritePoolByStringId: Map<string, Sprite>;
+    };
+    const atlasTexture = new Texture({ source: new TextureSource({ width: 64, height: 64 }) });
+    internals.app = { stage: new Container(), render: vi.fn() };
+    internals.texturesByRenderableAssetId.set(ASSET_A, atlasTexture);
+
+    await Effect.runPromise(
+      adapter.renderFromEntities(
+        [{
+          id: "single-frame-pickup",
+          assetId: ASSET_A,
+          x: 0,
+          y: 0,
+          animation: {
+            frames: [{ assetId: ASSET_A, uv: { x: 8, y: 4, w: 16, h: 12 } }],
+            loop: false,
+            clockMs: 0,
+          },
+        }],
+        new Map(),
+        1,
+      ),
+    );
+
+    const sprite = internals.spritePoolByStringId.get("single-frame-pickup")!;
+    expect(sprite.texture).not.toBe(atlasTexture);
+    expect(sprite.texture.frame).toEqual(new Rectangle(8, 4, 16, 12));
   });
 
   it("culls entities outside the viewport while keeping in-view entities renderable", async () => {

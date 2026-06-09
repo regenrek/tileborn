@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Button, cn, typography } from '@tileborne/ui';
-import { Trash2Icon, UserPlusIcon } from 'lucide-react';
+import { PanelTopOpenIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
 import { gameObjectTypeIdForKey } from '@tileborne/core';
 import type { JsonObject } from '@tileborne/core';
 import type { PackId, ProjectId } from '@tileborne/core';
@@ -13,8 +14,9 @@ import {
   readBattleRoyaleAuthoringSettings,
 } from '@tileborne/plugin-battle-royale/authoring';
 import {
-  readBattleRoyalePlayerModels,
+  isDefaultBattleRoyalePlayerModelId,
   removeBattleRoyalePlayerModel,
+  resolveBattleRoyalePlayerModels,
   upsertBattleRoyalePlayerModel,
 } from '@tileborne/plugin-battle-royale/player-models';
 import { buildPlayerModelRefFromPlaceable } from '@/lib/promote-player-model';
@@ -28,6 +30,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 import type { ModeAuthoringPanelProps } from './mode-authoring-panels';
 import { GameSettingsForm } from './game-settings-form';
+import { VisualAssetRolesSection } from './visual-asset-roles-section';
 
 export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: ModeAuthoringPanelProps) {
   const updateMap = useUpdateMap();
@@ -119,6 +122,7 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
       ) : null}
 
       <PlayerModelsSection projectId={projectId} />
+      <VisualAssetRolesSection projectId={projectId} />
     </div>
   );
 }
@@ -129,11 +133,14 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
  * sprite/placeable brush into the roster ("sprite → player model" bridge).
  */
 function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
+  const navigate = useNavigate();
   const projectQuery = useProject(projectId);
   const project = projectQuery.data?.project;
   const updateProject = useUpdateProject();
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
-  const roster = useMemo(() => readBattleRoyalePlayerModels(project), [project]);
+  const roster = useMemo(() => resolveBattleRoyalePlayerModels(project), [project]);
+  const showingBundledDefaults =
+    roster.length > 0 && roster.every((model) => isDefaultBattleRoyalePlayerModelId(model.id));
   // Persisted pre-match lobby selection (per project, reused across matches).
   const [selectionOverride, setSelectionOverride] = useState<string | undefined>();
   const selectedModelId =
@@ -165,7 +172,7 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
       ...(activePlaceable.clipId === undefined ? {} : { clipId: activePlaceable.clipId }),
     });
     if (model === undefined) {
-      notifyError('That brush is not a sprite/object that can be a player model.');
+      notifyError('That sprite is missing required player-model clips or geometry metadata.');
       return;
     }
     try {
@@ -180,6 +187,10 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
     if (project === undefined) {
       return;
     }
+    if (showingBundledDefaults && isDefaultBattleRoyalePlayerModelId(modelId)) {
+      notifyError('Bundled default models are replaced by adding a project model.');
+      return;
+    }
     try {
       await updateProject.mutateAsync({
         project: removeBattleRoyalePlayerModel(project, modelId),
@@ -192,19 +203,34 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
   return (
     <div className="space-y-2 border-t border-border pt-3" data-testid="br-player-models-section">
       <div className="flex items-center justify-between gap-2">
-        <p className={cn('px-0.5', typography.sectionLabelMicro)}>Player models (project)</p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 px-2"
-          disabled={updateProject.isPending || activePlaceable?.packId === undefined}
-          onClick={() => void addActiveAsModel()}
-          data-testid="br-player-model-add-active"
-        >
-          <UserPlusIcon className="size-3.5" aria-hidden />
-          Use active sprite
-        </Button>
+        <p className={cn('px-0.5', typography.sectionLabelMicro)}>Player models</p>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-6 shrink-0"
+            onClick={() =>
+              void navigate({ to: '/projects/$projectId/player-models', params: { projectId } })
+            }
+            data-testid="br-player-model-open-editor"
+            aria-label="Open Player Model Editor"
+          >
+            <PanelTopOpenIcon className="size-3.5" aria-hidden />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2"
+            disabled={updateProject.isPending || activePlaceable?.packId === undefined}
+            onClick={() => void addActiveAsModel()}
+            data-testid="br-player-model-add-active"
+          >
+            <UserPlusIcon className="size-3.5" aria-hidden />
+            Use active sprite
+          </Button>
+        </div>
       </div>
       {roster.length === 0 ? (
         <p className={cn('px-0.5', typography.bodyMicro)}>
@@ -241,7 +267,7 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
                   size="icon"
                   variant="ghost"
                   className="size-6 shrink-0"
-                  disabled={updateProject.isPending}
+                  disabled={updateProject.isPending || (showingBundledDefaults && isDefaultBattleRoyalePlayerModelId(model.id))}
                   onClick={() => void removeModel(model.id)}
                   data-testid={`br-player-model-remove-${model.id}`}
                   aria-label={`Remove ${model.label}`}

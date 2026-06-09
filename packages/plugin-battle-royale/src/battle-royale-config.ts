@@ -31,6 +31,9 @@ const BattleRoyaleProjectileOverride = Schema.Struct({
   shootCooldownTicks: Schema.optional(Schema.Number),
   radius: Schema.optional(Schema.Number),
   weaponSlotCount: Schema.optional(Schema.Number),
+  magazineSize: Schema.optional(Schema.Number),
+  reloadTicks: Schema.optional(Schema.Number),
+  initialAmmoReserve: Schema.optional(Schema.Number),
 });
 
 const BattleRoyaleDamageOverride = Schema.Struct({
@@ -79,6 +82,9 @@ export interface ResolvedBattleRoyaleConfig {
     readonly shootCooldownTicks: number;
     readonly radius: number;
     readonly weaponSlotCount: number;
+    readonly magazineSize: number;
+    readonly reloadTicks: number;
+    readonly initialAmmoReserve: number;
   };
   readonly damage: {
     readonly playerHealth: number;
@@ -115,6 +121,9 @@ export const DEFAULT_BATTLE_ROYALE_CONFIG: ResolvedBattleRoyaleConfig = {
     shootCooldownTicks: PROJECTILE.shootCooldownTicks,
     radius: PROJECTILE.radius,
     weaponSlotCount: PROJECTILE.weaponSlotCount,
+    magazineSize: PROJECTILE.magazineSize,
+    reloadTicks: PROJECTILE.reloadTicks,
+    initialAmmoReserve: PROJECTILE.initialAmmoReserve,
   },
   damage: {
     playerHealth: DAMAGE.playerHealth,
@@ -177,6 +186,9 @@ export const mergeBattleRoyaleConfig = (
       shootCooldownTicks: override.projectile?.shootCooldownTicks ?? base.projectile.shootCooldownTicks,
       radius: override.projectile?.radius ?? base.projectile.radius,
       weaponSlotCount: override.projectile?.weaponSlotCount ?? base.projectile.weaponSlotCount,
+      magazineSize: override.projectile?.magazineSize ?? base.projectile.magazineSize,
+      reloadTicks: override.projectile?.reloadTicks ?? base.projectile.reloadTicks,
+      initialAmmoReserve: override.projectile?.initialAmmoReserve ?? base.projectile.initialAmmoReserve,
     },
     damage: {
       playerHealth: override.damage?.playerHealth ?? base.damage.playerHealth,

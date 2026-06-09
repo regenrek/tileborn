@@ -22,6 +22,7 @@ const RUNTIME_DEFAULTS = {
   assetLoaders: undefined,
   clientSystems: undefined,
   hudWidgets: undefined,
+  hudLayouts: undefined,
   lobbyPanels: undefined,
   menuSections: undefined,
   inputMaps: undefined,
@@ -113,7 +114,16 @@ describe("playtest manifest-driven mode selection", () => {
     ).toEqual(["@tileborne-plugins/example-arena"]);
   });
 
-  it("falls back to the first discovered mode when the selection is unavailable", () => {
+  it("selects no plugin when multiple modes are available without an explicit selection", () => {
+    expect(
+      activePlaytestPluginIds([
+        candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
+        candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("selects no plugin when the selection is unavailable", () => {
     expect(
       activePlaytestPluginIds(
         [
@@ -122,6 +132,6 @@ describe("playtest manifest-driven mode selection", () => {
         ],
         gameModeIdFromPluginId(pluginId("@tileborne-plugins/missing-mode")),
       ),
-    ).toEqual([BATTLE_ROYALE_PLUGIN_ID]);
+    ).toEqual([]);
   });
 });

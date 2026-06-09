@@ -6,12 +6,17 @@ export interface RuntimeClientInputFrame {
   readonly seq: number;
   readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleProtocol.BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 export type RuntimeClientFrameView =
   | { readonly kind: "heartbeat"; readonly tick: number }
+  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
   | {
       readonly kind: "input";
       readonly input: RuntimeClientInputFrame;
@@ -35,14 +40,21 @@ export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrame
   if (frame._tag === "Heartbeat") {
     return { kind: "heartbeat", tick: frame.tick };
   }
+  if (frame._tag === "SnapshotAck") {
+    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
+  }
   if (frame._tag === "PlayerInput") {
     const input: RuntimeClientInputFrame = {
       tick: frame.tick,
       seq: frame.seq,
       ...(Option.isSome(frame.dir) ? { dir: frame.dir.value } : {}),
       shoot: frame.shoot,
+      reload: frame.reload,
+      interact: frame.interact,
+      drop: frame.drop,
+      abilities: [...frame.abilities],
       ...(Option.isSome(frame.aimDeg) ? { aimDeg: frame.aimDeg.value } : {}),
-      ...(Option.isSome(frame.weaponSlot) ? { weaponSlot: frame.weaponSlot.value } : {}),
+      ...(Option.isSome(frame.swapSlot) ? { swapSlot: frame.swapSlot.value } : {}),
     };
     return {
       kind: "input",

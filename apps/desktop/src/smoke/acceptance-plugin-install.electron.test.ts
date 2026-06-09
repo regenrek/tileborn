@@ -56,8 +56,9 @@ describe('acceptance: battle-royale plugin install UI', () => {
       (tab as HTMLElement).click();
     });
 
-    await expect(page.getByText('Installed · Enabled')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(BATTLE_ROYALE_PLUGIN_ID)).toBeVisible();
+    await expect(page.getByText(new RegExp(`${BATTLE_ROYALE_PLUGIN_ID}.*Enabled`))).toBeVisible({
+      timeout: 20_000,
+    });
 
     const plugins = await page.evaluate(async () => {
       const { plugins: listed } = await window.tileborne.plugins.list({});

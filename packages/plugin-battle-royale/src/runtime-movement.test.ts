@@ -1,4 +1,19 @@
-import { MapObject, TileChunk, TileLayer, gameObjectTypeIdForKey, makeAssetId, makeTileId, makeTileborneMap, type Uuid } from "@tileborne/core";
+import {
+  AssetLibraryReference,
+  CollisionLayer,
+  MapObject,
+  PlayerModelClipSet,
+  PlayerModelRef,
+  TileChunk,
+  TileLayer,
+  gameObjectTypeIdForKey,
+  makeAssetId,
+  makeClipId,
+  makePackId,
+  makeTileId,
+  makeTileborneMap,
+  type Uuid,
+} from "@tileborne/core";
 import {
   BitmaskCollisionMask,
   CellSize,
@@ -41,6 +56,37 @@ const uuid = (suffix: string): Uuid =>
   `660e8400-e29b-41d4-a716-${suffix.padStart(12, "0")}` as Uuid;
 const passableTileId = makeTileId(uuid("201"));
 const blockedTileId = makeTileId(uuid("202"));
+const modelPackId = makePackId("550e8400-e29b-41d4-a716-446655440999");
+const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544000${index}`);
+
+const testModel = (id: string): PlayerModelRef =>
+  new PlayerModelRef({
+    id,
+    label: id,
+    ref: new AssetLibraryReference({
+      packId: modelPackId,
+      kind: "sprite",
+      refId: "placeable:hero",
+      clipId: clipIdAt(0),
+    }),
+    defaultClipId: clipIdAt(0),
+    clips: new PlayerModelClipSet({
+      idle: clipIdAt(0),
+      walk: clipIdAt(1),
+      run: clipIdAt(2),
+      shoot: clipIdAt(3),
+      reload: clipIdAt(4),
+      hit: clipIdAt(5),
+      death: clipIdAt(6),
+      dash: clipIdAt(7),
+      pickup: clipIdAt(8),
+    }),
+    anchor: { x: 0.5, y: 1 },
+    hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+    muzzle: { x: 0.75, y: 0.45 },
+  });
+
+const playerModels = [testModel("model:default")] as const;
 
 const makeTestObject = (
   id: (typeof TEST_OBJECT_IDS)[number],
@@ -68,7 +114,7 @@ const spawnSinglePlayer = (world: ReturnType<typeof createTestPluginWorld>, star
     tileHeight: TILE_SIZE,
     objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, startX, startY)],
   });
-  const artifact = exportArtifact(map);
+  const artifact = exportArtifact(map, { playerModels });
   spawnPlayersFromArtifact(world, artifact);
   return artifact;
 };
@@ -87,6 +133,7 @@ const spawnTwoPlayerArtifact = () =>
       ],
       properties: { maxPlayers: 2 },
     }),
+    { playerModels },
   );
 
 const firstPosition = (world: ReturnType<typeof createTestPluginWorld>): Position => {
@@ -178,7 +225,7 @@ describe("applyMovementTick", () => {
   it("moves east for two ticks by 2 * speed * dt", () => {
     const world = createTestPluginWorld();
     spawnSinglePlayer(world, 10, 20);
-    const input = { dir: 0 as const, shoot: false };
+    const input = { dir: 0 as const, shoot: false, reload: false, interact: false };
 
     applyMovementTick(world, DT, new Map([["player-1", input]]), undefined);
     applyMovementTick(world, DT, new Map([["player-1", input]]), undefined);
@@ -191,7 +238,7 @@ describe("applyMovementTick", () => {
   it("applies sqrt(2)/2 normalization for north-east movement", () => {
     const world = createTestPluginWorld();
     spawnSinglePlayer(world, 0, 0);
-    const input = { dir: 7 as const, shoot: false };
+    const input = { dir: 7 as const, shoot: false, reload: false, interact: false };
     const axisDelta = (Math.SQRT2 / 2) * MOVEMENT.speed * DT;
 
     applyMovementTick(world, DT, new Map([["player-1", input]]), undefined);
@@ -224,17 +271,139 @@ describe("applyMovementTick", () => {
       ],
       objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 100, 100)],
     });
-    const artifact = exportArtifact(map, { tilesetPack: pack });
+    const artifact = exportArtifact(map, { tilesetPack: pack, playerModels });
     spawnPlayersFromArtifact(world, artifact);
     const environment = buildCollisionEnvironment(artifact);
 
-    const input = { dir: 0 as const, shoot: false };
+    const input = { dir: 0 as const, shoot: false, reload: false, interact: false };
     for (let tick = 0; tick < 20; tick += 1) {
       applyMovementTick(world, DT, new Map([["player-1", input]]), environment);
     }
 
     const after = firstPosition(world);
     expect(after.x).toBeLessThanOrEqual(128 - MOVEMENT.radius);
+  });
+
+  it("exports collision-paint layers into runtime blockers", () => {
+    const world = createTestPluginWorld();
+    const pack = makeCollisionTilesetPack();
+    const collisionTiles = Array.from({ length: 32 * 32 }, () => 0);
+    collisionTiles[3 * 32 + 4] = 2;
+    const artifact = exportArtifact(
+      makeTileborneMap({
+        id: TEST_MAP_ID,
+        width: 32,
+        height: 32,
+        tileWidth: TILE_SIZE,
+        tileHeight: TILE_SIZE,
+        layers: [
+          new CollisionLayer({
+            id: TEST_LAYER_ID,
+            name: "Collision",
+            visible: true,
+            opacity: 1,
+            chunks: [new TileChunk({ x: 0, y: 0, width: 32, height: 32, tiles: collisionTiles })],
+          }),
+        ],
+        objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 100, 100)],
+      }),
+      { tilesetPack: pack, playerModels },
+    );
+    spawnPlayersFromArtifact(world, artifact);
+    const environment = buildCollisionEnvironment(artifact);
+
+    const input = { dir: 0 as const, shoot: false, reload: false, interact: false };
+    for (let tick = 0; tick < 20; tick += 1) {
+      applyMovementTick(world, DT, new Map([["player-1", input]]), environment);
+    }
+
+    expect(firstPosition(world).x).toBeLessThanOrEqual(128 - MOVEMENT.radius);
+  });
+
+  it("sweeps long movement steps so players cannot tunnel through blockers", () => {
+    const world = createTestPluginWorld();
+    const pack = makeCollisionTilesetPack();
+    const collisionTiles = Array.from({ length: 32 * 32 }, () => 0);
+    collisionTiles[3 * 32 + 4] = 2;
+    const artifact = exportArtifact(
+      makeTileborneMap({
+        id: TEST_MAP_ID,
+        width: 32,
+        height: 32,
+        tileWidth: TILE_SIZE,
+        tileHeight: TILE_SIZE,
+        layers: [
+          new CollisionLayer({
+            id: TEST_LAYER_ID,
+            name: "Collision",
+            visible: true,
+            opacity: 1,
+            chunks: [new TileChunk({ x: 0, y: 0, width: 32, height: 32, tiles: collisionTiles })],
+          }),
+        ],
+        objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 80, 100)],
+      }),
+      { tilesetPack: pack, playerModels },
+    );
+    spawnPlayersFromArtifact(world, artifact);
+
+    applyMovementTick(
+      world,
+      2,
+      new Map([["player-1", { dir: 0 as const, shoot: false, reload: false, interact: false }]]),
+      buildCollisionEnvironment(artifact),
+    );
+
+    expect(firstPosition(world).x).toBeLessThanOrEqual(128 - MOVEMENT.radius);
+  });
+
+  it("blocks movement against exported object collision rects", () => {
+    const world = createTestPluginWorld();
+    const artifact = {
+      ...spawnSinglePlayer(world, 100, 100),
+      objectCollisionRects: [
+        {
+          objectId: TEST_OBJECT_IDS[1],
+          x: 128,
+          y: 88,
+          width: 32,
+          height: 32,
+          blocksMovement: true,
+          blocksProjectiles: false,
+          blocksVision: false,
+        },
+      ],
+    };
+
+    const input = { dir: 0 as const, shoot: false, reload: false, interact: false };
+    for (let tick = 0; tick < 20; tick += 1) {
+      applyMovementTick(world, DT, new Map([["player-1", input]]), buildCollisionEnvironment(artifact));
+    }
+
+    expect(firstPosition(world).x).toBeLessThanOrEqual(128 - MOVEMENT.radius);
+  });
+
+  it("does not displace idle players from authored spawn positions inside runtime blockers", () => {
+    const world = createTestPluginWorld();
+    const artifact = {
+      ...spawnSinglePlayer(world, 20, 44),
+      objectCollisionRects: [
+        {
+          objectId: TEST_OBJECT_IDS[1],
+          x: 28,
+          y: 36,
+          width: 16,
+          height: 16,
+          blocksMovement: true,
+          blocksProjectiles: true,
+          blocksVision: true,
+        },
+      ],
+    };
+
+    applyMovementTick(world, DT, new Map(), buildCollisionEnvironment(artifact));
+
+    expect(firstPosition(world)).toEqual({ x: 20, y: 44 });
   });
 
   it("uses each alive player's own runtime input without cross-bleed", () => {
@@ -244,10 +413,10 @@ describe("applyMovementTick", () => {
       getArtifact: () => artifact,
       getPlayerInput: (playerId) => {
         if (playerId === "player-1") {
-          return { tick: 1, seq: 1, dir: 0, shoot: false };
+          return { tick: 1, seq: 1, dir: 0, shoot: false, reload: false, interact: false, drop: false, abilities: [] };
         }
         if (playerId === "player-2") {
-          return { tick: 1, seq: 1, dir: 2, shoot: false };
+          return { tick: 1, seq: 1, dir: 2, shoot: false, reload: false, interact: false, drop: false, abilities: [] };
         }
         return undefined;
       },
@@ -269,7 +438,9 @@ describe("applyMovementTick", () => {
     const plugin = createRuntimeAdapter({
       getArtifact: () => artifact,
       getPlayerInput: (playerId) =>
-        playerId === "player-1" ? { tick: 1, seq: 1, shoot: true, aimDeg: 0 } : undefined,
+        playerId === "player-1"
+          ? { tick: 1, seq: 1, shoot: true, reload: false, interact: false, drop: false, abilities: [], aimDeg: 0 }
+          : undefined,
     });
 
     plugin.onInit?.({ pluginId: plugin.id }, world);

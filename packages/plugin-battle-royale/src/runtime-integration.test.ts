@@ -8,6 +8,7 @@ import { DEFAULT_MAX_PLAYERS, SPAWN_POINT_KIND } from "./constants.js";
 import { countAlivePlayers } from "./ecs/spawn-players.js";
 import { exportArtifact } from "./export-artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
+import { TEST_PLAYER_MODELS } from "./test-player-model.js";
 import { createTestPluginWorld } from "./test-plugin-world.js";
 
 const makeTestObject = (
@@ -58,7 +59,7 @@ describe("built runtime bundle", () => {
       readonly exportArtifact: typeof exportArtifact;
     };
 
-    const artifact = serverModule.exportArtifact(makeSpawnFixtureMap());
+    const artifact = serverModule.exportArtifact(makeSpawnFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
     const plugin = runtimeModule.createRuntimeAdapter({ getArtifact: () => artifact });
     const world = createTestPluginWorld();
 

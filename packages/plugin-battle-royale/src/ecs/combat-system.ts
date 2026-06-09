@@ -2,13 +2,16 @@ import {
   advanceProjectile,
   advanceWeaponTick,
   applyDamageToEntity,
+  beginReload,
   createProjectileFromDelivery,
   environmentSource,
   fireWeapon,
   initialWeaponState,
+  type KnockbackImpulse,
   makeCombatEntityId,
   makeProjectileId,
   makeTeamId,
+  segmentIntersectsAabb,
   WeaponState,
   type CombatEntityId,
   type CombatWorldView,
@@ -23,21 +26,48 @@ import {
 import type { ExportedArtifact } from '../types/artifact.js';
 import type { PluginWorld, RuntimePlayerInput } from '../types/runtime-plugin.js';
 import {
-  LAST_FACING_COMPONENT,
+  AIM_COMPONENT,
+  AMMO_RESERVE_COMPONENT,
+  BREAKABLE_COMPONENT,
+  COLLISION_BODY_COMPONENT,
+  DAMAGE_INDICATOR_COMPONENT,
+  EQUIPPED_WEAPON_COMPONENT,
+  FACING_COMPONENT,
+  LOOT_SOURCE_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
   PROJECTILE_COMPONENT,
+  RELOAD_STATE_COMPONENT,
+  TEAM_COMPONENT,
   VELOCITY_COMPONENT,
+  WEAPON_RUNTIME_STATE_COMPONENT,
+  type Aim,
+  type AmmoReserve,
+  type Breakable,
+  type CollisionBody,
+  type DamageIndicator,
   type Direction8,
-  type LastFacing,
+  type EquippedWeapon,
+  type Facing,
+  type LootSource,
   type Player,
   type Position,
   type Projectile as EcsProjectile,
+  type ReloadState,
+  type Team,
   type Velocity,
+  type WeaponRuntimeState,
 } from './components.js';
 import { excludingEntity } from './combat-world-view.js';
+import { type PluginCollisionEnvironment, resolvePlayerCollision } from './collision.js';
 import type { DamageSystemState } from './damage-system.js';
 import { direction8ToUnitVector } from './movement.js';
+import {
+  DEFAULT_PLAYER_PHYSICS,
+  physicsForPlayer,
+  type PlayerPhysicsProfile,
+} from './player-physics.js';
+import { isBlockedByStun } from './ability-status-system.js';
 
 /** Axis-aligned bounds a projectile is culled when it fully leaves. */
 export interface MapBounds {
@@ -98,16 +128,31 @@ export interface CombatSystemContext {
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly mapBounds?: MapBounds;
   readonly weaponSlotCount: number;
+  readonly initialAmmoReserve?: number;
   /** Projectile own collision radius, used only for the map-bounds cull. */
   readonly projectileBoundsRadius: number;
+  readonly bodyByModelId?: ReadonlyMap<string, PlayerPhysicsProfile>;
+  readonly defaultPlayerPhysics?: PlayerPhysicsProfile;
+  readonly collisionEnvironment?: PluginCollisionEnvironment;
+  readonly tick?: number;
 }
 
 const PROJECTILE_MUZZLE_PADDING = 1;
 const DEFAULT_FACING_DIRECTION: Direction8 = 0;
 
 const registerCombatComponents = (world: PluginWorld): void => {
-  world.registerComponent<LastFacing>(LAST_FACING_COMPONENT);
+  world.registerComponent<Facing>(FACING_COMPONENT);
+  world.registerComponent<Aim>(AIM_COMPONENT);
+  world.registerComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
+  world.registerComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
+  world.registerComponent<ReloadState>(RELOAD_STATE_COMPONENT);
+  world.registerComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT);
+  world.registerComponent<DamageIndicator>(DAMAGE_INDICATOR_COMPONENT);
   world.registerComponent<EcsProjectile>(PROJECTILE_COMPONENT);
+  world.registerComponent<Team>(TEAM_COMPONENT);
+  world.registerComponent<Breakable>(BREAKABLE_COMPONENT);
+  world.registerComponent<LootSource>(LOOT_SOURCE_COMPONENT);
+  world.registerComponent<CollisionBody>(COLLISION_BODY_COMPONENT);
 };
 
 const normalizeVector = (x: number, y: number): { readonly x: number; readonly y: number } => {
@@ -120,7 +165,7 @@ const normalizeVector = (x: number, y: number): { readonly x: number; readonly y
 
 const resolveShootDirection = (
   velocity: Velocity | undefined,
-  lastFacing: LastFacing | undefined,
+  facing: Facing | undefined,
   aimDeg: number | undefined,
 ): { readonly x: number; readonly y: number } => {
   if (aimDeg !== undefined) {
@@ -130,7 +175,7 @@ const resolveShootDirection = (
   if (velocity && (velocity.vx !== 0 || velocity.vy !== 0)) {
     return normalizeVector(velocity.vx, velocity.vy);
   }
-  return direction8ToUnitVector(lastFacing === undefined ? DEFAULT_FACING_DIRECTION : lastFacing.dir);
+  return direction8ToUnitVector(facing === undefined ? DEFAULT_FACING_DIRECTION : facing.dir);
 };
 
 const isValidAimDeg = (value: number | undefined): value is number =>
@@ -179,6 +224,43 @@ const recordDefeat = (
 const isDefeat = (outcome: DamageOutcome): outcome is EntityDefeated =>
   outcome._tag === 'EntityDefeated';
 
+const isDamageEvent = (
+  event: { readonly _tag: string },
+): event is Extract<DamageOutcome, { readonly _tag: 'DamageApplied' | 'EntityDefeated' }> =>
+  event._tag === 'DamageApplied' || event._tag === 'EntityDefeated';
+
+const normalizeDegrees = (degrees: number): number => {
+  const normalized = degrees % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+};
+
+const damageAngleDeg = (
+  target: Position | undefined,
+  source: { readonly x: number; readonly y: number } | undefined,
+): number => {
+  if (target === undefined || source === undefined) {
+    return 0;
+  }
+  return normalizeDegrees((Math.atan2(source.y - target.y, source.x - target.x) * 180) / Math.PI);
+};
+
+const recordDamageIndicator = (
+  world: PluginWorld,
+  targetEntity: number,
+  sourceId: string,
+  amount: number,
+  tick: number,
+  sourcePosition?: { readonly x: number; readonly y: number },
+): void => {
+  const position = world.getComponent<Position>(POSITION_COMPONENT).get(targetEntity);
+  world.getComponent<DamageIndicator>(DAMAGE_INDICATOR_COMPONENT).set(targetEntity, {
+    sourceId,
+    angleDeg: damageAngleDeg(position, sourcePosition),
+    amount,
+    tick,
+  });
+};
+
 const projectileMuzzleOffset = (delivery: ProjectileDelivery): number =>
   delivery.radius + PROJECTILE_MUZZLE_PADDING;
 
@@ -186,11 +268,12 @@ const projectileOrigin = (
   position: Position,
   direction: { readonly x: number; readonly y: number },
   delivery: ProjectileDelivery,
+  body: PlayerPhysicsProfile,
 ): Position => {
   const offset = projectileMuzzleOffset(delivery);
   return {
-    x: position.x + direction.x * offset,
-    y: position.y + direction.y * offset,
+    x: position.x + body.offsetX + direction.x * offset,
+    y: position.y + body.offsetY + direction.y * offset,
   };
 };
 
@@ -208,24 +291,110 @@ const ensureWeaponState = (
   return fresh;
 };
 
-/**
- * Advance every tracked weapon's neutral firing timers by one tick and top the
- * magazine back up. BR has no inventory/ammo (ADR-0018 non-goal), so the single
- * round is refilled each tick — cooldown alone gates the firing cadence.
- */
 const advanceWeapons = (ctx: CombatSystemContext, state: CombatSystemState): void => {
   for (const [playerId, weaponState] of state.weaponStateByPlayerId) {
-    const advanced = advanceWeaponTick(ctx.weapon, weaponState, 1).state;
-    const refilled =
-      advanced.ammoInMagazine >= ctx.weapon.magazineSize
-        ? advanced
-        : new WeaponState({
-            ammoInMagazine: ctx.weapon.magazineSize,
-            cooldownRemaining: advanced.cooldownRemaining,
-            reloadRemaining: advanced.reloadRemaining,
-            reloadAmount: advanced.reloadAmount,
-          });
-    state.weaponStateByPlayerId.set(playerId, refilled);
+    state.weaponStateByPlayerId.set(playerId, advanceWeaponTick(ctx.weapon, weaponState, 1).state);
+  }
+};
+
+const ammoKind = (ctx: CombatSystemContext): string => String(ctx.weapon.id);
+
+const reserveAmount = (
+  reserve: AmmoReserve | undefined,
+  kind: string,
+): number =>
+  reserve?.stacks.find((stack) => stack.ammoKind === kind)?.amount ?? 0;
+
+const setReserveAmount = (
+  world: PluginWorld,
+  entity: number,
+  kind: string,
+  amount: number,
+): void => {
+  const reserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
+  const current = reserves.get(entity)?.stacks ?? [];
+  const nextAmount = Math.max(0, Math.floor(amount));
+  const nextStacks = current.some((stack) => stack.ammoKind === kind)
+    ? current.map((stack) => (stack.ammoKind === kind ? { ...stack, amount: nextAmount } : stack))
+    : [...current, { ammoKind: kind, amount: nextAmount }];
+  reserves.set(entity, { stacks: nextStacks });
+};
+
+const ensureWeaponRuntimeComponents = (
+  world: PluginWorld,
+  ctx: CombatSystemContext,
+  state: CombatSystemState,
+  entity: number,
+  player: Player,
+): WeaponState => {
+  const weaponState = ensureWeaponState(ctx, state, player.playerId);
+  const kind = ammoKind(ctx);
+  const reserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
+  if (!reserves.has(entity)) {
+    setReserveAmount(world, entity, kind, ctx.initialAmmoReserve ?? 0);
+  }
+  const equippedWeapons = world.getComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
+  if (!equippedWeapons.has(entity)) {
+    equippedWeapons.set(entity, {
+      weaponId: kind,
+      slot: state.activeWeaponSlotByPlayerId.get(player.playerId) ?? 1,
+    });
+  }
+  const reloadStates = world.getComponent<ReloadState>(RELOAD_STATE_COMPONENT);
+  if (!reloadStates.has(entity)) {
+    reloadStates.set(entity, { active: false, weaponId: kind, remainingTicks: 0 });
+  }
+  return weaponState;
+};
+
+const syncWeaponRuntimeComponents = (
+  world: PluginWorld,
+  ctx: CombatSystemContext,
+  state: CombatSystemState,
+): void => {
+  const players = world.getComponent<Player>(PLAYER_COMPONENT);
+  const equippedWeapons = world.getComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
+  const ammoReserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
+  const reloadStates = world.getComponent<ReloadState>(RELOAD_STATE_COMPONENT);
+  const weaponRuntimeStates = world.getComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT);
+  const kind = ammoKind(ctx);
+  for (const [entity, player] of players.entries()) {
+    const weaponState = state.weaponStateByPlayerId.get(player.playerId);
+    const slot = state.activeWeaponSlotByPlayerId.get(player.playerId) ?? 1;
+    equippedWeapons.set(entity, { weaponId: kind, slot });
+    if (!weaponState) {
+      if (!ammoReserves.has(entity)) {
+        ammoReserves.set(entity, { stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }] });
+      }
+      reloadStates.set(entity, { active: false, weaponId: kind, remainingTicks: 0 });
+      weaponRuntimeStates.set(entity, {
+        weaponId: kind,
+        slot,
+        ammoInMagazine: ctx.weapon.magazineSize,
+        magazineSize: ctx.weapon.magazineSize,
+        cooldownRemainingTicks: 0,
+        reloadRemainingTicks: 0,
+        reloadTotalTicks: ctx.weapon.reloadTicks,
+      });
+      continue;
+    }
+    if (!ammoReserves.has(entity)) {
+      ammoReserves.set(entity, { stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }] });
+    }
+    reloadStates.set(entity, {
+      active: weaponState.reloadRemaining > 0,
+      weaponId: kind,
+      remainingTicks: weaponState.reloadRemaining,
+    });
+    weaponRuntimeStates.set(entity, {
+      weaponId: kind,
+      slot,
+      ammoInMagazine: weaponState.ammoInMagazine,
+      magazineSize: ctx.weapon.magazineSize,
+      cooldownRemainingTicks: weaponState.cooldownRemaining,
+      reloadRemainingTicks: weaponState.reloadRemaining,
+      reloadTotalTicks: ctx.weapon.reloadTicks,
+    });
   }
 };
 
@@ -238,9 +407,10 @@ const spawnProjectile = (
   position: Position,
   direction: { readonly x: number; readonly y: number },
   weaponSlot: number,
+  body: PlayerPhysicsProfile,
 ): void => {
   const entity = world.createEntity();
-  const origin = projectileOrigin(position, direction, ctx.delivery);
+  const origin = projectileOrigin(position, direction, ctx.delivery, body);
   world.getComponent<Position>(POSITION_COMPONENT).set(entity, origin);
   world.getComponent<EcsProjectile>(PROJECTILE_COMPONENT).set(entity, {
     ownerId: owner.playerId,
@@ -261,36 +431,53 @@ const processShootInput = (
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
   const velocities = world.getComponent<Velocity>(VELOCITY_COMPONENT);
-  const lastFacings = world.getComponent<LastFacing>(LAST_FACING_COMPONENT);
+  const facings = world.getComponent<Facing>(FACING_COMPONENT);
+  const aims = world.getComponent<Aim>(AIM_COMPONENT);
+  const equippedWeapons = world.getComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
+  const reserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
+  const kind = ammoKind(ctx);
 
   for (const [entity, player] of players.entries()) {
-    if (player.alive !== 1) {
+    if (player.alive !== 1 || isBlockedByStun(world, entity)) {
       continue;
     }
 
-    ensureWeaponState(ctx, state, player.playerId);
+    let weaponState = ensureWeaponRuntimeComponents(world, ctx, state, entity, player);
 
     const input = ctx.getPlayerInput?.(player.playerId);
     if (!input) {
       continue;
     }
 
-    if (isValidWeaponSlot(input.weaponSlot, ctx.weaponSlotCount)) {
-      state.activeWeaponSlotByPlayerId.set(player.playerId, input.weaponSlot);
+    if (isValidWeaponSlot(input.swapSlot, ctx.weaponSlotCount)) {
+      state.activeWeaponSlotByPlayerId.set(player.playerId, input.swapSlot);
+      equippedWeapons.set(entity, { weaponId: String(ctx.weapon.id), slot: input.swapSlot });
     }
 
     if (isValidDirection8(input.dir)) {
-      const currentFacing = lastFacings.get(entity);
+      const currentFacing = facings.get(entity);
       if (!currentFacing || currentFacing.dir !== input.dir) {
-        lastFacings.set(entity, { dir: input.dir });
+        facings.set(entity, { dir: input.dir });
       }
+    }
+    if (isValidAimDeg(input.aimDeg)) {
+      aims.set(entity, { deg: input.aimDeg });
+    }
+
+    if (input.reload) {
+      const reserveBefore = reserveAmount(reserves.get(entity), kind);
+      const reload = beginReload(ctx.weapon, weaponState, reserveBefore);
+      if (reload.ammoLoaded > 0) {
+        setReserveAmount(world, entity, kind, reserveBefore - reload.ammoLoaded);
+      }
+      state.weaponStateByPlayerId.set(player.playerId, reload.state);
+      weaponState = reload.state;
     }
 
     if (!input.shoot) {
       continue;
     }
 
-    const weaponState = state.weaponStateByPlayerId.get(player.playerId)!;
     const fired = fireWeapon(ctx.weapon, weaponState);
     state.weaponStateByPlayerId.set(player.playerId, fired.state);
     if (fired.outcome._tag !== 'WeaponFired') {
@@ -304,12 +491,137 @@ const processShootInput = (
 
     const direction = resolveShootDirection(
       velocities.get(entity),
-      lastFacings.get(entity),
+      facings.get(entity),
       isValidAimDeg(input.aimDeg) ? input.aimDeg : undefined,
     );
     const weaponSlot = state.activeWeaponSlotByPlayerId.get(player.playerId) ?? 1;
-    spawnProjectile(world, ctx, state, entity, player, position, direction, weaponSlot);
+    const body = physicsForPlayer(
+      player,
+      ctx.bodyByModelId,
+      ctx.defaultPlayerPhysics ?? DEFAULT_PLAYER_PHYSICS,
+    );
+    spawnProjectile(world, ctx, state, entity, player, position, direction, weaponSlot, body);
   }
+};
+
+const applyKnockbacks = (
+  world: PluginWorld,
+  ctx: CombatSystemContext,
+  knockbacks: readonly KnockbackImpulse[],
+): void => {
+  if (knockbacks.length === 0) {
+    return;
+  }
+  const players = world.getComponent<Player>(PLAYER_COMPONENT);
+  const positions = world.getComponent<Position>(POSITION_COMPONENT);
+  const sorted = [...knockbacks].sort((left, right) => left.target - right.target);
+
+  for (const impulse of sorted) {
+    const player = players.get(impulse.target);
+    const position = positions.get(impulse.target);
+    if (!player || !position) {
+      continue;
+    }
+    const body = physicsForPlayer(
+      player,
+      ctx.bodyByModelId,
+      ctx.defaultPlayerPhysics ?? DEFAULT_PLAYER_PHYSICS,
+    );
+    const nextPosition = {
+      x: position.x + impulse.x,
+      y: position.y + impulse.y,
+    };
+    if (ctx.collisionEnvironment !== undefined) {
+      resolvePlayerCollision(nextPosition, ctx.collisionEnvironment, body.radius, {
+        x: body.offsetX,
+        y: body.offsetY,
+      });
+    }
+    positions.set(impulse.target, nextPosition);
+  }
+};
+
+interface BreakableProjectileHit {
+  readonly entity: number;
+  readonly bodyEntity: number;
+  readonly distanceFromProjectile: number;
+}
+
+const findBreakableProjectileHit = (
+  world: PluginWorld,
+  from: { readonly x: number; readonly y: number },
+  to: { readonly x: number; readonly y: number },
+  radius: number,
+): BreakableProjectileHit | undefined => {
+  const breakables = world.getComponent<Breakable>(BREAKABLE_COMPONENT);
+  const lootSources = world.getComponent<LootSource>(LOOT_SOURCE_COMPONENT);
+  const collisionBodies = world.getComponent<CollisionBody>(COLLISION_BODY_COMPONENT);
+  let nearest: BreakableProjectileHit | undefined;
+
+  for (const [entity, breakable] of breakables.entries()) {
+    if (breakable.destroyed || breakable.health <= 0) {
+      continue;
+    }
+    const source = lootSources.get(entity);
+    if (source === undefined || source.collected) {
+      continue;
+    }
+    for (const [bodyEntity, body] of collisionBodies.entries()) {
+      if (body.objectId !== source.tableId || !body.blocksProjectiles) {
+        continue;
+      }
+      const intersects = segmentIntersectsAabb(
+        from,
+        to,
+        {
+          minX: body.x,
+          minY: body.y,
+          maxX: body.x + body.width,
+          maxY: body.y + body.height,
+          blocksProjectiles: body.blocksProjectiles,
+          blocksVision: body.blocksVision,
+        },
+        radius,
+      );
+      if (!intersects) {
+        continue;
+      }
+      const center = { x: body.x + body.width / 2, y: body.y + body.height / 2 };
+      const distanceFromProjectile = Math.hypot(center.x - from.x, center.y - from.y);
+      if (
+        nearest === undefined ||
+        distanceFromProjectile < nearest.distanceFromProjectile ||
+        (distanceFromProjectile === nearest.distanceFromProjectile && entity < nearest.entity) ||
+        (
+          distanceFromProjectile === nearest.distanceFromProjectile &&
+          entity === nearest.entity &&
+          bodyEntity < nearest.bodyEntity
+        )
+      ) {
+        nearest = { entity, bodyEntity, distanceFromProjectile };
+      }
+    }
+  }
+
+  return nearest;
+};
+
+const applyBreakableProjectileDamage = (
+  world: PluginWorld,
+  entity: number,
+  amount: number,
+): void => {
+  const breakables = world.getComponent<Breakable>(BREAKABLE_COMPONENT);
+  const breakable = breakables.get(entity);
+  if (breakable === undefined || breakable.destroyed) {
+    return;
+  }
+  const health = Math.max(0, breakable.health - amount);
+  breakables.set(entity, {
+    ...breakable,
+    health,
+    destroyed: false,
+  });
 };
 
 const advanceProjectiles = (
@@ -330,11 +642,28 @@ const advanceProjectiles = (
       continue;
     }
 
-    const sourcePlayer = world.getComponent<Player>(PLAYER_COMPONENT).get(source);
+    const sourceTeam = world.getComponent<Team>(TEAM_COMPONENT).get(source);
+    const from = { x: position.x, y: position.y };
+    const to = {
+      x: position.x + projectile.dirX * projectile.speed,
+      y: position.y + projectile.dirY * projectile.speed,
+    };
+    const breakableHit = findBreakableProjectileHit(
+      world,
+      from,
+      to,
+      ctx.delivery.radius,
+    );
+    if (breakableHit !== undefined) {
+      applyBreakableProjectileDamage(world, breakableHit.entity, ctx.delivery.damage);
+      toDestroy.push(entity);
+      continue;
+    }
+
     const engineProjectile = createProjectileFromDelivery({
       id: makeProjectileId(entity),
       source,
-      ...(sourcePlayer === undefined ? {} : { sourceTeam: makeTeamId(sourcePlayer.team) }),
+      ...(sourceTeam === undefined ? {} : { sourceTeam: makeTeamId(sourceTeam.team) }),
       origin: position,
       direction: { x: projectile.dirX, y: projectile.dirY },
       delivery: ctx.delivery,
@@ -348,10 +677,14 @@ const advanceProjectiles = (
     );
 
     for (const event of step.events) {
+      if (isDamageEvent(event)) {
+        recordDamageIndicator(world, event.target, projectile.ownerId, event.amount, ctx.tick ?? 0, from);
+      }
       if (event._tag === 'EntityDefeated') {
         recordDefeat(world, ctx.damageState, event.target, projectile.ownerId);
       }
     }
+    applyKnockbacks(world, ctx, step.knockbacks);
 
     if (step.alive === undefined) {
       toDestroy.push(entity);
@@ -400,6 +733,7 @@ export const runCombatSystem = (
 
   advanceWeapons(ctx, state);
   processShootInput(world, ctx, state);
+  syncWeaponRuntimeComponents(world, ctx, state);
   advanceProjectiles(world, ctx, state);
 };
 
@@ -415,6 +749,7 @@ export const applyEnvironmentDamage = (
   damageState: DamageSystemState,
   targetEntity: number,
   amount: number,
+  tick = 0,
 ): void => {
   const outcome = applyDamageToEntity(
     worldView,
@@ -423,6 +758,9 @@ export const applyEnvironmentDamage = (
     environmentSource(),
     policy,
   );
+  if (isDamageEvent(outcome)) {
+    recordDamageIndicator(world, targetEntity, 'zone', outcome.amount, tick);
+  }
   if (isDefeat(outcome)) {
     recordDefeat(world, damageState, targetEntity, 'zone');
   }

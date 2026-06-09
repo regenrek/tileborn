@@ -46,23 +46,57 @@ interface BundledRuntimeAdapter {
 }
 
 interface BundledPluginLoaderOptions {
+  readonly getPlayerIds?: () => readonly string[];
   readonly getInput?: (playerId: string) => BundledRuntimeInput | undefined;
   readonly emitFrame?: (frame: Uint8Array) => void;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
   readonly seed?: string | number;
+  readonly runtimeArtifact?: unknown;
 }
+
+const DEFAULT_PLAYER_MODEL_ID = "model:bundled-player";
+const DEFAULT_PLAYER_MODEL_PACK_ID = "pack:00000000-0000-4000-8000-000000000101";
+const DEFAULT_PLAYER_MODEL_PLACEABLE_ID = "placeable:00000000-0000-4000-8000-000000000102";
+const DEFAULT_PLAYER_MODEL_CLIPS = {
+  idle: "clip:00000000-0000-4000-8000-000000000201",
+  walk: "clip:00000000-0000-4000-8000-000000000202",
+  run: "clip:00000000-0000-4000-8000-000000000203",
+  shoot: "clip:00000000-0000-4000-8000-000000000204",
+  reload: "clip:00000000-0000-4000-8000-000000000205",
+  hit: "clip:00000000-0000-4000-8000-000000000206",
+  death: "clip:00000000-0000-4000-8000-000000000207",
+  dash: "clip:00000000-0000-4000-8000-000000000208",
+  pickup: "clip:00000000-0000-4000-8000-000000000209",
+} as const;
+
+const DEFAULT_PLAYER_MODEL = {
+  id: DEFAULT_PLAYER_MODEL_ID,
+  label: "Bundled Player",
+  ref: {
+    packId: DEFAULT_PLAYER_MODEL_PACK_ID,
+    kind: "sprite",
+    refId: DEFAULT_PLAYER_MODEL_PLACEABLE_ID,
+    clipId: DEFAULT_PLAYER_MODEL_CLIPS.idle,
+  },
+  defaultClipId: DEFAULT_PLAYER_MODEL_CLIPS.idle,
+  clips: DEFAULT_PLAYER_MODEL_CLIPS,
+  anchor: { x: 0.5, y: 0.5 },
+  hitbox: { x: 0.25, y: 0.2, width: 0.5, height: 0.65 },
+  muzzle: { x: 0.85, y: 0.5 },
+} as const;
+
+const DEFAULT_SPAWN_ANCHORS = Array.from({ length: 32 }, (_, index) => ({
+  x: 16 + (index % 8) * 16,
+  y: 32 + Math.floor(index / 8) * 16,
+  team: "solo",
+  weight: 1,
+}));
 
 const DEFAULT_ARTIFACT = {
   schemaVersion: 1 as const,
   maxPlayers: 32,
-  spawnPoints: [
-    { x: 16, y: 32, team: "solo", weight: 1 },
-    { x: 48, y: 32, team: "solo", weight: 1 },
-  ],
-  spawnAnchors: [
-    { x: 16, y: 32, team: "solo", weight: 1 },
-    { x: 48, y: 32, team: "solo", weight: 1 },
-  ],
+  spawnPoints: DEFAULT_SPAWN_ANCHORS,
+  spawnAnchors: DEFAULT_SPAWN_ANCHORS,
   shrinkSchedule: {
     centerX: 32,
     centerY: 32,
@@ -78,6 +112,8 @@ const DEFAULT_ARTIFACT = {
     readonly y: number;
     readonly properties: Record<string, unknown>;
   }[],
+  playerModels: [DEFAULT_PLAYER_MODEL],
+  defaultPlayerModelId: DEFAULT_PLAYER_MODEL_ID,
 };
 
 class InMemoryBundledPluginWorld implements BundledPluginWorld {
@@ -160,8 +196,10 @@ export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = 
       if (pluginId !== bundledPlugin.id) {
         throw new Error(`no bundled runtime plugin for ${pluginId}`);
       }
+      const artifact = options.runtimeArtifact ?? DEFAULT_ARTIFACT;
       const adapter = createRuntimeAdapter({
-        getArtifact: () => DEFAULT_ARTIFACT,
+        getArtifact: () => artifact,
+        ...(options.getPlayerIds === undefined ? {} : { getPlayerIds: options.getPlayerIds }),
         ...(options.getInput === undefined ? {} : { getPlayerInput: options.getInput }),
         ...(options.emitFrame === undefined ? {} : { msgOut: { push: options.emitFrame } }),
         ...(options.setReplayFrames === undefined ? {} : { setReplayFrames: options.setReplayFrames }),

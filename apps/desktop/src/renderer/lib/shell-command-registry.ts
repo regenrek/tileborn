@@ -13,10 +13,12 @@ import {
   PaintbrushIcon,
   PlayIcon,
   PuzzleIcon,
+  CrosshairIcon,
   Redo2Icon,
   SettingsIcon,
   SquareDashedIcon,
   Undo2Icon,
+  UserIcon,
   WrenchIcon,
 } from 'lucide-react';
 
@@ -173,6 +175,22 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
     icon: PuzzleIcon,
     requiresProject: true,
     keywords: ['extensions', 'plugins'],
+  },
+  {
+    id: 'view.visual-role-editor',
+    label: 'Visual Role Editor',
+    group: 'view',
+    icon: CrosshairIcon,
+    requiresProject: true,
+    keywords: ['visual', 'roles', 'weapon', 'projectile', 'muzzle', 'vfx'],
+  },
+  {
+    id: 'view.player-model-editor',
+    label: 'Player Model Editor',
+    group: 'view',
+    icon: UserIcon,
+    requiresProject: true,
+    keywords: ['player', 'model', 'sprite', 'clips', 'hitbox', 'muzzle'],
   },
   {
     id: 'view.toggle-grid',

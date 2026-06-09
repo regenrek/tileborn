@@ -9,6 +9,7 @@ import {
   ArenaHeartbeat,
   ArenaPlayerInput,
   ArenaSnapshot,
+  ArenaSnapshotAck,
   decodeArenaClientMessage,
   decodeArenaServerMessage,
   encodeArenaClientMessage,
@@ -64,6 +65,7 @@ export interface ClientInputFrame {
 
 export type ClientFrameView =
   | { readonly kind: "heartbeat"; readonly tick: number }
+  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
   | ({ readonly kind: "input" } & ClientInputFrame);
 
 export type ServerFrameView = {
@@ -225,6 +227,9 @@ export const createInitialFrame = (input: InitialFrameInput): unknown => {
 export const encodeHeartbeatFrame = (tick: number): Uint8Array =>
   encodeArenaClientMessage(new ArenaHeartbeat({ tick }));
 
+export const encodeSnapshotAckFrame = (tick: number, receivedAtMs: number): Uint8Array =>
+  encodeArenaClientMessage(new ArenaSnapshotAck({ tick, receivedAtMs }));
+
 export const encodeClientInputFrame = (input: ClientInputFrame): Uint8Array =>
   encodeArenaClientMessage(
     new ArenaPlayerInput({
@@ -240,6 +245,9 @@ export const decodeClientFrameView = (bytes: Uint8Array): ClientFrameView | unde
   const frame = decodeArenaClientMessage(bytes);
   if (frame._tag === "ArenaHeartbeat") {
     return { kind: "heartbeat", tick: frame.tick };
+  }
+  if (frame._tag === "ArenaSnapshotAck") {
+    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
   if (frame._tag === "ArenaPlayerInput") {
     return {

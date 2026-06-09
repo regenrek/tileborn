@@ -66,6 +66,7 @@ import {
   type ImportSpriteSheetInput,
   type SpriteAnchorName,
   type SpriteSheetClipInput,
+  type SpriteSheetPlayerModelMetadata,
   type SpriteSheetSliceConfig,
 } from '@tileborne/sdk-tileset/importers/sprite-sheet';
 import { writeTilesetManifest, type ManifestProvenance } from '@tileborne/sdk-tileset/manifest';
@@ -178,6 +179,7 @@ export interface SpriteSheetImportInput {
   readonly anchor?: SpriteAnchorName;
   readonly packName?: string;
   readonly clips?: readonly SpriteSheetClipInput[];
+  readonly playerModel?: SpriteSheetPlayerModelMetadata | undefined;
   /** Pre-decoded Aseprite JSON sidecar (drives slicing + clips when present). */
   readonly aseprite?: unknown;
 }
@@ -1028,6 +1030,7 @@ const stageSpriteSheetPack = (
       ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
       ...(input.packName === undefined ? {} : { packName: input.packName }),
       ...(input.clips === undefined ? {} : { clips: input.clips }),
+      ...(input.playerModel === undefined ? {} : { playerModel: input.playerModel }),
       ...(input.aseprite === undefined ? {} : { aseprite: input.aseprite }),
       importedAt: new Date().toISOString(),
     } satisfies ImportSpriteSheetInput);

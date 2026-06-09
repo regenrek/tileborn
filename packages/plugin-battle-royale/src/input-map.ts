@@ -1,5 +1,9 @@
-import { coreActionId, CORE_ACTIONS, CONTROL_SCHEMES, InputMap, type ActionId, type ActionState } from "@tileborne/core";
-import type { Direction8 } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import { coreActionId, CORE_ACTIONS, CONTROL_SCHEMES, InputMap, makeActionId, type ActionId, type ActionState } from "@tileborne/core";
+import {
+  BattleRoyaleAbility,
+  type BattleRoyaleAbilityId,
+  type Direction8,
+} from "@tileborne/ipc-contracts/protocols/battle-royale";
 import { Schema } from "effect";
 
 /**
@@ -10,7 +14,7 @@ import { Schema } from "effect";
  * `Space`/mouse-0 → PrimaryAction, WASD/arrows → Move, `R` → Reload, `Digit/Numpad
  * 1-5` → Slot1-5, pointer → Aim. The engine resolver turns raw input into a
  * neutral `ActionState`; THIS module owns the only BR-specific step — mapping that
- * neutral state into BR's existing `{ dir, shoot, aimDeg, weaponSlot }` intent.
+ * neutral state into BR's `{ dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot }` intent.
  * The engine never knows PrimaryAction means "shoot"; that is this adapter's job.
  */
 
@@ -32,7 +36,15 @@ const BR_SLOT_ACTIONS = [
 const MOVE_ACTION: ActionId = coreActionId(CORE_ACTIONS.Move);
 const AIM_ACTION: ActionId = coreActionId(CORE_ACTIONS.Aim);
 const PRIMARY_ACTION: ActionId = coreActionId(CORE_ACTIONS.PrimaryAction);
+const SECONDARY_ACTION: ActionId = coreActionId(CORE_ACTIONS.SecondaryAction);
+const DASH_ACTION: ActionId = coreActionId(CORE_ACTIONS.Dash);
+const RELOAD_ACTION: ActionId = coreActionId(CORE_ACTIONS.Reload);
+const INTERACT_ACTION: ActionId = coreActionId(CORE_ACTIONS.Interact);
 const SLOT_ACTION_IDS: readonly ActionId[] = BR_SLOT_ACTIONS.map((action) => coreActionId(action));
+const SCAN_ACTION: ActionId = makeActionId("battle-royale.ScanPulse");
+const TRAP_ACTION: ActionId = makeActionId("battle-royale.PlaceTrap");
+const DECOY_ACTION: ActionId = makeActionId("battle-royale.DeployDecoy");
+const DROP_ACTION: ActionId = makeActionId("battle-royale.DropItem");
 
 interface RawTriggerData {
   readonly _tag: "key" | "mouseButton" | "axis" | "pointer" | "gamepadButton";
@@ -99,14 +111,27 @@ export const buildBattleRoyaleInputMapData = (): {
     { action: CORE_ACTIONS.Move, valueKind: "analog2d" },
     { action: CORE_ACTIONS.Aim, valueKind: "pointer" },
     { action: CORE_ACTIONS.PrimaryAction, valueKind: "digital" },
+    { action: CORE_ACTIONS.SecondaryAction, valueKind: "digital" },
+    { action: CORE_ACTIONS.Dash, valueKind: "digital" },
     { action: CORE_ACTIONS.Reload, valueKind: "digital" },
     { action: CORE_ACTIONS.Interact, valueKind: "digital" },
+    { action: "battle-royale.ScanPulse", valueKind: "digital" },
+    { action: "battle-royale.PlaceTrap", valueKind: "digital" },
+    { action: "battle-royale.DeployDecoy", valueKind: "digital" },
+    { action: "battle-royale.DropItem", valueKind: "digital" },
     ...BR_SLOT_ACTIONS.map((action) => ({ action, valueKind: "digital" })),
   ],
   schemeDefaults: {
     [CONTROL_SCHEMES.KeyboardMouse]: [
       ...moveBindings(),
       ...primaryActionBindings(),
+      keyBinding(CORE_ACTIONS.SecondaryAction, "ShiftLeft"),
+      keyBinding(CORE_ACTIONS.SecondaryAction, "ShiftRight"),
+      keyBinding(CORE_ACTIONS.Dash, "KeyF"),
+      keyBinding("battle-royale.ScanPulse", "KeyQ"),
+      keyBinding("battle-royale.PlaceTrap", "KeyT"),
+      keyBinding("battle-royale.DeployDecoy", "KeyC"),
+      keyBinding("battle-royale.DropItem", "KeyG"),
       keyBinding(CORE_ACTIONS.Reload, "KeyR"),
       keyBinding(CORE_ACTIONS.Interact, "KeyE"),
       { _tag: "InputBinding", action: CORE_ACTIONS.Aim, trigger: { _tag: "pointer" } },
@@ -134,8 +159,12 @@ export const battleRoyaleDefaultInputMap = (): InputMap =>
 export interface BattleRoyaleInputIntent {
   readonly dir: Direction8 | undefined;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 /** Origin (viewport-center / local-player screen position) aim angle is measured from. */
@@ -178,9 +207,11 @@ const moveVectorToDirection = (x: number, y: number): Direction8 | undefined => 
 
 /**
  * The BR action→intent adapter (ADR-0024). Maps a neutral {@link ActionState}
- * into BR's `{ dir, shoot, aimDeg, weaponSlot }` intent so the renderer/host can
- * encode the current `ClientInputFrame` shape. PrimaryAction→shoot, Move→dir,
- * Aim(pointer)→aimDeg, the first just-pressed SlotN→weaponSlot.
+ * into BR's `{ dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot }` intent so the
+ * renderer/host can encode the current `ClientInputFrame` shape.
+ * PrimaryAction→shoot, Reload→reload, Interact→interact, Move→dir,
+ * DropItem→drop, ability actions→abilities, Aim(pointer)→aimDeg,
+ * the first just-pressed SlotN→swapSlot.
  */
 export const resolveBattleRoyaleInputIntent = (
   actions: ActionState,
@@ -189,6 +220,16 @@ export const resolveBattleRoyaleInputIntent = (
   const move = actions.analog.get(MOVE_ACTION);
   const dir = move === undefined ? undefined : moveVectorToDirection(move.x, move.y);
   const shoot = actions.digital.get(PRIMARY_ACTION)?.pressed ?? false;
+  const reload = actions.digital.get(RELOAD_ACTION)?.pressed ?? false;
+  const interact = actions.digital.get(INTERACT_ACTION)?.pressed ?? false;
+  const drop = actions.digital.get(DROP_ACTION)?.justPressed ?? false;
+  const abilities: BattleRoyaleAbilityId[] = [
+    ...(actions.digital.get(DASH_ACTION)?.justPressed ? [BattleRoyaleAbility.dash] : []),
+    ...(actions.digital.get(SECONDARY_ACTION)?.justPressed ? [BattleRoyaleAbility.shieldBurst] : []),
+    ...(actions.digital.get(SCAN_ACTION)?.justPressed ? [BattleRoyaleAbility.scanPulse] : []),
+    ...(actions.digital.get(TRAP_ACTION)?.justPressed ? [BattleRoyaleAbility.trap] : []),
+    ...(actions.digital.get(DECOY_ACTION)?.justPressed ? [BattleRoyaleAbility.decoy] : []),
+  ];
 
   let aimDeg: number | undefined;
   const pointer = actions.pointer.get(AIM_ACTION);
@@ -196,11 +237,11 @@ export const resolveBattleRoyaleInputIntent = (
     aimDeg = computeAimDeg(pointer.x, pointer.y, context.aimOrigin.x, context.aimOrigin.y);
   }
 
-  let weaponSlot: number | undefined;
+  let swapSlot: number | undefined;
   for (let index = 0; index < SLOT_ACTION_IDS.length; index += 1) {
     const slotAction = SLOT_ACTION_IDS[index] as ActionId;
     if (actions.digital.get(slotAction)?.justPressed === true) {
-      weaponSlot = index + 1;
+      swapSlot = index + 1;
       break;
     }
   }
@@ -208,7 +249,11 @@ export const resolveBattleRoyaleInputIntent = (
   return {
     dir,
     shoot,
+    reload,
+    interact,
+    drop,
+    abilities,
     ...(aimDeg === undefined ? {} : { aimDeg }),
-    ...(weaponSlot === undefined ? {} : { weaponSlot }),
+    ...(swapSlot === undefined ? {} : { swapSlot }),
   };
 };

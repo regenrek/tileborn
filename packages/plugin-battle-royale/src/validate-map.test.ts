@@ -42,9 +42,9 @@ describe("validateMap", () => {
   it("passes when spawn, anchor, and loot requirements are met", () => {
     const map = fixtureMap([
       makeTestObject(TEST_OBJECT_IDS[0], "spawn-point", 1, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], "spawn-point", 2, 2),
-      makeTestObject(TEST_OBJECT_IDS[2], "spawn-point", 3, 3),
-      makeTestObject(TEST_OBJECT_IDS[3], "spawn-point", 4, 4),
+      makeTestObject(TEST_OBJECT_IDS[1], "spawn-point", 12, 1),
+      makeTestObject(TEST_OBJECT_IDS[2], "spawn-point", 1, 12),
+      makeTestObject(TEST_OBJECT_IDS[3], "spawn-point", 12, 12),
       makeTestObject(TEST_OBJECT_IDS[4], "shrink-zone-anchor", 32, 32),
       makeTestObject(TEST_OBJECT_IDS[5], "loot-crate", 10, 10, { tier: "common" }),
     ]);
@@ -60,5 +60,24 @@ describe("validateMap", () => {
     const result = validateMap(map);
     expect(result.ok).toBe(false);
     expect(result.issues.some((issue) => issue.message.includes("spawn-point"))).toBe(true);
+  });
+
+  it("warns when spawn points are too close for player clearance", () => {
+    const map = fixtureMap([
+      makeTestObject(TEST_OBJECT_IDS[0], "spawn-point", 1, 1),
+      makeTestObject(TEST_OBJECT_IDS[1], "spawn-point", 2, 2),
+      makeTestObject(TEST_OBJECT_IDS[2], "spawn-point", 20, 20),
+      makeTestObject(TEST_OBJECT_IDS[3], "spawn-point", 30, 30),
+      makeTestObject(TEST_OBJECT_IDS[4], "shrink-zone-anchor", 32, 32),
+      makeTestObject(TEST_OBJECT_IDS[5], "loot-crate", 10, 10),
+    ]);
+    const result = validateMap(map);
+
+    expect(result.ok).toBe(true);
+    expect(result.issues).toContainEqual({
+      severity: "warning",
+      message: "Closest spawn points are 1.4 world units apart; keep at least 8 for player clearance",
+      location: "objects",
+    });
   });
 });

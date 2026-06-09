@@ -11,6 +11,14 @@
       "layerHint": "objects",
       "components": [
         {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005000",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
           "_tag": "spawn-point",
           "data": { "defaultTeam": "solo" }
         }
@@ -25,6 +33,14 @@
       "category": "gameplay",
       "layerHint": "objects",
       "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005001",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
         {
           "_tag": "interactable",
           "kind": "shrink-zone-anchor",
@@ -43,13 +59,167 @@
       "layerHint": "objects",
       "components": [
         {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005002",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {
+            "pickup": { "x": 24, "y": 24 }
+          }
+        },
+        {
           "_tag": "loot-source",
           "lootTableId": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
           "interactionMode": "tap",
-          "grants": {}
+          "grants": {},
+          "grantRefs": [
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007001"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007002"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007003"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007004"
+            }
+          ]
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": true,
+              "blocksProjectiles": true,
+              "blocksVision": true
+            }
+          ]
         }
       ],
       "instanceDefaults": { "tier": "common", "respawnSeconds": 0 }
+    },
+    {
+      "id": "gobj:3eb0db38-4591-8f16-8e66-ff41dff40cdd",
+      "schemaVersion": 1,
+      "label": "Trap",
+      "family": "hazard",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005003",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "interactable",
+          "kind": "trap",
+          "radiusPx": 34,
+          "parameters": {}
+        }
+      ],
+      "instanceDefaults": {
+        "radius": 34,
+        "slowTicks": 60,
+        "stunTicks": 10,
+        "damageTicks": 60
+      }
+    },
+    {
+      "id": "gobj:e4b5db5e-0557-87f6-8311-e7092943226e",
+      "schemaVersion": 1,
+      "label": "Decoy",
+      "family": "prop",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005004",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": -16,
+              "y": -16,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": false,
+              "blocksProjectiles": true,
+              "blocksVision": false
+            }
+          ]
+        }
+      ],
+      "instanceDefaults": {
+        "radius": 16,
+        "durationTicks": 140
+      }
+    },
+    {
+      "id": "gobj:fa0f2b84-d7da-8624-8699-3ece01d777f8",
+      "schemaVersion": 1,
+      "label": "Barrier",
+      "family": "obstacle",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005005",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": -16,
+              "y": -16,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": true,
+              "blocksProjectiles": true,
+              "blocksVision": true
+            }
+          ]
+        },
+        {
+          "_tag": "breakable",
+          "hp": 125,
+          "dropTableId": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+        }
+      ],
+      "instanceDefaults": {
+        "hp": 125
+      }
     }
   ],
   "lootTables": [
@@ -64,5 +234,47 @@
       ]
     }
   ],
-  "items": []
+  "items": [
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007001",
+      "label": "Health Pack",
+      "category": "consumable",
+      "data": {
+        "itemKind": "health-pack",
+        "tier": "common",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005006"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007002",
+      "label": "Ammo Box",
+      "category": "ammo",
+      "data": {
+        "itemKind": "ammo-box",
+        "tier": "common",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005007"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007003",
+      "label": "Armor Vest",
+      "category": "armor",
+      "data": {
+        "itemKind": "armor-vest",
+        "tier": "rare",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005008"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007004",
+      "label": "Rifle",
+      "category": "weapon",
+      "equippableSlot": "primary",
+      "data": {
+        "itemKind": "weapon-crate",
+        "tier": "epic",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005009"
+      }
+    }
+  ]
 }

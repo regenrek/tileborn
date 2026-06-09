@@ -17,6 +17,7 @@ import { getZone, resetZoneSingleton } from "../ecs/zone.js";
 import { exportArtifact } from "../export-artifact.js";
 import type { ExportedArtifact } from "../types/artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
+import { TEST_PLAYER_MODELS } from "../test-player-model.js";
 import { createRuntimeAdapter } from "../runtime-adapter.js";
 import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
 import { createTestPluginWorld } from "../test-plugin-world.js";
@@ -82,7 +83,7 @@ export const makeAcceptanceFixtureMap = () =>
   });
 
 export const exportAcceptanceArtifact = (): ExportedArtifact => {
-  const artifact = exportArtifact(makeAcceptanceFixtureMap());
+  const artifact = exportArtifact(makeAcceptanceFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
   return {
     ...artifact,
     shrinkSchedule: {
@@ -115,6 +116,10 @@ const buildInputLookup = (
       seq: 0,
       dir: entry.dir,
       shoot: entry.shoot,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
     });
     byTick.set(entry.tick, tickInputs);
   }

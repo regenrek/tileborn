@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { LOOT_CRATE_KEY, PLUGIN_ID, SHRINK_ZONE_ANCHOR_KEY, SPAWN_POINT_KEY } from "../../constants.js";
+import {
+  BARRIER_KEY,
+  DECOY_KEY,
+  LOOT_CRATE_KEY,
+  PLUGIN_ID,
+  SHRINK_ZONE_ANCHOR_KEY,
+  SPAWN_POINT_KEY,
+  TRAP_KEY,
+} from "../../constants.js";
 import { BATTLE_ROYALE_PALETTE_ACTIONS } from "../palette.js";
 
 describe("Battle Royale palette contribution", () => {
@@ -12,6 +20,9 @@ describe("Battle Royale palette contribution", () => {
       SPAWN_POINT_KEY,
       SHRINK_ZONE_ANCHOR_KEY,
       LOOT_CRATE_KEY,
+      TRAP_KEY,
+      DECOY_KEY,
+      BARRIER_KEY,
     ]);
     for (const item of BATTLE_ROYALE_PALETTE_ACTIONS.items) {
       expect(item.placement).toBe("sticky");

@@ -7,6 +7,8 @@ import {
   PuzzleIcon,
   SettingsIcon,
   FolderOpenIcon,
+  CrosshairIcon,
+  UserIcon,
   XIcon,
   type LucideIcon,
 } from 'lucide-react';
@@ -50,6 +52,16 @@ function useTabLabel(tab: WorkspaceTab): TabLabel {
       return {
         icon: PuzzleIcon,
         label: 'Plugin manager',
+      };
+    case 'visual-role-editor':
+      return {
+        icon: CrosshairIcon,
+        label: 'Visual Role Editor',
+      };
+    case 'player-model-editor':
+      return {
+        icon: UserIcon,
+        label: 'Player Model Editor',
       };
     case 'settings':
       return { icon: SettingsIcon, label: 'Settings' };
@@ -174,6 +186,22 @@ export function WorkspaceTabBar() {
           if (tab.projectId) {
             void navigate({
               to: '/projects/$projectId/plugins',
+              params: { projectId: tab.projectId },
+            });
+          }
+          return;
+        case 'visual-role-editor':
+          if (tab.projectId) {
+            void navigate({
+              to: '/projects/$projectId/visual-roles',
+              params: { projectId: tab.projectId },
+            });
+          }
+          return;
+        case 'player-model-editor':
+          if (tab.projectId) {
+            void navigate({
+              to: '/projects/$projectId/player-models',
               params: { projectId: tab.projectId },
             });
           }

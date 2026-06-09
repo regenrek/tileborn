@@ -3,6 +3,7 @@ import path from "node:path";
 import { type GameModeId, MapId, ProjectId } from "@tileborne/core";
 import {
   discoverGameModes,
+  type GameModeDescriptor,
   type GameModeManifest,
   resolveActiveGameMode,
 } from "@tileborne/plugin-api";
@@ -53,27 +54,57 @@ export interface PlaytestModeCandidate extends GameModeManifest {
   readonly enabled: boolean;
 }
 
+const enabledPlaytestGameModes = (
+  candidates: readonly PlaytestModeCandidate[],
+): readonly GameModeDescriptor[] =>
+  discoverGameModes(
+    candidates
+      .filter((candidate) => candidate.enabled)
+      .map(({ pluginId, contributions }): GameModeManifest => ({ pluginId, contributions })),
+  );
+
 /**
  * Manifest-driven playtest mode selection (ADR-0023 section B).
  *
  * Discovers the selectable game modes from the ENABLED plugins' decoded
  * contributions ({@link discoverGameModes}: a plugin is a mode when it declares a
- * runtime system) and activates the resolved active mode
- * ({@link resolveActiveGameMode}, defaulting to the first discovered mode while
- * no explicit selection is threaded). There is NO hardcoded plugin id: a new
- * genre plugin that declares a runtime system becomes the active playtest mode
- * with zero engine edits. Battle royale stays selected only because it declares
- * a runtime system, just like any other mode.
+ * runtime system) and activates the resolved active mode. Multi-mode projects
+ * require an explicit active-mode selection; invalid selections resolve to no
+ * plugin so PlaytestService can fail fast with an actionable error. There is NO
+ * hardcoded plugin id: a new genre plugin that declares a runtime system becomes
+ * selectable with zero engine edits. Battle royale stays selectable only because
+ * it declares a runtime system, just like any other mode.
  */
 export const activePlaytestPluginIds = (
   candidates: readonly PlaytestModeCandidate[],
   selection?: GameModeId | undefined,
 ): readonly string[] => {
-  const manifests = candidates
-    .filter((candidate) => candidate.enabled)
-    .map(({ pluginId, contributions }): GameModeManifest => ({ pluginId, contributions }));
-  const active = resolveActiveGameMode(discoverGameModes(manifests), selection);
+  const active = resolveActiveGameMode(enabledPlaytestGameModes(candidates), selection);
   return active === undefined ? [] : [active.pluginId];
+};
+
+const modeLabel = (mode: GameModeDescriptor): string => `${mode.label} (${mode.modeId})`;
+
+const describeActiveModeSelectionIssue = (
+  modes: readonly GameModeDescriptor[],
+  selection?: GameModeId | undefined,
+): string | undefined => {
+  if (selection !== undefined) {
+    if (modes.length === 0) {
+      return `Selected active game mode ${selection} is not available because no enabled plugin declares a runtime system.`;
+    }
+    return [
+      `Selected active game mode ${selection} is not enabled or does not declare a runtime system.`,
+      `Available modes: ${modes.map(modeLabel).join(", ")}.`,
+    ].join(" ");
+  }
+  if (modes.length > 1) {
+    return [
+      `Multiple enabled game modes are available (${modes.map(modeLabel).join(", ")}).`,
+      "Select an active game mode before starting playtest.",
+    ].join(" ");
+  }
+  return undefined;
 };
 
 export interface AssemblePlaytestInput {
@@ -310,6 +341,26 @@ export const PlaytestServiceLive = Layer.effect(
         delayMs: Option.none(),
       }),
     ) {
+      const project = yield* projects.open(projectId);
+      const installed = yield* registry.list();
+      const modeCandidates = installed.map((plugin) => ({
+        pluginId: plugin.id,
+        enabled: plugin.enabled,
+        contributions: plugin.manifest.contributes,
+      }));
+      const activeModeSelection = readProjectActiveGameModeId(project);
+      const availableModes = enabledPlaytestGameModes(modeCandidates);
+      const enabledPlugins = activePlaytestPluginIds(
+        modeCandidates,
+        activeModeSelection,
+      );
+      const modeSelectionIssue = enabledPlugins.length === 0
+        ? describeActiveModeSelectionIssue(availableModes, activeModeSelection)
+        : undefined;
+      if (modeSelectionIssue !== undefined) {
+        yield* new ServicesBuildError({ path: Option.none(), message: modeSelectionIssue });
+      }
+
       const sessionId = makePlaytestSessionId();
       const session = new PlaytestSession({
         id: sessionId,
@@ -325,16 +376,6 @@ export const PlaytestServiceLive = Layer.effect(
       yield* Ref.update(sessions, (current) => [...current, session]);
       yield* PubSub.publish(events, void 0);
 
-      const project = yield* projects.open(projectId);
-      const installed = yield* registry.list();
-      const enabledPlugins = activePlaytestPluginIds(
-        installed.map((plugin) => ({
-          pluginId: plugin.id,
-          enabled: plugin.enabled,
-          contributions: plugin.manifest.contributes,
-        })),
-        readProjectActiveGameModeId(project),
-      );
       const artifact = yield* assembleArtifact({
         projectId,
         mapId,

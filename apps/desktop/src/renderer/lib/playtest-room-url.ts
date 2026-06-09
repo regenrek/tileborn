@@ -65,15 +65,15 @@ export const parsePlaytestRoomInput = (
 export const createLocalMultiplayerRoom = async (
   baseUrl: string,
   mapId: string,
-  options: { readonly artifactPath?: string; readonly maxPlayers?: number } = {},
+  options: { readonly runtimeArtifact?: unknown; readonly maxPlayers?: number } = {},
 ): Promise<LocalMultiplayerRoomReady> => {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/rooms/create`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       mapId,
+      ...(options.runtimeArtifact === undefined ? {} : { runtimeArtifact: options.runtimeArtifact }),
       options: {
-        ...(options.artifactPath ? { artifactPath: options.artifactPath } : {}),
         ...(options.maxPlayers ? { maxPlayers: options.maxPlayers } : {}),
       },
     }),

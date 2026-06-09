@@ -4,6 +4,7 @@ export type {
   SpriteAnchorName,
   SpriteSheetClipInput,
   SpriteSheetImportResult,
+  SpriteSheetPlayerModelMetadata,
   SpriteSheetSliceConfig,
 } from "./import.js";
 export { parseAsepriteSheet } from "./aseprite.js";

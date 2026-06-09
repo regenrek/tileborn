@@ -12,7 +12,21 @@ import {
 
 import type { ComponentStore, PluginWorld } from '../types/runtime-plugin.js';
 import type { PluginCollisionEnvironment } from './collision.js';
-import { PLAYER_COMPONENT, POSITION_COMPONENT, type Player, type Position } from './components.js';
+import {
+  PLAYER_COMPONENT,
+  POSITION_COMPONENT,
+  SHIELD_COMPONENT,
+  TEAM_COMPONENT,
+  type Player,
+  type Position,
+  type Shield,
+  type Team,
+} from './components.js';
+import {
+  DEFAULT_PLAYER_PHYSICS,
+  physicsForPlayer,
+  type PlayerPhysicsProfile,
+} from './player-physics.js';
 import type { RoomRulesConfig } from './damage-system.js';
 
 export interface CombatWorldViewConfig {
@@ -20,6 +34,8 @@ export interface CombatWorldViewConfig {
   readonly maxHealth: number;
   /** Vertical offset from a player's origin to its collision-circle center. */
   readonly footprintOffsetY: number;
+  readonly footprintOffsetX?: number;
+  readonly bodyByModelId?: ReadonlyMap<string, PlayerPhysicsProfile>;
 }
 
 /**
@@ -39,6 +55,14 @@ export const createBattleRoyaleCombatWorldView = (
   const playerStore = (): ComponentStore<Player> => world.getComponent<Player>(PLAYER_COMPONENT);
   const positionStore = (): ComponentStore<Position> =>
     world.getComponent<Position>(POSITION_COMPONENT);
+  const teamStore = (): ComponentStore<Team> => world.getComponent<Team>(TEAM_COMPONENT);
+  const shieldStore = (): ComponentStore<Shield> | undefined => {
+    try {
+      return world.getComponent<Shield>(SHIELD_COMPONENT);
+    } catch {
+      return undefined;
+    }
+  };
 
   return {
     entities: function* (): Generator<CombatEntityId> {
@@ -62,6 +86,22 @@ export const createBattleRoyaleCombatWorldView = (
       if (!player) {
         return;
       }
+      if (health.current < player.health) {
+        const shields = shieldStore();
+        const shield = shields?.get(entity);
+        const incomingDamage = player.health - health.current;
+        const absorbed = Math.min(shield?.current ?? 0, incomingDamage);
+        if (shield && shields) {
+          shields.set(entity, { ...shield, current: Math.max(0, shield.current - absorbed) });
+        }
+        const nextHealth = Math.max(0, player.health - (incomingDamage - absorbed));
+        store.set(entity, {
+          ...player,
+          health: nextHealth,
+          alive: nextHealth > 0 ? 1 : 0,
+        });
+        return;
+      }
       store.set(entity, {
         ...player,
         health: health.current,
@@ -69,14 +109,25 @@ export const createBattleRoyaleCombatWorldView = (
       });
     },
     getTeam: (entity) => {
-      const player = playerStore().get(entity);
-      return player ? Option.some(makeTeamId(player.team)) : Option.none();
+      const team = teamStore().get(entity);
+      return team ? Option.some(makeTeamId(team.team)) : Option.none();
     },
     getPosition: (entity) => {
       const position = positionStore().get(entity);
-      return position
-        ? Option.some(new Vec2({ x: position.x, y: position.y + config.footprintOffsetY }))
-        : Option.none();
+      const player = playerStore().get(entity);
+      if (!position || !player) {
+        return Option.none();
+      }
+      const body = physicsForPlayer(
+        player,
+        config.bodyByModelId,
+        {
+          radius: DEFAULT_PLAYER_PHYSICS.radius,
+          offsetX: config.footprintOffsetX ?? DEFAULT_PLAYER_PHYSICS.offsetX,
+          offsetY: config.footprintOffsetY,
+        },
+      );
+      return Option.some(new Vec2({ x: position.x + body.offsetX, y: position.y + body.offsetY }));
     },
     blockers: () => blockers,
   };
@@ -113,17 +164,19 @@ export const buildCombatBlockers = (
   if (!environment) {
     return [];
   }
-  return environment.blockingRects.map(
+  return environment.rects
+    .filter((rect) => rect.blocksProjectiles || rect.blocksVision)
+    .map(
     (rect) =>
       new CombatBlocker({
         minX: rect.x,
         minY: rect.y,
         maxX: rect.x + rect.width,
         maxY: rect.y + rect.height,
-        blocksProjectiles: true,
-        blocksVision: true,
+        blocksProjectiles: rect.blocksProjectiles,
+        blocksVision: rect.blocksVision,
       }),
-  );
+    );
 };
 
 /**

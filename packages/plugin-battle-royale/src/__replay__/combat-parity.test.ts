@@ -9,6 +9,7 @@ import { PLAYER_COMPONENT, type Player } from '../ecs/components.js';
 import { resetZoneSingleton } from '../ecs/zone.js';
 import { exportArtifact } from '../export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
+import { TEST_PLAYER_MODELS } from '../test-player-model.js';
 import { createRuntimeAdapter } from '../runtime-adapter.js';
 import type { ExportedArtifact } from '../types/artifact.js';
 import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
@@ -51,6 +52,7 @@ const makeDuelArtifact = (): ExportedArtifact =>
       ],
       properties: { maxPlayers: 2 },
     }),
+    { playerModels: TEST_PLAYER_MODELS },
   );
 
 interface PlayerState {
@@ -89,7 +91,7 @@ const runDuel = (): RunResult => {
 
   // player-1 shoots east toward the stationary player-2 every tick.
   const inputForTick: ReadonlyMap<string, RuntimePlayerInput> = new Map([
-    ['player-1', { tick: 0, seq: 0, dir: 0, shoot: true }],
+    ['player-1', { tick: 0, seq: 0, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }],
   ]);
 
   const plugin = createRuntimeAdapter({

@@ -70,11 +70,38 @@ export default defineConfig([
     external: ['react', 'react-dom', '@tileborne/ui', '@tileborne/core', 'effect', 'lucide-react'],
   },
   {
+    // Browser-only playtest renderer bridge consumed by the desktop renderer.
+    // Keep this separate from the package root so Vite never has to prebundle
+    // the BR Node/server graph just to get projector/input/asset exports.
+    entry: { renderer: 'src/renderer/index.ts' },
+    format: ['esm'],
+    platform: 'browser',
+    target: 'es2022',
+    outDir: 'dist',
+    clean: false,
+    sourcemap: true,
+    dts: false,
+    external: ['@tileborne/core', '@tileborne/ipc-contracts', '@tileborne/runtime', 'effect'],
+  },
+  {
     // Player-model concerns consumed by the desktop renderer (canonical model
     // identity + roster schema + selection policy + loadout). @tileborne/core +
     // effect stay external so the renderer's single core instance backs all
     // schema classes (PlayerModelRef instanceof across the bundle boundary).
     entry: { 'player-models': 'src/player-models/index.ts' },
+    format: ['esm'],
+    platform: 'browser',
+    target: 'es2022',
+    outDir: 'dist',
+    clean: false,
+    sourcemap: true,
+    dts: false,
+    external: ['@tileborne/core', 'effect'],
+  },
+  {
+    // Visual-role concerns consumed by the desktop renderer. Kept browser-only
+    // like player-models so Vite can serve role defaults live in monorepo dev.
+    entry: { 'visual-roles': 'src/visual-roles/index.ts' },
     format: ['esm'],
     platform: 'browser',
     target: 'es2022',

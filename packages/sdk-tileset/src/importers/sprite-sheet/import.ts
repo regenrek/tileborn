@@ -66,6 +66,20 @@ export interface SpriteSheetClipInput {
   readonly frameDurationsMs?: readonly number[] | undefined;
 }
 
+export interface SpriteSheetPlayerModelMetadata {
+  readonly renderScale?: number | undefined;
+  readonly hitbox: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly muzzle: {
+    readonly x: number;
+    readonly y: number;
+  };
+}
+
 export interface ImportSpriteSheetInput {
   readonly imagePath: string;
   readonly imageWidth: number;
@@ -78,6 +92,8 @@ export interface ImportSpriteSheetInput {
   readonly packName?: string;
   readonly packVersion?: string;
   readonly clips?: readonly SpriteSheetClipInput[];
+  /** Optional production player-model geometry persisted onto the placeable. */
+  readonly playerModel?: SpriteSheetPlayerModelMetadata | undefined;
   /** Pre-decoded Aseprite JSON sidecar; when present it drives slicing + clips. */
   readonly aseprite?: unknown;
   readonly importedAt?: string;
@@ -114,6 +130,57 @@ const invalidConfig = (message: string): ParseDiagnostic => ({
 const clipNameToSeed = (name: string): string => name.replace(/[^A-Za-z0-9_-]+/g, "-").toLowerCase();
 
 type FrameRect = { readonly uv: UVRect; readonly durationMs: number | undefined };
+
+const normalizedNumber = (value: number): boolean => Number.isFinite(value) && value >= 0 && value <= 1;
+
+const validatePlayerModelMetadata = (
+  metadata: SpriteSheetPlayerModelMetadata | undefined,
+): readonly ParseDiagnostic[] => {
+  if (metadata === undefined) {
+    return [];
+  }
+  const diagnostics: ParseDiagnostic[] = [];
+  if (
+    !normalizedNumber(metadata.hitbox.x) ||
+    !normalizedNumber(metadata.hitbox.y) ||
+    !normalizedNumber(metadata.hitbox.width) ||
+    !normalizedNumber(metadata.hitbox.height) ||
+    metadata.hitbox.width <= 0 ||
+    metadata.hitbox.height <= 0 ||
+    metadata.hitbox.x + metadata.hitbox.width > 1 ||
+    metadata.hitbox.y + metadata.hitbox.height > 1
+  ) {
+    diagnostics.push(invalidConfig("Player model hitbox must stay inside normalized 0..1 bounds"));
+  }
+  if (!normalizedNumber(metadata.muzzle.x) || !normalizedNumber(metadata.muzzle.y)) {
+    diagnostics.push(invalidConfig("Player model muzzle must use normalized 0..1 coordinates"));
+  }
+  if (
+    metadata.renderScale !== undefined &&
+    (!Number.isFinite(metadata.renderScale) || metadata.renderScale <= 0 || metadata.renderScale > 8)
+  ) {
+    diagnostics.push(invalidConfig("Player model render scale must be greater than 0 and at most 8"));
+  }
+  return diagnostics;
+};
+
+const playerModelProperties = (
+  metadata: SpriteSheetPlayerModelMetadata | undefined,
+): Record<string, boolean | number> =>
+  metadata === undefined
+    ? {}
+    : {
+        "tileborne.playerModel": true,
+        ...(metadata.renderScale === undefined
+          ? {}
+          : { "tileborne.player.renderScale": metadata.renderScale }),
+        "tileborne.player.hitboxX": metadata.hitbox.x,
+        "tileborne.player.hitboxY": metadata.hitbox.y,
+        "tileborne.player.hitboxW": metadata.hitbox.width,
+        "tileborne.player.hitboxH": metadata.hitbox.height,
+        "tileborne.player.muzzleX": metadata.muzzle.x,
+        "tileborne.player.muzzleY": metadata.muzzle.y,
+      };
 
 /** Derive frame rects from Aseprite frames (each frame keeps its own duration). */
 const framesFromAseprite = (sheet: ParsedAsepriteSheet): readonly FrameRect[] =>
@@ -177,6 +244,10 @@ export const importSpriteSheet = (
   const tilesetSeed = `${seed}/sheet`;
   const anchor: SpriteAnchorName = input.anchor ?? "top-left";
   const anchorPivot = anchorNameToPivot(anchor);
+  diagnostics.push(...validatePlayerModelMetadata(input.playerModel));
+  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+    return { diagnostics };
+  }
 
   const aseprite = input.aseprite === undefined ? undefined : parseAsepriteSheet(input.aseprite);
   if (input.aseprite !== undefined && aseprite === undefined) {
@@ -302,6 +373,7 @@ export const importSpriteSheet = (
         "tileborne.anchorX": anchorPivot.x,
         "tileborne.anchorY": anchorPivot.y,
         "tileborne.sprite": true,
+        ...playerModelProperties(input.playerModel),
       },
     }),
   });

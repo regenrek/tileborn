@@ -1,9 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
+import { AssetPackManifest, hashAssetPackManifest } from "@tileborne/asset-pipeline";
 import { ContentHash, type PluginId } from "@tileborne/core";
+import { AssetService, DirectoryAssetPackSource } from "@tileborne/services-app";
 import {
   hashPluginDirectory,
   type InstalledPlugin,
@@ -42,6 +44,8 @@ const isNotFound = (cause: unknown): boolean =>
 
 const seedFingerprintPath = (rootPath: string): string =>
   path.join(rootPath, PLUGIN_SEED_FINGERPRINT_FILE);
+
+const TILEBORNE_PACK_MANIFEST = "tileborne-asset-pack.json";
 
 const readSeedFingerprint = (rootPath: string) =>
   Effect.promise(async (): Promise<ContentHash | undefined> => {
@@ -147,3 +151,77 @@ export const seedBundledPlugins = Effect.forEach(
     ),
   { discard: true },
 ).pipe(Effect.asVoid);
+
+const resolveContainedContributionPath = (
+  plugin: InstalledPlugin,
+  relativePath: string,
+): Effect.Effect<string, Error> =>
+  Effect.try({
+    try: () => {
+      const root = path.resolve(plugin.rootPath);
+      const resolved = path.resolve(root, relativePath);
+      if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+        throw new Error(`asset-pack contribution escapes plugin root: ${relativePath}`);
+      }
+      return resolved;
+    },
+    catch: (cause) => new Error(toMessage(cause)),
+  });
+
+const readAssetPackManifest = (packRoot: string): Effect.Effect<AssetPackManifest, Error> =>
+  Effect.tryPromise({
+    try: async () =>
+      Schema.decodeUnknownSync(AssetPackManifest)(
+        JSON.parse(await readFile(path.join(packRoot, TILEBORNE_PACK_MANIFEST), "utf8")) as unknown,
+      ),
+    catch: (cause) => new Error(`failed to read bundled asset pack ${packRoot}: ${toMessage(cause)}`),
+  });
+
+interface BundledAssetPackSeedServices {
+  readonly registry: {
+    readonly list: () => Effect.Effect<readonly InstalledPlugin[], unknown>;
+  };
+  readonly assets: {
+    readonly listPacks: () => Effect.Effect<readonly AssetPackManifest[], unknown>;
+    readonly importPackNow: (source: DirectoryAssetPackSource) => Effect.Effect<unknown, unknown>;
+  };
+}
+
+export const seedBundledPluginAssetPacksWithServices = (
+  { registry, assets }: BundledAssetPackSeedServices,
+) =>
+  Effect.gen(function* () {
+    const bundledIds = new Set(BUNDLED_PLUGINS.map((spec) => spec.id));
+    const plugins = (yield* registry.list()).filter((plugin) => bundledIds.has(plugin.id));
+    const installedPacks = yield* assets.listPacks();
+    const installedHashByKey = new Map<string, ContentHash>(
+      installedPacks.map((pack) => [`${pack.id}@${pack.version}`, hashAssetPackManifest(pack)] as const),
+    );
+
+    for (const plugin of plugins) {
+      const contributions = Option.getOrElse(plugin.manifest.contributes.assetPacks, () => []);
+      for (const contribution of contributions) {
+        const packRoot = yield* resolveContainedContributionPath(plugin, contribution.path);
+        const manifest = yield* readAssetPackManifest(packRoot);
+        const key = `${manifest.id}@${manifest.version}`;
+        const sourceHash = hashAssetPackManifest(manifest);
+        if (installedHashByKey.get(key) === sourceHash) {
+          yield* Effect.logInfo(
+            `[tileborne:start] ${plugin.id} asset pack ${contribution.id} up-to-date -> skipping`,
+          );
+          continue;
+        }
+        yield* Effect.logInfo(
+          `[tileborne:start] ${plugin.id} asset pack ${contribution.id} content drift -> importing`,
+        );
+        yield* assets.importPackNow(new DirectoryAssetPackSource({ path: packRoot }));
+        installedHashByKey.set(key, sourceHash);
+      }
+    }
+  });
+
+export const seedBundledPluginAssetPacks = Effect.gen(function* () {
+  const registry = yield* PluginRegistryService;
+  const assets = yield* AssetService;
+  return yield* seedBundledPluginAssetPacksWithServices({ registry, assets });
+});

@@ -1,4 +1,8 @@
-import type { ContentHash } from "@tileborne/core";
+import type { ContentHash, JsonObject } from '@tileborne/core';
+
+import type { RoomLifecyclePhase } from './rooms/storage-schema.js';
+
+export type { RoomLifecyclePhase } from './rooms/storage-schema.js';
 
 /** Matches `@tileborne/runtime` PROTOCOL_VERSION SSOT. */
 export const PROTOCOL_VERSION = 1;
@@ -45,6 +49,7 @@ export interface PlaytestStartRequest {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
+  readonly runtimeArtifact?: JsonObject;
   readonly playerId?: string;
 }
 
@@ -55,10 +60,15 @@ export interface PlaytestStartResponse {
   readonly playerId: string;
 }
 
+export interface RoomPlayerReservationResponse {
+  readonly playerId: string;
+}
+
 export interface RoomCreateRequest {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
+  readonly runtimeArtifact?: JsonObject;
 }
 
 export interface RoomCreateResponse {
@@ -66,14 +76,36 @@ export interface RoomCreateResponse {
   readonly wsUrl: string;
 }
 
-export type RoomLifecycleStatus = "lobby" | "running" | "finished" | "archived";
-
 export interface PlaytestSummary {
   readonly playtestId: string;
   readonly mapId: string;
   readonly createdAt: string;
   readonly lastTickAt: string | null;
   readonly connectedClients: number;
+  readonly metrics: PlaytestSessionMetrics;
+}
+
+export interface PlaytestTransportMetrics {
+  readonly trackedClients: number;
+  readonly maxPendingSnapshotLagTicks: number;
+  readonly totalDroppedOutboundFrames: number;
+  readonly totalResyncs: number;
+  readonly totalStaleSnapshotAcks: number;
+}
+
+export interface PlaytestSessionMetrics {
+  readonly lifecyclePhase: RoomLifecyclePhase;
+  readonly tick: number;
+  readonly baseTick: number;
+  readonly lastPersistedTick: number;
+  readonly playerCount: number;
+  readonly connectedClients: number;
+  readonly queuedInputPlayers: number;
+  readonly queuedInputs: number;
+  readonly pendingPluginFrames: number;
+  readonly replayFrames: number;
+  readonly generatedAt: string;
+  readonly transport: PlaytestTransportMetrics;
 }
 
 export interface PlaytestRoomMeta {

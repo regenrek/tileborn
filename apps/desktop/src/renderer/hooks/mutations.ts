@@ -56,6 +56,11 @@ type AssetLibraryCacheMutationBridge = {
     | undefined;
 };
 
+type CatalogImportMutationInput = {
+  readonly projectId: string;
+  readonly catalogJson: unknown;
+};
+
 const assetLibraryCacheMutationBridge = (): AssetLibraryCacheMutationBridge =>
   typeof window === 'undefined'
     ? {}
@@ -568,12 +573,16 @@ export function useDisablePlugin() {
  * manual reload. A validation failure returns `{ imported: false, report }`
  * (nothing persisted) — the caller surfaces the report.
  */
-export function useImportCatalog() {
+export function useImportCatalog(): UseMutationResult<
+  CatalogImportResponse,
+  TileborneQueryError,
+  CatalogImportMutationInput
+> {
   const queryClient = useQueryClient();
   return useMutation<
     CatalogImportResponse,
     TileborneQueryError,
-    { readonly projectId: string; readonly catalogJson: unknown }
+    CatalogImportMutationInput
   >({
     mutationFn: ({ projectId, catalogJson }) =>
       invokeIpc(() =>

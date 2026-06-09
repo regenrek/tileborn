@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 import { createEventRegistry, defineEvent, type IpcEventRegistry } from "./events-core.js";
+import { Uint8ArraySchema } from "./bytes.js";
 
 export * from "./events-core.js";
 export { TriggerEventPayload } from "./contracts/trigger.js";
@@ -19,11 +20,6 @@ import { TriggerEventPayload } from "./contracts/trigger.js";
  * the renderer; the shell treats `frame` as unknown bytes and lets the active
  * plugin's projector narrow them. See ADR-0014.
  */
-const Uint8ArraySchema: Schema.Schema<Uint8Array> = Schema.declare<Uint8Array>(
-  (value): value is Uint8Array => value instanceof Uint8Array,
-  { title: "Uint8Array" },
-);
-
 export const RuntimeSnapshotEventPayload = Schema.Struct({
   sessionId: Schema.String,
   frame: Uint8ArraySchema,

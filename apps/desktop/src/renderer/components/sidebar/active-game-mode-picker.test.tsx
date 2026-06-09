@@ -111,12 +111,12 @@ describe('ActiveGameModePicker', () => {
     cleanup();
   });
 
-  it('defaults to the first discovered mode while no project selection is saved', () => {
+  it('leaves mode unselected while no multi-mode project selection is saved', () => {
     render(<ActiveGameModePicker projectId="project-1" />);
 
     expect(screen.getByTestId('active-game-mode-native-select')).toHaveProperty(
       'value',
-      battleRoyalePluginId,
+      'tileborne:select-active-game-mode',
     );
   });
 

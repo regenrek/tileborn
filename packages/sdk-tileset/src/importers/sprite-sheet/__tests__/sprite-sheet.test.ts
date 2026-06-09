@@ -110,6 +110,45 @@ describe("importSpriteSheet", () => {
     expect(placeable.source.properties["tileborne.anchorY"]).toBe(0.5);
   });
 
+  it("persists player-model geometry metadata onto the placeable", () => {
+    const placeable = importSpriteSheet({
+      ...baseInput,
+      playerModel: {
+        renderScale: 1.5,
+        hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+        muzzle: { x: 0.75, y: 0.45 },
+      },
+    }).value!.pack.placeables![0]!;
+
+    expect(placeable.source.properties).toMatchObject({
+      "tileborne.playerModel": true,
+      "tileborne.player.renderScale": 1.5,
+      "tileborne.player.hitboxX": 0.25,
+      "tileborne.player.hitboxY": 0.1,
+      "tileborne.player.hitboxW": 0.5,
+      "tileborne.player.hitboxH": 0.85,
+      "tileborne.player.muzzleX": 0.75,
+      "tileborne.player.muzzleY": 0.45,
+    });
+  });
+
+  it("rejects player-model geometry outside normalized bounds", () => {
+    const result = importSpriteSheet({
+      ...baseInput,
+      playerModel: {
+        renderScale: 0,
+        hitbox: { x: 0.8, y: 0.1, width: 0.5, height: 0.85 },
+        muzzle: { x: 1.2, y: 0.45 },
+      },
+    });
+    expect(result.value).toBeUndefined();
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Player model hitbox must stay inside normalized 0..1 bounds",
+      "Player model muzzle must use normalized 0..1 coordinates",
+      "Player model render scale must be greater than 0 and at most 8",
+    ]);
+  });
+
   it("maps named anchors to normalized pivots", () => {
     expect(anchorNameToPivot("top-left")).toEqual({ x: 0, y: 0 });
     expect(anchorNameToPivot("center")).toEqual({ x: 0.5, y: 0.5 });

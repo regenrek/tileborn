@@ -1,6 +1,14 @@
-import { CrosshairIcon, PackageIcon, RadioTowerIcon } from "lucide-react";
+import { BoxIcon, CrosshairIcon, PackageIcon, RadioTowerIcon, ShieldIcon } from "lucide-react";
 
-import { LOOT_CRATE_KEY, PLUGIN_ID, SHRINK_ZONE_ANCHOR_KEY, SPAWN_POINT_KEY } from "../constants.js";
+import {
+  BARRIER_KEY,
+  DECOY_KEY,
+  LOOT_CRATE_KEY,
+  PLUGIN_ID,
+  SHRINK_ZONE_ANCHOR_KEY,
+  SPAWN_POINT_KEY,
+  TRAP_KEY,
+} from "../constants.js";
 
 /**
  * Battle Royale's authoring object kinds mapped to their editor presentation
@@ -26,6 +34,24 @@ export const BATTLE_ROYALE_AUTHORING_OBJECTS = [
     label: "Loot crate",
     description: "Supply source",
     icon: PackageIcon,
+  },
+  {
+    kind: TRAP_KEY,
+    label: "Trap",
+    description: "Triggered slow, stun, and damage zone",
+    icon: ShieldIcon,
+  },
+  {
+    kind: DECOY_KEY,
+    label: "Decoy",
+    description: "Projectile-blocking runtime decoy",
+    icon: CrosshairIcon,
+  },
+  {
+    kind: BARRIER_KEY,
+    label: "Barrier",
+    description: "Movement and projectile blocker",
+    icon: BoxIcon,
   },
 ] as const;
 

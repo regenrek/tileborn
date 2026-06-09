@@ -8,4 +8,12 @@ export default [
       "import/no-extraneous-dependencies": "off",
     },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+      },
+    },
+  },
 ];

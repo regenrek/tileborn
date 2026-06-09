@@ -1,8 +1,10 @@
 import { Schema } from "effect";
 
+import { JsonObject, MapId, ProjectId } from "@tileborne/core";
+import { Uint8ArraySchema } from "../bytes.js";
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";
-import { Direction8 } from "../protocols/battle-royale.js";
+import { BattleRoyaleAbilityId, Direction8 } from "../protocols/battle-royale.js";
 import { PlaytestSessionId } from "./playtest.js";
 import { EmptyRequest, EmptyResponse, IpcContractErrors } from "./common.js";
 
@@ -18,6 +20,17 @@ export const RuntimeStartLocalHostResponse = Schema.Struct({
 export const RuntimeStopLocalHostRequest = EmptyRequest;
 export const RuntimeStopLocalHostResponse = EmptyResponse;
 
+export const RuntimePrepareLocalRoomArtifactRequest = Schema.Struct({
+  projectId: ProjectId,
+  mapId: MapId,
+  selectedPlayerModelId: Schema.optional(Schema.String),
+});
+
+export const RuntimePrepareLocalRoomArtifactResponse = Schema.Struct({
+  mapId: MapId,
+  runtimeArtifact: JsonObject,
+});
+
 export const RuntimeStartLocalHostContract = defineContract({
   channel: "tileborne:runtime:startLocalHost",
   request: RuntimeStartLocalHostRequest,
@@ -32,6 +45,13 @@ export const RuntimeStopLocalHostContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const RuntimePrepareLocalRoomArtifactContract = defineContract({
+  channel: "tileborne:runtime:prepareLocalRoomArtifact",
+  request: RuntimePrepareLocalRoomArtifactRequest,
+  response: RuntimePrepareLocalRoomArtifactResponse,
+  errors: IpcContractErrors,
+});
+
 export const RuntimePlaytestInputRequest = Schema.Struct({
   sessionId: PlaytestSessionId,
   playerId: Schema.optional(Schema.String),
@@ -39,8 +59,12 @@ export const RuntimePlaytestInputRequest = Schema.Struct({
   seq: Schema.Int,
   dir: Schema.optional(Direction8),
   shoot: Schema.Boolean,
+  reload: Schema.Boolean,
+  interact: Schema.Boolean,
+  drop: Schema.Boolean,
+  abilities: Schema.Array(BattleRoyaleAbilityId),
   aimDeg: Schema.optional(Schema.Int),
-  weaponSlot: Schema.optional(Schema.Int),
+  swapSlot: Schema.optional(Schema.Int),
   active: Schema.optional(Schema.Boolean),
 });
 
@@ -58,6 +82,7 @@ export const RuntimePlaytestSnapshotPlayer = Schema.Struct({
 
 export const RuntimePlaytestSnapshotResponse = Schema.Struct({
   players: Schema.Array(RuntimePlaytestSnapshotPlayer),
+  frame: Schema.optional(Uint8ArraySchema),
 });
 
 export const RuntimePlaytestInputContract = defineContract({
@@ -77,6 +102,7 @@ export const RuntimePlaytestSnapshotContract = defineContract({
 export const RuntimeContracts = [
   RuntimeStartLocalHostContract,
   RuntimeStopLocalHostContract,
+  RuntimePrepareLocalRoomArtifactContract,
   RuntimePlaytestInputContract,
   RuntimePlaytestSnapshotContract,
 ] as const;

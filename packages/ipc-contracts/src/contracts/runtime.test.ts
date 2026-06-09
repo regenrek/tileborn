@@ -31,11 +31,16 @@ describe("runtime IPC contracts", () => {
       seq: 3,
       dir: 0,
       shoot: false,
+      reload: true,
+      interact: false,
+      drop: false,
+      abilities: ["shield-burst"],
       aimDeg: 90,
-      weaponSlot: 2,
+      swapSlot: 2,
     });
     roundTrip(RuntimePlaytestSnapshotResponse, {
       players: [{ playerId: "player-1", x: 10.5, y: 20.25 }],
+      frame: new Uint8Array([1, 2, 3]),
     });
   });
 
@@ -46,6 +51,10 @@ describe("runtime IPC contracts", () => {
       seq: 4,
       dir: 6,
       shoot: true,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
     });
   });
 
@@ -55,6 +64,25 @@ describe("runtime IPC contracts", () => {
       tick: 14,
       seq: 5,
       shoot: true,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+    });
+  });
+
+  it("round-trips inactive input frames used to clear held controls", () => {
+    roundTrip(RuntimePlaytestInputRequest, {
+      sessionId: "playtest:550e8400-e29b-41d4-a716-446655440000",
+      playerId: "player-1",
+      tick: 15,
+      seq: 6,
+      shoot: false,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+      active: false,
     });
   });
 });

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { MapId, ProjectId } from '@tileborne/core';
 
 import { useStartPlaytest, useStopPlaytest } from '@/hooks/mutations';
+import { readLobbyModelSelection } from '@/lib/lobby-model-selection';
 import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -16,12 +17,19 @@ export function usePlaytestControls() {
   const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
 
   const start = useCallback(
-    async (projectId: string, mapId: string) => {
+    async (
+      projectId: string,
+      mapId: string,
+      options: { readonly selectedPlayerModelId?: string } = {},
+    ) => {
       try {
         await useEditorCommandsBridge.getState().flushPersist?.();
+        const selectedPlayerModelId =
+          options.selectedPlayerModelId ?? readLobbyModelSelection(projectId);
         const result = await startPlaytest.mutateAsync({
           projectId: projectId as ProjectId,
           mapId: mapId as MapId,
+          ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
         });
         setPlaytestSessionId(result.session.id);
         setPlaytestActivePlugins(result.session.activePlugins ?? []);

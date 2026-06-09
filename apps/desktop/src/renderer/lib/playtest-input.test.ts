@@ -4,7 +4,7 @@ import { CORE_ACTIONS, InputMap, controlScheme, CONTROL_SCHEMES } from '@tilebor
 import {
   battleRoyaleDefaultInputMap,
   resolveBattleRoyaleInputIntent,
-} from '@tileborne/plugin-battle-royale';
+} from '@tileborne/plugin-battle-royale/renderer';
 import { resolveEffectiveInputMap } from '@tileborne/plugin-api';
 import { Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -171,13 +171,13 @@ describe('attachPlaytestInputCapture (neutral pipeline, no hardcoded SHOOT_KEY)'
     expect(intents.at(-1)?.dir).toBe(7); // north-east
   });
 
-  it('emits a weapon slot once on the Digit key just-press', () => {
+  it('emits a swap slot once on the Digit key just-press', () => {
     const { intents } = attach();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit3' }));
-    expect(intents.at(-1)?.weaponSlot).toBe(3);
+    expect(intents.at(-1)?.swapSlot).toBe(3);
     // A subsequent unrelated input no longer re-sends the slot (just-pressed edge).
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
-    expect(intents.at(-1)?.weaponSlot).toBeUndefined();
+    expect(intents.at(-1)?.swapSlot).toBeUndefined();
   });
 });
 

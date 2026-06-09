@@ -23,4 +23,15 @@ describe('describeTabForPath', () => {
       mapId: 'map:3cdc898a-e697-4e8d-a2d4-fa5d203fa7f3',
     });
   });
+
+  it('creates workspace descriptors for visual editor workbench routes', () => {
+    expect(describeTabForPath('/projects/project%3Aone/visual-roles')).toEqual({
+      kind: 'visual-role-editor',
+      projectId: 'project:one',
+    });
+    expect(describeTabForPath('/projects/project%3Aone/player-models')).toEqual({
+      kind: 'player-model-editor',
+      projectId: 'project:one',
+    });
+  });
 });

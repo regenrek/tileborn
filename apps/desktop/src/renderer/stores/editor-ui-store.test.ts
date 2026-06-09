@@ -21,6 +21,8 @@ describe('editor-ui-store workspace tabs', () => {
       { id: 'assets:project-1', kind: 'assets', projectId: 'project-1' },
       { id: 'encoded-overview-id', kind: 'overview', projectId: 'project%3Aencoded' },
       { id: 'overview:project:encoded', kind: 'overview', projectId: 'project:encoded' },
+      { id: 'legacy-visual-role-id', kind: 'visual-role-editor', projectId: 'project%3Aencoded' },
+      { id: 'legacy-player-model-id', kind: 'player-model-editor', projectId: 'project%3Aencoded' },
       { id: 'broken-map', kind: 'map', projectId: 'project-1' },
       { id: 'legacy-settings-id', kind: 'settings' },
       { id: 'settings:global', kind: 'settings' },
@@ -29,6 +31,8 @@ describe('editor-ui-store workspace tabs', () => {
     expect(normalizeWorkspaceTabs(tabs)).toEqual([
       { id: 'assets:project-1', kind: 'assets', projectId: 'project-1' },
       { id: 'overview:project:encoded', kind: 'overview', projectId: 'project:encoded' },
+      { id: 'visual-role-editor:project:encoded', kind: 'visual-role-editor', projectId: 'project:encoded' },
+      { id: 'player-model-editor:project:encoded', kind: 'player-model-editor', projectId: 'project:encoded' },
       { id: 'settings:global', kind: 'settings' },
     ]);
   });

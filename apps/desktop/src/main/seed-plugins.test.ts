@@ -1,9 +1,11 @@
 // @vitest-environment node
 
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 
+import { AssetPackManifest } from "@tileborne/asset-pipeline";
 import { ContentHash, PluginId } from "@tileborne/core";
 import { PluginManifest } from "@tileborne/plugin-api";
 import {
@@ -18,7 +20,11 @@ import { Effect, Layer, Logger, Schema, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BUNDLED_PLUGINS, resolveBundledPluginPath } from "./bundled-plugins.js";
-import { installBundledPlugin, seedBundledPlugins } from "./seed-plugins.js";
+import {
+  installBundledPlugin,
+  seedBundledPluginAssetPacksWithServices,
+  seedBundledPlugins,
+} from "./seed-plugins.js";
 
 vi.mock("./bundled-plugins.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./bundled-plugins.js")>();
@@ -52,14 +58,19 @@ const fakeContentHash = Schema.decodeUnknownSync(ContentHash)(`sha256:${"0".repe
 
 const TEST_PLUGIN_ID = "@tileborne-plugins/test";
 
-const fakeInstalled = (id: string, enabled: boolean, rootPath = "/fake"): InstalledPlugin =>
+const fakeInstalled = (
+  id: string,
+  enabled: boolean,
+  rootPath = "/fake",
+  manifest = fakeManifest,
+): InstalledPlugin =>
   new InstalledPlugin({
     id: Schema.decodeUnknownSync(PluginId)(id),
     version: "0.0.0",
     enabled,
     rootPath,
     manifestPath: path.join(rootPath, "tileborne-plugin.json"),
-    manifest: fakeManifest,
+    manifest,
     integrity: fakeContentHash,
   });
 
@@ -85,6 +96,70 @@ const writeSeedFingerprint = async (rootPath: string, fingerprint: ContentHash):
 
 const readSeedFingerprint = async (rootPath: string): Promise<string> =>
   (await readFile(path.join(rootPath, PLUGIN_SEED_FINGERPRINT_FILE), "utf8")).trim();
+
+const hashBytes = (bytes: Buffer): string =>
+  `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+
+const writeAssetPack = async (rootPath: string, content = "pack image\n"): Promise<AssetPackManifest> => {
+  const bytes = Buffer.from(content, "utf8");
+  await mkdir(path.join(rootPath, "assets", "core", "atlases"), { recursive: true });
+  await writeFile(path.join(rootPath, "assets", "core", "atlases", "sprite.png"), bytes);
+  const raw = {
+    schemaVersion: 1,
+    id: "pack:b4111e00-0000-4000-8000-000000000001",
+    name: "Battle Royale Core Assets",
+    version: "0.1.0",
+    license: { spdxId: "MIT", redistributable: true },
+    assets: [
+      {
+        id: "asset:b4111e00-0000-4000-8000-000000000002",
+        path: "atlases/sprite.png",
+        mime: "image/png",
+        size: bytes.byteLength,
+        hash: hashBytes(bytes),
+        license: { spdxId: "MIT", redistributable: true },
+      },
+    ],
+    tilesets: [],
+    tiles: [],
+    animations: [],
+    collisionMasks: [],
+  };
+  await writeFile(
+    path.join(rootPath, "assets", "core", "tileborne-asset-pack.json"),
+    `${JSON.stringify(raw, null, 2)}\n`,
+    "utf8",
+  );
+  return Schema.decodeUnknownSync(AssetPackManifest)(raw);
+};
+
+const manifestWithAssetPack = (id = BATTLE_ROYALE_PLUGIN_ID): PluginManifest =>
+  Schema.decodeUnknownSync(PluginManifest)(
+    materializePluginManifestInput({
+      schemaVersion: 1,
+      id,
+      name: id,
+      version: "0.1.0",
+      displayName: "Battle Royale",
+      description: "Bundled plugin with a content pack.",
+      author: "Tileborne",
+      license: "MIT",
+      engines: { tileborne: "^0.1.0" },
+      permissions: [],
+      dependsOn: [],
+      contributes: {
+        assetPacks: [
+          {
+            _tag: "AssetPackContribution",
+            id: "battle-royale-core",
+            name: "Battle Royale Core Assets",
+            path: "./assets/core",
+            license: { spdxId: "MIT" },
+          },
+        ],
+      },
+    }),
+  );
 
 const makeServiceLayers = ({
   installed = [],
@@ -309,5 +384,85 @@ describe("seedBundledPlugins", () => {
     expect(installedPaths).toEqual([arenaSource]);
     expect(warnings.some((message) => message.includes(ARENA_PLUGIN_ID))).toBe(false);
     expect(warnings.some((message) => message.includes(BATTLE_ROYALE_PLUGIN_ID))).toBe(true);
+  });
+});
+
+describe("seedBundledPluginAssetPacksWithServices", () => {
+  it("imports bundled plugin asset packs when the installed pack is missing", async () => {
+    const pluginRoot = await tempDirectory();
+    await writeAssetPack(pluginRoot);
+    const imported: string[] = [];
+    const assets = {
+      listPacks: () => Effect.succeed([]),
+      importPackNow: (source: { readonly path: string }) => {
+        imported.push(source.path);
+        return Effect.succeed("pack:b4111e00-0000-4000-8000-000000000001");
+      },
+    };
+
+    await Effect.runPromise(
+      seedBundledPluginAssetPacksWithServices({
+        registry: {
+          list: () => Effect.succeed([
+            fakeInstalled(BATTLE_ROYALE_PLUGIN_ID, true, pluginRoot, manifestWithAssetPack()),
+          ]),
+        },
+        assets,
+      }),
+    );
+
+    expect(imported).toEqual([path.join(pluginRoot, "assets", "core")]);
+  });
+
+  it("skips bundled plugin asset packs when the installed manifest hash matches", async () => {
+    const pluginRoot = await tempDirectory();
+    const manifest = await writeAssetPack(pluginRoot);
+    const imported: string[] = [];
+
+    await Effect.runPromise(
+      seedBundledPluginAssetPacksWithServices({
+        registry: {
+          list: () => Effect.succeed([
+            fakeInstalled(BATTLE_ROYALE_PLUGIN_ID, true, pluginRoot, manifestWithAssetPack()),
+          ]),
+        },
+        assets: {
+          listPacks: () => Effect.succeed([manifest]),
+          importPackNow: (source: { readonly path: string }) => {
+            imported.push(source.path);
+            return Effect.succeed(manifest.id);
+          },
+        },
+      }),
+    );
+
+    expect(imported).toEqual([]);
+  });
+
+  it("refreshes bundled plugin asset packs when same-version content drifts", async () => {
+    const pluginRoot = await tempDirectory();
+    await writeAssetPack(pluginRoot, "new image\n");
+    const staleRoot = await tempDirectory();
+    const staleManifest = await writeAssetPack(staleRoot, "old image\n");
+    const imported: string[] = [];
+
+    await Effect.runPromise(
+      seedBundledPluginAssetPacksWithServices({
+        registry: {
+          list: () => Effect.succeed([
+            fakeInstalled(BATTLE_ROYALE_PLUGIN_ID, true, pluginRoot, manifestWithAssetPack()),
+          ]),
+        },
+        assets: {
+          listPacks: () => Effect.succeed([staleManifest]),
+          importPackNow: (source: { readonly path: string }) => {
+            imported.push(source.path);
+            return Effect.succeed(staleManifest.id);
+          },
+        },
+      }),
+    );
+
+    expect(imported).toEqual([path.join(pluginRoot, "assets", "core")]);
   });
 });

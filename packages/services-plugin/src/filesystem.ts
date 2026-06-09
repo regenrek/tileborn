@@ -150,6 +150,7 @@ const optionalContributionKeys = {
     "assetLoaders",
     "clientSystems",
     "hudWidgets",
+    "hudLayouts",
     "lobbyPanels",
     "menuSections",
     "inputMaps",

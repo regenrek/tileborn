@@ -43,9 +43,14 @@ describe("battle royale loadout selection", () => {
   });
 
   it("persists and resolves a valid selection across reads", () => {
-    writeSelectedModelId("tank");
-    expect(readSelectedModelId()).toBe("tank");
-    expect(resolveSelectedModelId()).toBe("tank");
+    const selectedModelId = DEFAULT_BATTLE_ROYALE_MODELS[1]?.id;
+    if (selectedModelId === undefined) {
+      throw new Error("expected a second default model for selection coverage");
+    }
+
+    writeSelectedModelId(selectedModelId);
+    expect(readSelectedModelId()).toBe(selectedModelId);
+    expect(resolveSelectedModelId()).toBe(selectedModelId);
   });
 
   it("falls back to the default when the persisted model is no longer in the roster", () => {

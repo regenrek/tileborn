@@ -29,7 +29,14 @@ export type EditorTool =
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-export type WorkspaceTabKind = 'map' | 'overview' | 'assets' | 'plugins' | 'settings';
+export type WorkspaceTabKind =
+  | 'map'
+  | 'overview'
+  | 'assets'
+  | 'plugins'
+  | 'settings'
+  | 'visual-role-editor'
+  | 'player-model-editor';
 
 export interface WorkspaceTab {
   readonly id: string;
@@ -54,6 +61,10 @@ export function workspaceTabId(tab: {
       return `plugins:${tab.projectId ?? ''}`;
     case 'settings':
       return `settings:${tab.projectId ?? 'global'}`;
+    case 'visual-role-editor':
+      return `visual-role-editor:${tab.projectId ?? ''}`;
+    case 'player-model-editor':
+      return `player-model-editor:${tab.projectId ?? ''}`;
   }
 }
 
@@ -69,7 +80,11 @@ export function normalizeWorkspaceTabs(tabs: readonly WorkspaceTab[]): Workspace
       continue;
     }
     if (
-      (tab.kind === 'overview' || tab.kind === 'assets' || tab.kind === 'plugins') &&
+      (tab.kind === 'overview' ||
+        tab.kind === 'assets' ||
+        tab.kind === 'plugins' ||
+        tab.kind === 'visual-role-editor' ||
+        tab.kind === 'player-model-editor') &&
       !projectId
     ) {
       continue;

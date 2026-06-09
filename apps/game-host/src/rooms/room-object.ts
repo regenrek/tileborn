@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option } from 'effect';
 
 import {
   encodeMessage,
@@ -12,7 +12,7 @@ import {
   type GameRuntimeApi,
   type PluginHostApi,
   type RuntimeMessage,
-} from "@tileborne/runtime/worker";
+} from '@tileborne/runtime/worker';
 
 import {
   bundledPlugin,
@@ -20,36 +20,73 @@ import {
   createBundledPluginProtocolBridge,
   type BundledPluginProtocolBridge,
   type BundledRuntimeInput,
-} from "../bundled-plugin-loader.js";
+} from '../bundled-plugin-loader.js';
 import {
   broadcastBinaryFrame,
   createRoomMeta,
   parsePlaytestInitBody,
+  toPlaytestSessionMetrics,
   toPlaytestSummary,
   type BinarySocket,
-} from "../room.js";
-import type { Env, PlaytestRoomMeta, PlaytestSummary } from "../types.js";
-import { isHandoffSigningKeyValid, verifyHandoffToken } from "./handoff-token.js";
+} from '../room.js';
+import type { Env, PlaytestRoomMeta, PlaytestSummary } from '../types.js';
+import { isHandoffSigningKeyValid, verifyHandoffToken } from './handoff-token.js';
 import {
   INVALID_HANDOFF_CLOSE_CODE,
   PERSIST_EVERY_N_TICKS,
+  ROOM_BACKPRESSURE_CLOSE_CODE,
+  ROOM_INVALID_ACK_CLOSE_CODE,
+  ROOM_REPLACED_CLOSE_CODE,
   TICK_HZ,
   TICK_INTERVAL_MS,
   heartbeatTimeoutMs,
   roomIdleTimeoutMs,
-} from "./room-config.js";
+} from './room-config.js';
+import {
+  RoomAdmissionRejectedError,
+  admitPlayerToRoom,
+  advanceLifecycleForAlarm,
+  archiveRoom,
+  finishRoomIfEmpty,
+  reserveRoomPlayer,
+  shouldHydrateRuntime,
+  validateRoomOptions,
+} from './room-lifecycle.js';
 import {
   STORAGE_KEY,
   emptyRoomStorage,
   migrateRoomStorage,
+  type PersistedRoomStorage,
   type RoomPlayerRecord,
   type RoomStorage,
-} from "./storage-schema.js";
+} from './storage-schema.js';
+import {
+  MAX_OUTBOUND_FRAMES_PER_TICK,
+  MAX_STALE_SNAPSHOT_ACKS,
+  applySnapshotAck,
+  compareQueuedInputs,
+  createRoomSocketRecord,
+  decodeSnapshotAckFrame,
+  decideSnapshotOutbound,
+  encodeTransportErrorFrame,
+  recordOutboundDropped,
+  recordSnapshotProduced,
+  recordSnapshotResyncSent,
+  recordSnapshotSent,
+  snapshotTickFromServerFrame,
+  socketBufferedAmount,
+  toClientTransportStats,
+  type ClientTransportStats,
+  type QueuedInput,
+  type RoomSocketRecord,
+} from './room-transport.js';
+import type { JsonObject } from '@tileborne/core';
 
 export interface RoomCreateOptions {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
+  readonly runtimeArtifact?: JsonObject;
   readonly idempotencyKey?: string;
 }
 
@@ -59,22 +96,14 @@ export interface PlaytestRoomDeps {
   readonly createPluginHost?: (emit: (message: RuntimeMessage) => void) => PluginHostApi;
 }
 
-interface QueuedInput {
-  readonly playerId: string;
-  readonly input: BundledRuntimeInput;
-  readonly sortKey: {
-    readonly tick: number;
-    readonly seq: number;
-  };
-  readonly order: number;
+interface RoomSocketAttachment {
+  readonly playerId?: string;
+  readonly socketId?: string;
 }
 
-export const MAX_QUEUED_INPUTS_PER_PLAYER = 1;
-
-const compareQueuedInputs = (left: QueuedInput, right: QueuedInput): number =>
-  left.sortKey.tick - right.sortKey.tick ||
-  left.sortKey.seq - right.sortKey.seq ||
-  left.order - right.order;
+interface RoomPlayerReservationRequest {
+  readonly playerId?: unknown;
+}
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);
@@ -83,6 +112,28 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 };
 
 const defaultSeed = (): string | number => crypto.randomUUID();
+
+export { MAX_QUEUED_INPUTS_PER_PLAYER } from './room-transport.js';
+
+const parseRoomPlayerReservationBody = async (request: Request): Promise<string | undefined> => {
+  const text = await request.text();
+  if (text.trim().length === 0) {
+    return undefined;
+  }
+  let body: RoomPlayerReservationRequest;
+  try {
+    body = JSON.parse(text) as RoomPlayerReservationRequest;
+  } catch {
+    throw new Error('reservation body must be valid JSON');
+  }
+  if (body.playerId === undefined) {
+    return undefined;
+  }
+  if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+    throw new Error('playerId must be a non-empty string');
+  }
+  return body.playerId;
+};
 
 const websocketUpgradeResponse = (client: WebSocket): Response => {
   try {
@@ -96,8 +147,8 @@ export class PlaytestRoom implements DurableObject {
   private storageData: RoomStorage | null = null;
   private runtime: GameRuntimeApi | null = null;
   private pluginHost: PluginHostApi | null = null;
-  private readonly socketByPlayerId = new Map<string, WebSocket>();
-  private readonly inputQueueByPlayerId = new Map<string, QueuedInput>();
+  private readonly socketByPlayerId = new Map<string, RoomSocketRecord>();
+  private readonly inputQueueByPlayerId = new Map<string, QueuedInput<BundledRuntimeInput>>();
   private readonly inputByPlayerId = new Map<string, BundledRuntimeInput>();
   private readonly pluginMessages: RuntimeMessage[] = [];
   private readonly pluginBinaryFrames: Uint8Array[] = [];
@@ -127,12 +178,15 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private async hydrateFromStorage(): Promise<void> {
-    const stored = await this.state.storage.get<RoomStorage>(STORAGE_KEY);
+    const stored = await this.state.storage.get<PersistedRoomStorage>(STORAGE_KEY);
     if (!stored) {
       return;
     }
     this.storageData = migrateRoomStorage(stored);
-    if (this.storageData.status === "running" || this.storageData.status === "lobby") {
+    if (stored.schemaVersion !== this.storageData.schemaVersion) {
+      await this.state.storage.put(STORAGE_KEY, this.storageData);
+    }
+    if (shouldHydrateRuntime(this.storageData)) {
       await this.ensureRuntime();
       await this.scheduleNextAlarm();
     }
@@ -142,11 +196,14 @@ export class PlaytestRoom implements DurableObject {
     if (this.storageData) {
       return this.storageData;
     }
-    const stored = await this.state.storage.get<RoomStorage>(STORAGE_KEY);
+    const stored = await this.state.storage.get<PersistedRoomStorage>(STORAGE_KEY);
     if (!stored) {
       return null;
     }
     this.storageData = migrateRoomStorage(stored);
+    if (stored.schemaVersion !== this.storageData.schemaVersion) {
+      await this.state.storage.put(STORAGE_KEY, this.storageData);
+    }
     return this.storageData;
   }
 
@@ -160,6 +217,9 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private emitPluginFrame(frame: Uint8Array): void {
+    if (this.pluginBinaryFrames.length >= MAX_OUTBOUND_FRAMES_PER_TICK) {
+      this.pluginBinaryFrames.shift();
+    }
     const copy = new Uint8Array(frame.byteLength);
     copy.set(frame);
     this.pluginBinaryFrames.push(copy);
@@ -177,6 +237,28 @@ export class PlaytestRoom implements DurableObject {
     return this.inputByPlayerId.get(playerId);
   }
 
+  private getPlayerIdsForPlugin(): readonly string[] {
+    const players = Object.values(this.storageData?.players ?? {});
+    return players
+      .sort((left, right) => {
+        const joinedDelta = Date.parse(left.joinedAt) - Date.parse(right.joinedAt);
+        return joinedDelta || left.id.localeCompare(right.id);
+      })
+      .map((player) => player.id);
+  }
+
+  private buildSessionMetrics(storage: RoomStorage): PlaytestSummary['metrics'] {
+    return toPlaytestSessionMetrics({
+      storage,
+      connectedClients: this.state.getWebSockets().length,
+      queuedInputPlayers: this.inputQueueByPlayerId.size,
+      pendingPluginFrames: this.pluginBinaryFrames.length,
+      replayFrames: this.latestReplayFrames.length,
+      transportClients: [...this.socketByPlayerId.values()].map(toClientTransportStats),
+      generatedAt: this.nowIso(),
+    });
+  }
+
   private async ensureRuntime(): Promise<void> {
     if (this.runtime && this.pluginHost) {
       return;
@@ -187,10 +269,14 @@ export class PlaytestRoom implements DurableObject {
       this.deps.createPluginHost?.((message) => this.emitPluginMessage(message)) ??
       makePluginHost({
         loader: createBundledPluginLoader({
+          getPlayerIds: () => this.getPlayerIdsForPlugin(),
           getInput: (playerId) => this.getInputForPlugin(playerId),
           emitFrame: (frame) => this.emitPluginFrame(frame),
           setReplayFrames: (frames) => this.setReplayFrames(frames),
           ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+          ...(storage?.runtimeArtifact === undefined
+            ? {}
+            : { runtimeArtifact: storage.runtimeArtifact }),
         }),
       });
     const runtime = this.deps.createRuntime?.() ?? makeGameRuntime();
@@ -210,34 +296,74 @@ export class PlaytestRoom implements DurableObject {
     this.pluginHost = pluginHost;
   }
 
+  private async stopRuntimeOnly(): Promise<void> {
+    if (!this.runtime) {
+      return;
+    }
+    await Effect.runPromise(this.runtime.stop());
+    this.runtime = null;
+    this.pluginHost = null;
+    this.pluginBinaryFrames.length = 0;
+    this.latestReplayFrames = [];
+  }
+
+  private async restartRuntimeForPreActiveRosterChange(storage: RoomStorage): Promise<void> {
+    if (!this.runtime || this.legacyEnvelopeEnabled || this.deps.createRuntime !== undefined) {
+      return;
+    }
+    if (storage.lifecycle.phase === 'active') {
+      return;
+    }
+    await this.stopRuntimeOnly();
+  }
+
+  private async syncRuntimeForActiveRosterAdmission(
+    storage: RoomStorage,
+    playerWasPresent: boolean,
+  ): Promise<void> {
+    if (
+      playerWasPresent ||
+      storage.lifecycle.phase !== 'active' ||
+      this.legacyEnvelopeEnabled ||
+      this.deps.createRuntime !== undefined
+    ) {
+      return;
+    }
+    await this.runSimulationTick();
+  }
+
   async create(opts: RoomCreateOptions): Promise<RoomStorage> {
     if (!isHandoffSigningKeyValid(this.env)) {
-      throw new Error("handoff signing key is not configured");
+      throw new Error('handoff signing key is not configured');
     }
     const existing = await this.readStorage();
     if (existing) {
-      if (
-        opts.idempotencyKey !== undefined &&
-        existing.idempotencyKey === opts.idempotencyKey
-      ) {
+      if (opts.idempotencyKey !== undefined && existing.idempotencyKey === opts.idempotencyKey) {
         return existing;
       }
-      if (existing.status !== "archived") {
+      if (existing.lifecycle.phase !== 'archived') {
         return existing;
       }
     }
     const seed = opts.seed ?? defaultSeed();
     const options = opts.options ?? {};
-    const created = emptyRoomStorage(opts.mapId, seed, options, opts.idempotencyKey);
+    validateRoomOptions(options);
+    const created = emptyRoomStorage(
+      opts.mapId,
+      seed,
+      options,
+      opts.idempotencyKey,
+      this.nowIso(),
+      opts.runtimeArtifact,
+    );
     await this.writeStorage(created);
-    await this.ensureRuntime();
     return created;
   }
 
   async destroy(): Promise<void> {
     const sockets = this.state.getWebSockets();
     for (const socket of sockets) {
-      socket.close(1000, "room destroyed");
+      socket.close(1000, 'room destroyed');
     }
     this.socketByPlayerId.clear();
     if (this.runtime) {
@@ -247,13 +373,18 @@ export class PlaytestRoom implements DurableObject {
     }
     const existing = await this.readStorage();
     if (existing) {
-      await this.writeStorage({ ...existing, status: "archived", emptySince: this.nowIso() });
+      await this.writeStorage(archiveRoom(existing, this.nowIso(), 'room destroyed'));
     }
     await this.state.storage.deleteAlarm();
   }
 
   getPlayers(): Record<string, RoomPlayerRecord> {
     return { ...this.storageData?.players };
+  }
+
+  getClientTransportStats(playerId: string): ClientTransportStats | undefined {
+    const record = this.socketByPlayerId.get(playerId);
+    return record === undefined ? undefined : toClientTransportStats(record);
   }
 
   async addPlayer(
@@ -264,29 +395,18 @@ export class PlaytestRoom implements DurableObject {
   ): Promise<void> {
     const verified = await verifyHandoffToken(this.env, sessionToken, { playtestId });
     if (!verified || verified.playerId !== playerId) {
-      throw new Error("invalid handoff token");
+      throw new Error('invalid handoff token');
     }
     const storage = await this.readStorage();
     if (!storage) {
-      throw new Error("room not initialized");
+      throw new Error('room not initialized');
     }
-    const now = this.nowIso();
-    const players = {
-      ...storage.players,
-      [playerId]: {
-        id: playerId,
-        joinedAt: now,
-        lastHeartbeatAt: now,
-      },
-    };
-    const next: RoomStorage = {
-      ...storage,
-      players,
-      emptySince: null,
-      status: storage.status === "lobby" ? "running" : storage.status,
-    };
+    const playerWasPresent = storage.players[playerId] !== undefined;
+    const next = admitPlayerToRoom(storage, playerId, this.nowIso());
     await this.writeStorage(next);
+    await this.restartRuntimeForPreActiveRosterChange(next);
     await this.ensureRuntime();
+    await this.syncRuntimeForActiveRosterAdmission(next, playerWasPresent);
     await this.scheduleNextAlarm();
     if (options.broadcast !== false && this.legacyEnvelopeEnabled) {
       this.broadcast(new PlayerJoined({ playerId, displayName: Option.none() }));
@@ -300,23 +420,22 @@ export class PlaytestRoom implements DurableObject {
     }
     const players = { ...storage.players };
     delete players[playerId];
-    const playerCount = Object.keys(players).length;
-    const next: RoomStorage = {
+    const removed: RoomStorage = {
       ...storage,
       players,
-      emptySince: playerCount === 0 ? this.nowIso() : null,
-      status: playerCount === 0 && storage.status === "running" ? "finished" : storage.status,
+      emptySince: Object.keys(players).length === 0 ? this.nowIso() : null,
     };
+    const next = finishRoomIfEmpty(removed, this.nowIso(), reason);
     await this.writeStorage(next);
     if (this.legacyEnvelopeEnabled) {
       this.broadcast(new PlayerLeft({ playerId, reason }));
     }
-    const socket = this.socketByPlayerId.get(playerId);
+    const socket = this.socketByPlayerId.get(playerId)?.socket;
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.close(1000, reason);
     }
     this.socketByPlayerId.delete(playerId);
-    if (playerCount === 0) {
+    if (Object.keys(players).length === 0) {
       await this.scheduleEmptyRoomCheck();
     }
   }
@@ -342,9 +461,60 @@ export class PlaytestRoom implements DurableObject {
     ws.send(toArrayBuffer(frame));
   }
 
-  private sendReplayFramesToSocket(ws: WebSocket): void {
+  private sendSnapshotFrameToRecord(record: RoomSocketRecord, frame: Uint8Array): void {
+    const tick = snapshotTickFromServerFrame(frame);
+    if (tick === undefined) {
+      this.sendBinaryFrameToSocket(record.socket, frame);
+      return;
+    }
+    recordSnapshotProduced(record, tick);
+    const decision = decideSnapshotOutbound(record, socketBufferedAmount(record.socket), tick);
+    if (decision === 'close') {
+      recordOutboundDropped(record);
+      record.socket.close(ROOM_BACKPRESSURE_CLOSE_CODE, 'snapshot backpressure');
+      return;
+    }
+    if (decision === 'drop') {
+      recordOutboundDropped(record);
+      return;
+    }
+    if (decision === 'resync') {
+      recordOutboundDropped(record);
+      if (this.latestReplayFrames.length === 0) {
+        record.socket.close(ROOM_BACKPRESSURE_CLOSE_CODE, 'snapshot backpressure');
+        return;
+      }
+      this.sendReplayFramesToSocket(record, true);
+      return;
+    }
+    recordSnapshotSent(record, tick);
+    this.sendBinaryFrameToSocket(record.socket, frame);
+  }
+
+  private sendReplayFramesToSocket(record: RoomSocketRecord, markAsResync = false): void {
     for (const frame of this.latestReplayFrames) {
-      this.sendBinaryFrameToSocket(ws, frame);
+      const tick = snapshotTickFromServerFrame(frame);
+      if (tick !== undefined) {
+        if (markAsResync) {
+          recordSnapshotResyncSent(record, tick);
+        } else {
+          recordSnapshotSent(record, tick);
+        }
+      }
+      this.sendBinaryFrameToSocket(record.socket, frame);
+    }
+  }
+
+  private acceptPlayerSocket(playerId: string, server: WebSocket): void {
+    const previous = this.socketByPlayerId.get(playerId);
+    const socketId = crypto.randomUUID();
+    this.state.acceptWebSocket(server);
+    server.serializeAttachment({ playerId, socketId });
+    const record = createRoomSocketRecord(playerId, server, socketId);
+    this.socketByPlayerId.set(playerId, record);
+    this.sendReplayFramesToSocket(record);
+    if (previous?.socket !== undefined && previous.socket.readyState === WebSocket.OPEN) {
+      previous.socket.close(ROOM_REPLACED_CLOSE_CODE, 'player reconnected');
     }
   }
 
@@ -359,6 +529,11 @@ export class PlaytestRoom implements DurableObject {
   private async scheduleEmptyRoomCheck(): Promise<void> {
     const idleMs = roomIdleTimeoutMs(this.env.ROOM_IDLE_TIMEOUT_SECONDS);
     await this.state.storage.setAlarm(this.nowMs() + idleMs);
+  }
+
+  private async scheduleAlarmAt(timestampMs: number): Promise<void> {
+    this.tickAlarmScheduled = true;
+    await this.state.storage.setAlarm(timestampMs);
   }
 
   async alarm(): Promise<void> {
@@ -378,7 +553,19 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     await this.disconnectStalePlayers();
-    if (storage.status === "running" || storage.status === "lobby") {
+    const latest = await this.readStorage();
+    if (!latest) {
+      return;
+    }
+    const lifecycleStep = advanceLifecycleForAlarm(latest, this.nowMs(), this.nowIso());
+    if (lifecycleStep.changed) {
+      await this.writeStorage(lifecycleStep.storage);
+    }
+    if (lifecycleStep.rescheduleAtMs !== undefined) {
+      await this.scheduleAlarmAt(lifecycleStep.rescheduleAtMs);
+      return;
+    }
+    if (lifecycleStep.runSimulation) {
       await this.runSimulationTick();
       await this.scheduleNextAlarm();
     }
@@ -393,12 +580,15 @@ export class PlaytestRoom implements DurableObject {
     for (const player of Object.values(storage.players)) {
       const lastHeartbeatMs = Date.parse(player.lastHeartbeatAt);
       if (nowMs - lastHeartbeatMs >= heartbeatTimeoutMs(this.env.HEARTBEAT_TIMEOUT_SECONDS)) {
-        await this.removePlayer(player.id, "heartbeat timeout");
+        await this.removePlayer(player.id, 'heartbeat timeout');
       }
     }
   }
 
-  private buildSnapshotDiff(tick: number, playerCount: number): readonly Record<string, string | number | boolean | null>[] {
+  private buildSnapshotDiff(
+    tick: number,
+    playerCount: number,
+  ): readonly Record<string, string | number | boolean | null>[] {
     return [{ tick, players: playerCount }];
   }
 
@@ -418,8 +608,12 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
-  private enqueueInput(playerId: string, input: BundledRuntimeInput, sortKey: QueuedInput["sortKey"]): void {
-    const queued: QueuedInput = {
+  private enqueueInput(
+    playerId: string,
+    input: BundledRuntimeInput,
+    sortKey: QueuedInput<BundledRuntimeInput>['sortKey'],
+  ): void {
+    const queued: QueuedInput<BundledRuntimeInput> = {
       playerId,
       input,
       sortKey,
@@ -434,15 +628,19 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private broadcastPluginFrames(): void {
-    const sockets = this.collectOpenSockets();
+    const records = [...this.socketByPlayerId.values()].filter(
+      (record) => record.socket.readyState === WebSocket.OPEN,
+    );
     for (const frame of this.pluginBinaryFrames.splice(0)) {
-      broadcastBinaryFrame(sockets, toArrayBuffer(frame));
+      for (const record of records) {
+        this.sendSnapshotFrameToRecord(record, frame);
+      }
     }
   }
 
   private async runSimulationTick(): Promise<void> {
     const storage = await this.readStorage();
-    if (!storage || !this.runtime) {
+    if (!storage || !this.runtime || storage.lifecycle.phase !== 'active') {
       return;
     }
     this.drainInputQueueForTick();
@@ -460,8 +658,11 @@ export class PlaytestRoom implements DurableObject {
       tick,
       baseTick,
       lastTickAt: this.nowIso(),
-      simState: { ...storage.simState, lastTick: tick, playerCount: Object.keys(storage.players).length },
-      status: "running",
+      simState: {
+        ...storage.simState,
+        lastTick: tick,
+        playerCount: Object.keys(storage.players).length,
+      },
       ...(shouldPersist ? { lastPersistedTick: tick } : {}),
     };
     if (shouldPersist) {
@@ -495,7 +696,7 @@ export class PlaytestRoom implements DurableObject {
       for (const message of this.pluginMessages.splice(0)) {
         this.broadcast(message);
       }
-      this.broadcast(new Events({ events: Option.some([{ type: "tick", tick }]) }));
+      this.broadcast(new Events({ events: Option.some([{ type: 'tick', tick }]) }));
     }
   }
 
@@ -517,9 +718,15 @@ export class PlaytestRoom implements DurableObject {
     await this.writeStorage(next);
   }
 
-  private rejectWebSocket(_server: WebSocket, client: WebSocket, code: number, message: string): Response {
+  private rejectWebSocket(
+    server: WebSocket,
+    client: WebSocket,
+    code: number,
+    message: string,
+  ): Response {
+    server.accept();
     setTimeout(() => {
-      client.close(code, message);
+      server.close(code, message);
     }, 25);
     return websocketUpgradeResponse(client);
   }
@@ -529,12 +736,15 @@ export class PlaytestRoom implements DurableObject {
     const cf = request.cf as { readonly alarm?: boolean } | undefined;
     if (cf?.alarm === true) {
       await this.alarm();
-      return Response.json({ ok: true, triggered: "alarm" });
+      return Response.json({ ok: true, triggered: 'alarm' });
     }
 
-    if (request.method === "POST" && (url.pathname === "/create" || url.pathname === "/playtest/init")) {
+    if (
+      request.method === 'POST' &&
+      (url.pathname === '/create' || url.pathname === '/playtest/init')
+    ) {
       if (!isHandoffSigningKeyValid(this.env)) {
-        return Response.json({ error: "room unavailable" }, { status: 503 });
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
       }
       const body = await request.text();
       const init = parsePlaytestInitBody(body);
@@ -542,98 +752,179 @@ export class PlaytestRoom implements DurableObject {
         mapId: init.mapId,
         ...(init.seed === undefined ? {} : { seed: init.seed }),
         ...(init.options === undefined ? {} : { options: init.options }),
-        ...(init.options?.idempotencyKey === undefined || typeof init.options.idempotencyKey !== "string"
+        ...(init.runtimeArtifact === undefined ? {} : { runtimeArtifact: init.runtimeArtifact }),
+        ...(init.options?.idempotencyKey === undefined ||
+        typeof init.options.idempotencyKey !== 'string'
           ? {}
           : { idempotencyKey: init.options.idempotencyKey }),
       });
-      return Response.json({ ok: true, roomId: url.searchParams.get("roomId") ?? "local", mapId: created.mapId });
+      return Response.json({
+        ok: true,
+        roomId: url.searchParams.get('roomId') ?? 'local',
+        mapId: created.mapId,
+      });
     }
 
-    if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
+    if (request.method === 'POST' && url.pathname === '/players/reserve') {
       if (!isHandoffSigningKeyValid(this.env)) {
-        return new Response("room unavailable", { status: 503 });
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let requestedPlayerId: string | undefined;
+      try {
+        requestedPlayerId = await parseRoomPlayerReservationBody(request);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid reservation request' },
+          { status: 400 },
+        );
+      }
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      try {
+        const reservation = reserveRoomPlayer(storage, requestedPlayerId, this.nowIso());
+        const playerWasPresent = storage.players[reservation.playerId] !== undefined;
+        await this.writeStorage(reservation.storage);
+        await this.restartRuntimeForPreActiveRosterChange(reservation.storage);
+        await this.ensureRuntime();
+        await this.syncRuntimeForActiveRosterAdmission(reservation.storage, playerWasPresent);
+        await this.scheduleNextAlarm();
+        return Response.json({ playerId: reservation.playerId });
+      } catch (error) {
+        if (error instanceof RoomAdmissionRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to reserve player' }, { status: 500 });
+      }
+    }
+
+    if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return new Response('room unavailable', { status: 503 });
       }
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
-      const playtestId = url.searchParams.get("playtestId") ?? url.searchParams.get("roomId") ?? "";
-      const token = url.searchParams.get("token") ?? "";
-      const playerId = url.searchParams.get("playerId") ?? "";
+      const playtestId = url.searchParams.get('playtestId') ?? url.searchParams.get('roomId') ?? '';
+      const token = url.searchParams.get('token') ?? '';
+      const playerId = url.searchParams.get('playerId') ?? '';
       if (!token || !playerId || !playtestId) {
-        return this.rejectWebSocket(server, client, INVALID_HANDOFF_CLOSE_CODE, "missing handoff credentials");
+        return this.rejectWebSocket(
+          server,
+          client,
+          INVALID_HANDOFF_CLOSE_CODE,
+          'missing handoff credentials',
+        );
       }
       try {
         await this.addPlayer(playerId, token, playtestId, { broadcast: false });
-      } catch {
-        return this.rejectWebSocket(server, client, INVALID_HANDOFF_CLOSE_CODE, "invalid handoff token");
+      } catch (error) {
+        if (error instanceof RoomAdmissionRejectedError) {
+          return this.rejectWebSocket(server, client, error.closeCode, error.message);
+        }
+        return this.rejectWebSocket(
+          server,
+          client,
+          INVALID_HANDOFF_CLOSE_CODE,
+          'invalid handoff token',
+        );
       }
-      this.state.acceptWebSocket(server);
-      server.serializeAttachment({ playerId });
-      this.socketByPlayerId.set(playerId, server);
-      this.sendReplayFramesToSocket(server);
+      this.acceptPlayerSocket(playerId, server);
       if (this.legacyEnvelopeEnabled) {
         this.broadcast(new PlayerJoined({ playerId, displayName: Option.none() }));
       }
       return websocketUpgradeResponse(client);
     }
 
-    if (request.method === "GET") {
+    if (request.method === 'GET') {
       const storage = await this.readStorage();
       if (!storage) {
-        return Response.json({ error: "playtest not initialized" }, { status: 404 });
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
       }
-      const playtestId = url.searchParams.get("playtestId") ?? url.searchParams.get("roomId") ?? "unknown";
+      const playtestId =
+        url.searchParams.get('playtestId') ?? url.searchParams.get('roomId') ?? 'unknown';
       const meta: PlaytestRoomMeta = {
         mapId: storage.mapId,
         createdAt: storage.createdAt,
         lastTickAt: storage.lastTickAt,
         ...(storage.seed === undefined ? {} : { seed: storage.seed }),
       };
-      return Response.json(toPlaytestSummary(playtestId, meta, this.state.getWebSockets().length));
+      return Response.json(toPlaytestSummary(playtestId, meta, this.buildSessionMetrics(storage)));
     }
 
-    if (request.method === "POST" && url.pathname === "/destroy") {
+    if (request.method === 'POST' && url.pathname === '/destroy') {
       await this.destroy();
       return Response.json({ ok: true });
     }
 
-    return new Response("not found", { status: 404 });
+    return new Response('not found', { status: 404 });
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const attachment = ws.deserializeAttachment() as { readonly playerId?: string } | null;
+    const attachment = ws.deserializeAttachment() as RoomSocketAttachment | null;
     const playerId = attachment?.playerId;
     if (!playerId) {
-      ws.close(INVALID_HANDOFF_CLOSE_CODE, "missing player attachment");
+      ws.close(INVALID_HANDOFF_CLOSE_CODE, 'missing player attachment');
       return;
     }
-    if (typeof message === "string") {
+    const current = this.socketByPlayerId.get(playerId);
+    if (!current || current.socket !== ws || current.socketId !== attachment.socketId) {
       return;
     }
-    const decoded = this.protocolBridge.decodeClientFrame(new Uint8Array(message));
-    if (decoded.kind === "rejected") {
+    if (typeof message === 'string') {
+      return;
+    }
+    const bytes = new Uint8Array(message);
+    const ack = decodeSnapshotAckFrame(bytes);
+    if (ack !== undefined) {
+      await this.touchHeartbeat(playerId);
+      const result = applySnapshotAck(current, ack, this.nowMs());
+      if (result.kind === 'accepted') {
+        return;
+      }
+      this.sendBinaryFrameToSocket(
+        ws,
+        encodeTransportErrorFrame(
+          'stale_snapshot_ack',
+          result.kind === 'future'
+            ? 'snapshot ack is ahead of sent state'
+            : 'snapshot ack is stale',
+        ),
+      );
+      if (result.kind === 'future' || current.staleAckCount >= MAX_STALE_SNAPSHOT_ACKS) {
+        ws.close(ROOM_INVALID_ACK_CLOSE_CODE, 'invalid snapshot ack');
+      }
+      return;
+    }
+    const decoded = this.protocolBridge.decodeClientFrame(bytes);
+    if (decoded.kind === 'rejected') {
       this.sendBinaryFrameToSocket(ws, decoded.frame);
       ws.close(decoded.closeCode, decoded.closeReason);
       return;
     }
     await this.touchHeartbeat(playerId);
-    if (decoded.frame.kind === "heartbeat") {
+    if (decoded.frame.kind === 'heartbeat') {
       return;
     }
-    if (decoded.frame.kind === "input") {
+    if (decoded.frame.kind === 'input') {
       this.enqueueInput(playerId, decoded.frame.input, decoded.frame.sortKey);
       return;
     }
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
-    const attachment = ws.deserializeAttachment() as { readonly playerId?: string } | null;
+    const attachment = ws.deserializeAttachment() as RoomSocketAttachment | null;
     const playerId = attachment?.playerId;
     if (!playerId) {
       return;
     }
+    const current = this.socketByPlayerId.get(playerId);
+    if (!current || current.socket !== ws || current.socketId !== attachment.socketId) {
+      return;
+    }
     this.socketByPlayerId.delete(playerId);
-    await this.removePlayer(playerId, "disconnect");
+    await this.removePlayer(playerId, 'disconnect');
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
@@ -641,7 +932,15 @@ export class PlaytestRoom implements DurableObject {
   }
 }
 
-export const roomSummaryFromStorage = (playtestId: string, storage: RoomStorage, connectedClients: number): PlaytestSummary => {
+export const roomSummaryFromStorage = (
+  playtestId: string,
+  storage: RoomStorage,
+  connectedClients: number,
+): PlaytestSummary => {
   const meta = createRoomMeta(storage.mapId, storage.seed);
-  return toPlaytestSummary(playtestId, { ...meta, lastTickAt: storage.lastTickAt, createdAt: storage.createdAt }, connectedClients);
+  return toPlaytestSummary(
+    playtestId,
+    { ...meta, lastTickAt: storage.lastTickAt, createdAt: storage.createdAt },
+    toPlaytestSessionMetrics({ storage, connectedClients }),
+  );
 };

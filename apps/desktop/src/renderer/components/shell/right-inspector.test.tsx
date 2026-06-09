@@ -148,6 +148,8 @@ describe('RightInspector', () => {
   });
 
   it('keeps Battle Royale authoring settings visible while an object is selected', () => {
+    hoisted.projectSettings.current = { activeGameMode: battleRoyalePluginId };
+
     render(<RightInspector />);
 
     expect(screen.getByTestId('selection-summary').textContent).toContain('1 selected');

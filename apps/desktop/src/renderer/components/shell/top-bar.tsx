@@ -45,9 +45,10 @@ import {
   useImportProjectFromDirectory,
   useStartBuild,
 } from '@/hooks/mutations';
-import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
+import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
 import { useMap, useProject } from '@/hooks/queries';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
+import { useVisualModelDiagnostics } from '@/hooks/use-visual-model-diagnostics';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 import { usePlaytestMultiplayerStore } from '@/stores/playtest-multiplayer-store';
 
@@ -302,6 +303,7 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
   const importProject = useImportProjectFromDirectory();
   const exportProject = useExportProjectArchive();
   const { start: startPlaytest, isStarting: isStartingPlaytest } = usePlaytestControls();
+  const visualModelDiagnostics = useVisualModelDiagnostics(projectId, mapId);
   const hostLocalMatch = usePlaytestMultiplayerStore((state) => state.hostLocalMatch);
   const joinFromInput = usePlaytestMultiplayerStore((state) => state.joinFromInput);
   const joinHostAsPlayer = usePlaytestMultiplayerStore((state) => state.joinHostAsPlayer);
@@ -355,6 +357,26 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
       },
     );
   };
+  const canStartPlaytest = (): boolean => {
+    const blockingDiagnostics = visualModelDiagnostics.filter(
+      (diagnostic) => diagnostic.severity === 'error',
+    );
+    if (blockingDiagnostics.length > 0) {
+      notifyError(
+        `Fix ${blockingDiagnostics.length} visual/model issue${blockingDiagnostics.length === 1 ? '' : 's'} before playtest.`,
+      );
+      return false;
+    }
+    const warnings = visualModelDiagnostics.filter(
+      (diagnostic) => diagnostic.severity === 'warning',
+    );
+    if (warnings.length > 0) {
+      notifyInfo(
+        `Playtest has ${warnings.length} visual/model warning${warnings.length === 1 ? '' : 's'}.`,
+      );
+    }
+    return true;
+  };
 
   return (
     <TooltipProvider>
@@ -399,13 +421,13 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
             isStartingPlaytest={isStartingPlaytest}
             flowPhase={flowPhase}
             onSinglePlayer={() => {
-              if (projectId && mapId) {
+              if (projectId && mapId && canStartPlaytest()) {
                 void startPlaytest(projectId, mapId);
               }
             }}
             onHost={() => {
-              if (mapId) {
-                void hostLocalMatch(mapId);
+              if (projectId && mapId && canStartPlaytest()) {
+                void hostLocalMatch(projectId, mapId);
               }
             }}
             onJoin={() => setPlaytestJoinModalOpen(true)}

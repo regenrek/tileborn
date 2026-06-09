@@ -1,10 +1,19 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import {
+  AssetLibraryReference,
+  MapObject,
+  PlayerModelClipSet,
+  PlayerModelRef,
+  gameObjectTypeIdForKey,
+  makeClipId,
+  makePackId,
+  makeTileborneMap,
+} from '@tileborne/core';
 import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from './constants.js';
 import {
-  LAST_FACING_COMPONENT,
+  FACING_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
   PROJECTILE_COMPONENT,
@@ -19,6 +28,32 @@ import { createTestPluginWorld } from './test-plugin-world.js';
 
 const OVERRIDE_PROJECTILE_SPEED = 600;
 const DT = 1 / MOVEMENT.tickRate;
+const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544040${index}`);
+const playerModel = new PlayerModelRef({
+  id: 'model:runtime-config',
+  label: 'Runtime Config',
+  ref: new AssetLibraryReference({
+    packId: makePackId('550e8400-e29b-41d4-a716-446655440499'),
+    kind: 'sprite',
+    refId: 'placeable:runtime-config',
+    clipId: clipIdAt(0),
+  }),
+  defaultClipId: clipIdAt(0),
+  clips: new PlayerModelClipSet({
+    idle: clipIdAt(0),
+    walk: clipIdAt(1),
+    run: clipIdAt(2),
+    shoot: clipIdAt(3),
+    reload: clipIdAt(4),
+    hit: clipIdAt(5),
+    death: clipIdAt(6),
+    dash: clipIdAt(7),
+    pickup: clipIdAt(8),
+  }),
+  anchor: { x: 0.5, y: 1 },
+  hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+  muzzle: { x: 0.75, y: 0.45 },
+});
 
 const makeTestObject = (
   id: (typeof TEST_OBJECT_IDS)[number],
@@ -56,17 +91,17 @@ const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
 
 describe('BattleRoyaleConfig overrides', () => {
   it('propagates host projectile.speed override through createRuntimeAdapter', () => {
-    const artifact = exportArtifact(makeSpawnFixtureMap());
+    const artifact = exportArtifact(makeSpawnFixtureMap(), { playerModels: [playerModel] });
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
     world.registerComponent(PLAYER_COMPONENT);
-    world.registerComponent(LAST_FACING_COMPONENT);
+    world.registerComponent(FACING_COMPONENT);
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
       getArtifact: () => artifact,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true }),
+      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
       config: {
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       },
@@ -92,17 +127,18 @@ describe('BattleRoyaleConfig overrides', () => {
       makeSpawnFixtureMap({
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       }),
+      { playerModels: [playerModel] },
     );
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
     world.registerComponent(PLAYER_COMPONENT);
-    world.registerComponent(LAST_FACING_COMPONENT);
+    world.registerComponent(FACING_COMPONENT);
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
       getArtifact: () => artifact,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true }),
+      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
     });
 
     plugin.onTick?.(world, DT, 1);

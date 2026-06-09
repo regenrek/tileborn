@@ -1,0 +1,3043 @@
+{
+  "schemaVersion": 1,
+  "id": "pack:b4111e00-0000-4000-8000-000000000001",
+  "name": "Battle Royale Core Assets",
+  "version": "0.1.0",
+  "license": {
+    "spdxId": "MIT",
+    "attribution": "Tileborne / Petwars generated Maltipoo assets",
+    "notes": "Maltipoo player sprites are reused from Petwars upright hatch-pet exports by Kevin Kern; BR object sprites are generated in-repo.",
+    "redistributable": true
+  },
+  "assets": [
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000002",
+      "path": "atlases/player-models/maltipoo-mae.png",
+      "mime": "image/png",
+      "size": 2500693,
+      "hash": "sha256:6e2498c4c2539906cf9f3b5e344aeb21e26bfce10ef31e16714ed8c560157321",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated Maltipoo assets",
+        "notes": "Maltipoo player sprites are reused from Petwars upright hatch-pet exports by Kevin Kern; BR object sprites are generated in-repo.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000004",
+      "path": "atlases/player-models/maltipoo-max.png",
+      "mime": "image/png",
+      "size": 2532026,
+      "hash": "sha256:a338ab0d628d7148c809a2d9d747b145f011fcec7e5277a18a447146eceede9d",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated Maltipoo assets",
+        "notes": "Maltipoo player sprites are reused from Petwars upright hatch-pet exports by Kevin Kern; BR object sprites are generated in-repo.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000100",
+      "path": "atlases/weapons/ion-blaster.png",
+      "mime": "image/png",
+      "size": 2995,
+      "hash": "sha256:f04f0e6b1dc5b8476956293c3576e1b92ed07266e772638ac9b082c6fc2dbbd6",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000101",
+      "path": "atlases/weapons/pulse-ranger.png",
+      "mime": "image/png",
+      "size": 4438,
+      "hash": "sha256:1c1e2788df8c19ca5007bfb3d15faf5ba89cfb00e7beef1ef1d68d095912f885",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000102",
+      "path": "atlases/weapons/arc-burst.png",
+      "mime": "image/png",
+      "size": 3150,
+      "hash": "sha256:98f2925685e9e67b1a54bd22e833085943dd884a4465989ca8373f748c43861d",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000103",
+      "path": "atlases/weapons/pulse-carbine.png",
+      "mime": "image/png",
+      "size": 3976,
+      "hash": "sha256:d87da94f71ae20bd005184ec442402a8b129a5b8774b2cd90ff401911c28a3de",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000104",
+      "path": "atlases/weapons/scatter-lance.png",
+      "mime": "image/png",
+      "size": 4360,
+      "hash": "sha256:5b3b0ccb894d5a5fac49b80e8b3a1fd2d9416f4d118abf7e33ccacceaf1e7b28",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000105",
+      "path": "atlases/weapons/arc-charger.png",
+      "mime": "image/png",
+      "size": 5060,
+      "hash": "sha256:d790b6b4e13106f6b9c1a06289aed7eb1d113e9b4d8e39c34365ef013eec9ad9",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000106",
+      "path": "atlases/weapons/ricochet-disc.png",
+      "mime": "image/png",
+      "size": 2413,
+      "hash": "sha256:3f2bd785fc33146e5c45b46da1ac256f56b09537576492e7d3b99077dadd7da7",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000107",
+      "path": "atlases/weapons/rail-needle.png",
+      "mime": "image/png",
+      "size": 4524,
+      "hash": "sha256:a50c65b827cce981771f08a61cbe17b73849521ad855a7116644175a4f4e49bf",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000108",
+      "path": "atlases/weapons/nova-launcher.png",
+      "mime": "image/png",
+      "size": 4198,
+      "hash": "sha256:fbbca1096b47dc8ff69f7c9f64036a8254e08fa427b73fc29333b69fe5274f85",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000109",
+      "path": "atlases/weapons/prism-beam.png",
+      "mime": "image/png",
+      "size": 4880,
+      "hash": "sha256:fdf8759b6a6ca1518e57cf495a412f0d046b4d3f413fea28b8b53f8033b18c91",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-00000000010a",
+      "path": "atlases/weapons/plasma-sabre.png",
+      "mime": "image/png",
+      "size": 721,
+      "hash": "sha256:efcaf3622a7e48f5bf2c4a3cf0e3d2f6be63f7f84a7821738150bd2edcf8c935",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000003",
+      "path": "atlases/objects.png",
+      "mime": "image/png",
+      "size": 2362,
+      "hash": "sha256:915d0545af6eadd9bc5d94e2463d1a58ddc438f3e012884f14c1f1deb4171d4c",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne",
+        "notes": "Programmatically generated Battle Royale pixel-art object content; no third-party source assets.",
+        "redistributable": true
+      }
+    }
+  ],
+  "provenance": {
+    "sourcePath": "packages/plugin-battle-royale/scripts/generate-content-assets.mjs",
+    "originTool": "tileborne-br-content-generator",
+    "importedAt": "2026-06-08T00:00:00.000Z",
+    "sourceAssets": [
+      {
+        "modelId": "maltipoo-mae",
+        "atlas": "sources/player-models/maltipoo-mae/spritesheet.png",
+        "contactSheet": "sources/player-models/maltipoo-mae/contact-sheet.png",
+        "validation": "sources/player-models/maltipoo-mae/validation.json",
+        "petRequest": "sources/player-models/maltipoo-mae/pet_request.json"
+      },
+      {
+        "modelId": "maltipoo-max",
+        "atlas": "sources/player-models/maltipoo-max/spritesheet.png",
+        "contactSheet": "sources/player-models/maltipoo-max/contact-sheet.png",
+        "validation": "sources/player-models/maltipoo-max/validation.json",
+        "petRequest": "sources/player-models/maltipoo-max/pet_request.json"
+      }
+    ],
+    "petwarsWeapons": [
+      {
+        "slug": "ion-blaster",
+        "kind": "hitscan",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/ion-blaster.png",
+        "atlas": "atlases/weapons/ion-blaster.png"
+      },
+      {
+        "slug": "pulse-ranger",
+        "kind": "hitscan",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/pulse-ranger.png",
+        "atlas": "atlases/weapons/pulse-ranger.png"
+      },
+      {
+        "slug": "arc-burst",
+        "kind": "hitscan",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/arc-burst.png",
+        "atlas": "atlases/weapons/arc-burst.png"
+      },
+      {
+        "slug": "pulse-carbine",
+        "kind": "projectile",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/pulse-carbine.png",
+        "atlas": "atlases/weapons/pulse-carbine.png"
+      },
+      {
+        "slug": "scatter-lance",
+        "kind": "pellet",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/scatter-lance.png",
+        "atlas": "atlases/weapons/scatter-lance.png"
+      },
+      {
+        "slug": "arc-charger",
+        "kind": "charge",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/arc-charger.png",
+        "atlas": "atlases/weapons/arc-charger.png"
+      },
+      {
+        "slug": "ricochet-disc",
+        "kind": "bounce",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/ricochet-disc.png",
+        "atlas": "atlases/weapons/ricochet-disc.png"
+      },
+      {
+        "slug": "rail-needle",
+        "kind": "pierce",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/rail-needle.png",
+        "atlas": "atlases/weapons/rail-needle.png"
+      },
+      {
+        "slug": "nova-launcher",
+        "kind": "explosive",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/nova-launcher.png",
+        "atlas": "atlases/weapons/nova-launcher.png"
+      },
+      {
+        "slug": "prism-beam",
+        "kind": "beam",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/prism-beam.png",
+        "atlas": "atlases/weapons/prism-beam.png"
+      },
+      {
+        "slug": "plasma-sabre",
+        "kind": "melee",
+        "source": "../games/petwars/app/public/assets/graphics/weapons/plasma-sabre.png",
+        "atlas": "atlases/weapons/plasma-sabre.png"
+      }
+    ]
+  },
+  "terrainClasses": [],
+  "tilesets": [],
+  "tiles": [],
+  "autotileRules": [],
+  "variantFilters": [],
+  "animations": [],
+  "terrainTransitions": [],
+  "collisionMasks": [],
+  "placeables": [
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000002000",
+      "name": "Maltipoo Mae",
+      "size": {
+        "width": 192,
+        "height": 208
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000003000",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 192,
+            "h": 208
+          },
+          "durationMs": 130
+        }
+      ],
+      "clips": [
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001000",
+          "name": "idle",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003000",
+              "uv": {
+                "x": 0,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003001",
+              "uv": {
+                "x": 192,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003002",
+              "uv": {
+                "x": 384,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003003",
+              "uv": {
+                "x": 576,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003004",
+              "uv": {
+                "x": 768,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003005",
+              "uv": {
+                "x": 960,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 130
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001001",
+          "name": "walk",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003100",
+              "uv": {
+                "x": 0,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003101",
+              "uv": {
+                "x": 192,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003102",
+              "uv": {
+                "x": 384,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003103",
+              "uv": {
+                "x": 576,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003104",
+              "uv": {
+                "x": 768,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003105",
+              "uv": {
+                "x": 960,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 100
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001002",
+          "name": "run",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003200",
+              "uv": {
+                "x": 0,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003201",
+              "uv": {
+                "x": 192,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003202",
+              "uv": {
+                "x": 384,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003203",
+              "uv": {
+                "x": 576,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003204",
+              "uv": {
+                "x": 768,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003205",
+              "uv": {
+                "x": 960,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 80
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001003",
+          "name": "shoot",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003300",
+              "uv": {
+                "x": 0,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003301",
+              "uv": {
+                "x": 192,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003302",
+              "uv": {
+                "x": 384,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003303",
+              "uv": {
+                "x": 576,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003304",
+              "uv": {
+                "x": 768,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003305",
+              "uv": {
+                "x": 960,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 70
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001004",
+          "name": "reload",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003400",
+              "uv": {
+                "x": 0,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003401",
+              "uv": {
+                "x": 192,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003402",
+              "uv": {
+                "x": 384,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003403",
+              "uv": {
+                "x": 576,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003404",
+              "uv": {
+                "x": 768,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003405",
+              "uv": {
+                "x": 960,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 120
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001005",
+          "name": "hit",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003500",
+              "uv": {
+                "x": 0,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003501",
+              "uv": {
+                "x": 192,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003502",
+              "uv": {
+                "x": 384,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003503",
+              "uv": {
+                "x": 576,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 110
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001006",
+          "name": "death",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003600",
+              "uv": {
+                "x": 0,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003601",
+              "uv": {
+                "x": 192,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003602",
+              "uv": {
+                "x": 384,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003603",
+              "uv": {
+                "x": 576,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003604",
+              "uv": {
+                "x": 768,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003605",
+              "uv": {
+                "x": 960,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003606",
+              "uv": {
+                "x": 1152,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003607",
+              "uv": {
+                "x": 1344,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 130
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001007",
+          "name": "dash",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003700",
+              "uv": {
+                "x": 0,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003701",
+              "uv": {
+                "x": 192,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003702",
+              "uv": {
+                "x": 384,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003703",
+              "uv": {
+                "x": 576,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003704",
+              "uv": {
+                "x": 768,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 80
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001008",
+          "name": "pickup",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003800",
+              "uv": {
+                "x": 0,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003801",
+              "uv": {
+                "x": 192,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003802",
+              "uv": {
+                "x": 384,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000002",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000003803",
+              "uv": {
+                "x": 576,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 100
+        }
+      ],
+      "tags": [
+        "sprite",
+        "player-model",
+        "battle-royale",
+        "maltipoo",
+        "maltipoo-mae"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Maltipoo Player Models",
+        "localTileId": 0,
+        "image": "atlases/player-models/maltipoo-mae.png",
+        "imageWidth": 1536,
+        "imageHeight": 1872,
+        "objectType": "player-model",
+        "objectClass": "battle-royale-player",
+        "properties": {
+          "modelId": "maltipoo-mae",
+          "assetFormat": "codex_pet",
+          "variant": "female",
+          "sourcePath": "sources/player-models/maltipoo-mae/spritesheet.png",
+          "contactSheetPath": "sources/player-models/maltipoo-mae/contact-sheet.png",
+          "validationPath": "sources/player-models/maltipoo-mae/validation.json",
+          "requestPath": "sources/player-models/maltipoo-mae/pet_request.json",
+          "clipSourceRows": {
+            "idle": {
+              "sourceState": "idle",
+              "row": 0,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "walk": {
+              "sourceState": "running",
+              "row": 7,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "run": {
+              "sourceState": "running",
+              "row": 7,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "shoot": {
+              "sourceState": "review",
+              "row": 8,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "fallbackNote": "Codex-pet Maltipoo atlas has no gun-fire row; BR weapon overlay and muzzle flash own shooting."
+            },
+            "reload": {
+              "sourceState": "waiting",
+              "row": 6,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "fallbackNote": "Codex-pet Maltipoo atlas has no reload row; waiting loop is the visible reload fallback."
+            },
+            "hit": {
+              "sourceState": "failed",
+              "row": 5,
+              "frames": [
+                0,
+                1,
+                2,
+                3
+              ]
+            },
+            "death": {
+              "sourceState": "failed",
+              "row": 5,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            },
+            "dash": {
+              "sourceState": "jumping",
+              "row": 4,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            },
+            "pickup": {
+              "sourceState": "waving",
+              "row": 3,
+              "frames": [
+                0,
+                1,
+                2,
+                3
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000002001",
+      "name": "Maltipoo Max",
+      "size": {
+        "width": 192,
+        "height": 208
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000004000",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 192,
+            "h": 208
+          },
+          "durationMs": 130
+        }
+      ],
+      "clips": [
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001100",
+          "name": "idle",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004000",
+              "uv": {
+                "x": 0,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004001",
+              "uv": {
+                "x": 192,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004002",
+              "uv": {
+                "x": 384,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004003",
+              "uv": {
+                "x": 576,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004004",
+              "uv": {
+                "x": 768,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004005",
+              "uv": {
+                "x": 960,
+                "y": 0,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 130
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001101",
+          "name": "walk",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004100",
+              "uv": {
+                "x": 0,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004101",
+              "uv": {
+                "x": 192,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004102",
+              "uv": {
+                "x": 384,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004103",
+              "uv": {
+                "x": 576,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004104",
+              "uv": {
+                "x": 768,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004105",
+              "uv": {
+                "x": 960,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 100
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001102",
+          "name": "run",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004200",
+              "uv": {
+                "x": 0,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004201",
+              "uv": {
+                "x": 192,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004202",
+              "uv": {
+                "x": 384,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004203",
+              "uv": {
+                "x": 576,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004204",
+              "uv": {
+                "x": 768,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004205",
+              "uv": {
+                "x": 960,
+                "y": 1456,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            }
+          ],
+          "loop": true,
+          "defaultDurationMs": 80
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001103",
+          "name": "shoot",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004300",
+              "uv": {
+                "x": 0,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004301",
+              "uv": {
+                "x": 192,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004302",
+              "uv": {
+                "x": 384,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004303",
+              "uv": {
+                "x": 576,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004304",
+              "uv": {
+                "x": 768,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004305",
+              "uv": {
+                "x": 960,
+                "y": 1664,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 70
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 70
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001104",
+          "name": "reload",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004400",
+              "uv": {
+                "x": 0,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004401",
+              "uv": {
+                "x": 192,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004402",
+              "uv": {
+                "x": 384,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004403",
+              "uv": {
+                "x": 576,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004404",
+              "uv": {
+                "x": 768,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004405",
+              "uv": {
+                "x": 960,
+                "y": 1248,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 120
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 120
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001105",
+          "name": "hit",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004500",
+              "uv": {
+                "x": 0,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004501",
+              "uv": {
+                "x": 192,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004502",
+              "uv": {
+                "x": 384,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004503",
+              "uv": {
+                "x": 576,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 110
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 110
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001106",
+          "name": "death",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004600",
+              "uv": {
+                "x": 0,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004601",
+              "uv": {
+                "x": 192,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004602",
+              "uv": {
+                "x": 384,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004603",
+              "uv": {
+                "x": 576,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004604",
+              "uv": {
+                "x": 768,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004605",
+              "uv": {
+                "x": 960,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004606",
+              "uv": {
+                "x": 1152,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004607",
+              "uv": {
+                "x": 1344,
+                "y": 1040,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 130
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 130
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001107",
+          "name": "dash",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004700",
+              "uv": {
+                "x": 0,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004701",
+              "uv": {
+                "x": 192,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004702",
+              "uv": {
+                "x": 384,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004703",
+              "uv": {
+                "x": 576,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004704",
+              "uv": {
+                "x": 768,
+                "y": 832,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 80
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 80
+        },
+        {
+          "id": "clip:b4111e00-0000-4000-8000-000000001108",
+          "name": "pickup",
+          "frames": [
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004800",
+              "uv": {
+                "x": 0,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004801",
+              "uv": {
+                "x": 192,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004802",
+              "uv": {
+                "x": 384,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            },
+            {
+              "assetId": "asset:b4111e00-0000-4000-8000-000000000004",
+              "tileId": "tile:b4111e00-0000-4000-8000-000000004803",
+              "uv": {
+                "x": 576,
+                "y": 624,
+                "w": 192,
+                "h": 208
+              },
+              "durationMs": 100
+            }
+          ],
+          "loop": false,
+          "defaultDurationMs": 100
+        }
+      ],
+      "tags": [
+        "sprite",
+        "player-model",
+        "battle-royale",
+        "maltipoo",
+        "maltipoo-max"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Maltipoo Player Models",
+        "localTileId": 1,
+        "image": "atlases/player-models/maltipoo-max.png",
+        "imageWidth": 1536,
+        "imageHeight": 1872,
+        "objectType": "player-model",
+        "objectClass": "battle-royale-player",
+        "properties": {
+          "modelId": "maltipoo-max",
+          "assetFormat": "codex_pet",
+          "variant": "male",
+          "sourcePath": "sources/player-models/maltipoo-max/spritesheet.png",
+          "contactSheetPath": "sources/player-models/maltipoo-max/contact-sheet.png",
+          "validationPath": "sources/player-models/maltipoo-max/validation.json",
+          "requestPath": "sources/player-models/maltipoo-max/pet_request.json",
+          "clipSourceRows": {
+            "idle": {
+              "sourceState": "idle",
+              "row": 0,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "walk": {
+              "sourceState": "running",
+              "row": 7,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "run": {
+              "sourceState": "running",
+              "row": 7,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "shoot": {
+              "sourceState": "review",
+              "row": 8,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "fallbackNote": "Codex-pet Maltipoo atlas has no gun-fire row; BR weapon overlay and muzzle flash own shooting."
+            },
+            "reload": {
+              "sourceState": "waiting",
+              "row": 6,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "fallbackNote": "Codex-pet Maltipoo atlas has no reload row; waiting loop is the visible reload fallback."
+            },
+            "hit": {
+              "sourceState": "failed",
+              "row": 5,
+              "frames": [
+                0,
+                1,
+                2,
+                3
+              ]
+            },
+            "death": {
+              "sourceState": "failed",
+              "row": 5,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            },
+            "dash": {
+              "sourceState": "jumping",
+              "row": 4,
+              "frames": [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            },
+            "pickup": {
+              "sourceState": "waving",
+              "row": 3,
+              "frames": [
+                0,
+                1,
+                2,
+                3
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005000",
+      "name": "Spawn Marker",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006000",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "spawn-marker"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 0,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "spawn-marker",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005001",
+      "name": "Shrink Anchor",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006001",
+          "uv": {
+            "x": 48,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "shrink-anchor"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 1,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "shrink-anchor",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005002",
+      "name": "Loot Crate",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006002",
+          "uv": {
+            "x": 96,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "loot-crate"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 2,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "loot-crate",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005003",
+      "name": "Trap",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006003",
+          "uv": {
+            "x": 144,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "trap"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 3,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "trap",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005004",
+      "name": "Decoy",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006004",
+          "uv": {
+            "x": 192,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "decoy"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 4,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "decoy",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005005",
+      "name": "Barrier",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006005",
+          "uv": {
+            "x": 240,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "barrier"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 5,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "barrier",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005006",
+      "name": "Health Pack",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006006",
+          "uv": {
+            "x": 288,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "health-pack"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 6,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "health-pack",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005007",
+      "name": "Ammo Box",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006007",
+          "uv": {
+            "x": 336,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "ammo-box"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 7,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "ammo-box",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005008",
+      "name": "Armor Vest",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006008",
+          "uv": {
+            "x": 384,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "armor-vest"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 8,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "armor-vest",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000005009",
+      "name": "Rifle",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000006009",
+          "uv": {
+            "x": 432,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "rifle"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 9,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "rifle",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500a",
+      "name": "Projectile Bolt",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600a",
+          "uv": {
+            "x": 480,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "projectile-bolt"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 10,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "projectile-bolt",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500b",
+      "name": "Muzzle Flash",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600b",
+          "uv": {
+            "x": 528,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "muzzle-flash"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 11,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "muzzle-flash",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500c",
+      "name": "Impact Burst",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600c",
+          "uv": {
+            "x": 576,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "impact-burst"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 12,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "impact-burst",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500d",
+      "name": "Shield Bubble",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600d",
+          "uv": {
+            "x": 624,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "shield-bubble"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 13,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "shield-bubble",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500e",
+      "name": "Player Shadow",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600e",
+          "uv": {
+            "x": 672,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "player-shadow"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 14,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "player-shadow",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000500f",
+      "name": "Hazard Flame",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000600f",
+          "uv": {
+            "x": 720,
+            "y": 0,
+            "w": 48,
+            "h": 48
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "hazard-flame"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Battle Royale Objects",
+        "localTileId": 15,
+        "image": "atlases/objects.png",
+        "imageWidth": 48,
+        "imageHeight": 48,
+        "objectType": "hazard-flame",
+        "objectClass": "battle-royale-object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007000",
+      "name": "Ion Blaster",
+      "size": {
+        "width": 72,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000100",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008000",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 72,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "hitscan",
+        "ion-blaster"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 0,
+        "image": "atlases/weapons/ion-blaster.png",
+        "imageWidth": 72,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "ion-blaster",
+          "weaponKind": "hitscan",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/ion-blaster.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.9,
+          "tileborne.visual.muzzleY": 0.48
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007001",
+      "name": "Pulse Ranger",
+      "size": {
+        "width": 88,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000101",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008001",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 88,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "hitscan",
+        "pulse-ranger"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 1,
+        "image": "atlases/weapons/pulse-ranger.png",
+        "imageWidth": 88,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "pulse-ranger",
+          "weaponKind": "hitscan",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/pulse-ranger.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.93,
+          "tileborne.visual.muzzleY": 0.47
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007002",
+      "name": "Arc Burst",
+      "size": {
+        "width": 76,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000102",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008002",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 76,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "hitscan",
+        "arc-burst"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 2,
+        "image": "atlases/weapons/arc-burst.png",
+        "imageWidth": 76,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "arc-burst",
+          "weaponKind": "hitscan",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/arc-burst.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.9,
+          "tileborne.visual.muzzleY": 0.5
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007003",
+      "name": "Pulse Carbine",
+      "size": {
+        "width": 82,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000103",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008003",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 82,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "projectile",
+        "pulse-carbine"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 3,
+        "image": "atlases/weapons/pulse-carbine.png",
+        "imageWidth": 82,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "pulse-carbine",
+          "weaponKind": "projectile",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/pulse-carbine.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.92,
+          "tileborne.visual.muzzleY": 0.49
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007004",
+      "name": "Scatter Lance",
+      "size": {
+        "width": 84,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000104",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008004",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 84,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "pellet",
+        "scatter-lance"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 4,
+        "image": "atlases/weapons/scatter-lance.png",
+        "imageWidth": 84,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "scatter-lance",
+          "weaponKind": "pellet",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/scatter-lance.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.91,
+          "tileborne.visual.muzzleY": 0.52
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007005",
+      "name": "Arc Charger",
+      "size": {
+        "width": 88,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000105",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008005",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 88,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "charge",
+        "arc-charger"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 5,
+        "image": "atlases/weapons/arc-charger.png",
+        "imageWidth": 88,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "arc-charger",
+          "weaponKind": "charge",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/arc-charger.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.88,
+          "tileborne.visual.muzzleY": 0.51
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007006",
+      "name": "Ricochet Disc",
+      "size": {
+        "width": 64,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000106",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008006",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "bounce",
+        "ricochet-disc"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 6,
+        "image": "atlases/weapons/ricochet-disc.png",
+        "imageWidth": 64,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "ricochet-disc",
+          "weaponKind": "bounce",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/ricochet-disc.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.36,
+          "tileborne.visual.handY": 0.55,
+          "tileborne.visual.muzzleX": 0.78,
+          "tileborne.visual.muzzleY": 0.5
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007007",
+      "name": "Rail Needle",
+      "size": {
+        "width": 94,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000107",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008007",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 94,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "pierce",
+        "rail-needle"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 7,
+        "image": "atlases/weapons/rail-needle.png",
+        "imageWidth": 94,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "rail-needle",
+          "weaponKind": "pierce",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/rail-needle.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.96,
+          "tileborne.visual.muzzleY": 0.48
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007008",
+      "name": "Nova Launcher",
+      "size": {
+        "width": 92,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000108",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008008",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 92,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "explosive",
+        "nova-launcher"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 8,
+        "image": "atlases/weapons/nova-launcher.png",
+        "imageWidth": 92,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "nova-launcher",
+          "weaponKind": "explosive",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/nova-launcher.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.25,
+          "tileborne.visual.handY": 0.58,
+          "tileborne.visual.muzzleX": 0.92,
+          "tileborne.visual.muzzleY": 0.5
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-000000007009",
+      "name": "Prism Beam",
+      "size": {
+        "width": 90,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000109",
+          "tileId": "tile:b4111e00-0000-4000-8000-000000008009",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 90,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "beam",
+        "prism-beam"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 9,
+        "image": "atlases/weapons/prism-beam.png",
+        "imageWidth": 90,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "prism-beam",
+          "weaponKind": "beam",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/prism-beam.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.28,
+          "tileborne.visual.handY": 0.56,
+          "tileborne.visual.muzzleX": 0.94,
+          "tileborne.visual.muzzleY": 0.5
+        }
+      }
+    },
+    {
+      "id": "placeable:b4111e00-0000-4000-8000-00000000700a",
+      "name": "Plasma Sabre",
+      "size": {
+        "width": 78,
+        "height": 32
+      },
+      "frames": [
+        {
+          "assetId": "asset:b4111e00-0000-4000-8000-00000000010a",
+          "tileId": "tile:b4111e00-0000-4000-8000-00000000800a",
+          "uv": {
+            "x": 0,
+            "y": 0,
+            "w": 78,
+            "h": 32
+          },
+          "durationMs": 120
+        }
+      ],
+      "tags": [
+        "battle-royale",
+        "weapon",
+        "petwars",
+        "melee",
+        "plasma-sabre"
+      ],
+      "placementMode": "object",
+      "source": {
+        "format": "tiled",
+        "tilesetName": "Petwars Weapon Sprites",
+        "localTileId": 10,
+        "image": "atlases/weapons/plasma-sabre.png",
+        "imageWidth": 78,
+        "imageHeight": 32,
+        "objectType": "weapon",
+        "objectClass": "battle-royale-weapon",
+        "properties": {
+          "sourceGame": "petwars",
+          "weaponSlug": "plasma-sabre",
+          "weaponKind": "melee",
+          "sourcePath": "../games/petwars/app/public/assets/graphics/weapons/plasma-sabre.png",
+          "tileborne.visual.scale": 0.52,
+          "tileborne.visual.pivotX": 0.28,
+          "tileborne.visual.pivotY": 0.56,
+          "tileborne.visual.handX": 0.23,
+          "tileborne.visual.handY": 0.6,
+          "tileborne.visual.muzzleX": 0.86,
+          "tileborne.visual.muzzleY": 0.45
+        }
+      }
+    }
+  ]
+}

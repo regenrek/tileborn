@@ -5,6 +5,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "generate:assets": "node scripts/generate-content-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -23,9 +24,17 @@
       "types": "./src/authoring/index.ts",
       "default": "./dist/authoring.js"
     },
+    "./renderer": {
+      "types": "./src/renderer/index.ts",
+      "default": "./dist/renderer.js"
+    },
     "./player-models": {
       "types": "./src/player-models/index.ts",
       "default": "./dist/player-models.js"
+    },
+    "./visual-roles": {
+      "types": "./src/visual-roles/index.ts",
+      "default": "./dist/visual-roles.js"
     },
     "./constants": {
       "types": "./src/constants.ts",

@@ -182,6 +182,22 @@ function useCommandPaletteModel({
             void navigate({ to: '/projects/$projectId/plugins', params: { projectId } });
           });
           return;
+        case 'view.visual-role-editor':
+          if (!projectId) {
+            return;
+          }
+          runCommand(command.id, () => {
+            void navigate({ to: '/projects/$projectId/visual-roles', params: { projectId } });
+          });
+          return;
+        case 'view.player-model-editor':
+          if (!projectId) {
+            return;
+          }
+          runCommand(command.id, () => {
+            void navigate({ to: '/projects/$projectId/player-models', params: { projectId } });
+          });
+          return;
         case 'view.toggle-grid':
           runCommand(command.id, () => {
             setShowGrid(!showGrid);

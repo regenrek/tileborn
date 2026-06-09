@@ -105,6 +105,24 @@ export const SpriteSheetClipInputSchema = Schema.Struct({
   frameDurationsMs: Schema.optional(Schema.Array(Schema.Int)),
 });
 
+export const SpriteSheetPlayerModelHitboxSchema = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+});
+
+export const SpriteSheetPlayerModelPointSchema = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+});
+
+export const SpriteSheetPlayerModelMetadataSchema = Schema.Struct({
+  renderScale: Schema.optional(Schema.Number),
+  hitbox: SpriteSheetPlayerModelHitboxSchema,
+  muzzle: SpriteSheetPlayerModelPointSchema,
+});
+
 export const AssetsImportSpriteSheetRequest = Schema.Struct({
   /** Base64-encoded raw image bytes for the atlas asset. */
   imageBase64: Schema.String,
@@ -117,6 +135,7 @@ export const AssetsImportSpriteSheetRequest = Schema.Struct({
   anchor: Schema.optional(Schema.Literals(["top-left", "center", "bottom-left"])),
   packName: Schema.optional(Schema.String),
   clips: Schema.optional(Schema.Array(SpriteSheetClipInputSchema)),
+  playerModel: Schema.optional(SpriteSheetPlayerModelMetadataSchema),
   /** Raw Aseprite sidecar JSON text; drives slicing + clips when present. */
   asepriteJson: Schema.optional(Schema.String),
 });

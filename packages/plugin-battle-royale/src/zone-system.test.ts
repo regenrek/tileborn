@@ -1,12 +1,23 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import {
+  AssetLibraryReference,
+  MapObject,
+  PlayerModelClipSet,
+  PlayerModelRef,
+  gameObjectTypeIdForKey,
+  makeClipId,
+  makePackId,
+  makeTileborneMap,
+} from '@tileborne/core';
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { Option } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DAMAGE, SPAWN_POINT_KIND } from './constants.js';
 import {
+  DAMAGE_INDICATOR_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
+  TEAM_COMPONENT,
   VELOCITY_COMPONENT,
   type Player,
 } from './ecs/components.js';
@@ -34,6 +45,32 @@ import { createRuntimeAdapter } from './runtime-adapter.js';
 import { createTestPluginWorld } from './test-plugin-world.js';
 
 const TICK_DT = 1 / DEFAULT_ZONE_SCHEDULE.tickRate;
+const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544030${index}`);
+const playerModel = new PlayerModelRef({
+  id: 'model:zone-test',
+  label: 'Zone Test',
+  ref: new AssetLibraryReference({
+    packId: makePackId('550e8400-e29b-41d4-a716-446655440399'),
+    kind: 'sprite',
+    refId: 'placeable:zone-test',
+    clipId: clipIdAt(0),
+  }),
+  defaultClipId: clipIdAt(0),
+  clips: new PlayerModelClipSet({
+    idle: clipIdAt(0),
+    walk: clipIdAt(1),
+    run: clipIdAt(2),
+    shoot: clipIdAt(3),
+    reload: clipIdAt(4),
+    hit: clipIdAt(5),
+    death: clipIdAt(6),
+    dash: clipIdAt(7),
+    pickup: clipIdAt(8),
+  }),
+  anchor: { x: 0.5, y: 1 },
+  hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+  muzzle: { x: 0.75, y: 0.45 },
+});
 
 const makeTestObject = (
   id: (typeof TEST_OBJECT_IDS)[number],
@@ -66,6 +103,7 @@ const makeFixtureArtifact = () =>
         makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
       ],
     }),
+    { playerModels: [playerModel] },
   );
 
 const fastTestSchedule = (): ZoneScheduleConfig => ({
@@ -119,6 +157,8 @@ const registerPlayerStores = (world: ReturnType<typeof createTestPluginWorld>): 
   world.registerComponent(POSITION_COMPONENT);
   world.registerComponent(VELOCITY_COMPONENT);
   world.registerComponent(PLAYER_COMPONENT);
+  world.registerComponent(TEAM_COMPONENT);
+  world.registerComponent(DAMAGE_INDICATOR_COMPONENT);
 };
 
 describe('zone damage', () => {
@@ -136,6 +176,7 @@ describe('zone damage', () => {
       alive: 1,
       team: 'solo',
     });
+    world.getComponent(TEAM_COMPONENT).set(inside, { team: 'solo' });
 
     const alsoInside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(alsoInside, { x: 15, y: 15 });
@@ -145,6 +186,7 @@ describe('zone damage', () => {
       alive: 1,
       team: 'solo',
     });
+    world.getComponent(TEAM_COMPONENT).set(alsoInside, { team: 'solo' });
 
     const collector = createMsgCollector();
     const damageState = createDamageSystemState();
@@ -176,6 +218,7 @@ describe('zone damage', () => {
       alive: 1,
       team: 'solo',
     });
+    world.getComponent(TEAM_COMPONENT).set(entity, { team: 'solo' });
 
     const collector = createMsgCollector();
     const damageState = createDamageSystemState();
@@ -243,6 +286,7 @@ describe('last-man-standing', () => {
       alive: 1,
       team: 'solo',
     });
+    world.getComponent(TEAM_COMPONENT).set(inside, { team: 'solo' });
 
     const outside = world.createEntity();
     world.getComponent(POSITION_COMPONENT).set(outside, { x: 100, y: 100 });
@@ -252,6 +296,7 @@ describe('last-man-standing', () => {
       alive: 1,
       team: 'solo',
     });
+    world.getComponent(TEAM_COMPONENT).set(outside, { team: 'solo' });
 
     const collector = createMsgCollector();
     const damageState = createDamageSystemState();

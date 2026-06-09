@@ -6,6 +6,7 @@ import {
   Culler,
   Rectangle,
   Sprite,
+  Text,
   Texture,
   type ApplicationOptions,
 } from "pixi.js";
@@ -69,6 +70,9 @@ const isHtmlContainer = (value: unknown): value is HTMLElement =>
 
 const lerp = (from: number, to: number, alpha: number): number => from + (to - from) * alpha;
 
+const clampOpacity = (value: number | undefined): number =>
+  value === undefined || !Number.isFinite(value) ? 1 : Math.min(1, Math.max(0, value));
+
 const assetIndexFor = (index: number): number => index + 1;
 
 type CompositeTilemapLike = Container & {
@@ -97,6 +101,7 @@ export class PixiRendererAdapter implements RendererAdapter {
   private readonly bundledTextureFactory: (asset: RegisteredBundledAsset) => Texture | Promise<Texture>;
   private readonly spritePool = new Map<EntityId, Sprite>();
   private readonly spritePoolByStringId = new Map<string, Sprite>();
+  private readonly textPoolByStringId = new Map<string, Text>();
   private readonly spriteLayers = new Map<number, Container>();
   private readonly texturesByRenderableAssetId = new Map<number | string, Texture>();
   // Sub-rect frame textures for animated entities, keyed by asset+uv.
@@ -248,31 +253,55 @@ export class PixiRendererAdapter implements RendererAdapter {
 
         for (const entity of entities) {
           liveEntities.add(entity.id);
-          const sprite = this.spriteForStringId(entity.id, entity.assetId, entity.layerIndex ?? 0);
           const previous = previousById.get(entity.id) ?? entity;
-          sprite.position.set(lerp(previous.x, entity.x, alpha), lerp(previous.y, entity.y, alpha));
 
-          if (entity.anchor !== undefined) {
-            sprite.anchor.set(entity.anchor.x, entity.anchor.y);
-          }
-          if (entity.rotation !== undefined) {
-            sprite.rotation = entity.rotation;
-          }
-          if (entity.scale !== undefined) {
-            sprite.scale.set(entity.scale, entity.scale);
-          }
+          if (entity.text !== undefined) {
+            const label = this.textForStringId(entity.id, entity.layerIndex ?? 0);
+            label.position.set(lerp(previous.x, entity.x, alpha), lerp(previous.y, entity.y, alpha));
+            label.text = entity.text.value;
+            label.style = {
+              fontFamily: entity.text.style?.fontFamily ?? "Inter, system-ui, sans-serif",
+              fontSize: entity.text.style?.fontSize ?? 10,
+              fontWeight: entity.text.style?.fontWeight ?? "bold",
+              fill: entity.text.style?.fill ?? 0xffffff,
+              ...(entity.text.style?.stroke === undefined
+                ? {}
+                : {
+                    stroke: {
+                      color: entity.text.style.stroke,
+                      width: entity.text.style.strokeWidth ?? 2,
+                    },
+                  }),
+            };
+            label.anchor.set(entity.anchor?.x ?? 0, entity.anchor?.y ?? 0);
+            label.rotation = entity.rotation ?? 0;
+            label.scale.set(entity.scaleX ?? entity.scale ?? 1, entity.scaleY ?? entity.scale ?? 1);
+            label.alpha = clampOpacity(entity.opacity);
+          } else {
+            const sprite = this.spriteForStringId(entity.id, entity.assetId, entity.layerIndex ?? 0);
+            sprite.position.set(lerp(previous.x, entity.x, alpha), lerp(previous.y, entity.y, alpha));
 
-          const animation = entity.animation;
-          if (animation !== undefined && animation.frames.length > 1) {
-            const clip = this.compiledClipFor(animation);
-            const frameIndex = resolveClipFrameIndex(clip, animation.clockMs, {
-              ...(animation.speed === undefined ? {} : { speed: animation.speed }),
-              ...(animation.offsetMs === undefined ? {} : { offsetMs: animation.offsetMs }),
-            });
-            const frame = animation.frames[frameIndex] ?? animation.frames[0]!;
-            const texture = this.animationFrameTexture(frame);
-            if (texture !== undefined && sprite.texture !== texture) {
-              sprite.texture = texture;
+            sprite.anchor.set(entity.anchor?.x ?? 0, entity.anchor?.y ?? 0);
+            sprite.rotation = entity.rotation ?? 0;
+            sprite.scale.set(entity.scaleX ?? entity.scale ?? 1, entity.scaleY ?? entity.scale ?? 1);
+            sprite.alpha = clampOpacity(entity.opacity);
+            sprite.tint = entity.tint ?? 0xffffff;
+
+            const animation = entity.animation;
+            if (animation !== undefined && animation.frames.length > 0) {
+              const frame =
+                animation.frames.length === 1
+                  ? animation.frames[0]!
+                  : (animation.frames[
+                      resolveClipFrameIndex(this.compiledClipFor(animation), animation.clockMs, {
+                        ...(animation.speed === undefined ? {} : { speed: animation.speed }),
+                        ...(animation.offsetMs === undefined ? {} : { offsetMs: animation.offsetMs }),
+                      })
+                    ] ?? animation.frames[0]!);
+              const texture = this.animationFrameTexture(frame);
+              if (texture !== undefined && sprite.texture !== texture) {
+                sprite.texture = texture;
+              }
             }
           }
         }
@@ -281,6 +310,12 @@ export class PixiRendererAdapter implements RendererAdapter {
           if (!liveEntities.has(entityId)) {
             sprite.removeFromParent();
             this.spritePoolByStringId.delete(entityId);
+          }
+        }
+        for (const [entityId, text] of this.textPoolByStringId) {
+          if (!liveEntities.has(entityId)) {
+            text.removeFromParent();
+            this.textPoolByStringId.delete(entityId);
           }
         }
         this.cullStage();
@@ -341,8 +376,12 @@ export class PixiRendererAdapter implements RendererAdapter {
         for (const sprite of this.spritePoolByStringId.values()) {
           sprite.removeFromParent();
         }
+        for (const text of this.textPoolByStringId.values()) {
+          text.removeFromParent();
+        }
         this.spritePool.clear();
         this.spritePoolByStringId.clear();
+        this.textPoolByStringId.clear();
         this.spriteLayers.clear();
         this.texturesByRenderableAssetId.clear();
         this.animationFrameTextureCache.clear();
@@ -470,6 +509,11 @@ export class PixiRendererAdapter implements RendererAdapter {
   }
 
   private spriteForStringId(entityId: string, renderableAssetId: RenderableAssetId, layerIndex: number): Sprite {
+    const existingText = this.textPoolByStringId.get(entityId);
+    if (existingText !== undefined) {
+      existingText.removeFromParent();
+      this.textPoolByStringId.delete(entityId);
+    }
     const existing = this.spritePoolByStringId.get(entityId);
     if (existing) {
       return existing;
@@ -484,6 +528,24 @@ export class PixiRendererAdapter implements RendererAdapter {
     this.layerFor(layerIndex).addChild(sprite);
     this.spritePoolByStringId.set(entityId, sprite);
     return sprite;
+  }
+
+  private textForStringId(entityId: string, layerIndex: number): Text {
+    const existingSprite = this.spritePoolByStringId.get(entityId);
+    if (existingSprite !== undefined) {
+      existingSprite.removeFromParent();
+      this.spritePoolByStringId.delete(entityId);
+    }
+    const existing = this.textPoolByStringId.get(entityId);
+    if (existing) {
+      return existing;
+    }
+    const text = new Text({ text: "" });
+    text.zIndex = layerIndex;
+    text.cullable = true;
+    this.layerFor(layerIndex).addChild(text);
+    this.textPoolByStringId.set(entityId, text);
+    return text;
   }
 
   private layerFor(layerIndex: number): Container {
@@ -528,6 +590,43 @@ export class PixiRendererAdapter implements RendererAdapter {
   }
 
   private async textureFromBundledAsset(asset: RegisteredBundledAsset): Promise<Texture> {
+    if (asset.path.startsWith("data:") && asset.mime.startsWith("image/")) {
+      const texture = await this.textureFromDataImage(asset.path, asset.mime, String(asset.assetId));
+      if (texture !== undefined) {
+        return texture;
+      }
+    }
     return Assets.load<Texture>(asset.path);
+  }
+
+  private async textureFromDataImage(
+    path: string,
+    mime: string,
+    assetId: string,
+  ): Promise<Texture | undefined> {
+    if (typeof fetch === "function" && mime !== "image/svg+xml") {
+      const response = await fetch(path);
+      const blob = await response.blob();
+      if (typeof createImageBitmap === "function") {
+        return Texture.from(await createImageBitmap(blob));
+      }
+    }
+    if (typeof Image === "undefined") {
+      return undefined;
+    }
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(`failed to decode bundled image ${assetId}`));
+      image.src = path;
+    });
+    if (typeof image.decode === "function") {
+      try {
+        await image.decode();
+      } catch {
+        // Some browser engines reject decode() after onload for cached data URLs.
+      }
+    }
+    return Texture.from(image);
   }
 }

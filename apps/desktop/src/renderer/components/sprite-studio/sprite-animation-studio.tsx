@@ -13,6 +13,7 @@ import {
   Switch,
   cn,
 } from '@tileborne/ui';
+import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
 import { sliceAtlas } from '@tileborne/sdk-tileset/atlas';
 import { compileClipTimeline, resolveClipFrameIndex } from '@tileborne/sdk-tileset/animation';
 import { PlusIcon, Trash2Icon } from 'lucide-react';
@@ -20,6 +21,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useImportSpriteSheet } from '@/hooks/mutations';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
+import {
+  DEFAULT_PLAYER_MODEL_GEOMETRY,
+  SpritePlayerModelControls,
+  missingPlayerModelClipNames,
+  toPlayerModelImportMetadata,
+  type PlayerModelGeometryDraft,
+} from './sprite-player-model-controls';
 
 interface SpriteAnimationStudioProps {
   readonly open: boolean;
@@ -96,6 +104,10 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
   const [slice, setSlice] = useState<SliceConfig>(DEFAULT_SLICE);
   const [spriteName, setSpriteName] = useState('Sprite');
   const [anchor, setAnchor] = useState<SpriteAnchor>('top-left');
+  const [playerModelEnabled, setPlayerModelEnabled] = useState(false);
+  const [playerModelGeometry, setPlayerModelGeometry] = useState<PlayerModelGeometryDraft>(
+    DEFAULT_PLAYER_MODEL_GEOMETRY,
+  );
   const [clips, setClips] = useState<readonly ClipDraft[]>([]);
   const [activeClipId, setActiveClipId] = useState<string | undefined>();
   const [playing, setPlaying] = useState(true);
@@ -109,6 +121,8 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     setSlice(DEFAULT_SLICE);
     setSpriteName('Sprite');
     setAnchor('top-left');
+    setPlayerModelEnabled(false);
+    setPlayerModelGeometry(DEFAULT_PLAYER_MODEL_GEOMETRY);
     setClips([]);
     setActiveClipId(undefined);
     setPlaying(true);
@@ -275,9 +289,44 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     setClips((current) => current.filter((clip) => clip.id !== id));
   };
 
+  const seedPlayerModelClips = () => {
+    if (frames.length === 0) {
+      return;
+    }
+    const required = REQUIRED_PLAYER_MODEL_CLIP_KEYS;
+    const lastFrame = frames.length - 1;
+    const framesPerClip = Math.max(1, Math.floor(frames.length / required.length));
+    const seeded = required.map((name, index): ClipDraft => {
+      const fromFrame = Math.min(lastFrame, index * framesPerClip);
+      const toFrame =
+        index === required.length - 1
+          ? lastFrame
+          : Math.min(lastFrame, fromFrame + framesPerClip - 1);
+      return {
+        id: `player-model-${name}`,
+        name,
+        fromFrame,
+        toFrame,
+        fps: 10,
+        loop: name !== 'death',
+      };
+    });
+    setClips(seeded);
+    setActiveClipId(seeded[0]?.id);
+    setAnchor('bottom-left');
+    setPlayerModelEnabled(true);
+  };
+
   const handleSave = async () => {
     if (image === undefined || frames.length === 0) {
       notifyError('Load a sprite sheet and configure slicing first.');
+      return;
+    }
+    const missingPlayerClips = playerModelEnabled
+      ? missingPlayerModelClipNames(clips.map((clip) => clip.name))
+      : [];
+    if (missingPlayerClips.length > 0) {
+      notifyError(`Player model requires clips: ${missingPlayerClips.join(', ')}`);
       return;
     }
     try {
@@ -306,6 +355,9 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
           loop: clip.loop,
           defaultDurationMs: fpsToDurationMs(clip.fps),
         })),
+        ...(playerModelEnabled
+          ? { playerModel: toPlayerModelImportMetadata(playerModelGeometry) }
+          : {}),
       });
       notifySuccess('Sprite sheet imported as an animated pack.');
       handleOpenChange(false);
@@ -414,6 +466,15 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
                   ))}
                 </div>
               </div>
+
+              <SpritePlayerModelControls
+                enabled={playerModelEnabled}
+                geometry={playerModelGeometry}
+                clipNames={clips.map((clip) => clip.name)}
+                onEnabledChange={setPlayerModelEnabled}
+                onGeometryChange={setPlayerModelGeometry}
+                onSeedClips={seedPlayerModelClips}
+              />
 
               <div className="flex flex-col items-center gap-2 rounded-md border bg-[#0b1220] p-3">
                 <canvas

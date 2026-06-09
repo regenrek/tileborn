@@ -32,6 +32,11 @@ export class ArenaHeartbeat extends Schema.TaggedClass<ArenaHeartbeat>()("ArenaH
   tick: Schema.Int,
 }) {}
 
+export class ArenaSnapshotAck extends Schema.TaggedClass<ArenaSnapshotAck>()("ArenaSnapshotAck", {
+  tick: Schema.Int,
+  receivedAtMs: Schema.Number,
+}) {}
+
 export class ArenaSnapshot extends Schema.TaggedClass<ArenaSnapshot>()("ArenaSnapshot", {
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
@@ -43,7 +48,7 @@ export class ArenaWireError extends Schema.TaggedClass<ArenaWireError>()("Error"
   message: Schema.String,
 }) {}
 
-export const ArenaClientToServerMessage = Schema.Union([ArenaPlayerInput, ArenaHeartbeat]);
+export const ArenaClientToServerMessage = Schema.Union([ArenaPlayerInput, ArenaHeartbeat, ArenaSnapshotAck]);
 export type ArenaClientToServerMessage =
   typeof ArenaClientToServerMessage.Type;
 
@@ -54,6 +59,7 @@ export type ArenaServerToClientMessage =
 export const ArenaMessage = Schema.Union([
   ArenaPlayerInput,
   ArenaHeartbeat,
+  ArenaSnapshotAck,
   ArenaSnapshot,
   ArenaWireError,
 ]);

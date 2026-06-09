@@ -12,7 +12,7 @@ export type {
   PlaytestSummary,
   RoomCreateRequest,
   RoomCreateResponse,
-  RoomLifecycleStatus,
+  RoomLifecyclePhase,
 } from "./types.js";
 export { buildBundledManifest, hashFileSha256, hashManifestPayload } from "./build/manifest.js";
 export { createWorkerApp } from "./worker.js";

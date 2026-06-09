@@ -5,12 +5,16 @@ const { encodeMessage, GameOver, makePlayerId, PlayerKilled } = BattleRoyaleProt
 import { DAMAGE, RESPAWN } from '../constants.js';
 import type { PluginWorld } from '../types/runtime-plugin.js';
 import {
+  MATCH_PHASE_COMPONENT,
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
   POSITION_COMPONENT,
+  RESPAWN_STATE_COMPONENT,
+  type MatchPhase,
   type Player,
   type PlayerStats,
   type Position,
+  type RespawnState,
 } from './components.js';
 import type { SpawnSlot } from './spawn-players.js';
 import { countAllPlayers } from './spawn-players.js';
@@ -53,6 +57,7 @@ export interface DamageSystemState {
   starterCount: number | undefined;
   componentsRegistered: boolean;
   lastEliminatedPlayerIds: string[];
+  matchEntity: number | undefined;
 }
 
 export const createDamageSystemState = (): DamageSystemState => ({
@@ -62,6 +67,7 @@ export const createDamageSystemState = (): DamageSystemState => ({
   starterCount: undefined,
   componentsRegistered: false,
   lastEliminatedPlayerIds: [],
+  matchEntity: undefined,
 });
 
 export const resolveRoomRules = (partial: Partial<RoomRulesConfig> = {}): RoomRulesConfig => ({
@@ -71,6 +77,22 @@ export const resolveRoomRules = (partial: Partial<RoomRulesConfig> = {}): RoomRu
 
 const registerDamageComponents = (world: PluginWorld): void => {
   world.registerComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
+  world.registerComponent<RespawnState>(RESPAWN_STATE_COMPONENT);
+  world.registerComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
+};
+
+export const ensureMatchPhase = (
+  world: PluginWorld,
+  state: DamageSystemState,
+): void => {
+  world.registerComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
+  const phases = world.getComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
+  if (state.matchEntity === undefined) {
+    state.matchEntity = world.createEntity();
+  }
+  if (!phases.has(state.matchEntity)) {
+    phases.set(state.matchEntity, { phase: 'active', tick: 0 });
+  }
 };
 
 const findPlayerEntityById = (world: PluginWorld, playerId: string): number | undefined => {
@@ -88,6 +110,14 @@ const ensurePlayerStats = (world: PluginWorld, entity: number): void => {
   if (!stats.has(entity)) {
     stats.set(entity, { kills: 0, deaths: 0 });
   }
+};
+
+const setRespawnState = (
+  world: PluginWorld,
+  entity: number,
+  value: RespawnState,
+): void => {
+  world.getComponent<RespawnState>(RESPAWN_STATE_COMPONENT).set(entity, value);
 };
 
 const pickRespawnSlot = (
@@ -162,10 +192,16 @@ const emitPendingKills = (
     }
 
     if (roomRules.respawnEnabled) {
+      setRespawnState(world, kill.victimEntity, {
+        state: 'scheduled',
+        respawnTick: tick + respawnDelayTicks,
+      });
       state.scheduledRespawns.push({
         entity: kill.victimEntity,
         atTick: tick + respawnDelayTicks,
       });
+    } else {
+      setRespawnState(world, kill.victimEntity, { state: 'dead' });
     }
   }
 
@@ -210,6 +246,7 @@ const processScheduledRespawns = (
       health: ctx.playerHealth ?? DAMAGE.playerHealth,
       alive: 1,
     });
+    setRespawnState(world, respawn.entity, { state: 'alive' });
   }
 
   state.scheduledRespawns = remaining;
@@ -217,6 +254,7 @@ const processScheduledRespawns = (
 
 const emitGameOverIfNeeded = (
   world: PluginWorld,
+  tick: number,
   ctx: DamageSystemContext,
   state: DamageSystemState,
 ): void => {
@@ -258,6 +296,13 @@ const emitGameOverIfNeeded = (
   }
 
   state.gameOverEmitted = true;
+  if (state.matchEntity !== undefined) {
+    world.getComponent<MatchPhase>(MATCH_PHASE_COMPONENT).set(state.matchEntity, {
+      phase: 'game-over',
+      tick,
+      winnerPlayerId: lastAlivePlayerId,
+    });
+  }
   ctx.msgOut.push(
     encodeMessage(
       new GameOver({
@@ -277,9 +322,10 @@ export const runDamageSystem = (
     registerDamageComponents(world);
     state.componentsRegistered = true;
   }
+  ensureMatchPhase(world, state);
 
   const roomRules = resolveRoomRules(ctx.roomRules);
   processScheduledRespawns(world, tick, ctx, state);
   emitPendingKills(world, tick, ctx, state, roomRules);
-  emitGameOverIfNeeded(world, ctx, state);
+  emitGameOverIfNeeded(world, tick, ctx, state);
 };

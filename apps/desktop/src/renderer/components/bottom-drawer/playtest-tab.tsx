@@ -48,6 +48,7 @@ export function PlaytestTab() {
       : undefined);
 
   const metrics = activeSession && 'runtimeMetrics' in activeSession ? activeSession.runtimeMetrics : undefined;
+  const diagnostics = metrics?.diagnostics;
   const pluginName = resolvePlaytestPluginName(
     activeSession && 'activePlugins' in activeSession
       ? (activeSession.activePlugins ?? playtestActivePlugins)
@@ -96,6 +97,22 @@ export function PlaytestTab() {
                 <Badge variant="info">Plugin {pluginName}</Badge>
                 <Badge variant="secondary">Tick {metrics.tickCount}</Badge>
                 <Badge variant="secondary">Players {metrics.playerCount}</Badge>
+                {diagnostics ? (
+                  <>
+                    <Badge variant="secondary">
+                      Avg tick {diagnostics.telemetry.averageTickDurationMs.toFixed(1)} ms
+                    </Badge>
+                    <Badge variant="secondary">
+                      Frames {diagnostics.bandwidth.snapshotFrames}
+                    </Badge>
+                    <Badge variant="secondary">
+                      Inputs {diagnostics.bandwidth.inputEvents}
+                    </Badge>
+                    <Badge variant={diagnostics.budgets.backpressureOverBudget ? 'warning' : 'success'}>
+                      Backpressure {diagnostics.telemetry.backpressureFrameCount}
+                    </Badge>
+                  </>
+                ) : null}
               </div>
             ) : null}
             <Button variant="outline" size="sm" disabled={isStopping} onClick={() => void stop()}>

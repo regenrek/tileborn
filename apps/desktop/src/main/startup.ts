@@ -12,7 +12,7 @@ import { registerAssetProtocol } from "./asset-library/asset-protocol.js";
 import { registerMainIpc, type MainIpcRegistration } from "./ipc/handlers.js";
 import { stopDesktopLocalGameHost } from "./local-game-host-manager.js";
 import { disposeRuntime, runEffect } from "./runtime.js";
-import { seedBundledPlugins } from "./seed-plugins.js";
+import { seedBundledPluginAssetPacks, seedBundledPlugins } from "./seed-plugins.js";
 import type { StartupStatusStore, StartupTaskId } from "../shared/startup-status.js";
 
 const OPTIONAL_STARTUP_TASK_TIMEOUT_MS = 15_000;
@@ -133,6 +133,7 @@ export const createDesktopStartupController = ({
       ipcRegistration = await runRequiredEffect(reporter, "ipc-registration", registerMainIpc);
 
       await runOptionalEffect(reporter, logger, "plugin-seed", seedBundledPlugins);
+      await runOptionalEffect(reporter, logger, "asset-pack-seed", seedBundledPluginAssetPacks);
 
       reporter.complete("background-startup");
       const finalState = status.getSnapshot().state;

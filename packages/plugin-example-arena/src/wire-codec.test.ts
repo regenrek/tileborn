@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   ArenaEntitySnapshot,
+  ArenaSnapshotAck,
   ArenaSnapshot,
+  decodeArenaClientMessage,
   decodeArenaServerMessage,
+  encodeArenaClientMessage,
   encodeArenaServerMessage,
 } from "./wire-codec.js";
 
@@ -48,5 +51,11 @@ describe("arena wire codec", () => {
         { id: "dummy-1", kind: "dummy", health: 85, hitTick: 7 },
       ],
     });
+  });
+
+  it("round-trips a snapshot ack frame through the arena codec", () => {
+    const frame = new ArenaSnapshotAck({ tick: 7, receivedAtMs: 1_234 });
+
+    expect(decodeArenaClientMessage(encodeArenaClientMessage(frame))).toEqual(frame);
   });
 });

@@ -577,6 +577,82 @@ describe("PlaytestService", () => {
       expect(session.activePlugins).toEqual([EXAMPLE_ARENA_PLUGIN_ID]);
     }));
 
+  it("fails fast when multiple enabled game modes have no active selection", () =>
+    withTempHome(async () => {
+      const sessions = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject("Arena");
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: "battle-royale-runtime",
+            runtimeLabel: "Battle Royale Runtime Adapter",
+          });
+          yield* installRuntimePlugin({
+            pluginId: EXAMPLE_ARENA_PLUGIN_ID,
+            runtimeSystemId: "arena-runtime",
+            runtimeLabel: "Example Arena Runtime Adapter",
+          });
+          const playtest = yield* PlaytestService;
+          let failed = false;
+          yield* playtest.start(projectId, mapId).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                failed = true;
+                expect(error).toMatchObject({
+                  _tag: "ServicesBuildError",
+                  message: expect.stringContaining("Multiple enabled game modes are available"),
+                });
+              }),
+            ),
+          );
+          expect(failed).toBe(true);
+          return yield* playtest.list();
+        }).pipe(Effect.provide(testLayer)),
+      );
+      expect(sessions).toHaveLength(0);
+    }));
+
+  it("fails fast when the selected active game mode is unavailable", () =>
+    withTempHome(async () => {
+      const sessions = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject("Arena");
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: "battle-royale-runtime",
+            runtimeLabel: "Battle Royale Runtime Adapter",
+          });
+          const projects = yield* ProjectService;
+          const project = yield* projects.open(projectId);
+          yield* projects.save(
+            new ProjectManifest({
+              ...project,
+              settings: {
+                ...(project.settings ?? {}),
+                activeGameMode: EXAMPLE_ARENA_PLUGIN_ID,
+              },
+            }),
+          );
+          const playtest = yield* PlaytestService;
+          let failed = false;
+          yield* playtest.start(projectId, mapId).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                failed = true;
+                expect(error).toMatchObject({
+                  _tag: "ServicesBuildError",
+                  message: expect.stringContaining("Selected active game mode"),
+                });
+              }),
+            ),
+          );
+          expect(failed).toBe(true);
+          return yield* playtest.list();
+        }).pipe(Effect.provide(testLayer)),
+      );
+      expect(sessions).toHaveLength(0);
+    }));
+
   it("stops a running session", () =>
     withTempHome(async () => {
       const stopped = await Effect.runPromise(

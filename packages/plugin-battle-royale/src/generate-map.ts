@@ -9,7 +9,15 @@ import {
   type TileborneMap,
 } from "@tileborne/core";
 
-import { LOOT_CRATE_KIND, SHRINK_ZONE_ANCHOR_KIND, SPAWN_POINT_KIND } from "./constants.js";
+import {
+  ABILITY,
+  BARRIER_KIND,
+  DECOY_KIND,
+  LOOT_CRATE_KIND,
+  SHRINK_ZONE_ANCHOR_KIND,
+  SPAWN_POINT_KIND,
+  TRAP_KIND,
+} from "./constants.js";
 import { layerIdFromSeed, mapIdFromSeed, objectIdFromSeed } from "./id-utils.js";
 import type { GenerateMapOptions } from "./types/artifact.js";
 import { SeededRng } from "./rng.js";
@@ -143,6 +151,56 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
         y: point.y,
         layerId: objectLayerId,
         properties: { tier, respawnSeconds: 0 },
+      }),
+    );
+  }
+
+  const trapCount = Math.max(1, Math.floor(spawnCount / 2));
+  const trapPoints = poissonLikePoints(rng, trapCount, width, height, 6);
+  for (const [index, point] of trapPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `trap-${index}`),
+        kind: TRAP_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: {
+          radius: ABILITY.trap.radius,
+          slowTicks: ABILITY.trap.slowTicks,
+          stunTicks: ABILITY.trap.stunTicks,
+          damageTicks: ABILITY.trap.damageTicks,
+        },
+      }),
+    );
+  }
+
+  const decoyCount = Math.max(1, Math.floor(spawnCount / 3));
+  const decoyPoints = poissonLikePoints(rng, decoyCount, width, height, 8);
+  for (const [index, point] of decoyPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `decoy-${index}`),
+        kind: DECOY_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: { radius: ABILITY.decoy.radius, durationTicks: ABILITY.decoy.durationTicks },
+      }),
+    );
+  }
+
+  const barrierCount = Math.max(2, Math.floor(Math.min(width, height) / 12));
+  const barrierPoints = poissonLikePoints(rng, barrierCount, width, height, 7);
+  for (const [index, point] of barrierPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `barrier-${index}`),
+        kind: BARRIER_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: { width: 32, height: 32 },
       }),
     );
   }

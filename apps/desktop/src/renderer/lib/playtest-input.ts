@@ -5,6 +5,7 @@ import {
   MouseButtonInputEvent,
   MouseMoveInputEvent,
 } from '@tileborne/runtime';
+import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
 
 /**
  * Neutral playtest input capture (ADR-0024).
@@ -22,8 +23,12 @@ export interface ResolvedInputIntent {
   /** 8-way movement direction, or `undefined` when idle. */
   readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | undefined;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 export interface InputCaptureProfile {

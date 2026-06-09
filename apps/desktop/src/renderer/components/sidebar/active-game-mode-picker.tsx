@@ -17,6 +17,8 @@ import {
 } from '@/lib/active-game-mode-selection';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 
+const UNSELECTED_GAME_MODE_VALUE = 'tileborne:select-active-game-mode';
+
 export function ActiveGameModePicker({ projectId }: { readonly projectId: string | undefined }) {
   const contributionsQuery = usePluginContributions();
   const projectQuery = useProject(projectId);
@@ -30,6 +32,9 @@ export function ActiveGameModePicker({ projectId }: { readonly projectId: string
   }
 
   const updateActiveMode = async (modeId: string) => {
+    if (modeId === UNSELECTED_GAME_MODE_VALUE) {
+      return;
+    }
     if (project === undefined) {
       notifyError('Open a project before selecting a game mode.');
       return;
@@ -64,7 +69,7 @@ export function ActiveGameModePicker({ projectId }: { readonly projectId: string
         </p>
       </div>
       <Select
-        value={activeMode?.modeId ?? ''}
+        value={activeMode?.modeId ?? UNSELECTED_GAME_MODE_VALUE}
         onValueChange={(modeId) => {
           if (modeId !== null) {
             void updateActiveMode(modeId);
@@ -80,6 +85,9 @@ export function ActiveGameModePicker({ projectId }: { readonly projectId: string
           <SelectValue placeholder="Select game mode" />
         </SelectTrigger>
         <SelectContent>
+          {activeMode === undefined ? (
+            <SelectItem value={UNSELECTED_GAME_MODE_VALUE}>Select game mode</SelectItem>
+          ) : null}
           {gameModes.map((mode) => (
             <SelectItem key={mode.modeId} value={mode.modeId}>
               {mode.label}

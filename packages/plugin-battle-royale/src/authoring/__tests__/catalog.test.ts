@@ -7,7 +7,14 @@ import { decodeGameObjectCatalog, mergeGameObjectCatalogs } from "@tileborne/plu
 import { Result } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { LOOT_CRATE_KEY, SHRINK_ZONE_ANCHOR_KEY, SPAWN_POINT_KEY } from "../../constants.js";
+import {
+  BARRIER_KEY,
+  DECOY_KEY,
+  LOOT_CRATE_KEY,
+  SHRINK_ZONE_ANCHOR_KEY,
+  SPAWN_POINT_KEY,
+  TRAP_KEY,
+} from "../../constants.js";
 
 const catalogPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -35,6 +42,9 @@ describe("Battle Royale game-object catalog contribution", () => {
       expect(merged.success.byId.has(gameObjectTypeIdForKey(SPAWN_POINT_KEY))).toBe(true);
       expect(merged.success.byId.has(gameObjectTypeIdForKey(SHRINK_ZONE_ANCHOR_KEY))).toBe(true);
       expect(merged.success.byId.has(gameObjectTypeIdForKey(LOOT_CRATE_KEY))).toBe(true);
+      expect(merged.success.byId.has(gameObjectTypeIdForKey(TRAP_KEY))).toBe(true);
+      expect(merged.success.byId.has(gameObjectTypeIdForKey(DECOY_KEY))).toBe(true);
+      expect(merged.success.byId.has(gameObjectTypeIdForKey(BARRIER_KEY))).toBe(true);
     }
   });
 });

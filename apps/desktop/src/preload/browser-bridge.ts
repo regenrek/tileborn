@@ -85,6 +85,7 @@ export const MAIN_IPC_BRIDGE_CHANNELS = [
   "tileborne:playtest:list",
   "tileborne:runtime:startLocalHost",
   "tileborne:runtime:stopLocalHost",
+  "tileborne:runtime:prepareLocalRoomArtifact",
   "tileborne:runtime:playtestInput",
   "tileborne:runtime:playtestSnapshot",
   "tileborne:runtime-deploy:deploy",

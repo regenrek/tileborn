@@ -57,10 +57,8 @@ export const buildBattleRoyaleWeaponCatalogData = (
         id: BR_PRIMARY_WEAPON_ID,
         damage: config.projectile.damage,
         cooldownTicks: config.projectile.shootCooldownTicks,
-        // BR has no inventory/ammo system (ADR-0018 non-goal); the firing runtime
-        // is topped up every tick, so a single-round magazine never blocks fire.
-        magazineSize: 1,
-        reloadTicks: 0,
+        magazineSize: config.projectile.magazineSize,
+        reloadTicks: config.projectile.reloadTicks,
       },
       delivery: {
         _tag: "ProjectileDelivery",

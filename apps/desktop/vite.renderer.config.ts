@@ -23,20 +23,40 @@ const packageJson = JSON.parse(
 // correct monorepo dev boundary and the real fix for t-vups (replacing the
 // blunt "clear .vite on every start" hack).
 //
-// IMPORTANT: only packages with a *pure browser* dependency graph may be
-// excluded. Excluding a package serves its whole import graph live, so any
+// IMPORTANT: only entries with a *pure browser* dependency graph may be
+// excluded. Excluding an entry serves its whole import graph live, so any
 // transitive Node code reaches the browser and throws ("node:fs/promises has
 // been externalized") => blank. The other internal packages (plugin-api,
 // runtime, plugin-battle-royale, ipc-contracts, services-*) transitively pull
 // @tileborne/asset-pipeline (Node/fs); they MUST stay pre-bundled so esbuild
-// tree-shakes that Node-only code out. If a new renderer-used export on a
-// pre-bundled package serves stale, run:
+// tree-shakes that Node-only code out. Browser-only BR subpaths used by the
+// editor are excluded separately so roster/default changes do not get trapped
+// in stale optimized deps. If a new renderer-used export on a pre-bundled
+// package serves stale, run:
 // pnpm --filter @tileborne/desktop clean:vite-deps
 const browserSafeInternalPackages = [
   "@tileborne/core",
+  "@tileborne/game-client",
   "@tileborne/sdk-tileset",
   "@tileborne/ui",
 ] as const;
+const browserSafePluginSubpaths = [
+  "@tileborne/plugin-battle-royale/authoring",
+  "@tileborne/plugin-battle-royale/constants",
+  "@tileborne/plugin-battle-royale/player-models",
+  "@tileborne/plugin-battle-royale/renderer",
+  "@tileborne/plugin-battle-royale/visual-roles",
+] as const;
+
+const liveSourceAliases = {
+  // The desktop renderer consumes the shared HUD shell while live-testing editor
+  // changes. Pointing at source avoids Vite serving a stale transformed `dist`
+  // module for this symlinked workspace package.
+  "@tileborne/game-client": path.resolve(
+    import.meta.dirname,
+    "../../packages/game-client/src/index.ts",
+  ),
+} as const;
 
 function resolveGitCommit(): string {
   try {
@@ -61,6 +81,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src/renderer"),
+      ...liveSourceAliases,
     },
     dedupe: ["react", "react-dom"],
   },
@@ -69,7 +90,7 @@ export default defineConfig({
     // changing dev export surfaces are always current; Base UI's CJS shims below
     // and Node-graph internal packages must still be prebundled. See
     // browserSafeInternalPackages above (t-vups).
-    exclude: [...browserSafeInternalPackages],
+    exclude: [...browserSafeInternalPackages, ...browserSafePluginSubpaths],
     include: [
       "@base-ui/react",
       "@base-ui/react/dialog",

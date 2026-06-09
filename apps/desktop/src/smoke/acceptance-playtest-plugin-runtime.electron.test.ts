@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {
   BATTLE_ROYALE_PLUGIN_ID,
+  addBattleRoyaleSpawnAnchors,
   createTileborneHome,
   disposeSmokeContext,
   launchElectron,
@@ -35,6 +36,7 @@ describe('acceptance: playtest plugin runtime', () => {
       });
       return createdMapId;
     }, projectId);
+    await addBattleRoyaleSpawnAnchors(page, projectId, mapId);
 
     const pluginSourcePath = resolveBattleRoyaleInstallPath();
     await page.evaluate(

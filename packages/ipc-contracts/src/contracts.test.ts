@@ -24,7 +24,7 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('main IPC contracts', () => {
   it('exports the main IPC registry', () => {
-    expect(MainIpcContracts).toHaveLength(93);
+    expect(MainIpcContracts).toHaveLength(94);
     expect(MainIpcRegistry.byChannel['tileborne:projects:get']).toBe(ProjectsGetContract);
     expect(MainIpcRegistry.byChannel['tileborne:maps:setMapTilesetPack']).toBe(
       MapsSetMapTilesetPackContract,
@@ -107,6 +107,27 @@ describe('main IPC contracts', () => {
                 max: undefined,
                 step: 1,
                 default: 32,
+              },
+            ],
+          },
+          hudLayoutContributionId: 'br-hud-layout',
+          hudLayout: {
+            id: 'br-default-hud',
+            widgets: [
+              {
+                id: 'minimap',
+                kind: 'core.Minimap',
+                anchor: 'top-right',
+                order: 0,
+                enabled: true,
+              },
+              {
+                id: 'weapon-panel',
+                kind: 'core.WeaponPanel',
+                anchor: 'bottom-center',
+                order: 1,
+                enabled: true,
+                offset: { x: 0, y: -8 },
               },
             ],
           },

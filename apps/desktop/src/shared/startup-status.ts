@@ -9,6 +9,7 @@ export const STARTUP_TASK_DEFINITIONS = [
   { id: "home-init", label: "Home directory initialization", required: true },
   { id: "ipc-registration", label: "Domain IPC registration", required: true },
   { id: "plugin-seed", label: "Battle Royale plugin seed", required: false },
+  { id: "asset-pack-seed", label: "Bundled asset pack seed", required: false },
 ] as const;
 
 export type StartupTaskId = (typeof STARTUP_TASK_DEFINITIONS)[number]["id"];

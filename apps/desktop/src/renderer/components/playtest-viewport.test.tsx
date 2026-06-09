@@ -22,7 +22,10 @@ const editorStateMock = vi.hoisted(() => ({
 const setCameraMock = vi.hoisted(() => vi.fn());
 const renderFromEntitiesSpy = vi.hoisted(() => vi.fn());
 const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
+const snapshotApplySpy = vi.hoisted(() => vi.fn());
 const projectMock = vi.hoisted(() => vi.fn<(snapshot: unknown) => unknown[]>());
+const decodeServerFrameMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
+const hudOverlayMock = vi.hoisted(() => vi.fn(() => null));
 
 vi.mock('@tileborne/runtime', async () => {
   // Use the REAL neutral input resolver + raw-event classes so the input-bridge
@@ -45,9 +48,13 @@ vi.mock('@tileborne/runtime', async () => {
       dispose = vi.fn(() => Effect.succeed(undefined));
     },
     SnapshotEntityStore: class SnapshotEntityStore {
-      apply = vi.fn();
+      current: unknown | undefined;
+      apply = vi.fn((frame: unknown) => {
+        snapshotApplySpy(frame);
+        this.current = frame;
+      });
       sampleInterpolatedFullState = sampleInterpolatedMock;
-      getCurrentFullState = vi.fn(() => undefined);
+      getCurrentFullState = vi.fn(() => this.current);
       getPreviousFullState = vi.fn(() => undefined);
     },
     // Real interpolation (not identity) so the render-loop test can assert the
@@ -102,8 +109,8 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
   // PrimaryAction (Space / mouse-0 → shoot) for real; only the renderer-side
   // projector/manifest stays stubbed for the overlay + camera tests.
   const core = await vi.importActual<typeof import('@tileborne/core')>('@tileborne/core');
-  const br = await vi.importActual<typeof import('@tileborne/plugin-battle-royale')>(
-    '@tileborne/plugin-battle-royale',
+  const br = await vi.importActual<typeof import('@tileborne/plugin-battle-royale/renderer')>(
+    '@tileborne/plugin-battle-royale/renderer',
   );
   const inputMap = br.battleRoyaleDefaultInputMap();
   const scheme = core.controlScheme(core.CONTROL_SCHEMES.KeyboardMouse);
@@ -127,7 +134,7 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
       projector: { mergeFrame: vi.fn(), project: projectMock },
       bundledAssets: [],
       manifest: { fixedZoom: 4, hudInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
-      decodeServerFrame: vi.fn(() => undefined),
+      decodeServerFrame: decodeServerFrameMock,
       inputMap,
       controlScheme: scheme,
       inputCaptureProfile: { boundKeyCodes, usesMouseButtons },
@@ -137,13 +144,19 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
 });
 
 vi.mock('@/components/playtest-overlay', () => ({ PlaytestOverlay: () => null }));
-vi.mock('@/components/playtest-hud-overlay', () => ({ PlaytestHudOverlay: () => null }));
+vi.mock('@/components/playtest-hud-overlay', () => ({ PlaytestHudOverlay: hudOverlayMock }));
 
 const sessionsMock = vi.hoisted(() => ({
-  current: { data: { sessions: [] as { id: string; runtimeMetrics?: { tickCount: number } }[] } },
+  current: { data: { sessions: [] as { id: string; runtimeMetrics?: Record<string, unknown> }[] } },
 }));
 vi.mock('@/hooks/queries', () => ({
   usePlaytestSessions: () => sessionsMock.current,
+  usePluginContributions: () => ({ data: undefined }),
+  useProject: () => ({ data: undefined }),
+}));
+
+vi.mock('@/hooks/mutations', () => ({
+  useUpdateProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 const stablePlayerModels = vi.hoisted(() => ({
@@ -151,9 +164,14 @@ const stablePlayerModels = vi.hoisted(() => ({
   selectedModelId: undefined,
   roster: [] as const,
 }));
+const stableVisualRoles = vi.hoisted(() => ({
+  builtRoles: [] as const,
+}));
 vi.mock('@/hooks/use-playtest-player-models', () => ({
   usePlaytestPlayerModels: () => stablePlayerModels,
+  usePlaytestVisualRoles: () => stableVisualRoles,
   assemblePlaytestPlayerModelConfig: vi.fn(),
+  assemblePlaytestVisualRoleConfig: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-playtest-controls', () => ({
@@ -206,10 +224,14 @@ describe('PlaytestViewport overlay wiring', () => {
     setShowCollisionMock.mockReset();
     setCameraMock.mockReset();
     renderFromEntitiesSpy.mockReset();
+    snapshotApplySpy.mockReset();
+    hudOverlayMock.mockClear();
     sampleInterpolatedMock.mockReset();
     sampleInterpolatedMock.mockReturnValue(undefined);
     projectMock.mockReset();
     projectMock.mockReturnValue([]);
+    decodeServerFrameMock.mockReset();
+    decodeServerFrameMock.mockReturnValue(undefined);
     sessionsMock.current = { data: { sessions: [] } };
     editorStateMock.current = {
       showGrid: true,
@@ -221,13 +243,73 @@ describe('PlaytestViewport overlay wiring', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     (window as unknown as { tileborne: unknown }).tileborne = {
       events: { onRuntimeSnapshot: vi.fn(() => vi.fn()) },
-      runtime: { playtestInput: vi.fn() },
+      runtime: {
+        playtestInput: vi.fn(),
+        playtestSnapshot: vi.fn(() => Promise.resolve({ players: [] })),
+      },
     };
   });
 
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('passes rich HUD scoreboard and minimap fields through to the overlay', () => {
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            runtimeMetrics: {
+              tickCount: 7,
+              playerCount: 2,
+              hud: {
+                totalPlayers: 2,
+                localPlayer: {
+                  playerId: 'player-1',
+                  displayName: 'Player 1',
+                  health: 100,
+                  maxHealth: 100,
+                },
+                recentEvents: [],
+                scoreboard: [
+                  {
+                    playerId: 'player-1',
+                    displayName: 'Player 1',
+                    health: 100,
+                    alive: true,
+                    kills: 1,
+                    deaths: 0,
+                  },
+                ],
+                minimap: {
+                  zone: { cx: 16, cy: 16, radius: 16 },
+                  players: [
+                    { playerId: 'player-1', x: 8, y: 8, local: true, alive: true, health: 100 },
+                  ],
+                  objects: [],
+                },
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    renderViewport();
+
+    expect(hudOverlayMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metrics: expect.objectContaining({
+          hud: expect.objectContaining({
+            scoreboard: [expect.objectContaining({ playerId: 'player-1', kills: 1 })],
+            minimap: expect.objectContaining({ zone: { cx: 16, cy: 16, radius: 16 } }),
+          }),
+        }),
+      }),
+      undefined,
+    );
   });
 
   it('seeds the debug and collision overlays from the live store at mount', async () => {
@@ -279,6 +361,60 @@ describe('PlaytestViewport overlay wiring', () => {
     });
   });
 
+  it('seeds the render store from the retained runtime snapshot frame', async () => {
+    const seedFrame = new Uint8Array([1, 2, 3]);
+    const seedSnapshot = { tag: 'seed' };
+    const animation = {
+      clipId: 'maltipoo-mae:idle',
+      frames: [
+        { assetId: 'pet', uv: { x: 0, y: 0, w: 192, h: 208 }, durationMs: 130 },
+        { assetId: 'pet', uv: { x: 192, y: 0, w: 192, h: 208 }, durationMs: 130 },
+      ],
+      loop: true,
+      clockMs: 0,
+    };
+    decodeServerFrameMock.mockReturnValue(seedSnapshot);
+    projectMock.mockImplementation((snapshot: unknown) =>
+      snapshot === seedSnapshot
+        ? [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20, animation }]
+        : [],
+    );
+    const runtime = (window as unknown as {
+      tileborne: { runtime: { playtestSnapshot: ReturnType<typeof vi.fn> } };
+    }).tileborne.runtime;
+    runtime.playtestSnapshot.mockResolvedValue({ players: [], frame: seedFrame });
+
+    let capturedTick: FrameRequestCallback | undefined;
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        capturedTick = callback;
+        return 1;
+      }),
+    );
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(runtime.playtestSnapshot).toHaveBeenCalledWith({ sessionId: 'session-1' });
+      expect(snapshotApplySpy).toHaveBeenCalledWith(seedSnapshot);
+    });
+
+    expect(capturedTick).toBeDefined();
+    capturedTick!(0);
+
+    expect(renderFromEntitiesSpy).toHaveBeenCalledTimes(1);
+    const [projected] = renderFromEntitiesSpy.mock.calls[0]!;
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toEqual(
+      expect.objectContaining({
+        id: 'br:player:p1',
+        assetId: 'pet',
+        animation,
+      }),
+    );
+  });
+
   // Regression lock for the snapshot-interpolation smoothness fix: the
   // follow-camera must track the INTERPOLATED local-player position (not the
   // discrete latest snapshot), and the renderer must receive an empty
@@ -286,14 +422,20 @@ describe('PlaytestViewport overlay wiring', () => {
   it('drives the camera from the interpolated local entity and renders without a double lerp', async () => {
     const previousSnapshot = { tag: 'previous' };
     const currentSnapshot = { tag: 'current' };
+    const animation = {
+      clipId: 'maltipoo-mae:idle',
+      frames: [{ assetId: 'pet', uv: { x: 0, y: 0, w: 192, h: 208 }, durationMs: 130 }],
+      loop: true,
+      clockMs: 0,
+    };
     // Local player walks from (0,0) -> (10,20); at alpha 0.5 the interpolated
     // position is (5,10). The discrete `current` would be (10,20).
     projectMock.mockImplementation((snapshot: unknown) => {
       if (snapshot === currentSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20, animation }];
       }
       if (snapshot === previousSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, animation }];
       }
       return [];
     });
@@ -338,9 +480,11 @@ describe('PlaytestViewport overlay wiring', () => {
     expect((previousById as Map<string, unknown>).size).toBe(0);
     // The projected local entity sits at the screen centre because the camera
     // tracks the same interpolated position the sprite is drawn at.
-    expect(projected).toEqual([
-      { id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scale: 4 },
-    ]);
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toEqual(
+      expect.objectContaining({ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scaleX: 4, scaleY: 4 }),
+    );
+    expect(projected[0]?.scale).toBeUndefined();
   });
 
   it('sends WASD movement frames with a dir value', async () => {

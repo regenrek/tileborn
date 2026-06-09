@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",
+    "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "effect": "4.0.0-beta.70"

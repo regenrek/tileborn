@@ -3,14 +3,21 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { normalizeAndMigratePersistedMapJson } from "@tileborne/core";
+import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
 import { makeGameRuntime, makePluginHost, type RuntimePlugin } from "@tileborne/runtime";
 import { Effect } from "effect";
 
 import {
   createPlaytestRuntimeHudTracker,
+  type PlaytestHudWorldStateDeriver,
   type PlaytestRuntimeHudState,
 } from "./playtest-runtime-hud.js";
 import { createPlaytestPluginWorld, type PlaytestPluginWorld } from "./playtest-plugin-world.js";
+import {
+  createPlaytestRuntimeDiagnosticsRecorder,
+  type PlaytestRuntimeDiagnostics,
+  type PlaytestRuntimeDiagnosticsRecorder,
+} from "./playtest-runtime-diagnostics.js";
 
 const TICK_RATE = 20;
 const TICK_MS = 1000 / TICK_RATE;
@@ -22,6 +29,7 @@ export interface PlaytestRuntimeMetrics {
   readonly lastPluginEvent: string;
   readonly lastTickAtMs: number;
   readonly hud?: PlaytestRuntimeHudState;
+  readonly diagnostics?: PlaytestRuntimeDiagnostics;
 }
 
 export interface PlaytestRuntimePlayerInput {
@@ -29,8 +37,12 @@ export interface PlaytestRuntimePlayerInput {
   readonly seq: number;
   readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
 export interface PlaytestRuntimePlayerSnapshot {
@@ -39,9 +51,16 @@ export interface PlaytestRuntimePlayerSnapshot {
   readonly y: number;
 }
 
+export interface PlaytestRuntimeSnapshot {
+  readonly players: readonly PlaytestRuntimePlayerSnapshot[];
+  readonly frame?: Uint8Array;
+}
+
 interface PlaytestSessionState {
   readonly inputByPlayerId: Map<string, PlaytestRuntimePlayerInput>;
   readonly world: PlaytestPluginWorld;
+  readonly diagnosticsRecorder: PlaytestRuntimeDiagnosticsRecorder;
+  seedFrame?: Uint8Array;
 }
 
 interface PlaytestTickPlugin {
@@ -55,11 +74,25 @@ interface RuntimePluginModule {
   readonly default?: PlaytestTickPlugin | RuntimePlugin;
   readonly plugin?: RuntimePlugin;
   readonly createRuntimeAdapter?: (host: {
-    readonly getArtifact: () => Record<string, never>;
+    readonly getArtifact: () => unknown;
     readonly getPlayerInput?: (playerId: string) => PlaytestRuntimePlayerInput | undefined;
     readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
+    readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
   }) => PlaytestTickPlugin;
-  readonly exportArtifact?: (map: Record<string, never>) => Record<string, never>;
+  readonly exportArtifact?: (
+    map: unknown,
+    options?: {
+      readonly playerModels?: readonly unknown[];
+      readonly selectedPlayerModelId?: string;
+      readonly objectTypes?: readonly unknown[];
+    },
+  ) => unknown;
+  /**
+   * Plugin-owned world→HUD derivation (HUD-state SSOT). When the runtime
+   * bundle exports it, the host's HUD tracker delegates the per-tick world
+   * slice (player status, scoreboard, minimap, zone phase) to the plugin.
+   */
+  readonly derivePlaytestHudWorldState?: PlaytestHudWorldStateDeriver;
 }
 
 interface ActivePlaytestRuntime {
@@ -114,6 +147,7 @@ const maybeNotifyPlaytestChanged = (): void => {
 const createMetricsState = (
   playerCount: number,
   readHud: () => PlaytestRuntimeHudState | undefined,
+  readDiagnostics: () => PlaytestRuntimeDiagnostics | undefined,
 ) => {
   const state = {
     tickCount: 0,
@@ -125,12 +159,14 @@ const createMetricsState = (
     state,
     getMetrics: (): PlaytestRuntimeMetrics => {
       const hud = readHud();
+      const diagnostics = readDiagnostics();
       return {
         tickCount: state.tickCount,
         playerCount: state.playerCount,
         lastPluginEvent: state.lastPluginEvent,
         lastTickAtMs: state.lastTickAtMs,
         ...(hud !== undefined ? { hud } : {}),
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
       };
     },
     recordEvent: (event: string): void => {
@@ -195,28 +231,35 @@ const readPlainStub = (moduleValue: RuntimePluginModule): PlaytestTickPlugin | u
 const loadPluginForPlaytest = async (
   pluginId: string,
   rootPath: string,
-  mapPayload: Record<string, never>,
+  mapPayload: unknown,
   hostExtras: {
     readonly getPlayerInput: (playerId: string) => PlaytestRuntimePlayerInput | undefined;
     readonly msgOut: { readonly push: (frame: Uint8Array) => void };
+    readonly recordArtifact?: (artifact: unknown) => void;
+    readonly setSeedFrame: (frame: Uint8Array | undefined) => void;
+    readonly setHudWorldStateDeriver?: (deriver: PlaytestHudWorldStateDeriver) => void;
+    readonly playerModels?: readonly unknown[];
+    readonly selectedPlayerModelId?: string;
+    readonly objectTypes?: readonly unknown[];
   },
 ): Promise<PlaytestTickPlugin> => {
   const runtimeEntry = await resolveRuntimeEntry(rootPath);
   const runtimeModule = await loadRuntimeModule(runtimeEntry);
 
+  if (typeof runtimeModule.derivePlaytestHudWorldState === "function") {
+    hostExtras.setHudWorldStateDeriver?.(runtimeModule.derivePlaytestHudWorldState);
+  }
+
   if (typeof runtimeModule.createRuntimeAdapter === "function") {
-    const nodeEntry = await resolveNodeEntry(rootPath);
-    let artifact: Record<string, never> = mapPayload;
-    if (nodeEntry) {
-      const nodeModule = await loadRuntimeModule(nodeEntry);
-      if (typeof nodeModule.exportArtifact === "function") {
-        artifact = nodeModule.exportArtifact(mapPayload) as Record<string, never>;
-      }
-    }
+    const artifact = await exportRuntimeArtifactForPlugin(rootPath, mapPayload, hostExtras);
+    hostExtras.recordArtifact?.(artifact);
     return runtimeModule.createRuntimeAdapter({
       getArtifact: () => artifact,
       getPlayerInput: hostExtras.getPlayerInput,
       msgOut: hostExtras.msgOut,
+      setReplayFrames: (frames) => {
+        hostExtras.setSeedFrame(frames[0]);
+      },
     });
   }
 
@@ -225,6 +268,54 @@ const loadPluginForPlaytest = async (
     return plainStub;
   }
   throw new Error(`plugin ${pluginId} did not export a runtime adapter`);
+};
+
+const readArtifactMapPayload = async (artifactDirectory: string): Promise<unknown> => {
+  const mapPath = path.join(artifactDirectory, "map.json");
+  return normalizeAndMigratePersistedMapJson(
+    JSON.parse(await readFile(mapPath, "utf8")),
+  );
+};
+
+const exportRuntimeArtifactForPlugin = async (
+  rootPath: string,
+  mapPayload: unknown,
+  options: {
+    readonly playerModels?: readonly unknown[];
+    readonly selectedPlayerModelId?: string;
+    readonly objectTypes?: readonly unknown[];
+  },
+): Promise<unknown> => {
+  const nodeEntry = await resolveNodeEntry(rootPath);
+  if (!nodeEntry) {
+    return mapPayload;
+  }
+  const nodeModule = await loadRuntimeModule(nodeEntry);
+  if (typeof nodeModule.exportArtifact !== "function") {
+    return mapPayload;
+  }
+  return nodeModule.exportArtifact(mapPayload, {
+    ...(options.playerModels === undefined ? {} : { playerModels: options.playerModels }),
+    ...(options.selectedPlayerModelId === undefined
+      ? {}
+      : { selectedPlayerModelId: options.selectedPlayerModelId }),
+    ...(options.objectTypes === undefined ? {} : { objectTypes: options.objectTypes }),
+  });
+};
+
+export const exportPlaytestRuntimeArtifact = async (input: {
+  readonly artifactDirectory: string;
+  readonly pluginRootPath: string;
+  readonly playerModels?: readonly unknown[];
+  readonly selectedPlayerModelId?: string;
+  readonly objectTypes?: readonly unknown[];
+}): Promise<unknown> => {
+  const mapPayload = await readArtifactMapPayload(input.artifactDirectory);
+  return exportRuntimeArtifactForPlugin(input.pluginRootPath, mapPayload, {
+    ...(input.playerModels === undefined ? {} : { playerModels: input.playerModels }),
+    ...(input.selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId: input.selectedPlayerModelId }),
+    ...(input.objectTypes === undefined ? {} : { objectTypes: input.objectTypes }),
+  });
 };
 
 const errorMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
@@ -261,7 +352,13 @@ export const setPlaytestRuntimeInput = (
   playerId: string,
   input: PlaytestRuntimePlayerInput,
 ): void => {
-  sessionStates.get(sessionId)?.inputByPlayerId.set(playerId, input);
+  const state = sessionStates.get(sessionId);
+  if (!state) {
+    return;
+  }
+  const currentTick = activeRuntimes.get(sessionId)?.getMetrics().tickCount ?? 0;
+  state.diagnosticsRecorder.recordInput(playerId, input, currentTick);
+  state.inputByPlayerId.set(playerId, input);
 };
 
 export const clearPlaytestRuntimeInput = (sessionId: string, playerId: string): void => {
@@ -270,7 +367,7 @@ export const clearPlaytestRuntimeInput = (sessionId: string, playerId: string): 
 
 export const getPlaytestRuntimeSnapshot = (
   sessionId: string,
-): { readonly players: readonly PlaytestRuntimePlayerSnapshot[] } | undefined => {
+): PlaytestRuntimeSnapshot | undefined => {
   const state = sessionStates.get(sessionId);
   if (!state) {
     return undefined;
@@ -291,9 +388,15 @@ export const getPlaytestRuntimeSnapshot = (
         y: position.y,
       });
     }
-    return { players: snapshots };
+    return {
+      players: snapshots,
+      ...(state.seedFrame === undefined ? {} : { frame: new Uint8Array(state.seedFrame) }),
+    };
   } catch {
-    return { players: [] };
+    return {
+      players: [],
+      ...(state.seedFrame === undefined ? {} : { frame: new Uint8Array(state.seedFrame) }),
+    };
   }
 };
 
@@ -302,29 +405,46 @@ export const startPlaytestRuntimeHost = async (input: {
   readonly artifactDirectory: string;
   readonly pluginInstalls: readonly { readonly pluginId: string; readonly rootPath: string }[];
   readonly logger?: PlaytestRuntimeLogger;
+  readonly playerModels?: readonly unknown[];
+  readonly selectedPlayerModelId?: string;
+  readonly objectTypes?: readonly unknown[];
 }): Promise<PlaytestRuntimeMetrics> => {
   await stopPlaytestRuntimeHost(input.sessionId);
 
-  const mapPath = path.join(input.artifactDirectory, "map.json");
   // Route through the single ADR-0019 plain-JSON load contract shared with the
   // map services / CLI / IPC: migrate legacy free-string `MapObject.kind` to
   // catalog GameObjectTypeIds AND fill the optional object/placement keys that
   // on-disk JSON omits, so legacy maps cannot drift here. The plugin consumes
   // plain JSON (not a decoded `TileborneMap` class). Idempotent.
-  const mapPayload = normalizeAndMigratePersistedMapJson(
-    JSON.parse(await readFile(mapPath, "utf8")),
-  ) as Record<string, never>;
+  const mapPayload = await readArtifactMapPayload(input.artifactDirectory);
 
   const pluginWorld = createPlaytestPluginWorld();
   const inputByPlayerId = new Map<string, PlaytestRuntimePlayerInput>();
-  sessionStates.set(input.sessionId, { inputByPlayerId, world: pluginWorld });
+  const diagnosticsRecorder = createPlaytestRuntimeDiagnosticsRecorder({
+    tickRate: TICK_RATE,
+    tickBudgetMs: TICK_MS,
+  });
+  const sessionState: PlaytestSessionState = {
+    inputByPlayerId,
+    world: pluginWorld,
+    diagnosticsRecorder,
+  };
+  sessionStates.set(input.sessionId, sessionState);
   const pendingPluginFrames: Uint8Array[] = [];
   const msgOut = {
     push: (frame: Uint8Array): void => {
+      diagnosticsRecorder.recordPluginFrame(frame);
       pendingPluginFrames.push(frame);
     },
   };
-  const hudTracker = createPlaytestRuntimeHudTracker();
+  // HUD-state SSOT: the loaded plugin's runtime bundle provides the world→HUD
+  // derivation; the tracker only composes it with host-tracked wire events.
+  const hudDeriverRef: { current: PlaytestHudWorldStateDeriver | undefined } = {
+    current: undefined,
+  };
+  const hudTracker = createPlaytestRuntimeHudTracker((world, tick) =>
+    hudDeriverRef.current?.(world, tick),
+  );
   const tickState = { tickCount: 0 };
   const flushPluginFrames = (): void => {
     if (pendingPluginFrames.length === 0) {
@@ -342,8 +462,14 @@ export const startPlaytestRuntimeHost = async (input: {
       }
     }
   };
-  const metricsState = createMetricsState(countPlayers(pluginWorld), () =>
-    hudTracker.snapshot(pluginWorld, tickState.tickCount),
+  const metricsState = createMetricsState(
+    countPlayers(pluginWorld),
+    () => hudTracker.snapshot(pluginWorld, tickState.tickCount),
+    () =>
+      diagnosticsRecorder.snapshot({
+        world: pluginWorld,
+        pendingSnapshotFrames: pendingPluginFrames.length,
+      }),
   );
   const loadedPlugins: PlaytestTickPlugin[] = [];
   const pluginIds = input.pluginInstalls.map((install) => install.pluginId);
@@ -354,6 +480,22 @@ export const startPlaytestRuntimeHost = async (input: {
       const plugin = await loadPluginForPlaytest(install.pluginId, install.rootPath, mapPayload, {
         getPlayerInput: (playerId) => inputByPlayerId.get(playerId),
         msgOut,
+        recordArtifact: diagnosticsRecorder.recordArtifact,
+        setSeedFrame: (frame) => {
+          if (frame === undefined) {
+            delete sessionState.seedFrame;
+          } else {
+            sessionState.seedFrame = new Uint8Array(frame);
+          }
+        },
+        setHudWorldStateDeriver: (deriver) => {
+          hudDeriverRef.current = deriver;
+        },
+        ...(input.playerModels === undefined ? {} : { playerModels: input.playerModels }),
+        ...(input.selectedPlayerModelId === undefined
+          ? {}
+          : { selectedPlayerModelId: input.selectedPlayerModelId }),
+        ...(input.objectTypes === undefined ? {} : { objectTypes: input.objectTypes }),
       });
       loadedPlugins.push(plugin);
       await logRuntimeInfo(input.logger, `Plugin ${install.pluginId} loaded`, {
@@ -395,12 +537,24 @@ export const startPlaytestRuntimeHost = async (input: {
     maybeNotifyPlaytestChanged();
 
     const interval = setInterval(() => {
+      const tickStartedAt = performance.now();
       void Effect.runPromise(runtime.step(1)).then(() => {
+        diagnosticsRecorder.recordTick(performance.now() - tickStartedAt);
         metricsState.state.tickCount += 1;
         tickState.tickCount = metricsState.state.tickCount;
         metricsState.state.playerCount = countPlayers(pluginWorld);
         metricsState.recordEvent(`onTick:${metricsState.state.tickCount}`);
         flushPluginFrames();
+        maybeNotifyPlaytestChanged();
+      }).catch((cause) => {
+        const message = errorMessage(cause);
+        diagnosticsRecorder.recordError(message);
+        metricsState.recordEvent(`runtime-error:${message}`);
+        void logRuntimeError(input.logger, "Playtest plugin runtime tick failed", {
+          sessionId: input.sessionId,
+          pluginIds,
+          message,
+        });
         maybeNotifyPlaytestChanged();
       });
     }, TICK_MS);
@@ -422,24 +576,25 @@ export const startPlaytestRuntimeHost = async (input: {
     return metricsState.getMetrics();
   } catch (cause) {
     const message = errorMessage(cause);
-    metricsState.recordEvent(`startup-failed: ${message}`);
-    activeRuntimes.set(input.sessionId, {
-      getMetrics: metricsState.getMetrics,
-      stop: async () => {},
-    });
-    maybeNotifyPlaytestChanged();
+    sessionStates.delete(input.sessionId);
+    activeRuntimes.delete(input.sessionId);
     await logRuntimeError(input.logger, "Playtest plugin runtime startup failed", {
       sessionId: input.sessionId,
       pluginIds,
       message,
     });
     for (const plugin of loadedPlugins) {
-      plugin.onShutdown?.();
+      try {
+        plugin.onShutdown?.();
+      } catch {
+        // Startup is already failing; keep the original boundary error visible.
+      }
     }
     if (gameRuntime) {
       await Effect.runPromise(gameRuntime.stop()).catch(() => undefined);
     }
-    return metricsState.getMetrics();
+    maybeNotifyPlaytestChanged();
+    throw new Error(`Playtest runtime startup failed: ${message}`, { cause });
   }
 };
 

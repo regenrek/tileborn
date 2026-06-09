@@ -1,8 +1,11 @@
-import type { BrandConfig } from "@tileborne/core";
+import type { BrandConfig, HudLayout } from "@tileborne/core";
 import { useCallback, useEffect, type CSSProperties, type ReactElement, type ReactNode } from "react";
 
 import { defaultBrandConfig } from "../config/default-brand.js";
 import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
+import { HudOverlay, type HudInsets } from "../hud/hud-overlay.js";
+import type { HudMetrics } from "../hud/hud-state.js";
+import type { HudWidgetRegistration } from "../hud/hud-widget-registry.js";
 import {
   initialMenuState,
   type MenuEvent,
@@ -40,6 +43,17 @@ export interface RuntimeRootProps {
    * the static Controls blurb.
    */
   readonly controls?: ControlsTabConfig;
+  /**
+   * In-match HUD wiring (ADR-0027). The app supplies the live HUD metrics
+   * stream, the effective `HudLayout` (plugin default ⊕ user overlay), custom
+   * widget registrations for plugin-declared kinds, and optional render-area
+   * insets. The HUD chassis mounts over the canvas during `in-match` whenever
+   * metrics are present; the pause scrim layers above it.
+   */
+  readonly hudMetrics?: HudMetrics;
+  readonly hudLayout?: HudLayout;
+  readonly hudWidgets?: readonly HudWidgetRegistration[];
+  readonly hudInsets?: HudInsets;
 }
 
 /**
@@ -59,6 +73,10 @@ export function RuntimeRoot({
   initialState = initialMenuState,
   bootProgress,
   controls,
+  hudMetrics,
+  hudLayout,
+  hudWidgets,
+  hudInsets,
 }: RuntimeRootProps): ReactElement {
   const { state, dispatch } = useMenuMachine(initialState);
 
@@ -132,6 +150,14 @@ export function RuntimeRoot({
         {canvas}
       </div>
       <div className="tb-overlay-layer">
+        {state.phase === "in-match" && hudMetrics !== undefined ? (
+          <HudOverlay
+            metrics={hudMetrics}
+            layout={hudLayout}
+            customWidgets={hudWidgets}
+            hudInsets={hudInsets}
+          />
+        ) : null}
         <MenuShell
           state={state}
           dispatch={dispatchWithEffects}

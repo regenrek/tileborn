@@ -80,6 +80,10 @@ describe('playtest multiplayer modal flow', () => {
     Object.assign(window, {
       tileborne: {
         runtime: {
+          prepareLocalRoomArtifact: vi.fn().mockResolvedValue({
+            mapId: 'map:test',
+            runtimeArtifact: { schemaVersion: 1, maxPlayers: 8 },
+          }),
           startLocalHost: vi.fn().mockResolvedValue({
             baseUrl: 'http://127.0.0.1:8787',
             signingKey: 'local-handoff-signing-key-32-bytes-x',
@@ -136,15 +140,25 @@ describe('playtest multiplayer modal flow', () => {
   });
 
   it('runs hostLocalMatch store action through mocked IPC and fetch', async () => {
-    await usePlaytestMultiplayerStore.getState().hostLocalMatch('map:test');
+    await usePlaytestMultiplayerStore.getState().hostLocalMatch('project:test', 'map:test');
     await waitFor(() => {
       expect(usePlaytestMultiplayerStore.getState().flowPhase).toBe('host-ready');
+    });
+    expect(window.tileborne.runtime.prepareLocalRoomArtifact).toHaveBeenCalledWith({
+      projectId: 'project:test',
+      mapId: 'map:test',
     });
     expect(window.tileborne.runtime.startLocalHost).toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8787/rooms/create',
       expect.objectContaining({ method: 'POST' }),
     );
+    const fetchMock = vi.mocked(fetch);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      mapId: 'map:test',
+      runtimeArtifact: { schemaVersion: 1, maxPlayers: 8 },
+      options: { maxPlayers: 8 },
+    });
     expect(usePlaytestMultiplayerStore.getState().roomReady?.wsUrl).toBe(roomReady.wsUrl);
   });
 

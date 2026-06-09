@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { JsonObject, MapId, PluginId, ProjectId } from "@tileborne/core";
+import { HudLayout, JsonObject, MapId, PluginId, ProjectId } from "@tileborne/core";
 import { ContributionId, GameSettingsScope, PluginContributionZone } from "@tileborne/plugin-api";
 
 import { defineContract } from "../contract.js";
@@ -114,6 +114,14 @@ export const GameModeView = Schema.Struct({
   authoringSettingsPanelId: Schema.optional(Schema.String),
   gameSettingsFormId: Schema.optional(Schema.String),
   gameSettingsForm: Schema.optional(GameSettingsFormView),
+  hudLayoutContributionId: Schema.optional(Schema.String),
+  /**
+   * The mode's default in-match HUD layout discovered from the plugin's
+   * `runtime.hudLayouts` contribution (the engine-owned `@tileborne/core`
+   * `HudLayout` shape). The renderer playtest layers the user's HUD overlay on
+   * top via `resolveEffectiveHudLayout`.
+   */
+  hudLayout: Schema.optional(HudLayout),
   hasAuthoringPanel: Schema.Boolean,
 });
 

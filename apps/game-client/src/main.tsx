@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import "@tileborne/game-client/styles/menu.css";
+import "./index.css";
 
 import { App } from "./app.js";
 

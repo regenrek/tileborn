@@ -2,8 +2,12 @@ import {
   decodeMessage as decodeRuntimeMessage,
   type RuntimeMessage,
 } from '@tileborne/runtime';
+import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
 
-import type { PlaytestHudEvent, PlaytestHudState } from '@/lib/playtest-hud-utils';
+import type {
+  HudEvent as PlaytestHudEvent,
+  HudState as PlaytestHudState,
+} from '@tileborne/game-client';
 import {
   BATTLE_ROYALE_PLUGIN_ID,
   resolvePlaytestPlugin,
@@ -14,6 +18,12 @@ import {
 } from '@/lib/playtest-plugin-bridge';
 
 type ZoneStatusState = NonNullable<PlaytestHudState['zoneStatus']>;
+type InitialServerFrameView = Extract<ServerFrameView, { readonly kind: 'initial' }>;
+type ServerFrameObjectView = NonNullable<InitialServerFrameView['objects']>[number];
+type MinimapObject = NonNullable<PlaytestHudState['minimap']>['objects'][number];
+type LocalPlayerState = NonNullable<PlaytestHudState['localPlayer']>;
+
+const MAX_RECENT_EVENTS = 20;
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);
@@ -25,9 +35,29 @@ export type MultiplayerConnectionPhase = 'idle' | 'connecting' | 'live' | 'error
 
 export interface MultiplayerPlayerState {
   readonly playerId: string;
+  readonly team?: string;
   readonly x: number;
   readonly y: number;
   readonly health: number;
+  readonly shield?: number;
+  readonly armor?: NonNullable<PlaytestHudState['localPlayer']>['armor'];
+  readonly weapon?: NonNullable<PlaytestHudState['localPlayer']>['weapon'];
+  readonly inventory?: NonNullable<PlaytestHudState['localPlayer']>['inventory'];
+  readonly pickupPrompt?: NonNullable<PlaytestHudState['localPlayer']>['pickupPrompt'];
+  readonly pickupToast?: NonNullable<LocalPlayerState['pickupToast']>;
+  readonly damageIndicator?: NonNullable<LocalPlayerState['damageIndicator']>;
+  readonly stats?: NonNullable<PlaytestHudState['localPlayer']>['stats'];
+  readonly statusEffects?: NonNullable<PlaytestHudState['localPlayer']>['statusEffects'];
+  readonly abilityCooldowns?: NonNullable<PlaytestHudState['localPlayer']>['abilityCooldowns'];
+}
+
+interface MultiplayerObjectState {
+  readonly objectId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly pickup?: ServerFrameObjectView['pickup'];
+  readonly lootSource?: ServerFrameObjectView['lootSource'];
+  readonly hazard?: ServerFrameObjectView['hazard'];
 }
 
 export interface MultiplayerSessionState {
@@ -64,9 +94,20 @@ const toInitialFrame = (
     tick,
     players: players.map((player) => ({
       playerId: player.playerId,
+      ...(player.team === undefined ? {} : { team: player.team }),
       x: player.x,
       y: player.y,
       health: player.health,
+      ...(player.shield === undefined ? {} : { shield: player.shield }),
+      ...(player.armor === undefined ? {} : { armor: player.armor }),
+      ...(player.weapon === undefined ? {} : { weapon: player.weapon }),
+      ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
+      ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
+      ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
+      ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
+      ...(player.stats === undefined ? {} : { stats: player.stats }),
+      ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
+      ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: player.abilityCooldowns }),
     })),
     zone,
   });
@@ -89,11 +130,14 @@ export class PlaytestMultiplayerClient {
   private zone: ZoneView = defaultZone(64, 64);
   private zoneStatus: ZoneStatusState = { phase: 'stable' };
   private readonly recentEvents: PlaytestHudEvent[] = [];
+  private readonly seenPickupToastKeys = new Set<string>();
   private gameOver: PlaytestHudState['gameOver'];
   private maxPlayersSeen = 0;
+  private objects = new Map<string, MultiplayerObjectState>();
   private phase: MultiplayerConnectionPhase = 'idle';
   private errorMessage: string | null = null;
   private onSnapshotFrame: ((frame: unknown) => void) | undefined;
+  private lastSnapshotAckTick = -1;
 
   constructor(
     private readonly mapWidth: number,
@@ -147,7 +191,46 @@ export class PlaytestMultiplayerClient {
             totalPlayers,
             tickCount: this.tick,
           };
-    return {
+    const scoreboard = [...this.players.values()]
+      .map((player) => ({
+        playerId: player.playerId,
+        displayName: formatPlayerDisplayName(player.playerId),
+        ...(player.team === undefined ? {} : { team: player.team }),
+        health: player.health,
+        alive: player.health > 0,
+        kills: player.stats?.kills ?? 0,
+        deaths: player.stats?.deaths ?? 0,
+      }))
+      .sort((left, right) => right.kills - left.kills || left.playerId.localeCompare(right.playerId));
+    const minimapObjects: MinimapObject[] = [...this.objects.values()]
+      .flatMap((object): MinimapObject[] => {
+        if (object.hazard?.enabled) {
+          return [{ objectId: object.objectId, x: object.x, y: object.y, kind: 'hazard' as const }];
+        }
+        if (object.pickup !== undefined) {
+          return [{
+            objectId: object.objectId,
+            x: object.x,
+            y: object.y,
+            kind: 'pickup' as const,
+            tier: object.pickup.tier,
+            available: object.pickup.available,
+          }];
+        }
+        if (object.lootSource !== undefined) {
+          return [{
+            objectId: object.objectId,
+            x: object.x,
+            y: object.y,
+            kind: 'loot' as const,
+            tier: object.lootSource.tier,
+            available: !object.lootSource.collected,
+          }];
+        }
+        return [];
+      })
+      .sort((left, right) => left.objectId.localeCompare(right.objectId));
+    const hud: PlaytestHudState = {
       totalPlayers,
       recentEvents: gameOver
         ? this.recentEvents.map((event) =>
@@ -166,14 +249,72 @@ export class PlaytestMultiplayerClient {
             localPlayer: {
               playerId: localPlayer.playerId,
               displayName: formatPlayerDisplayName(localPlayer.playerId),
+              ...(localPlayer.team === undefined ? {} : { team: localPlayer.team }),
               health: localPlayer.health,
               maxHealth: 100,
+              position: { x: localPlayer.x, y: localPlayer.y },
+              ...(localPlayer.shield === undefined ? {} : { shield: localPlayer.shield }),
+              ...(localPlayer.armor === undefined ? {} : { armor: localPlayer.armor }),
+              ...(localPlayer.weapon === undefined ? {} : { weapon: localPlayer.weapon }),
+              ...(localPlayer.inventory === undefined ? {} : { inventory: localPlayer.inventory }),
+              ...(localPlayer.pickupPrompt === undefined ? {} : { pickupPrompt: localPlayer.pickupPrompt }),
+              ...(localPlayer.pickupToast === undefined ? {} : { pickupToast: localPlayer.pickupToast }),
+              ...(localPlayer.damageIndicator === undefined ? {} : { damageIndicator: localPlayer.damageIndicator }),
+              ...(localPlayer.stats === undefined ? {} : { stats: localPlayer.stats }),
+              ...(localPlayer.statusEffects === undefined ? {} : { statusEffects: localPlayer.statusEffects }),
+              ...(localPlayer.abilityCooldowns === undefined ? {} : { abilityCooldowns: localPlayer.abilityCooldowns }),
             },
           }
         : {}),
       zoneStatus: this.zoneStatus,
+      scoreboard,
+      minimap: {
+        zone: this.zone,
+        players: [...this.players.values()]
+          .map((player) => ({
+            playerId: player.playerId,
+            x: player.x,
+            y: player.y,
+            local: player.playerId === this.localPlayerId,
+            alive: player.health > 0,
+            health: player.health,
+          }))
+          .sort((left, right) => left.playerId.localeCompare(right.playerId)),
+        objects: minimapObjects,
+      },
       ...(gameOver ? { gameOver } : {}),
     };
+    return hud;
+  }
+
+  private pushRecentEvent(event: PlaytestHudEvent): void {
+    this.recentEvents.push(event);
+    if (this.recentEvents.length > MAX_RECENT_EVENTS) {
+      this.recentEvents.shift();
+    }
+  }
+
+  private recordLocalPickupToast(): void {
+    const localPlayer = this.localPlayerId ? this.players.get(this.localPlayerId) : undefined;
+    const pickupToast = localPlayer?.pickupToast;
+    if (localPlayer === undefined || pickupToast === undefined) {
+      return;
+    }
+    const key = `${localPlayer.playerId}:${pickupToast.itemKind}:${pickupToast.tier}:${pickupToast.quantity}:${pickupToast.tick}`;
+    if (this.seenPickupToastKeys.has(key)) {
+      return;
+    }
+    this.seenPickupToastKeys.add(key);
+    this.pushRecentEvent({
+      _tag: 'PickupCollected',
+      playerId: localPlayer.playerId,
+      playerDisplayName: formatPlayerDisplayName(localPlayer.playerId),
+      itemKind: pickupToast.itemKind,
+      tier: pickupToast.tier,
+      quantity: pickupToast.quantity,
+      tick: pickupToast.tick,
+      emittedAtMs: Date.now(),
+    });
   }
 
   private emitState(): void {
@@ -231,13 +372,36 @@ export class PlaytestMultiplayerClient {
       for (const player of message.players) {
         this.players.set(player.playerId, {
           playerId: player.playerId,
+          ...(player.team === undefined ? {} : { team: player.team }),
           x: player.x,
           y: player.y,
           health: player.health,
+          ...(player.shield === undefined ? {} : { shield: player.shield }),
+          ...(player.armor === undefined ? {} : { armor: player.armor }),
+          ...(player.weapon === undefined ? {} : { weapon: player.weapon }),
+          ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
+          ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
+          ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
+          ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
+          ...(player.stats === undefined ? {} : { stats: player.stats }),
+          ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
+          ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: player.abilityCooldowns }),
+        });
+      }
+      this.objects.clear();
+      for (const object of message.objects ?? []) {
+        this.objects.set(object.objectId, {
+          objectId: object.objectId,
+          x: object.x,
+          y: object.y,
+          ...(object.pickup === undefined ? {} : { pickup: object.pickup }),
+          ...(object.lootSource === undefined ? {} : { lootSource: object.lootSource }),
+          ...(object.hazard === undefined ? {} : { hazard: object.hazard }),
         });
       }
       this.maxPlayersSeen = Math.max(this.maxPlayersSeen, this.players.size);
       this.phase = 'live';
+      this.recordLocalPickupToast();
       this.emitState();
       return;
     }
@@ -259,14 +423,50 @@ export class PlaytestMultiplayerClient {
           y: this.mapHeight / 2,
           health: 100,
         };
+        const shield = updated.shield ?? current.shield;
+        const armor = updated.armor ?? current.armor;
+        const weapon = updated.weapon ?? current.weapon;
+        const inventory = updated.inventory ?? current.inventory;
+        const pickupPrompt = updated.pickupPrompt ?? current.pickupPrompt;
+        const pickupToast = updated.pickupToast ?? current.pickupToast;
+        const damageIndicator = updated.damageIndicator ?? current.damageIndicator;
+        const stats = updated.stats ?? current.stats;
+        const statusEffects = updated.statusEffects ?? current.statusEffects;
+        const abilityCooldowns = updated.abilityCooldowns ?? current.abilityCooldowns;
+        const team = updated.team ?? current.team;
         this.players.set(updated.playerId, {
           playerId: updated.playerId,
+          ...(team === undefined ? {} : { team }),
           x: updated.x ?? current.x,
           y: updated.y ?? current.y,
           health: updated.health ?? current.health,
+          ...(shield === undefined ? {} : { shield }),
+          ...(armor === undefined ? {} : { armor }),
+          ...(weapon === undefined ? {} : { weapon }),
+          ...(inventory === undefined ? {} : { inventory }),
+          ...(pickupPrompt === undefined ? {} : { pickupPrompt }),
+          ...(pickupToast === undefined ? {} : { pickupToast }),
+          ...(damageIndicator === undefined ? {} : { damageIndicator }),
+          ...(stats === undefined ? {} : { stats }),
+          ...(statusEffects === undefined ? {} : { statusEffects }),
+          ...(abilityCooldowns === undefined ? {} : { abilityCooldowns }),
+        });
+      }
+      for (const removed of message.objectsRemoved ?? []) {
+        this.objects.delete(removed);
+      }
+      for (const object of message.objectsUpdated ?? []) {
+        this.objects.set(object.objectId, {
+          objectId: object.objectId,
+          x: object.x,
+          y: object.y,
+          ...(object.pickup === undefined ? {} : { pickup: object.pickup }),
+          ...(object.lootSource === undefined ? {} : { lootSource: object.lootSource }),
+          ...(object.hazard === undefined ? {} : { hazard: object.hazard }),
         });
       }
       this.maxPlayersSeen = Math.max(this.maxPlayersSeen, this.players.size);
+      this.recordLocalPickupToast();
       this.emitState();
       return;
     }
@@ -291,7 +491,7 @@ export class PlaytestMultiplayerClient {
       return;
     }
     if (message.kind === 'killed') {
-      this.recentEvents.push({
+      this.pushRecentEvent({
         _tag: 'PlayerKilled',
         victimId: message.victim,
         victimDisplayName: formatPlayerDisplayName(message.victim),
@@ -311,7 +511,7 @@ export class PlaytestMultiplayerClient {
         totalPlayers: Math.max(this.maxPlayersSeen, this.players.size),
         tickCount: this.tick,
       };
-      this.recentEvents.push({
+      this.pushRecentEvent({
         _tag: 'GameOver',
         winnerId: message.winner,
         winnerDisplayName,
@@ -322,6 +522,15 @@ export class PlaytestMultiplayerClient {
       });
       this.emitState();
     }
+  }
+
+  private sendSnapshotAck(socket: WebSocket, tick: number): void {
+    if (socket.readyState !== WebSocket.OPEN || tick <= this.lastSnapshotAckTick) {
+      return;
+    }
+    const ackBytes = this.plugin.encodeSnapshotAckFrame(tick, Date.now());
+    socket.send(toArrayBuffer(ackBytes));
+    this.lastSnapshotAckTick = tick;
   }
 
   connect(wsUrl: string, localPlayerId: string): void {
@@ -367,6 +576,9 @@ export class PlaytestMultiplayerClient {
           this.onSnapshotFrame?.(pluginFrame);
         }
         this.handlePluginFrameView(frameView);
+        if (frameView.kind === 'initial' || frameView.kind === 'delta') {
+          this.sendSnapshotAck(socket, frameView.tick);
+        }
         return;
       } catch {
         // Fall through to runtime wire codec used by game-host.
@@ -396,7 +608,7 @@ export class PlaytestMultiplayerClient {
 
   /**
    * Send a single client input frame. The renderer hands us a high-level
-   * direction + shoot flag + optional aim/weapon hints; we encode them through
+   * direction + action flags + optional aim/weapon hints; we encode them through
    * the plugin bridge (`encodeClientInputFrame`) which is the single point
    * that knows the on-the-wire shape. ADR-0014 Phase 1 boundary invariant:
    * this is the only place outgoing inputs are constructed.
@@ -404,7 +616,14 @@ export class PlaytestMultiplayerClient {
   sendInput(
     dir: InputDirection | undefined,
     shoot = false,
-    options?: { readonly aimDeg?: number; readonly weaponSlot?: number },
+    options?: {
+      readonly reload?: boolean;
+      readonly interact?: boolean;
+      readonly drop?: boolean;
+      readonly abilities?: readonly BattleRoyaleAbilityId[];
+      readonly aimDeg?: number;
+      readonly swapSlot?: number;
+    },
   ): void {
     const socket = this.socket;
     const localPlayerId = this.localPlayerId;
@@ -417,8 +636,12 @@ export class PlaytestMultiplayerClient {
       seq: this.seq,
       ...(dir === undefined ? {} : { dir }),
       shoot,
+      reload: options?.reload ?? false,
+      interact: options?.interact ?? false,
+      drop: options?.drop ?? false,
+      abilities: options?.abilities ?? [],
       ...(options?.aimDeg !== undefined ? { aimDeg: options.aimDeg } : {}),
-      ...(options?.weaponSlot !== undefined ? { weaponSlot: options.weaponSlot } : {}),
+      ...(options?.swapSlot !== undefined ? { swapSlot: options.swapSlot } : {}),
     });
     socket.send(toArrayBuffer(brFrame));
   }
@@ -433,14 +656,17 @@ export class PlaytestMultiplayerClient {
       this.socket = null;
     }
     this.players.clear();
+    this.objects.clear();
     this.localPlayerId = null;
     this.seq = 0;
     this.tick = 0;
+    this.lastSnapshotAckTick = -1;
     this.phase = 'idle';
     this.errorMessage = null;
     this.zone = defaultZone(this.mapWidth, this.mapHeight);
     this.zoneStatus = { phase: 'stable' };
     this.recentEvents.length = 0;
+    this.seenPickupToastKeys.clear();
     this.gameOver = undefined;
     this.maxPlayersSeen = 0;
   }

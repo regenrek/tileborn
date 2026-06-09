@@ -4,6 +4,7 @@ export * from "./contributions.js";
 export * from "./errors.js";
 export * from "./game-mode.js";
 export * from "./game-settings-form.js";
+export * from "./hud-layout-registry.js";
 export * from "./input-map-registry.js";
 export * from "./manifest.js";
 export * from "./permissions.js";

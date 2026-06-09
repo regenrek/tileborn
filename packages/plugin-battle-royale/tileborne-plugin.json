@@ -85,7 +85,7 @@
         "_tag": "AssetPackContribution",
         "id": "battle-royale-core",
         "name": "Battle Royale Core Assets",
-        "path": "./assets/index.json",
+        "path": "./assets/core",
         "license": {
           "spdxId": "MIT",
           "attribution": "Tileborne"
@@ -263,8 +263,8 @@
                   "id": "weapon:00000000-0000-4000-8000-000000000001",
                   "damage": 25,
                   "cooldownTicks": 8,
-                  "magazineSize": 1,
-                  "reloadTicks": 0
+                  "magazineSize": 3,
+                  "reloadTicks": 12
                 },
                 "delivery": {
                   "_tag": "ProjectileDelivery",
@@ -296,8 +296,14 @@
               { "action": "core.Move", "valueKind": "analog2d" },
               { "action": "core.Aim", "valueKind": "pointer" },
               { "action": "core.PrimaryAction", "valueKind": "digital" },
+              { "action": "core.SecondaryAction", "valueKind": "digital" },
+              { "action": "core.Dash", "valueKind": "digital" },
               { "action": "core.Reload", "valueKind": "digital" },
               { "action": "core.Interact", "valueKind": "digital" },
+              { "action": "battle-royale.ScanPulse", "valueKind": "digital" },
+              { "action": "battle-royale.PlaceTrap", "valueKind": "digital" },
+              { "action": "battle-royale.DeployDecoy", "valueKind": "digital" },
+              { "action": "battle-royale.DropItem", "valueKind": "digital" },
               { "action": "core.Slot1", "valueKind": "digital" },
               { "action": "core.Slot2", "valueKind": "digital" },
               { "action": "core.Slot3", "valueKind": "digital" },
@@ -316,6 +322,13 @@
                 { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowRight" }, "axisRole": "x+" },
                 { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "key", "code": "Space" } },
                 { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "mouseButton", "button": 0 } },
+                { "_tag": "InputBinding", "action": "core.SecondaryAction", "trigger": { "_tag": "key", "code": "ShiftLeft" } },
+                { "_tag": "InputBinding", "action": "core.SecondaryAction", "trigger": { "_tag": "key", "code": "ShiftRight" } },
+                { "_tag": "InputBinding", "action": "core.Dash", "trigger": { "_tag": "key", "code": "KeyF" } },
+                { "_tag": "InputBinding", "action": "battle-royale.ScanPulse", "trigger": { "_tag": "key", "code": "KeyQ" } },
+                { "_tag": "InputBinding", "action": "battle-royale.PlaceTrap", "trigger": { "_tag": "key", "code": "KeyT" } },
+                { "_tag": "InputBinding", "action": "battle-royale.DeployDecoy", "trigger": { "_tag": "key", "code": "KeyC" } },
+                { "_tag": "InputBinding", "action": "battle-royale.DropItem", "trigger": { "_tag": "key", "code": "KeyG" } },
                 { "_tag": "InputBinding", "action": "core.Reload", "trigger": { "_tag": "key", "code": "KeyR" } },
                 { "_tag": "InputBinding", "action": "core.Interact", "trigger": { "_tag": "key", "code": "KeyE" } },
                 { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
@@ -331,6 +344,33 @@
                 { "_tag": "InputBinding", "action": "core.Slot5", "trigger": { "_tag": "key", "code": "Numpad5" } }
               ]
             }
+          }
+        }
+      ],
+      "hudLayouts": [
+        {
+          "_tag": "DeclarativeRuntimeHudLayoutContribution",
+          "id": "br-hud-layout",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale HUD",
+            "description": "Default in-match HUD arrangement: player status + team roster top-left, alive count + minimap + scoreboard top-right, zone status + pickup prompt + weapon panel bottom-center, kill feed bottom-left, toasts + damage indicator centered."
+          },
+          "data": {
+            "id": "br-default-hud",
+            "widgets": [
+              { "id": "local-player", "kind": "core.LocalPlayerStatus", "anchor": "top-left", "order": 0, "enabled": true },
+              { "id": "team-roster", "kind": "core.TeamRoster", "anchor": "top-left", "order": 1, "enabled": true },
+              { "id": "alive-count", "kind": "core.AliveCount", "anchor": "top-right", "order": 0, "enabled": true },
+              { "id": "minimap", "kind": "core.Minimap", "anchor": "top-right", "order": 1, "enabled": true },
+              { "id": "scoreboard", "kind": "core.Scoreboard", "anchor": "top-right", "order": 2, "enabled": true },
+              { "id": "zone-status", "kind": "core.ZoneStatus", "anchor": "bottom-center", "order": 0, "enabled": true },
+              { "id": "pickup-prompt", "kind": "core.PickupPrompt", "anchor": "bottom-center", "order": 1, "enabled": true },
+              { "id": "weapon-panel", "kind": "core.WeaponPanel", "anchor": "bottom-center", "order": 2, "enabled": true },
+              { "id": "kill-feed", "kind": "core.KillFeed", "anchor": "bottom-left", "order": 0, "enabled": true },
+              { "id": "event-toast", "kind": "core.EventToast", "anchor": "center", "order": 0, "enabled": true },
+              { "id": "damage-indicator", "kind": "core.DamageIndicator", "anchor": "center", "order": 1, "enabled": true }
+            ]
           }
         }
       ],

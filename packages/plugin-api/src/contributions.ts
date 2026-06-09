@@ -241,6 +241,18 @@ export type RuntimeClientSystemContribution = typeof RuntimeClientSystemContribu
 export const RuntimeHudWidgetContribution = defineExecutableContributionSlot("RuntimeHudWidget");
 export type RuntimeHudWidgetContribution = typeof RuntimeHudWidgetContribution.Type;
 
+/**
+ * Declarative HUD LAYOUT contribution: a game-mode plugin's default in-match
+ * HUD arrangement as `@tileborne/core` `HudLayout` data (which widget kinds,
+ * which anchor, order, visibility, offsets). Decoded by
+ * `decodeHudLayout` and merged with the user's HUD customisation via
+ * `resolveEffectiveHudLayout`. Distinct from {@link RuntimeHudWidgetContribution},
+ * which is the EXECUTABLE widget-implementation slot for the shipped
+ * game-client (ADR-0022); this slot is pure data and renderer-safe (ADR-0001).
+ */
+export const RuntimeHudLayoutContribution = defineDeclarativeContributionSlot("RuntimeHudLayout");
+export type RuntimeHudLayoutContribution = typeof RuntimeHudLayoutContribution.Type;
+
 export const RuntimeLobbyPanelContribution = defineExecutableContributionSlot("RuntimeLobbyPanel");
 export type RuntimeLobbyPanelContribution = typeof RuntimeLobbyPanelContribution.Type;
 
@@ -343,6 +355,7 @@ export class RuntimeContributions extends Schema.Class<RuntimeContributions>("Ru
   assetLoaders: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeAssetLoaderContribution)),
   clientSystems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeClientSystemContribution)),
   hudWidgets: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeHudWidgetContribution)),
+  hudLayouts: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeHudLayoutContribution)),
   lobbyPanels: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeLobbyPanelContribution)),
   menuSections: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeMenuSectionContribution)),
   inputMaps: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInputMapContribution)),

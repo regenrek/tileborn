@@ -18,6 +18,7 @@
  */
 import {
   PLUGIN_ID,
+  battleRoyaleDefaultHudLayout,
   battleRoyaleDefaultInputMap,
   createBattleRoyaleBundledAssets,
   createInitialFrame,
@@ -26,10 +27,12 @@ import {
   decodeServerFrame,
   encodeClientInputFrame,
   encodeHeartbeatFrame,
+  encodeSnapshotAckFrame,
   encodeServerFrame,
+  requiredBattleRoyaleRenderableAssetIds,
   resolveBattleRoyaleInputIntent,
   serverFrameToView,
-} from '@tileborne/plugin-battle-royale';
+} from '@tileborne/plugin-battle-royale/renderer';
 import {
   ARENA_INPUT_MAP_CONTRIBUTION_ID,
   ARENA_PLUGIN_ID,
@@ -41,19 +44,26 @@ import {
   decodeServerFrame as decodeArenaServerFrame,
   encodeClientInputFrame as encodeArenaClientInputFrame,
   encodeHeartbeatFrame as encodeArenaHeartbeatFrame,
+  encodeSnapshotAckFrame as encodeArenaSnapshotAckFrame,
   encodeServerFrame as encodeArenaServerFrame,
   serverFrameToView as arenaServerFrameToView,
 } from '@tileborne/plugin-example-arena';
 import {
   controlScheme,
   coreActionId,
+  standardHudLayout,
   CONTROL_SCHEMES,
   CORE_ACTIONS,
   type ActionState,
   type ControlScheme,
+  type HudLayout,
   type InputMap,
 } from '@tileborne/core';
-import { decodeInputMap, resolveEffectiveInputMap } from '@tileborne/plugin-api';
+import {
+  decodeInputMap,
+  resolveEffectiveHudLayout,
+  resolveEffectiveInputMap,
+} from '@tileborne/plugin-api';
 import { Result } from 'effect';
 import {
   deriveInputCaptureProfile,
@@ -61,16 +71,19 @@ import {
   type ResolvedInputIntent,
 } from './playtest-input';
 import { loadUserInputOverlay } from './playtest-user-bindings';
+import { loadUserHudOverlay } from './playtest-user-hud';
 import type {
   BattleRoyaleProjectorConfig,
   ClientFrameView,
   ClientInputFrame,
   InitialFrameInput,
   InputDirection,
+  PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
+  VisualRoleRenderData,
   ZoneView,
-} from '@tileborne/plugin-battle-royale';
+} from '@tileborne/plugin-battle-royale/renderer';
 import type {
   BundledAssetSpec,
   RenderableEntityProjector,
@@ -101,8 +114,10 @@ export type {
   ClientInputFrame,
   InitialFrameInput,
   InputDirection,
+  PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
+  VisualRoleRenderData,
   ZoneView,
 };
 
@@ -115,16 +130,20 @@ export type {
 export interface PlaytestPlayerModelConfig {
   /** modelId -> resolved render data (atlas + animation frames + anchor). */
   readonly catalog: ReadonlyMap<string, PlayerModelRenderData>;
-  /** Fallback per-player selection when the wire snapshot omits modelId. */
-  readonly playerModelIds: ReadonlyMap<string, string>;
-  /** Final fallback model id applied to any player without a resolved selection. */
-  readonly defaultModelId?: string;
   /** Installed-pack atlas textures the runtime must load for the catalog models. */
+  readonly atlasAssets: readonly BundledAssetSpec[];
+}
+
+export interface PlaytestVisualRoleConfig {
+  /** visualRoleKind -> resolved render data (atlas + animation frames + anchor). */
+  readonly catalog: ReadonlyMap<string, VisualRoleRenderData>;
+  /** Installed-pack atlas textures the runtime must load for the role refs. */
   readonly atlasAssets: readonly BundledAssetSpec[];
 }
 
 export interface ResolvePlaytestPluginOptions {
   readonly playerModels?: PlaytestPlayerModelConfig;
+  readonly visualRoles?: PlaytestVisualRoleConfig;
   /**
    * The user's persisted keybind remap overlay (ADR-0024). When provided it is
    * layered on the plugin defaults via `resolveEffectiveInputMap`; when omitted
@@ -135,7 +154,46 @@ export interface ResolvePlaytestPluginOptions {
    * `pluginDefault ⊕ overlay`, deterministic + non-destructive.
    */
   readonly userInputOverlay?: InputMap;
+  /**
+   * The user's persisted HUD customisation overlay (same overlay model as
+   * {@link userInputOverlay}). When omitted it is loaded from the renderer
+   * prefs store ({@link loadUserHudOverlay}). The effective layout the HUD
+   * renderer consumes is always `pluginDefault ⊕ overlay`.
+   */
+  readonly userHudOverlay?: HudLayout;
+  /**
+   * The mode's default HUD layout DISCOVERED from its manifest
+   * (`runtime.hudLayouts` via the `gameModes` IPC). When provided it is the
+   * base layout (so an installed third-party mode's manifest wins); the
+   * code-built default of the bundled plugin is only the fallback for callers
+   * without manifest access (tests, host bootstrap).
+   */
+  readonly manifestHudLayout?: HudLayout;
+  /**
+   * The PROJECT's designer-authored HUD layout overlay (persisted in the
+   * project manifest's settings bag, `project-hud-layout.ts`). Sits between
+   * the plugin default and the player's personal overlay:
+   * `pluginDefault ⊕ project ⊕ player`.
+   */
+  readonly projectHudLayout?: HudLayout;
 }
+
+/**
+ * Resolve the three HUD layout layers into the effective in-match layout:
+ * plugin default (manifest-discovered or bundled) ⊕ project overlay ⊕ player
+ * overlay. Each step is the same non-destructive merge, so absent layers are
+ * free.
+ */
+const resolveHudLayoutLayers = (
+  base: HudLayout,
+  options: ResolvePlaytestPluginOptions,
+): HudLayout => {
+  const withProject =
+    options.projectHudLayout === undefined
+      ? base
+      : resolveEffectiveHudLayout(base, options.projectHudLayout);
+  return resolveEffectiveHudLayout(withProject, options.userHudOverlay ?? loadUserHudOverlay());
+};
 
 export interface ResolvedPlaytestPlugin {
   readonly projector: RenderableEntityProjector<unknown>;
@@ -148,6 +206,14 @@ export interface ResolvedPlaytestPlugin {
    */
   readonly manifest: RuntimePluginRenderManifest;
   /**
+   * The mode's EFFECTIVE in-match HUD layout: the plugin's contributed default
+   * (`RuntimeHudLayout` slot data) with the project's designer overlay and the
+   * user's persisted HUD customisation overlay applied (in that order). The
+   * HUD renderer consumes this generically — which widgets exist, where they
+   * sit, and how many there are is entirely layout data, never shell code.
+   */
+  readonly hudLayout: HudLayout;
+  /**
    * Decode a single plugin-emitted wire frame into the opaque snapshot value
    * the projector consumes. Returns `undefined` when the bytes are not
    * recognised. The shell calls this for `tileborne:runtime:snapshot` IPC
@@ -159,6 +225,7 @@ export interface ResolvedPlaytestPlugin {
   readonly createInitialFrame: (input: InitialFrameInput) => unknown;
   readonly encodeClientInputFrame: (input: ClientInputFrame) => Uint8Array;
   readonly encodeHeartbeatFrame: (tick: number) => Uint8Array;
+  readonly encodeSnapshotAckFrame: (tick: number, receivedAtMs: number) => Uint8Array;
   readonly encodeServerFrame: (frame: unknown) => Uint8Array;
   readonly decodeClientFrameView: (bytes: Uint8Array) => ClientFrameView | undefined;
   /**
@@ -174,7 +241,7 @@ export interface ResolvedPlaytestPlugin {
   readonly inputCaptureProfile: InputCaptureProfile;
   /**
    * The plugin's action→intent adapter: maps a neutral `ActionState` into the
-   * `{ dir, shoot, aimDeg, weaponSlot }` intent the runtime expects, with
+   * `{ dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot }` intent the runtime expects, with
    * `dir` omitted when there is no movement. This is the ONLY place the
    * renderer learns what an action "does".
    */
@@ -193,18 +260,16 @@ type ModeRenderProvider = (options: ResolvePlaytestPluginOptions) => ResolvedPla
 
 const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
   const projectorConfig: BattleRoyaleProjectorConfig | undefined =
-    options.playerModels === undefined
+    options.playerModels === undefined && options.visualRoles === undefined
       ? undefined
       : {
-          catalog: options.playerModels.catalog,
-          playerModelIds: options.playerModels.playerModelIds,
-          ...(options.playerModels.defaultModelId === undefined
-            ? {}
-            : { defaultModelId: options.playerModels.defaultModelId }),
+          ...(options.playerModels === undefined ? {} : { catalog: options.playerModels.catalog }),
+          ...(options.visualRoles === undefined ? {} : { visualRoles: options.visualRoles.catalog }),
         };
   const projector = createBattleRoyaleProjector(projectorConfig);
   const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
   const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
+  const visualRoleAtlasAssets = registerBundledAssets(options.visualRoles?.atlasAssets ?? []);
   // Build the effective input map = BR plugin defaults ⊕ user remap overlay
   // (ADR-0024). The overlay is the player's persisted rebindings; when none is
   // injected we load it from the renderer prefs store. `resolveEffectiveInputMap`
@@ -213,13 +278,25 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
   const scheme = controlScheme(CONTROL_SCHEMES.KeyboardMouse);
   const userOverlay = options.userInputOverlay ?? loadUserInputOverlay();
   const inputMap = resolveEffectiveInputMap(battleRoyaleDefaultInputMap(), userOverlay);
+  const hudLayout = resolveHudLayoutLayers(
+    options.manifestHudLayout ?? battleRoyaleDefaultHudLayout(),
+    options,
+  );
+  const bundledAssets = [
+    ...registerBundledAssets(createBattleRoyaleBundledAssets()),
+    ...modelAtlasAssets,
+    ...visualRoleAtlasAssets,
+  ];
+  assertBundledAssetsPresent(
+    bundledAssets,
+    requiredBattleRoyaleRenderableAssetIds(),
+    BATTLE_ROYALE_PLUGIN_ID,
+  );
   return {
     projector,
-    bundledAssets: [
-      ...registerBundledAssets(createBattleRoyaleBundledAssets()),
-      ...modelAtlasAssets,
-    ],
+    bundledAssets,
     manifest,
+    hudLayout,
     decodeServerFrame: (bytes) => {
       try {
         return decodeServerFrame(bytes);
@@ -231,6 +308,7 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
     createInitialFrame,
     encodeClientInputFrame,
     encodeHeartbeatFrame,
+    encodeSnapshotAckFrame,
     encodeServerFrame,
     decodeClientFrameView,
     inputMap,
@@ -277,10 +355,17 @@ const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
   const baseInputMap = Result.isSuccess(decoded) ? decoded.success : battleRoyaleDefaultInputMap();
   const userOverlay = options.userInputOverlay ?? loadUserInputOverlay();
   const inputMap = resolveEffectiveInputMap(baseInputMap, userOverlay);
+  // Without a manifest-discovered layout, the engine's neutral baseline
+  // arrangement applies; widgets only render where HUD state exists.
+  const hudLayout = resolveHudLayoutLayers(
+    options.manifestHudLayout ?? standardHudLayout(),
+    options,
+  );
   return {
     projector,
     bundledAssets: registerBundledAssets(createArenaBundledAssets()),
     manifest,
+    hudLayout,
     decodeServerFrame: (bytes) => {
       try {
         return decodeArenaServerFrame(bytes);
@@ -292,6 +377,7 @@ const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
     createInitialFrame: createArenaInitialFrame,
     encodeClientInputFrame: encodeArenaClientInputFrame,
     encodeHeartbeatFrame: encodeArenaHeartbeatFrame,
+    encodeSnapshotAckFrame: encodeArenaSnapshotAckFrame,
     encodeServerFrame: encodeArenaServerFrame,
     decodeClientFrameView: (bytes) =>
       decodeArenaClientFrameView(bytes) as ClientFrameView | undefined,
@@ -302,7 +388,14 @@ const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
       const move = actions.analog.get(ARENA_MOVE_ACTION);
       const dir = move === undefined ? undefined : arenaMoveVectorToDirection(move.x, move.y);
       const shoot = actions.digital.get(ARENA_PRIMARY_ACTION)?.pressed ?? false;
-      return { dir, shoot };
+      return {
+        dir,
+        shoot,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      };
     },
   };
 };
@@ -334,4 +427,18 @@ const registerBundledAssets = (
     registry.register(asset);
   }
   return registry.list();
+};
+
+const assertBundledAssetsPresent = (
+  assets: readonly RegisteredBundledAsset[],
+  requiredAssetIds: readonly string[],
+  pluginId: string,
+): void => {
+  const registered = new Set(assets.map((asset) => String(asset.assetId)));
+  const missing = requiredAssetIds.filter((assetId) => !registered.has(assetId));
+  if (missing.length > 0) {
+    throw new Error(
+      `[playtest] ${pluginId} renderer is missing required bundled asset(s): ${missing.join(', ')}`,
+    );
+  }
 };

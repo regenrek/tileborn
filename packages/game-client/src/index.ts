@@ -61,3 +61,27 @@ export {
 export { BootSplash, type BootSplashProps } from "./components/boot-splash.js";
 export { ErrorPanel, type ErrorPanelProps } from "./components/error-panel.js";
 export { SlotHost, type SlotHostProps } from "./components/slot-host.js";
+
+// HUD chassis (layout-driven; HudLayout DATA comes from plugins/projects/users)
+export {
+  deriveHudWidgetContext,
+  HudOverlay,
+  type HudInsets,
+  type HudOverlayProps,
+  type HudWidgetContext,
+  type HudWidgetProps,
+} from "./hud/hud-overlay.js";
+export {
+  eventKey,
+  formatAlivePlayersLabel,
+  formatZoneStatusLabel,
+  healthPercent,
+  type HudEvent,
+  type HudMetrics,
+  type HudState,
+} from "./hud/hud-state.js";
+export {
+  findInvalidHudWidgetRegistrations,
+  hudWidgetComponents,
+  type HudWidgetRegistration,
+} from "./hud/hud-widget-registry.js";

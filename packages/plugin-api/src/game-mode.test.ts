@@ -29,6 +29,7 @@ const RUNTIME_DEFAULTS = {
   assetLoaders: undefined,
   clientSystems: undefined,
   hudWidgets: undefined,
+  hudLayouts: undefined,
   lobbyPanels: undefined,
   menuSections: undefined,
   inputMaps: undefined,
@@ -106,10 +107,25 @@ const gameSettingsForm = (id: string) => ({
   },
 });
 
+const hudLayoutContribution = (id: string) => ({
+  _tag: "DeclarativeRuntimeHudLayoutContribution" as const,
+  id,
+  kind: "declarative" as const,
+  display: display("Mode HUD"),
+  data: {
+    id: "mode-default-hud",
+    widgets: [
+      { id: "minimap", kind: "core.Minimap", anchor: "top-right", order: 0, enabled: true },
+      { id: "weapon-panel", kind: "core.WeaponPanel", anchor: "bottom-center", order: 0, enabled: true },
+    ],
+  },
+});
+
 const contributions = (parts: {
   readonly panels?: readonly unknown[];
   readonly systems?: readonly unknown[];
   readonly gameSettingsForms?: readonly unknown[];
+  readonly hudLayouts?: readonly unknown[];
 }): PluginContributions =>
   decodeContributions({
     ...CONTRIBUTIONS_DEFAULTS,
@@ -118,7 +134,10 @@ const contributions = (parts: {
       parts.gameSettingsForms === undefined
         ? undefined
         : { ...EDITOR_DEFAULTS, gameSettingsForms: parts.gameSettingsForms },
-    runtime: parts.systems === undefined ? undefined : { ...RUNTIME_DEFAULTS, systems: parts.systems },
+    runtime:
+      parts.systems === undefined && parts.hudLayouts === undefined
+        ? undefined
+        : { ...RUNTIME_DEFAULTS, systems: parts.systems, hudLayouts: parts.hudLayouts },
   });
 
 const BR_PLUGIN_ID = pluginId("@tileborne-plugins/battle-royale");
@@ -180,6 +199,26 @@ describe("game-mode discovery", () => {
     expect(descriptor?.gameSettingsForm?.fields[0]?.label).toBe("Max players");
   });
 
+  it("discovers the mode's default HUD layout from the runtime.hudLayouts slot", () => {
+    const withHud = contributions({
+      systems: [runtimeSystem("br-runtime", "BR")],
+      hudLayouts: [hudLayoutContribution("br-hud-layout")],
+    });
+    const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: withHud });
+    expect(descriptor?.hudLayoutContributionId).toBe("br-hud-layout");
+    expect(descriptor?.hudLayout?.id).toBe("mode-default-hud");
+    expect(descriptor?.hudLayout?.widgets.map((widget) => widget.kind as string)).toEqual([
+      "core.Minimap",
+      "core.WeaponPanel",
+    ]);
+  });
+
+  it("leaves hudLayout undefined when no hudLayouts contribution is declared", () => {
+    const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: brContributions });
+    expect(descriptor?.hudLayoutContributionId).toBeUndefined();
+    expect(descriptor?.hudLayout).toBeUndefined();
+  });
+
   it("ignores a settings panel outside the plugins zone", () => {
     const projectScoped = contributions({
       panels: [panel({ id: "match-rules", zone: "project", title: "Match Rules", capabilities: ["settings"] })],
@@ -199,13 +238,25 @@ describe("game-mode discovery", () => {
     expect(modes[0]?.pluginId).toBe(BR_PLUGIN_ID);
   });
 
-  it("resolves the active mode by selection, defaulting to the first discovered", () => {
-    const modes = discoverGameModes([{ pluginId: BR_PLUGIN_ID, contributions: brContributions }]);
-    expect(resolveActiveGameMode(modes)?.pluginId).toBe(BR_PLUGIN_ID);
+  it("resolves the active mode only when selection is unambiguous", () => {
+    const arenaPluginId = pluginId("@tileborne-plugins/example-arena");
+    const modes = discoverGameModes([
+      { pluginId: BR_PLUGIN_ID, contributions: brContributions },
+      {
+        pluginId: arenaPluginId,
+        contributions: contributions({
+          systems: [runtimeSystem("arena-runtime", "Example Arena")],
+        }),
+      },
+    ]);
+    const singleMode = discoverGameModes([{ pluginId: BR_PLUGIN_ID, contributions: brContributions }]);
+
+    expect(resolveActiveGameMode(singleMode)?.pluginId).toBe(BR_PLUGIN_ID);
+    expect(resolveActiveGameMode(modes)).toBeUndefined();
     expect(resolveActiveGameMode(modes, modes[0]?.modeId)?.pluginId).toBe(BR_PLUGIN_ID);
-    // Unknown selection falls back to the first discovered mode.
+    expect(resolveActiveGameMode(modes, modes[1]?.modeId)?.pluginId).toBe(arenaPluginId);
     const unknown = Schema.decodeUnknownSync(GameModeId)("@tileborne-plugins/missing");
-    expect(resolveActiveGameMode(modes, unknown)?.pluginId).toBe(BR_PLUGIN_ID);
+    expect(resolveActiveGameMode(modes, unknown)).toBeUndefined();
     expect(resolveActiveGameMode([])).toBeUndefined();
   });
 });

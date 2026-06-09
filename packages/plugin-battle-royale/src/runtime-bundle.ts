@@ -1,4 +1,6 @@
 export { createRuntimeAdapter } from "./runtime-adapter.js";
+export { derivePlaytestHudWorldState } from "./hud/world-state.js";
+export type { HudWorldView, PlaytestHudWorldState } from "./hud/world-state.js";
 export {
   decodeHostClientFrame as decodeClientFrame,
   decodeHostClientFrameView as decodeClientFrameView,

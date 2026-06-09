@@ -31,6 +31,7 @@
     "@tanstack/react-virtual": "3.13.26",
     "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
+    "@tileborne/game-client": "workspace:*",
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/plugin-battle-royale": "workspace:*",

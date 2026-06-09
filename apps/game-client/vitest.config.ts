@@ -18,6 +18,10 @@ export default defineConfig({
         "../../packages/plugin-battle-royale/src/menu/index.tsx",
       ),
       "@tileborne/core": resolveSrc("../../packages/core/src/index.ts"),
+      "@tileborne/ipc-contracts/protocols/battle-royale": resolveSrc(
+        "../../packages/ipc-contracts/src/protocols/battle-royale.ts",
+      ),
+      "@tileborne/ipc-contracts": resolveSrc("../../packages/ipc-contracts/src/index.ts"),
       "@tileborne/plugin-api": resolveSrc("../../packages/plugin-api/src/index.ts"),
       "@tileborne/ui": resolveSrc("../../packages/ui/src/index.ts"),
     },

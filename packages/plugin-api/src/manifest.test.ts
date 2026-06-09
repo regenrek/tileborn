@@ -97,6 +97,7 @@ const minimalContributions = {
     assetLoaders: undefined,
     clientSystems: undefined,
     hudWidgets: undefined,
+    hudLayouts: undefined,
     lobbyPanels: undefined,
     menuSections: undefined,
     inputMaps: undefined,

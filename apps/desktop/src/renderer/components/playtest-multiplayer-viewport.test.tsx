@@ -159,7 +159,7 @@ vi.mock('@/lib/playtest-plugin-bridge', () => ({
     inputMap: { id: 'test', actions: [], schemeDefaults: {} },
     controlScheme: 'keyboard-mouse',
     inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
-    resolveInputIntent: vi.fn(() => ({ dir: undefined, shoot: false })),
+    resolveInputIntent: vi.fn(() => ({ dir: undefined, shoot: false, reload: false, interact: false, drop: false, abilities: [] })),
   })),
 }));
 
@@ -171,9 +171,18 @@ const stablePlayerModels = vi.hoisted(() => ({
   selectedModelId: undefined,
   roster: [] as const,
 }));
+const stableVisualRoles = vi.hoisted(() => ({
+  builtRoles: [] as const,
+}));
+vi.mock('@/hooks/mutations', () => ({
+  useUpdateProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
 vi.mock('@/hooks/use-playtest-player-models', () => ({
   usePlaytestPlayerModels: () => stablePlayerModels,
+  usePlaytestVisualRoles: () => stableVisualRoles,
   assemblePlaytestPlayerModelConfig: vi.fn(),
+  assemblePlaytestVisualRoleConfig: vi.fn(),
 }));
 
 vi.mock('@/stores/playtest-multiplayer-store', () => {
@@ -232,7 +241,7 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
       client: null,
       stopHosting: vi.fn(),
     };
-    projectStateMock.current = { settings: undefined };
+    projectStateMock.current = { settings: { activeGameMode: activeModePluginId } };
     vi.mocked(resolvePlaytestPlugin).mockClear();
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
@@ -316,14 +325,20 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
 
     const previousSnapshot = { tag: 'previous' };
     const currentSnapshot = { tag: 'current' };
+    const animation = {
+      clipId: 'maltipoo-mae:idle',
+      frames: [{ assetId: 'pet', uv: { x: 0, y: 0, w: 192, h: 208 }, durationMs: 130 }],
+      loop: true,
+      clockMs: 0,
+    };
     // Local player walks from (0,0) -> (10,20); at alpha 0.5 the interpolated
     // position is (5,10). The discrete `current` would be (10,20).
     projectMock.mockImplementation((snapshot: unknown) => {
       if (snapshot === currentSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20, animation }];
       }
       if (snapshot === previousSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, animation }];
       }
       return [];
     });
@@ -364,8 +379,10 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     expect(alpha).toBe(1);
     expect(previousById).toBeInstanceOf(Map);
     expect((previousById as Map<string, unknown>).size).toBe(0);
-    expect(projected).toEqual([
-      { id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scale: 4 },
-    ]);
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toEqual(
+      expect.objectContaining({ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scaleX: 4, scaleY: 4 }),
+    );
+    expect(projected[0]?.scale).toBeUndefined();
   });
 });

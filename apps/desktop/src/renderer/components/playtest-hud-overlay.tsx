@@ -1,54 +1,68 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { HudAnchor, HudLayout, HudWidgetInstanceId } from '@tileborne/core';
+import { Option } from 'effect';
+import { useMemo } from 'react';
 import {
-  Badge,
+  deriveHudWidgetContext,
+  HudOverlay,
+  type HudInsets,
+  type HudMetrics,
+} from '@tileborne/game-client';
+import {
   Button,
-  cn,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Progress,
-  typography,
 } from '@tileborne/ui';
 
-import {
-  eventKey,
-  formatAlivePlayersLabel,
-  formatZoneStatusLabel,
-  healthPercent,
-  type PlaytestHudMetrics,
-} from '@/lib/playtest-hud-utils';
-
-interface HudInsets {
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-  readonly left: number;
-}
+/**
+ * Editor playtest HUD = the shared layout-driven HUD chassis
+ * (`@tileborne/game-client` `HudOverlay`) plus the editor-owned match-end
+ * dialog. The dialog stays here because "Back to Editor" / "Play Again" are
+ * editor flows, not part of the neutral chassis (same split as ADR-0022's
+ * menu framework).
+ */
 
 interface PlaytestHudOverlayProps {
-  readonly metrics: PlaytestHudMetrics | undefined;
+  readonly metrics: HudMetrics | undefined;
   readonly mapId: string;
   readonly projectId: string;
   readonly onPlayAgain: (projectId: string, mapId: string) => void | Promise<void>;
   readonly onBackToEditor: () => void | Promise<void>;
   readonly isRestarting?: boolean;
-  /**
-   * Plugin-owned HUD insets sourced from `RuntimePluginRenderManifest.hudInsets`
-   * (ADR-0014 Phase 1). Pushes the HUD anchor area inward by the given pixel
-   * amounts. Omitted / all-zero values yield the legacy edge-anchored layout.
-   */
+  /** Plugin-owned HUD insets (ADR-0014 Phase 1); see `HudOverlayProps.hudInsets`. */
   readonly hudInsets?: HudInsets;
+  /** Effective HUD layout (plugin default ⊕ project layout ⊕ user overlay). */
+  readonly layout?: HudLayout;
+  /** Visual HUD-editor mode; see `HudOverlayProps.editing`. */
+  readonly editing?: boolean;
+  readonly onMoveWidget?: (widgetId: HudWidgetInstanceId, anchor: HudAnchor) => void;
 }
 
-interface KillToast {
-  readonly id: string;
-  readonly message: string;
-}
+const normalizeHudLayoutForOverlay = (layout: HudLayout | undefined): HudLayout | undefined => {
+  if (layout === undefined) {
+    return undefined;
+  }
 
-const TOAST_DURATION_MS = 2_000;
+  return {
+    ...layout,
+    widgets: layout.widgets.map((widget) => {
+      const offset = widget.offset as unknown;
+      if (Option.isOption(offset)) {
+        return widget;
+      }
+      return {
+        ...widget,
+        offset:
+          offset === undefined || offset === null
+            ? Option.none()
+            : Option.some(offset as NonNullable<typeof offset>),
+      };
+    }),
+  } as HudLayout;
+};
 
 export function PlaytestHudOverlay({
   metrics,
@@ -58,120 +72,34 @@ export function PlaytestHudOverlay({
   onBackToEditor,
   isRestarting = false,
   hudInsets,
+  layout,
+  editing = false,
+  onMoveWidget,
 }: PlaytestHudOverlayProps) {
-  const insetStyle: CSSProperties | undefined = hudInsets
-    ? {
-        top: hudInsets.top,
-        right: hudInsets.right,
-        bottom: hudInsets.bottom,
-        left: hudInsets.left,
-      }
+  const ctx = deriveHudWidgetContext(metrics);
+  const overlayLayout = useMemo(() => normalizeHudLayoutForOverlay(layout), [layout]);
+  const gameOver = ctx.hud?.gameOver;
+  const localScoreboardEntry = ctx.scoreboard.find(
+    (entry) => entry.playerId === ctx.localPlayer?.playerId,
+  );
+  const localStats =
+    ctx.localPlayer?.stats ??
+    (localScoreboardEntry === undefined
+      ? undefined
+      : { kills: localScoreboardEntry.kills, deaths: localScoreboardEntry.deaths });
+  const winnerScore = gameOver
+    ? ctx.scoreboard.find((entry) => entry.playerId === gameOver.winnerId)
     : undefined;
-  const hud = metrics?.hud;
-  const [toast, setToast] = useState<KillToast | null>(null);
-  const seenEventsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (!hud?.recentEvents.length) {
-      return;
-    }
-
-    for (const event of hud.recentEvents) {
-      const key = eventKey(event);
-      if (seenEventsRef.current.has(key)) {
-        continue;
-      }
-      seenEventsRef.current.add(key);
-      if (event._tag === 'PlayerKilled') {
-        setToast({
-          id: key,
-          message: `${event.victimDisplayName} eliminated`,
-        });
-      }
-    }
-  }, [hud?.recentEvents]);
-
-  useEffect(() => {
-    if (!toast) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setToast(null), TOAST_DURATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  const aliveCount = metrics?.playerCount ?? 0;
-  const totalPlayers = hud?.totalPlayers ?? aliveCount;
-  const localPlayer = hud?.localPlayer;
-  const gameOver = hud?.gameOver;
 
   return (
     <>
-      <div
-        className="pointer-events-none absolute inset-0 z-30"
-        data-testid="playtest-hud-overlay"
-        aria-hidden={!hud}
-        style={insetStyle}
-        data-hud-inset-top={hudInsets?.top}
-        data-hud-inset-right={hudInsets?.right}
-        data-hud-inset-bottom={hudInsets?.bottom}
-        data-hud-inset-left={hudInsets?.left}
-      >
-        <div className="absolute left-3 top-3 flex max-w-[min(16rem,40vw)] flex-col gap-2 sm:left-4 sm:top-4">
-          {localPlayer ? (
-            <div
-              className="pointer-events-auto rounded-lg border border-border/80 bg-background/85 px-3 py-2 shadow-sm backdrop-blur-sm"
-              data-testid="playtest-hud-local-player"
-            >
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <Badge variant="secondary" data-testid="playtest-hud-player-name">
-                  {localPlayer.displayName}
-                </Badge>
-                <span className={cn(typography.bodyMicro, 'text-muted-foreground')}>
-                  {Math.round(localPlayer.health)} HP
-                </span>
-              </div>
-              <Progress
-                value={healthPercent(localPlayer.health, localPlayer.maxHealth)}
-                data-testid="playtest-hud-health-bar"
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
-          <Badge
-            variant="outline"
-            className="pointer-events-auto border-border/80 bg-background/85 px-3 py-1 text-foreground shadow-sm backdrop-blur-sm"
-            data-testid="playtest-hud-alive-count"
-          >
-            {formatAlivePlayersLabel(aliveCount, totalPlayers)}
-          </Badge>
-        </div>
-
-        {hud?.zoneStatus ? (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-            <Badge
-              variant="info"
-              className="pointer-events-auto border-info/30 bg-background/85 px-3 py-1 shadow-sm backdrop-blur-sm"
-              data-testid="playtest-hud-zone-status"
-            >
-              {formatZoneStatusLabel(hud.zoneStatus)}
-            </Badge>
-          </div>
-        ) : null}
-
-        {toast ? (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <Badge
-              variant="destructive"
-              className="pointer-events-none px-4 py-2 text-sm shadow-lg"
-              data-testid="playtest-hud-kill-toast"
-            >
-              {toast.message}
-            </Badge>
-          </div>
-        ) : null}
-      </div>
+      <HudOverlay
+        metrics={metrics}
+        hudInsets={hudInsets}
+        layout={overlayLayout}
+        editing={editing}
+        onMoveWidget={onMoveWidget}
+      />
 
       <Dialog open={gameOver !== undefined} onOpenChange={() => undefined}>
         <DialogContent
@@ -206,6 +134,22 @@ export function PlaytestHudOverlay({
                   {gameOver.tickCount} ticks
                 </dd>
               </div>
+              {winnerScore ? (
+                <div>
+                  <dt className="text-muted-foreground">Winner K/D</dt>
+                  <dd className="font-medium tabular-nums" data-testid="playtest-win-winner-stats">
+                    {winnerScore.kills} / {winnerScore.deaths}
+                  </dd>
+                </div>
+              ) : null}
+              {localStats ? (
+                <div>
+                  <dt className="text-muted-foreground">Your K/D</dt>
+                  <dd className="font-medium tabular-nums" data-testid="playtest-win-local-stats">
+                    {localStats.kills} / {localStats.deaths}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           ) : null}
 

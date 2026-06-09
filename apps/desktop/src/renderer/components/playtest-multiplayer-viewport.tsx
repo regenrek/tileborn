@@ -1,11 +1,15 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
+  useState,
   type MutableRefObject,
   type RefObject,
 } from 'react';
 import type { TileborneMap } from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import { PencilRulerIcon } from 'lucide-react';
 import {
   interpolateRenderableEntities,
   PixiRendererAdapter,
@@ -15,6 +19,7 @@ import {
 } from '@tileborne/runtime';
 import { Effect } from 'effect';
 
+import { PlaytestHudEditor } from '@/components/playtest-hud-editor';
 import { PlaytestHudOverlay } from '@/components/playtest-hud-overlay';
 import { PlaytestOverlay } from '@/components/playtest-overlay';
 import { EditorViewportController } from '@/editor/viewport/editor-viewport-controller';
@@ -34,12 +39,17 @@ import {
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
 import { usePluginContributions, useProject } from '@/hooks/queries';
+import { useHudEditing } from '@/hooks/use-hud-editing';
 import {
+  assemblePlaytestVisualRoleConfig,
   assemblePlaytestPlayerModelConfig,
   usePlaytestPlayerModels,
+  usePlaytestVisualRoles,
 } from '@/hooks/use-playtest-player-models';
 import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
+import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
+import type { BuiltVisualAssetRole } from '@/lib/visual-role-render';
 import type { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
 import { multiplayerStateToConnectionInput } from '@/lib/playtest-multiplayer-status';
 import { usePlaytestMultiplayerStore } from '@/stores/playtest-multiplayer-store';
@@ -72,7 +82,9 @@ const projectEntity = (
   ...entity,
   x: (entity.x - cameraX) * fixedZoom + cx,
   y: (entity.y - cameraY) * fixedZoom + cy,
-  scale: (entity.scale ?? 1) * fixedZoom,
+  ...(entity.scale === undefined ? {} : { scale: entity.scale * fixedZoom }),
+  scaleX: (entity.scaleX ?? entity.scale ?? 1) * fixedZoom,
+  scaleY: (entity.scaleY ?? entity.scale ?? 1) * fixedZoom,
 });
 
 function useMultiplayerRuntimeMount({
@@ -82,7 +94,7 @@ function useMultiplayerRuntimeMount({
   map,
   activeModePluginId,
   builtModels,
-  selectedModelId,
+  builtRoles,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
@@ -90,7 +102,7 @@ function useMultiplayerRuntimeMount({
   readonly map: TileborneMap;
   readonly activeModePluginId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
-  readonly selectedModelId: string | undefined;
+  readonly builtRoles: readonly BuiltVisualAssetRole[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -120,18 +132,21 @@ function useMultiplayerRuntimeMount({
 
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
-        // Resolve the projector with the lobby-chosen player models (defaultModelId
-        // applies to every player without an explicit wire/selection model).
-        if (builtModels.length > 0) {
+        // Resolve the projector with the roster models so runtime-emitted model
+        // ids can resolve to sprites. The server owns per-player selection.
+        if (builtModels.length > 0 || builtRoles.length > 0) {
           try {
-            const playerModels = await assemblePlaytestPlayerModelConfig(
-              builtModels,
-              new Map<string, string>(),
-              selectedModelId,
-            );
-            resolved = resolvePlaytestPlugin(activeModePluginId, { playerModels }) ?? basePlugin;
+            const [playerModels, visualRoles] = await Promise.all([
+              builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
+              builtRoles.length > 0 ? assemblePlaytestVisualRoleConfig(builtRoles) : undefined,
+            ]);
+            resolved =
+              resolvePlaytestPlugin(activeModePluginId, {
+                ...(playerModels === undefined ? {} : { playerModels }),
+                ...(visualRoles === undefined ? {} : { visualRoles }),
+              }) ?? basePlugin;
           } catch (error) {
-            console.error('[playtest] failed to load player-model atlases', error);
+            console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
           }
         }
@@ -191,7 +206,7 @@ function useMultiplayerRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, selectedModelId]);
+  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, builtRoles]);
 }
 
 function useMultiplayerSnapshotRenderer({
@@ -325,8 +340,12 @@ function useMultiplayerInputBridge({
       resolveIntent: plugin.resolveInputIntent,
       onIntent: (intent) => {
         client.sendInput(intent.dir as InputDirection | undefined, intent.shoot, {
+          reload: intent.reload,
+          interact: intent.interact,
+          drop: intent.drop,
+          abilities: intent.abilities,
           ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
-          ...(intent.weaponSlot === undefined ? {} : { weaponSlot: intent.weaponSlot }),
+          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
         });
       },
     });
@@ -348,8 +367,9 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const stopHosting = usePlaytestMultiplayerStore((state) => state.stopHosting);
   // ADR-0023 section B: the active game mode is discovered from the enabled
   // plugins' manifests (the `gameModes` IPC), then resolved through the
-  // per-project active selection (falling back to first discovered). No
-  // battle-royale id literal selects the mode here.
+  // per-project active selection. Multi-mode projects intentionally do not
+  // default to the first discovered mode, so the demo arena cannot drive a BR
+  // map by accident. No battle-royale id literal selects the mode here.
   const contributionsQuery = usePluginContributions();
   const projectQuery = useProject(projectId);
   const activeMode = resolveProjectActiveGameMode(
@@ -358,14 +378,35 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   );
   const activeModePluginId = activeMode?.pluginId;
   // Resolve the active plugin once to expose its render manifest (fixedZoom,
-  // hudInsets) to the JSX layer without piping it through refs. The render
-  // loop re-resolves inside its own effect for lifecycle reasons.
+  // hudInsets) and effective HUD layout (manifest-discovered default ⊕ user
+  // overlay) to the JSX layer without piping it through refs. The render loop
+  // re-resolves inside its own effect for lifecycle reasons.
+  const manifestHudLayout = activeMode?.hudLayout;
+  const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
+  const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
   const resolvedPlugin = useMemo(
-    () => (activeModePluginId === undefined ? undefined : resolvePlaytestPlugin(activeModePluginId)),
-    [activeModePluginId],
+    () =>
+      activeModePluginId === undefined
+        ? undefined
+        : resolvePlaytestPlugin(activeModePluginId, {
+            ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
+            ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
+          }),
+    // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
+    [activeModePluginId, manifestHudLayout, projectHudLayout, hudOverlayVersion],
   );
+  const bumpHudOverlayVersion = useCallback(
+    () => setHudOverlayVersion((version) => version + 1),
+    [],
+  );
+  const hudEditing = useHudEditing({
+    baseLayout: resolvedPlugin?.hudLayout,
+    project: projectQuery.data?.project,
+    onPersisted: bumpHudOverlayVersion,
+  });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
-  const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
+  const { builtModels } = usePlaytestPlayerModels(projectId, map);
+  const { builtRoles } = usePlaytestVisualRoles(projectId);
 
   useMultiplayerRuntimeMount({
     containerRef,
@@ -374,7 +415,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     map,
     activeModePluginId,
     builtModels,
-    selectedModelId,
+    builtRoles,
   });
   useMultiplayerSnapshotRenderer({ client, containerRef, runtimeRef, map, activeModePluginId });
   useMultiplayerInputBridge({ client, containerRef, activeModePluginId });
@@ -429,7 +470,42 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
           onBackToEditor={stopHosting}
           onPlayAgain={stopHosting}
           {...(hudInsets ? { hudInsets } : {})}
+          {...(hudEditing.layout !== undefined
+            ? { layout: hudEditing.layout }
+            : resolvedPlugin
+              ? { layout: resolvedPlugin.hudLayout }
+              : {})}
+          editing={hudEditing.editing}
+          onMoveWidget={hudEditing.moveWidget}
         />
+        {resolvedPlugin && !hudEditing.editing ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="absolute right-3 top-3 z-40 bg-background/85 backdrop-blur-sm"
+            onClick={hudEditing.start}
+            data-testid="playtest-hud-edit-toggle"
+          >
+            <PencilRulerIcon className="size-3.5" />
+            Edit HUD
+          </Button>
+        ) : null}
+        {hudEditing.editing && hudEditing.layout !== undefined ? (
+          <PlaytestHudEditor
+            layout={hudEditing.layout}
+            onSetAnchor={hudEditing.moveWidget}
+            onSetEnabled={hudEditing.toggleWidget}
+            onMoveOrder={hudEditing.reorderWidget}
+            onSaveUser={hudEditing.saveForMe}
+            onSaveProject={
+              hudEditing.canSaveProject ? () => void hudEditing.saveToProject() : undefined
+            }
+            onResetUser={hudEditing.resetUser}
+            onClose={hudEditing.close}
+            isSaving={hudEditing.isSaving}
+          />
+        ) : null}
       </div>
     </div>
   );

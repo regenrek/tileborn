@@ -5,7 +5,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { gameObjectTypeIdForKey } from "@tileborne/core";
+import {
+  AssetLibraryReference,
+  PlayerModelClipSet,
+  PlayerModelRef,
+  gameObjectTypeIdForKey,
+  makeClipId,
+  makePackId,
+} from "@tileborne/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { Option } from "effect";
 import { PLUGIN_ID, decodeServerFrame } from "@tileborne/plugin-battle-royale";
@@ -21,6 +28,36 @@ import {
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const battleRoyalePluginRoot = path.resolve(desktopRoot, "../../packages/plugin-battle-royale");
+const packId = makePackId("550e8400-e29b-41d4-a716-446655440999");
+const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544000${index}`);
+
+const playerModels = [
+  new PlayerModelRef({
+    id: "model:test",
+    label: "Test Model",
+    ref: new AssetLibraryReference({
+      packId,
+      kind: "sprite",
+      refId: "placeable:test",
+      clipId: clipIdAt(0),
+    }),
+    defaultClipId: clipIdAt(0),
+    clips: new PlayerModelClipSet({
+      idle: clipIdAt(0),
+      walk: clipIdAt(1),
+      run: clipIdAt(2),
+      shoot: clipIdAt(3),
+      reload: clipIdAt(4),
+      hit: clipIdAt(5),
+      death: clipIdAt(6),
+      dash: clipIdAt(7),
+      pickup: clipIdAt(8),
+    }),
+    anchor: { x: 0.5, y: 1 },
+    hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+    muzzle: { x: 0.75, y: 0.45 },
+  }),
+] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -220,7 +257,7 @@ describe("playtest-runtime-host", () => {
         layers: [],
         objects: [
           {
-            id: "obj:00000000-0000-4000-8000-000000000001",
+            id: "object:00000000-0000-4000-8000-000000000001",
             kind: "spawn-point",
             x: 10,
             y: 20,
@@ -240,17 +277,117 @@ describe("playtest-runtime-host", () => {
       sessionId,
       artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
     const before = getPlaytestRuntimeSnapshot(sessionId);
     expect(before?.players[0]).toMatchObject({ playerId: "player-1", x: 10, y: 20 });
 
-    setPlaytestRuntimeInput(sessionId, "player-1", { tick: 3, seq: 1, dir: 0, shoot: false });
+    setPlaytestRuntimeInput(sessionId, "player-1", {
+      tick: 3,
+      seq: 1,
+      dir: 0,
+      shoot: false,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+    });
     await waitForTickCount(sessionId, 6);
 
     const after = getPlaytestRuntimeSnapshot(sessionId);
     expect(after?.players[0]?.x).toBeGreaterThan(10);
+    expect(getPlaytestRuntimeMetrics(sessionId)?.playerCount).toBe(1);
+  });
+
+  it("rejects battle royale playtest startup when the map has no authored spawn anchors", async () => {
+    tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-invalid-br-"));
+    const artifactDirectory = path.join(tempRoot, "artifact");
+    await mkdir(artifactDirectory, { recursive: true });
+    await writeFile(
+      path.join(artifactDirectory, "map.json"),
+      JSON.stringify({
+        id: "map:test",
+        schemaVersion: 1,
+        size: { width: 32, height: 32 },
+        tileSize: { width: 32, height: 32 },
+        layers: [],
+        objects: [],
+        properties: { maxPlayers: 1 },
+      }),
+      "utf8",
+    );
+
+    const sessionId = "runtime-host-invalid-br-test";
+
+    await expect(
+      startPlaytestRuntimeHost({
+        sessionId,
+        artifactDirectory,
+        pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+        playerModels,
+      }),
+    ).rejects.toThrow(/spawnAnchors/);
+    expect(getPlaytestRuntimeMetrics(sessionId)).toBeUndefined();
+    expect(getPlaytestRuntimeSnapshot(sessionId)).toBeUndefined();
+  });
+
+  it("starts battle royale from a canonical gobj map and preserves authored spawn coordinates", async () => {
+    tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-canonical-br-"));
+    const artifactDirectory = path.join(tempRoot, "artifact");
+    await mkdir(artifactDirectory, { recursive: true });
+    await writeFile(
+      path.join(artifactDirectory, "map.json"),
+      JSON.stringify({
+        id: "map:test",
+        schemaVersion: 1,
+        size: { width: 32, height: 32 },
+        tileSize: { width: 32, height: 32 },
+        layers: [],
+        objects: [
+          {
+            id: "object:00000000-0000-4000-8000-000000000001",
+            kind: gameObjectTypeIdForKey("spawn-point"),
+            x: 80,
+            y: 96,
+            layerId: "layer:00000000-0000-4000-8000-000000000001",
+            properties: { team: "solo", weight: 1 },
+          },
+        ],
+        properties: { maxPlayers: 1 },
+      }),
+      "utf8",
+    );
+
+    const sessionId = "runtime-host-canonical-br-test";
+    sessionIds.push(sessionId);
+
+    await startPlaytestRuntimeHost({
+      sessionId,
+      artifactDirectory,
+      pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+      playerModels,
+    });
+
+    await waitForTickCount(sessionId, 2);
+
+    const snapshot = getPlaytestRuntimeSnapshot(sessionId);
+    expect(snapshot?.players).toEqual([
+      { playerId: "player-1", x: 80, y: 96 },
+    ]);
+    expect(snapshot?.frame).toBeInstanceOf(Uint8Array);
+    const frame = decodeServerFrame(snapshot!.frame!);
+    expect(frame).toMatchObject({
+      _tag: "WelcomeSnapshot",
+      players: [
+        {
+          id: "player-1",
+          modelId: "model:test",
+          animation: { modelId: "model:test", clipKey: "idle" },
+        },
+      ],
+    });
     expect(getPlaytestRuntimeMetrics(sessionId)?.playerCount).toBe(1);
   });
 
@@ -268,7 +405,7 @@ describe("playtest-runtime-host", () => {
         layers: [],
         objects: [
           {
-            id: "obj:00000000-0000-4000-8000-000000000001",
+            id: "object:00000000-0000-4000-8000-000000000001",
             kind: "spawn-point",
             x: 10,
             y: 20,
@@ -297,6 +434,7 @@ describe("playtest-runtime-host", () => {
       sessionId,
       artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
@@ -322,7 +460,7 @@ describe("playtest-runtime-host", () => {
         layers: [],
         objects: [
           {
-            id: "obj:00000000-0000-4000-8000-000000000001",
+            id: "object:00000000-0000-4000-8000-000000000001",
             kind: "spawn-point",
             x: 10,
             y: 20,
@@ -347,6 +485,7 @@ describe("playtest-runtime-host", () => {
       sessionId,
       artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
@@ -355,8 +494,12 @@ describe("playtest-runtime-host", () => {
       seq: 1,
       dir: 0,
       shoot: true,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
       aimDeg: 90,
-      weaponSlot: 2,
+      swapSlot: 2,
     });
     await waitForTickCount(sessionId, 6);
 
@@ -373,5 +516,17 @@ describe("playtest-runtime-host", () => {
     expect(Option.getOrUndefined(projectile?.weaponSlot as Option.Option<number>)).toBe(2);
     expect(Option.getOrUndefined(projectile?.vx as Option.Option<number>)).toBeCloseTo(0);
     expect(Option.getOrUndefined(projectile?.vy as Option.Option<number>)).toBeGreaterThan(0);
+
+    const diagnostics = getPlaytestRuntimeMetrics(sessionId)?.diagnostics;
+    expect(diagnostics?.bandwidth.inputEvents).toBeGreaterThanOrEqual(1);
+    expect(diagnostics?.bandwidth.snapshotFrames).toBeGreaterThan(0);
+    expect(diagnostics?.entities.players).toBe(1);
+    expect(diagnostics?.debugOverlay.spawnSlots).toBe(1);
+    expect(diagnostics?.debugOverlay.hitboxes).toBeGreaterThan(0);
+    expect(diagnostics?.replay.rollingHash).toMatch(/^fnv1a:[0-9a-f]{8}$/);
+    expect(diagnostics?.replay.deterministicVerifier).toBe("battle-royale-replay-harness");
+    expect(diagnostics?.budgets.snapshotOverBudget).toBe(false);
+    expect(diagnostics?.budgets.snapshotFrameBudgetBytes).toBe(8_192);
+    expect(diagnostics?.budgets.inputBacklogBudgetFrames).toBeGreaterThan(0);
   });
 });

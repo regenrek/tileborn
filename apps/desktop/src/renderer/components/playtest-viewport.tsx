@@ -1,11 +1,15 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
+  useState,
   type MutableRefObject,
   type RefObject,
 } from 'react';
 import type { TileborneMap } from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import { PencilRulerIcon } from 'lucide-react';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 import {
   interpolateRenderableEntities,
@@ -17,6 +21,7 @@ import {
 import { Effect } from 'effect';
 
 import { PlaytestOverlay } from '@/components/playtest-overlay';
+import { PlaytestHudEditor } from '@/components/playtest-hud-editor';
 import { PlaytestHudOverlay } from '@/components/playtest-hud-overlay';
 import { EditorViewportController } from '@/editor/viewport/editor-viewport-controller';
 import {
@@ -28,7 +33,9 @@ import {
   viewportControllerAtlas,
 } from '@/editor/viewport/viewport-asset-manifest';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
-import { usePlaytestSessions } from '@/hooks/queries';
+import { usePlaytestSessions, usePluginContributions, useProject } from '@/hooks/queries';
+import { useHudEditing } from '@/hooks/use-hud-editing';
+import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
 import {
@@ -36,13 +43,15 @@ import {
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
 import {
+  assemblePlaytestVisualRoleConfig,
   assemblePlaytestPlayerModelConfig,
   usePlaytestPlayerModels,
+  usePlaytestVisualRoles,
 } from '@/hooks/use-playtest-player-models';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
+import type { BuiltVisualAssetRole } from '@/lib/visual-role-render';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
-const LOCAL_PLAYER_ID = 'player-1';
 const LOCAL_PLAYER_INPUT_ID = 'player-1';
 
 // Positions are interpolated once in world space before projection, so the
@@ -75,7 +84,9 @@ const projectEntity = (
   ...entity,
   x: (entity.x - cameraX) * fixedZoom + cx,
   y: (entity.y - cameraY) * fixedZoom + cy,
-  scale: (entity.scale ?? 1) * fixedZoom,
+  ...(entity.scale === undefined ? {} : { scale: entity.scale * fixedZoom }),
+  scaleX: (entity.scaleX ?? entity.scale ?? 1) * fixedZoom,
+  scaleY: (entity.scaleY ?? entity.scale ?? 1) * fixedZoom,
 });
 
 const findLocalPlayerEntity = (entities: readonly RenderableEntity[]): RenderableEntity | undefined =>
@@ -88,7 +99,7 @@ function usePlaytestRuntimeMount({
   map,
   pluginId,
   builtModels,
-  selectedModelId,
+  builtRoles,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
@@ -96,7 +107,7 @@ function usePlaytestRuntimeMount({
   readonly map: TileborneMap;
   readonly pluginId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
-  readonly selectedModelId: string | undefined;
+  readonly builtRoles: readonly BuiltVisualAssetRole[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -127,21 +138,21 @@ function usePlaytestRuntimeMount({
     const handle = startSerializedViewportMount<EditorViewportController>({
       performMount: async () => {
         // Resolve the projector with the lobby-chosen player models so the
-        // chosen sprite (and its clip) renders+animates per player; the model
+        // runtime-emitted player model ids can resolve to sprites; the model
         // atlases are loaded as runtime textures alongside the plugin defaults.
-        if (builtModels.length > 0) {
-          const playerModelIds = new Map<string, string>(
-            selectedModelId === undefined ? [] : [[LOCAL_PLAYER_ID, selectedModelId]],
-          );
+        if (builtModels.length > 0 || builtRoles.length > 0) {
           try {
-            const playerModels = await assemblePlaytestPlayerModelConfig(
-              builtModels,
-              playerModelIds,
-              selectedModelId,
-            );
-            resolved = resolvePlaytestPlugin(pluginId, { playerModels }) ?? basePlugin;
+            const [playerModels, visualRoles] = await Promise.all([
+              builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
+              builtRoles.length > 0 ? assemblePlaytestVisualRoleConfig(builtRoles) : undefined,
+            ]);
+            resolved =
+              resolvePlaytestPlugin(pluginId, {
+                ...(playerModels === undefined ? {} : { playerModels }),
+                ...(visualRoles === undefined ? {} : { visualRoles }),
+              }) ?? basePlugin;
           } catch (error) {
-            console.error('[playtest] failed to load player-model atlases', error);
+            console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
           }
         }
@@ -202,7 +213,7 @@ function usePlaytestRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, selectedModelId]);
+  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, builtRoles]);
 }
 
 function usePlaytestSnapshotRenderer({
@@ -250,6 +261,21 @@ function usePlaytestSnapshotRenderer({
       }
       store.apply(decoded);
     });
+    let disposed = false;
+    void window.tileborne.runtime
+      .playtestSnapshot({ sessionId: sessionId as PlaytestSessionId })
+      .then((snapshot) => {
+        if (disposed || snapshot.frame === undefined) {
+          return;
+        }
+        const decoded = plugin.decodeServerFrame(snapshot.frame);
+        if (decoded !== undefined) {
+          store.apply(decoded);
+        }
+      })
+      .catch((error) => {
+        console.error('[playtest] failed to seed runtime snapshot', error);
+      });
 
     const renderTick = (): void => {
       rafHandle = requestAnimationFrame(renderTick);
@@ -305,6 +331,7 @@ function usePlaytestSnapshotRenderer({
     rafHandle = requestAnimationFrame(renderTick);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(rafHandle);
       unsubscribe();
     };
@@ -358,18 +385,29 @@ function usePlaytestInputBridge({
       resolveIntent: plugin.resolveInputIntent,
       onIntent: (intent) => {
         seq += 1;
-        const idle = intent.dir === undefined && !intent.shoot && intent.weaponSlot === undefined;
+        const idle =
+          intent.dir === undefined &&
+	          !intent.shoot &&
+	          !intent.reload &&
+	          !intent.interact &&
+	          !intent.drop &&
+	          intent.abilities.length === 0 &&
+	          intent.swapSlot === undefined;
         const payload = {
           sessionId: sessionId as PlaytestSessionId,
           playerId: LOCAL_PLAYER_INPUT_ID,
           tick: tickCountRef.current ?? 0,
           seq,
           ...(intent.dir === undefined ? {} : { dir: intent.dir }),
-          shoot: intent.shoot,
-          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
-          ...(intent.weaponSlot === undefined ? {} : { weaponSlot: intent.weaponSlot }),
-          ...(idle ? { active: false } : {}),
-        };
+	          shoot: intent.shoot,
+	          reload: intent.reload,
+	          interact: intent.interact,
+	          drop: intent.drop,
+	          abilities: [...intent.abilities],
+	          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
+	          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
+	          ...(idle ? { active: false } : {}),
+	        };
         void window.tileborne.runtime.playtestInput(payload);
       },
     });
@@ -395,12 +433,42 @@ export function PlaytestViewport({
   const playtestQuery = usePlaytestSessions({ refetchInterval: 500 });
   const session = playtestQuery.data?.sessions.find((entry) => entry.id === sessionId);
   const pluginId = activePlugins[0];
+  // Prefer the manifest-DISCOVERED HUD layout of the active mode (the
+  // `gameModes` IPC carries the decoded `runtime.hudLayouts` data) so an
+  // installed third-party mode's HUD arrangement applies without a bundled
+  // code default; the bridge falls back to its bundled default otherwise.
+  const contributionsQuery = usePluginContributions();
+  const manifestHudLayout = contributionsQuery.data?.gameModes.find(
+    (mode) => mode.pluginId === pluginId,
+  )?.hudLayout;
+  // The project's designer-authored HUD overlay sits between the plugin
+  // default and the player's personal overlay (`pluginDefault ⊕ project ⊕ player`).
+  const projectQuery = useProject(projectId);
+  const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
+  const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
   const resolvedPlugin = useMemo(
-    () => (pluginId !== undefined ? resolvePlaytestPlugin(pluginId) : undefined),
-    [pluginId],
+    () =>
+      pluginId !== undefined
+        ? resolvePlaytestPlugin(pluginId, {
+            ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
+            ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
+          })
+        : undefined,
+    // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
+    [pluginId, manifestHudLayout, projectHudLayout, hudOverlayVersion],
   );
+  const bumpHudOverlayVersion = useCallback(
+    () => setHudOverlayVersion((version) => version + 1),
+    [],
+  );
+  const hudEditing = useHudEditing({
+    baseLayout: resolvedPlugin?.hudLayout,
+    project: projectQuery.data?.project,
+    onPersisted: bumpHudOverlayVersion,
+  });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
   const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
+  const { builtRoles } = usePlaytestVisualRoles(projectId);
 
   usePlaytestRuntimeMount({
     containerRef,
@@ -409,7 +477,7 @@ export function PlaytestViewport({
     map,
     pluginId,
     builtModels,
-    selectedModelId,
+    builtRoles,
   });
   usePlaytestSnapshotRenderer({ containerRef, runtimeRef, map, pluginId, sessionId });
 
@@ -464,6 +532,12 @@ export function PlaytestViewport({
                         ...(session.runtimeMetrics.hud.zoneStatus
                           ? { zoneStatus: session.runtimeMetrics.hud.zoneStatus }
                           : {}),
+                        ...(session.runtimeMetrics.hud.scoreboard
+                          ? { scoreboard: session.runtimeMetrics.hud.scoreboard }
+                          : {}),
+                        ...(session.runtimeMetrics.hud.minimap
+                          ? { minimap: session.runtimeMetrics.hud.minimap }
+                          : {}),
                         ...(session.runtimeMetrics.hud.gameOver
                           ? { gameOver: session.runtimeMetrics.hud.gameOver }
                           : {}),
@@ -478,10 +552,49 @@ export function PlaytestViewport({
           onBackToEditor={stop}
           onPlayAgain={async (nextProjectId, nextMapId) => {
             await stop();
-            await start(nextProjectId, nextMapId);
+            await start(
+              nextProjectId,
+              nextMapId,
+              selectedModelId === undefined ? {} : { selectedPlayerModelId: selectedModelId },
+            );
           }}
           {...(hudInsets ? { hudInsets } : {})}
+          {...(hudEditing.layout !== undefined
+            ? { layout: hudEditing.layout }
+            : resolvedPlugin
+              ? { layout: resolvedPlugin.hudLayout }
+              : {})}
+          editing={hudEditing.editing}
+          onMoveWidget={hudEditing.moveWidget}
         />
+        {resolvedPlugin && !hudEditing.editing ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="absolute right-3 top-3 z-40 bg-background/85 backdrop-blur-sm"
+            onClick={hudEditing.start}
+            data-testid="playtest-hud-edit-toggle"
+          >
+            <PencilRulerIcon className="size-3.5" />
+            Edit HUD
+          </Button>
+        ) : null}
+        {hudEditing.editing && hudEditing.layout !== undefined ? (
+          <PlaytestHudEditor
+            layout={hudEditing.layout}
+            onSetAnchor={hudEditing.moveWidget}
+            onSetEnabled={hudEditing.toggleWidget}
+            onMoveOrder={hudEditing.reorderWidget}
+            onSaveUser={hudEditing.saveForMe}
+            onSaveProject={
+              hudEditing.canSaveProject ? () => void hudEditing.saveToProject() : undefined
+            }
+            onResetUser={hudEditing.resetUser}
+            onClose={hudEditing.close}
+            isSaving={hudEditing.isSaving}
+          />
+        ) : null}
       </div>
     </div>
   );

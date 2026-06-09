@@ -124,6 +124,7 @@ describe("PluginContributions", () => {
         hudWidgets: [
           executable("ExecutableRuntimeHudWidgetContribution", "safe-zone-timer", "runtime.hud.safeZoneTimer"),
         ],
+        hudLayouts: [declarative("DeclarativeRuntimeHudLayoutContribution", "br-hud-layout")],
         lobbyPanels: [
           executable("ExecutableRuntimeLobbyPanelContribution", "loadout", "runtime.lobby.loadout"),
         ],
@@ -372,6 +373,7 @@ describe("RuntimeMenuSectionContribution", () => {
         assetLoaders: undefined,
         clientSystems: undefined,
         hudWidgets: undefined,
+        hudLayouts: undefined,
         lobbyPanels: undefined,
         menuSections: [
           {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
+import { PLUGIN_ID } from '@tileborne/plugin-battle-royale/constants';
 
 import {
   formatPlaytestRuntimeStatus,

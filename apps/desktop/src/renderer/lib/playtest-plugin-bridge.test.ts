@@ -1,5 +1,8 @@
-import { CORE_ACTIONS, InputMap } from '@tileborne/core';
-import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
+import { CORE_ACTIONS, CORE_HUD_WIDGETS, HudLayout, InputMap } from '@tileborne/core';
+import {
+  PLUGIN_ID,
+  requiredBattleRoyaleRenderableAssetIds,
+} from '@tileborne/plugin-battle-royale/renderer';
 import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -57,6 +60,13 @@ describe('playtest-plugin-bridge', () => {
     });
   });
 
+  it('fails playtest resolution before mount if a BR projector asset is missing', () => {
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const registered = new Set(plugin?.bundledAssets.map((asset) => String(asset.assetId)) ?? []);
+
+    expect(requiredBattleRoyaleRenderableAssetIds().filter((assetId) => !registered.has(assetId))).toEqual([]);
+  });
+
   it('uses the BR plugin defaults when no user overlay is injected (Space + mouse bound)', () => {
     const plugin = resolvePlaytestPlugin(PLUGIN_ID);
     expect(plugin?.inputCaptureProfile.boundKeyCodes.has('Space')).toBe(true);
@@ -95,5 +105,111 @@ describe('playtest-plugin-bridge', () => {
     expect(plugin?.inputCaptureProfile.usesMouseButtons).toBe(false);
     // Unremapped Move keeps its default WASD bindings.
     expect(bindings.some((binding) => binding.action === CORE_ACTIONS.Move)).toBe(true);
+  });
+
+  it('exposes the BR default HUD layout when no user HUD overlay is injected', () => {
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const byId = new Map(
+      (plugin?.hudLayout.widgets ?? []).map((widget) => [widget.id as string, widget]),
+    );
+    expect(plugin?.hudLayout.id).toBe('br-default-hud');
+    expect(byId.get('minimap')?.anchor).toBe('top-right');
+    expect(byId.get('weapon-panel')?.anchor).toBe('bottom-center');
+  });
+
+  it('prefers a manifest-discovered HUD layout over the bundled code default', () => {
+    const manifestLayout = Schema.decodeUnknownSync(HudLayout)({
+      id: 'manifest-hud',
+      widgets: [
+        {
+          id: 'minimap',
+          kind: CORE_HUD_WIDGETS.Minimap,
+          anchor: 'bottom-left',
+          order: 0,
+          enabled: true,
+        },
+      ],
+    });
+
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { manifestHudLayout: manifestLayout });
+    expect(plugin?.hudLayout.id).toBe('manifest-hud');
+    expect(plugin?.hudLayout.widgets).toHaveLength(1);
+    expect(plugin?.hudLayout.widgets[0]?.anchor).toBe('bottom-left');
+  });
+
+  it('layers the project HUD overlay between the plugin default and the player overlay', () => {
+    const projectLayout = Schema.decodeUnknownSync(HudLayout)({
+      id: 'project-hud',
+      widgets: [
+        // Designer moves the minimap to the bottom-right for this project.
+        {
+          id: 'minimap',
+          kind: CORE_HUD_WIDGETS.Minimap,
+          anchor: 'bottom-right',
+          order: 0,
+          enabled: true,
+        },
+        // Designer hides the scoreboard project-wide.
+        {
+          id: 'scoreboard',
+          kind: CORE_HUD_WIDGETS.Scoreboard,
+          anchor: 'top-right',
+          order: 1,
+          enabled: false,
+        },
+      ],
+    });
+    const playerOverlay = Schema.decodeUnknownSync(HudLayout)({
+      id: 'player-hud',
+      widgets: [
+        // Player moves the minimap again — the player layer wins over project.
+        {
+          id: 'minimap',
+          kind: CORE_HUD_WIDGETS.Minimap,
+          anchor: 'top-left',
+          order: 0,
+          enabled: true,
+        },
+      ],
+    });
+
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID, {
+      projectHudLayout: projectLayout,
+      userHudOverlay: playerOverlay,
+    });
+    const widgets = plugin?.hudLayout.widgets ?? [];
+    expect(widgets.find((widget) => widget.id === 'minimap')?.anchor).toBe('top-left');
+    expect(widgets.find((widget) => widget.id === 'scoreboard')?.enabled).toBe(false);
+  });
+
+  it('applies an injected user HUD overlay (move minimap, hide scoreboard) to the effective layout', () => {
+    const overlay = Schema.decodeUnknownSync(HudLayout)({
+      id: 'user-hud',
+      widgets: [
+        {
+          id: 'minimap',
+          kind: CORE_HUD_WIDGETS.Minimap,
+          anchor: 'bottom-right',
+          order: 0,
+          enabled: true,
+        },
+        {
+          id: 'scoreboard',
+          kind: CORE_HUD_WIDGETS.Scoreboard,
+          anchor: 'top-right',
+          order: 2,
+          enabled: false,
+        },
+      ],
+    });
+
+    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { userHudOverlay: overlay });
+    const byId = new Map(
+      (plugin?.hudLayout.widgets ?? []).map((widget) => [widget.id as string, widget]),
+    );
+    expect(byId.get('minimap')?.anchor).toBe('bottom-right');
+    expect(byId.get('scoreboard')?.enabled).toBe(false);
+    // Untouched defaults stay in place.
+    expect(byId.get('weapon-panel')?.anchor).toBe('bottom-center');
   });
 });

@@ -20,6 +20,8 @@
  * regardless of whether the consumer file references it directly.
  */
 @source "../../../../packages/ui/src/**/*.{ts,tsx,js,jsx}";
+/* Shared HUD chassis lives in @tileborne/game-client (same reasoning as above). */
+@source "../../../../packages/game-client/src/**/*.{ts,tsx,js,jsx}";
 
 @theme inline {
   --font-sans: 'IBM Plex Sans Variable', Inter, system-ui, sans-serif;

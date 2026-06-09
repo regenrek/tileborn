@@ -2,51 +2,112 @@ import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
 
 import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
 
+/**
+ * Host-side playtest HUD tracker (engine chassis, plugin-agnostic).
+ *
+ * Ownership split (HUD-state SSOT): the WORLD→HUD derivation — which ECS
+ * components exist and how they project into player status, scoreboard,
+ * minimap, and zone phase — is plugin code. The active mode's runtime bundle
+ * exports `derivePlaytestHudWorldState`, and the host calls it through the
+ * {@link PlaytestHudWorldStateDeriver} seam. This module owns only host
+ * concerns: accumulating wire events (kill feed, pickup toasts, game-over)
+ * across ticks and composing them with the plugin-derived world slice. No
+ * Battle Royale component name or zone-schedule constant lives here.
+ */
+
 const { decodeMessage } = BattleRoyaleProtocol;
 
-const DEFAULT_ZONE_SCHEDULE = {
-  waitSec: 60,
-  shrinkSec: 30,
-  holdSec: 30,
-  shrinkPhases: 3,
-  tickRate: 20,
-} as const;
-
-const DEFAULT_PLAYER_HEALTH = 100;
-const PRIMARY_PLAYER_ID = "player-1";
 const MAX_RECENT_EVENTS = 20;
 
-interface ZoneComponent {
-  readonly cx: number;
-  readonly cy: number;
-  readonly currentRadius: number;
-  readonly targetRadius: number;
-  readonly shrinkStartTick: number;
-  readonly shrinkDurationTicks: number;
-  readonly shrinkFromRadius: number;
-  readonly damagePerSecOutside: number;
-  readonly schedulePhaseIndex: number;
-  readonly phaseStartTick: number;
-}
-
-interface PlayerComponent {
-  readonly playerId: string;
-  readonly health: number;
-  readonly alive: 0 | 1;
-}
-
-export interface PlaytestRuntimeHudState {
+/** The per-tick HUD slice derived from the plugin world — plugin-owned. */
+export interface PlaytestRuntimeHudWorldState {
   readonly totalPlayers: number;
   readonly localPlayer?: {
     readonly playerId: string;
     readonly displayName: string;
+    readonly team?: string;
     readonly health: number;
     readonly maxHealth: number;
+    readonly position?: { readonly x: number; readonly y: number };
+    readonly shield?: number;
+    readonly armor?: { readonly mitigation: number; readonly durability: number };
+    readonly weapon?: {
+      readonly weaponId: string;
+      readonly slot: number;
+      readonly ammoInMagazine?: number;
+      readonly magazineSize?: number;
+      readonly reserveAmmo?: number;
+      readonly cooldownRemainingTicks?: number;
+      readonly reloadRemainingTicks?: number;
+      readonly reloadTotalTicks?: number;
+    };
+    readonly inventory?: { readonly itemIds: readonly string[]; readonly capacity: number };
+    readonly pickupPrompt?: {
+      readonly itemKind?: string;
+      readonly tier?: string;
+      readonly distance?: number;
+      readonly action: "pickup-loot";
+      readonly available: boolean;
+    };
+    readonly pickupToast?: {
+      readonly itemKind: string;
+      readonly tier: string;
+      readonly quantity: number;
+      readonly tick: number;
+    };
+    readonly damageIndicator?: {
+      readonly sourceId: string;
+      readonly angleDeg: number;
+      readonly amount: number;
+      readonly tick: number;
+    };
+    readonly stats?: { readonly kills: number; readonly deaths: number };
+    readonly statusEffects?: readonly {
+      readonly effectId: string;
+      readonly remainingTicks: number;
+      readonly stacks: number;
+    }[];
+    readonly abilityCooldowns?: readonly {
+      readonly abilityId: string;
+      readonly remainingTicks: number;
+    }[];
   };
   readonly zoneStatus?: {
     readonly phase: "stable" | "countdown" | "shrinking";
     readonly secondsRemaining?: number;
   };
+  readonly scoreboard?: readonly {
+    readonly playerId: string;
+    readonly displayName: string;
+    readonly team?: string;
+    readonly health: number;
+    readonly alive: boolean;
+    readonly kills: number;
+    readonly deaths: number;
+  }[];
+  readonly minimap?: {
+    readonly zone?: { readonly cx: number; readonly cy: number; readonly radius: number };
+    readonly players: readonly {
+      readonly playerId: string;
+      readonly x: number;
+      readonly y: number;
+      readonly local: boolean;
+      readonly alive: boolean;
+      readonly health: number;
+    }[];
+    readonly objects: readonly {
+      readonly objectId: string;
+      readonly x: number;
+      readonly y: number;
+      readonly kind: "pickup" | "loot" | "hazard" | "objective";
+      readonly tier?: string;
+      readonly available?: boolean;
+    }[];
+  };
+}
+
+/** The complete HUD state the runtime metrics expose to the renderer. */
+export interface PlaytestRuntimeHudState extends PlaytestRuntimeHudWorldState {
   readonly recentEvents: readonly PlaytestRuntimeHudEventState[];
   readonly gameOver?: {
     readonly winnerId: string;
@@ -57,14 +118,22 @@ export interface PlaytestRuntimeHudState {
   };
 }
 
-type ZoneStatusState = NonNullable<PlaytestRuntimeHudState["zoneStatus"]>;
-
 export type PlaytestRuntimeHudEventState =
   | {
       readonly _tag: "PlayerKilled";
       readonly victimId: string;
       readonly victimDisplayName: string;
       readonly killerId: string;
+      readonly tick: number;
+      readonly emittedAtMs: number;
+    }
+  | {
+      readonly _tag: "PickupCollected";
+      readonly playerId: string;
+      readonly playerDisplayName: string;
+      readonly itemKind: string;
+      readonly tier: string;
+      readonly quantity: number;
       readonly tick: number;
       readonly emittedAtMs: number;
     }
@@ -78,10 +147,26 @@ export type PlaytestRuntimeHudEventState =
       readonly emittedAtMs: number;
     };
 
+/**
+ * The plugin runtime bundle's world→HUD derivation export. Structurally
+ * matches `derivePlaytestHudWorldState` in the Battle Royale runtime bundle;
+ * other game-mode plugins export their own.
+ */
+export type PlaytestHudWorldStateDeriver = (
+  world: PlaytestPluginWorld,
+  tickCount: number,
+) => PlaytestRuntimeHudWorldState | undefined;
+
 export interface PlaytestRuntimeHudTracker {
   readonly ingestFrames: (frames: readonly Uint8Array[]) => void;
   readonly snapshot: (world: PlaytestPluginWorld, tickCount: number) => PlaytestRuntimeHudState;
 }
+
+const EMPTY_WORLD_STATE: PlaytestRuntimeHudWorldState = {
+  totalPlayers: 0,
+  scoreboard: [],
+  minimap: { players: [], objects: [] },
+};
 
 const formatPlayerDisplayName = (playerId: string): string => {
   const match = /^player-(\d+)$/.exec(playerId);
@@ -91,69 +176,11 @@ const formatPlayerDisplayName = (playerId: string): string => {
   return playerId;
 };
 
-const computeZoneStatus = (zone: ZoneComponent, tick: number): ZoneStatusState => {
-  if (zone.schedulePhaseIndex === 0) {
-    const phaseDuration = DEFAULT_ZONE_SCHEDULE.waitSec * DEFAULT_ZONE_SCHEDULE.tickRate;
-    const elapsed = Math.max(0, tick - zone.phaseStartTick);
-    const remainingTicks = Math.max(0, phaseDuration - elapsed);
-    return {
-      phase: "countdown",
-      secondsRemaining: Math.ceil(remainingTicks / DEFAULT_ZONE_SCHEDULE.tickRate),
-    };
-  }
-
-  if (zone.shrinkStartTick >= 0) {
-    const elapsed = tick - zone.shrinkStartTick;
-    if (elapsed >= 0 && elapsed < zone.shrinkDurationTicks) {
-      return { phase: "shrinking" };
-    }
-  }
-
-  return { phase: "stable" };
-};
-
-const readZone = (world: PlaytestPluginWorld): ZoneComponent | undefined => {
-  try {
-    const zones = world.getComponent<ZoneComponent>("Zone");
-    for (const [, zone] of zones.entries()) {
-      return zone;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-};
-
-const readPlayers = (
-  world: PlaytestPluginWorld,
-): { readonly totalPlayers: number; readonly localPlayer?: PlaytestRuntimeHudState["localPlayer"] } => {
-  try {
-    const players = world.getComponent<PlayerComponent>("Player");
-    let totalPlayers = 0;
-    let localPlayer: PlaytestRuntimeHudState["localPlayer"];
-
-    for (const [, player] of players.entries()) {
-      totalPlayers += 1;
-      if (player.playerId === PRIMARY_PLAYER_ID) {
-        localPlayer = {
-          playerId: player.playerId,
-          displayName: formatPlayerDisplayName(player.playerId),
-          health: player.health,
-          maxHealth: DEFAULT_PLAYER_HEALTH,
-        };
-      }
-    }
-
-    return localPlayer === undefined
-      ? { totalPlayers }
-      : { totalPlayers, localPlayer };
-  } catch {
-    return { totalPlayers: 0 };
-  }
-};
-
-export const createPlaytestRuntimeHudTracker = (): PlaytestRuntimeHudTracker => {
+export const createPlaytestRuntimeHudTracker = (
+  deriveWorldState?: PlaytestHudWorldStateDeriver,
+): PlaytestRuntimeHudTracker => {
   const recentEvents: PlaytestRuntimeHudEventState[] = [];
+  const seenPickupToastKeys = new Set<string>();
   let gameOver: PlaytestRuntimeHudState["gameOver"];
 
   const pushEvent = (event: PlaytestRuntimeHudEventState): void => {
@@ -202,13 +229,31 @@ export const createPlaytestRuntimeHudTracker = (): PlaytestRuntimeHudTracker => 
       }
     },
     snapshot(world, tickCount) {
-      const { totalPlayers, localPlayer } = readPlayers(world);
-      const zone = readZone(world);
+      const worldState = deriveWorldState?.(world, tickCount) ?? EMPTY_WORLD_STATE;
+      const localPlayer = worldState.localPlayer;
+
+      const pickupToast = localPlayer?.pickupToast;
+      if (localPlayer !== undefined && pickupToast !== undefined) {
+        const key = `${localPlayer.playerId}:${pickupToast.itemKind}:${pickupToast.tier}:${pickupToast.quantity}:${pickupToast.tick}`;
+        if (!seenPickupToastKeys.has(key)) {
+          seenPickupToastKeys.add(key);
+          pushEvent({
+            _tag: "PickupCollected",
+            playerId: localPlayer.playerId,
+            playerDisplayName: localPlayer.displayName,
+            itemKind: pickupToast.itemKind,
+            tier: pickupToast.tier,
+            quantity: pickupToast.quantity,
+            tick: pickupToast.tick,
+            emittedAtMs: Date.now(),
+          });
+        }
+      }
 
       if (gameOver) {
         gameOver = {
           ...gameOver,
-          totalPlayers,
+          totalPlayers: worldState.totalPlayers,
           tickCount,
         };
       }
@@ -228,14 +273,11 @@ export const createPlaytestRuntimeHudTracker = (): PlaytestRuntimeHudTracker => 
                 : event,
             );
 
-      const snapshot: PlaytestRuntimeHudState = {
-        totalPlayers,
+      return {
+        ...worldState,
         recentEvents: events,
-        ...(localPlayer !== undefined ? { localPlayer } : {}),
-        ...(zone ? { zoneStatus: computeZoneStatus(zone, tickCount) } : {}),
         ...(gameOver !== undefined ? { gameOver } : {}),
       };
-      return snapshot;
     },
   };
 };

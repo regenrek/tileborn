@@ -19,10 +19,7 @@ describe('game-host worker routes', () => {
     HANDOFF_SIGNING_KEY: TEST_KEY,
     PLAYTEST_ROOM: makePlaytestNamespace(async (request) => {
       const url = new URL(request.url);
-      if (
-        request.method === 'POST' &&
-        (url.pathname.endsWith('/playtest/init') || url.pathname.endsWith('/create'))
-      ) {
+      if (request.method === 'POST' && url.pathname.endsWith('/create')) {
         return Response.json({ ok: true });
       }
       if (request.method === 'POST' && url.pathname.endsWith('/players/reserve')) {
@@ -178,7 +175,7 @@ describe('game-host worker routes', () => {
     expect(body.wsUrl).toContain('/rooms/room-stable/connect');
   });
 
-  it('POST /rooms/create forwards runtimeArtifact to room init', async () => {
+  it('POST /rooms/create forwards mapPackage and playerModelSelections to room init', async () => {
     let initBody: unknown;
     const app = createWorkerApp(runtimeManifest);
     const response = await app.request(
@@ -188,8 +185,9 @@ describe('game-host worker routes', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           mapId: 'map:fixture',
-          runtimeArtifact: { schemaVersion: 1, spawnAnchors: [{ x: 12, y: 18 }] },
-          options: { idempotencyKey: 'room-artifact' },
+          mapPackage: { manifest: { schemaVersion: 1 } },
+          playerModelSelections: [{ playerId: 'player-1', modelId: 'model:test' }],
+          options: { idempotencyKey: 'room-package' },
         }),
       },
       {
@@ -204,9 +202,38 @@ describe('game-host worker routes', () => {
     expect(response.status).toBe(201);
     expect(initBody).toMatchObject({
       mapId: 'map:fixture',
-      runtimeArtifact: { schemaVersion: 1, spawnAnchors: [{ x: 12, y: 18 }] },
-      options: { idempotencyKey: 'room-artifact' },
+      mapPackage: { manifest: { schemaVersion: 1 } },
+      playerModelSelections: [{ playerId: 'player-1', modelId: 'model:test' }],
+      options: { idempotencyKey: 'room-package' },
     });
+  });
+
+  it('POST /rooms/create surfaces the room boundary 400 for a malformed mapPackage', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mapId: 'map:fixture',
+          mapPackage: { manifest: { schemaVersion: 1 } },
+        }),
+      },
+      {
+        ...env,
+        PLAYTEST_ROOM: makePlaytestNamespace(async () =>
+          Response.json(
+            { error: 'mapPackage is not a valid RuntimeMapPackage: boom' },
+            { status: 400 },
+          ),
+        ),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { readonly error: string };
+    expect(body.error).toContain('mapPackage is not a valid RuntimeMapPackage');
   });
 
   it('POST /rooms/create is idempotent for the same idempotency key', async () => {
@@ -237,6 +264,28 @@ describe('game-host worker routes', () => {
     const secondBody = (await second.json()) as { readonly roomId: string };
     expect(firstBody.roomId).toBe('room-idem');
     expect(secondBody.roomId).toBe('room-idem');
+  });
+
+  it('POST /playtest/start returns 404 for an unknown room (joining never creates)', async () => {
+    const missingEnv: Env = {
+      HANDOFF_SIGNING_KEY: TEST_KEY,
+      PLAYTEST_ROOM: makePlaytestNamespace(async () =>
+        Response.json({ error: 'playtest not initialized' }, { status: 404 }),
+      ),
+    };
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/playtest/start',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture', options: { idempotencyKey: 'unknown-room' } }),
+      },
+      missingEnv,
+    );
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { readonly error: string };
+    expect(body.error).toBe('playtest not found');
   });
 
   it('GET /playtest/:id returns 404 for unknown room init', async () => {

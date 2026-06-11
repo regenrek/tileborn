@@ -43,13 +43,16 @@ import {
   type ResolvedPlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
 import {
-  assemblePlaytestVisualRoleConfig,
+  assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
+  assemblePlaytestWeaponVisualConfig,
   usePlaytestPlayerModels,
-  usePlaytestVisualRoles,
+  usePlaytestOverlayVisuals,
+  usePlaytestWeaponVisuals,
 } from '@/hooks/use-playtest-player-models';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
-import type { BuiltVisualAssetRole } from '@/lib/visual-role-render';
+import type { BuiltOverlayVisual } from '@/lib/overlay-visual-render';
+import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 const LOCAL_PLAYER_INPUT_ID = 'player-1';
@@ -99,7 +102,8 @@ function usePlaytestRuntimeMount({
   map,
   pluginId,
   builtModels,
-  builtRoles,
+  builtOverlays,
+  builtWeapons,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
@@ -107,7 +111,8 @@ function usePlaytestRuntimeMount({
   readonly map: TileborneMap;
   readonly pluginId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
-  readonly builtRoles: readonly BuiltVisualAssetRole[];
+  readonly builtOverlays: readonly BuiltOverlayVisual[];
+  readonly builtWeapons: readonly BuiltWeaponVisual[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -140,16 +145,20 @@ function usePlaytestRuntimeMount({
         // Resolve the projector with the lobby-chosen player models so the
         // runtime-emitted player model ids can resolve to sprites; the model
         // atlases are loaded as runtime textures alongside the plugin defaults.
-        if (builtModels.length > 0 || builtRoles.length > 0) {
+        if (builtModels.length > 0 || builtOverlays.length > 0 || builtWeapons.length > 0) {
           try {
-            const [playerModels, visualRoles] = await Promise.all([
+            const [playerModels, overlayVisuals, weaponVisuals] = await Promise.all([
               builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
-              builtRoles.length > 0 ? assemblePlaytestVisualRoleConfig(builtRoles) : undefined,
+              builtOverlays.length > 0 ? assemblePlaytestOverlayVisualConfig(builtOverlays) : undefined,
+              builtWeapons.length > 0
+                ? assemblePlaytestWeaponVisualConfig(builtWeapons)
+                : undefined,
             ]);
             resolved =
               resolvePlaytestPlugin(pluginId, {
                 ...(playerModels === undefined ? {} : { playerModels }),
-                ...(visualRoles === undefined ? {} : { visualRoles }),
+                ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
+                ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
               }) ?? basePlugin;
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
@@ -213,7 +222,7 @@ function usePlaytestRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, builtRoles]);
+  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, builtOverlays, builtWeapons]);
 }
 
 function usePlaytestSnapshotRenderer({
@@ -468,7 +477,8 @@ export function PlaytestViewport({
   });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
   const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
-  const { builtRoles } = usePlaytestVisualRoles(projectId);
+  const { builtOverlays } = usePlaytestOverlayVisuals(projectId);
+  const { builtWeapons } = usePlaytestWeaponVisuals(projectId);
 
   usePlaytestRuntimeMount({
     containerRef,
@@ -477,7 +487,8 @@ export function PlaytestViewport({
     map,
     pluginId,
     builtModels,
-    builtRoles,
+    builtOverlays,
+    builtWeapons,
   });
   usePlaytestSnapshotRenderer({ containerRef, runtimeRef, map, pluginId, sessionId });
 

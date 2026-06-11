@@ -73,19 +73,35 @@ export const decodeGameObjectCatalog = (
   });
 };
 
+/** Cross-pack resolvers injected into the merge (ADR-0028 weapon-ref refs). */
+export interface MergeGameObjectCatalogsDeps {
+  /**
+   * Returns true when a `weapon-ref.weaponId` resolves. Weapon definitions are
+   * never declared in object catalogs (ADR-0018 owns weapon content), so this
+   * comes from the weapon-catalog registry of the composing app.
+   */
+  readonly resolveWeapon?: (id: string) => boolean;
+}
+
 /**
  * Merge contributed catalogs into a single resolved registry. Each pack is
  * validated independently; object-type ids must be unique across all packs
- * (plugin-neutral, ADR-0019 duplicate detection). Loot-table references are
- * resolved against the union of all packs' loot tables.
+ * (plugin-neutral, ADR-0019 duplicate detection). Loot-table references and
+ * `weapon-ref` companion entity references are resolved against the union of
+ * all packs (ADR-0028 §4a).
  */
 export const mergeGameObjectCatalogs = (
   contributions: readonly CatalogContributionInput[],
+  deps: MergeGameObjectCatalogsDeps = {},
 ): Result.Result<MergedGameObjectCatalog, CatalogRegistryError> => {
   const allLootTableIds = new Set<string>();
+  const allObjectTypeIds = new Set<string>();
   for (const { catalog } of contributions) {
     for (const table of Option.getOrElse(catalog.lootTables, () => [])) {
       allLootTableIds.add(table.id);
+    }
+    for (const objectType of catalog.objectTypes) {
+      allObjectTypeIds.add(objectType.id);
     }
   }
 
@@ -97,6 +113,8 @@ export const mergeGameObjectCatalogs = (
   for (const { contributionId, catalog } of contributions) {
     const validated = validateCatalog(catalog, {
       resolveLootTable: (id) => allLootTableIds.has(id),
+      resolveObjectType: (id) => allObjectTypeIds.has(id),
+      ...(deps.resolveWeapon === undefined ? {} : { resolveWeapon: deps.resolveWeapon }),
     });
     if (Result.isFailure(validated)) {
       return Result.fail(

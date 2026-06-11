@@ -30,7 +30,6 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 import type { ModeAuthoringPanelProps } from './mode-authoring-panels';
 import { GameSettingsForm } from './game-settings-form';
-import { VisualAssetRolesSection } from './visual-asset-roles-section';
 
 export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: ModeAuthoringPanelProps) {
   const updateMap = useUpdateMap();
@@ -122,7 +121,6 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
       ) : null}
 
       <PlayerModelsSection projectId={projectId} />
-      <VisualAssetRolesSection projectId={projectId} />
     </div>
   );
 }

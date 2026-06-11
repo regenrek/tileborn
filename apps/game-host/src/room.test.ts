@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultMapPackage } from "./.generated/default-map-package.js";
 import {
   broadcastBinaryFrame,
   createRoomMeta,
@@ -21,20 +22,34 @@ describe("PlaytestRoom stub helpers", () => {
     expect(parsed.seed).toBe(42);
   });
 
-  it("parsePlaytestInitBody preserves runtimeArtifact outside scalar room options", () => {
+  it("parsePlaytestInitBody preserves the ORIGINAL mapPackage wire and selections", () => {
+    const wire = JSON.parse(JSON.stringify(defaultMapPackage)) as Record<string, unknown>;
     const parsed = parsePlaytestInitBody(
       JSON.stringify({
         mapId: "map:1",
-        runtimeArtifact: { schemaVersion: 1, objectPlacements: [{ objectId: "object:1" }] },
+        mapPackage: wire,
+        playerModelSelections: [{ playerId: "player-1", modelId: "model:test" }],
         options: { maxPlayers: 8 },
       }),
     );
 
-    expect(parsed.runtimeArtifact).toEqual({
-      schemaVersion: 1,
-      objectPlacements: [{ objectId: "object:1" }],
-    });
+    // Original wire JSON survives validation untouched (no re-encode).
+    expect(parsed.mapPackage).toEqual(wire);
+    expect(parsed.playerModelSelections).toEqual([
+      { playerId: "player-1", modelId: "model:test" },
+    ]);
     expect(parsed.options).toEqual({ maxPlayers: 8 });
+  });
+
+  it("parsePlaytestInitBody rejects a mapPackage that fails RuntimeMapPackage decode", () => {
+    expect(() =>
+      parsePlaytestInitBody(
+        JSON.stringify({
+          mapId: "map:1",
+          mapPackage: { manifest: { schemaVersion: 1 } },
+        }),
+      ),
+    ).toThrow(/mapPackage is not a valid RuntimeMapPackage/);
   });
 
   it("createRoomMeta stores mapId and timestamps", () => {
@@ -113,8 +128,16 @@ describe("PlaytestRoom DO fake", () => {
         get: () => ({ fetch: async () => new Response("unused") }),
       },
     });
-    const init = await room.fetch(
+    // `/playtest/init` is hard-cut: rooms are created via `/create` only.
+    const legacyInit = await room.fetch(
       new Request("https://do/playtest/init", {
+        method: "POST",
+        body: JSON.stringify({ mapId: "map:fixture" }),
+      }),
+    );
+    expect(legacyInit.status).toBe(404);
+    const init = await room.fetch(
+      new Request("https://do/create", {
         method: "POST",
         body: JSON.stringify({ mapId: "map:fixture" }),
       }),

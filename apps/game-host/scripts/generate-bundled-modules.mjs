@@ -5,6 +5,8 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { generateDefaultMapPackage } from "./generate-default-map-package.mjs";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const gameHostRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(gameHostRoot, "../..");
@@ -200,6 +202,7 @@ export const generateBundledModules = async (options = {}) => {
   };
 
   await mkdir(generatedDir, { recursive: true });
+  await generateDefaultMapPackage();
   const pluginRuntimeSource = (await readFile(PLUGIN_RUNTIME_PATH, "utf8"))
     .replace(/\n\/\/# sourceMappingURL=.*$/u, "\n");
   assertBrowserSafeRuntimeSource(pluginRuntimeSource);
@@ -246,7 +249,11 @@ export declare function encodeInvalidClientFrame(): Uint8Array;
 export declare function isWelcomeFrame(bytes: Uint8Array): boolean;
 
 export declare function createRuntimeAdapter(host: {
-  readonly getArtifact: () => unknown;
+  readonly getMapPackage: () => unknown;
+  readonly getPlayerModelSelections?: () => readonly {
+    readonly playerId: string;
+    readonly modelId: string;
+  }[];
   readonly getPlayerInput?: (playerId: string) => {
     readonly tick: number;
     readonly seq: number;

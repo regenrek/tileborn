@@ -15,7 +15,6 @@ import {
   makeLayerId,
   makeMapId,
   makeTileborneMap,
-  normalizeAndMigratePersistedMapJson,
 } from '@tileborne/core';
 import {
   HomeService,
@@ -836,8 +835,7 @@ const readTilesetPackManifest = (
 
 export const toMapIpcView = (map: TileborneMap): TileborneMap => mapToIpcView(map);
 
-export const toMapIpcPayload = (map: TileborneMap): unknown =>
-  normalizeAndMigratePersistedMapJson(mapToJson(map));
+export const toMapIpcPayload = (map: TileborneMap): unknown => mapToJson(map);
 
 export const readVerifiedMap = (
   projectDir: string,

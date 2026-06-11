@@ -35,8 +35,8 @@ export function RightInspector() {
   const contributionsQuery = usePluginContributions();
   // ADR-0023 section B: mount the ACTIVE game mode's authoring panel by manifest
   // discovery (a plugin declaring a runtime system + settings panel), resolving
-  // the bundled panel component by plugin id — not a `battleRoyaleEnabled`
-  // literal-id check. Multi-mode projects must store an explicit
+  // the bundled panel component by plugin id — not a literal-id enabled-flag
+  // check. Multi-mode projects must store an explicit
   // `project.settings.activeGameMode` selection before a mode panel is mounted.
   const activeMode = resolveProjectActiveGameMode(
     contributionsQuery.data?.gameModes ?? [],

@@ -35,8 +35,8 @@ export type WorkspaceTabKind =
   | 'assets'
   | 'plugins'
   | 'settings'
-  | 'visual-role-editor'
-  | 'player-model-editor';
+  | 'player-model-editor'
+  | 'entity-editor';
 
 export interface WorkspaceTab {
   readonly id: string;
@@ -44,6 +44,32 @@ export interface WorkspaceTab {
   readonly projectId?: string;
   readonly mapId?: string;
 }
+
+const CURRENT_WORKSPACE_TAB_KINDS = new Set<WorkspaceTabKind>([
+  'map',
+  'overview',
+  'assets',
+  'plugins',
+  'settings',
+  'player-model-editor',
+  'entity-editor',
+]);
+
+const isWorkspaceTabRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const normalizeWorkspaceTabKind = (kind: unknown): WorkspaceTabKind | undefined => {
+  if (typeof kind !== 'string') {
+    return undefined;
+  }
+  if (CURRENT_WORKSPACE_TAB_KINDS.has(kind as WorkspaceTabKind)) {
+    return kind as WorkspaceTabKind;
+  }
+  return undefined;
+};
+
+const normalizeWorkspaceTabRouteParam = (value: unknown): string | undefined =>
+  typeof value === 'string' ? normalizeOptionalRouteParam(value) : undefined;
 
 export function workspaceTabId(tab: {
   kind: WorkspaceTabKind;
@@ -61,37 +87,44 @@ export function workspaceTabId(tab: {
       return `plugins:${tab.projectId ?? ''}`;
     case 'settings':
       return `settings:${tab.projectId ?? 'global'}`;
-    case 'visual-role-editor':
-      return `visual-role-editor:${tab.projectId ?? ''}`;
     case 'player-model-editor':
       return `player-model-editor:${tab.projectId ?? ''}`;
+    case 'entity-editor':
+      return `entity-editor:${tab.projectId ?? ''}`;
   }
 }
 
-export function normalizeWorkspaceTabs(tabs: readonly WorkspaceTab[]): WorkspaceTab[] {
+export function normalizeWorkspaceTabs(tabs: readonly unknown[]): WorkspaceTab[] {
   const normalized: WorkspaceTab[] = [];
   const seen = new Set<string>();
 
   for (const tab of tabs) {
-    const projectId = normalizeOptionalRouteParam(tab.projectId);
-    const mapId = normalizeOptionalRouteParam(tab.mapId);
+    if (!isWorkspaceTabRecord(tab)) {
+      continue;
+    }
+    const kind = normalizeWorkspaceTabKind(tab.kind);
+    if (kind === undefined) {
+      continue;
+    }
+    const projectId = normalizeWorkspaceTabRouteParam(tab.projectId);
+    const mapId = normalizeWorkspaceTabRouteParam(tab.mapId);
 
-    if (tab.kind === 'map' && (!projectId || !mapId)) {
+    if (kind === 'map' && (!projectId || !mapId)) {
       continue;
     }
     if (
-      (tab.kind === 'overview' ||
-        tab.kind === 'assets' ||
-        tab.kind === 'plugins' ||
-        tab.kind === 'visual-role-editor' ||
-        tab.kind === 'player-model-editor') &&
+      (kind === 'overview' ||
+        kind === 'assets' ||
+        kind === 'plugins' ||
+        kind === 'player-model-editor' ||
+        kind === 'entity-editor') &&
       !projectId
     ) {
       continue;
     }
 
     const id = workspaceTabId({
-      kind: tab.kind,
+      kind,
       ...(projectId === undefined ? {} : { projectId }),
       ...(mapId === undefined ? {} : { mapId }),
     });
@@ -101,9 +134,9 @@ export function normalizeWorkspaceTabs(tabs: readonly WorkspaceTab[]): Workspace
     seen.add(id);
     normalized.push({
       id,
-      kind: tab.kind,
+      kind,
       ...(projectId === undefined ? {} : { projectId }),
-      ...(tab.kind === 'map' && mapId !== undefined ? { mapId } : {}),
+      ...(kind === 'map' && mapId !== undefined ? { mapId } : {}),
     });
   }
 

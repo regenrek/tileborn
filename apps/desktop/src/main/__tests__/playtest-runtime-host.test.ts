@@ -7,15 +7,25 @@ import { fileURLToPath } from "node:url";
 
 import {
   AssetLibraryReference,
+  GameObjectCatalog,
   PlayerModelClipSet,
   PlayerModelRef,
+  PluginId,
+  decodePersistedTileborneMapJson,
+  gameModeIdFromPluginId,
   gameObjectTypeIdForKey,
   makeClipId,
   makePackId,
+  readPluginMapSettings,
 } from "@tileborne/core";
+import { assembleRuntimeMapPackage } from "@tileborne/services-build";
 import { afterEach, describe, expect, it } from "vitest";
-import { Option } from "effect";
-import { PLUGIN_ID, decodeServerFrame } from "@tileborne/plugin-battle-royale";
+import { Effect, Option, Schema } from "effect";
+import {
+  PLUGIN_ID,
+  decodeServerFrame,
+  exportBattleRoyaleModeData,
+} from "@tileborne/plugin-battle-royale";
 
 import {
   getPlaytestRuntimeMetrics,
@@ -30,11 +40,67 @@ const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const battleRoyalePluginRoot = path.resolve(desktopRoot, "../../packages/plugin-battle-royale");
 const packId = makePackId("550e8400-e29b-41d4-a716-446655440999");
 const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544000${index}`);
+const MAP_ID = "map:5b1901ca-1abd-42d6-aeac-553b34b9bda6";
+const PROJECT_ID = "project:5b1901ca-1abd-42d6-aeac-553b34b9bda7";
 
-const playerModels = [
+const battleRoyalePluginId = Schema.decodeUnknownSync(PluginId)(PLUGIN_ID);
+
+/**
+ * Hosts boot from the ONE typed runtime map package (ADR-0030): tests assemble
+ * a real package (BR catalog merged, placements projected, visuals baked) from
+ * a persisted-map fixture instead of writing a bare map.json.
+ */
+const writeMapPackage = async (
+  outputDirectory: string,
+  persistedMapJson: unknown,
+  models: readonly PlayerModelRef[] = [],
+): Promise<void> => {
+  const catalog = Schema.decodeUnknownSync(GameObjectCatalog)(
+    JSON.parse(
+      await readFile(
+        path.join(battleRoyalePluginRoot, "schemas", "game-object-catalog.json"),
+        "utf8",
+      ),
+    ),
+  );
+  const map = decodePersistedTileborneMapJson(persistedMapJson);
+  // Same neutral-capacity sourcing the IPC handler uses: the BR-namespaced
+  // authored `maxPlayers`, falling back to the legacy flat fixture key.
+  const settingsMaxPlayers = readPluginMapSettings(map, PLUGIN_ID).maxPlayers;
+  const flatMaxPlayers = map.properties.maxPlayers;
+  const playerCapacity =
+    typeof settingsMaxPlayers === "number"
+      ? settingsMaxPlayers
+      : typeof flatMaxPlayers === "number"
+        ? flatMaxPlayers
+        : 32;
+  await Effect.runPromise(
+    assembleRuntimeMapPackage({
+      projectId: PROJECT_ID,
+      map,
+      activeMode: {
+        modeId: gameModeIdFromPluginId(battleRoyalePluginId),
+        pluginId: battleRoyalePluginId,
+      },
+      pluginCatalogs: [
+        {
+          pluginId: battleRoyalePluginId,
+          catalogs: [{ contributionId: `${PLUGIN_ID}#catalog`, catalog }],
+        },
+      ],
+      playerModels: models,
+      playerCapacity,
+      modeDataExporter: exportBattleRoyaleModeData,
+      engineVersion: "0.0.0-test",
+      outputDirectory,
+    }),
+  );
+};
+
+const makePlayerModel = (id: string, label: string): PlayerModelRef =>
   new PlayerModelRef({
-    id: "model:test",
-    label: "Test Model",
+    id,
+    label,
     ref: new AssetLibraryReference({
       packId,
       kind: "sprite",
@@ -55,9 +121,9 @@ const playerModels = [
     }),
     anchor: { x: 0.5, y: 1 },
     hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-    muzzle: { x: 0.75, y: 0.45 },
-  }),
-] as const;
+  });
+
+const playerModels = [makePlayerModel("model:test", "Test Model")] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -95,7 +161,15 @@ describe("playtest-runtime-host", () => {
     const pluginRoot = path.join(tempRoot, "plugin");
     await mkdir(path.join(pluginRoot, "dist"), { recursive: true });
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(path.join(artifactDirectory, "map.json"), JSON.stringify({ layers: [] }), "utf8");
+    await writeMapPackage(artifactDirectory, {
+      id: MAP_ID,
+      schemaVersion: 1,
+      size: { width: 32, height: 32 },
+      tileSize: { width: 32, height: 32 },
+      layers: [],
+      objects: [],
+      properties: {},
+    });
     await writeFile(
       path.join(pluginRoot, "tileborne-plugin.json"),
       JSON.stringify(
@@ -125,7 +199,7 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: "@tileborne-plugins/test-runtime", rootPath: pluginRoot }],
     });
 
@@ -133,7 +207,7 @@ describe("playtest-runtime-host", () => {
     expect(getPlaytestRuntimeMetrics(sessionId)?.tickCount).toBeGreaterThanOrEqual(5);
   });
 
-  it("routes a legacy-`kind` map.json through the shared migrate+normalize contract before the plugin reads it", async () => {
+  it("routes a legacy-`kind` map through the package decode contract before the plugin reads it", async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-legacy-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     const pluginRoot = path.join(tempRoot, "plugin");
@@ -141,36 +215,32 @@ describe("playtest-runtime-host", () => {
     await mkdir(path.join(pluginRoot, "dist"), { recursive: true });
     await mkdir(artifactDirectory, { recursive: true });
 
-    // Pre-ADR-0019 map: free-string `kind`, omitted optional object keys
-    // (width/height) and a placement that omits its optional sub-keys. The host
-    // must migrate + normalize it (single shared plain-JSON contract) before the
-    // plugin reads it, instead of bypassing the normalize step.
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:5b1901ca-1abd-42d6-aeac-553b34b9bda6",
-        schemaVersion: 1,
-        size: { width: 32, height: 32 },
-        tileSize: { width: 32, height: 32 },
-        layers: [],
-        objects: [
-          {
-            id: "object:f08061c1-423d-4532-b972-0cb221b1a08a",
-            kind: "spawn-point",
-            x: 10,
-            y: 20,
-            layerId: "layer:00000000-0000-4000-8000-000000000001",
-            properties: {},
-            placement: {
-              placeableId: "placeable:11111111-1111-4111-8111-111111111111",
-              source: "manual",
-            },
+    // Pre-ADR-0019 map: free-string `kind` and a placement that omits its
+    // optional sub-keys. Package assembly + the package loader both route
+    // through the ONE persisted-map decode contract (migrate legacy kinds to
+    // catalog GameObjectTypeIds), so the plugin sees the canonical wire shape.
+    await writeMapPackage(artifactDirectory, {
+      id: MAP_ID,
+      schemaVersion: 1,
+      size: { width: 32, height: 32 },
+      tileSize: { width: 32, height: 32 },
+      layers: [],
+      objects: [
+        {
+          id: "object:f08061c1-423d-4532-b972-0cb221b1a08a",
+          kind: "spawn-point",
+          x: 10,
+          y: 20,
+          layerId: "layer:00000000-0000-4000-8000-000000000001",
+          properties: {},
+          placement: {
+            placeableId: "placeable:11111111-1111-4111-8111-111111111111",
+            source: "manual",
           },
-        ],
-        properties: { maxPlayers: 1 },
-      }),
-      "utf8",
-    );
+        },
+      ],
+      properties: { maxPlayers: 1 },
+    });
 
     await writeFile(
       path.join(pluginRoot, "tileborne-plugin.json"),
@@ -187,24 +257,18 @@ describe("playtest-runtime-host", () => {
       "utf8",
     );
 
-    // The adapter captures the exact map JSON the host hands it. Key presence
-    // survives JSON serialization (the filled values are `undefined`, which
-    // serialization would drop), so we assert on migrated kind + key presence.
+    // The adapter captures the exact package JSON the host hands it: the
+    // encoded `RuntimeMapPackage` with the canonical `TileborneMap` wire map.
     await writeFile(
       path.join(pluginRoot, "dist", "runtime.js"),
       [
         'import { writeFileSync } from "node:fs";',
         "export const createRuntimeAdapter = (host) => {",
-        "  const artifact = host.getArtifact();",
-        "  const obj = artifact.objects[0];",
-        "  const placement = obj.placement;",
+        "  const mapPackage = host.getMapPackage();",
+        "  const obj = mapPackage.map.objects[0];",
         `  writeFileSync(${JSON.stringify(capturePath)}, JSON.stringify({`,
         "    kind: obj.kind,",
-        '    hasWidthKey: "width" in obj,',
-        '    hasHeightKey: "height" in obj,',
-        '    hasPlacementKey: "placement" in obj,',
-        '    placementHasPackIdKey: placement && typeof placement === "object" ? "packId" in placement : false,',
-        '    placementHasAssetIdKey: placement && typeof placement === "object" ? "assetId" in placement : false,',
+        "    placement: obj.placement,",
         "  }));",
         '  return { id: "@tileborne-plugins/capture-runtime", onTick() {} };',
         "};",
@@ -218,7 +282,7 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: "@tileborne-plugins/capture-runtime", rootPath: pluginRoot }],
     });
 
@@ -226,31 +290,26 @@ describe("playtest-runtime-host", () => {
 
     const captured = JSON.parse(await readFile(capturePath, "utf8")) as {
       readonly kind: string;
-      readonly hasWidthKey: boolean;
-      readonly hasHeightKey: boolean;
-      readonly hasPlacementKey: boolean;
-      readonly placementHasPackIdKey: boolean;
-      readonly placementHasAssetIdKey: boolean;
+      readonly placement: { readonly placeableId: string; readonly source: string } | undefined;
     };
 
     // Migrated: legacy slug resolved to the catalog GameObjectTypeId.
     expect(captured.kind).toBe(gameObjectTypeIdForKey("spawn-point"));
-    // Normalized: omitted optional object/placement keys are now present.
-    expect(captured.hasWidthKey).toBe(true);
-    expect(captured.hasHeightKey).toBe(true);
-    expect(captured.hasPlacementKey).toBe(true);
-    expect(captured.placementHasPackIdKey).toBe(true);
-    expect(captured.placementHasAssetIdKey).toBe(true);
+    // The authored placement survives the package round-trip losslessly.
+    expect(captured.placement).toMatchObject({
+      placeableId: "placeable:11111111-1111-4111-8111-111111111111",
+      source: "manual",
+    });
   });
 
   it("forwards playtest input to the battle royale adapter and updates player position", async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-movement-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:test",
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
         schemaVersion: 1,
         size: { width: 32, height: 32 },
         tileSize: { width: 32, height: 32 },
@@ -266,8 +325,8 @@ describe("playtest-runtime-host", () => {
           },
         ],
         properties: { maxPlayers: 1 },
-      }),
-      "utf8",
+      },
+      playerModels,
     );
 
     const sessionId = "runtime-host-movement-test";
@@ -275,9 +334,8 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
-      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
@@ -305,18 +363,18 @@ describe("playtest-runtime-host", () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-invalid-br-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:test",
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
         schemaVersion: 1,
         size: { width: 32, height: 32 },
         tileSize: { width: 32, height: 32 },
         layers: [],
         objects: [],
         properties: { maxPlayers: 1 },
-      }),
-      "utf8",
+      },
+      playerModels,
     );
 
     const sessionId = "runtime-host-invalid-br-test";
@@ -324,9 +382,8 @@ describe("playtest-runtime-host", () => {
     await expect(
       startPlaytestRuntimeHost({
         sessionId,
-        artifactDirectory,
+        packageDirectory: artifactDirectory,
         pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
-        playerModels,
       }),
     ).rejects.toThrow(/spawnAnchors/);
     expect(getPlaytestRuntimeMetrics(sessionId)).toBeUndefined();
@@ -337,10 +394,10 @@ describe("playtest-runtime-host", () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-canonical-br-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:test",
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
         schemaVersion: 1,
         size: { width: 32, height: 32 },
         tileSize: { width: 32, height: 32 },
@@ -356,8 +413,8 @@ describe("playtest-runtime-host", () => {
           },
         ],
         properties: { maxPlayers: 1 },
-      }),
-      "utf8",
+      },
+      playerModels,
     );
 
     const sessionId = "runtime-host-canonical-br-test";
@@ -365,9 +422,8 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
-      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
@@ -391,14 +447,70 @@ describe("playtest-runtime-host", () => {
     expect(getPlaytestRuntimeMetrics(sessionId)?.playerCount).toBe(1);
   });
 
+  it("hands selectedPlayerModelId to the plugin as the player-1 session selection", async () => {
+    tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-selection-"));
+    const artifactDirectory = path.join(tempRoot, "artifact");
+    await mkdir(artifactDirectory, { recursive: true });
+    // Two baked models: the package default is the FIRST one, so asserting
+    // the second proves the host's selectedPlayerModelId reaches the plugin
+    // through `getPlayerModelSelections` (the session channel) and wins.
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
+        schemaVersion: 1,
+        size: { width: 32, height: 32 },
+        tileSize: { width: 32, height: 32 },
+        layers: [],
+        objects: [
+          {
+            id: "object:00000000-0000-4000-8000-000000000001",
+            kind: gameObjectTypeIdForKey("spawn-point"),
+            x: 10,
+            y: 20,
+            layerId: "layer:00000000-0000-4000-8000-000000000001",
+            properties: {},
+          },
+        ],
+        properties: { maxPlayers: 1 },
+      },
+      [makePlayerModel("model:test", "Test Model"), makePlayerModel("model:alt", "Alt Model")],
+    );
+
+    const sessionId = "runtime-host-selection-test";
+    sessionIds.push(sessionId);
+
+    await startPlaytestRuntimeHost({
+      sessionId,
+      packageDirectory: artifactDirectory,
+      pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
+      selectedPlayerModelId: "model:alt",
+    });
+
+    await waitForTickCount(sessionId, 2);
+    const snapshot = getPlaytestRuntimeSnapshot(sessionId);
+    expect(snapshot?.frame).toBeInstanceOf(Uint8Array);
+    const frame = decodeServerFrame(snapshot!.frame!);
+    expect(frame).toMatchObject({
+      _tag: "WelcomeSnapshot",
+      players: [
+        {
+          id: "player-1",
+          modelId: "model:alt",
+          animation: { modelId: "model:alt", clipKey: "idle" },
+        },
+      ],
+    });
+  });
+
   it("feeds authored battle royale settings into runtime HUD snapshots", async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-settings-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:test",
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
         schemaVersion: 1,
         size: { width: 32, height: 32 },
         tileSize: { width: 32, height: 32 },
@@ -423,8 +535,8 @@ describe("playtest-runtime-host", () => {
             },
           },
         },
-      }),
-      "utf8",
+      },
+      playerModels,
     );
 
     const sessionId = "runtime-host-settings-test";
@@ -432,9 +544,8 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
-      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);
@@ -450,10 +561,10 @@ describe("playtest-runtime-host", () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-projectile-"));
     const artifactDirectory = path.join(tempRoot, "artifact");
     await mkdir(artifactDirectory, { recursive: true });
-    await writeFile(
-      path.join(artifactDirectory, "map.json"),
-      JSON.stringify({
-        id: "map:test",
+    await writeMapPackage(
+      artifactDirectory,
+      {
+        id: MAP_ID,
         schemaVersion: 1,
         size: { width: 32, height: 32 },
         tileSize: { width: 32, height: 32 },
@@ -469,8 +580,8 @@ describe("playtest-runtime-host", () => {
           },
         ],
         properties: { maxPlayers: 1 },
-      }),
-      "utf8",
+      },
+      playerModels,
     );
 
     const decodedFrames: unknown[] = [];
@@ -483,9 +594,8 @@ describe("playtest-runtime-host", () => {
 
     await startPlaytestRuntimeHost({
       sessionId,
-      artifactDirectory,
+      packageDirectory: artifactDirectory,
       pluginInstalls: [{ pluginId: PLUGIN_ID, rootPath: battleRoyalePluginRoot }],
-      playerModels,
     });
 
     await waitForTickCount(sessionId, 2);

@@ -22,6 +22,12 @@ export interface RoomPlayerRecord {
   readonly displayName?: string;
 }
 
+/** Per-session player→model selection carried by the room, never the package. */
+export interface RoomPlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
 interface RoomStorageLegacyV1 {
   readonly schemaVersion: 1;
   readonly mapId: string;
@@ -44,7 +50,9 @@ export interface RoomStorageV2 {
   readonly mapId: string;
   readonly seed: string | number;
   readonly createdAt: string;
-  readonly runtimeArtifact?: JsonObject;
+  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
+  readonly mapPackage?: JsonObject;
+  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly lifecycle: RoomLifecycleState;
   readonly options: Record<string, string | number | boolean | null>;
   readonly players: Record<string, RoomPlayerRecord>;
@@ -68,13 +76,17 @@ export const emptyRoomStorage = (
   options: Record<string, string | number | boolean | null> = {},
   idempotencyKey?: string,
   createdAt = new Date().toISOString(),
-  runtimeArtifact?: JsonObject,
+  mapPackage?: JsonObject,
+  playerModelSelections?: readonly RoomPlayerModelSelection[],
 ): RoomStorageV2 => ({
   schemaVersion: ROOM_SCHEMA_VERSION,
   mapId,
   seed,
   createdAt,
-  ...(runtimeArtifact === undefined ? {} : { runtimeArtifact }),
+  ...(mapPackage === undefined ? {} : { mapPackage }),
+  ...(playerModelSelections === undefined || playerModelSelections.length === 0
+    ? {}
+    : { playerModelSelections }),
   lifecycle: {
     phase: "lobby",
     enteredAt: createdAt,

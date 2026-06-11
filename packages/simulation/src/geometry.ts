@@ -72,6 +72,28 @@ export const angleBetween = (a: Vec2Like, b: Vec2Like): number => {
   return Math.acos(cos);
 };
 
+/** Anything shaped like an axis-aligned box (lets helpers accept plain literals). */
+export interface AabbLike {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+}
+
+const axisGap = (aMin: number, aMax: number, bMin: number, bMax: number): number =>
+  Math.max(0, aMin - bMax, bMin - aMax);
+
+/**
+ * Shortest Euclidean distance between the boundaries of two axis-aligned
+ * boxes: `0` when they touch or overlap, otherwise the hypot of the per-axis
+ * gaps. A point is the degenerate box with `min === max`, so point-to-box
+ * gap distance needs no separate helper. This is the neutral form of the
+ * body-gap pickup metric (an interaction reach measured between collision
+ * bodies rather than centers).
+ */
+export const aabbGapDistance = (a: AabbLike, b: AabbLike): number =>
+  Math.hypot(axisGap(a.minX, a.maxX, b.minX, b.maxX), axisGap(a.minY, a.maxY, b.minY, b.maxY));
+
 /**
  * Axis-aligned blocking rectangle the combat systems test against for
  * line-of-sight and projectile/beam blocking. Neutral geometry + neutral flags

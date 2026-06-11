@@ -3,72 +3,54 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
-import { LOOT_CRATE_KIND } from "@tileborne/plugin-battle-royale/constants";
+import { LOOT_CRATE_KIND, SPAWN_POINT_KIND } from "@tileborne/plugin-battle-royale/constants";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { bundledPlugin, createBundledPluginLoader } from "./bundled-plugin-loader.js";
+import { defaultMapPackage } from "./.generated/default-map-package.js";
 
 const generatedRuntimeTypesPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   ".generated/plugin-runtime.d.ts",
 );
 const optionalDirectionPattern = /readonly dir\?: 0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6 \| 7;/gu;
-const clipIdAt = (index: number): string => `clip:00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 
-const makeRuntimeArtifact = () => ({
-  schemaVersion: 1,
-  maxPlayers: 1,
-  spawnPoints: [{ x: 10, y: 20, team: "solo", weight: 1 }],
-  spawnAnchors: [{ x: 10, y: 20, team: "solo", weight: 1 }],
-  shrinkSchedule: {
-    centerX: 16,
-    centerY: 16,
-    startRadiusTiles: 16,
-    endRadiusTiles: 4,
-    shrinkIntervalMs: 30_000,
-    damagePerSecond: 5,
-  },
-  lootTables: [{ itemKind: "rifle", tier: "rare", weight: 1 }],
-  objectPlacements: [
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/**
+ * Room-supplied encoded `RuntimeMapPackage`: the bundled default with a
+ * single authored spawn at (10, 20) and one loot crate at (12, 18).
+ */
+const makeMapPackage = (): unknown => {
+  const pkg = clone(defaultMapPackage) as {
+    placements: unknown;
+    modeData: Record<string, { maxPlayers: number; lootTables: unknown }>;
+  };
+  pkg.placements = [
+    {
+      objectId: "object:00000000-0000-4000-8000-000000000104",
+      typeId: SPAWN_POINT_KIND,
+      x: 10,
+      y: 20,
+      instanceProperties: { team: "solo", weight: 1 },
+    },
     {
       objectId: "object:00000000-0000-4000-8000-000000000103",
-      role: "loot-crate",
-      kind: LOOT_CRATE_KIND,
+      typeId: LOOT_CRATE_KIND,
       x: 12,
       y: 18,
-      properties: { itemKind: "rifle", tier: "rare", weight: 1 },
+      instanceProperties: { itemKind: "rifle", tier: "rare", weight: 1 },
     },
-  ],
-  playerModels: [
-    {
-      id: "model:plain",
-      label: "Plain",
-      ref: {
-        packId: "pack:00000000-0000-4000-8000-000000000002",
-        kind: "sprite",
-        refId: "placeable:plain",
-        clipId: clipIdAt(0),
-      },
-      defaultClipId: clipIdAt(0),
-      clips: {
-        idle: clipIdAt(0),
-        walk: clipIdAt(1),
-        run: clipIdAt(2),
-        shoot: clipIdAt(3),
-        reload: clipIdAt(4),
-        hit: clipIdAt(5),
-        death: clipIdAt(6),
-        dash: clipIdAt(7),
-        pickup: clipIdAt(8),
-      },
-      anchor: { x: 0.5, y: 1 },
-      hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-      muzzle: { x: 0.75, y: 0.45 },
-    },
-  ],
-  defaultPlayerModelId: "model:plain",
-});
+  ];
+  const modeSection = pkg.modeData["@tileborne-plugins/battle-royale"];
+  if (modeSection === undefined) {
+    throw new Error("default map package is missing the BR modeData section");
+  }
+  modeSection.maxPlayers = 1;
+  modeSection.lootTables = [{ itemKind: "rifle", tier: "rare", weight: 1 }];
+  return pkg;
+};
 
 describe("createBundledPluginLoader", () => {
   it("keeps generated BR input declarations aligned with shoot-only frames", () => {
@@ -170,10 +152,10 @@ describe("createBundledPluginLoader", () => {
     }
   });
 
-  it("uses supplied runtimeArtifact for spawns and object snapshots", async () => {
+  it("uses the supplied mapPackage for spawns and object snapshots", async () => {
     const frames: Uint8Array[] = [];
     const loader = createBundledPluginLoader({
-      runtimeArtifact: makeRuntimeArtifact(),
+      mapPackage: makeMapPackage(),
       emitFrame: (frame) => {
         frames.push(frame);
       },

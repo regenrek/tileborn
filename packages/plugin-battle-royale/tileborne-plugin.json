@@ -25,10 +25,6 @@
       "generatorId": "generate-map"
     },
     {
-      "_tag": "ExportArtifact",
-      "formats": ["battle-royale-artifact"]
-    },
-    {
       "_tag": "RegisterRuntimeSystem",
       "systemId": "battle-royale-runtime"
     },
@@ -171,17 +167,6 @@
           "kind": "executable",
           "display": {
             "label": "Generate Battle Royale Arena"
-          },
-          "entry": "./dist/server.js"
-        }
-      ],
-      "exporters": [
-        {
-          "_tag": "ExecutableEditorExporterContribution",
-          "id": "export-artifact",
-          "kind": "executable",
-          "display": {
-            "label": "Export Battle Royale Artifact"
           },
           "entry": "./dist/server.js"
         }

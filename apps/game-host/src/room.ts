@@ -1,34 +1,70 @@
-import type { JsonObject } from "@tileborne/core";
+import { RuntimeMapPackage, type JsonObject } from "@tileborne/core";
+import { Result, Schema } from "effect";
+
 import type { PlaytestRoomMeta, PlaytestSummary } from "./types.js";
-import type { RoomStorage } from "./rooms/storage-schema.js";
+import type { RoomPlayerModelSelection, RoomStorage } from "./rooms/storage-schema.js";
 import type { ClientTransportStats } from "./rooms/room-transport.js";
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const decodeMapPackageWire = Schema.decodeUnknownResult(RuntimeMapPackage);
+
+const isPlayerModelSelection = (value: unknown): value is RoomPlayerModelSelection =>
+  isJsonObject(value) &&
+  typeof value.playerId === "string" &&
+  value.playerId.length > 0 &&
+  typeof value.modelId === "string" &&
+  value.modelId.length > 0;
+
 export const parsePlaytestInitBody = (body: string): {
   mapId: string;
   seed?: string | number;
   options?: Record<string, string | number | boolean | null>;
-  runtimeArtifact?: JsonObject;
+  mapPackage?: JsonObject;
+  playerModelSelections?: readonly RoomPlayerModelSelection[];
 } => {
   const parsed = JSON.parse(body) as {
     readonly mapId?: string;
     readonly seed?: string | number;
     readonly options?: Record<string, string | number | boolean | null>;
-    readonly runtimeArtifact?: unknown;
+    readonly mapPackage?: unknown;
+    readonly playerModelSelections?: unknown;
   };
   if (typeof parsed.mapId !== "string" || parsed.mapId.length === 0) {
     throw new Error("mapId is required");
   }
-  if (parsed.runtimeArtifact !== undefined && !isJsonObject(parsed.runtimeArtifact)) {
-    throw new Error("runtimeArtifact must be a JSON object");
+  if (parsed.mapPackage !== undefined) {
+    // Boundary validation (M2 review, F1): a supplied package must decode as
+    // a full `RuntimeMapPackage` before the room stores it. The ORIGINAL wire
+    // JSON is what gets stored/forwarded — never a re-encode.
+    if (!isJsonObject(parsed.mapPackage)) {
+      throw new Error("mapPackage must be a JSON object");
+    }
+    const decoded = decodeMapPackageWire(parsed.mapPackage);
+    if (Result.isFailure(decoded)) {
+      throw new Error(
+        `mapPackage is not a valid RuntimeMapPackage: ${String(decoded.failure)}`,
+      );
+    }
+  }
+  if (
+    parsed.playerModelSelections !== undefined &&
+    !(Array.isArray(parsed.playerModelSelections) &&
+      parsed.playerModelSelections.every(isPlayerModelSelection))
+  ) {
+    throw new Error("playerModelSelections must be an array of { playerId, modelId }");
   }
   return {
     mapId: parsed.mapId,
     ...(parsed.seed === undefined ? {} : { seed: parsed.seed }),
     ...(parsed.options === undefined ? {} : { options: parsed.options }),
-    ...(parsed.runtimeArtifact === undefined ? {} : { runtimeArtifact: parsed.runtimeArtifact }),
+    ...(parsed.mapPackage === undefined ? {} : { mapPackage: parsed.mapPackage }),
+    ...(parsed.playerModelSelections === undefined
+      ? {}
+      : {
+          playerModelSelections: parsed.playerModelSelections as readonly RoomPlayerModelSelection[],
+        }),
   };
 };
 

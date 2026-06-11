@@ -8,9 +8,13 @@ import { Effect, Option, Schema, Stream } from 'effect';
 import { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
   hashJsonStable,
+  readPluginMapSettings,
   type ContentHash,
   type GameModeId,
   type JsonObject,
+  type MapId,
+  type PlayerModelRef,
+  type ProjectId,
   type TileborneMap,
 } from '@tileborne/core';
 import {
@@ -42,6 +46,7 @@ import {
   RuntimeDeployService,
   RuntimeDeployTarget,
   activePlaytestPluginIds,
+  assembleRuntimeMapPackage,
   SupportService,
   type PlaytestSession,
 } from '@tileborne/services-build';
@@ -77,9 +82,10 @@ import {
 import { createElectronIpcServerTransport } from './transport.js';
 import {
   clearPlaytestRuntimeInput,
-  exportPlaytestRuntimeArtifact,
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
+  loadPlaytestMapPackage,
+  loadPlaytestModeDataExporter,
   setPlaytestRuntimeChangedNotifier,
   setPlaytestRuntimeInput,
   setPlaytestRuntimeSnapshotNotifier,
@@ -97,6 +103,24 @@ import { createPlaytestJoinWindow } from '../window.js';
 
 const triggerPayload = {};
 const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
+
+/**
+ * Fallback NEUTRAL player capacity when the active mode's authored settings
+ * declare no `maxPlayers` (matches the game-host room default).
+ */
+const DEFAULT_PLAYTEST_PLAYER_CAPACITY = 32;
+
+/**
+ * Source the package's neutral `manifest.playerCapacity` the same way the
+ * mode-data export reads it today: the active plugin's namespaced map
+ * settings (`map.properties.<pluginId>.maxPlayers`, ADR-0023 §A).
+ */
+const resolvePlaytestPlayerCapacity = (map: TileborneMap, activePluginId: string): number => {
+  const value = readPluginMapSettings(map, activePluginId).maxPlayers;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : DEFAULT_PLAYTEST_PLAYER_CAPACITY;
+};
 const TILED_MAP_SOURCE_EXTENSION_SET = new Set(TILED_MAP_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
 const TILED_TILESET_SOURCE_EXTENSION_SET = new Set(TILED_TILESET_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
 const SPRITE_SHEET_IMAGE_EXTENSION_SET = new Set(SPRITE_SHEET_IMAGE_EXTENSIONS.map((extension) => `.${extension}`));
@@ -312,6 +336,63 @@ const buildHandlers = Effect.gen(function* () {
   const support = yield* SupportService;
   const home = yield* HomeService;
   const logger = yield* LoggerService;
+
+  /**
+   * Assemble the ONE typed `RuntimeMapPackage` (ADR-0030 step 1) every playtest
+   * host boots from: merge the materialized plugin catalogs + project entities
+   * through the canonical registry, project placements, bake visuals, and write
+   * the package into the playtest artifact directory.
+   */
+  const assemblePlaytestMapPackage = (input: {
+    readonly projectId: ProjectId;
+    readonly mapId: MapId;
+    readonly activePluginId: string;
+    readonly pluginRootPath: string;
+    readonly playerModels: readonly PlayerModelRef[];
+    readonly outputDirectory: string;
+  }) =>
+    Effect.gen(function* () {
+      const project = yield* projects.open(input.projectId);
+      const map = yield* maps.load(input.projectId, input.mapId);
+      const sources = yield* catalog.runtimeSources(input.projectId);
+      const installed = yield* registry.list();
+      const activeMode = discoverGameModes(
+        installed
+          .filter((plugin) => plugin.enabled)
+          .map((plugin) => ({ pluginId: plugin.id, contributions: plugin.manifest.contributes })),
+      ).find((mode) => mode.pluginId === input.activePluginId);
+      if (activeMode === undefined) {
+        return yield* Effect.fail(
+          new Error(`Active game-mode plugin declares no game mode: ${input.activePluginId}`),
+        );
+      }
+      // The active mode's narrowed exporter bakes `modeData.<pluginId>` into
+      // the package; without it the mode's runtime cannot boot from the package.
+      const modeDataExporter = yield* Effect.tryPromise({
+        try: () => loadPlaytestModeDataExporter(input.pluginRootPath),
+        catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+      });
+      if (modeDataExporter === undefined) {
+        return yield* Effect.fail(
+          new Error(
+            `Active game-mode plugin exposes no mode-data exporter: ${input.activePluginId}`,
+          ),
+        );
+      }
+      return yield* assembleRuntimeMapPackage({
+        projectId: input.projectId,
+        map,
+        activeMode,
+        pluginCatalogs: sources.pluginCatalogs,
+        projectObjectTypes: sources.projectObjectTypes,
+        playerModels: input.playerModels,
+        playerCapacity: resolvePlaytestPlayerCapacity(map, input.activePluginId),
+        mergeDeps: { resolveWeapon: (id) => sources.weaponIds.has(id) },
+        modeDataExporter,
+        engineVersion: project.engineVersion,
+        outputDirectory: input.outputDirectory,
+      });
+    });
 
   const projectHandlers = handlerBuilder(MainIpcRegistry)
     .add('tileborne:projects:list', () =>
@@ -820,6 +901,12 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:catalog:export', ({ projectId }) =>
       ipcCatchAll('tileborne:catalog:export')(catalog.exportCatalog(projectId)),
     )
+    .add('tileborne:catalog:upsertType', ({ projectId, objectTypeJson }) =>
+      ipcCatchAll('tileborne:catalog:upsertType')(catalog.upsertType(projectId, objectTypeJson)),
+    )
+    .add('tileborne:catalog:removeType', ({ projectId, objectTypeId }) =>
+      ipcCatchAll('tileborne:catalog:removeType')(catalog.removeType(projectId, objectTypeId)),
+    )
     .build();
 
   const pluginHandlers = handlerBuilder(MainIpcRegistry)
@@ -1111,13 +1198,14 @@ const buildHandlers = Effect.gen(function* () {
               const plugin = installed.find((entry) => entry.id === pluginId);
               return plugin ? [{ pluginId, rootPath: plugin.rootPath }] : [];
             });
-            if (pluginInstalls.length > 0) {
+            const activePluginId = session.activePlugins[0];
+            const activeInstall = pluginInstalls.find(
+              (install) => install.pluginId === activePluginId,
+            );
+            if (pluginInstalls.length > 0 && activePluginId !== undefined && activeInstall !== undefined) {
               const project = yield* projects.open(projectId);
               const playerModels = session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)
                 ? resolveBattleRoyalePlayerModels(project)
-                : [];
-              const objectTypes = session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)
-                ? (yield* catalog.resolve(projectId)).objectTypes.map((entry) => entry.objectType)
                 : [];
               if (session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)) {
                 if (playerModels.length === 0) {
@@ -1134,15 +1222,34 @@ const buildHandlers = Effect.gen(function* () {
                   );
                 }
               }
+              // ADR-0030: assemble the typed runtime map package into the
+              // session's artifact directory; the host boots ONLY from it.
+              yield* assemblePlaytestMapPackage({
+                projectId,
+                mapId,
+                activePluginId,
+                pluginRootPath: activeInstall.rootPath,
+                playerModels,
+                outputDirectory: artifactDirectory,
+              }).pipe(
+                Effect.catch((error) =>
+                  playtest.stop(session.id).pipe(
+                    Effect.catch(() => Effect.void),
+                    Effect.flatMap(() =>
+                      Effect.fail(
+                        new Error(error instanceof Error ? error.message : String(error)),
+                      ),
+                    ),
+                  ),
+                ),
+              );
               yield* Effect.tryPromise({
                 try: () =>
                   startPlaytestRuntimeHost({
                     sessionId: session.id,
-                    artifactDirectory,
+                    packageDirectory: artifactDirectory,
                     pluginInstalls,
-                    ...(playerModels.length === 0 ? {} : { playerModels }),
                     ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
-                    ...(objectTypes.length === 0 ? {} : { objectTypes }),
                     logger: {
                       info: (message, fields) => Effect.runPromise(logger.info(message, fields)),
                       error: (message, fields) => Effect.runPromise(logger.error(message, fields)),
@@ -1254,21 +1361,32 @@ const buildHandlers = Effect.gen(function* () {
             mapId,
             plugins: activePlugins,
           });
-          const objectTypes = (yield* catalog.resolve(projectId)).objectTypes.map((entry) => entry.objectType);
-          const runtimeArtifact = yield* Effect.tryPromise({
-            try: () =>
-              exportPlaytestRuntimeArtifact({
-                artifactDirectory: artifact.directory,
-                pluginRootPath: activePlugin.rootPath,
-                playerModels,
-                ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
-                objectTypes,
-              }),
+          // ADR-0030: the multiplayer room boots from the SAME typed runtime
+          // map package the single-player playtest host boots from.
+          yield* assemblePlaytestMapPackage({
+            projectId,
+            mapId,
+            activePluginId,
+            pluginRootPath: activePlugin.rootPath,
+            playerModels,
+            outputDirectory: artifact.directory,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.fail(new Error(error instanceof Error ? error.message : String(error))),
+            ),
+          );
+          const mapPackage = yield* Effect.tryPromise({
+            try: () => loadPlaytestMapPackage(artifact.directory),
             catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
           });
           return {
             mapId,
-            runtimeArtifact: toJsonObject(runtimeArtifact),
+            mapPackage: toJsonObject(mapPackage),
+            // The hosting player joins first and always takes the player-1 slot.
+            playerModelSelections:
+              selectedPlayerModelId === undefined
+                ? []
+                : [{ playerId: 'player-1', modelId: selectedPlayerModelId }],
           };
         }),
       ),

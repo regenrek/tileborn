@@ -1,9 +1,10 @@
 import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
 import {
   REQUIRED_PLAYER_MODEL_CLIP_KEYS,
-  WELL_KNOWN_VISUAL_ROLE_KINDS,
   type PlayerModelClipKey,
 } from "@tileborne/core";
+
+import { BR_OVERLAY_SLOTS } from "../constants.js";
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -18,7 +19,8 @@ import {
   type BattleRoyaleProjectorConfig,
   type PlayerModelClipRenderData,
   type PlayerModelRenderData,
-  type VisualRoleRenderData,
+  type SpriteVisualRenderData,
+  type WeaponVisualRenderData,
 } from "./battle-royale-projector.js";
 import { PROJECTILE_TEXTURE_ASSET_ID } from "./bundled-assets.js";
 import { BATTLE_ROYALE_VISUAL_ORACLE, projectVisualSize } from "./visual-oracle.js";
@@ -71,63 +73,54 @@ const VISUAL_SHIELD_ASSET_ID = "visualrole:test:shield";
 const VISUAL_SHADOW_ASSET_ID = "visualrole:test:shadow";
 const VISUAL_HAZARD_ASSET_ID = "visualrole:test:hazard";
 
-const visualRole = (roleKind: string, assetId: string): VisualRoleRenderData => ({
-  roleId: `visual-role:${roleKind}`,
-  roleKind,
+const spriteVisual = (visualKey: string, assetId: string): SpriteVisualRenderData => ({
+  visualId: `sprite-visual:${visualKey}`,
   assetId,
   frames: [{ assetId, uv: { x: 0, y: 0, w: 24, h: 24 }, durationMs: 100 }],
   loop: false,
   anchor: { x: 0.5, y: 0.5 },
-  ...(roleKind === WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon
-    ? {
-        anchor: { x: 0.25, y: 0.5 },
-        anchors: {
-          hand: { point: { x: 0.25, y: 0.5 } },
-          muzzle: { point: { x: 0.75, y: 0.5 } },
-        },
-      }
-    : {}),
 });
 
-const visualRoles = (): ReadonlyMap<string, VisualRoleRenderData> =>
+const TEST_WEAPON_ID = "weapon:00000000-0000-4000-8000-000000000001";
+
+const weaponEquippedVisual = (): SpriteVisualRenderData => ({
+  ...spriteVisual("equipped", VISUAL_WEAPON_ASSET_ID),
+  anchor: { x: 0.25, y: 0.5 },
+  anchors: {
+    grip: { point: { x: 0.25, y: 0.5 } },
+    muzzle: { point: { x: 0.75, y: 0.5 } },
+  },
+});
+
+const weaponVisuals = (
+  equipped: SpriteVisualRenderData = weaponEquippedVisual(),
+): ReadonlyMap<string, WeaponVisualRenderData> =>
   new Map([
     [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon, VISUAL_WEAPON_ASSET_ID),
+      TEST_WEAPON_ID,
+      {
+        weaponId: TEST_WEAPON_ID,
+        equipped,
+        projectile: spriteVisual("projectile", VISUAL_PROJECTILE_ASSET_ID),
+        muzzleFlash: spriteVisual("muzzle-flash", VISUAL_MUZZLE_ASSET_ID),
+        impactVfx: spriteVisual("impact-vfx", VISUAL_IMPACT_ASSET_ID),
+        pickup: spriteVisual("pickup", VISUAL_PICKUP_ASSET_ID),
+      },
     ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.projectile,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.projectile, VISUAL_PROJECTILE_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.pickup,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.pickup, VISUAL_PICKUP_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.muzzleFlash,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.muzzleFlash, VISUAL_MUZZLE_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.impactVfx,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.impactVfx, VISUAL_IMPACT_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.shield,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.shield, VISUAL_SHIELD_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.shadow,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.shadow, VISUAL_SHADOW_ASSET_ID),
-    ],
-    [
-      WELL_KNOWN_VISUAL_ROLE_KINDS.hazard,
-      visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.hazard, VISUAL_HAZARD_ASSET_ID),
-    ],
+  ]);
+
+const overlays = (): ReadonlyMap<string, SpriteVisualRenderData> =>
+  new Map([
+    [BR_OVERLAY_SLOTS.shield, spriteVisual(BR_OVERLAY_SLOTS.shield, VISUAL_SHIELD_ASSET_ID)],
+    [BR_OVERLAY_SLOTS.shadow, spriteVisual(BR_OVERLAY_SLOTS.shadow, VISUAL_SHADOW_ASSET_ID)],
+    [BR_OVERLAY_SLOTS.hazard, spriteVisual(BR_OVERLAY_SLOTS.hazard, VISUAL_HAZARD_ASSET_ID)],
   ]);
 
 const projectorConfig = (model = modelRenderData()): BattleRoyaleProjectorConfig => ({
   catalog: catalog(model),
-  visualRoles: visualRoles(),
+  overlays: overlays(),
+  weapons: weaponVisuals(),
+  defaultWeaponId: TEST_WEAPON_ID,
 });
 
 const expectedPlayerScale = (
@@ -287,18 +280,17 @@ describe("BattleRoyaleProjector", () => {
     expect(entity?.animation?.loop).toBe(true);
   });
 
-  it("applies authored weapon hand and muzzle transforms from visual role metadata", () => {
-    const roles = new Map(visualRoles());
-    roles.set(WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon, {
-      ...visualRole(WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon, VISUAL_WEAPON_ASSET_ID),
-      anchors: {
-        hand: { point: { x: 0.25, y: 0.5 }, rotationDeg: 30, zOffset: 2 },
-        muzzle: { point: { x: 0.75, y: 0.5 }, rotationDeg: 15, zOffset: 3 },
-      },
-    });
+  it("applies authored weapon grip and muzzle transforms from weapon-entity metadata", () => {
     const projector = createBattleRoyaleProjector({
       catalog: catalog(),
-      visualRoles: roles,
+      weapons: weaponVisuals({
+        ...spriteVisual("equipped", VISUAL_WEAPON_ASSET_ID),
+        anchors: {
+          grip: { point: { x: 0.25, y: 0.5 }, rotationDeg: 30, zOffset: 2 },
+          muzzle: { point: { x: 0.75, y: 0.5 }, rotationDeg: 15, zOffset: 3 },
+        },
+      }),
+      defaultWeaponId: TEST_WEAPON_ID,
     });
     const playerId = BattleRoyaleProtocol.makePlayerId("player-1");
     const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
@@ -804,6 +796,56 @@ describe("BattleRoyaleProjector", () => {
         y: 40,
         scale: 3,
       }),
+    );
+  });
+
+  it("renders a dropped weapon pickup with THAT weapon's pickup companion visual", () => {
+    const SECOND_WEAPON_ID = "weapon:00000000-0000-4000-8000-000000000002";
+    const SECOND_PICKUP_ASSET_ID = "visualrole:test:second-pickup";
+    const weapons = new Map([
+      ...weaponVisuals(),
+      [
+        SECOND_WEAPON_ID,
+        {
+          weaponId: SECOND_WEAPON_ID,
+          equipped: weaponEquippedVisual(),
+          pickup: spriteVisual("pickup", SECOND_PICKUP_ASSET_ID),
+        },
+      ],
+    ]);
+    const projector = createBattleRoyaleProjector({ ...projectorConfig(), weapons });
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 100,
+      seed: 1,
+      players: [],
+      projectiles: [],
+      objects: [
+        new BattleRoyaleProtocol.ObjectSnapshot({
+          id: BattleRoyaleProtocol.makeObjectId("drop-1"),
+          x: 10,
+          y: 12,
+          pickup: { itemKind: SECOND_WEAPON_ID, tier: "epic", quantity: 1, available: true },
+        }),
+        new BattleRoyaleProtocol.ObjectSnapshot({
+          id: BattleRoyaleProtocol.makeObjectId("drop-2"),
+          x: 20,
+          y: 22,
+          pickup: { itemKind: "health-pack", tier: "common", quantity: 1, available: true },
+        }),
+      ],
+      zone: { cx: 0, cy: 0, radius: 100 },
+    });
+
+    const entities = projector.project(projector.mergeFrame?.(undefined, welcome));
+
+    expect(entities).toEqual(
+      expect.arrayContaining([
+        // A weapon drop joins by itemKind === weaponId -> its OWN pickup companion.
+        expect.objectContaining({ id: "br:pickup:drop-1", assetId: SECOND_PICKUP_ASSET_ID }),
+        // Generic loot keeps the default weapon's pickup companion.
+        expect.objectContaining({ id: "br:pickup:drop-2", assetId: VISUAL_PICKUP_ASSET_ID }),
+      ]),
     );
   });
 

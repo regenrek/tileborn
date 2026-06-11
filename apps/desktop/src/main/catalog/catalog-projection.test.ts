@@ -5,10 +5,12 @@ import {
   LootSourceComponent,
   LootTable,
   type PluginId,
+  WeaponRefComponent,
   makeCatalogId,
   makeGameObjectTypeId,
   makeItemDefinitionId,
   makeLootTableId,
+  makeWeaponDefinitionId,
   type Uuid,
 } from '@tileborne/core';
 import { Option } from 'effect';
@@ -132,6 +134,73 @@ describe('buildValidationReport', () => {
     ];
 
     expect(buildValidationReport(sources)).toEqual({ ok: true, issues: [] });
+  });
+
+  it('resolves weapon-ref weaponIds against the injected weapon registry (ADR-0028)', () => {
+    const weaponId = makeWeaponDefinitionId(UUID('50'));
+    const sources: readonly CatalogContributionSource[] = [
+      {
+        contributionId: 'plugin#cat',
+        catalog: catalog('a', [
+          objectType('51', [new WeaponRefComponent({ weaponId })]),
+        ]),
+        origin: 'plugin',
+        sourcePluginId: PLUGIN_ID,
+      },
+    ];
+
+    expect(buildValidationReport(sources, { weaponIds: new Set([String(weaponId)]) })).toEqual({
+      ok: true,
+      issues: [],
+    });
+    const failing = buildValidationReport(sources, { weaponIds: new Set() });
+    expect(failing.ok).toBe(false);
+    // Skipped entirely when the caller has no weapon knowledge.
+    expect(buildValidationReport(sources)).toEqual({ ok: true, issues: [] });
+  });
+
+  it('emits structured, navigable weapon-ref issues (weaponId + companions)', () => {
+    const weaponId = makeWeaponDefinitionId(UUID('60'));
+    const knownCompanion = makeGameObjectTypeId(UUID('62'));
+    const missingCompanion = makeGameObjectTypeId(UUID('63'));
+    const weaponEntity = objectType('61', [
+      new WeaponRefComponent({
+        weaponId,
+        projectileEntityId: knownCompanion,
+        muzzleFlashEntityId: missingCompanion,
+      }),
+    ]);
+    const sources: readonly CatalogContributionSource[] = [
+      {
+        contributionId: 'project-catalog-fragment',
+        catalog: catalog('b', [weaponEntity, objectType('62')]),
+        origin: 'project',
+      },
+    ];
+
+    const report = buildValidationReport(sources, { weaponIds: new Set() });
+
+    expect(report.ok).toBe(false);
+    const weaponIssue = report.issues.find(
+      (issue) => issue.refKind === 'weapon-ref.weaponId',
+    );
+    expect(weaponIssue).toMatchObject({
+      kind: 'unknown-reference',
+      objectTypeId: weaponEntity.id,
+      missingId: String(weaponId),
+    });
+    const companionIssue = report.issues.find(
+      (issue) => issue.refKind === 'weapon-ref.muzzleFlashEntityId',
+    );
+    expect(companionIssue).toMatchObject({
+      kind: 'unknown-reference',
+      objectTypeId: weaponEntity.id,
+      missingId: String(missingCompanion),
+    });
+    // The resolving companion stays clean.
+    expect(
+      report.issues.some((issue) => issue.refKind === 'weapon-ref.projectileEntityId'),
+    ).toBe(false);
   });
 
   it('surfaces duplicate-type and unknown-reference issues', () => {

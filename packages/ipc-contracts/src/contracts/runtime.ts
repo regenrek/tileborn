@@ -4,7 +4,7 @@ import { JsonObject, MapId, ProjectId } from "@tileborne/core";
 import { Uint8ArraySchema } from "../bytes.js";
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";
-import { BattleRoyaleAbilityId, Direction8 } from "../protocols/battle-royale.js";
+import { BattleRoyaleAbilityId, Direction8 } from "../protocols/battle-royale-input.js";
 import { PlaytestSessionId } from "./playtest.js";
 import { EmptyRequest, EmptyResponse, IpcContractErrors } from "./common.js";
 
@@ -26,9 +26,17 @@ export const RuntimePrepareLocalRoomArtifactRequest = Schema.Struct({
   selectedPlayerModelId: Schema.optional(Schema.String),
 });
 
+export const RuntimePlayerModelSelection = Schema.Struct({
+  playerId: Schema.String,
+  modelId: Schema.String,
+});
+
 export const RuntimePrepareLocalRoomArtifactResponse = Schema.Struct({
   mapId: MapId,
-  runtimeArtifact: JsonObject,
+  /** Encoded `RuntimeMapPackage` wire JSON the room boots from (ADR-0030). */
+  mapPackage: JsonObject,
+  /** Per-session player→model selections; the package carries none. */
+  playerModelSelections: Schema.Array(RuntimePlayerModelSelection),
 });
 
 export const RuntimeStartLocalHostContract = defineContract({

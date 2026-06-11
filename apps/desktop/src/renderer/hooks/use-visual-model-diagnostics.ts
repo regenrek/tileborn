@@ -3,13 +3,11 @@ import type { ProjectManifest } from '@tileborne/core';
 
 import { useMap, usePluginsList, useProject } from '@/hooks/queries';
 import { PLUGIN_PLAYER_MODEL_POLICIES } from '@/lib/plugin-player-model-policies';
-import { PLUGIN_VISUAL_ROLE_POLICIES } from '@/lib/plugin-visual-role-policies';
 import { resolvePlayerModelPolicy } from '@/lib/player-model-policy';
 import {
   diagnoseVisualModelAuthoring,
   type VisualModelDiagnostic,
 } from '@/lib/visual-model-diagnostics';
-import { resolveVisualRolePolicy } from '@/lib/visual-role-policy';
 
 export function useVisualModelDiagnostics(
   projectId: string | undefined,
@@ -38,9 +36,6 @@ export function useVisualModelDiagnostics(
       return [];
     }
     return diagnoseVisualModelAuthoring({
-      visualPolicy: resolveVisualRolePolicy(enabledPluginIds, PLUGIN_VISUAL_ROLE_POLICIES, {
-        project,
-      }),
       playerModelPolicy: resolvePlayerModelPolicy(enabledPluginIds, PLUGIN_PLAYER_MODEL_POLICIES, {
         map,
         project,

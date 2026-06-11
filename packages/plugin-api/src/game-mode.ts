@@ -16,9 +16,9 @@ import { decodeHudLayout } from "./hud-layout-registry.js";
  * via its manifest contributions (a runtime system plus optional authoring
  * panel/form data), and the engine resolves it into a
  * {@link GameModeDescriptor} that the renderer playtest, inspector, and
- * game-host boot consume. This replaces the hardcoded `switch (pluginId)` /
- * `battleRoyaleEnabled` literal-id paths: a new genre plugin becomes a
- * selectable mode with ZERO engine edits.
+ * game-host boot consume. This replaces the hardcoded per-plugin-id switch and
+ * literal-id enabled-flag paths: a new genre plugin becomes a selectable mode
+ * with ZERO engine edits.
  *
  * This module is renderer-safe: it only reads already-decoded
  * {@link PluginContributions} values (no Node, no asset-pipeline runtime). The

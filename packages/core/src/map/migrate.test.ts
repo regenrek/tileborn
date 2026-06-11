@@ -49,8 +49,6 @@ describe("migrateLegacyMapJson", () => {
         kind: "spawn-point",
         x: 352,
         y: 672,
-        width: undefined,
-        height: undefined,
         layerId: "layer:00000000-0000-4000-8000-000000000004",
         properties: {},
       },

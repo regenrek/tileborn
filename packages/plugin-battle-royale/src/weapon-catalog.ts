@@ -9,13 +9,9 @@ import {
 import { Option, Result, Schema } from "effect";
 
 import type { ResolvedBattleRoyaleConfig } from "./battle-royale-config.js";
+import { BR_PRIMARY_WEAPON_ID } from "./constants.js";
 
-/**
- * Branded id of Battle Royale's single primary weapon (`weapon:<uuid>`). BR
- * still ships exactly one hardcoded projectile weapon (ADR-0018 §current-modeling
- * "a single hardcoded projectile delivery"); this is its neutral catalog id.
- */
-export const BR_PRIMARY_WEAPON_ID = "weapon:00000000-0000-4000-8000-000000000001";
+export { BR_PRIMARY_WEAPON_ID } from "./constants.js";
 
 /** Contribution id for BR's weapon-content pack registered via the typed slot. */
 export const BR_WEAPON_CATALOG_CONTRIBUTION_ID = "br-weapon-catalog";

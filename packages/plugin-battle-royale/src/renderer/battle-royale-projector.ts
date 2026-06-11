@@ -7,7 +7,9 @@
  * PixiRendererAdapter.renderFromEntities().
  */
 import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { WELL_KNOWN_VISUAL_ROLE_KINDS, type PlayerModelClipKey } from "@tileborne/core";
+import { type PlayerModelClipKey } from "@tileborne/core";
+
+import { BR_OVERLAY_SLOTS } from "../constants.js";
 import type {
   RenderableAnimationFrame,
   RenderableEntityAnimation,
@@ -64,13 +66,58 @@ export interface PlayerModelRenderData {
   readonly anchor?: { readonly x: number; readonly y: number };
   readonly worldSize?: VisualSize;
   readonly renderScale?: number;
+  /**
+   * Named model-local attachment anchors (normalized 0..1), e.g. "hand" — where
+   * equipped weapon entities mount (composed with the weapon's own "grip"
+   * anchor, ADR-0028 section 2b).
+   */
+  readonly anchors?: Readonly<
+    Record<
+      string,
+      {
+        readonly point: { readonly x: number; readonly y: number };
+        readonly rotationDeg?: number;
+        readonly zOffset?: number;
+      }
+    >
+  >;
+}
+
+/**
+ * Render-ready visuals for ONE weapon entity (ADR-0028): the equipped sprite
+ * plus optional companion visuals, all derived from the weapon's
+ * `GameObjectType` (`weapon-ref` component) by the shell — never from global
+ * visual roles. `equipped.anchors` carries the weapon-local "grip"/"muzzle"
+ * attachment points.
+ */
+export interface WeaponVisualRenderData {
+  readonly weaponId: string;
+  /**
+   * Name of the anchor (in `equipped.anchors`) by which the weapon mounts on
+   * its holder — the entity's `equippable.attachAnchor`. Defaults to "grip".
+   */
+  readonly attachAnchor?: string;
+  readonly equipped: SpriteVisualRenderData;
+  readonly projectile?: SpriteVisualRenderData;
+  readonly muzzleFlash?: SpriteVisualRenderData;
+  readonly impactVfx?: SpriteVisualRenderData;
+  readonly pickup?: SpriteVisualRenderData;
 }
 
 export interface BattleRoyaleProjectorConfig {
   /** modelId -> resolved render data (atlas + animation frames + anchor). */
   readonly catalog?: ReadonlyMap<string, PlayerModelRenderData>;
-  /** visualRoleKind -> resolved render data from project visual role settings. */
-  readonly visualRoles?: ReadonlyMap<string, VisualRoleRenderData>;
+  /**
+   * overlay slot -> resolved render data, derived from `overlay-visual`
+   * catalog ENTITIES (entity-first hard cut: plugin ships default claimant
+   * entities, a project-authored claimant overrides them). BR consumes the
+   * {@link BR_OVERLAY_SLOTS} slots (shield, shadow, hazard).
+   */
+  readonly overlays?: ReadonlyMap<string, SpriteVisualRenderData>;
+  /** weaponId -> per-weapon-entity render data (equipped + companions). */
+  readonly weapons?: ReadonlyMap<string, WeaponVisualRenderData>;
+  /** Weapon used when a player snapshot carries no weapon (initial spawn). */
+  readonly defaultWeaponId?: string;
 }
 
 export interface PlayerModelClipRenderData {
@@ -79,9 +126,14 @@ export interface PlayerModelClipRenderData {
   readonly defaultDurationMs?: number;
 }
 
-export interface VisualRoleRenderData {
-  readonly roleId: string;
-  readonly roleKind: string;
+/**
+ * The projector's generic animated-sprite render contract: resolved frames +
+ * anchor metadata for ONE visual (an equipped weapon, a companion VFX, an
+ * overlay slot, …). `visualId` is the stable animation identity (typically
+ * the source placeable id).
+ */
+export interface SpriteVisualRenderData {
+  readonly visualId: string;
   readonly assetId: string;
   readonly frames: readonly RenderableAnimationFrame[];
   readonly loop: boolean;
@@ -574,42 +626,65 @@ const playerStatusEntities = (id: PlayerId, player: PlayerProjectionState): read
     layerIndex: 9,
   }));
 
-const visualRoleFor = (
+const overlayFor = (
   config: BattleRoyaleProjectorConfig | undefined,
-  roleKind: string,
-): VisualRoleRenderData | undefined => config?.visualRoles?.get(roleKind);
+  slot: string,
+): SpriteVisualRenderData | undefined => config?.overlays?.get(slot);
 
-const visualRoleScale = (visual: VisualRoleRenderData): number =>
+/** Per-weapon visuals for an explicit weapon id, falling back to the default weapon. */
+const weaponVisualsById = (
+  config: BattleRoyaleProjectorConfig | undefined,
+  weaponId: string | undefined,
+): WeaponVisualRenderData | undefined => {
+  if (config?.weapons === undefined) {
+    return undefined;
+  }
+  const direct = weaponId === undefined ? undefined : config.weapons.get(weaponId);
+  if (direct !== undefined) {
+    return direct;
+  }
+  return config.defaultWeaponId === undefined
+    ? undefined
+    : config.weapons.get(config.defaultWeaponId);
+};
+
+/** Visuals for the weapon a PLAYER currently has equipped (snapshot join). */
+const weaponVisualsForPlayer = (
+  config: BattleRoyaleProjectorConfig | undefined,
+  player: PlayerProjectionState,
+): WeaponVisualRenderData | undefined => weaponVisualsById(config, player.weapon?.weaponId);
+
+const spriteVisualScale = (visual: SpriteVisualRenderData): number =>
   visual.renderScale === undefined ||
   !Number.isFinite(visual.renderScale) ||
   visual.renderScale <= 0
     ? 1
     : visual.renderScale;
 
-const visualRoleAnchorPoint = (
-  visual: VisualRoleRenderData,
+const spriteVisualAnchorPoint = (
+  visual: SpriteVisualRenderData,
   name: string,
   fallback: { readonly x: number; readonly y: number },
 ): { readonly x: number; readonly y: number } => visual.anchors?.[name]?.point ?? fallback;
 
-const visualRoleAnchorRotation = (
-  visual: VisualRoleRenderData | undefined,
+const spriteVisualAnchorRotation = (
+  visual: SpriteVisualRenderData | undefined,
   name: string,
 ): number => {
   const degrees = visual?.anchors?.[name]?.rotationDeg;
   return degrees === undefined || !Number.isFinite(degrees) ? 0 : degToRadians(degrees);
 };
 
-const visualRoleAnchorZOffset = (
-  visual: VisualRoleRenderData | undefined,
+const spriteVisualAnchorZOffset = (
+  visual: SpriteVisualRenderData | undefined,
   name: string,
 ): number => {
   const offset = visual?.anchors?.[name]?.zOffset;
   return offset === undefined || !Number.isFinite(offset) ? 0 : offset;
 };
 
-const visualRoleFrameSize = (
-  visual: VisualRoleRenderData,
+const spriteVisualFrameSize = (
+  visual: SpriteVisualRenderData,
 ): { readonly width: number; readonly height: number } | undefined => {
   const uv = visual.frames[0]?.uv;
   if (uv === undefined || uv.w <= 0 || uv.h <= 0) {
@@ -619,57 +694,82 @@ const visualRoleFrameSize = (
 };
 
 const weaponDisplayScale = (
-  visual: VisualRoleRenderData,
+  visual: SpriteVisualRenderData,
 ): { readonly scaleX: number; readonly scaleY: number } => {
-  const scale = visualRoleScale(visual);
+  const scale = spriteVisualScale(visual);
   return { scaleX: 0.72 * scale, scaleY: 0.58 * scale };
 };
 
+/**
+ * World position where an equipped weapon mounts on the player: the player
+ * model's "hand" anchor (model-local, normalized) projected into world space
+ * when authored, otherwise a small aim-facing orbit around the player center.
+ */
 const weaponMountPoint = (
   player: PlayerProjectionState,
   radians: number,
-): { readonly x: number; readonly y: number } => ({
-  x: player.x + Math.cos(radians) * 9,
-  y: player.y + Math.sin(radians) * 9,
-});
+  model: PlayerModelRenderData | undefined,
+  clip: PlayerModelClipRenderData | undefined,
+): { readonly x: number; readonly y: number } => {
+  const hand = model?.anchors?.["hand"]?.point;
+  const uv = clip?.frames[0]?.uv;
+  if (model !== undefined && clip !== undefined && hand !== undefined && uv !== undefined && uv.w > 0 && uv.h > 0) {
+    const pivot = model.anchor ?? CENTER_ANCHOR;
+    const { scaleX, scaleY } = playerDisplayScale(model, clip);
+    return {
+      x: player.x + (hand.x - pivot.x) * uv.w * scaleX,
+      y: player.y + (hand.y - pivot.y) * uv.h * scaleY,
+    };
+  }
+  return {
+    x: player.x + Math.cos(radians) * 9,
+    y: player.y + Math.sin(radians) * 9,
+  };
+};
+
+const weaponAttachAnchor = (weapon: WeaponVisualRenderData | undefined): string =>
+  weapon?.attachAnchor ?? "grip";
 
 const weaponMuzzlePoint = (
   player: PlayerProjectionState,
-  weaponVisual: VisualRoleRenderData | undefined,
+  weaponVisual: SpriteVisualRenderData | undefined,
+  attachAnchor: string,
   mountRotation: number,
   weaponRotation: number,
+  model: PlayerModelRenderData | undefined,
+  clip: PlayerModelClipRenderData | undefined,
 ): { readonly x: number; readonly y: number } => {
-  const mount = weaponMountPoint(player, mountRotation);
+  const mount = weaponMountPoint(player, mountRotation, model, clip);
   if (weaponVisual === undefined) {
     return {
       x: player.x + Math.cos(mountRotation) * 14,
       y: player.y + Math.sin(mountRotation) * 14,
     };
   }
-  const frameSize = visualRoleFrameSize(weaponVisual);
+  const frameSize = spriteVisualFrameSize(weaponVisual);
   if (frameSize === undefined) {
     return mount;
   }
-  const hand = visualRoleAnchorPoint(weaponVisual, "hand", weaponVisual.anchor ?? CENTER_ANCHOR);
-  const muzzle = visualRoleAnchorPoint(weaponVisual, "muzzle", { x: 0.92, y: 0.5 });
+  const grip = spriteVisualAnchorPoint(weaponVisual, attachAnchor, weaponVisual.anchor ?? CENTER_ANCHOR);
+  const muzzle = spriteVisualAnchorPoint(weaponVisual, "muzzle", { x: 0.92, y: 0.5 });
   const { scaleX, scaleY } = weaponDisplayScale(weaponVisual);
-  const dx = (muzzle.x - hand.x) * frameSize.width * scaleX;
-  const dy = (muzzle.y - hand.y) * frameSize.height * scaleY;
+  const dx = (muzzle.x - grip.x) * frameSize.width * scaleX;
+  const dy = (muzzle.y - grip.y) * frameSize.height * scaleY;
   return {
     x: mount.x + dx * Math.cos(weaponRotation) - dy * Math.sin(weaponRotation),
     y: mount.y + dx * Math.sin(weaponRotation) + dy * Math.cos(weaponRotation),
   };
 };
 
-const visualRoleAnimation = (
-  visual: VisualRoleRenderData,
+const spriteVisualAnimation = (
+  visual: SpriteVisualRenderData,
   clockMs: number,
 ): RenderableEntityAnimation | undefined => {
   if (visual.frames.length === 0) {
     return undefined;
   }
   return {
-    clipId: visual.roleId,
+    clipId: visual.visualId,
     frames: visual.frames,
     loop: visual.loop,
     ...(visual.defaultDurationMs === undefined ? {} : { defaultDurationMs: visual.defaultDurationMs }),
@@ -677,11 +777,11 @@ const visualRoleAnimation = (
   };
 };
 
-const visualRoleBase = (
-  visual: VisualRoleRenderData,
+const spriteVisualBase = (
+  visual: SpriteVisualRenderData,
   clockMs: number,
 ): Pick<RenderableEntity, "assetId" | "anchor" | "animation"> | undefined => {
-  const animation = visualRoleAnimation(visual, clockMs);
+  const animation = spriteVisualAnimation(visual, clockMs);
   if (animation === undefined) {
     return undefined;
   }
@@ -695,17 +795,17 @@ const visualRoleBase = (
 const playerShadowEntity = (
   id: PlayerId,
   player: PlayerProjectionState,
-  visual: VisualRoleRenderData | undefined,
+  visual: SpriteVisualRenderData | undefined,
   clockMs: number,
 ): readonly RenderableEntity[] => {
   if (visual === undefined) {
     return [];
   }
-  const base = visualRoleBase(visual, clockMs);
+  const base = spriteVisualBase(visual, clockMs);
   if (base === undefined) {
     return [];
   }
-  const scale = visualRoleScale(visual);
+  const scale = spriteVisualScale(visual);
   return [{
     id: `br:shadow:${id}`,
     ...base,
@@ -747,21 +847,25 @@ const playerDisplayScale = (
 const equippedWeaponEntity = (
   id: PlayerId,
   player: PlayerProjectionState,
-  visual: VisualRoleRenderData | undefined,
+  weapon: WeaponVisualRenderData | undefined,
+  model: PlayerModelRenderData | undefined,
+  clip: PlayerModelClipRenderData | undefined,
   clockMs: number,
 ): readonly RenderableEntity[] => {
   const animation = player.animation;
+  const visual = weapon?.equipped;
   if (animation === undefined || visual === undefined) {
     return [];
   }
-  const base = visualRoleBase(visual, clockMs);
+  const base = spriteVisualBase(visual, clockMs);
   if (base === undefined) {
     return [];
   }
   const aimDeg = animation.aimDeg ?? animation.facingDeg;
   const radians = facingDegToRadians(aimDeg);
-  const weaponRotation = radians + visualRoleAnchorRotation(visual, "hand");
-  const mount = weaponMountPoint(player, radians);
+  const attachAnchor = weaponAttachAnchor(weapon);
+  const weaponRotation = radians + spriteVisualAnchorRotation(visual, attachAnchor);
+  const mount = weaponMountPoint(player, radians, model, clip);
   const { scaleX, scaleY } = weaponDisplayScale(visual);
   return [{
     id: `br:weapon:${id}`,
@@ -769,45 +873,49 @@ const equippedWeaponEntity = (
     x: mount.x,
     y: mount.y,
     rotation: weaponRotation,
-    anchor: visualRoleAnchorPoint(visual, "hand", base.anchor ?? CENTER_ANCHOR),
+    anchor: spriteVisualAnchorPoint(visual, attachAnchor, base.anchor ?? CENTER_ANCHOR),
     scaleX,
     scaleY,
     tint: 0xe5e7eb,
     opacity: player.health <= 0 ? 0.3 : 0.95,
-    layerIndex: 18 + visualRoleAnchorZOffset(visual, "hand"),
+    layerIndex: 18 + spriteVisualAnchorZOffset(visual, attachAnchor),
   }];
 };
 
 const muzzleFlashEntity = (
   id: PlayerId,
   player: PlayerProjectionState,
-  visual: VisualRoleRenderData | undefined,
-  weaponVisual: VisualRoleRenderData | undefined,
+  weapon: WeaponVisualRenderData | undefined,
+  model: PlayerModelRenderData | undefined,
+  clip: PlayerModelClipRenderData | undefined,
   clockMs: number,
 ): readonly RenderableEntity[] => {
   const animation = player.animation;
+  const visual = weapon?.muzzleFlash;
   if (animation?.clipKey !== "shoot" || visual === undefined) {
     return [];
   }
-  const base = visualRoleBase(visual, clockMs);
+  const base = spriteVisualBase(visual, clockMs);
   if (base === undefined) {
     return [];
   }
+  const weaponVisual = weapon?.equipped;
   const aimDeg = animation.aimDeg ?? animation.facingDeg;
   const radians = facingDegToRadians(aimDeg);
-  const weaponRotation = radians + visualRoleAnchorRotation(weaponVisual, "hand");
-  const muzzleRotation = weaponRotation + visualRoleAnchorRotation(weaponVisual, "muzzle");
-  const muzzle = weaponMuzzlePoint(player, weaponVisual, radians, weaponRotation);
+  const attachAnchor = weaponAttachAnchor(weapon);
+  const weaponRotation = radians + spriteVisualAnchorRotation(weaponVisual, attachAnchor);
+  const muzzleRotation = weaponRotation + spriteVisualAnchorRotation(weaponVisual, "muzzle");
+  const muzzle = weaponMuzzlePoint(player, weaponVisual, attachAnchor, radians, weaponRotation, model, clip);
   return [{
     id: `br:muzzle:${id}`,
     ...base,
     x: muzzle.x,
     y: muzzle.y,
     rotation: muzzleRotation,
-    scale: 0.55 * visualRoleScale(visual),
+    scale: 0.55 * spriteVisualScale(visual),
     tint: 0xfacc15,
     opacity: 0.9,
-    layerIndex: 22 + visualRoleAnchorZOffset(weaponVisual, "muzzle"),
+    layerIndex: 22 + spriteVisualAnchorZOffset(weaponVisual, "muzzle"),
   }];
 };
 
@@ -853,12 +961,17 @@ const objectRenderableEntities = (
 ): readonly RenderableEntity[] => {
   const entities: RenderableEntity[] = [];
   const isCrate = object.lootSource !== undefined || object.pickup !== undefined || object.breakable !== undefined;
-  const hazardVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.hazard);
-  const pickupVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.pickup);
+  const hazardVisual = overlayFor(config, BR_OVERLAY_SLOTS.hazard);
+  // Crate/pickup visuals come from a weapon's pickup companion ENTITY
+  // (weapon-ref.pickupEntityId -> e.g. the Loot Crate object type), not from
+  // a global visual role (ADR-0028 hard cut). When the loot itemKind IS a
+  // weapon id (a dropped weapon entity), that weapon's own pickup companion
+  // renders; generic item kinds fall back to the default weapon's companion.
+  const pickupVisual = weaponVisualsById(config, object.pickup?.itemKind)?.pickup;
   const hazardBase =
-    hazardVisual === undefined ? undefined : visualRoleBase(hazardVisual, clockMs);
+    hazardVisual === undefined ? undefined : spriteVisualBase(hazardVisual, clockMs);
   const pickupBase =
-    pickupVisual === undefined ? undefined : visualRoleBase(pickupVisual, clockMs);
+    pickupVisual === undefined ? undefined : spriteVisualBase(pickupVisual, clockMs);
 
   if (object.hazard?.enabled && hazardVisual !== undefined && hazardBase !== undefined) {
     entities.push({
@@ -866,7 +979,7 @@ const objectRenderableEntities = (
       ...hazardBase,
       x: object.x,
       y: object.y,
-      scale: Math.max(1.4, object.hazard.damagePerSecond / 3) * visualRoleScale(hazardVisual),
+      scale: Math.max(1.4, object.hazard.damagePerSecond / 3) * spriteVisualScale(hazardVisual),
       tint: 0xef4444,
       opacity: 0.24,
       layerIndex: 3,
@@ -880,7 +993,7 @@ const objectRenderableEntities = (
       ...pickupBase,
       x: object.x,
       y: object.y,
-      scale: (destroyed ? 0.9 : 1) * visualRoleScale(pickupVisual),
+      scale: (destroyed ? 0.9 : 1) * spriteVisualScale(pickupVisual),
       tint: destroyed ? 0x64748b : tierTint(object.pickup?.tier ?? object.lootSource?.tier),
       opacity: destroyed ? 0.45 : object.pickup?.available === false ? 0.65 : 1,
       layerIndex: 7,
@@ -894,7 +1007,7 @@ const objectRenderableEntities = (
       ...pickupBase,
       x: object.x,
       y: object.y,
-      scale: 0.8 * visualRoleScale(pickupVisual),
+      scale: 0.8 * spriteVisualScale(pickupVisual),
       tint: tierTint(object.pickup.tier),
       opacity: 0.72,
       layerIndex: 13,
@@ -930,12 +1043,9 @@ export const projectBattleRoyaleFullStateWith = (
   // A single deterministic shared clock so every player's clip advances
   // frame-identically and repeated projection of the same snapshot is pure.
   const clockMs = snapshot.tick * 50;
-  const equippedWeaponVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon);
-  const projectileVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.projectile);
-  const muzzleFlashVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.muzzleFlash);
-  const impactVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.impactVfx);
-  const shieldVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.shield);
-  const shadowVisual = visualRoleFor(config, WELL_KNOWN_VISUAL_ROLE_KINDS.shadow);
+  const defaultWeapon = weaponVisualsById(config, undefined);
+  const shieldVisual = overlayFor(config, BR_OVERLAY_SLOTS.shield);
+  const shadowVisual = overlayFor(config, BR_OVERLAY_SLOTS.shadow);
 
   const zoneEntity: RenderableEntity =
     {
@@ -960,7 +1070,7 @@ export const projectBattleRoyaleFullStateWith = (
         player.shield === undefined || player.shield <= 0 || shieldVisual === undefined
           ? []
           : (() => {
-              const base = visualRoleBase(shieldVisual, clockMs);
+              const base = spriteVisualBase(shieldVisual, clockMs);
               return base === undefined
                 ? []
                 : [{
@@ -968,12 +1078,13 @@ export const projectBattleRoyaleFullStateWith = (
                     ...base,
                     x: player.x,
                     y: player.y,
-                    scale: 1.35 * visualRoleScale(shieldVisual),
+                    scale: 1.35 * spriteVisualScale(shieldVisual),
                     layerIndex: 11,
                   }];
             })();
       if (animation !== undefined && model !== undefined && clip !== undefined && clip.frames.length > 0) {
         const displayScale = playerDisplayScale(model, clip);
+        const weapon = weaponVisualsForPlayer(config, player);
         return [
           {
             id: `br:player:${id}`,
@@ -995,11 +1106,11 @@ export const projectBattleRoyaleFullStateWith = (
             },
           },
           ...playerShadowEntity(id, player, shadowVisual, clockMs),
-          ...equippedWeaponEntity(id, player, equippedWeaponVisual, clockMs),
+          ...equippedWeaponEntity(id, player, weapon, model, clip, clockMs),
           ...shieldEntity,
           ...playerStatusEntities(id, player),
           ...playerHealthEntities(id, player),
-          ...muzzleFlashEntity(id, player, muzzleFlashVisual, equippedWeaponVisual, clockMs),
+          ...muzzleFlashEntity(id, player, weapon, model, clip, clockMs),
         ];
       }
       return [];
@@ -1008,16 +1119,20 @@ export const projectBattleRoyaleFullStateWith = (
   const projectileEntities = [...snapshot.projectiles.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([id, projectile]): readonly RenderableEntity[] => {
+      const owner = snapshot.players.get(projectile.ownerId);
+      const weapon =
+        owner === undefined ? defaultWeapon : weaponVisualsForPlayer(config, owner);
+      const projectileVisual = weapon?.projectile;
       if (projectileVisual === undefined) {
         return [];
       }
-      const base = visualRoleBase(projectileVisual, clockMs);
+      const base = spriteVisualBase(projectileVisual, clockMs);
       if (base === undefined) {
         return [];
       }
       const dx = Math.cos(projectile.rot);
       const dy = Math.sin(projectile.rot);
-      const scale = visualRoleScale(projectileVisual);
+      const scale = spriteVisualScale(projectileVisual);
       return [
         {
           id: `br:projectile-trail:${id}`,
@@ -1048,10 +1163,13 @@ export const projectBattleRoyaleFullStateWith = (
   const impactEntities = [...snapshot.impacts.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([id, impact]): readonly RenderableEntity[] => {
+      // Impacts carry no owner in the snapshot; the default weapon's impact
+      // VFX applies (single-weapon BR; revisit when impacts carry weaponId).
+      const impactVisual = defaultWeapon?.impactVfx;
       if (impactVisual === undefined) {
         return [];
       }
-      const base = visualRoleBase(impactVisual, clockMs);
+      const base = spriteVisualBase(impactVisual, clockMs);
       if (base === undefined) {
         return [];
       }
@@ -1063,7 +1181,7 @@ export const projectBattleRoyaleFullStateWith = (
         x: impact.x,
         y: impact.y,
         rotation: impact.rot,
-        scale: (0.55 + age * 0.12) * visualRoleScale(impactVisual),
+        scale: (0.55 + age * 0.12) * spriteVisualScale(impactVisual),
         tint: 0xfef08a,
         opacity: 0.75 * pct,
         layerIndex: 21,

@@ -2,10 +2,15 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { normalizeAndMigratePersistedMapJson } from "@tileborne/core";
+import { RuntimeMapPackage } from "@tileborne/core";
 import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import type { RuntimeModeDataExporter } from "@tileborne/plugin-api";
 import { makeGameRuntime, makePluginHost, type RuntimePlugin } from "@tileborne/runtime";
-import { Effect } from "effect";
+import {
+  loadRuntimeMapPackage,
+  type RuntimeMapPackageEntryReader,
+} from "@tileborne/runtime/map-package";
+import { Effect, Result, Schema } from "effect";
 
 import {
   createPlaytestRuntimeHudTracker,
@@ -74,25 +79,27 @@ interface RuntimePluginModule {
   readonly default?: PlaytestTickPlugin | RuntimePlugin;
   readonly plugin?: RuntimePlugin;
   readonly createRuntimeAdapter?: (host: {
-    readonly getArtifact: () => unknown;
+    readonly getMapPackage: () => unknown;
+    readonly getPlayerModelSelections?: () => readonly {
+      readonly playerId: string;
+      readonly modelId: string;
+    }[];
     readonly getPlayerInput?: (playerId: string) => PlaytestRuntimePlayerInput | undefined;
     readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
     readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
   }) => PlaytestTickPlugin;
-  readonly exportArtifact?: (
-    map: unknown,
-    options?: {
-      readonly playerModels?: readonly unknown[];
-      readonly selectedPlayerModelId?: string;
-      readonly objectTypes?: readonly unknown[];
-    },
-  ) => unknown;
   /**
    * Plugin-owned world→HUD derivation (HUD-state SSOT). When the runtime
    * bundle exports it, the host's HUD tracker delegates the per-tick world
    * slice (player status, scoreboard, minimap, zone phase) to the plugin.
    */
   readonly derivePlaytestHudWorldState?: PlaytestHudWorldStateDeriver;
+  /**
+   * The active mode's narrowed `RuntimeModeDataExporter` (ADR-0030): the node
+   * entry exports it under this generic name so package assembly can inject
+   * the mode's `modeData.<pluginId>` section.
+   */
+  readonly exportModeData?: RuntimeModeDataExporter;
 }
 
 interface ActivePlaytestRuntime {
@@ -219,6 +226,21 @@ const resolveNodeEntry = async (rootPath: string): Promise<string | undefined> =
   return nodeEntry ? path.resolve(rootPath, nodeEntry) : undefined;
 };
 
+/**
+ * Discover the active mode's `RuntimeModeDataExporter` on the installed
+ * plugin's node entry so package assembly can bake `modeData.<pluginId>`.
+ */
+export const loadPlaytestModeDataExporter = async (
+  rootPath: string,
+): Promise<RuntimeModeDataExporter | undefined> => {
+  const nodeEntry = await resolveNodeEntry(rootPath);
+  if (nodeEntry === undefined) {
+    return undefined;
+  }
+  const nodeModule = await loadRuntimeModule(nodeEntry);
+  return typeof nodeModule.exportModeData === "function" ? nodeModule.exportModeData : undefined;
+};
+
 interface PlainRuntimeStubModule {
   readonly default?: PlaytestTickPlugin;
 }
@@ -228,19 +250,52 @@ const readPlainStub = (moduleValue: RuntimePluginModule): PlaytestTickPlugin | u
   return plainModule.default;
 };
 
+const encodeMapPackage = Schema.encodeSync(RuntimeMapPackage);
+
+const directoryEntryReader =
+  (directory: string): RuntimeMapPackageEntryReader =>
+  async (entryPath) => {
+    try {
+      return new Uint8Array(await readFile(path.join(directory, entryPath)));
+    } catch {
+      return undefined;
+    }
+  };
+
+/**
+ * Load + integrity-verify the typed package, then re-encode it as the ONE
+ * wire-JSON payload every runtime host hands the plugin (ADR-0030): plugins
+ * consume the encoded `RuntimeMapPackage`, never decoded class instances.
+ */
+export const loadPlaytestMapPackage = async (packageDirectory: string): Promise<unknown> => {
+  const loaded = await loadRuntimeMapPackage(directoryEntryReader(packageDirectory));
+  if (Result.isFailure(loaded)) {
+    throw new Error(
+      `runtime map package at ${packageDirectory} failed to load (${loaded.failure.reason}): ${loaded.failure.message}`,
+    );
+  }
+  return encodeMapPackage(loaded.success);
+};
+
+/** Single-player playtest session: the local player is always player-1. */
+const toPlayerModelSelections = (
+  selectedPlayerModelId: string | undefined,
+): readonly { readonly playerId: string; readonly modelId: string }[] =>
+  selectedPlayerModelId === undefined
+    ? []
+    : [{ playerId: "player-1", modelId: selectedPlayerModelId }];
+
 const loadPluginForPlaytest = async (
   pluginId: string,
   rootPath: string,
-  mapPayload: unknown,
+  mapPackage: unknown,
   hostExtras: {
     readonly getPlayerInput: (playerId: string) => PlaytestRuntimePlayerInput | undefined;
     readonly msgOut: { readonly push: (frame: Uint8Array) => void };
-    readonly recordArtifact?: (artifact: unknown) => void;
+    readonly recordMapPackage?: (mapPackage: unknown) => void;
     readonly setSeedFrame: (frame: Uint8Array | undefined) => void;
     readonly setHudWorldStateDeriver?: (deriver: PlaytestHudWorldStateDeriver) => void;
-    readonly playerModels?: readonly unknown[];
     readonly selectedPlayerModelId?: string;
-    readonly objectTypes?: readonly unknown[];
   },
 ): Promise<PlaytestTickPlugin> => {
   const runtimeEntry = await resolveRuntimeEntry(rootPath);
@@ -251,10 +306,11 @@ const loadPluginForPlaytest = async (
   }
 
   if (typeof runtimeModule.createRuntimeAdapter === "function") {
-    const artifact = await exportRuntimeArtifactForPlugin(rootPath, mapPayload, hostExtras);
-    hostExtras.recordArtifact?.(artifact);
+    hostExtras.recordMapPackage?.(mapPackage);
+    const selections = toPlayerModelSelections(hostExtras.selectedPlayerModelId);
     return runtimeModule.createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
+      ...(selections.length === 0 ? {} : { getPlayerModelSelections: () => selections }),
       getPlayerInput: hostExtras.getPlayerInput,
       msgOut: hostExtras.msgOut,
       setReplayFrames: (frames) => {
@@ -268,54 +324,6 @@ const loadPluginForPlaytest = async (
     return plainStub;
   }
   throw new Error(`plugin ${pluginId} did not export a runtime adapter`);
-};
-
-const readArtifactMapPayload = async (artifactDirectory: string): Promise<unknown> => {
-  const mapPath = path.join(artifactDirectory, "map.json");
-  return normalizeAndMigratePersistedMapJson(
-    JSON.parse(await readFile(mapPath, "utf8")),
-  );
-};
-
-const exportRuntimeArtifactForPlugin = async (
-  rootPath: string,
-  mapPayload: unknown,
-  options: {
-    readonly playerModels?: readonly unknown[];
-    readonly selectedPlayerModelId?: string;
-    readonly objectTypes?: readonly unknown[];
-  },
-): Promise<unknown> => {
-  const nodeEntry = await resolveNodeEntry(rootPath);
-  if (!nodeEntry) {
-    return mapPayload;
-  }
-  const nodeModule = await loadRuntimeModule(nodeEntry);
-  if (typeof nodeModule.exportArtifact !== "function") {
-    return mapPayload;
-  }
-  return nodeModule.exportArtifact(mapPayload, {
-    ...(options.playerModels === undefined ? {} : { playerModels: options.playerModels }),
-    ...(options.selectedPlayerModelId === undefined
-      ? {}
-      : { selectedPlayerModelId: options.selectedPlayerModelId }),
-    ...(options.objectTypes === undefined ? {} : { objectTypes: options.objectTypes }),
-  });
-};
-
-export const exportPlaytestRuntimeArtifact = async (input: {
-  readonly artifactDirectory: string;
-  readonly pluginRootPath: string;
-  readonly playerModels?: readonly unknown[];
-  readonly selectedPlayerModelId?: string;
-  readonly objectTypes?: readonly unknown[];
-}): Promise<unknown> => {
-  const mapPayload = await readArtifactMapPayload(input.artifactDirectory);
-  return exportRuntimeArtifactForPlugin(input.pluginRootPath, mapPayload, {
-    ...(input.playerModels === undefined ? {} : { playerModels: input.playerModels }),
-    ...(input.selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId: input.selectedPlayerModelId }),
-    ...(input.objectTypes === undefined ? {} : { objectTypes: input.objectTypes }),
-  });
 };
 
 const errorMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
@@ -402,21 +410,18 @@ export const getPlaytestRuntimeSnapshot = (
 
 export const startPlaytestRuntimeHost = async (input: {
   readonly sessionId: string;
-  readonly artifactDirectory: string;
+  /** Directory holding the assembled `RuntimeMapPackage` this host boots from. */
+  readonly packageDirectory: string;
   readonly pluginInstalls: readonly { readonly pluginId: string; readonly rootPath: string }[];
   readonly logger?: PlaytestRuntimeLogger;
-  readonly playerModels?: readonly unknown[];
   readonly selectedPlayerModelId?: string;
-  readonly objectTypes?: readonly unknown[];
 }): Promise<PlaytestRuntimeMetrics> => {
   await stopPlaytestRuntimeHost(input.sessionId);
 
-  // Route through the single ADR-0019 plain-JSON load contract shared with the
-  // map services / CLI / IPC: migrate legacy free-string `MapObject.kind` to
-  // catalog GameObjectTypeIds AND fill the optional object/placement keys that
-  // on-disk JSON omits, so legacy maps cannot drift here. The plugin consumes
-  // plain JSON (not a decoded `TileborneMap` class). Idempotent.
-  const mapPayload = await readArtifactMapPayload(input.artifactDirectory);
+  // ADR-0030: every host boots from the ONE typed runtime map package —
+  // decode + hash-verify + version-gate via the shared worker-safe loader,
+  // then hand the plugin the canonical encoded package wire JSON.
+  const mapPackage = await loadPlaytestMapPackage(input.packageDirectory);
 
   const pluginWorld = createPlaytestPluginWorld();
   const inputByPlayerId = new Map<string, PlaytestRuntimePlayerInput>();
@@ -477,10 +482,10 @@ export const startPlaytestRuntimeHost = async (input: {
 
   try {
     for (const install of input.pluginInstalls) {
-      const plugin = await loadPluginForPlaytest(install.pluginId, install.rootPath, mapPayload, {
+      const plugin = await loadPluginForPlaytest(install.pluginId, install.rootPath, mapPackage, {
         getPlayerInput: (playerId) => inputByPlayerId.get(playerId),
         msgOut,
-        recordArtifact: diagnosticsRecorder.recordArtifact,
+        recordMapPackage: diagnosticsRecorder.recordMapPackage,
         setSeedFrame: (frame) => {
           if (frame === undefined) {
             delete sessionState.seedFrame;
@@ -491,11 +496,9 @@ export const startPlaytestRuntimeHost = async (input: {
         setHudWorldStateDeriver: (deriver) => {
           hudDeriverRef.current = deriver;
         },
-        ...(input.playerModels === undefined ? {} : { playerModels: input.playerModels }),
         ...(input.selectedPlayerModelId === undefined
           ? {}
           : { selectedPlayerModelId: input.selectedPlayerModelId }),
-        ...(input.objectTypes === undefined ? {} : { objectTypes: input.objectTypes }),
       });
       loadedPlugins.push(plugin);
       await logRuntimeInfo(input.logger, `Plugin ${install.pluginId} loaded`, {

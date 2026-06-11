@@ -20,7 +20,6 @@ import { PlaytestRoom } from './room.js';
 
 export type WorkerBindings = Env;
 
-const initPath = '/playtest/init';
 const HANDOFF_TTL_SECONDS = 300;
 const corsHeaders = {
   'access-control-allow-origin': '*',
@@ -161,11 +160,20 @@ export const createWorkerApp = (
           mapId: body.mapId,
           ...(body.seed === undefined ? {} : { seed: body.seed }),
           ...(body.options === undefined ? {} : { options: body.options }),
-          ...(body.runtimeArtifact === undefined ? {} : { runtimeArtifact: body.runtimeArtifact }),
+          ...(body.mapPackage === undefined ? {} : { mapPackage: body.mapPackage }),
+          ...(body.playerModelSelections === undefined
+            ? {}
+            : { playerModelSelections: body.playerModelSelections }),
         }),
       }),
     );
     if (!initResponse.ok) {
+      // Surface the room's boundary validation failures (e.g. a malformed
+      // mapPackage) as a structured 400 instead of a generic 500.
+      if (initResponse.status === 400) {
+        const error = await readJsonError(initResponse, 'invalid room create request');
+        return context.json({ error }, 400);
+      }
       return context.json({ error: 'failed to initialize room' }, 500);
     }
     const requestUrl = new URL(context.req.url);
@@ -212,20 +220,16 @@ export const createWorkerApp = (
       return context.json({ error: 'playerId must be a non-empty string' }, 400);
     }
     const stub = context.env.PLAYTEST_ROOM.get(context.env.PLAYTEST_ROOM.idFromName(playtestId));
-    const initResponse = await stub.fetch(
-      new Request(`https://playtest-room${initPath}?roomId=${encodeURIComponent(playtestId)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          mapId: body.mapId,
-          ...(body.seed === undefined ? {} : { seed: body.seed }),
-          ...(body.options === undefined ? {} : { options: body.options }),
-          ...(body.runtimeArtifact === undefined ? {} : { runtimeArtifact: body.runtimeArtifact }),
-        }),
-      }),
+    // Joining never creates a room (hard cut): the room must already exist
+    // via the explicit `/rooms/create` route, otherwise the join is a 404.
+    const summaryResponse = await stub.fetch(
+      new Request(`https://playtest-room/?playtestId=${encodeURIComponent(playtestId)}`),
     );
-    if (!initResponse.ok) {
-      return context.json({ error: 'failed to initialize playtest room' }, 500);
+    if (summaryResponse.status === 404) {
+      return context.json({ error: 'playtest not found' }, 404);
+    }
+    if (!summaryResponse.ok) {
+      return context.json({ error: 'failed to join playtest room' }, 500);
     }
     const reserveResponse = await stub.fetch(
       new Request('https://playtest-room/players/reserve', {

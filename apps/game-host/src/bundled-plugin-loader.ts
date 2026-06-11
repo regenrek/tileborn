@@ -11,6 +11,7 @@ import {
   type RuntimeClientFrameView,
   type RuntimeClientInputFrame,
 } from "./.generated/plugin-runtime.js";
+import { defaultMapPackage } from "./.generated/default-map-package.js";
 
 interface BundledComponentStore<T extends object> {
   readonly get: (entity: number) => T | undefined;
@@ -45,76 +46,22 @@ interface BundledRuntimeAdapter {
   readonly onShutdown?: () => void;
 }
 
+export interface BundledPlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
 interface BundledPluginLoaderOptions {
   readonly getPlayerIds?: () => readonly string[];
   readonly getInput?: (playerId: string) => BundledRuntimeInput | undefined;
   readonly emitFrame?: (frame: Uint8Array) => void;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
   readonly seed?: string | number;
-  readonly runtimeArtifact?: unknown;
+  /** Encoded `RuntimeMapPackage` wire JSON the room boots from (ADR-0030). */
+  readonly mapPackage?: unknown;
+  /** Per-session player→model selections (never part of the package). */
+  readonly getPlayerModelSelections?: () => readonly BundledPlayerModelSelection[];
 }
-
-const DEFAULT_PLAYER_MODEL_ID = "model:bundled-player";
-const DEFAULT_PLAYER_MODEL_PACK_ID = "pack:00000000-0000-4000-8000-000000000101";
-const DEFAULT_PLAYER_MODEL_PLACEABLE_ID = "placeable:00000000-0000-4000-8000-000000000102";
-const DEFAULT_PLAYER_MODEL_CLIPS = {
-  idle: "clip:00000000-0000-4000-8000-000000000201",
-  walk: "clip:00000000-0000-4000-8000-000000000202",
-  run: "clip:00000000-0000-4000-8000-000000000203",
-  shoot: "clip:00000000-0000-4000-8000-000000000204",
-  reload: "clip:00000000-0000-4000-8000-000000000205",
-  hit: "clip:00000000-0000-4000-8000-000000000206",
-  death: "clip:00000000-0000-4000-8000-000000000207",
-  dash: "clip:00000000-0000-4000-8000-000000000208",
-  pickup: "clip:00000000-0000-4000-8000-000000000209",
-} as const;
-
-const DEFAULT_PLAYER_MODEL = {
-  id: DEFAULT_PLAYER_MODEL_ID,
-  label: "Bundled Player",
-  ref: {
-    packId: DEFAULT_PLAYER_MODEL_PACK_ID,
-    kind: "sprite",
-    refId: DEFAULT_PLAYER_MODEL_PLACEABLE_ID,
-    clipId: DEFAULT_PLAYER_MODEL_CLIPS.idle,
-  },
-  defaultClipId: DEFAULT_PLAYER_MODEL_CLIPS.idle,
-  clips: DEFAULT_PLAYER_MODEL_CLIPS,
-  anchor: { x: 0.5, y: 0.5 },
-  hitbox: { x: 0.25, y: 0.2, width: 0.5, height: 0.65 },
-  muzzle: { x: 0.85, y: 0.5 },
-} as const;
-
-const DEFAULT_SPAWN_ANCHORS = Array.from({ length: 32 }, (_, index) => ({
-  x: 16 + (index % 8) * 16,
-  y: 32 + Math.floor(index / 8) * 16,
-  team: "solo",
-  weight: 1,
-}));
-
-const DEFAULT_ARTIFACT = {
-  schemaVersion: 1 as const,
-  maxPlayers: 32,
-  spawnPoints: DEFAULT_SPAWN_ANCHORS,
-  spawnAnchors: DEFAULT_SPAWN_ANCHORS,
-  shrinkSchedule: {
-    centerX: 32,
-    centerY: 32,
-    startRadiusTiles: 24,
-    endRadiusTiles: 4,
-    shrinkIntervalMs: 30_000,
-    damagePerSecond: 5,
-  },
-  lootTables: [{ itemKind: "health-pack", tier: "common", weight: 1 }],
-  objectPlacements: [] as readonly {
-    readonly kind: string;
-    readonly x: number;
-    readonly y: number;
-    readonly properties: Record<string, unknown>;
-  }[],
-  playerModels: [DEFAULT_PLAYER_MODEL],
-  defaultPlayerModelId: DEFAULT_PLAYER_MODEL_ID,
-};
 
 class InMemoryBundledPluginWorld implements BundledPluginWorld {
   private nextEntity = 1;
@@ -196,9 +143,12 @@ export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = 
       if (pluginId !== bundledPlugin.id) {
         throw new Error(`no bundled runtime plugin for ${pluginId}`);
       }
-      const artifact = options.runtimeArtifact ?? DEFAULT_ARTIFACT;
+      const mapPackage = options.mapPackage ?? defaultMapPackage;
       const adapter = createRuntimeAdapter({
-        getArtifact: () => artifact,
+        getMapPackage: () => mapPackage,
+        ...(options.getPlayerModelSelections === undefined
+          ? {}
+          : { getPlayerModelSelections: options.getPlayerModelSelections }),
         ...(options.getPlayerIds === undefined ? {} : { getPlayerIds: options.getPlayerIds }),
         ...(options.getInput === undefined ? {} : { getPlayerInput: options.getInput }),
         ...(options.emitFrame === undefined ? {} : { msgOut: { push: options.emitFrame } }),

@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 import { HudLayout, JsonObject, MapId, PluginId, ProjectId } from "@tileborne/core";
-import { ContributionId, GameSettingsScope, PluginContributionZone } from "@tileborne/plugin-api";
+import { ContributionId, GameSettingsScope, PluginContributionZone } from "@tileborne/plugin-api/preload";
 
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";

@@ -1,8 +1,8 @@
 import type { ContentHash, JsonObject } from '@tileborne/core';
 
-import type { RoomLifecyclePhase } from './rooms/storage-schema.js';
+import type { RoomLifecyclePhase, RoomPlayerModelSelection } from './rooms/storage-schema.js';
 
-export type { RoomLifecyclePhase } from './rooms/storage-schema.js';
+export type { RoomLifecyclePhase, RoomPlayerModelSelection } from './rooms/storage-schema.js';
 
 /** Matches `@tileborne/runtime` PROTOCOL_VERSION SSOT. */
 export const PROTOCOL_VERSION = 1;
@@ -49,7 +49,9 @@ export interface PlaytestStartRequest {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
-  readonly runtimeArtifact?: JsonObject;
+  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
+  readonly mapPackage?: JsonObject;
+  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly playerId?: string;
 }
 
@@ -68,7 +70,9 @@ export interface RoomCreateRequest {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
-  readonly runtimeArtifact?: JsonObject;
+  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
+  readonly mapPackage?: JsonObject;
+  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
 }
 
 export interface RoomCreateResponse {

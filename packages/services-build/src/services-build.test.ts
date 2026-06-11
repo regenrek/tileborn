@@ -540,7 +540,10 @@ describe("PlaytestService", () => {
       );
       expect(session.activePlugins).toContain(BATTLE_ROYALE_PLUGIN_ID);
       const artifactDirectory = Option.getOrThrow(session.artifactDirectory);
-      expect(await fileExists(path.join(artifactDirectory, "map.json"))).toBe(true);
+      // The artifact scaffold never writes map.json: assembleRuntimeMapPackage
+      // is the single writer of the package directory's map entry.
+      expect(await fileExists(path.join(artifactDirectory, "map.json"))).toBe(false);
+      expect(await fileExists(path.join(artifactDirectory, "index.html"))).toBe(true);
     }));
 
   it("assembles artifact with the selected active game mode plugin on start", () =>

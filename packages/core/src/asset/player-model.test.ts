@@ -34,7 +34,6 @@ const clips = () =>
 const geometry = {
   anchor: { x: 0.5, y: 1 },
   hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-  muzzle: { x: 0.75, y: 0.45 },
 } as const;
 
 const spriteRef = (clipId?: string) =>
@@ -106,7 +105,6 @@ describe('PlayerModelRef', () => {
       clips: clips(),
       anchor: { x: -1, y: 2 },
       hitbox: { x: 0.8, y: 0.8, width: 0.5, height: 0.5 },
-      muzzle: { x: 1.2, y: 0.5 },
       renderScale: 0,
       worldSize: new PlayerModelWorldSize({ width: -1, height: 0 }),
     });
@@ -117,7 +115,6 @@ describe('PlayerModelRef', () => {
         'anchor.x',
         'anchor.y',
         'hitbox',
-        'muzzle.x',
         'renderScale',
         'worldSize.width',
         'worldSize.height',

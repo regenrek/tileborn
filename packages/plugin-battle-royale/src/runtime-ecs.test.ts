@@ -40,10 +40,14 @@ import {
   VISION_BLOCKER_COMPONENT,
   type Player,
 } from "./ecs/components.js";
-import { exportArtifact } from "./export-artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
 import { syncPlayerInputRuntimeComponents } from "./ecs/runtime-ecs.js";
 import { createRuntimeAdapter } from "./runtime-adapter.js";
+import {
+  buildTestMapPackage,
+  shippedCatalogObjectTypes,
+  toCatalogEntries,
+} from "./test-map-package.js";
 import { createTestPluginWorld } from "./test-plugin-world.js";
 
 const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544020${index}`);
@@ -72,7 +76,6 @@ const playerModel = new PlayerModelRef({
   }),
   anchor: { x: 0.5, y: 1 },
   hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-  muzzle: { x: 0.75, y: 0.45 },
 });
 
 const makeObject = (
@@ -124,8 +127,8 @@ const lootCrateType = (): GameObjectType =>
 describe("Battle Royale runtime ECS", () => {
   it("initializes authoritative player, object, match, and collision components", () => {
     const lootObjectId = TEST_OBJECT_IDS[2];
-    const artifact = exportArtifact(
-      makeTileborneMap({
+    const mapPackage = buildTestMapPackage({
+      map: makeTileborneMap({
         id: TEST_MAP_ID,
         width: 32,
         height: 32,
@@ -141,11 +144,17 @@ describe("Battle Royale runtime ECS", () => {
           }),
         ],
       }),
-      { playerModels: [playerModel], objectTypes: [lootCrateType()] },
-    );
+      playerModels: [playerModel],
+      // The fixture's loot-crate footprint replaces the shipped one so the
+      // collision/vision expectations stay exact.
+      catalog: toCatalogEntries([
+        ...shippedCatalogObjectTypes().filter((objectType) => objectType.id !== LOOT_CRATE_KIND),
+        lootCrateType(),
+      ]),
+    });
     const world = createTestPluginWorld();
 
-    const plugin = createRuntimeAdapter({ getArtifact: () => artifact });
+    const plugin = createRuntimeAdapter({ getMapPackage: () => mapPackage });
     plugin.onInit?.({ pluginId: plugin.id }, world);
 
     const playerEntity = [...world.getComponent<Player>(PLAYER_COMPONENT).entries()].find(
@@ -204,8 +213,8 @@ describe("Battle Royale runtime ECS", () => {
   });
 
   it("keeps player collision bodies in sync with alive state", () => {
-    const artifact = exportArtifact(
-      makeTileborneMap({
+    const mapPackage = buildTestMapPackage({
+      map: makeTileborneMap({
         id: TEST_MAP_ID,
         width: 32,
         height: 32,
@@ -216,10 +225,10 @@ describe("Battle Royale runtime ECS", () => {
           makeObject(TEST_OBJECT_IDS[1], SHRINK_ZONE_ANCHOR_KIND, 160, 160),
         ],
       }),
-      { playerModels: [playerModel] },
-    );
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
-    const plugin = createRuntimeAdapter({ getArtifact: () => artifact });
+    const plugin = createRuntimeAdapter({ getMapPackage: () => mapPackage });
     plugin.onInit?.({ pluginId: plugin.id }, world);
 
     const [playerEntity, player] = world.getComponent<Player>(PLAYER_COMPONENT).entries().next().value as [

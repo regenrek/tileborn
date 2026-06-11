@@ -4,6 +4,7 @@ import {
   PlaytestMultiplayerClient,
   type MultiplayerSessionState,
 } from '@/lib/playtest-multiplayer-client';
+import { resolvePlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import {
   createLocalMultiplayerRoom,
   parsePlaytestRoomInput,
@@ -36,12 +37,18 @@ interface PlaytestMultiplayerStoreActions {
   hostLocalMatch: (projectId: string, mapId: string) => Promise<void>;
   joinFromInput: (
     input: string,
+    activeModePluginId: string | undefined,
     mapId: string,
     mapWidth: number,
     mapHeight: number,
     fallbackBaseUrl?: string,
   ) => Promise<void>;
-  joinHostAsPlayer: (mapId: string, mapWidth: number, mapHeight: number) => Promise<void>;
+  joinHostAsPlayer: (
+    activeModePluginId: string | undefined,
+    mapId: string,
+    mapWidth: number,
+    mapHeight: number,
+  ) => Promise<void>;
   openSecondClient: (projectId: string, mapId: string) => Promise<void>;
   stopHosting: () => Promise<void>;
   copyText: (label: string, value: string) => Promise<void>;
@@ -56,6 +63,7 @@ const initialState: PlaytestMultiplayerStoreState = {
 };
 
 const ensureClient = (
+  activeModePluginId: string,
   mapWidth: number,
   mapHeight: number,
   set: (
@@ -68,6 +76,13 @@ const ensureClient = (
   const existing = get().client;
   if (existing) {
     return existing;
+  }
+  // ADR-0023 section B: the multiplayer client runs the ACTIVE game mode's
+  // discovered playtest runtime — resolved here by the caller-provided mode
+  // plugin id, never a hardcoded plugin literal.
+  const plugin = resolvePlaytestPlugin(activeModePluginId);
+  if (plugin === undefined) {
+    throw new Error(`No playtest runtime registered for active game mode ${activeModePluginId}`);
   }
   const client = new PlaytestMultiplayerClient(
     mapWidth,
@@ -88,6 +103,7 @@ const ensureClient = (
       useEditorUiStore.getState().setPlaytestMode('multiplayer');
       useEditorUiStore.getState().setPlaytestActive(true);
     },
+    plugin,
   );
   set({ client });
   return client;
@@ -95,6 +111,7 @@ const ensureClient = (
 
 const connectToRoom = async (
   baseUrl: string,
+  activeModePluginId: string,
   mapId: string,
   roomId: string,
   mapWidth: number,
@@ -108,7 +125,7 @@ const connectToRoom = async (
 ): Promise<void> => {
   set({ flowPhase: 'joining' });
   const joinSession = await startPlaytestJoinSession(baseUrl, mapId, roomId);
-  const client = ensureClient(mapWidth, mapHeight, set, get);
+  const client = ensureClient(activeModePluginId, mapWidth, mapHeight, set, get);
   client.connect(joinSession.wsUrl, joinSession.playerId);
 };
 
@@ -138,7 +155,8 @@ export const usePlaytestMultiplayerStore = create<
       useEditorUiStore.getState().setLocalHostSession(host);
       const room = await createLocalMultiplayerRoom(host.baseUrl, mapId, {
         maxPlayers: 8,
-        runtimeArtifact: prepared.runtimeArtifact,
+        mapPackage: prepared.mapPackage,
+        playerModelSelections: prepared.playerModelSelections,
       });
       const merged: LocalHostSession = { ...host, ...room };
       useEditorUiStore.getState().setLocalHostSession(merged);
@@ -153,7 +171,11 @@ export const usePlaytestMultiplayerStore = create<
     }
   },
 
-  joinFromInput: async (input, mapId, mapWidth, mapHeight, fallbackBaseUrl) => {
+  joinFromInput: async (input, activeModePluginId, mapId, mapWidth, mapHeight, fallbackBaseUrl) => {
+    if (activeModePluginId === undefined) {
+      notifyError('Select an active game mode before joining a match');
+      return;
+    }
     const parsed = parsePlaytestRoomInput(input, fallbackBaseUrl);
     if (!parsed) {
       notifyError('Enter a valid room URL or tileborne://playtest/<roomId> deep link');
@@ -161,7 +183,16 @@ export const usePlaytestMultiplayerStore = create<
     }
     useEditorUiStore.getState().setPlaytestJoinModalOpen(false);
     try {
-      await connectToRoom(parsed.baseUrl, mapId, parsed.roomId, mapWidth, mapHeight, set, get);
+      await connectToRoom(
+        parsed.baseUrl,
+        activeModePluginId,
+        mapId,
+        parsed.roomId,
+        mapWidth,
+        mapHeight,
+        set,
+        get,
+      );
     } catch (error) {
       set({ flowPhase: 'error' });
       notifyError(error instanceof Error ? error.message : 'Failed to join room');
@@ -169,13 +200,26 @@ export const usePlaytestMultiplayerStore = create<
     }
   },
 
-  joinHostAsPlayer: async (mapId, mapWidth, mapHeight) => {
+  joinHostAsPlayer: async (activeModePluginId, mapId, mapWidth, mapHeight) => {
     const room = get().roomReady;
     if (!room) {
       return;
     }
+    if (activeModePluginId === undefined) {
+      notifyError('Select an active game mode before joining a match');
+      return;
+    }
     useEditorUiStore.getState().setPlaytestHostModalOpen(false);
-    await connectToRoom(room.baseUrl, mapId, room.roomId, mapWidth, mapHeight, set, get);
+    await connectToRoom(
+      room.baseUrl,
+      activeModePluginId,
+      mapId,
+      room.roomId,
+      mapWidth,
+      mapHeight,
+      set,
+      get,
+    );
   },
 
   openSecondClient: async (projectId, mapId) => {

@@ -3,6 +3,7 @@ import { License } from "@tileborne/asset-pipeline";
 import { Option, Schema } from "effect";
 
 import { DuplicateContributionError } from "./errors.js";
+import { PluginContributionZone } from "./contribution-zone.js";
 import { ContributionId } from "./primitives.js";
 
 const IconName = Schema.String.check(Schema.isPattern(/^[a-z0-9-]+:[a-z0-9-]+[a-z0-9-_.]*$/i));
@@ -13,9 +14,6 @@ export class ContributionDisplay extends Schema.Class<ContributionDisplay>("Cont
   icon: Schema.OptionFromUndefinedOr(IconName),
   order: Schema.OptionFromUndefinedOr(Schema.Number),
 }) {}
-
-export const PluginContributionZone = Schema.Literals(["project", "working-palette", "assets", "plugins"]);
-export type PluginContributionZone = typeof PluginContributionZone.Type;
 
 const ContributionCapability = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9.-]*$/i));
 

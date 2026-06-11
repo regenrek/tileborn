@@ -15,9 +15,9 @@ import { describe, expect, it } from "vitest";
 import { ABILITY, DAMAGE, DEFAULT_MAX_PLAYERS, MOVEMENT, SPAWN_POINT_KIND, STATUS_EFFECT } from "./constants.js";
 import { PLAYER_COMPONENT, POSITION_COMPONENT, VELOCITY_COMPONENT, type Player } from "./ecs/components.js";
 import { countAlivePlayers, resolveSpawnSlots, spawnPlayersFromArtifact } from "./ecs/spawn-players.js";
-import { exportArtifact } from "./export-artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
 import { createRuntimeAdapter } from "./runtime-adapter.js";
+import { buildTestMapPackage, buildTestRuntimeArtifact } from "./test-map-package.js";
 import { createTestPluginWorld } from "./test-plugin-world.js";
 
 const makeTestObject = (
@@ -65,7 +65,6 @@ const testModel = (id: string): PlayerModelRef =>
     }),
     anchor: { x: 0.5, y: 1 },
     hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-    muzzle: { x: 0.75, y: 0.45 },
   });
 
 const playerModels = [testModel("model:default"), testModel("model:hero")] as const;
@@ -74,12 +73,17 @@ const exportRuntimeArtifact = (
   map = makeSpawnFixtureMap(),
   options: { readonly selectedPlayerModelId?: string } = {},
 ) =>
-  exportArtifact(map, {
+  buildTestRuntimeArtifact(map, {
     playerModels,
     ...(options.selectedPlayerModelId === undefined
       ? {}
       : { selectedPlayerModelId: options.selectedPlayerModelId }),
   });
+
+const makeRuntimeMapPackage = (
+  map = makeSpawnFixtureMap(),
+  options: { readonly playerModels?: readonly PlayerModelRef[] } = {},
+) => buildTestMapPackage({ map, playerModels: options.playerModels ?? playerModels });
 
 const makeSpawnFixtureMap = () =>
   makeTileborneMap({
@@ -203,30 +207,30 @@ describe("spawnPlayersFromArtifact", () => {
 });
 
 describe("createRuntimeAdapter", () => {
-  it("rejects host artifacts that do not satisfy the runtime contract", () => {
-    const artifact = exportRuntimeArtifact();
+  it("rejects packages that do not satisfy the runtime contract", () => {
+    const mapWithoutSpawns = makeTileborneMap({
+      id: TEST_MAP_ID,
+      width: 32,
+      height: 32,
+      tileWidth: 32,
+      tileHeight: 32,
+      objects: [makeTestObject(TEST_OBJECT_IDS[0], "shrink-zone-anchor", 16, 16)],
+    });
 
     expect(() =>
-      createRuntimeAdapter({
-        getArtifact: () => ({
-          ...artifact,
-          spawnPoints: [],
-          spawnAnchors: [],
-        } as never),
-      }),
+      createRuntimeAdapter({ getMapPackage: () => makeRuntimeMapPackage(mapWithoutSpawns) }),
     ).toThrow(/spawnAnchors/);
   });
 
-  it("rejects runtime artifacts without a validated player-model roster", () => {
-    const artifact = exportArtifact(makeSpawnFixtureMap());
+  it("rejects packages without a validated player-model roster", () => {
+    const mapPackage = makeRuntimeMapPackage(makeSpawnFixtureMap(), { playerModels: [] });
 
-    expect(() => createRuntimeAdapter({ getArtifact: () => artifact })).toThrow(/playerModels/);
+    expect(() => createRuntimeAdapter({ getMapPackage: () => mapPackage })).toThrow(/playerModels/);
   });
 
   it("registers Player components during onInit for runtime metrics", () => {
-    const artifact = exportRuntimeArtifact();
     const world = createTestPluginWorld();
-    const plugin = createRuntimeAdapter({ getArtifact: () => artifact });
+    const plugin = createRuntimeAdapter({ getMapPackage: () => makeRuntimeMapPackage() });
 
     plugin.onInit?.({ pluginId: plugin.id }, world);
 
@@ -235,9 +239,8 @@ describe("createRuntimeAdapter", () => {
   });
 
   it("spawns players on first onTick when onInit lacks a world reference", () => {
-    const artifact = exportRuntimeArtifact();
     const world = createTestPluginWorld();
-    const plugin = createRuntimeAdapter({ getArtifact: () => artifact });
+    const plugin = createRuntimeAdapter({ getMapPackage: () => makeRuntimeMapPackage() });
 
     plugin.onTick?.(world, 0, 0);
 
@@ -245,11 +248,11 @@ describe("createRuntimeAdapter", () => {
   });
 
   it("emits runtime animation state from player input", () => {
-    const artifact = exportRuntimeArtifact(undefined, { selectedPlayerModelId: "model:hero" });
     const world = createTestPluginWorld();
     const frames: Uint8Array[] = [];
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPlayerModelSelections: () => [{ playerId: "player-1", modelId: "model:hero" }],
       getPlayerInput: (playerId) =>
         playerId === "player-1"
           ? {
@@ -290,7 +293,7 @@ describe("createRuntimeAdapter", () => {
   });
 
   it("emits authored trap and decoy deployables in the welcome snapshot", () => {
-    const artifact = exportRuntimeArtifact(
+    const mapPackage = makeRuntimeMapPackage(
       makeTileborneMap({
         id: TEST_MAP_ID,
         width: 32,
@@ -310,7 +313,7 @@ describe("createRuntimeAdapter", () => {
     const world = createTestPluginWorld();
     const frames: Uint8Array[] = [];
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
       msgOut: { push: (frame) => frames.push(frame) },
     });
 
@@ -324,7 +327,7 @@ describe("createRuntimeAdapter", () => {
   });
 
   it("emits ability deployables and reveal status through delta snapshots", () => {
-    const artifact = exportRuntimeArtifact(
+    const mapPackage = makeRuntimeMapPackage(
       makeTileborneMap({
         id: TEST_MAP_ID,
         width: 32,
@@ -343,7 +346,7 @@ describe("createRuntimeAdapter", () => {
     const frames: Uint8Array[] = [];
     let currentTick = 0;
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
       getPlayerInput: (playerId) =>
         currentTick === 1 && playerId === "player-1"
           ? {

@@ -1,5 +1,7 @@
 import {
   GameObjectCatalog,
+  GameObjectType,
+  type GameObjectTypeId,
   type JsonValue,
   ProjectManifest,
   type ProjectId,
@@ -15,6 +17,7 @@ import {
   ProjectService,
   type ProjectServiceError,
 } from '@tileborne/services-app';
+import { type RuntimeCatalogPluginSource } from '@tileborne/runtime/map-package';
 import {
   PluginLoaderService,
   PluginRegistryService,
@@ -88,6 +91,28 @@ export interface CatalogExportResult {
   readonly catalogJson: JsonValue;
 }
 
+export interface CatalogUpsertTypeResult {
+  readonly saved: boolean;
+  readonly report: CatalogValidationReport;
+}
+
+export interface CatalogRemoveTypeResult {
+  readonly removed: boolean;
+}
+
+/**
+ * The raw merge inputs for runtime map-package assembly (ADR-0030): the
+ * materialized per-plugin catalogs, the project-authored entities, and the
+ * contributed weapon ids the canonical `buildRuntimeCatalogRegistry` merge
+ * needs to resolve `weapon-ref` references. The editor projection (`resolve`)
+ * and the package share these EXACT sources, so both surfaces always agree.
+ */
+export interface CatalogRuntimeSources {
+  readonly pluginCatalogs: readonly RuntimeCatalogPluginSource[];
+  readonly projectObjectTypes: readonly GameObjectType[];
+  readonly weaponIds: ReadonlySet<string>;
+}
+
 /**
  * The sole `apps/desktop/src/main` consumer of `@tileborne/services-plugin` for
  * the editor catalog surface (ADR-0025): it lists declarative plugins, collects
@@ -104,6 +129,17 @@ export class CatalogService extends Context.Service<CatalogService, {
     catalogJson: unknown,
   ) => Effect.Effect<CatalogImportResult, CatalogServiceError>;
   readonly exportCatalog: (projectId: ProjectId) => Effect.Effect<CatalogExportResult, CatalogServiceError>;
+  readonly upsertType: (
+    projectId: ProjectId,
+    objectTypeJson: unknown,
+  ) => Effect.Effect<CatalogUpsertTypeResult, CatalogServiceError>;
+  readonly removeType: (
+    projectId: ProjectId,
+    objectTypeId: GameObjectTypeId,
+  ) => Effect.Effect<CatalogRemoveTypeResult, CatalogServiceError>;
+  readonly runtimeSources: (
+    projectId: ProjectId,
+  ) => Effect.Effect<CatalogRuntimeSources, CatalogServiceError>;
 }>()('@tileborne/desktop/CatalogService') {}
 
 const projectFragmentSources = (
@@ -122,9 +158,8 @@ const projectFragmentSources = (
 
 const emptyFragment = (projectId: ProjectId): GameObjectCatalog => {
   const uuid = projectId.slice('project:'.length) as Uuid;
-  // Explicit empty arrays (not `Option.none`) so the exported pack keeps the
-  // `lootTables`/`items` keys and stays re-importable through JSON (the schema's
-  // `OptionFromUndefinedOr` fields require the key to be present).
+  // Explicit empty arrays so the exported pack keeps the `lootTables`/`items`
+  // keys visible (the schema also tolerates omitted keys via OptionFromOptional).
   return new GameObjectCatalog({
     id: makeCatalogId(uuid),
     schemaVersion: 1,
@@ -149,8 +184,10 @@ export const CatalogServiceLive = Layer.effect(
      * Materialize every enabled declarative plugin's catalogs. `loadDeclarative`
      * populates the loader's declarative cache; a broken/integrity-failing plugin
      * is skipped rather than failing the whole catalog so authoring stays usable.
+     * Also collects the union of contributed weapon ids (ADR-0018) so
+     * `weapon-ref.weaponId` references can resolve in the merge (ADR-0028 §4a).
      */
-    const loadPluginSources = Effect.fn('CatalogService.loadPluginSources')(function* () {
+    const loadEnabledDeclarative = Effect.fn('CatalogService.loadEnabledDeclarative')(function* () {
       const plugins = yield* registry.list();
       const enabledIds = plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.id);
       const enabled = new Set(enabledIds);
@@ -162,7 +199,19 @@ export const CatalogServiceLive = Layer.effect(
       const loaded = (yield* loader.listDeclarative()).filter((plugin) =>
         enabled.has(plugin.pluginId),
       );
-      return loaded.flatMap((plugin) =>
+      const weaponIds = new Set<string>(
+        loaded.flatMap((plugin) =>
+          plugin.weaponCatalogs.flatMap((materialized) =>
+            materialized.catalog.weapons.map((entry) => String(entry.weapon.id)),
+          ),
+        ),
+      );
+      return { loaded, weaponIds };
+    });
+
+    const loadPluginSources = Effect.fn('CatalogService.loadPluginSources')(function* () {
+      const { loaded, weaponIds } = yield* loadEnabledDeclarative();
+      const sources = loaded.flatMap((plugin) =>
         plugin.gameObjectCatalogs.map(
           (materialized): CatalogContributionSource => ({
             contributionId: `${plugin.pluginId}#${materialized.contributionId}`,
@@ -172,6 +221,7 @@ export const CatalogServiceLive = Layer.effect(
           }),
         ),
       );
+      return { sources, weaponIds };
     });
 
     const readFragment = Effect.fn('CatalogService.readFragment')(function* (projectId: ProjectId) {
@@ -216,17 +266,42 @@ export const CatalogServiceLive = Layer.effect(
     });
 
     const resolve = Effect.fn('CatalogService.resolve')(function* (projectId: ProjectId) {
-      const pluginSources = yield* loadPluginSources();
+      const { sources: pluginSources, weaponIds } = yield* loadPluginSources();
       const fragment = yield* readFragment(projectId);
       const sources = [...pluginSources, ...projectFragmentSources(fragment)];
-      return buildResolveProjection(sources);
+      return buildResolveProjection(sources, { weaponIds });
+    });
+
+    const runtimeSources = Effect.fn('CatalogService.runtimeSources')(function* (
+      projectId: ProjectId,
+    ) {
+      const { loaded, weaponIds } = yield* loadEnabledDeclarative();
+      const fragment = yield* readFragment(projectId);
+      return {
+        pluginCatalogs: loaded
+          .filter((plugin) => plugin.gameObjectCatalogs.length > 0)
+          .map(
+            (plugin): RuntimeCatalogPluginSource => ({
+              pluginId: plugin.pluginId,
+              catalogs: plugin.gameObjectCatalogs.map(({ contributionId, catalog }) => ({
+                contributionId: `${plugin.pluginId}#${contributionId}`,
+                catalog,
+              })),
+            }),
+          ),
+        projectObjectTypes: Option.match(fragment, {
+          onNone: () => [] as readonly GameObjectType[],
+          onSome: (catalog) => catalog.objectTypes,
+        }),
+        weaponIds,
+      } satisfies CatalogRuntimeSources;
     });
 
     const validate = Effect.fn('CatalogService.validate')(function* (projectId: ProjectId) {
-      const pluginSources = yield* loadPluginSources();
+      const { sources: pluginSources, weaponIds } = yield* loadPluginSources();
       const fragment = yield* readFragment(projectId);
       const sources = [...pluginSources, ...projectFragmentSources(fragment)];
-      return { report: toValidationReport(buildValidationReport(sources)) };
+      return { report: toValidationReport(buildValidationReport(sources, { weaponIds })) };
     });
 
     const importCatalog = Effect.fn('CatalogService.importCatalog')(function* (
@@ -244,7 +319,7 @@ export const CatalogServiceLive = Layer.effect(
         };
       }
       const fragment = decoded.success;
-      const pluginSources = yield* loadPluginSources();
+      const { sources: pluginSources, weaponIds } = yield* loadPluginSources();
       const sources: readonly CatalogContributionSource[] = [
         ...pluginSources,
         {
@@ -253,7 +328,7 @@ export const CatalogServiceLive = Layer.effect(
           origin: 'project',
         },
       ];
-      const projection = buildValidationReport(sources);
+      const projection = buildValidationReport(sources, { weaponIds });
       const report = toValidationReport(projection);
       if (projection.ok) {
         yield* writeFragment(projectId, fragment);
@@ -268,6 +343,98 @@ export const CatalogServiceLive = Layer.effect(
       return { catalogJson: toJsonValue(Schema.encodeUnknownSync(GameObjectCatalog)(catalog)) };
     });
 
-    return { resolve, validate, importCatalog, exportCatalog };
+    const fragmentWithTypes = (
+      fragment: GameObjectCatalog,
+      objectTypes: readonly GameObjectType[],
+    ): GameObjectCatalog =>
+      new GameObjectCatalog({
+        id: fragment.id,
+        schemaVersion: fragment.schemaVersion,
+        objectTypes: [...objectTypes],
+        lootTables: fragment.lootTables,
+        items: fragment.items,
+      });
+
+    /**
+     * Entity-editor authoring write (ADR-0028): create or replace one
+     * project-authored type in the fragment. Unlike `importCatalog`, saving is
+     * NOT gated on a clean merged report — authors persist work-in-progress
+     * entities and the returned report carries the open issues. Rejected only
+     * when the payload doesn't decode or the id collides with a plugin-owned
+     * type (which the project fragment must never shadow).
+     */
+    const upsertType = Effect.fn('CatalogService.upsertType')(function* (
+      projectId: ProjectId,
+      objectTypeJson: unknown,
+    ) {
+      const decoded = Schema.decodeUnknownResult(GameObjectType)(objectTypeJson);
+      if (Result.isFailure(decoded)) {
+        return {
+          saved: false,
+          report: toValidationReport({
+            ok: false,
+            issues: [{ kind: 'coherence', message: String(decoded.failure) }],
+          }),
+        };
+      }
+      const objectType = decoded.success;
+      const { sources: pluginSources, weaponIds } = yield* loadPluginSources();
+      const pluginOwned = pluginSources.some((source) =>
+        source.catalog.objectTypes.some((existing) => existing.id === objectType.id),
+      );
+      if (pluginOwned) {
+        return {
+          saved: false,
+          report: toValidationReport({
+            ok: false,
+            issues: [
+              {
+                kind: 'duplicate-type',
+                objectTypeId: objectType.id,
+                message: `object type id ${objectType.id} is owned by a plugin catalog; duplicate it as a project entity instead`,
+              },
+            ],
+          }),
+        };
+      }
+      const fragment = Option.getOrElse(yield* readFragment(projectId), () =>
+        emptyFragment(projectId),
+      );
+      const nextTypes = [
+        ...fragment.objectTypes.filter((existing) => existing.id !== objectType.id),
+        objectType,
+      ];
+      const nextFragment = fragmentWithTypes(fragment, nextTypes);
+      yield* writeFragment(projectId, nextFragment);
+      const sources: readonly CatalogContributionSource[] = [
+        ...pluginSources,
+        {
+          contributionId: PROJECT_CATALOG_FRAGMENT_CONTRIBUTION_ID,
+          catalog: nextFragment,
+          origin: 'project',
+        },
+      ];
+      return { saved: true, report: toValidationReport(buildValidationReport(sources, { weaponIds })) };
+    });
+
+    const removeType = Effect.fn('CatalogService.removeType')(function* (
+      projectId: ProjectId,
+      objectTypeId: GameObjectTypeId,
+    ) {
+      const fragment = yield* readFragment(projectId);
+      if (Option.isNone(fragment)) {
+        return { removed: false };
+      }
+      const nextTypes = fragment.value.objectTypes.filter(
+        (existing) => existing.id !== objectTypeId,
+      );
+      if (nextTypes.length === fragment.value.objectTypes.length) {
+        return { removed: false };
+      }
+      yield* writeFragment(projectId, fragmentWithTypes(fragment.value, nextTypes));
+      return { removed: true };
+    });
+
+    return { resolve, validate, importCatalog, exportCatalog, upsertType, removeType, runtimeSources };
   }),
 );

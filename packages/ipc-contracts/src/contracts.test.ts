@@ -24,7 +24,7 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('main IPC contracts', () => {
   it('exports the main IPC registry', () => {
-    expect(MainIpcContracts).toHaveLength(94);
+    expect(MainIpcContracts).toHaveLength(96);
     expect(MainIpcRegistry.byChannel['tileborne:projects:get']).toBe(ProjectsGetContract);
     expect(MainIpcRegistry.byChannel['tileborne:maps:setMapTilesetPack']).toBe(
       MapsSetMapTilesetPackContract,

@@ -79,9 +79,14 @@ describe("MapService placement persistence", () => {
           expect(Option.isNone(loaded.objects[0]?.width ?? Option.some(0))).toBe(true);
           expect(Option.isNone(loaded.objects[0]?.height ?? Option.some(0))).toBe(true);
           expect(loaded.objects[0]?.placement).toBeUndefined();
-          expect(toMapIpcPayload(loaded)).toMatchObject({
-            objects: [{ width: undefined, height: undefined, placement: undefined }],
-          });
+          // Optional-key encoding: none-options encode as ABSENT keys, so the
+          // IPC payload (plain JSON wire) carries no width/height/placement.
+          const payload = toMapIpcPayload(loaded) as {
+            objects: readonly Record<string, unknown>[];
+          };
+          expect(payload.objects[0]).not.toHaveProperty("width");
+          expect(payload.objects[0]).not.toHaveProperty("height");
+          expect(payload.objects[0]).not.toHaveProperty("placement");
         }),
       );
     }));
@@ -275,16 +280,14 @@ describe("MapService placement persistence", () => {
       expect(Option.isNone(placement?.assetId ?? Option.some(""))).toBe(true);
       expect(Option.isNone(placement?.tileId ?? Option.some(""))).toBe(true);
       expect(Option.isNone(placement?.gid ?? Option.some(0))).toBe(true);
-      expect(toMapIpcPayload(loaded)).toMatchObject({
-        objects: [
-          {
-            placement: {
-              assetId: undefined,
-              tileId: undefined,
-              gid: undefined,
-            },
-          },
-        ],
-      });
+      // Optional-key encoding: none-options encode as ABSENT keys on the wire.
+      const payload = toMapIpcPayload(loaded) as {
+        objects: readonly { placement?: Record<string, unknown> }[];
+      };
+      const payloadPlacement = payload.objects[0]?.placement;
+      expect(payloadPlacement).toBeDefined();
+      expect(payloadPlacement).not.toHaveProperty("assetId");
+      expect(payloadPlacement).not.toHaveProperty("tileId");
+      expect(payloadPlacement).not.toHaveProperty("gid");
     }));
 });

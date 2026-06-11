@@ -48,7 +48,6 @@ const model = (): PlayerModelRef =>
     clips: clips(),
     anchor: { x: 0.5, y: 0.86 },
     hitbox: { x: 0.28, y: 0.18, width: 0.44, height: 0.66 },
-    muzzle: { x: 0.8, y: 0.52 },
   });
 
 const sampleProject = (): ProjectManifest =>

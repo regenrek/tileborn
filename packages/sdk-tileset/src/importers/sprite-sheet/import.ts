@@ -74,7 +74,8 @@ export interface SpriteSheetPlayerModelMetadata {
     readonly width: number;
     readonly height: number;
   };
-  readonly muzzle: {
+  /** Model-local "hand" attachment anchor where equipped entities mount (ADR-0028). */
+  readonly hand: {
     readonly x: number;
     readonly y: number;
   };
@@ -152,8 +153,8 @@ const validatePlayerModelMetadata = (
   ) {
     diagnostics.push(invalidConfig("Player model hitbox must stay inside normalized 0..1 bounds"));
   }
-  if (!normalizedNumber(metadata.muzzle.x) || !normalizedNumber(metadata.muzzle.y)) {
-    diagnostics.push(invalidConfig("Player model muzzle must use normalized 0..1 coordinates"));
+  if (!normalizedNumber(metadata.hand.x) || !normalizedNumber(metadata.hand.y)) {
+    diagnostics.push(invalidConfig("Player model hand anchor must use normalized 0..1 coordinates"));
   }
   if (
     metadata.renderScale !== undefined &&
@@ -178,8 +179,8 @@ const playerModelProperties = (
         "tileborne.player.hitboxY": metadata.hitbox.y,
         "tileborne.player.hitboxW": metadata.hitbox.width,
         "tileborne.player.hitboxH": metadata.hitbox.height,
-        "tileborne.player.muzzleX": metadata.muzzle.x,
-        "tileborne.player.muzzleY": metadata.muzzle.y,
+        "tileborne.player.handX": metadata.hand.x,
+        "tileborne.player.handY": metadata.hand.y,
       };
 
 /** Derive frame rects from Aseprite frames (each frame keeps its own duration). */

@@ -13,7 +13,7 @@ export interface NormalizedRect extends NormalizedPoint {
   readonly height: number;
 }
 
-export type SpriteGeometryHandleKind = 'pivot' | 'hand' | 'muzzle' | 'anchor';
+export type SpriteGeometryHandleKind = 'pivot' | 'hand' | 'anchor';
 
 export interface SpriteGeometryHandle {
   readonly id: string;
@@ -59,7 +59,6 @@ export interface SpriteGeometryCanvasProps {
 const HANDLE_COLORS: Record<SpriteGeometryHandleKind, string> = {
   pivot: '#38bdf8',
   hand: '#f97316',
-  muzzle: '#ef4444',
   anchor: '#a78bfa',
 };
 

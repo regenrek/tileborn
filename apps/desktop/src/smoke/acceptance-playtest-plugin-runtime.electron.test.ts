@@ -10,6 +10,7 @@ import {
   navigateToRoute,
   resolveBattleRoyaleInstallPath,
   resolveMainEntry,
+  setProjectActiveGameMode,
   SMOKE_PROJECT_NAME,
   type SmokeContext,
 } from './helpers.js';
@@ -55,6 +56,7 @@ describe('acceptance: playtest plugin runtime', () => {
       },
       { sourcePath: pluginSourcePath, pluginId: BATTLE_ROYALE_PLUGIN_ID },
     );
+    await setProjectActiveGameMode(page, projectId, BATTLE_ROYALE_PLUGIN_ID);
   }, 120_000);
 
   afterAll(async () => {

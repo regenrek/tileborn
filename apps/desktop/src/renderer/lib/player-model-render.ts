@@ -97,6 +97,14 @@ export const buildPlayerModelRenderData = (
     return undefined;
   }
   const renderScale = model.renderScale ?? renderScaleFor(placeable.source.properties);
+  const anchorEntries = Object.entries(model.anchors).map(([name, anchor]) => [
+    name,
+    {
+      point: { x: anchor.point.x, y: anchor.point.y },
+      rotationDeg: anchor.rotationDeg,
+      zOffset: anchor.zOffset,
+    },
+  ] as const);
 
   return {
     modelId: model.id,
@@ -104,6 +112,7 @@ export const buildPlayerModelRenderData = (
       assetId: clips.idle!.frames[0]!.assetId,
       clips: clips as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
       anchor: { x: model.anchor.x, y: model.anchor.y },
+      ...(anchorEntries.length === 0 ? {} : { anchors: Object.fromEntries(anchorEntries) }),
       ...(renderScale === undefined ? {} : { renderScale }),
       ...(model.worldSize === undefined
         ? {}

@@ -15,23 +15,29 @@ import { createRoot } from 'react-dom/client';
 
 import { StartupBoundary } from '@/components/startup/startup-boundary';
 import { queryClient } from '@/lib/query-client';
+import { installTileborneBridge } from '@/lib/tileborne-bridge';
 import { router } from '@/router';
 
 import './index.css';
 import '@tileborne/ui/styles/index.css';
 
-if (typeof window === 'undefined' || !window.tileborne || !window.tileborneStartup) {
+if (typeof window === 'undefined' || !window.tileborneIpc || !window.tileborneStartup) {
   document.body.innerHTML =
     '<pre style="font:14px/1.5 monospace;padding:1.5rem;color:#f87171;background:#1e1e1e;">' +
-    'Tileborne preload bridge missing (window.tileborne / window.tileborneStartup).\n\n' +
+    'Tileborne preload transport missing (window.tileborneIpc / window.tileborneStartup).\n\n' +
     'The preload script likely failed to load. Open DevTools and check for:\n' +
     '  • "Unable to load preload script"\n' +
     '  • node:crypto / sandbox errors in the main process log\n\n' +
     'Fix: ensure apps/desktop/src/main/window.ts has sandbox: false.</pre>';
   throw new Error(
-    'Tileborne preload bridge missing. Check main process logs for "Unable to load preload script".',
+    'Tileborne preload transport missing. Check main process logs for "Unable to load preload script".',
   );
 }
+
+// Build the typed window.tileborne bridge in the renderer realm BEFORE any
+// component renders: decoding on this side of contextBridge is what preserves
+// schema class instances and Option identity (see lib/tileborne-bridge.ts).
+installTileborneBridge();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

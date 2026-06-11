@@ -173,7 +173,7 @@ export const BATTLE_ROYALE_PLAYER_MODEL_POLICY = {
   requiredClipKeys: REQUIRED_PLAYER_MODEL_CLIP_KEYS,
   defaultGeometry: {
     anchor: { x: 0.5, y: 0.86 },
-    muzzle: { x: 0.8, y: 0.52 },
+    hand: { x: 0.64, y: 0.56 },
     hitbox: { x: 0.28, y: 0.18, width: 0.44, height: 0.66 },
     renderScale: 1,
     worldSize: { width: 24, height: 32 },

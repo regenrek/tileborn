@@ -17,8 +17,8 @@ const playerGeometry = {
   'tileborne.player.hitboxY': 0.1,
   'tileborne.player.hitboxW': 0.5,
   'tileborne.player.hitboxH': 0.85,
-  'tileborne.player.muzzleX': 0.75,
-  'tileborne.player.muzzleY': 0.45,
+  'tileborne.player.handX': 0.75,
+  'tileborne.player.handY': 0.45,
 } as const;
 
 const geometryWithoutAnchor = {
@@ -26,8 +26,8 @@ const geometryWithoutAnchor = {
   'tileborne.player.hitboxY': 0.1,
   'tileborne.player.hitboxW': 0.5,
   'tileborne.player.hitboxH': 0.85,
-  'tileborne.player.muzzleX': 0.75,
-  'tileborne.player.muzzleY': 0.45,
+  'tileborne.player.handX': 0.75,
+  'tileborne.player.handY': 0.45,
 } as const;
 
 const requiredClips = () =>
@@ -71,7 +71,7 @@ describe('buildPlayerModelRefFromPlaceable', () => {
     expect(Object.keys(model?.clips ?? {})).toEqual([...REQUIRED_PLAYER_MODEL_CLIP_KEYS]);
     expect(model?.anchor).toEqual({ x: 0.5, y: 1 });
     expect(model?.hitbox).toEqual({ x: 0.25, y: 0.1, width: 0.5, height: 0.85 });
-    expect(model?.muzzle).toEqual({ x: 0.75, y: 0.45 });
+    expect(model?.anchors.hand?.point).toEqual({ x: 0.75, y: 0.45 });
   });
 
   it('supports a named anchor when geometry metadata is otherwise complete', () => {

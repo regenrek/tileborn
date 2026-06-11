@@ -25,8 +25,8 @@ describe('describeTabForPath', () => {
   });
 
   it('creates workspace descriptors for visual editor workbench routes', () => {
-    expect(describeTabForPath('/projects/project%3Aone/visual-roles')).toEqual({
-      kind: 'visual-role-editor',
+    expect(describeTabForPath('/projects/project%3Aone/entities')).toEqual({
+      kind: 'entity-editor',
       projectId: 'project:one',
     });
     expect(describeTabForPath('/projects/project%3Aone/player-models')).toEqual({

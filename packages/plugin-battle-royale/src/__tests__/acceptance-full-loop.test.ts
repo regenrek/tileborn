@@ -14,16 +14,15 @@ import {
   type Position,
 } from "../ecs/components.js";
 import { getZone, resetZoneSingleton } from "../ecs/zone.js";
-import { exportArtifact } from "../export-artifact.js";
-import type { ExportedArtifact } from "../types/artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
+import { buildTestMapPackage } from "../test-map-package.js";
 import { TEST_PLAYER_MODELS } from "../test-player-model.js";
 import { createRuntimeAdapter } from "../runtime-adapter.js";
 import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
 import { createTestPluginWorld } from "../test-plugin-world.js";
 import {
   buildScriptedInputLog,
-  exportReplayArtifact,
+  makeReplayMapPackage,
   type InputLogEntry,
   type WorldSnapshot,
   REPLAY_SEED,
@@ -54,6 +53,7 @@ const makeTestObject = (
   kind: string,
   x: number,
   y: number,
+  properties: Record<string, number> = {},
 ): MapObject =>
   new MapObject({
     id,
@@ -63,7 +63,7 @@ const makeTestObject = (
     width: Option.none(),
     height: Option.none(),
     layerId: TEST_LAYER_ID,
-    properties: {},
+    properties,
   });
 
 export const makeAcceptanceFixtureMap = () =>
@@ -77,21 +77,17 @@ export const makeAcceptanceFixtureMap = () =>
       makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 10, 16),
       makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 22, 16),
       makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 50, 50),
-      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16),
+      // The wider start radius is authored on the anchor (initialRadiusTiles)
+      // so the package-derived shrink schedule matches the scenario's needs.
+      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16, {
+        initialRadiusTiles: 20,
+      }),
     ],
     properties: { maxPlayers: 3 },
   });
 
-export const exportAcceptanceArtifact = (): ExportedArtifact => {
-  const artifact = exportArtifact(makeAcceptanceFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
-  return {
-    ...artifact,
-    shrinkSchedule: {
-      ...artifact.shrinkSchedule,
-      startRadiusTiles: 20,
-    },
-  };
-};
+export const makeAcceptanceMapPackage = (): unknown =>
+  buildTestMapPackage({ map: makeAcceptanceFixtureMap(), playerModels: TEST_PLAYER_MODELS });
 
 const createMsgCollector = () => {
   const frames: Uint8Array[] = [];
@@ -198,7 +194,7 @@ export const runAcceptanceScenario = (
   resetZoneSingleton();
 
   const world = createTestPluginWorld();
-  const artifact = exportAcceptanceArtifact();
+  const mapPackage = makeAcceptanceMapPackage();
   const inputByTick = buildInputLookup(inputLog);
   const collector = createMsgCollector();
   let currentTick = 0;
@@ -208,7 +204,7 @@ export const runAcceptanceScenario = (
   let gameOverSeen = false;
 
   const plugin = createRuntimeAdapter({
-    getArtifact: () => artifact,
+    getMapPackage: () => mapPackage,
     config: {
       tickRate: MOVEMENT.tickRate,
       projectile: {
@@ -371,14 +367,14 @@ describe("acceptance: full BR loop", () => {
       inputLog,
       tickCount: 300,
       snapshotInterval: 30,
-      artifact: exportReplayArtifact(),
+      mapPackage: makeReplayMapPackage(),
     });
     const second = runReplayScenario({
       seed: ACCEPTANCE_SEED,
       inputLog,
       tickCount: 300,
       snapshotInterval: 30,
-      artifact: exportReplayArtifact(),
+      mapPackage: makeReplayMapPackage(),
     });
 
     expect(Buffer.from(first.snapshotBytes)).toEqual(Buffer.from(second.snapshotBytes));

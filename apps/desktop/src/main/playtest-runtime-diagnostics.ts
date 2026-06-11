@@ -1,3 +1,4 @@
+import { gameObjectTypeIdForKey } from "@tileborne/core";
 import { decodeServerMessage } from "@tileborne/ipc-contracts/protocols/battle-royale";
 
 import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
@@ -97,7 +98,8 @@ export interface PlaytestRuntimeDiagnostics {
 }
 
 export interface PlaytestRuntimeDiagnosticsRecorder {
-  readonly recordArtifact: (artifact: unknown) => void;
+  /** Record the encoded `RuntimeMapPackage` the session's plugin booted from. */
+  readonly recordMapPackage: (mapPackage: unknown) => void;
   readonly recordInput: (
     playerId: string,
     input: PlaytestRuntimeInputTelemetry,
@@ -121,8 +123,6 @@ const encoder = new TextEncoder();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
 const updateHash = (hash: number, bytes: Uint8Array): number => {
   let next = hash;
@@ -192,18 +192,47 @@ const classifyFrame = (frame: Uint8Array): "snapshot" | "event" | "unknown" => {
   }
 };
 
-const summarizeArtifact = (artifact: unknown) => {
-  const objectPlacements = isRecord(artifact) && Array.isArray(artifact.objectPlacements)
-    ? artifact.objectPlacements.filter(isRecord)
+/**
+ * Summarize the encoded package's authored content: spawn/zone/loot counts
+ * come from the NEUTRAL sections only — placements matched against the
+ * catalog's `spawn-point` / `loot-source` components and well-known type ids.
+ * `modeData` is engine-opaque and never read here (M2 review, N3).
+ */
+const summarizeMapPackage = (mapPackage: unknown) => {
+  if (!isRecord(mapPackage)) {
+    return { spawnSlots: 0, lootRolls: 0, zoneAnchors: 0 };
+  }
+  const catalog = Array.isArray(mapPackage.catalog) ? mapPackage.catalog.filter(isRecord) : [];
+  const typeIdsWithComponent = (tag: string): ReadonlySet<string> =>
+    new Set(
+      catalog
+        .filter((entry) => {
+          const objectType = entry.objectType;
+          return (
+            isRecord(objectType) &&
+            Array.isArray(objectType.components) &&
+            objectType.components.some(
+              (component) => isRecord(component) && component._tag === tag,
+            )
+          );
+        })
+        .map((entry) => String(isRecord(entry.objectType) ? entry.objectType.id : "")),
+    );
+  const spawnTypeIds = typeIdsWithComponent("spawn-point");
+  const lootTypeIds = typeIdsWithComponent("loot-source");
+  const placements = Array.isArray(mapPackage.placements)
+    ? mapPackage.placements.filter(isRecord)
     : [];
-  const zoneAnchors = objectPlacements.filter((placement) => placement.role === "shrink-zone-anchor").length;
-  const lootPlacements = objectPlacements.filter((placement) => placement.role === "loot-crate").length;
+  const placementsOf = (typeIds: ReadonlySet<string>): number =>
+    placements.filter((placement) => typeIds.has(String(placement.typeId))).length;
+  const zoneAnchors = placements.filter(
+    (placement) => String(placement.typeId) === gameObjectTypeIdForKey("shrink-zone-anchor"),
+  ).length;
 
   return {
-    spawnSlots: isRecord(artifact) ? arrayLength(artifact.spawnAnchors) : 0,
-    lootRolls: isRecord(artifact) ? Math.max(arrayLength(artifact.lootTables), lootPlacements) : 0,
+    spawnSlots: placementsOf(spawnTypeIds),
+    lootRolls: placementsOf(lootTypeIds),
     zoneAnchors,
-    objectCollisionRects: isRecord(artifact) ? arrayLength(artifact.objectCollisionRects) : 0,
   };
 };
 
@@ -212,11 +241,10 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
   readonly tickBudgetMs: number;
 }): PlaytestRuntimeDiagnosticsRecorder => {
   const startedAtMs = Date.now();
-  let artifactCounts = {
+  let packageCounts = {
     spawnSlots: 0,
     lootRolls: 0,
     zoneAnchors: 0,
-    objectCollisionRects: 0,
   };
   let lastTickDurationMs = 0;
   let totalTickDurationMs = 0;
@@ -244,9 +272,9 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
   };
 
   return {
-    recordArtifact: (artifact): void => {
-      artifactCounts = summarizeArtifact(artifact);
-      recordBytes("artifact", encodeStable(artifactCounts));
+    recordMapPackage: (mapPackage): void => {
+      packageCounts = summarizeMapPackage(mapPackage);
+      recordBytes("map-package", encodeStable(packageCounts));
     },
     recordInput: (playerId, input, currentTick): void => {
       const latencyTicks = Math.max(0, currentTick - input.tick);
@@ -346,13 +374,13 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
         },
         entities,
         debugOverlay: {
-          collision: entities.collisionBodies + artifactCounts.objectCollisionRects,
+          collision: entities.collisionBodies,
           lineOfSight: entities.visionBlockers,
           hitboxes: entities.hitboxes,
           projectiles: entities.projectiles,
-          spawnSlots: Math.max(artifactCounts.spawnSlots, entities.players),
-          lootRolls: Math.max(artifactCounts.lootRolls, entities.lootSources),
-          zone: Math.max(artifactCounts.zoneAnchors, entities.zones),
+          spawnSlots: Math.max(packageCounts.spawnSlots, entities.players),
+          lootRolls: Math.max(packageCounts.lootRolls, entities.lootSources),
+          zone: Math.max(packageCounts.zoneAnchors, entities.zones),
         },
         budgets: {
           tickOverBudget: lastTickDurationMs > options.tickBudgetMs,

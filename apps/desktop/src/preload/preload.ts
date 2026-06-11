@@ -1,10 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-import {
-  buildTilebornePreloadBridge,
-  type PreloadIpcTransport,
-} from "./browser-bridge.js";
+import { MainEventRegistry, MainIpcRegistry } from "@tileborne/ipc-contracts/bridge";
 
+import type { TileborneIpcTransport } from "../shared/ipc-transport.js";
 import {
   STARTUP_STATUS_CHANGED_CHANNEL,
   STARTUP_STATUS_GET_CHANNEL,
@@ -12,9 +10,26 @@ import {
   type TileborneStartupBridge,
 } from "../shared/startup-status.js";
 
-const electronPreloadTransport: PreloadIpcTransport = {
-  invoke: (channel, payload) => ipcRenderer.invoke(channel, payload) as Promise<unknown>,
+const INVOKE_CHANNELS = new Set<string>(
+  MainIpcRegistry.contracts.map((contract) => contract.channel),
+);
+const EVENT_CHANNELS = new Set<string>(MainEventRegistry.events.map((event) => event.channel));
+
+// The preload owns exactly one concern: a channel-allowlisted raw transport.
+// Decode/encode lives in the renderer (see src/renderer/lib/tileborne-bridge.ts)
+// because contextBridge structured-clones values and would strip schema class
+// and Option identity from decoded payloads.
+const tileborneIpc: TileborneIpcTransport = {
+  invoke: (channel, payload) => {
+    if (!INVOKE_CHANNELS.has(channel)) {
+      return Promise.reject(new Error(`Unknown Tileborne IPC channel: ${channel}`));
+    }
+    return ipcRenderer.invoke(channel, payload) as Promise<unknown>;
+  },
   subscribe: (channel, onPayload) => {
+    if (!EVENT_CHANNELS.has(channel)) {
+      throw new Error(`Unknown Tileborne event channel: ${channel}`);
+    }
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
       onPayload(payload);
     };
@@ -24,8 +39,6 @@ const electronPreloadTransport: PreloadIpcTransport = {
     };
   },
 };
-
-const tileborne = buildTilebornePreloadBridge(electronPreloadTransport);
 
 const tileborneStartup: TileborneStartupBridge = {
   getStatus: () => ipcRenderer.invoke(STARTUP_STATUS_GET_CHANNEL) as Promise<StartupStatusSnapshot>,
@@ -40,5 +53,5 @@ const tileborneStartup: TileborneStartupBridge = {
   },
 };
 
-contextBridge.exposeInMainWorld("tileborne", tileborne);
+contextBridge.exposeInMainWorld("tileborneIpc", tileborneIpc);
 contextBridge.exposeInMainWorld("tileborneStartup", tileborneStartup);

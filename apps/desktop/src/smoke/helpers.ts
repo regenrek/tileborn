@@ -168,25 +168,43 @@ export async function addBattleRoyaleSpawnAnchors(
   count = 4,
 ): Promise<void> {
   const spawnKind = gameObjectTypeIdForKey('spawn-point');
+  // Drive the raw wire transport instead of the typed bridge: this helper
+  // edits the map as plain wire JSON (the maps:update request's encoded
+  // side), which is exactly what the renderer client puts on the channel.
   await page.evaluate(
     async ({ pid, mid, kind, anchorCount }) => {
-      type PersistedLayer = {
+      type WireLayer = {
         readonly id: string;
-        readonly kind?: string;
-        readonly _tag?: string;
+        readonly kind: string;
         readonly objectIds?: readonly string[];
       };
-      type PersistedMap = {
-        readonly layers: readonly PersistedLayer[];
+      type WireMap = {
+        readonly layers: readonly WireLayer[];
         readonly objects: readonly Record<string, unknown>[];
         readonly properties: Record<string, unknown>;
       };
+      const failIfIpcError = (response: unknown, channel: string): void => {
+        if (
+          typeof response === 'object' &&
+          response !== null &&
+          '_tag' in response &&
+          String((response as { _tag: unknown })._tag).endsWith('Error')
+        ) {
+          throw new Error(`${channel} failed: ${JSON.stringify(response)}`);
+        }
+      };
       try {
-        const { map } = await window.tileborne.maps.get({ projectId: pid, mapId: mid });
-        const persisted = map as unknown as PersistedMap;
+        const got = (await window.tileborneIpc.invoke('tileborne:maps:get', {
+          projectId: pid,
+          mapId: mid,
+        })) as { readonly map?: WireMap };
+        failIfIpcError(got, 'tileborne:maps:get');
+        const persisted = got.map;
+        if (!persisted) {
+          throw new Error('tileborne:maps:get returned no map');
+        }
         const objectLayer =
-          persisted.layers.find((layer) => layer.kind === 'object' || layer._tag === 'object') ??
-          persisted.layers[0];
+          persisted.layers.find((layer) => layer.kind === 'object') ?? persisted.layers[0];
         if (!objectLayer) {
           throw new Error('Map has no layer for BR spawn anchors');
         }
@@ -197,8 +215,6 @@ export async function addBattleRoyaleSpawnAnchors(
             kind,
             x: 64 + index * 48,
             y: 80 + index * 32,
-            width: undefined,
-            height: undefined,
             layerId: objectLayer.id,
             properties: { team: 'solo', weight: 1 },
           };
@@ -209,7 +225,7 @@ export async function addBattleRoyaleSpawnAnchors(
             ? { ...layer, objectIds: [...layer.objectIds.filter((id) => !anchorIds.has(id)), ...anchorIds] }
             : layer,
         );
-        await window.tileborne.maps.update({
+        const updated = await window.tileborneIpc.invoke('tileborne:maps:update', {
           projectId: pid,
           map: {
             ...persisted,
@@ -219,14 +235,54 @@ export async function addBattleRoyaleSpawnAnchors(
               ...anchors,
             ],
             properties: { ...persisted.properties, maxPlayers: anchorCount },
-          } as unknown as Parameters<typeof window.tileborne.maps.update>[0]['map'],
+          },
         });
+        failIfIpcError(updated, 'tileborne:maps:update');
       } catch (error) {
         const message = error instanceof Error ? error.message : JSON.stringify(error);
         throw new Error(message, { cause: error });
       }
     },
     { pid: projectId, mid: mapId, kind: spawnKind, anchorCount: count },
+  );
+}
+
+/**
+ * Persist the project's active game mode (ADR-0023). The bundled seed installs
+ * multiple game-mode plugins (battle royale + example arena), so playtest
+ * acceptance flows must select one explicitly — exactly like a user would via
+ * the active-game-mode picker.
+ */
+export async function setProjectActiveGameMode(
+  page: Page,
+  projectId: string,
+  modeId: string,
+): Promise<void> {
+  await page.evaluate(
+    async ({ pid, mode }) => {
+      const got = (await window.tileborneIpc.invoke('tileborne:projects:get', {
+        projectId: pid,
+      })) as { readonly project?: Record<string, unknown> };
+      if (!got.project) {
+        throw new Error(`tileborne:projects:get returned no project: ${JSON.stringify(got)}`);
+      }
+      const settings = {
+        ...(got.project.settings as Record<string, unknown> | undefined),
+        activeGameMode: mode,
+      };
+      const updated = await window.tileborneIpc.invoke('tileborne:projects:update', {
+        project: { ...got.project, settings },
+      });
+      if (
+        typeof updated === 'object' &&
+        updated !== null &&
+        '_tag' in updated &&
+        String((updated as { _tag: unknown })._tag).endsWith('Error')
+      ) {
+        throw new Error(`tileborne:projects:update failed: ${JSON.stringify(updated)}`);
+      }
+    },
+    { pid: projectId, mode: modeId },
   );
 }
 

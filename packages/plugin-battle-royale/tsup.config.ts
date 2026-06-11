@@ -10,7 +10,18 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     dts: false,
-    noExternal: ['@tileborne/core', '@tileborne/ipc-contracts', '@tileborne/simulation', 'effect'],
+    // `@tileborne/plugin-api` (+ its pure dep `@tileborne/asset-pipeline`) must
+    // be inlined: the installed plugin's dist/server.js is imported by the
+    // desktop main process out-of-tree, where workspace packages don't resolve
+    // (ADR-0030 mode-data exporter pulls ModeDataExportError at runtime).
+    noExternal: [
+      '@tileborne/asset-pipeline',
+      '@tileborne/core',
+      '@tileborne/ipc-contracts',
+      '@tileborne/plugin-api',
+      '@tileborne/simulation',
+      'effect',
+    ],
   },
   {
     entry: { runtime: 'src/runtime-bundle.ts' },
@@ -89,19 +100,6 @@ export default defineConfig([
     // effect stay external so the renderer's single core instance backs all
     // schema classes (PlayerModelRef instanceof across the bundle boundary).
     entry: { 'player-models': 'src/player-models/index.ts' },
-    format: ['esm'],
-    platform: 'browser',
-    target: 'es2022',
-    outDir: 'dist',
-    clean: false,
-    sourcemap: true,
-    dts: false,
-    external: ['@tileborne/core', 'effect'],
-  },
-  {
-    // Visual-role concerns consumed by the desktop renderer. Kept browser-only
-    // like player-models so Vite can serve role defaults live in monorepo dev.
-    entry: { 'visual-roles': 'src/visual-roles/index.ts' },
     format: ['esm'],
     platform: 'browser',
     target: 'es2022',

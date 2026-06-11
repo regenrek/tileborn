@@ -137,12 +137,12 @@ export type MapLayer = TileLayer | ObjectLayer | ImageLayer | CollisionLayer;
 
 /** Reference from a map object to an asset-pack placeable. */
 export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObjectPlacement")({
-  packId: Schema.OptionFromUndefinedOr(PackId),
+  packId: Schema.OptionFromOptionalKey(PackId),
   placeableId: PlaceableId,
   source: Schema.Union([Schema.Literal("manual"), Schema.Literal("tiled-object")]),
-  assetId: Schema.OptionFromUndefinedOr(AssetId),
-  tileId: Schema.OptionFromUndefinedOr(TileId),
-  gid: Schema.OptionFromUndefinedOr(Schema.Int),
+  assetId: Schema.OptionFromOptionalKey(AssetId),
+  tileId: Schema.OptionFromOptionalKey(TileId),
+  gid: Schema.OptionFromOptionalKey(Schema.Int),
   transform: Schema.optional(TileTransform),
   /** Active animation clip for this placement; absent uses the implicit default clip. */
   clipId: Schema.optional(ClipId),
@@ -166,8 +166,8 @@ export class MapObject extends Schema.Class<MapObject>("MapObject")({
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
-  width: Schema.OptionFromUndefinedOr(Schema.Number),
-  height: Schema.OptionFromUndefinedOr(Schema.Number),
+  width: Schema.OptionFromOptionalKey(Schema.Number),
+  height: Schema.OptionFromOptionalKey(Schema.Number),
   layerId: LayerId,
   properties: JsonObject,
   placement: Schema.optional(MapObjectPlacement),

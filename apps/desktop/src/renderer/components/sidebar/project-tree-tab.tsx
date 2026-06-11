@@ -10,12 +10,13 @@ import {
   cn,
   typography,
 } from '@tileborne/ui';
-import { FolderTreeIcon, MapIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { ClapperboardIcon, FolderTreeIcon, MapIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 
 import { SidebarPluginContributions } from '@/components/sidebar/plugin-contribution-zone';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
 import { useMaps, useProject } from '@/hooks/queries';
+import { WORKSPACE_TOOL_VIEWS } from '@/lib/workspace-views';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 interface ProjectTreeTabProps {
@@ -28,6 +29,7 @@ export function ProjectTreeTab({ projectId }: ProjectTreeTabProps) {
   const mapsQuery = useMaps(projectId);
   const setGenerateMapDialogOpen = useEditorUiStore((s) => s.setGenerateMapDialogOpen);
   const setCreateMapDialogOpen = useEditorUiStore((s) => s.setCreateMapDialogOpen);
+  const setSpriteEditorOpen = useEditorUiStore((s) => s.setSpriteEditorOpen);
   const recentProjectMaps = useEditorUiStore((s) => s.recentProjectMaps);
 
   const maps = mapsQuery.data?.maps ?? [];
@@ -110,6 +112,33 @@ export function ProjectTreeTab({ projectId }: ProjectTreeTabProps) {
                   Settings
                 </Link>
               </div>
+            </div>
+
+            <div className="space-y-1" data-testid="sidebar-tools">
+              <div className="flex items-center justify-between gap-2 px-1">
+                <p className={typography.panelTitle}>Tools</p>
+              </div>
+              {WORKSPACE_TOOL_VIEWS.map((view) => (
+                <Link
+                  key={view.kind}
+                  to={view.route}
+                  params={{ projectId }}
+                  data-testid={`sidebar-tool-${view.kind}`}
+                  className="flex items-center gap-2 truncate rounded-md px-2 py-1.5 text-caption text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <view.icon className="size-3.5 shrink-0" aria-hidden />
+                  {view.label}
+                </Link>
+              ))}
+              <button
+                type="button"
+                data-testid="sidebar-tool-sprite-studio"
+                onClick={() => setSpriteEditorOpen(true)}
+                className="flex w-full items-center gap-2 truncate rounded-md px-2 py-1.5 text-left text-caption text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <ClapperboardIcon className="size-3.5 shrink-0" aria-hidden />
+                Sprite / Animation Studio
+              </button>
             </div>
 
             <SidebarPluginContributions zone="project" title="Plugin project panels" />

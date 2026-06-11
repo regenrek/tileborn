@@ -120,6 +120,7 @@ const loadedPlugin = (objectTypes: readonly GameObjectType[]): LoadedDeclarative
         catalog: fragment('a', objectTypes),
       }),
     ],
+    weaponCatalogs: [],
   }) as unknown as LoadedDeclarativePlugin;
 
 const makeLayer = (state: FakeProjectState, plugins: readonly GameObjectType[]) =>
@@ -224,6 +225,105 @@ describe('CatalogService', () => {
     expect(result.report.ok).toBe(false);
     expect(result.report.issues.some((issue) => issue.kind === 'unknown-reference')).toBe(true);
     expect(state.saved).toHaveLength(0);
+  });
+
+  it('upsertType persists a work-in-progress entity even when the report has issues', async () => {
+    const state: FakeProjectState = { manifest: baseManifest(), saved: [] };
+    const danglingLoot = makeLootTableId(UUID('98'));
+    const draft = objectType('40', [
+      new LootSourceComponent({
+        lootTableId: Option.some(danglingLoot),
+        interactionMode: 'tap',
+        grants: {},
+      }),
+    ]);
+    const objectTypeJson = Schema.encodeUnknownSync(GameObjectType)(draft);
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const catalog = yield* CatalogService;
+        return yield* catalog.upsertType(PROJECT_ID, objectTypeJson);
+      }).pipe(Effect.provide(makeLayer(state, [objectType('10')]))),
+    );
+
+    expect(result.saved).toBe(true);
+    expect(result.report.ok).toBe(false);
+    expect(result.report.issues.some((issue) => issue.kind === 'unknown-reference')).toBe(true);
+    expect(state.saved).toHaveLength(1);
+  });
+
+  it('upsertType replaces an existing project entity by id', async () => {
+    const original = objectType('41');
+    const encoded = asJson(
+      Schema.encodeUnknownSync(GameObjectCatalog)(fragment('f', [original])),
+    );
+    const state: FakeProjectState = {
+      manifest: baseManifest({ [PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY]: encoded }),
+      saved: [],
+    };
+    const renamed = new GameObjectType({ ...original, label: 'renamed' });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const catalog = yield* CatalogService;
+        yield* catalog.upsertType(PROJECT_ID, Schema.encodeUnknownSync(GameObjectType)(renamed));
+        return yield* catalog.resolve(PROJECT_ID);
+      }).pipe(Effect.provide(makeLayer(state, [objectType('10')]))),
+    );
+
+    const entry = result.objectTypes.find((item) => item.objectType.id === original.id);
+    expect(entry?.objectType.label).toBe('renamed');
+    expect(
+      result.objectTypes.filter((item) => item.objectType.id === original.id),
+    ).toHaveLength(1);
+  });
+
+  it('upsertType rejects a plugin-owned id and an undecodable payload', async () => {
+    const state: FakeProjectState = { manifest: baseManifest(), saved: [] };
+    const pluginType = objectType('10');
+
+    const { collision, undecodable } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const catalog = yield* CatalogService;
+        const collision = yield* catalog.upsertType(
+          PROJECT_ID,
+          Schema.encodeUnknownSync(GameObjectType)(pluginType),
+        );
+        const undecodable = yield* catalog.upsertType(PROJECT_ID, { not: 'a type' });
+        return { collision, undecodable };
+      }).pipe(Effect.provide(makeLayer(state, [pluginType]))),
+    );
+
+    expect(collision.saved).toBe(false);
+    expect(collision.report.issues[0]?.kind).toBe('duplicate-type');
+    expect(undecodable.saved).toBe(false);
+    expect(undecodable.report.issues[0]?.kind).toBe('coherence');
+    expect(state.saved).toHaveLength(0);
+  });
+
+  it('removeType deletes a project entity and reports a missing one', async () => {
+    const victim = objectType('42');
+    const encoded = asJson(
+      Schema.encodeUnknownSync(GameObjectCatalog)(fragment('9f', [victim])),
+    );
+    const state: FakeProjectState = {
+      manifest: baseManifest({ [PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY]: encoded }),
+      saved: [],
+    };
+
+    const { removed, again, resolved } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const catalog = yield* CatalogService;
+        const removed = yield* catalog.removeType(PROJECT_ID, victim.id);
+        const again = yield* catalog.removeType(PROJECT_ID, victim.id);
+        const resolved = yield* catalog.resolve(PROJECT_ID);
+        return { removed, again, resolved };
+      }).pipe(Effect.provide(makeLayer(state, [objectType('10')]))),
+    );
+
+    expect(removed.removed).toBe(true);
+    expect(again.removed).toBe(false);
+    expect(resolved.objectTypes.some((entry) => entry.objectType.id === victim.id)).toBe(false);
   });
 
   it('export round-trips the persisted project fragment', async () => {

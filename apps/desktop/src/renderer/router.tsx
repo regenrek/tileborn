@@ -15,13 +15,13 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { useEventInvalidations } from '@/hooks/use-event-invalidations';
 import { normalizeRouteParam } from '@/lib/route-params';
 import { AssetLibraryPage } from '@/routes/asset-library-page';
+import { EntityEditorPage } from '@/routes/entity-editor-page';
 import { HomePage } from '@/routes/home-page';
 import { MapEditorPage } from '@/routes/map-editor-page';
 import { PlayerModelEditorPage } from '@/routes/player-model-editor-page';
 import { PluginManagerPage } from '@/routes/plugin-manager-page';
 import { ProjectOverviewPage } from '@/routes/project-overview-page';
 import { SettingsPage } from '@/routes/settings-page';
-import { VisualRoleEditorPage } from '@/routes/visual-role-editor-page';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 function GlobalCommandPalette() {
@@ -132,18 +132,18 @@ const pluginManagerRoute = createRoute({
   component: PluginManagerPage,
 });
 
-const visualRoleEditorRoute = createRoute({
-  getParentRoute: () => editorRoute,
-  path: '/projects/$projectId/visual-roles',
-  params: projectParams,
-  component: VisualRoleEditorPage,
-});
-
 const playerModelEditorRoute = createRoute({
   getParentRoute: () => editorRoute,
   path: '/projects/$projectId/player-models',
   params: projectParams,
   component: PlayerModelEditorPage,
+});
+
+const entityEditorRoute = createRoute({
+  getParentRoute: () => editorRoute,
+  path: '/projects/$projectId/entities',
+  params: projectParams,
+  component: EntityEditorPage,
 });
 
 const projectSettingsRoute = createRoute({
@@ -174,8 +174,8 @@ const routeTree = rootRoute.addChildren([
     mapEditorRoute,
     assetLibraryRoute,
     pluginManagerRoute,
-    visualRoleEditorRoute,
     playerModelEditorRoute,
+    entityEditorRoute,
     projectSettingsRoute,
     mapsIndexRoute,
   ]),

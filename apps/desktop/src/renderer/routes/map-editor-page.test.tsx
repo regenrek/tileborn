@@ -30,6 +30,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/hooks/queries', () => ({
   useMap: () => mapQueryMock.current,
   useMaps: () => ({ data: { maps: [] } }),
+  useProject: () => ({ data: undefined, isLoading: false }),
+  usePluginContributions: () => ({ data: undefined, isLoading: false }),
 }));
 
 vi.mock('@/hooks/mutations', () => ({

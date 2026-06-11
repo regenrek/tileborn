@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CombatBlocker,
   Vec2,
+  aabbGapDistance,
   addVec,
   angleBetween,
   distance,
@@ -65,6 +66,40 @@ describe('vector math', () => {
 
   it('reflects a direction across a surface normal', () => {
     expect(reflectVec(vec2(1, -1), vec2(0, 1))).toEqual(vec2(1, 1));
+  });
+});
+
+describe('aabbGapDistance', () => {
+  const box = (minX: number, minY: number, maxX: number, maxY: number) => ({
+    minX,
+    minY,
+    maxX,
+    maxY,
+  });
+
+  it('is zero for overlapping and exactly touching boxes', () => {
+    expect(aabbGapDistance(box(0, 0, 4, 4), box(2, 2, 6, 6))).toBe(0);
+    expect(aabbGapDistance(box(0, 0, 4, 4), box(4, 0, 8, 4))).toBe(0);
+  });
+
+  it('measures the single-axis gap between separated boxes', () => {
+    expect(aabbGapDistance(box(0, 0, 4, 4), box(7, 0, 9, 4))).toBe(3);
+    expect(aabbGapDistance(box(0, 10, 4, 12), box(0, 0, 4, 4))).toBe(6);
+  });
+
+  it('measures the diagonal hypot gap when both axes are separated', () => {
+    expect(aabbGapDistance(box(0, 0, 1, 1), box(4, 5, 6, 7))).toBe(5);
+  });
+
+  it('treats a point as the degenerate box with min === max', () => {
+    expect(aabbGapDistance(box(10, 0, 10, 0), box(0, 0, 4, 4))).toBe(6);
+    expect(aabbGapDistance(box(2, 2, 2, 2), box(0, 0, 4, 4))).toBe(0);
+  });
+
+  it('is symmetric', () => {
+    const a = box(0, 0, 1, 1);
+    const b = box(5, 9, 6, 10);
+    expect(aabbGapDistance(a, b)).toBe(aabbGapDistance(b, a));
   });
 });
 

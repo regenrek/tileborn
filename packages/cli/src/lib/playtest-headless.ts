@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises";
-
-import { decodePersistedTileborneMapJson } from "@tileborne/core";
 import type { PlaytestArtifact } from "@tileborne/services-build";
 import { PlaytestHeadlessResult } from "@tileborne/services-build";
 import { makeGameRuntime, makePluginHost } from "@tileborne/runtime";
@@ -10,10 +7,6 @@ export const runHeadlessPlaytest = async (
   artifact: PlaytestArtifact,
   durationSec: number,
 ): Promise<PlaytestHeadlessResult> => {
-  const raw = await readFile(artifact.mapPath, "utf8");
-  const parsed: unknown = JSON.parse(raw);
-  decodePersistedTileborneMapJson(parsed);
-
   const hookCounts = await Effect.runPromise(Ref.make<Record<string, number>>({}));
   const runtime = makeGameRuntime();
   const host = makePluginHost({

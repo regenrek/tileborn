@@ -32,10 +32,6 @@
       "types": "./src/player-models/index.ts",
       "default": "./dist/player-models.js"
     },
-    "./visual-roles": {
-      "types": "./src/visual-roles/index.ts",
-      "default": "./dist/visual-roles.js"
-    },
     "./constants": {
       "types": "./src/constants.ts",
       "default": "./dist/constants.js"

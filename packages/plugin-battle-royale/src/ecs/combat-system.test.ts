@@ -73,7 +73,8 @@ import {
   type DamageSystemState,
 } from './damage-system.js';
 import { resolveBattleRoyaleWeaponEntry } from '../weapon-catalog.js';
-import { exportArtifact } from '../export-artifact.js';
+import { extractCollisionArtifact } from '../collision-artifact.js';
+import { buildTestRuntimeArtifact } from '../test-map-package.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
 import { createBattleRoyaleSnapshotEmitter } from '../server/snapshot-emitter.js';
 import { createTestPluginWorld } from '../test-plugin-world.js';
@@ -882,26 +883,28 @@ describe('combat system (neutral engine)', () => {
     const pack = makeCollisionTilesetPack();
     const collisionTiles = Array.from({ length: 32 * 32 }, () => 0);
     collisionTiles[3 * 32 + 4] = 2;
-    const artifact = exportArtifact(
-      makeTileborneMap({
-        id: TEST_MAP_ID,
-        width: 32,
-        height: 32,
-        tileWidth: TILE_SIZE,
-        tileHeight: TILE_SIZE,
-        layers: [
-          new TileLayer({
-            id: TEST_LAYER_ID,
-            name: 'Ground',
-            visible: true,
-            opacity: 1,
-            chunks: [new TileChunk({ x: 0, y: 0, width: 32, height: 32, tiles: collisionTiles })],
-          }),
-        ],
-        objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16)],
-      }),
-      { tilesetPack: pack },
-    );
+    const collisionMap = makeTileborneMap({
+      id: TEST_MAP_ID,
+      width: 32,
+      height: 32,
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      layers: [
+        new TileLayer({
+          id: TEST_LAYER_ID,
+          name: 'Ground',
+          visible: true,
+          opacity: 1,
+          chunks: [new TileChunk({ x: 0, y: 0, width: 32, height: 32, tiles: collisionTiles })],
+        }),
+      ],
+      objects: [makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16)],
+    });
+    const artifact = {
+      ...buildTestRuntimeArtifact(collisionMap),
+      tilesetPack: pack,
+      collision: extractCollisionArtifact(collisionMap, pack),
+    };
     const blockers = buildCombatBlockers(PluginCollisionEnvironment.fromArtifact(artifact));
     expect(blockers.length).toBeGreaterThan(0);
     const state = createCombatSystemState();

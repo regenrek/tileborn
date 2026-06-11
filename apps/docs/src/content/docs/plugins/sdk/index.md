@@ -50,7 +50,7 @@ Functions exported from the plugin `dist/` entry:
 | Hook | Purpose |
 | --- | --- |
 | `validateProject` / `validateMap` | Lint before export or playtest |
-| `exportArtifact` | Target-specific export pipelines |
+| `exportModeData` | Mode-data section of the runtime map package |
 | `generateMap` | Procedural generation |
 | `importAsset` / `postProcessAssetPack` | Custom import transforms |
 | `createRuntimeAdapter` | Register runtime systems |

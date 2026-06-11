@@ -1,7 +1,9 @@
 import {
   AssetLibraryReference,
+  AttachmentAnchor,
   PlayerModelRef,
   REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  VisualAnchorPoint,
   validatePlayerModelRef,
   type ClipId,
   type JsonValue,
@@ -14,8 +16,10 @@ import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
  * Sprite → player-model bridge. Imported sprites flow today only into a
  * placeable brush; this builds the missing {@link PlayerModelRef} only when the
  * placeable already carries the complete production player-model metadata:
- * required semantic clips, anchor, hitbox, and muzzle. Pure: given the loaded
- * pack + the placeable id it returns a ready-to-persist model ref.
+ * required semantic clips, anchor, and hitbox. The optional "hand" attachment
+ * anchor (where equipped weapon entities mount, ADR-0028 §2b) is carried over
+ * when authored. Pure: given the loaded pack + the placeable id it returns a
+ * ready-to-persist model ref.
  */
 const NAMED_ANCHOR_PIVOT: Record<string, { readonly x: number; readonly y: number }> = {
   'top-left': { x: 0, y: 0 },
@@ -69,11 +73,11 @@ const normalizedHitboxFor = (
     : { x, y, width, height };
 };
 
-const muzzleFor = (
+const handAnchorFor = (
   properties: Readonly<Record<string, JsonValue>>,
 ): { readonly x: number; readonly y: number } | undefined => {
-  const x = readFirstNumber(properties, ['tileborne.player.muzzleX', 'tileborne.muzzleX']);
-  const y = readFirstNumber(properties, ['tileborne.player.muzzleY', 'tileborne.muzzleY']);
+  const x = readFirstNumber(properties, ['tileborne.player.handX', 'tileborne.handX']);
+  const y = readFirstNumber(properties, ['tileborne.player.handY', 'tileborne.handY']);
   return x === undefined || y === undefined ? undefined : { x, y };
 };
 
@@ -106,8 +110,8 @@ export const buildPlayerModelRefFromPlaceable = (
   const clips = clipSetFor(placeable);
   const anchor = anchorFor(placeable.source.properties);
   const hitbox = normalizedHitboxFor(placeable.source.properties);
-  const muzzle = muzzleFor(placeable.source.properties);
-  if (clips === undefined || anchor === undefined || hitbox === undefined || muzzle === undefined) {
+  const hand = handAnchorFor(placeable.source.properties);
+  if (clips === undefined || anchor === undefined || hitbox === undefined) {
     return undefined;
   }
   const defaultClipId = input.clipId ?? clips.idle;
@@ -124,7 +128,9 @@ export const buildPlayerModelRefFromPlaceable = (
     clips,
     anchor,
     hitbox,
-    muzzle,
+    ...(hand === undefined
+      ? {}
+      : { anchors: { hand: new AttachmentAnchor({ point: new VisualAnchorPoint(hand) }) } }),
   });
   return validatePlayerModelRef(model).length === 0 ? model : undefined;
 };

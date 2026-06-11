@@ -1,15 +1,13 @@
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { gameObjectTypeIdForKey } from "../catalog/well-known.js";
-import {
-  decodePersistedTileborneMapJson,
-  normalizeAndMigratePersistedMapJson,
-} from "./decode.js";
+import { decodePersistedTileborneMapJson } from "./decode.js";
+import { TileborneMap } from "./index.js";
 import { LegacyMapObjectKindError } from "./migrate.js";
 
 /** A persisted map written before the catalog: free-string `kind`, and the
- * `OptionFromUndefinedOr` object keys (`width`/`height`) omitted entirely. */
+ * optional object keys (`width`/`height`) omitted entirely. */
 const legacyPersistedMap = {
   id: "map:5b1901ca-1abd-42d6-aeac-553b34b9bda6",
   schemaVersion: 1,
@@ -65,7 +63,7 @@ describe("decodePersistedTileborneMapJson", () => {
     expect(() => decodePersistedTileborneMapJson(bad)).toThrow(LegacyMapObjectKindError);
   });
 
-  it("normalizes a present placement's omitted Option keys before decode", () => {
+  it("decodes a present placement whose Option keys are omitted", () => {
     const withPlacement = {
       ...legacyPersistedMap,
       objects: [
@@ -86,19 +84,41 @@ describe("decodePersistedTileborneMapJson", () => {
   });
 });
 
-describe("normalizeAndMigratePersistedMapJson", () => {
-  it("returns non-map input unchanged", () => {
-    expect(normalizeAndMigratePersistedMapJson(42)).toBe(42);
-    expect(normalizeAndMigratePersistedMapJson({ not: "a map" })).toEqual({ not: "a map" });
-  });
+describe("TileborneMap JSON round-trip (optional-key Option encoding)", () => {
+  it("encodes none-Options as ABSENT keys and decodes after JSON.stringify/parse without normalization", () => {
+    const map = decodePersistedTileborneMapJson({
+      ...legacyPersistedMap,
+      objects: [
+        {
+          ...legacyPersistedMap.objects[0],
+          placement: {
+            placeableId: "placeable:11111111-1111-4111-8111-111111111111",
+            source: "manual",
+            gid: 7,
+          },
+        },
+      ],
+    });
 
-  it("migrates legacy kinds and fills omitted optional keys, returning plain JSON", () => {
-    const result = normalizeAndMigratePersistedMapJson(legacyPersistedMap) as {
-      objects: readonly { readonly kind: string; readonly width: unknown; readonly placement: unknown }[];
-    };
-    // Plain JSON (not a decoded class): width is a literal `undefined`, not Option.none.
-    expect(result.objects[0]?.kind).toBe(gameObjectTypeIdForKey("spawn-point"));
-    expect(result.objects[0]?.width).toBeUndefined();
-    expect("placement" in (result.objects[0] as object)).toBe(true);
+    const encoded = Schema.encodeSync(TileborneMap)(map);
+    const encodedObject = (encoded as { objects: readonly Record<string, unknown>[] })
+      .objects[0]!;
+    // none-Options are encoded as absent keys, never present-undefined.
+    expect("width" in encodedObject).toBe(false);
+    expect("height" in encodedObject).toBe(false);
+    const encodedPlacement = encodedObject.placement as Record<string, unknown>;
+    expect("packId" in encodedPlacement).toBe(false);
+    expect("assetId" in encodedPlacement).toBe(false);
+    expect("tileId" in encodedPlacement).toBe(false);
+    expect(encodedPlacement.gid).toBe(7);
+
+    // The JSON wire round-trip is lossless and decodes with the STRICT schema
+    // decode — no key backfill / normalization step in between.
+    const wire: unknown = JSON.parse(JSON.stringify(encoded));
+    const decoded = Schema.decodeUnknownSync(TileborneMap)(wire);
+    expect(Option.isNone(decoded.objects[0]!.width)).toBe(true);
+    expect(Option.isNone(decoded.objects[0]!.placement!.packId)).toBe(true);
+    expect(Option.getOrNull(decoded.objects[0]!.placement!.gid)).toBe(7);
+    expect(decoded).toStrictEqual(map);
   });
 });

@@ -103,7 +103,6 @@ const makeRuntimeArtifact = () => ({
       },
       anchor: { x: 0.5, y: 1 },
       hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-      muzzle: { x: 0.75, y: 0.45 },
     },
   ],
   defaultPlayerModelId: "model:plain",

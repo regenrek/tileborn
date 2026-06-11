@@ -4,7 +4,12 @@ export { createSimulationRules, defaultPickupRadius } from "./simulation-rules.j
 export { validateMap } from "./validate-map.js";
 export { generateMap } from "./generate-map.js";
 export { createBattleRoyaleSampleMaps } from "./sample-maps.js";
-export { exportArtifact } from "./export-artifact.js";
+export { buildBattleRoyaleRuntimeState } from "./runtime-state-from-package.js";
+export {
+  BattleRoyaleModeData,
+  decodeBattleRoyaleModeData,
+  exportBattleRoyaleModeData,
+} from "./mode-data.js";
 export {
   createInitialFrame,
   createBattleRoyaleProjector,
@@ -50,7 +55,7 @@ export type {
   PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
-  VisualRoleRenderData,
+  SpriteVisualRenderData,
   ZoneView,
 } from "./renderer/battle-royale-projector.js";
 export type {
@@ -73,13 +78,10 @@ export {
   buildBattleRoyaleHudLayoutData,
 } from "./hud-layout.js";
 export {
-  BATTLE_ROYALE_PLACEHOLDER_WEAPON_VISUAL_ASSET_IDS,
-  BATTLE_ROYALE_REQUIRED_WEAPON_VISUAL_ROLE_KINDS,
   BattleRoyaleWeaponVisualError,
-  resolveBattleRoyaleWeaponVisualBinding,
-  validateBattleRoyaleWeaponRenderableAssetIds,
+  resolveBattleRoyaleWeaponVisuals,
 } from "./weapon-visuals.js";
-export type { BattleRoyaleWeaponRenderableAssetIds } from "./weapon-visuals.js";
+export type { BattleRoyaleWeaponVisualsResult } from "./weapon-visuals.js";
 export { PLUGIN_ID } from "./constants.js";
 export {
   BATTLE_ROYALE_CORE_PACK_ID,

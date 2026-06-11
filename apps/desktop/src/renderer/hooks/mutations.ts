@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import type { PackId, PluginId, ProjectId } from '@tileborne/core';
+import type { GameObjectTypeId, PackId, PluginId, ProjectId } from '@tileborne/core';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 
 import type { MapId } from '@tileborne/core';
@@ -10,6 +10,8 @@ import type {
   AssetPacksListResponse,
   CatalogExportResponse,
   CatalogImportResponse,
+  CatalogRemoveTypeResponse,
+  CatalogUpsertTypeResponse,
   MapsImportTiledResponse,
   MapsGenerateResponse,
   MapsScanTiledResponse,
@@ -22,7 +24,6 @@ import type {
   TiledImportScanResponse,
 } from '@/lib/bridge-types';
 import { invokeIpc, type TileborneQueryError } from '@/lib/ipc';
-import { normalizeMapForIpc } from '@/lib/map-ipc-normalization';
 import {
   formatMutationError,
   isUserCancelledMutation,
@@ -275,12 +276,7 @@ export function useUpdateMap() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Parameters<typeof window.tileborne.maps.update>[0]) =>
-      invokeIpc(() =>
-        window.tileborne.maps.update({
-          ...input,
-          map: normalizeMapForIpc(input.map) as typeof input.map,
-        }),
-      ),
+      invokeIpc(() => window.tileborne.maps.update(input)),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.maps.list(input.projectId),
@@ -613,6 +609,71 @@ export function useExportCatalog() {
   return useMutation<CatalogExportResponse, TileborneQueryError, { readonly projectId: string }>({
     mutationFn: ({ projectId }) =>
       invokeIpc(() => window.tileborne.catalog.export({ projectId: projectId as ProjectId })),
+  });
+}
+
+const invalidateCatalog = (queryClient: ReturnType<typeof useQueryClient>, projectId: string) => {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.resolve(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.validate(projectId) });
+};
+
+/**
+ * Entity-editor authoring write: create or replace ONE project-authored
+ * `GameObjectType` in the project catalog fragment via
+ * `tileborne:catalog:upsertType`. `objectTypeJson` is the serialized type
+ * (callers encode with the core `GameObjectType` schema). Saves
+ * work-in-progress entities; the returned report carries any open issues.
+ */
+export function useUpsertCatalogType(): UseMutationResult<
+  CatalogUpsertTypeResponse,
+  TileborneQueryError,
+  { readonly projectId: string; readonly objectTypeJson: unknown }
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CatalogUpsertTypeResponse,
+    TileborneQueryError,
+    { readonly projectId: string; readonly objectTypeJson: unknown }
+  >({
+    mutationFn: ({ projectId, objectTypeJson }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.upsertType({
+          projectId: projectId as ProjectId,
+          objectTypeJson,
+        }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.saved) {
+        invalidateCatalog(queryClient, input.projectId);
+      }
+    },
+  });
+}
+
+/** Deletes one project-authored type from the fragment via `tileborne:catalog:removeType`. */
+export function useRemoveCatalogType(): UseMutationResult<
+  CatalogRemoveTypeResponse,
+  TileborneQueryError,
+  { readonly projectId: string; readonly objectTypeId: string }
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CatalogRemoveTypeResponse,
+    TileborneQueryError,
+    { readonly projectId: string; readonly objectTypeId: string }
+  >({
+    mutationFn: ({ projectId, objectTypeId }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.removeType({
+          projectId: projectId as ProjectId,
+          objectTypeId: objectTypeId as GameObjectTypeId,
+        }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.removed) {
+        invalidateCatalog(queryClient, input.projectId);
+      }
+    },
   });
 }
 

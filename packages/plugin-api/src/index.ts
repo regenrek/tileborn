@@ -1,5 +1,6 @@
 export * from "./api.js";
 export * from "./catalog-registry.js";
+export * from "./contribution-zone.js";
 export * from "./contributions.js";
 export * from "./errors.js";
 export * from "./game-mode.js";
@@ -7,6 +8,7 @@ export * from "./game-settings-form.js";
 export * from "./hud-layout-registry.js";
 export * from "./input-map-registry.js";
 export * from "./manifest.js";
+export * from "./mode-data-exporter.js";
 export * from "./permissions.js";
 export * from "./primitives.js";
 export * from "./registry.js";

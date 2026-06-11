@@ -92,6 +92,34 @@ export const CatalogExportResponse = Schema.Struct({
   catalogJson: Schema.Unknown,
 });
 
+/**
+ * `tileborne:catalog:upsertType` — create or replace ONE project-authored
+ * `GameObjectType` in the project catalog fragment (entity editor authoring
+ * loop). `objectTypeJson` is the serialized type (same boundary rule as
+ * `catalogJson` on import: the main handler decodes + reports rather than
+ * rejecting at the wire). Saving is NOT gated on a clean merged report —
+ * authors must be able to persist work-in-progress entities (e.g. a weapon
+ * before its projectile companion exists); the returned report surfaces the
+ * remaining issues. Only plugin-id collisions and decode failures reject.
+ */
+export const CatalogUpsertTypeRequest = Schema.Struct({
+  projectId: ProjectId,
+  objectTypeJson: Schema.Unknown,
+});
+export const CatalogUpsertTypeResponse = Schema.Struct({
+  saved: Schema.Boolean,
+  report: CatalogValidationReport,
+});
+
+/** `tileborne:catalog:removeType` — delete one project-authored type from the fragment. */
+export const CatalogRemoveTypeRequest = Schema.Struct({
+  projectId: ProjectId,
+  objectTypeId: GameObjectTypeId,
+});
+export const CatalogRemoveTypeResponse = Schema.Struct({
+  removed: Schema.Boolean,
+});
+
 export const CatalogResolveContract = defineContract({
   channel: 'tileborne:catalog:resolve',
   request: CatalogResolveRequest,
@@ -121,11 +149,27 @@ export const CatalogExportContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const CatalogUpsertTypeContract = defineContract({
+  channel: 'tileborne:catalog:upsertType',
+  request: CatalogUpsertTypeRequest,
+  response: CatalogUpsertTypeResponse,
+  errors: IpcContractErrors,
+});
+
+export const CatalogRemoveTypeContract = defineContract({
+  channel: 'tileborne:catalog:removeType',
+  request: CatalogRemoveTypeRequest,
+  response: CatalogRemoveTypeResponse,
+  errors: IpcContractErrors,
+});
+
 export const CatalogContracts = [
   CatalogResolveContract,
   CatalogValidateContract,
   CatalogImportContract,
   CatalogExportContract,
+  CatalogUpsertTypeContract,
+  CatalogRemoveTypeContract,
 ] as const;
 
 export const CatalogIpcRegistry = createRegistry(CatalogContracts);

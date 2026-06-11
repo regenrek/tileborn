@@ -10,8 +10,8 @@ import { BattleRoyaleAuthoringPanel } from './battle-royale-authoring-panel';
 /**
  * Props every mode authoring panel receives from the inspector. The inspector
  * mounts the ACTIVE mode's panel by discovery (ADR-0023 section B) — it no
- * longer hardcodes `<BattleRoyaleAuthoringPanel>` behind a `battleRoyaleEnabled`
- * literal-id check. `settingsForm` is the active mode's manifest-discovered
+ * longer hardcodes `<BattleRoyaleAuthoringPanel>` behind a literal-id enabled
+ * flag. `settingsForm` is the active mode's manifest-discovered
  * `EditorGameSettingsForm` declaration (ADR-0023 section A), projected on the
  * game-mode IPC descriptor; a panel renders it generically via `GameSettingsForm`.
  */

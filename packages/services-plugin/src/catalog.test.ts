@@ -35,7 +35,8 @@ describe("resolvePluginGameObjectCatalogs (real Battle Royale manifest)", () => 
 
     expect(contributions).toHaveLength(1);
     expect(contributions[0]?.contributionId).toBe("br-game-object-catalog");
-    expect(contributions[0]?.catalog.objectTypes).toHaveLength(3);
+    // 6 map objects + 4 weapon-family entities (ADR-0028).
+    expect(contributions[0]?.catalog.objectTypes).toHaveLength(10);
   });
 
   it("merges the resolved catalog with the expected object-type ids", async () => {

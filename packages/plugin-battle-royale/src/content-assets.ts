@@ -3,18 +3,10 @@ import {
   AttachmentAnchor,
   PlayerModelClipSet,
   PlayerModelRef,
-  RenderProfile,
   VisualAnchorPoint,
-  VisualAssetRoleRef,
-  WELL_KNOWN_VISUAL_ROLE_KINDS,
   makeClipId,
   makePackId,
-  readProjectVisualAssetRoles,
-  type ProjectManifest,
-  type VisualRoleKind,
 } from "@tileborne/core";
-
-import { PLUGIN_ID } from "./constants.js";
 
 export const BATTLE_ROYALE_CORE_PACK_ID = makePackId("b4111e00-0000-4000-8000-000000000001");
 export const BATTLE_ROYALE_CORE_PACK_VERSION = "0.1.0";
@@ -57,7 +49,11 @@ const model = (index: number, id: string, label: string): PlayerModelRef => {
     clips,
     anchor: { x: 0.5, y: 0.86 },
     hitbox: { x: 0.28, y: 0.18, width: 0.44, height: 0.66 },
-    muzzle: { x: 0.8, y: 0.52 },
+    // Model-local attachment anchor where equipped weapon entities mount
+    // (composed with the weapon entity's "grip" anchor, ADR-0028 §2b).
+    anchors: {
+      hand: new AttachmentAnchor({ point: new VisualAnchorPoint({ x: 0.64, y: 0.56 }) }),
+    },
   });
 };
 
@@ -92,140 +88,6 @@ export const BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS = {
     plasmaSabre: objectPlaceableId(0x200a),
   },
 } as const;
-
-const visualRoleId = (roleKind: VisualRoleKind): string => `visual-role:${String(roleKind)}`;
-
-const visualRole = (
-  roleKind: VisualRoleKind,
-  label: string,
-  refId: string,
-  render: {
-    readonly scale: number;
-    readonly pivot: { readonly x: number; readonly y: number };
-    readonly hand?: { readonly x: number; readonly y: number } | undefined;
-    readonly muzzle?: { readonly x: number; readonly y: number } | undefined;
-  },
-): VisualAssetRoleRef =>
-  new VisualAssetRoleRef({
-    id: visualRoleId(roleKind),
-    roleKind,
-    label,
-    ref: new AssetLibraryReference({
-      packId: BATTLE_ROYALE_CORE_PACK_ID,
-      kind: "placeable",
-      refId,
-    }),
-    renderProfile: new RenderProfile({
-      scale: render.scale,
-      pivot: new VisualAnchorPoint(render.pivot),
-    }),
-    anchors: {
-      ...(render.hand === undefined
-        ? {}
-        : { hand: new AttachmentAnchor({ point: new VisualAnchorPoint(render.hand) }) }),
-      ...(render.muzzle === undefined
-        ? {}
-        : { muzzle: new AttachmentAnchor({ point: new VisualAnchorPoint(render.muzzle) }) }),
-    },
-  });
-
-export const DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES: readonly VisualAssetRoleRef[] = [
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon,
-    "Pulse Carbine",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.petwarsWeapons.pulseCarbine,
-    {
-      scale: 0.52,
-      pivot: { x: 0.28, y: 0.56 },
-      hand: { x: 0.28, y: 0.56 },
-      muzzle: { x: 0.92, y: 0.49 },
-    },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.projectile,
-    "Projectile Bolt",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.projectileBolt,
-    { scale: 0.72, pivot: { x: 0.14, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.pickup,
-    "Loot Crate",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.lootCrate,
-    { scale: 1, pivot: { x: 0.5, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.muzzleFlash,
-    "Muzzle Flash",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.muzzleFlash,
-    { scale: 0.72, pivot: { x: 0.18, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.impactVfx,
-    "Impact Burst",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.impactBurst,
-    { scale: 0.86, pivot: { x: 0.5, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.shield,
-    "Shield Bubble",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.shieldBubble,
-    { scale: 1, pivot: { x: 0.5, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.shadow,
-    "Player Shadow",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.playerShadow,
-    { scale: 1, pivot: { x: 0.5, y: 0.5 } },
-  ),
-  visualRole(
-    WELL_KNOWN_VISUAL_ROLE_KINDS.hazard,
-    "Hazard Flame",
-    BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.hazardFlame,
-    { scale: 1, pivot: { x: 0.5, y: 0.62 } },
-  ),
-] as const;
-
-export const DEFAULT_BATTLE_ROYALE_VISUAL_ROLE_DEFINITIONS = [
-  {
-    kind: WELL_KNOWN_VISUAL_ROLE_KINDS.equippedWeapon,
-    label: "Equipped weapon",
-    requiredAnchors: [
-      { id: "hand", label: "Hand", kind: "hand" },
-      { id: "muzzle", label: "Muzzle", kind: "muzzle" },
-    ],
-    previewScenario: "weapon-attachment",
-  },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.projectile, label: "Projectile" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.pickup, label: "Pickup" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.muzzleFlash, label: "Muzzle flash" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.impactVfx, label: "Impact VFX" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.shield, label: "Shield" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.shadow, label: "Shadow" },
-  { kind: WELL_KNOWN_VISUAL_ROLE_KINDS.hazard, label: "Hazard" },
-] as const;
-
-export const resolveBattleRoyaleVisualAssetRoles = (
-  project: ProjectManifest | undefined,
-): readonly VisualAssetRoleRef[] => {
-  const byKind = new Map<string, VisualAssetRoleRef>(
-    DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES.map((role) => [String(role.roleKind), role]),
-  );
-  for (const role of readProjectVisualAssetRoles(project)) {
-    byKind.set(String(role.roleKind), role);
-  }
-  return [...byKind.values()];
-};
-
-interface VisualRolePolicyContext {
-  readonly project?: ProjectManifest | undefined;
-}
-
-export const BATTLE_ROYALE_VISUAL_ROLE_POLICY = {
-  pluginId: PLUGIN_ID,
-  roleDefinitions: DEFAULT_BATTLE_ROYALE_VISUAL_ROLE_DEFINITIONS,
-  resolveRoles: (context: VisualRolePolicyContext): readonly VisualAssetRoleRef[] =>
-    resolveBattleRoyaleVisualAssetRoles(context.project),
-};
 
 const defaultModelIds = new Set(DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS.map((entry) => entry.id));
 export const DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS = [

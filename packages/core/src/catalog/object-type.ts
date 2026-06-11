@@ -19,15 +19,19 @@ export type CategoryTag = typeof CategoryTag.Type;
  * A neutral, component-based object-type definition: the typed registry entry
  * that sits behind a placed `MapObject`. Carries structure + identity + static
  * authoring data only — never numeric gameplay balance.
+ *
+ * Catalog Option fields use `OptionFromOptional` (missing key ⇄ `Option.none`)
+ * so authored types survive JSON persistence (project fragment, exported
+ * packs, the entity-editor wire) without requiring placeholder values.
  */
 export class GameObjectType extends Schema.Class<GameObjectType>("GameObjectType")({
   id: GameObjectTypeId,
   schemaVersion: Schema.Int,
   label: Schema.String,
   family: FamilyTag,
-  category: Schema.OptionFromUndefinedOr(CategoryTag),
+  category: Schema.OptionFromOptional(CategoryTag),
   /** Soft hint for default editor layer placement; not authoritative ordering. */
-  layerHint: Schema.OptionFromUndefinedOr(Schema.String),
+  layerHint: Schema.OptionFromOptional(Schema.String),
   components: Schema.Array(GameObjectComponent),
   /** Per-type authoring defaults applied to `MapObject.properties` overrides. */
   instanceDefaults: JsonObject,
@@ -59,7 +63,7 @@ export class LootTable extends Schema.Class<LootTable>("LootTable")({
 export class ItemDefinition extends Schema.Class<ItemDefinition>("ItemDefinition")({
   id: ItemDefinitionId,
   label: Schema.String,
-  category: Schema.OptionFromUndefinedOr(CategoryTag),
+  category: Schema.OptionFromOptional(CategoryTag),
   equippableSlot: Schema.optional(OpenTag),
   grants: Schema.optional(GrantRef),
   data: JsonObject,
@@ -70,8 +74,8 @@ export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>("GameObje
   id: CatalogId,
   schemaVersion: Schema.Int,
   objectTypes: Schema.Array(GameObjectType),
-  lootTables: Schema.OptionFromUndefinedOr(Schema.Array(LootTable)),
-  items: Schema.OptionFromUndefinedOr(Schema.Array(ItemDefinition)),
+  lootTables: Schema.OptionFromOptional(Schema.Array(LootTable)),
+  items: Schema.OptionFromOptional(Schema.Array(ItemDefinition)),
 }) {}
 
 export const GameObjectTypeSchema = GameObjectType;

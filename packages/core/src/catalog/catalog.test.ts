@@ -12,6 +12,7 @@ import {
 } from "../ids.js";
 import {
   CatalogValidationError,
+  EquippableComponent,
   GameObjectCatalog,
   GameObjectType,
   ItemDefinition,
@@ -19,6 +20,7 @@ import {
   LootSourceComponent,
   VisualRefComponent,
   WeaponGrant,
+  WeaponRefComponent,
   gameObjectTypeIdForKey,
   validateCatalog,
 } from "./index.js";
@@ -308,5 +310,157 @@ describe("validateCatalog pickup → grant join (ADR-0023 C)", () => {
       { resolveAsset: (id) => id === ASSET_ID, resolveWeapon: (id) => id === WEAPON_ID },
     );
     expect(Result.isSuccess(result)).toBe(true);
+  });
+
+  describe("weapon-ref component (ADR-0028)", () => {
+    const WEAPON_ID = makeWeaponDefinitionId(UUID_D);
+    const weaponEntity = (
+      id = makeGameObjectTypeId(UUID_A),
+      overrides: Partial<ConstructorParameters<typeof WeaponRefComponent>[0]> = {},
+    ) =>
+      typeWith(id, [
+        new WeaponRefComponent({ weaponId: WEAPON_ID, ...overrides }),
+      ]);
+
+    const catalogOf = (objectTypes: readonly GameObjectType[]) =>
+      new GameObjectCatalog({
+        id: makeCatalogId(UUID_A),
+        schemaVersion: 1,
+        objectTypes,
+        lootTables: Option.none(),
+        items: Option.none(),
+      });
+
+    it("resolves weaponId via deps.resolveWeapon and companions in-pack", () => {
+      const pickup = typeWith(makeGameObjectTypeId(UUID_B), [
+        new LootSourceComponent({
+          lootTableId: Option.none(),
+          interactionMode: "tap",
+          grants: {},
+          grantRefs: [new WeaponGrant({ weaponId: WEAPON_ID })],
+        }),
+      ]);
+      const result = validateCatalog(
+        catalogOf([
+          weaponEntity(makeGameObjectTypeId(UUID_A), { pickupEntityId: pickup.id }),
+          pickup,
+        ]),
+        { resolveWeapon: (id) => id === WEAPON_ID },
+      );
+      expect(Result.isSuccess(result)).toBe(true);
+    });
+
+    it("flags an unresolved weaponId and unknown companion entity", () => {
+      const result = validateCatalog(
+        catalogOf([
+          weaponEntity(makeGameObjectTypeId(UUID_A), {
+            projectileEntityId: makeGameObjectTypeId(UUID_C),
+          }),
+        ]),
+        { resolveWeapon: () => false },
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        const text = result.failure.issues.join("\n");
+        expect(text).toContain("weapon-ref.weaponId references unknown weapon");
+        expect(text).toContain("weapon-ref.projectileEntityId references unknown object type");
+      }
+    });
+
+    it("skips weaponId resolution when no resolveWeapon dep is provided (merge sites without weapon knowledge)", () => {
+      const result = validateCatalog(catalogOf([weaponEntity(makeGameObjectTypeId(UUID_A))]));
+      expect(Result.isSuccess(result)).toBe(true);
+    });
+
+    it("resolves companions cross-pack via deps.resolveObjectType", () => {
+      const companion = makeGameObjectTypeId(UUID_B);
+      const result = validateCatalog(
+        catalogOf([weaponEntity(makeGameObjectTypeId(UUID_A), { projectileEntityId: companion })]),
+        { resolveWeapon: () => true, resolveObjectType: (id) => id === companion },
+      );
+      expect(Result.isSuccess(result)).toBe(true);
+    });
+
+    it("flags two entities claiming the same weaponId", () => {
+      const result = validateCatalog(
+        catalogOf([
+          weaponEntity(makeGameObjectTypeId(UUID_A)),
+          weaponEntity(makeGameObjectTypeId(UUID_B)),
+        ]),
+        { resolveWeapon: () => true },
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        expect(result.failure.issues.join("\n")).toContain("already claimed by");
+      }
+    });
+
+    it("flags non-normalized visual-ref anchors and a dangling equippable attachAnchor", () => {
+      const result = validateCatalog(
+        catalogOf([
+          typeWith(makeGameObjectTypeId(UUID_A), [
+            Schema.decodeUnknownSync(VisualRefComponent)({
+              _tag: "visual-ref",
+              placeableId: undefined,
+              assetId: undefined,
+              width: 48,
+              height: 48,
+              anchors: { muzzle: { point: { x: 24, y: 24 } } },
+            }),
+            Schema.decodeUnknownSync(EquippableComponent)({
+              _tag: "equippable",
+              slot: "weapon",
+              attachAnchor: "grip",
+            }),
+          ]),
+        ]),
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        const text = result.failure.issues.join("\n");
+        expect(text).toContain('anchor "muzzle" point must be normalized 0..1');
+        expect(text).toContain('equippable.attachAnchor "grip" is not defined');
+      }
+    });
+
+    it("defaults equippable.attachAnchor to grip and visual-ref.anchors to {}", () => {
+      const equippable = Schema.decodeUnknownSync(EquippableComponent)({
+        _tag: "equippable",
+        slot: "weapon",
+      });
+      expect(String(equippable.attachAnchor)).toBe("grip");
+
+      const visual = Schema.decodeUnknownSync(VisualRefComponent)({
+        _tag: "visual-ref",
+        placeableId: undefined,
+        assetId: undefined,
+        width: 16,
+        height: 16,
+      });
+      expect(visual.anchors).toEqual({});
+    });
+
+    it("flags a pickup companion that grants a DIFFERENT weapon (coherence)", () => {
+      const otherWeapon = makeWeaponDefinitionId(UUID_C);
+      const pickup = typeWith(makeGameObjectTypeId(UUID_B), [
+        new LootSourceComponent({
+          lootTableId: Option.none(),
+          interactionMode: "tap",
+          grants: {},
+          grantRefs: [new WeaponGrant({ weaponId: otherWeapon })],
+        }),
+      ]);
+      const result = validateCatalog(
+        catalogOf([
+          weaponEntity(makeGameObjectTypeId(UUID_A), { pickupEntityId: pickup.id }),
+          pickup,
+        ]),
+        { resolveWeapon: () => true },
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        expect(result.failure.issues.join("\n")).toContain("grants a different weapon");
+      }
+    });
   });
 });

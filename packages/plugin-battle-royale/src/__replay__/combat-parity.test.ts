@@ -7,11 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { DAMAGE, MOVEMENT, SPAWN_POINT_KIND } from '../constants.js';
 import { PLAYER_COMPONENT, type Player } from '../ecs/components.js';
 import { resetZoneSingleton } from '../ecs/zone.js';
-import { exportArtifact } from '../export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
 import { TEST_PLAYER_MODELS } from '../test-player-model.js';
 import { createRuntimeAdapter } from '../runtime-adapter.js';
-import type { ExportedArtifact } from '../types/artifact.js';
+import { buildTestMapPackage } from '../test-map-package.js';
 import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
 import { createTestPluginWorld } from '../test-plugin-world.js';
 
@@ -37,9 +36,9 @@ const makeTestObject = (
   });
 
 /** Two players on the same row so player-1's east shot reaches player-2. */
-const makeDuelArtifact = (): ExportedArtifact =>
-  exportArtifact(
-    makeTileborneMap({
+const makeDuelMapPackage = (): unknown =>
+  buildTestMapPackage({
+    map: makeTileborneMap({
       id: TEST_MAP_ID,
       width: 32,
       height: 32,
@@ -52,8 +51,8 @@ const makeDuelArtifact = (): ExportedArtifact =>
       ],
       properties: { maxPlayers: 2 },
     }),
-    { playerModels: TEST_PLAYER_MODELS },
-  );
+    playerModels: TEST_PLAYER_MODELS,
+  });
 
 interface PlayerState {
   readonly playerId: string;
@@ -85,7 +84,7 @@ const captureState = (world: ReturnType<typeof createTestPluginWorld>, tick: num
 const runDuel = (): RunResult => {
   resetZoneSingleton();
   const world = createTestPluginWorld();
-  const artifact = makeDuelArtifact();
+  const mapPackage = makeDuelMapPackage();
   const frames: Uint8Array[] = [];
   let currentTick = 0;
 
@@ -95,7 +94,7 @@ const runDuel = (): RunResult => {
   ]);
 
   const plugin = createRuntimeAdapter({
-    getArtifact: () => artifact,
+    getMapPackage: () => mapPackage,
     seed: PARITY_SEED,
     config: {
       // Isolate combat: the zone deals no damage so only weapon hits can kill.

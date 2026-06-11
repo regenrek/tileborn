@@ -11,7 +11,8 @@
     "rootDir": ".",
     "outDir": "./node_modules/.tmp/tsc/preload",
     "paths": {
-      "@/*": ["./src/renderer/*"]
+      "@/*": ["./src/renderer/*"],
+      "@tileborne/ipc-contracts/bridge": ["../../packages/ipc-contracts/src/bridge.ts"]
     }
   },
   "include": [

@@ -1,5 +1,11 @@
-import { GameObjectTypeId, ObjectId, PlayerModelRef, TileId, type GameObjectType } from "@tileborne/core";
-import type { TilesetPack } from "@tileborne/sdk-tileset/schemas";
+import {
+  GameObjectTypeId,
+  ObjectId,
+  PlayerModelRef,
+  ResolvedOverlayVisual,
+  ResolvedWeaponVisuals,
+  TileId,
+} from "@tileborne/core";
 import { Schema } from "effect";
 
 import { BattleRoyaleConfig } from "../battle-royale-config.js";
@@ -54,15 +60,6 @@ export const PlayerModelSelectionArtifactSchema = Schema.Struct({
   modelId: Schema.String,
 });
 export type PlayerModelSelectionArtifact = typeof PlayerModelSelectionArtifactSchema.Type;
-
-export const ObjectPlacementRoleSchema = Schema.Literals([
-  "spawn-point",
-  "shrink-zone-anchor",
-  "loot-crate",
-  "trap",
-  "decoy",
-] as const);
-export type ObjectPlacementRole = typeof ObjectPlacementRoleSchema.Type;
 
 export const SpawnPointObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
@@ -199,20 +196,24 @@ export const BattleRoyaleArtifactSchema = Schema.Struct({
   playerModels: Schema.optional(Schema.Array(PlayerModelRef)),
   defaultPlayerModelId: Schema.optional(Schema.String),
   playerModelSelections: Schema.optional(Schema.Array(PlayerModelSelectionArtifactSchema)),
+  /**
+   * Render-ready weapon + companion visuals derived from the merged
+   * game-object catalog at export time (ADR-0028 §4e). The artifact is the
+   * only weapon-visual carrier that travels to the game-host — the catalog
+   * itself never does.
+   */
+  weaponVisuals: Schema.optional(Schema.Array(ResolvedWeaponVisuals)),
+  /**
+   * Render-ready runtime-global overlay visuals (shield/shadow/hazard slots)
+   * derived from `overlay-visual` catalog entities at export time. Same
+   * carrier contract as {@link weaponVisuals}: the artifact travels, the
+   * catalog never does.
+   */
+  overlayVisuals: Schema.optional(Schema.Array(ResolvedOverlayVisual)),
 });
 export type BattleRoyaleArtifact = typeof BattleRoyaleArtifactSchema.Type;
 
 export type ExportedArtifact = BattleRoyaleArtifact;
-
-export interface ExportArtifactOptions {
-  readonly shrinkIntervalMs?: number;
-  readonly damagePerSecond?: number;
-  readonly tilesetPack?: TilesetPack;
-  readonly objectTypes?: readonly GameObjectType[];
-  readonly playerModels?: readonly PlayerModelRef[];
-  readonly selectedPlayerModelId?: string;
-  readonly defaultPlayerModelId?: string;
-}
 
 export interface GenerateMapOptions {
   readonly width: number;

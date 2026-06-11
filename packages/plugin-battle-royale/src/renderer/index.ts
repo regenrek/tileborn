@@ -40,7 +40,7 @@ export {
   battleRoyaleDefaultHudLayout,
   buildBattleRoyaleHudLayoutData,
 } from "../hud-layout.js";
-export { PLUGIN_ID } from "../constants.js";
+export { BR_PRIMARY_WEAPON_ID, PLUGIN_ID } from "../constants.js";
 export type {
   BattleRoyaleProjectorConfig,
   ClientFrameView,
@@ -52,7 +52,8 @@ export type {
   PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
-  VisualRoleRenderData,
+  SpriteVisualRenderData,
+  WeaponVisualRenderData,
   ZoneView,
 } from "./battle-royale-projector.js";
 export type { BattleRoyaleAimContext, BattleRoyaleInputIntent } from "../input-map.js";

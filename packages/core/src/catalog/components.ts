@@ -1,6 +1,19 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 
-import { AssetId, ItemDefinitionId, LootTableId, PlaceableId, WeaponDefinitionId } from "../ids.js";
+import {
+  AttachmentAnchorMap,
+  AttachmentAnchorName,
+  WELL_KNOWN_ATTACHMENT_ANCHORS,
+} from "../asset/anchors.js";
+import { RenderProfile } from "../asset/render-profile.js";
+import {
+  AssetId,
+  GameObjectTypeId,
+  ItemDefinitionId,
+  LootTableId,
+  PlaceableId,
+  WeaponDefinitionId,
+} from "../ids.js";
 import { JsonObject } from "../project/index.js";
 
 /**
@@ -9,12 +22,6 @@ import { JsonObject } from "../project/index.js";
  */
 export const OpenTag = Schema.String.pipe(Schema.brand("CatalogOpenTag"));
 export type OpenTag = typeof OpenTag.Type;
-
-/** A 2D anchor point in object-local pixel space (e.g. "hand", "muzzle"). */
-export class Anchor2D extends Schema.Class<Anchor2D>("Anchor2D")({
-  x: Schema.Number,
-  y: Schema.Number,
-}) {}
 
 /**
  * One rectangular part of a collision footprint, in object-local tile/pixel
@@ -49,13 +56,23 @@ export class CollisionFootprintComponent extends Schema.TaggedClass<CollisionFoo
 /**
  * Binds gameplay semantics to a render identity (sdk-tileset Placeable /
  * AssetId). Holds no frames/clips — those stay with the Placeable.
+ *
+ * `anchors` is THE entity anchor map (ADR-0028: anchors live ONLY here;
+ * normalized 0..1 sprite-local `AttachmentAnchor`s, e.g. "grip", "muzzle").
+ * `renderProfile` + `rotationOffsetDeg` make the entity render-complete.
  */
 export class VisualRefComponent extends Schema.TaggedClass<VisualRefComponent>()("visual-ref", {
-  placeableId: Schema.OptionFromUndefinedOr(PlaceableId),
-  assetId: Schema.OptionFromUndefinedOr(AssetId),
+  placeableId: Schema.OptionFromOptional(PlaceableId),
+  assetId: Schema.OptionFromOptional(AssetId),
   width: Schema.Number,
   height: Schema.Number,
-  anchors: Schema.Record(Schema.String, Anchor2D),
+  anchors: AttachmentAnchorMap.pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
+    Schema.withConstructorDefault(Effect.succeed({})),
+  ),
+  renderProfile: Schema.optional(RenderProfile),
+  /** Degrees to rotate the sprite when it is not authored facing right. */
+  rotationOffsetDeg: Schema.optional(Schema.Number),
 }) {}
 
 /** A spawn location marker (player start, POI, …). */
@@ -106,7 +123,7 @@ export type LootInteractionMode = typeof LootInteractionMode.Type;
  * remains the open per-instance authoring toggle bag and carries no id refs.
  */
 export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>()("loot-source", {
-  lootTableId: Schema.OptionFromUndefinedOr(LootTableId),
+  lootTableId: Schema.OptionFromOptional(LootTableId),
   interactionMode: LootInteractionMode,
   grants: Schema.Record(Schema.String, Schema.Boolean),
   grantRefs: Schema.optional(Schema.Array(GrantRef)),
@@ -115,7 +132,7 @@ export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>
 /** An object that can be destroyed, optionally dropping a loot table. */
 export class BreakableComponent extends Schema.TaggedClass<BreakableComponent>()("breakable", {
   hp: Schema.Number,
-  dropTableId: Schema.OptionFromUndefinedOr(LootTableId),
+  dropTableId: Schema.OptionFromOptional(LootTableId),
 }) {}
 
 /** A world hazard (harm zone, trap, …); shape is mode-defined. */
@@ -133,10 +150,49 @@ export class InteractableComponent extends Schema.TaggedClass<InteractableCompon
   },
 ) {}
 
-/** An object that can be equipped into a slot, with attach anchors. */
+/**
+ * An object that can be equipped into a slot. `attachAnchor` NAMES the anchor
+ * (in the entity's `visual-ref.anchors` map) by which the object attaches to
+ * its holder — it is a reference, not a second anchor map (ADR-0028 §1).
+ */
 export class EquippableComponent extends Schema.TaggedClass<EquippableComponent>()("equippable", {
   slot: OpenTag,
-  anchors: Schema.Record(Schema.String, Anchor2D),
+  attachAnchor: AttachmentAnchorName.pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed(WELL_KNOWN_ATTACHMENT_ANCHORS.grip)),
+    Schema.withConstructorDefault(Effect.succeed(WELL_KNOWN_ATTACHMENT_ANCHORS.grip)),
+  ),
+}) {}
+
+/**
+ * Claims a runtime-global overlay slot (e.g. "shield", "shadow", "hazard"):
+ * "this entity provides the visual for overlay slot X". The entity's own
+ * `visual-ref` is the render identity; slots are open tags owned by the
+ * consuming game mode. Project-authored claimants take precedence over
+ * plugin-shipped ones — duplicating a plugin's overlay entity into the project
+ * and editing it is how users reskin a mode's default overlays.
+ */
+export class OverlayVisualComponent extends Schema.TaggedClass<OverlayVisualComponent>()(
+  "overlay-visual",
+  {
+    slot: OpenTag,
+  },
+) {}
+
+/**
+ * The weapon identity join (ADR-0028 §4a): "this entity IS weapon X". Links
+ * the entity to its ADR-0018 balance definition by id and references the
+ * companion visual entities (plain entities with `visual-ref`) that render
+ * the weapon's projectile, muzzle flash, impact VFX, and world pickup. VFX
+ * timing lives on the referencing side. No numeric gameplay balance here.
+ */
+export class WeaponRefComponent extends Schema.TaggedClass<WeaponRefComponent>()("weapon-ref", {
+  weaponId: WeaponDefinitionId,
+  projectileEntityId: Schema.optional(GameObjectTypeId),
+  muzzleFlashEntityId: Schema.optional(GameObjectTypeId),
+  impactVfxEntityId: Schema.optional(GameObjectTypeId),
+  pickupEntityId: Schema.optional(GameObjectTypeId),
+  muzzleFlashDurationMs: Schema.optional(Schema.Number),
+  impactVfxDurationMs: Schema.optional(Schema.Number),
 }) {}
 
 /**
@@ -153,6 +209,8 @@ export const GameObjectComponent = Schema.Union([
   HazardComponent,
   InteractableComponent,
   EquippableComponent,
+  OverlayVisualComponent,
+  WeaponRefComponent,
 ]);
 export type GameObjectComponent =
   | CollisionFootprintComponent
@@ -162,7 +220,9 @@ export type GameObjectComponent =
   | BreakableComponent
   | HazardComponent
   | InteractableComponent
-  | EquippableComponent;
+  | EquippableComponent
+  | OverlayVisualComponent
+  | WeaponRefComponent;
 
 /** All component tags as a readonly tuple (for iteration / validation). */
 export const GAME_OBJECT_COMPONENT_TAGS = [
@@ -174,4 +234,6 @@ export const GAME_OBJECT_COMPONENT_TAGS = [
   "hazard",
   "interactable",
   "equippable",
+  "overlay-visual",
+  "weapon-ref",
 ] as const;

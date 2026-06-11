@@ -8,8 +8,8 @@ export interface PlayerModelGeometryDraft {
   readonly hitboxY: number;
   readonly hitboxW: number;
   readonly hitboxH: number;
-  readonly muzzleX: number;
-  readonly muzzleY: number;
+  readonly handX: number;
+  readonly handY: number;
 }
 
 export const DEFAULT_PLAYER_MODEL_GEOMETRY: PlayerModelGeometryDraft = {
@@ -18,8 +18,8 @@ export const DEFAULT_PLAYER_MODEL_GEOMETRY: PlayerModelGeometryDraft = {
   hitboxY: 0.1,
   hitboxW: 0.5,
   hitboxH: 0.85,
-  muzzleX: 0.75,
-  muzzleY: 0.45,
+  handX: 0.64,
+  handY: 0.56,
 };
 
 export const missingPlayerModelClipNames = (
@@ -37,9 +37,9 @@ export const toPlayerModelImportMetadata = (geometry: PlayerModelGeometryDraft) 
     width: geometry.hitboxW,
     height: geometry.hitboxH,
   },
-  muzzle: {
-    x: geometry.muzzleX,
-    y: geometry.muzzleY,
+  hand: {
+    x: geometry.handX,
+    y: geometry.handY,
   },
 });
 
@@ -155,8 +155,8 @@ export function SpritePlayerModelControls({
             {numberField('Hitbox Y', geometry.hitboxY, (hitboxY) => update({ hitboxY }), 'sprite-player-hitbox-y')}
             {numberField('Hitbox W', geometry.hitboxW, (hitboxW) => update({ hitboxW }), 'sprite-player-hitbox-w')}
             {numberField('Hitbox H', geometry.hitboxH, (hitboxH) => update({ hitboxH }), 'sprite-player-hitbox-h')}
-            {numberField('Muzzle X', geometry.muzzleX, (muzzleX) => update({ muzzleX }), 'sprite-player-muzzle-x')}
-            {numberField('Muzzle Y', geometry.muzzleY, (muzzleY) => update({ muzzleY }), 'sprite-player-muzzle-y')}
+            {numberField('Hand X', geometry.handX, (handX) => update({ handX }), 'sprite-player-hand-x')}
+            {numberField('Hand Y', geometry.handY, (handY) => update({ handY }), 'sprite-player-hand-y')}
           </div>
         </>
       ) : null}

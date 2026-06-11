@@ -9,7 +9,8 @@ import { MapEditorToolbar } from '@/components/map-editor-toolbar';
 import { PlaytestMultiplayerViewport } from '@/components/playtest-multiplayer-viewport';
 import { PlaytestViewport } from '@/components/playtest-viewport';
 import { useCreateMap } from '@/hooks/mutations';
-import { useMap, useMaps } from '@/hooks/queries';
+import { useMap, useMaps, usePluginContributions, useProject } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { formatMutationError } from '@/lib/mutation-notifications';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -28,7 +29,15 @@ export function MapEditorPage() {
   };
   const mapQuery = useMap(projectId, mapId);
   const mapsQuery = useMaps(projectId);
+  const projectQuery = useProject(projectId);
+  const contributionsQuery = usePluginContributions();
   const createMap = useCreateMap();
+  // ADR-0023 section B: the deep-link join runs the ACTIVE game mode's
+  // discovered playtest runtime, resolved from the project selection.
+  const activeModePluginId = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  )?.pluginId;
   const playtestActive = useEditorUiStore((state) => state.playtestActive);
   const playtestMode = useEditorUiStore((state) => state.playtestMode);
   const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
@@ -46,18 +55,33 @@ export function MapEditorPage() {
     if (!search.joinRoom || !mapQuery.data?.map) {
       return;
     }
+    // Wait until the discovered modes + project selection are loaded so the
+    // join targets the resolved active mode (not a spurious "no mode" error).
+    if (contributionsQuery.isLoading || projectQuery.isLoading) {
+      return;
+    }
     const joinInput =
       search.joinBase && search.joinRoom
         ? `${search.joinBase.replace(/\/$/, '')}/rooms/${search.joinRoom}`
         : search.joinRoom;
     void joinFromInput(
       joinInput,
+      activeModePluginId,
       mapId,
       mapQuery.data.map.size.width,
       mapQuery.data.map.size.height,
       search.joinBase,
     );
-  }, [joinFromInput, mapId, mapQuery.data?.map, search.joinBase, search.joinRoom]);
+  }, [
+    activeModePluginId,
+    contributionsQuery.isLoading,
+    projectQuery.isLoading,
+    joinFromInput,
+    mapId,
+    mapQuery.data?.map,
+    search.joinBase,
+    search.joinRoom,
+  ]);
 
   useEffect(
     () => () => {

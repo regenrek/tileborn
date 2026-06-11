@@ -52,8 +52,8 @@ Canonical defaults live in `src/constants.ts` as grouped sub-objects:
 Runtime merges overrides in this order (later wins):
 
 1. Package defaults (`constants.ts`)
-2. Exported artifact shrink schedule (anchor / export options)
-3. `map.properties.battleRoyale` (parsed at export, stored on artifact)
+2. Authored shrink schedule (zone anchor placement in the runtime map package)
+3. `map.properties.battleRoyale` (read from the package map at boot)
 4. `RuntimePluginHost.config` (room / host factory overrides)
 
 ### Map property path
@@ -78,7 +78,7 @@ Set on the map root:
 
 ```typescript
 createRuntimeAdapter({
-  getArtifact: () => artifact,
+  getMapPackage: () => mapPackage,
   config: {
     projectile: { speed: 600 },
     roomRules: { respawnEnabled: true },

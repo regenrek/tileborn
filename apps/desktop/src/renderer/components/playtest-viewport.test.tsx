@@ -164,14 +164,19 @@ const stablePlayerModels = vi.hoisted(() => ({
   selectedModelId: undefined,
   roster: [] as const,
 }));
-const stableVisualRoles = vi.hoisted(() => ({
-  builtRoles: [] as const,
+const stableOverlayVisuals = vi.hoisted(() => ({
+  builtOverlays: [] as const,
+}));
+const stableWeaponVisuals = vi.hoisted(() => ({
+  builtWeapons: [] as const,
 }));
 vi.mock('@/hooks/use-playtest-player-models', () => ({
   usePlaytestPlayerModels: () => stablePlayerModels,
-  usePlaytestVisualRoles: () => stableVisualRoles,
+  usePlaytestOverlayVisuals: () => stableOverlayVisuals,
+  usePlaytestWeaponVisuals: () => stableWeaponVisuals,
   assemblePlaytestPlayerModelConfig: vi.fn(),
-  assemblePlaytestVisualRoleConfig: vi.fn(),
+  assemblePlaytestOverlayVisualConfig: vi.fn(),
+  assemblePlaytestWeaponVisualConfig: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-playtest-controls', () => ({

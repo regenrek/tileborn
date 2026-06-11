@@ -39,9 +39,9 @@ import {
   resetZoneSingleton,
   type ZoneScheduleConfig,
 } from './ecs/zone.js';
-import { exportArtifact } from './export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
 import { createRuntimeAdapter } from './runtime-adapter.js';
+import { buildTestMapPackage, buildTestRuntimeArtifact } from './test-map-package.js';
 import { createTestPluginWorld } from './test-plugin-world.js';
 
 const TICK_DT = 1 / DEFAULT_ZONE_SCHEDULE.tickRate;
@@ -69,7 +69,6 @@ const playerModel = new PlayerModelRef({
   }),
   anchor: { x: 0.5, y: 1 },
   hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-  muzzle: { x: 0.75, y: 0.45 },
 });
 
 const makeTestObject = (
@@ -89,22 +88,22 @@ const makeTestObject = (
     properties: {},
   });
 
+const makeFixtureMap = () =>
+  makeTileborneMap({
+    id: TEST_MAP_ID,
+    width: 32,
+    height: 32,
+    tileWidth: 32,
+    tileHeight: 32,
+    objects: [
+      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 4, 4),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+    ],
+  });
+
 const makeFixtureArtifact = () =>
-  exportArtifact(
-    makeTileborneMap({
-      id: TEST_MAP_ID,
-      width: 32,
-      height: 32,
-      tileWidth: 32,
-      tileHeight: 32,
-      objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 4, 4),
-        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
-      ],
-    }),
-    { playerModels: [playerModel] },
-  );
+  buildTestRuntimeArtifact(makeFixtureMap(), { playerModels: [playerModel] });
 
 const fastTestSchedule = (): ZoneScheduleConfig => ({
   waitSec: 0,
@@ -324,11 +323,14 @@ describe('last-man-standing', () => {
   });
 
   it('routes zone ticks through the runtime adapter msgOut queue', () => {
-    const artifact = makeFixtureArtifact();
+    const mapPackage = buildTestMapPackage({
+      map: makeFixtureMap(),
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
     const collector = createMsgCollector();
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
       msgOut: collector.msgOut,
       config: {
         zone: {

@@ -272,7 +272,6 @@ export class PlaytestArtifact extends Schema.Class<PlaytestArtifact>("PlaytestAr
   directory: Schema.String,
   manifestPath: Schema.String,
   indexPath: Schema.String,
-  mapPath: Schema.String,
   manifest: PlaytestArtifactManifest,
 }) {}
 

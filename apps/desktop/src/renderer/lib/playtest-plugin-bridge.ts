@@ -8,7 +8,7 @@
  * resolved projector as an opaque `RenderableEntityProjector<unknown>`.
  *
  * Discovery (ADR-0023 section B): resolution is now a **registry lookup**, not
- * a `switch (pluginId)`. Each built-in mode provider registers its projector +
+ * a per-plugin-id switch. Each built-in mode provider registers its projector +
  * frame codecs keyed by plugin id; `resolvePlaytestPlugin` resolves the active
  * mode's plugin id against that registry. A new genre plugin becomes resolvable
  * by registering a provider here — no per-id `case` to grow. The renderer can't
@@ -17,6 +17,7 @@
  * discovered from the manifest upstream (`discoverGameModes`).
  */
 import {
+  BR_PRIMARY_WEAPON_ID,
   PLUGIN_ID,
   battleRoyaleDefaultHudLayout,
   battleRoyaleDefaultInputMap,
@@ -81,7 +82,8 @@ import type {
   PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
-  VisualRoleRenderData,
+  SpriteVisualRenderData,
+  WeaponVisualRenderData,
   ZoneView,
 } from '@tileborne/plugin-battle-royale/renderer';
 import type {
@@ -117,7 +119,8 @@ export type {
   PlayerModelClipRenderData,
   PlayerModelRenderData,
   ServerFrameView,
-  VisualRoleRenderData,
+  SpriteVisualRenderData,
+  WeaponVisualRenderData,
   ZoneView,
 };
 
@@ -134,16 +137,30 @@ export interface PlaytestPlayerModelConfig {
   readonly atlasAssets: readonly BundledAssetSpec[];
 }
 
-export interface PlaytestVisualRoleConfig {
-  /** visualRoleKind -> resolved render data (atlas + animation frames + anchor). */
-  readonly catalog: ReadonlyMap<string, VisualRoleRenderData>;
-  /** Installed-pack atlas textures the runtime must load for the role refs. */
+export interface PlaytestOverlayVisualConfig {
+  /** overlay slot -> resolved render data (atlas + animation frames + anchor). */
+  readonly catalog: ReadonlyMap<string, SpriteVisualRenderData>;
+  /** Installed-pack atlas textures the runtime must load for the overlay visuals. */
+  readonly atlasAssets: readonly BundledAssetSpec[];
+}
+
+/**
+ * Per-weapon-ENTITY visuals derived from the merged game-object catalog
+ * (ADR-0028): each weapon `GameObjectType` (`weapon-ref` component) resolves to
+ * its equipped sprite + companion visuals. Replaces the former global
+ * equipped-weapon/projectile/muzzle-flash/impact-vfx/pickup visual roles.
+ */
+export interface PlaytestWeaponVisualConfig {
+  /** weaponId -> render-ready weapon visuals (equipped + companions). */
+  readonly catalog: ReadonlyMap<string, WeaponVisualRenderData>;
+  /** Installed-pack atlas textures the runtime must load for the weapon visuals. */
   readonly atlasAssets: readonly BundledAssetSpec[];
 }
 
 export interface ResolvePlaytestPluginOptions {
   readonly playerModels?: PlaytestPlayerModelConfig;
-  readonly visualRoles?: PlaytestVisualRoleConfig;
+  readonly overlayVisuals?: PlaytestOverlayVisualConfig;
+  readonly weaponVisuals?: PlaytestWeaponVisualConfig;
   /**
    * The user's persisted keybind remap overlay (ADR-0024). When provided it is
    * layered on the plugin defaults via `resolveEffectiveInputMap`; when omitted
@@ -259,17 +276,31 @@ export interface ResolvedPlaytestPlugin {
 type ModeRenderProvider = (options: ResolvePlaytestPluginOptions) => ResolvedPlaytestPlugin;
 
 const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
+  const weaponCatalog = options.weaponVisuals?.catalog;
+  // BR's primary weapon is the default when present; otherwise a single derived
+  // weapon entity serves as default (multi-weapon snapshots carry weaponId).
+  const defaultWeaponId =
+    weaponCatalog === undefined
+      ? undefined
+      : weaponCatalog.has(BR_PRIMARY_WEAPON_ID)
+        ? BR_PRIMARY_WEAPON_ID
+        : [...weaponCatalog.keys()].sort()[0];
   const projectorConfig: BattleRoyaleProjectorConfig | undefined =
-    options.playerModels === undefined && options.visualRoles === undefined
+    options.playerModels === undefined &&
+    options.overlayVisuals === undefined &&
+    weaponCatalog === undefined
       ? undefined
       : {
           ...(options.playerModels === undefined ? {} : { catalog: options.playerModels.catalog }),
-          ...(options.visualRoles === undefined ? {} : { visualRoles: options.visualRoles.catalog }),
+          ...(options.overlayVisuals === undefined ? {} : { overlays: options.overlayVisuals.catalog }),
+          ...(weaponCatalog === undefined ? {} : { weapons: weaponCatalog }),
+          ...(defaultWeaponId === undefined ? {} : { defaultWeaponId }),
         };
   const projector = createBattleRoyaleProjector(projectorConfig);
   const manifest = projector.getRenderManifest?.() ?? FALLBACK_RENDER_MANIFEST;
   const modelAtlasAssets = registerBundledAssets(options.playerModels?.atlasAssets ?? []);
-  const visualRoleAtlasAssets = registerBundledAssets(options.visualRoles?.atlasAssets ?? []);
+  const overlayVisualAtlasAssets = registerBundledAssets(options.overlayVisuals?.atlasAssets ?? []);
+  const weaponVisualAtlasAssets = registerBundledAssets(options.weaponVisuals?.atlasAssets ?? []);
   // Build the effective input map = BR plugin defaults ⊕ user remap overlay
   // (ADR-0024). The overlay is the player's persisted rebindings; when none is
   // injected we load it from the renderer prefs store. `resolveEffectiveInputMap`
@@ -285,7 +316,8 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
   const bundledAssets = [
     ...registerBundledAssets(createBattleRoyaleBundledAssets()),
     ...modelAtlasAssets,
-    ...visualRoleAtlasAssets,
+    ...overlayVisualAtlasAssets,
+    ...weaponVisualAtlasAssets,
   ];
   assertBundledAssetsPresent(
     bundledAssets,

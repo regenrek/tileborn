@@ -90,21 +90,20 @@ const generatedPlayerSlot = (playerId: string): number | undefined => {
 const positiveInteger = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Player capacity authored in the package: read ONLY from the manifest's
+ * neutral `playerCapacity` field (M2 review, F2). `modeData` is engine-opaque
+ * — the room never reads into it (boundary-tested).
+ */
 const runtimePlayerSlotCapacity = (storage: RoomStorage): number | undefined => {
-  const artifact = storage.runtimeArtifact;
-  if (artifact === undefined) {
+  const mapPackage = storage.mapPackage;
+  if (mapPackage === undefined || !isRecord(mapPackage.manifest)) {
     return undefined;
   }
-  const capacities = [
-    positiveInteger(artifact.maxPlayers),
-    Array.isArray(artifact.spawnAnchors) && artifact.spawnAnchors.length > 0
-      ? artifact.spawnAnchors.length
-      : undefined,
-  ].filter((value): value is number => value !== undefined);
-  if (capacities.length === 0) {
-    return undefined;
-  }
-  return Math.min(...capacities);
+  return positiveInteger(mapPackage.manifest.playerCapacity);
 };
 
 const usesGeneratedRuntimePlayerSlots = (storage: RoomStorage): boolean =>

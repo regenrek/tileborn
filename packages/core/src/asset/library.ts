@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   ClipId,
@@ -9,6 +9,7 @@ import {
   WorkingPaletteId,
   WorkingPaletteItemId,
 } from '../ids.js';
+import { AttachmentAnchorMap } from './anchors.js';
 
 export const AssetLibraryReferenceKind = Schema.Literals([
   'tile',
@@ -130,8 +131,15 @@ export class PlayerModelRef extends Schema.Class<PlayerModelRef>('PlayerModelRef
   anchor: PlayerModelAnchor,
   /** Normalized collision/damage hitbox in sprite-local coordinates. */
   hitbox: PlayerModelHitbox,
-  /** Normalized muzzle origin used by shooter runtime/effects. */
-  muzzle: PlayerModelPoint,
+  /**
+   * Named attachment anchors (model-local, normalized), e.g. "hand" — where
+   * equipped entities attach (composed with the entity's own attach anchor,
+   * ADR-0028 §2b). The single player-model anchor map.
+   */
+  anchors: AttachmentAnchorMap.pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
+    Schema.withConstructorDefault(Effect.succeed({})),
+  ),
   /** Optional authored render multiplier. When omitted, pack/import defaults may apply. */
   renderScale: Schema.optional(Schema.Number),
   /** Optional authored world footprint in runtime world units. */
@@ -203,8 +211,16 @@ export const validatePlayerModelRef = (
     issues.push({ path: 'ref.kind', message: 'must be sprite or placeable' });
   }
   issues.push(...normalizedPointIssues('anchor', model.anchor));
-  issues.push(...normalizedPointIssues('muzzle', model.muzzle));
   issues.push(...normalizedHitboxIssues('hitbox', model.hitbox));
+  for (const [name, attachment] of Object.entries(model.anchors)) {
+    issues.push(...normalizedPointIssues(`anchors.${name}.point`, attachment.point));
+    if (!isFiniteNumber(attachment.rotationDeg)) {
+      issues.push({ path: `anchors.${name}.rotationDeg`, message: 'must be a finite number' });
+    }
+    if (!isFiniteNumber(attachment.zOffset)) {
+      issues.push({ path: `anchors.${name}.zOffset`, message: 'must be a finite number' });
+    }
+  }
   if (
     model.renderScale !== undefined &&
     (!isFiniteNumber(model.renderScale) || model.renderScale <= 0)

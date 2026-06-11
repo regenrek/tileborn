@@ -120,7 +120,8 @@ export const SpriteSheetPlayerModelPointSchema = Schema.Struct({
 export const SpriteSheetPlayerModelMetadataSchema = Schema.Struct({
   renderScale: Schema.optional(Schema.Number),
   hitbox: SpriteSheetPlayerModelHitboxSchema,
-  muzzle: SpriteSheetPlayerModelPointSchema,
+  /** Model-local "hand" attachment anchor where equipped entities mount (ADR-0028). */
+  hand: SpriteSheetPlayerModelPointSchema,
 });
 
 export const AssetsImportSpriteSheetRequest = Schema.Struct({

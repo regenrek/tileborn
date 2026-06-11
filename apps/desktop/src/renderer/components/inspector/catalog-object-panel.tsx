@@ -63,6 +63,10 @@ const summariseComponent = (component: GameObjectComponent): string => {
       return `${component.kind} · ${component.radiusPx}px`;
     case 'equippable':
       return `slot: ${component.slot}`;
+    case 'overlay-visual':
+      return `overlay slot: ${component.slot}`;
+    case 'weapon-ref':
+      return `weapon: ${component.weaponId}`;
   }
 };
 

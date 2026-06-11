@@ -136,128 +136,6 @@ const replaceSession = (
   next: PlaytestSession,
 ): readonly PlaytestSession[] => sessions.map((session) => (session.id === next.id ? next : session));
 
-const optionValue = <A>(value: A | { readonly _tag: string; readonly value?: A } | undefined): A | undefined => {
-  if (typeof value === "object" && value !== null && "_tag" in value) {
-    return value._tag === "Some" ? value.value : undefined;
-  }
-  return value;
-};
-
-const mapToPersistedJson = (map: {
-  readonly id: unknown;
-  readonly schemaVersion: unknown;
-  readonly size: { readonly width: number; readonly height: number };
-  readonly tileSize: { readonly width: number; readonly height: number };
-  readonly layers: readonly {
-    readonly _tag: string;
-    readonly id: unknown;
-    readonly name: string;
-    readonly visible: boolean;
-    readonly opacity: number;
-    readonly chunks?: readonly {
-      readonly x: number;
-      readonly y: number;
-      readonly width: number;
-      readonly height: number;
-      readonly tiles: readonly number[];
-    }[];
-    readonly objectIds?: readonly unknown[];
-    readonly assetId?: unknown;
-    readonly x?: number;
-    readonly y?: number;
-  }[];
-  readonly objects: readonly {
-    readonly id: unknown;
-    readonly kind: string;
-    readonly x: number;
-    readonly y: number;
-    readonly width?: unknown;
-    readonly height?: unknown;
-    readonly layerId: unknown;
-    readonly properties: unknown;
-  }[];
-  readonly properties: unknown;
-}): unknown => ({
-  id: map.id,
-  schemaVersion: map.schemaVersion,
-  size: { width: map.size.width, height: map.size.height },
-  tileSize: { width: map.tileSize.width, height: map.tileSize.height },
-  layers: map.layers.map((layer) => {
-    switch (layer._tag) {
-      case "tile":
-        return {
-          kind: "tile",
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          opacity: layer.opacity,
-          chunks: (layer.chunks ?? []).map((chunk) => ({
-            x: chunk.x,
-            y: chunk.y,
-            width: chunk.width,
-            height: chunk.height,
-            tiles: [...chunk.tiles],
-          })),
-        };
-      case "object":
-        return {
-          kind: "object",
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          opacity: layer.opacity,
-          objectIds: [...(layer.objectIds ?? [])],
-        };
-      case "image":
-        return {
-          kind: "image",
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          opacity: layer.opacity,
-          assetId: layer.assetId,
-          x: layer.x,
-          y: layer.y,
-        };
-      case "collision":
-        return {
-          kind: "collision",
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          opacity: layer.opacity,
-          chunks: (layer.chunks ?? []).map((chunk) => ({
-            x: chunk.x,
-            y: chunk.y,
-            width: chunk.width,
-            height: chunk.height,
-            tiles: [...chunk.tiles],
-          })),
-        };
-      default:
-        return {
-          kind: "object",
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          opacity: layer.opacity,
-          objectIds: [],
-        };
-    }
-  }),
-  objects: map.objects.map((object) => ({
-    id: object.id,
-    kind: object.kind,
-    x: object.x,
-    y: object.y,
-    width: optionValue(object.width),
-    height: optionValue(object.height),
-    layerId: object.layerId,
-    properties: object.properties,
-  })),
-  properties: map.properties,
-});
-
 const playtestIndexHtml = (artifactDir: string): string => `<!doctype html>
 <html lang="en">
   <head>
@@ -295,25 +173,16 @@ export const PlaytestServiceLive = Layer.effect(
     const assembleArtifact = Effect.fn("PlaytestService.assembleArtifact")(function* (
       input: AssemblePlaytestInput,
     ) {
-      const map = yield* maps.load(input.projectId, input.mapId);
+      // Validate the map exists and decodes before creating the artifact
+      // directory; the map itself ships ONLY inside the runtime map package
+      // (`assembleRuntimeMapPackage` is the single writer of `map.json`).
+      yield* maps.load(input.projectId, input.mapId);
       const artifactId = `playtest-artifact-${Date.now()}`;
       const directory =
         input.outputDirectory ?? (yield* verifiedChildPath(playtestRoot, artifactId));
       yield* ensureDirectory(directory);
-      const mapPath = path.join(directory, "map.json");
       const indexPath = path.join(directory, "index.html");
       const manifestPath = path.join(directory, metadataFileName);
-      yield* Effect.tryPromise({
-        try: async () => {
-          const { writeFile } = await import("node:fs/promises");
-          await writeFile(mapPath, `${JSON.stringify(mapToPersistedJson(map), null, 2)}\n`, "utf8");
-        },
-        catch: (cause) =>
-          new ServicesBuildError({
-            path: Option.some(mapPath),
-            message: cause instanceof Error ? cause.message : String(cause),
-          }),
-      });
       yield* writeTextFile(indexPath, playtestIndexHtml(directory));
       const manifest = new PlaytestArtifactManifest({
         mapId: input.mapId,
@@ -327,7 +196,6 @@ export const PlaytestServiceLive = Layer.effect(
         directory,
         manifestPath,
         indexPath,
-        mapPath,
         manifest: new PlaytestArtifactManifest({ ...manifest, integrityHash }),
       });
     });

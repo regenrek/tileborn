@@ -82,7 +82,8 @@ describe('playtest multiplayer modal flow', () => {
         runtime: {
           prepareLocalRoomArtifact: vi.fn().mockResolvedValue({
             mapId: 'map:test',
-            runtimeArtifact: { schemaVersion: 1, maxPlayers: 8 },
+            mapPackage: { manifest: { schemaVersion: 1 } },
+            playerModelSelections: [{ playerId: 'player-1', modelId: 'model:test' }],
           }),
           startLocalHost: vi.fn().mockResolvedValue({
             baseUrl: 'http://127.0.0.1:8787',
@@ -156,7 +157,8 @@ describe('playtest multiplayer modal flow', () => {
     const fetchMock = vi.mocked(fetch);
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       mapId: 'map:test',
-      runtimeArtifact: { schemaVersion: 1, maxPlayers: 8 },
+      mapPackage: { manifest: { schemaVersion: 1 } },
+      playerModelSelections: [{ playerId: 'player-1', modelId: 'model:test' }],
       options: { maxPlayers: 8 },
     });
     expect(usePlaytestMultiplayerStore.getState().roomReady?.wsUrl).toBe(roomReady.wsUrl);

@@ -279,7 +279,9 @@ export const readVerifiedProjectAtRoot = (
       Effect.mapError((error) =>
         error._tag === "ProjectPathNotFoundError"
           ? new ProjectNotFoundError({
-              projectId: makeProjectId("project:00000000-0000-0000-0000-000000000000" as Uuid),
+              // Sentinel id for "no project at this root": must be a VALID
+              // v4-shaped uuid or the error class itself fails to construct.
+              projectId: makeProjectId("00000000-0000-4000-8000-000000000000" as Uuid),
               message: error.message,
             })
           : error,
@@ -581,7 +583,20 @@ export const ProjectServiceLive = Layer.effect(
     });
 
     const open = Effect.fn("ProjectService.open")(function* (projectId: ProjectId) {
-      return yield* readVerifiedProject(paths.projects, projectId);
+      // Resolve the actual root first (home dir, cwd ancestors, registry):
+      // projects created with `project init <slug>` or `--here` do NOT live at
+      // the id-named home directory `readVerifiedProject` assumes.
+      const root = yield* resolveProjectRootForId(paths.projects, cwd, projectId);
+      const project = yield* readVerifiedProjectAtRoot(root);
+      if (project.id !== projectId) {
+        return yield* Effect.fail(
+          new ProjectValidationError({
+            path: projectManifestPath(root),
+            message: `project id mismatch: expected ${projectId} got ${project.id}`,
+          }),
+        );
+      }
+      return project;
     });
 
     const save = Effect.fn("ProjectService.save")(function* (project: ProjectManifest) {

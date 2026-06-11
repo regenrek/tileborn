@@ -13,17 +13,16 @@ import {
   PaintbrushIcon,
   PlayIcon,
   PuzzleIcon,
-  CrosshairIcon,
   Redo2Icon,
   SettingsIcon,
   SquareDashedIcon,
   Undo2Icon,
-  UserIcon,
   WrenchIcon,
 } from 'lucide-react';
 
 import { TOOL_LABELS, toolShortcut } from '@/lib/editor-tool-labels';
 import { SHORTCUTS } from '@/lib/keyboard-shortcuts';
+import { WORKSPACE_VIEWS } from '@/lib/workspace-views';
 import type { EditorTool } from '@/stores/editor-ui-store';
 
 export type ShellCommandGroupId =
@@ -99,6 +98,22 @@ const toolCommands: ShellCommandDef[] = COMMAND_TOOL_IDS.map((tool) => ({
   requiresMap: true,
 }));
 
+/**
+ * View commands generated from the workspace-view SSOT (`workspace-views.ts`).
+ * Label/icon/keywords are owned there; the palette executes them by navigating
+ * to the view's registered route.
+ */
+const workspaceViewCommands: ShellCommandDef[] = WORKSPACE_VIEWS.filter(
+  (view) => view.commandId !== undefined,
+).map((view) => ({
+  id: view.commandId!,
+  label: view.label,
+  group: 'view',
+  icon: view.icon,
+  requiresProject: true,
+  ...(view.keywords === undefined ? {} : { keywords: view.keywords }),
+}));
+
 export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
   {
     id: 'file.create-project',
@@ -152,46 +167,7 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
     icon: SettingsIcon,
     keywords: ['preferences', 'theme'],
   },
-  {
-    id: 'view.project-overview',
-    label: 'Project overview',
-    group: 'view',
-    icon: MapIcon,
-    requiresProject: true,
-    keywords: ['project'],
-  },
-  {
-    id: 'view.asset-library',
-    label: 'Asset library',
-    group: 'view',
-    icon: PackageIcon,
-    requiresProject: true,
-    keywords: ['assets', 'import'],
-  },
-  {
-    id: 'view.plugin-manager',
-    label: 'Plugin manager',
-    group: 'view',
-    icon: PuzzleIcon,
-    requiresProject: true,
-    keywords: ['extensions', 'plugins'],
-  },
-  {
-    id: 'view.visual-role-editor',
-    label: 'Visual Role Editor',
-    group: 'view',
-    icon: CrosshairIcon,
-    requiresProject: true,
-    keywords: ['visual', 'roles', 'weapon', 'projectile', 'muzzle', 'vfx'],
-  },
-  {
-    id: 'view.player-model-editor',
-    label: 'Player Model Editor',
-    group: 'view',
-    icon: UserIcon,
-    requiresProject: true,
-    keywords: ['player', 'model', 'sprite', 'clips', 'hitbox', 'muzzle'],
-  },
+  ...workspaceViewCommands,
   {
     id: 'view.toggle-grid',
     label: 'Toggle grid',

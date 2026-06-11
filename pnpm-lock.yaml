@@ -859,6 +859,9 @@ importers:
       '@tileborne/core':
         specifier: workspace:*
         version: link:../core
+      '@tileborne/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       effect:
         specifier: 4.0.0-beta.70
         version: 4.0.0-beta.70

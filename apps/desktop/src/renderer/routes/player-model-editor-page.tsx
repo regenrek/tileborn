@@ -1,13 +1,14 @@
 import { useParams } from '@tanstack/react-router';
 import {
   AssetLibraryReference,
+  AttachmentAnchor,
   PlayerModelAnchor,
   PlayerModelClipSet,
   PlayerModelHitbox,
-  PlayerModelPoint,
   PlayerModelRef,
   PlayerModelWorldSize,
   REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  VisualAnchorPoint,
   validatePlayerModelRef,
   type ClipId,
   type PlayerModelClipKey,
@@ -59,7 +60,7 @@ const modelWithPatch = (
     readonly defaultClipId?: ClipId | undefined;
     readonly clips?: PlayerModelClipSet | undefined;
     readonly anchor?: NormalizedPoint | undefined;
-    readonly muzzle?: NormalizedPoint | undefined;
+    readonly hand?: NormalizedPoint | undefined;
     readonly hitbox?: NormalizedRect | undefined;
     readonly renderScale?: number | undefined;
     readonly worldSize?: { readonly width: number; readonly height: number } | undefined;
@@ -76,7 +77,17 @@ const modelWithPatch = (
     clips: patch.clips ?? model.clips,
     anchor: new PlayerModelAnchor(patch.anchor ?? model.anchor),
     hitbox: new PlayerModelHitbox(patch.hitbox ?? model.hitbox),
-    muzzle: new PlayerModelPoint(patch.muzzle ?? model.muzzle),
+    anchors:
+      patch.hand === undefined
+        ? model.anchors
+        : {
+            ...model.anchors,
+            hand: new AttachmentAnchor({
+              point: new VisualAnchorPoint(patch.hand),
+              rotationDeg: model.anchors.hand?.rotationDeg ?? 0,
+              zOffset: model.anchors.hand?.zOffset ?? 0,
+            }),
+          },
     ...(patch.renderScale ?? model.renderScale) === undefined
       ? {}
       : { renderScale: patch.renderScale ?? model.renderScale },
@@ -99,12 +110,15 @@ const removeModel = (
   modelId: string,
 ): readonly PlayerModelRef[] => models.filter((entry) => entry.id !== modelId);
 
-const modelHandles = (model: PlayerModelRef | undefined): readonly SpriteGeometryHandle[] =>
+const modelHandles = (
+  model: PlayerModelRef | undefined,
+  defaultHand: NormalizedPoint,
+): readonly SpriteGeometryHandle[] =>
   model === undefined
     ? []
     : [
         { id: 'anchor', label: 'Anchor', kind: 'pivot', point: model.anchor },
-        { id: 'muzzle', label: 'Muzzle', kind: 'muzzle', point: model.muzzle },
+        { id: 'hand', label: 'Hand', kind: 'hand', point: model.anchors.hand?.point ?? defaultHand },
       ];
 
 const modelRects = (model: PlayerModelRef | undefined): readonly SpriteGeometryRect[] =>
@@ -169,12 +183,15 @@ export function PlayerModelEditorPage() {
   const requiredClipKeys = policy?.requiredClipKeys ?? REQUIRED_PLAYER_MODEL_CLIP_KEYS;
   const defaultGeometry = policy?.defaultGeometry ?? {
     anchor: { x: 0.5, y: 0.86 },
-    muzzle: { x: 0.8, y: 0.52 },
+    hand: { x: 0.64, y: 0.56 },
     hitbox: { x: 0.28, y: 0.18, width: 0.44, height: 0.66 },
     renderScale: 1,
     worldSize: DEFAULT_WORLD_SIZE,
   };
-  const handles = useMemo(() => modelHandles(draftModel), [draftModel]);
+  const handles = useMemo(
+    () => modelHandles(draftModel, defaultGeometry.hand),
+    [draftModel, defaultGeometry.hand],
+  );
   const rects = useMemo(() => modelRects(draftModel), [draftModel]);
   const worldSize = draftModel?.worldSize ?? DEFAULT_WORLD_SIZE;
   const activeClip = draftModel?.clips[activeClipKey];
@@ -434,13 +451,13 @@ export function PlayerModelEditorPage() {
             activeFrameId={activeClipKey}
             onFrameChange={(frameId) => setActiveClipKey(frameId as PlayerModelClipKey)}
             onHandleChange={(id, point) =>
-              updateDraft(id === 'muzzle' ? { muzzle: point } : { anchor: point })
+              updateDraft(id === 'hand' ? { hand: point } : { anchor: point })
             }
             onRectChange={(_, rect) => updateDraft({ hitbox: rect })}
             onResetDefaults={() =>
               updateDraft({
                 anchor: defaultGeometry.anchor,
-                muzzle: defaultGeometry.muzzle,
+                hand: defaultGeometry.hand,
                 hitbox: defaultGeometry.hitbox,
                 renderScale: defaultGeometry.renderScale ?? 1,
                 worldSize: defaultGeometry.worldSize ?? DEFAULT_WORLD_SIZE,
@@ -461,8 +478,12 @@ export function PlayerModelEditorPage() {
             />
             <GeometryStat
               icon={CrosshairIcon}
-              label="Muzzle"
-              value={draftModel === undefined ? '-' : `${draftModel.muzzle.x.toFixed(2)}, ${draftModel.muzzle.y.toFixed(2)}`}
+              label="Hand"
+              value={
+                draftModel?.anchors.hand === undefined
+                  ? '-'
+                  : `${draftModel.anchors.hand.point.x.toFixed(2)}, ${draftModel.anchors.hand.point.y.toFixed(2)}`
+              }
             />
           </div>
 

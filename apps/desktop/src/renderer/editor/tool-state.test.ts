@@ -58,7 +58,6 @@ import {
   TEST_OBJECT_LAYER_ID,
   TEST_TILE_LAYER_ID,
 } from './test-fixtures.js';
-import { normalizeMapForIpc } from '@/lib/map-ipc-normalization';
 import { createAutotilePaintResolver } from './viewport/autotile-paint.js';
 
 const point = (tileX: number, tileY: number): PointerPoint => ({
@@ -382,9 +381,9 @@ describe('tool state machine', () => {
     expect(down.result.command?.kind).toBe('tile-rectangle-fill');
     expect(edited && getTileIndex(edited, importedLayerId, 0, 0)).toBe(2);
     expect(() =>
-      Schema.decodeUnknownSync(MapsUpdateRequest)({
+      Schema.encodeUnknownSync(MapsUpdateRequest)({
         projectId: 'project:00000000-0000-4000-8000-000000000092' as ProjectId,
-        map: normalizeMapForIpc(edited!),
+        map: edited!,
       }),
     ).not.toThrow();
   });

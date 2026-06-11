@@ -21,9 +21,9 @@ import {
   type Position,
   type Projectile,
 } from './ecs/components.js';
-import { exportArtifact } from './export-artifact.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
 import { createRuntimeAdapter } from './runtime-adapter.js';
+import { buildTestMapPackage } from './test-map-package.js';
 import { createTestPluginWorld } from './test-plugin-world.js';
 
 const OVERRIDE_PROJECTILE_SPEED = 600;
@@ -52,7 +52,6 @@ const playerModel = new PlayerModelRef({
   }),
   anchor: { x: 0.5, y: 1 },
   hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-  muzzle: { x: 0.75, y: 0.45 },
 });
 
 const makeTestObject = (
@@ -91,7 +90,10 @@ const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
 
 describe('BattleRoyaleConfig overrides', () => {
   it('propagates host projectile.speed override through createRuntimeAdapter', () => {
-    const artifact = exportArtifact(makeSpawnFixtureMap(), { playerModels: [playerModel] });
+    const mapPackage = buildTestMapPackage({
+      map: makeSpawnFixtureMap(),
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
@@ -100,7 +102,7 @@ describe('BattleRoyaleConfig overrides', () => {
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
       getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
       config: {
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
@@ -123,12 +125,12 @@ describe('BattleRoyaleConfig overrides', () => {
   });
 
   it('merges map.properties.battleRoyale.projectile.speed at adapter init', () => {
-    const artifact = exportArtifact(
-      makeSpawnFixtureMap({
+    const mapPackage = buildTestMapPackage({
+      map: makeSpawnFixtureMap({
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       }),
-      { playerModels: [playerModel] },
-    );
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
@@ -137,7 +139,7 @@ describe('BattleRoyaleConfig overrides', () => {
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
+      getMapPackage: () => mapPackage,
       getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
     });
 

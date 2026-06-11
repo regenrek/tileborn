@@ -57,6 +57,13 @@ export interface ValidateCatalogDeps {
    * grant only resolves through this injected resolver.
    */
   readonly resolveWeapon?: (id: WeaponDefinitionId) => boolean;
+  /**
+   * Returns true when a referenced {@link GameObjectTypeId} (e.g. a
+   * `weapon-ref` companion entity) resolves outside this pack — in another
+   * contributed catalog or the project fragment. In-pack types always resolve
+   * without this resolver.
+   */
+  readonly resolveObjectType?: (id: GameObjectTypeId) => boolean;
 }
 
 /** A normalized, typed view of one "pickup grants `<id>`" reference. */
@@ -181,6 +188,8 @@ export const validateCatalog = (
     }).message;
   };
 
+  const seenWeaponIds = new Map<string, string>();
+
   for (const objectType of catalog.objectTypes) {
     const tags = new Set<string>();
     for (const component of objectType.components) {
@@ -190,6 +199,41 @@ export const validateCatalog = (
         );
       }
       tags.add(component._tag);
+    }
+
+    // Anchor units (ADR-0028 §1): catalog anchors are normalized 0..1
+    // sprite-local points — pixel-space values are authoring bugs.
+    const visualRef = objectType.components.find(
+      (component) => component._tag === "visual-ref",
+    );
+    if (visualRef !== undefined && visualRef._tag === "visual-ref") {
+      for (const [name, anchor] of Object.entries(visualRef.anchors)) {
+        const { x, y } = anchor.point;
+        if (!Number.isFinite(x) || x < 0 || x > 1 || !Number.isFinite(y) || y < 0 || y > 1) {
+          issues.push(
+            `object type ${objectType.id}: visual-ref anchor "${name}" point must be normalized 0..1 (got ${x}, ${y})`,
+          );
+        }
+        if (!Number.isFinite(anchor.rotationDeg) || !Number.isFinite(anchor.zOffset)) {
+          issues.push(
+            `object type ${objectType.id}: visual-ref anchor "${name}" rotationDeg/zOffset must be finite`,
+          );
+        }
+      }
+    }
+
+    // equippable.attachAnchor NAMES an entry in visual-ref.anchors (§1).
+    for (const component of objectType.components) {
+      if (
+        component._tag === "equippable" &&
+        visualRef !== undefined &&
+        visualRef._tag === "visual-ref" &&
+        visualRef.anchors[component.attachAnchor] === undefined
+      ) {
+        issues.push(
+          `object type ${objectType.id}: equippable.attachAnchor "${component.attachAnchor}" is not defined in visual-ref.anchors`,
+        );
+      }
     }
 
     for (const ref of lootTableRefsFor(objectType)) {
@@ -226,6 +270,73 @@ export const validateCatalog = (
       const issue = grantUnresolved(objectType.id, ref);
       if (issue !== undefined) {
         issues.push(issue);
+      }
+    }
+
+    for (const component of objectType.components) {
+      if (component._tag !== "weapon-ref") {
+        continue;
+      }
+      const claimedBy = seenWeaponIds.get(component.weaponId);
+      if (claimedBy !== undefined) {
+        issues.push(
+          `object type ${objectType.id}: weapon-ref.weaponId ${component.weaponId} is already claimed by ${claimedBy} (weapon visuals lookup would be ambiguous)`,
+        );
+      } else {
+        seenWeaponIds.set(component.weaponId, objectType.id);
+      }
+      // Weapon ids only exist in plugin balance data (ADR-0018), which generic
+      // merge sites (e.g. the desktop catalog projection) cannot see. Without a
+      // resolver the reference is unverifiable here — checked instead where
+      // weapon knowledge exists (plugin tests, runtime derivation).
+      if (deps.resolveWeapon !== undefined && !deps.resolveWeapon(component.weaponId)) {
+        issues.push(
+          new UnknownReferenceError({
+            from: objectType.id,
+            refKind: "weapon-ref.weaponId",
+            missingId: component.weaponId,
+            message: `${objectType.id}: weapon-ref.weaponId references unknown weapon ${component.weaponId}`,
+          }).message,
+        );
+      }
+      const companions = [
+        ["weapon-ref.projectileEntityId", component.projectileEntityId],
+        ["weapon-ref.muzzleFlashEntityId", component.muzzleFlashEntityId],
+        ["weapon-ref.impactVfxEntityId", component.impactVfxEntityId],
+        ["weapon-ref.pickupEntityId", component.pickupEntityId],
+      ] as const;
+      for (const [refKind, companionId] of companions) {
+        if (companionId === undefined) {
+          continue;
+        }
+        const resolved =
+          seen.has(companionId) || (deps.resolveObjectType?.(companionId) ?? false);
+        if (!resolved) {
+          issues.push(
+            new UnknownReferenceError({
+              from: objectType.id,
+              refKind,
+              missingId: companionId,
+              message: `${objectType.id}: ${refKind} references unknown object type ${companionId}`,
+            }).message,
+          );
+        }
+      }
+      // Bidirectional weapon<->pickup coherence (ADR-0028 §4a): when the
+      // referenced pickup entity grants a weapon, it must grant THIS weapon.
+      if (component.pickupEntityId !== undefined) {
+        const pickup = catalog.objectTypes.find((t) => t.id === component.pickupEntityId);
+        const grantedWeaponIds =
+          pickup === undefined
+            ? []
+            : grantRefsFor(pickup)
+                .filter((ref) => ref.kind === "weapon")
+                .map((ref) => ref.id);
+        if (grantedWeaponIds.length > 0 && !grantedWeaponIds.includes(component.weaponId)) {
+          issues.push(
+            `${objectType.id}: weapon-ref.pickupEntityId ${component.pickupEntityId} grants a different weapon (${grantedWeaponIds.join(", ")}) than weapon-ref.weaponId ${component.weaponId}`,
+          );
+        }
       }
     }
   }

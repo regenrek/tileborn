@@ -24,6 +24,19 @@ export const TRAP_KIND = gameObjectTypeIdForKey(TRAP_KEY);
 export const DECOY_KIND = gameObjectTypeIdForKey(DECOY_KEY);
 export const BARRIER_KIND = gameObjectTypeIdForKey(BARRIER_KEY);
 
+/**
+ * The runtime-global overlay slots BR consumes (entity-first, post visual-role
+ * hard cut): catalog entities claim these via an `overlay-visual` component;
+ * the plugin ships default claimant entities in `schemas/game-object-catalog.json`
+ * and a project-authored claimant overrides the plugin's (core derivation
+ * precedence).
+ */
+export const BR_OVERLAY_SLOTS = {
+  shield: "shield",
+  shadow: "shadow",
+  hazard: "hazard",
+} as const;
+
 export const MIN_SPAWN_POINTS = 4;
 export const REQUIRED_SHRINK_ANCHORS = 1;
 export const MIN_LOOT_CRATES = 1;
@@ -42,6 +55,13 @@ export const DEFAULT_LOOT_TABLE: readonly {
 export const LOOT_PICKUP_RADIUS = 1.5;
 
 export const PLUGIN_ID = "@tileborne-plugins/battle-royale" as const;
+
+/**
+ * Branded id of Battle Royale's single primary weapon (`weapon:<uuid>`).
+ * Lives in renderer-safe constants (no simulation import) so the projector
+ * bridge can reference the default weapon without pulling weapon balance code.
+ */
+export const BR_PRIMARY_WEAPON_ID = "weapon:00000000-0000-4000-8000-000000000001";
 
 /** Default player cap from declarative room-rules panel (`panels/index.json`). */
 export const DEFAULT_MAX_PLAYERS = 32;

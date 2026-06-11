@@ -73,7 +73,7 @@ describe("asset IPC contracts", () => {
       playerModel: {
         renderScale: 1.5,
         hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-        muzzle: { x: 0.75, y: 0.45 },
+        hand: { x: 0.75, y: 0.45 },
       },
     });
     roundTrip(AssetsRemovePackContract.request, { packId });

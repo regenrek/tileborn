@@ -175,13 +175,12 @@ describe("schema round-trips", () => {
       chunks: [],
     });
 
+    // Omitted width/height (Option.none) stay ABSENT keys across the round-trip.
     roundTrip(MapObject, {
       id: objectId,
       kind: gameObjectTypeIdForKey("spawn"),
       x: 32,
       y: 64,
-      width: undefined,
-      height: undefined,
       layerId,
       properties: { weight: 1 },
     });

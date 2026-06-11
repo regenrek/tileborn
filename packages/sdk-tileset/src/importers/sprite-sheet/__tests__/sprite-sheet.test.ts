@@ -116,7 +116,7 @@ describe("importSpriteSheet", () => {
       playerModel: {
         renderScale: 1.5,
         hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-        muzzle: { x: 0.75, y: 0.45 },
+        hand: { x: 0.75, y: 0.45 },
       },
     }).value!.pack.placeables![0]!;
 
@@ -127,8 +127,8 @@ describe("importSpriteSheet", () => {
       "tileborne.player.hitboxY": 0.1,
       "tileborne.player.hitboxW": 0.5,
       "tileborne.player.hitboxH": 0.85,
-      "tileborne.player.muzzleX": 0.75,
-      "tileborne.player.muzzleY": 0.45,
+      "tileborne.player.handX": 0.75,
+      "tileborne.player.handY": 0.45,
     });
   });
 
@@ -138,13 +138,13 @@ describe("importSpriteSheet", () => {
       playerModel: {
         renderScale: 0,
         hitbox: { x: 0.8, y: 0.1, width: 0.5, height: 0.85 },
-        muzzle: { x: 1.2, y: 0.45 },
+        hand: { x: 1.2, y: 0.45 },
       },
     });
     expect(result.value).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       "Player model hitbox must stay inside normalized 0..1 bounds",
-      "Player model muzzle must use normalized 0..1 coordinates",
+      "Player model hand anchor must use normalized 0..1 coordinates",
       "Player model render scale must be greater than 0 and at most 8",
     ]);
   });

@@ -7,7 +7,7 @@ afterEach(() => cleanup());
 
 const handles = [
   { id: 'pivot', label: 'Pivot', kind: 'pivot' as const, point: { x: 0.5, y: 0.5 } },
-  { id: 'muzzle', label: 'Muzzle', kind: 'muzzle' as const, point: { x: 0.85, y: 0.45 } },
+  { id: 'hand', label: 'Hand', kind: 'hand' as const, point: { x: 0.85, y: 0.45 } },
 ] as const;
 
 const rects = [
@@ -86,13 +86,13 @@ describe('SpriteGeometryCanvas', () => {
         toJSON: () => undefined,
       }),
     });
-    const circle = screen.getByTestId('sprite-geometry-handle-muzzle').querySelector('circle');
+    const circle = screen.getByTestId('sprite-geometry-handle-hand').querySelector('circle');
     expect(circle).not.toBeNull();
 
     fireEvent.pointerDown(circle!, { pointerId: 1, clientX: 170, clientY: 90 });
     fireEvent.pointerMove(stage, { pointerId: 1, clientX: 160, clientY: 40 });
     fireEvent.pointerUp(stage, { pointerId: 1 });
 
-    expect(onHandleChange).toHaveBeenCalledWith('muzzle', { x: 0.8, y: 0.2 });
+    expect(onHandleChange).toHaveBeenCalledWith('hand', { x: 0.8, y: 0.2 });
   });
 });

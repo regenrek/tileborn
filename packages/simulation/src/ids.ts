@@ -60,6 +60,39 @@ export type TeamId = typeof TeamId.Type;
 export const makeTeamId = (value: string): TeamId => value as TeamId;
 
 /**
+ * Open, neutral inventory item identity held in an `InventoryState` slot or
+ * granted by a loot roll (ADR-0018 inventory/loot addendum). Deliberately an
+ * open branded string — NOT a closed item-kind or tier enum: the engine never
+ * interprets the value, it only stores and moves it. Plugins put whatever
+ * identity they own here (e.g. a catalog `ItemDefinitionId` or a composite
+ * content key).
+ */
+export const InventoryItemId = Schema.String.pipe(Schema.brand('InventoryItemId'));
+export type InventoryItemId = typeof InventoryItemId.Type;
+export const makeInventoryItemId = (value: string): InventoryItemId => value as InventoryItemId;
+
+/**
+ * Open, neutral ammunition classification keying an `AmmoReserve` stack
+ * (ADR-0018 inventory/loot addendum). An open branded string — never a closed
+ * ammo-type enum: which kinds exist (and which weapon consumes which) is
+ * plugin content data.
+ */
+export const AmmoKind = Schema.String.pipe(Schema.brand('AmmoKind'));
+export type AmmoKind = typeof AmmoKind.Type;
+export const makeAmmoKind = (value: string): AmmoKind => value as AmmoKind;
+
+/**
+ * Open, neutral equipment-slot identity keyed by an `EquipmentState` entry
+ * (ADR-0018 inventory/loot addendum, Slice 2). An open branded string — never
+ * a closed slot enum: which slots exist is plugin content data (the catalog's
+ * `EquippableComponent.slot` open tag is the authoring-side counterpart; the
+ * caller maps it onto this id when building equip/swap commands).
+ */
+export const EquipmentSlotId = Schema.String.pipe(Schema.brand('EquipmentSlotId'));
+export type EquipmentSlotId = typeof EquipmentSlotId.Type;
+export const makeEquipmentSlotId = (value: string): EquipmentSlotId => value as EquipmentSlotId;
+
+/**
  * Identity of an in-flight projectile persisted across ticks by the
  * {@link runCombatTick} orchestrator (Slice 4). Neutral integer handle, stable
  * and sortable so the projectile lifecycle replays in a deterministic order;

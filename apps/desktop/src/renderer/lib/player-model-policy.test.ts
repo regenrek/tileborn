@@ -40,7 +40,6 @@ const model = (id: string): PlayerModelRef =>
     clips: clips(),
     anchor: { x: 0.5, y: 1 },
     hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
-    muzzle: { x: 0.75, y: 0.45 },
   });
 
 const emptyMap = makeTileborneMap({
@@ -57,7 +56,7 @@ const selectable: PlayerModelPolicyContribution = {
   requiredClipKeys: REQUIRED_PLAYER_MODEL_CLIP_KEYS,
   defaultGeometry: {
     anchor: { x: 0.5, y: 1 },
-    muzzle: { x: 0.75, y: 0.45 },
+    hand: { x: 0.75, y: 0.45 },
     hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
     renderScale: 1,
     worldSize: { width: 24, height: 32 },

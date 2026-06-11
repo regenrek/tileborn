@@ -62,17 +62,30 @@ export const parsePlaytestRoomInput = (
   return null;
 };
 
+export interface LocalRoomPlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
 export const createLocalMultiplayerRoom = async (
   baseUrl: string,
   mapId: string,
-  options: { readonly runtimeArtifact?: unknown; readonly maxPlayers?: number } = {},
+  options: {
+    /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from. */
+    readonly mapPackage?: unknown;
+    readonly playerModelSelections?: readonly LocalRoomPlayerModelSelection[];
+    readonly maxPlayers?: number;
+  } = {},
 ): Promise<LocalMultiplayerRoomReady> => {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/rooms/create`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       mapId,
-      ...(options.runtimeArtifact === undefined ? {} : { runtimeArtifact: options.runtimeArtifact }),
+      ...(options.mapPackage === undefined ? {} : { mapPackage: options.mapPackage }),
+      ...(options.playerModelSelections === undefined || options.playerModelSelections.length === 0
+        ? {}
+        : { playerModelSelections: options.playerModelSelections }),
       options: {
         ...(options.maxPlayers ? { maxPlayers: options.maxPlayers } : {}),
       },

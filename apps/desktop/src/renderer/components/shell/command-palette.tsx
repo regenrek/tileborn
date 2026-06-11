@@ -28,6 +28,7 @@ import {
   type ShellCommandDef,
   type ShellCommandGroupId,
 } from '@/lib/shell-command-registry';
+import { workspaceViewForCommand } from '@/lib/workspace-views';
 import {
   useInvokePluginEditorCommand,
   useStartBuild,
@@ -118,6 +119,17 @@ function useCommandPaletteModel({
 
   const executeShellCommand = useCallback(
     (command: ShellCommandDef) => {
+      // Workspace views resolve through the SSOT registry (workspace-views.ts).
+      const workspaceView = workspaceViewForCommand(command.id);
+      if (workspaceView !== undefined) {
+        if (!projectId) {
+          return;
+        }
+        runCommand(command.id, () => {
+          void navigate({ to: workspaceView.route, params: { projectId } });
+        });
+        return;
+      }
       switch (command.id) {
         case 'file.create-project':
           runCommand(command.id, () => {
@@ -156,46 +168,6 @@ function useCommandPaletteModel({
               return;
             }
             void navigate({ to: '/settings' });
-          });
-          return;
-        case 'view.project-overview':
-          if (!projectId) {
-            return;
-          }
-          runCommand(command.id, () => {
-            void navigate({ to: '/projects/$projectId', params: { projectId } });
-          });
-          return;
-        case 'view.asset-library':
-          if (!projectId) {
-            return;
-          }
-          runCommand(command.id, () => {
-            void navigate({ to: '/projects/$projectId/assets', params: { projectId } });
-          });
-          return;
-        case 'view.plugin-manager':
-          if (!projectId) {
-            return;
-          }
-          runCommand(command.id, () => {
-            void navigate({ to: '/projects/$projectId/plugins', params: { projectId } });
-          });
-          return;
-        case 'view.visual-role-editor':
-          if (!projectId) {
-            return;
-          }
-          runCommand(command.id, () => {
-            void navigate({ to: '/projects/$projectId/visual-roles', params: { projectId } });
-          });
-          return;
-        case 'view.player-model-editor':
-          if (!projectId) {
-            return;
-          }
-          runCommand(command.id, () => {
-            void navigate({ to: '/projects/$projectId/player-models', params: { projectId } });
           });
           return;
         case 'view.toggle-grid':

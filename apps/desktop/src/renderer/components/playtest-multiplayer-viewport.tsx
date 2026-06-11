@@ -41,15 +41,18 @@ import {
 import { usePluginContributions, useProject } from '@/hooks/queries';
 import { useHudEditing } from '@/hooks/use-hud-editing';
 import {
-  assemblePlaytestVisualRoleConfig,
+  assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
+  assemblePlaytestWeaponVisualConfig,
   usePlaytestPlayerModels,
-  usePlaytestVisualRoles,
+  usePlaytestOverlayVisuals,
+  usePlaytestWeaponVisuals,
 } from '@/hooks/use-playtest-player-models';
 import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
-import type { BuiltVisualAssetRole } from '@/lib/visual-role-render';
+import type { BuiltOverlayVisual } from '@/lib/overlay-visual-render';
+import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import type { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
 import { multiplayerStateToConnectionInput } from '@/lib/playtest-multiplayer-status';
 import { usePlaytestMultiplayerStore } from '@/stores/playtest-multiplayer-store';
@@ -94,7 +97,8 @@ function useMultiplayerRuntimeMount({
   map,
   activeModePluginId,
   builtModels,
-  builtRoles,
+  builtOverlays,
+  builtWeapons,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
@@ -102,7 +106,8 @@ function useMultiplayerRuntimeMount({
   readonly map: TileborneMap;
   readonly activeModePluginId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
-  readonly builtRoles: readonly BuiltVisualAssetRole[];
+  readonly builtOverlays: readonly BuiltOverlayVisual[];
+  readonly builtWeapons: readonly BuiltWeaponVisual[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -134,16 +139,20 @@ function useMultiplayerRuntimeMount({
       performMount: async () => {
         // Resolve the projector with the roster models so runtime-emitted model
         // ids can resolve to sprites. The server owns per-player selection.
-        if (builtModels.length > 0 || builtRoles.length > 0) {
+        if (builtModels.length > 0 || builtOverlays.length > 0 || builtWeapons.length > 0) {
           try {
-            const [playerModels, visualRoles] = await Promise.all([
+            const [playerModels, overlayVisuals, weaponVisuals] = await Promise.all([
               builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
-              builtRoles.length > 0 ? assemblePlaytestVisualRoleConfig(builtRoles) : undefined,
+              builtOverlays.length > 0 ? assemblePlaytestOverlayVisualConfig(builtOverlays) : undefined,
+              builtWeapons.length > 0
+                ? assemblePlaytestWeaponVisualConfig(builtWeapons)
+                : undefined,
             ]);
             resolved =
               resolvePlaytestPlugin(activeModePluginId, {
                 ...(playerModels === undefined ? {} : { playerModels }),
-                ...(visualRoles === undefined ? {} : { visualRoles }),
+                ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
+                ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
               }) ?? basePlugin;
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
@@ -206,7 +215,7 @@ function useMultiplayerRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, builtRoles]);
+  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, builtOverlays, builtWeapons]);
 }
 
 function useMultiplayerSnapshotRenderer({
@@ -406,7 +415,8 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
   const { builtModels } = usePlaytestPlayerModels(projectId, map);
-  const { builtRoles } = usePlaytestVisualRoles(projectId);
+  const { builtOverlays } = usePlaytestOverlayVisuals(projectId);
+  const { builtWeapons } = usePlaytestWeaponVisuals(projectId);
 
   useMultiplayerRuntimeMount({
     containerRef,
@@ -415,7 +425,8 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     map,
     activeModePluginId,
     builtModels,
-    builtRoles,
+    builtOverlays,
+    builtWeapons,
   });
   useMultiplayerSnapshotRenderer({ client, containerRef, runtimeRef, map, activeModePluginId });
   useMultiplayerInputBridge({ client, containerRef, activeModePluginId });

@@ -17,11 +17,17 @@ import { describe, expect, it } from "vitest";
 import {
   BATTLE_ROYALE_CORE_PACK_ID,
   BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS,
-  DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES,
   DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS,
-  resolveBattleRoyaleVisualAssetRoles,
 } from "./content-assets.js";
-import { BARRIER_KEY, DECOY_KEY, LOOT_CRATE_KEY, SHRINK_ZONE_ANCHOR_KEY, SPAWN_POINT_KEY, TRAP_KEY } from "./constants.js";
+import {
+  BARRIER_KEY,
+  BR_OVERLAY_SLOTS,
+  DECOY_KEY,
+  LOOT_CRATE_KEY,
+  SHRINK_ZONE_ANCHOR_KEY,
+  SPAWN_POINT_KEY,
+  TRAP_KEY,
+} from "./constants.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const assetIndexPath = path.join(packageRoot, "assets/index.json");
@@ -168,14 +174,32 @@ describe("Battle Royale production content assets", () => {
       "Trap",
       "Decoy",
       "Barrier",
+      // Weapon entity + companions (ADR-0028: weapon visuals as entities).
+      "Pulse Carbine",
+      "Projectile Bolt",
+      "Muzzle Flash",
+      "Impact Burst",
+      // Overlay claimant entities (visual-role hard cut: entity-first).
+      "Shield Bubble",
+      "Player Shadow",
+      "Hazard Flame",
     ]);
-    expect(catalog.objectTypes.map((entry) => entry.id)).toEqual([
+    expect(catalog.objectTypes.slice(0, 6).map((entry) => entry.id)).toEqual([
       gameObjectTypeIdForKey(SPAWN_POINT_KEY),
       gameObjectTypeIdForKey(SHRINK_ZONE_ANCHOR_KEY),
       gameObjectTypeIdForKey(LOOT_CRATE_KEY),
       gameObjectTypeIdForKey(TRAP_KEY),
       gameObjectTypeIdForKey(DECOY_KEY),
       gameObjectTypeIdForKey(BARRIER_KEY),
+    ]);
+    expect(catalog.objectTypes.slice(6).map((entry) => String(entry.id))).toEqual([
+      gameObjectTypeIdForKey("weapon-pulse-carbine"),
+      gameObjectTypeIdForKey("weapon-projectile-bolt"),
+      gameObjectTypeIdForKey("weapon-muzzle-flash"),
+      gameObjectTypeIdForKey("weapon-impact-burst"),
+      gameObjectTypeIdForKey("shield-bubble"),
+      gameObjectTypeIdForKey("player-shadow"),
+      gameObjectTypeIdForKey("hazard-flame"),
     ]);
     for (const objectType of catalog.objectTypes) {
       expect(visualRefs(objectType)).toHaveLength(1);
@@ -188,7 +212,7 @@ describe("Battle Royale production content assets", () => {
     expect(Option.getOrElse(catalog.items, () => [])).toHaveLength(4);
   });
 
-  it("ships default BR visual roles backed by distinct core-pack object sprites", () => {
+  it("ships overlay claimant entities backed by distinct core-pack object sprites", () => {
     const pack = parseTilesetManifest(readJson(packManifestPath)).value;
     const placeableIds = new Set((pack?.placeables ?? []).map((placeable) => String(placeable.id)));
     const visualPlaceableIds = [
@@ -207,25 +231,29 @@ describe("Battle Royale production content assets", () => {
     ];
 
     expect(visualPlaceableIds.every((id) => placeableIds.has(id))).toBe(true);
-    expect(DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES.map((role) => role.label)).toEqual([
-      "Pulse Carbine",
-      "Projectile Bolt",
-      "Loot Crate",
-      "Muzzle Flash",
-      "Impact Burst",
-      "Shield Bubble",
-      "Player Shadow",
-      "Hazard Flame",
-    ]);
-    for (const role of DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES) {
-      expect(role.ref.packId).toBe(BATTLE_ROYALE_CORE_PACK_ID);
-      expect(role.ref.kind).toBe("placeable");
-      expect(placeableIds.has(role.ref.refId)).toBe(true);
-    }
 
-    const uniqueRoleRefs = new Set(DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES.map((role) => role.ref.refId));
-    expect(uniqueRoleRefs.size).toBe(DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES.length);
-    expect(resolveBattleRoyaleVisualAssetRoles(undefined)).toEqual(DEFAULT_BATTLE_ROYALE_VISUAL_ASSET_ROLES);
+    // Overlay visuals are catalog ENTITIES claiming slots via `overlay-visual`
+    // (visual-role hard cut) — one claimant per BR slot, each backed by a
+    // distinct shipped placeable sprite.
+    const catalog = decodeCatalog();
+    const overlayEntities = catalog.objectTypes.flatMap((objectType) => {
+      const overlay = objectType.components.find(
+        (component) => component._tag === "overlay-visual",
+      );
+      return overlay === undefined ? [] : [{ objectType, slot: String(overlay.slot) }];
+    });
+
+    expect(overlayEntities.map((entry) => entry.slot).sort()).toEqual(
+      Object.values(BR_OVERLAY_SLOTS).sort(),
+    );
+    const overlayRefIds = overlayEntities.map((entry) => {
+      const visualRef = visualRefs(entry.objectType)[0]!;
+      expect(Option.isSome(visualRef.placeableId)).toBe(true);
+      const refId = String(Option.getOrThrow(visualRef.placeableId));
+      expect(placeableIds.has(refId)).toBe(true);
+      return refId;
+    });
+    expect(new Set(overlayRefIds).size).toBe(overlayEntities.length);
   });
 
   it("imports Petwars weapon sprites as first-class working-palette placeables", () => {

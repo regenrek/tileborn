@@ -46,7 +46,8 @@ import {
   useStartBuild,
 } from '@/hooks/mutations';
 import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
-import { useMap, useProject } from '@/hooks/queries';
+import { useMap, usePluginContributions, useProject } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
 import { useVisualModelDiagnostics } from '@/hooks/use-visual-model-diagnostics';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -299,6 +300,14 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
   const setPlaytestJoinModalOpen = useEditorUiStore((s) => s.setPlaytestJoinModalOpen);
   const projectQuery = useProject(projectId);
   const mapQuery = useMap(projectId, mapId);
+  const contributionsQuery = usePluginContributions();
+  // ADR-0023 section B: multiplayer join runs the ACTIVE game mode's
+  // discovered playtest runtime, resolved from the project selection.
+  const activeMode = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  );
+  const activeModePluginId = activeMode?.pluginId;
   const startBuild = useStartBuild();
   const importProject = useImportProjectFromDirectory();
   const exportProject = useExportProjectArchive();
@@ -464,7 +473,7 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         }}
         onJoinAsHost={() => {
           if (mapId) {
-            void joinHostAsPlayer(mapId, mapWidth, mapHeight);
+            void joinHostAsPlayer(activeModePluginId, mapId, mapWidth, mapHeight);
           }
         }}
         onStopHosting={() => void stopHosting()}
@@ -476,7 +485,14 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         fallbackBaseUrl={localHostSession?.baseUrl}
         onJoin={(input) => {
           if (mapId) {
-            void joinFromInput(input, mapId, mapWidth, mapHeight, localHostSession?.baseUrl);
+            void joinFromInput(
+              input,
+              activeModePluginId,
+              mapId,
+              mapWidth,
+              mapHeight,
+              localHostSession?.baseUrl,
+            );
           }
         }}
       />

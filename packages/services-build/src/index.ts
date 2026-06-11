@@ -12,6 +12,7 @@ import { SupportServiceLive } from "./support/index.js";
 
 export * from "./model.js";
 export * from "./build/index.js";
+export * from "./map-package/index.js";
 export * from "./export/index.js";
 export * from "./playtest/index.js";
 export * from "./runtime-deploy/index.js";

@@ -14,10 +14,9 @@ import {
   type Position,
 } from "../ecs/components.js";
 import { getZone, resetZoneSingleton } from "../ecs/zone.js";
-import { exportArtifact } from "../export-artifact.js";
-import type { ExportedArtifact } from "../types/artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
 import { TEST_PLAYER_MODELS } from "../test-player-model.js";
+import { buildTestMapPackage } from "../test-map-package.js";
 import { createRuntimeAdapter } from "../runtime-adapter.js";
 import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
 import { createTestPluginWorld } from "../test-plugin-world.js";
@@ -95,8 +94,8 @@ export const makeReplayFixtureMap = () =>
     properties: { maxPlayers: REPLAY_MAX_PLAYERS },
   });
 
-export const exportReplayArtifact = (): ExportedArtifact =>
-  exportArtifact(makeReplayFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
+export const makeReplayMapPackage = (): unknown =>
+  buildTestMapPackage({ map: makeReplayFixtureMap(), playerModels: TEST_PLAYER_MODELS });
 
 const buildInputLookup = (
   inputLog: readonly InputLogEntry[],
@@ -172,7 +171,8 @@ export interface RunReplayOptions {
   readonly inputLog: readonly InputLogEntry[];
   readonly tickCount?: number;
   readonly snapshotInterval?: number;
-  readonly artifact?: ExportedArtifact;
+  /** Encoded `RuntimeMapPackage` wire JSON the replayed adapter boots from. */
+  readonly mapPackage?: unknown;
 }
 
 export const runReplayScenario = ({
@@ -180,7 +180,7 @@ export const runReplayScenario = ({
   inputLog,
   tickCount = 300,
   snapshotInterval = 30,
-  artifact = exportReplayArtifact(),
+  mapPackage = makeReplayMapPackage(),
 }: RunReplayOptions): ReplayRunResult => {
   resetZoneSingleton();
 
@@ -191,7 +191,7 @@ export const runReplayScenario = ({
   let currentTick = 0;
 
   const plugin = createRuntimeAdapter({
-    getArtifact: () => artifact,
+    getMapPackage: () => mapPackage,
     seed,
     config: {
       tickRate: DEFAULT_BATTLE_ROYALE_CONFIG.tickRate,

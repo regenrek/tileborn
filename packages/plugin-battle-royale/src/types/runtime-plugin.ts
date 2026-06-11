@@ -1,7 +1,6 @@
 import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
 
 import type { BattleRoyaleConfigInput } from "../battle-royale-config.js";
-import type { ExportedArtifact } from "./artifact.js";
 
 export interface ComponentStore<T extends object> {
   readonly get: (entity: number) => T | undefined;
@@ -37,8 +36,25 @@ export interface RuntimePlayerInput {
   readonly swapSlot?: number;
 }
 
+/** Per-session player→model assignment (host session concern, never package data). */
+export interface PlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
 export interface RuntimePluginHost {
-  readonly getArtifact: () => ExportedArtifact;
+  /**
+   * The encoded `RuntimeMapPackage` wire JSON (ADR-0030): the ONE payload
+   * every runtime host hands the plugin. The plugin decodes it through the
+   * canonical schema and derives its own runtime state.
+   */
+  readonly getMapPackage: () => unknown;
+  /**
+   * Per-session player-model selections. The package deliberately carries no
+   * per-session data, so hosts that know who picked which model provide it
+   * through this channel.
+   */
+  readonly getPlayerModelSelections?: () => readonly PlayerModelSelection[];
   readonly getPlayerIds?: () => readonly string[];
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly msgOut?: RuntimeMessageOut;

@@ -5,6 +5,7 @@ import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { decodeMessage, makePluginHost, ServerNotice } from '@tileborne/runtime';
 import type { PluginHostApi, RuntimeMessage, RuntimePlugin } from '@tileborne/runtime';
 
+import { defaultMapPackage } from '../.generated/default-map-package.js';
 import { mintHandoffToken } from './handoff-token.js';
 import { MAX_QUEUED_INPUTS_PER_PLAYER, PlaytestRoom } from './room-object.js';
 import { STORAGE_KEY, type RoomStorage } from './storage-schema.js';
@@ -32,6 +33,16 @@ import type { Env, PlaytestSummary } from '../types.js';
 
 const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
 
+/** Valid encoded `RuntimeMapPackage` wire JSON (rooms validate at /create). */
+const cloneDefaultMapPackage = (): Record<string, unknown> =>
+  JSON.parse(JSON.stringify(defaultMapPackage)) as Record<string, unknown>;
+
+const mapPackageWithCapacity = (playerCapacity: number): Record<string, unknown> => {
+  const pkg = cloneDefaultMapPackage();
+  (pkg.manifest as Record<string, unknown>).playerCapacity = playerCapacity;
+  return pkg;
+};
+
 const makeEnv = (overrides: Partial<Env> = {}): Env => ({
   PLAYTEST_ROOM: {
     idFromName: (name: string) => ({ toString: () => name }) as DurableObjectId,
@@ -47,7 +58,7 @@ const initRoom = async (
   env: Env,
   deps?: ConstructorParameters<typeof PlaytestRoom>[2],
   options?: Record<string, string | number | boolean | null>,
-  runtimeArtifact?: Record<string, unknown>,
+  mapPackage?: Record<string, unknown>,
 ): Promise<PlaytestRoom> => {
   installWorkerGlobals();
   const room = new PlaytestRoom(asDurableObjectState(state), env, deps);
@@ -59,7 +70,7 @@ const initRoom = async (
         mapId: 'map:fixture',
         seed: 42,
         ...(options === undefined ? {} : { options }),
-        ...(runtimeArtifact === undefined ? {} : { runtimeArtifact }),
+        ...(mapPackage === undefined ? {} : { mapPackage }),
       }),
     }),
   );
@@ -182,28 +193,70 @@ describe('PlaytestRoom lifecycle', () => {
     expect(stored?.mapId).toBe('map:fixture');
   });
 
-  it('stores runtimeArtifact as room state instead of scalar options', async () => {
-    const artifactState = createFakeDurableObjectState();
-    const runtimeArtifact = { schemaVersion: 1, spawnAnchors: [{ x: 10, y: 20 }] };
-    const artifactRoom = new PlaytestRoom(asDurableObjectState(artifactState), makeEnv(), {
+  it('stores mapPackage and playerModelSelections as room state instead of scalar options', async () => {
+    const packageState = createFakeDurableObjectState();
+    const mapPackage = cloneDefaultMapPackage();
+    const playerModelSelections = [{ playerId: 'player-1', modelId: 'model:test' }];
+    const packageRoom = new PlaytestRoom(asDurableObjectState(packageState), makeEnv(), {
       createPluginHost: () => makePluginHost(),
     });
 
-    await artifactRoom.fetch(
-      new Request('https://do/create?roomId=room-artifact', {
+    const created = await packageRoom.fetch(
+      new Request('https://do/create?roomId=room-package', {
         method: 'POST',
         body: JSON.stringify({
-          mapId: 'map:artifact',
+          mapId: 'map:package',
           seed: 42,
-          runtimeArtifact,
+          mapPackage,
+          playerModelSelections,
           options: { maxPlayers: 8 },
         }),
       }),
     );
+    expect(created.status).toBe(200);
 
-    const stored = await artifactState.storage.get<RoomStorage>(STORAGE_KEY);
-    expect(stored?.runtimeArtifact).toEqual(runtimeArtifact);
+    const stored = await packageState.storage.get<RoomStorage>(STORAGE_KEY);
+    // The ORIGINAL wire JSON is stored after validation — never a re-encode.
+    expect(stored?.mapPackage).toEqual(mapPackage);
+    expect(stored?.playerModelSelections).toEqual(playerModelSelections);
     expect(stored?.options).toEqual({ maxPlayers: 8 });
+  });
+
+  it('rejects a malformed mapPackage at /create with a structured 400 (M2 review, F1)', async () => {
+    const packageState = createFakeDurableObjectState();
+    const packageRoom = new PlaytestRoom(asDurableObjectState(packageState), makeEnv(), {
+      createPluginHost: () => makePluginHost(),
+    });
+
+    const response = await packageRoom.fetch(
+      new Request('https://do/create?roomId=room-bad-package', {
+        method: 'POST',
+        body: JSON.stringify({
+          mapId: 'map:package',
+          mapPackage: { manifest: { schemaVersion: 1 } },
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { readonly error: string };
+    expect(body.error).toContain('mapPackage is not a valid RuntimeMapPackage');
+    expect(await packageState.storage.get(STORAGE_KEY)).toBeUndefined();
+  });
+
+  it('keeps the packageless dev-room path working (omitted mapPackage)', async () => {
+    const devState = createFakeDurableObjectState();
+    const devRoom = new PlaytestRoom(asDurableObjectState(devState), makeEnv(), {
+      createPluginHost: () => makePluginHost(),
+    });
+    const response = await devRoom.fetch(
+      new Request('https://do/create?roomId=room-dev', {
+        method: 'POST',
+        body: JSON.stringify({ mapId: 'map:dev' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const stored = await devState.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.mapPackage).toBeUndefined();
   });
 
   it('transitions lobby to countdown and then active before ticking', async () => {
@@ -322,21 +375,17 @@ describe('PlaytestRoom lifecycle', () => {
     expect(Object.keys(stored?.players ?? {})).toEqual(['player-1', 'player-2']);
   });
 
-  it('caps reserved generated slots to runtime artifact capacity', async () => {
-    const artifactState = createFakeDurableObjectState();
-    const artifactRoom = await initRoom(
-      artifactState,
+  it('caps reserved generated slots to the manifest playerCapacity', async () => {
+    const packageState = createFakeDurableObjectState();
+    const packageRoom = await initRoom(
+      packageState,
       makeEnv(),
       { createPluginHost: () => makePluginHost() },
       { maxPlayers: 8 },
-      {
-        schemaVersion: 1,
-        maxPlayers: 2,
-        spawnAnchors: [{ x: 10, y: 20 }],
-      },
+      mapPackageWithCapacity(1),
     );
 
-    const first = await artifactRoom.fetch(
+    const first = await packageRoom.fetch(
       new Request('https://do/players/reserve', {
         method: 'POST',
         body: JSON.stringify({}),
@@ -345,7 +394,7 @@ describe('PlaytestRoom lifecycle', () => {
     expect(first.status).toBe(200);
     expect((await first.json()) as { readonly playerId: string }).toEqual({ playerId: 'player-1' });
 
-    const second = await artifactRoom.fetch(
+    const second = await packageRoom.fetch(
       new Request('https://do/players/reserve', {
         method: 'POST',
         body: JSON.stringify({}),
@@ -545,6 +594,49 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     }
   });
 
+  it('flows stored playerModelSelections through the bundled loader into the adapter (welcome reflects the selection)', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    registerAlarmHandler(state, () => room.alarm());
+    // The bundled default package ships ['maltipoo-mae', 'maltipoo-max'];
+    // selecting the NON-default second model proves the session selection
+    // (room storage → createBundledPluginLoader.getPlayerModelSelections →
+    // adapter) wins over the package default.
+    await room.fetch(
+      new Request('https://do/create?roomId=room-models', {
+        method: 'POST',
+        body: JSON.stringify({
+          mapId: 'map:fixture',
+          seed: 42,
+          playerModelSelections: [{ playerId: 'player-1', modelId: 'maltipoo-max' }],
+        }),
+      }),
+    );
+
+    const selectedSocket = await connectPlayerViaFetch(room, state, 'room-models', 'player-1');
+    const selectedWelcome = decodeBattleRoyaleMessages(selectedSocket).find(
+      (message) => message._tag === 'WelcomeSnapshot',
+    );
+    if (selectedWelcome?._tag !== 'WelcomeSnapshot') {
+      throw new Error('expected BR welcome snapshot for player-1');
+    }
+    expect(
+      selectedWelcome.players.find((player) => player.id === 'player-1')?.modelId,
+    ).toBe('maltipoo-max');
+
+    const defaultSocket = await connectPlayerViaFetch(room, state, 'room-models', 'player-2');
+    const defaultWelcome = decodeBattleRoyaleMessages(defaultSocket)
+      .filter((message) => message._tag === 'WelcomeSnapshot')
+      .at(-1);
+    if (defaultWelcome?._tag !== 'WelcomeSnapshot') {
+      throw new Error('expected BR welcome snapshot for player-2');
+    }
+    expect(
+      defaultWelcome.players.find((player) => player.id === 'player-2')?.modelId,
+    ).toBe('maltipoo-mae');
+  });
+
   it('sends active late joiners a replay welcome that includes their spawned player', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
@@ -562,7 +654,14 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       throw new Error('expected BR welcome snapshot');
     }
     const latePlayer = welcome.players.find((player) => player.id === 'player-2');
-    expect(latePlayer).toMatchObject({ id: 'player-2', x: 32, y: 32 });
+    // The second joiner spawns at the SECOND spawn point of the generated
+    // default package (deterministic spawn assignment) — derive the expected
+    // coordinates from the package instead of pinning magic numbers.
+    const packageMap = (defaultMapPackage as {
+      map: { objects: readonly { x: number; y: number }[] };
+    }).map;
+    const secondSpawn = packageMap.objects[1]!;
+    expect(latePlayer).toMatchObject({ id: 'player-2', x: secondSpawn.x, y: secondSpawn.y });
   });
 
   it('routes a reserved generated player slot into BR shooting simulation', async () => {

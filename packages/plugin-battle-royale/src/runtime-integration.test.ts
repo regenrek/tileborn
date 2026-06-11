@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_MAX_PLAYERS, SPAWN_POINT_KIND } from "./constants.js";
 import { countAlivePlayers } from "./ecs/spawn-players.js";
-import { exportArtifact } from "./export-artifact.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
+import { buildTestMapPackage } from "./test-map-package.js";
 import { TEST_PLAYER_MODELS } from "./test-player-model.js";
 import { createTestPluginWorld } from "./test-plugin-world.js";
 
@@ -45,22 +45,30 @@ const makeSpawnFixtureMap = () =>
   });
 
 describe("built runtime bundle", () => {
-  it("loads dist/runtime.js and spawns players like the playtest host", async () => {
+  it("loads dist/runtime.js and spawns players from the encoded map package", async () => {
     const packageRoot = path.dirname(fileURLToPath(import.meta.url));
     const runtimeHref = pathToFileURL(path.join(packageRoot, "../dist/runtime.js")).href;
     const serverHref = pathToFileURL(path.join(packageRoot, "../dist/server.js")).href;
     const runtimeModule = (await import(runtimeHref)) as {
-      readonly createRuntimeAdapter: (host: { getArtifact: () => ReturnType<typeof exportArtifact> }) => {
+      readonly createRuntimeAdapter: (host: { getMapPackage: () => unknown }) => {
         readonly id: string;
         readonly onInit?: (ctx: { pluginId: string }, world: ReturnType<typeof createTestPluginWorld>) => void;
       };
     };
     const serverModule = (await import(serverHref)) as {
-      readonly exportArtifact: typeof exportArtifact;
+      readonly exportModeData: unknown;
+      readonly buildBattleRoyaleRuntimeState: unknown;
     };
 
-    const artifact = serverModule.exportArtifact(makeSpawnFixtureMap(), { playerModels: TEST_PLAYER_MODELS });
-    const plugin = runtimeModule.createRuntimeAdapter({ getArtifact: () => artifact });
+    // The node entry exposes the generic mode-data exporter hosts discover.
+    expect(typeof serverModule.exportModeData).toBe("function");
+    expect(typeof serverModule.buildBattleRoyaleRuntimeState).toBe("function");
+
+    const mapPackage = buildTestMapPackage({
+      map: makeSpawnFixtureMap(),
+      playerModels: TEST_PLAYER_MODELS,
+    });
+    const plugin = runtimeModule.createRuntimeAdapter({ getMapPackage: () => mapPackage });
     const world = createTestPluginWorld();
 
     plugin.onInit?.({ pluginId: plugin.id }, world);

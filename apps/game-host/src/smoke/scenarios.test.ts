@@ -23,6 +23,46 @@ import {
 } from './wire-helpers.js';
 import type { WebSocket as MiniflareWebSocket } from 'miniflare';
 
+/**
+ * Room creation is explicit (hard cut): `/playtest/start` only joins an
+ * EXISTING room, so every smoke flow creates the room via `/rooms/create`
+ * first (idempotent per idempotencyKey) and then joins it.
+ */
+const createRoom = async (
+  harness: Awaited<ReturnType<typeof bootMiniflare>>,
+  idempotencyKey: string,
+  options: Record<string, string | number | boolean> = {},
+): Promise<string> => {
+  const response = await harness.fetch('http://localhost/rooms/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      mapId: 'map:smoke',
+      seed: SMOKE_SEED,
+      options: { idempotencyKey, ...options },
+    }),
+  });
+  expect(response.status).toBe(201);
+  const created = await parseJson<{ readonly roomId: string }>(response);
+  return created.roomId;
+};
+
+const joinPlaytest = async (
+  harness: Awaited<ReturnType<typeof bootMiniflare>>,
+  roomId: string,
+  playerId?: string,
+) =>
+  harness.fetch('http://localhost/playtest/start', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      mapId: 'map:smoke',
+      seed: SMOKE_SEED,
+      ...(playerId === undefined ? {} : { playerId }),
+      options: { idempotencyKey: roomId },
+    }),
+  });
+
 describe('game-host smoke — health and discover', () => {
   let dispose: (() => Promise<void>) | null = null;
 
@@ -69,40 +109,34 @@ describe('game-host smoke — playtest creation', () => {
     }
   });
 
-  it('POST /playtest/start returns playtestId, wsUrl, handoffToken, and playerId', async () => {
+  it('POST /playtest/start joins an existing room and returns playtestId, wsUrl, handoffToken, and playerId', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
-    const response = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mapId: 'map:smoke', seed: SMOKE_SEED }),
-    });
+    const roomId = await createRoom(harness, 'playtest-join-smoke');
+    const response = await joinPlaytest(harness, roomId);
     expect(response.status).toBe(201);
     const body = await parseJson<PlaytestStartPayload>(response);
-    expect(body.playtestId.length).toBeGreaterThan(0);
+    expect(body.playtestId).toBe(roomId);
     expect(body.wsUrl).toContain('/playtest/');
     expect(body.handoffToken.length).toBeGreaterThan(0);
     expect(body.playerId.length).toBeGreaterThan(0);
   });
 
-  it('POST /playtest/start is idempotent for the same idempotency key', async () => {
+  it('POST /playtest/start returns 404 for an unknown room (joining never creates)', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
-    const payload = {
-      mapId: 'map:smoke',
-      seed: SMOKE_SEED,
-      options: { idempotencyKey: 'playtest-idem-smoke' },
-    };
-    const first = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const second = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const response = await joinPlaytest(harness, 'room-that-was-never-created');
+    expect(response.status).toBe(404);
+    const body = await parseJson<StructuredErrorPayload>(response);
+    expect(body.error).toBe('playtest not found');
+  });
+
+  it('POST /playtest/start joins the same room repeatedly for the same idempotency key', async () => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const roomId = await createRoom(harness, 'playtest-idem-smoke');
+    const first = await joinPlaytest(harness, roomId, 'player-one');
+    const second = await joinPlaytest(harness, roomId, 'player-two');
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     const firstBody = await parseJson<PlaytestStartPayload>(first);
@@ -114,15 +148,8 @@ describe('game-host smoke — playtest creation', () => {
   it('adds CORS headers to proxied playtest summary responses', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
-    const start = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mapId: 'map:smoke',
-        seed: SMOKE_SEED,
-        options: { idempotencyKey: 'playtest-summary-cors-smoke' },
-      }),
-    });
+    const roomId = await createRoom(harness, 'playtest-summary-cors-smoke');
+    const start = await joinPlaytest(harness, roomId);
     expect(start.status).toBe(201);
     const started = await parseJson<PlaytestStartPayload>(start);
 
@@ -160,11 +187,8 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
   const startPlaytest = async (
     harness: Awaited<ReturnType<typeof bootMiniflare>>,
   ): Promise<PlaytestStartPayload> => {
-    const response = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mapId: 'map:smoke', seed: SMOKE_SEED }),
-    });
+    const roomId = await createRoom(harness, 'smoke-handoff-room');
+    const response = await joinPlaytest(harness, roomId);
     expect(response.status).toBe(201);
     return parseJson<PlaytestStartPayload>(response);
   };
@@ -186,17 +210,9 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
     const idempotencyKey = 'smoke-capacity-room';
+    const roomId = await createRoom(harness, idempotencyKey, { maxPlayers: 1 });
     const start = async (playerId: string): Promise<PlaytestStartPayload> => {
-      const response = await harness.fetch('http://localhost/playtest/start', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          mapId: 'map:smoke',
-          seed: SMOKE_SEED,
-          playerId,
-          options: { idempotencyKey, maxPlayers: 1 },
-        }),
-      });
+      const response = await joinPlaytest(harness, roomId, playerId);
       expect(response.status).toBe(201);
       return parseJson<PlaytestStartPayload>(response);
     };
@@ -212,16 +228,7 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
       },
     );
 
-    const second = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mapId: 'map:smoke',
-        seed: SMOKE_SEED,
-        playerId: 'player-b',
-        options: { idempotencyKey, maxPlayers: 1 },
-      }),
-    });
+    const second = await joinPlaytest(harness, roomId, 'player-b');
     expect(second.status).toBe(409);
     expect(await parseJson<{ readonly error: string }>(second)).toEqual({
       error: 'room capacity reached',
@@ -280,16 +287,13 @@ describe('game-host smoke — live simulation fanout', () => {
     playerId: string,
     maxPlayers?: number,
   ): Promise<PlaytestStartPayload> => {
-    const response = await harness.fetch('http://localhost/playtest/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mapId: 'map:smoke',
-        seed: SMOKE_SEED,
-        playerId,
-        options: { idempotencyKey, ...(maxPlayers === undefined ? {} : { maxPlayers }) },
-      }),
-    });
+    // /rooms/create is idempotent per key, so every player can run it.
+    const roomId = await createRoom(
+      harness,
+      idempotencyKey,
+      maxPlayers === undefined ? {} : { maxPlayers },
+    );
+    const response = await joinPlaytest(harness, roomId, playerId);
     expect(response.status).toBe(201);
     return parseJson<PlaytestStartPayload>(response);
   };

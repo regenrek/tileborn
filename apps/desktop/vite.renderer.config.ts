@@ -45,7 +45,6 @@ const browserSafePluginSubpaths = [
   "@tileborne/plugin-battle-royale/constants",
   "@tileborne/plugin-battle-royale/player-models",
   "@tileborne/plugin-battle-royale/renderer",
-  "@tileborne/plugin-battle-royale/visual-roles",
 ] as const;
 
 const liveSourceAliases = {

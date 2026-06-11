@@ -12,7 +12,9 @@ import {
   AssetsRemovePackResponse,
   CatalogExportResponse,
   CatalogImportResponse,
+  CatalogRemoveTypeResponse,
   CatalogResolveResponse,
+  CatalogUpsertTypeResponse,
   CatalogValidateResponse,
   JobsListResponse,
   LogsListRecentResponse,
@@ -87,6 +89,8 @@ export type CatalogResolveResponse = Schema.Schema.Type<typeof CatalogResolveRes
 export type CatalogValidateResponse = Schema.Schema.Type<typeof CatalogValidateResponse>;
 export type CatalogImportResponse = Schema.Schema.Type<typeof CatalogImportResponse>;
 export type CatalogExportResponse = Schema.Schema.Type<typeof CatalogExportResponse>;
+export type CatalogUpsertTypeResponse = Schema.Schema.Type<typeof CatalogUpsertTypeResponse>;
+export type CatalogRemoveTypeResponse = Schema.Schema.Type<typeof CatalogRemoveTypeResponse>;
 
 export type PluginsListResponse = Schema.Schema.Type<typeof PluginsListResponse>;
 export type PluginsInstallResponse = Schema.Schema.Type<typeof PluginsInstallResponse>;

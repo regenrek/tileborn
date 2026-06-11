@@ -9,8 +9,6 @@ import type {
   HudState as PlaytestHudState,
 } from '@tileborne/game-client';
 import {
-  BATTLE_ROYALE_PLUGIN_ID,
-  resolvePlaytestPlugin,
   type InputDirection,
   type ResolvedPlaytestPlugin,
   type ServerFrameView,
@@ -76,14 +74,6 @@ const defaultZone = (mapWidth: number, mapHeight: number): ZoneView => ({
   radius: Math.max(mapWidth, mapHeight),
 });
 
-const resolveRequiredPlugin = (): ResolvedPlaytestPlugin => {
-  const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
-  if (plugin === undefined) {
-    throw new Error(`Missing playtest plugin ${BATTLE_ROYALE_PLUGIN_ID}`);
-  }
-  return plugin;
-};
-
 const toInitialFrame = (
   plugin: ResolvedPlaytestPlugin,
   tick: number,
@@ -144,7 +134,12 @@ export class PlaytestMultiplayerClient {
     private readonly mapHeight: number,
     private readonly onStateChange: (state: MultiplayerSessionState) => void,
     private readonly onInitialFrame: (snapshot: unknown) => void,
-    private readonly plugin: ResolvedPlaytestPlugin = resolveRequiredPlugin(),
+    /**
+     * The ACTIVE game mode's resolved playtest runtime (ADR-0023 section B):
+     * the caller resolves it from the discovered mode selection — this client
+     * never names a plugin id.
+     */
+    private readonly plugin: ResolvedPlaytestPlugin,
   ) {
     this.zone = defaultZone(mapWidth, mapHeight);
   }

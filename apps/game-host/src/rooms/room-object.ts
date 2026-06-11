@@ -57,6 +57,7 @@ import {
   emptyRoomStorage,
   migrateRoomStorage,
   type PersistedRoomStorage,
+  type RoomPlayerModelSelection,
   type RoomPlayerRecord,
   type RoomStorage,
 } from './storage-schema.js';
@@ -86,7 +87,9 @@ export interface RoomCreateOptions {
   readonly mapId: string;
   readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
-  readonly runtimeArtifact?: JsonObject;
+  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
+  readonly mapPackage?: JsonObject;
+  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly idempotencyKey?: string;
 }
 
@@ -274,9 +277,12 @@ export class PlaytestRoom implements DurableObject {
           emitFrame: (frame) => this.emitPluginFrame(frame),
           setReplayFrames: (frames) => this.setReplayFrames(frames),
           ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
-          ...(storage?.runtimeArtifact === undefined
+          ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
+          ...(storage?.playerModelSelections === undefined
             ? {}
-            : { runtimeArtifact: storage.runtimeArtifact }),
+            : {
+                getPlayerModelSelections: () => storage.playerModelSelections ?? [],
+              }),
         }),
       });
     const runtime = this.deps.createRuntime?.() ?? makeGameRuntime();
@@ -354,7 +360,8 @@ export class PlaytestRoom implements DurableObject {
       options,
       opts.idempotencyKey,
       this.nowIso(),
-      opts.runtimeArtifact,
+      opts.mapPackage,
+      opts.playerModelSelections,
     );
     await this.writeStorage(created);
     return created;
@@ -739,20 +746,33 @@ export class PlaytestRoom implements DurableObject {
       return Response.json({ ok: true, triggered: 'alarm' });
     }
 
-    if (
-      request.method === 'POST' &&
-      (url.pathname === '/create' || url.pathname === '/playtest/init')
-    ) {
+    // Room creation is EXPLICIT (`/rooms/create` → `/create`): joining or
+    // starting against an unknown room must never materialize one (hard cut).
+    if (request.method === 'POST' && url.pathname === '/create') {
       if (!isHandoffSigningKeyValid(this.env)) {
         return Response.json({ error: 'room unavailable' }, { status: 503 });
       }
       const body = await request.text();
-      const init = parsePlaytestInitBody(body);
+      // Boundary validation (M2 review, F1): reject malformed create bodies —
+      // including a supplied mapPackage that does not decode as a
+      // `RuntimeMapPackage` — with a structured 400 instead of storing them.
+      let init: ReturnType<typeof parsePlaytestInitBody>;
+      try {
+        init = parsePlaytestInitBody(body);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid room create request' },
+          { status: 400 },
+        );
+      }
       const created = await this.create({
         mapId: init.mapId,
         ...(init.seed === undefined ? {} : { seed: init.seed }),
         ...(init.options === undefined ? {} : { options: init.options }),
-        ...(init.runtimeArtifact === undefined ? {} : { runtimeArtifact: init.runtimeArtifact }),
+        ...(init.mapPackage === undefined ? {} : { mapPackage: init.mapPackage }),
+        ...(init.playerModelSelections === undefined
+          ? {}
+          : { playerModelSelections: init.playerModelSelections }),
         ...(init.options?.idempotencyKey === undefined ||
         typeof init.options.idempotencyKey !== 'string'
           ? {}

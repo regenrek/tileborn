@@ -43,6 +43,7 @@ import type { Direction8 } from './ecs/movement.js';
 import { resolveSpawnSlots, spawnPlayersFromArtifact } from './ecs/spawn-players.js';
 import { runZoneSystem } from './ecs/zone-system.js';
 import { initZoneFromArtifact } from './ecs/zone.js';
+import { buildBattleRoyaleRuntimeState } from './runtime-state-from-package.js';
 import { createBattleRoyaleSnapshotEmitter } from './server/snapshot-emitter.js';
 import { assertRuntimeBattleRoyaleArtifact } from './types/runtime-artifact-validation.js';
 import type { RuntimePlugin, RuntimePluginHost, PluginWorld } from './types/runtime-plugin.js';
@@ -61,7 +62,16 @@ export type {
 } from './battle-royale-config.js';
 
 export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => {
-  const artifact = assertRuntimeBattleRoyaleArtifact(host.getArtifact());
+  // The host hands the encoded `RuntimeMapPackage` (ADR-0030); the adapter
+  // derives BR's runtime state from it and re-asserts the runtime invariants
+  // (player models are REQUIRED at adapter boot, unlike at package assembly).
+  const artifact = assertRuntimeBattleRoyaleArtifact(
+    buildBattleRoyaleRuntimeState(host.getMapPackage(), {
+      ...(host.getPlayerModelSelections === undefined
+        ? {}
+        : { playerModelSelections: host.getPlayerModelSelections() }),
+    }),
+  );
   const config = resolveBattleRoyaleConfig(artifact, host.config);
   const tileCollisionEnvironment = buildTileCollisionEnvironment(artifact);
   const combatState = createCombatSystemState();

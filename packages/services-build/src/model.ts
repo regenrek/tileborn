@@ -13,7 +13,12 @@ import {
 } from "@tileborne/core";
 import { Option, Schema } from "effect";
 
-export const BuildTarget = Schema.Literals(["cloudflare", "node", "web"]);
+/**
+ * Ship targets (M5 S2, hard cut): `cloudflare` deploys the worker artifact via
+ * wrangler; `local` is the SAME canonical artifact plus a local serve
+ * convention (`tileborne game serve --dir <out>` boots it in miniflare).
+ */
+export const BuildTarget = Schema.Literals(["cloudflare", "local"]);
 export type BuildTarget = Schema.Schema.Type<typeof BuildTarget>;
 
 export const ExportId = Schema.String.check(Schema.isPattern(/^export:[0-9a-f-]{36}$/)).pipe(
@@ -287,6 +292,15 @@ export class GameBuildOptions extends Schema.Class<GameBuildOptions>("GameBuildO
   outputDirectory: Schema.OptionFromOptional(Schema.String),
   assetPackIds: Schema.OptionFromOptional(Schema.Array(Schema.String)),
   siteName: Schema.OptionFromOptional(Schema.String),
+  /**
+   * Project to ship (M5 S1): when set on the cloudflare target, every selected
+   * map is assembled into a `RuntimeMapPackage` and baked into the artifact.
+   * Unset = a bare host build with zero bundled maps (rooms then require a
+   * caller-supplied `mapPackage`).
+   */
+  projectId: Schema.OptionFromOptional(Schema.String),
+  /** Map selection within the project; unset = all project maps. */
+  mapIds: Schema.OptionFromOptional(Schema.Array(Schema.String)),
 }) {}
 
 export class GameBuildArtifact extends Schema.Class<GameBuildArtifact>("GameBuildArtifact")({

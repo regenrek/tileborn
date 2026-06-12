@@ -18,11 +18,12 @@ import {
 } from "@tileborne/services-plugin";
 import { materializePluginManifestInput } from "../../services-plugin/src/filesystem.js";
 import { describe, expect, it } from "vitest";
-import { Effect, Fiber, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Fiber, Layer, Option, Result, Schema, Stream } from "effect";
 
 import {
   BuildOptions,
   BuildService,
+  GameBuildOptions,
   BATTLE_ROYALE_PLUGIN_ID,
   CloudflareWorkerExportTarget,
   ExportOptions,
@@ -40,6 +41,7 @@ import {
   ServicesBuildLayer,
 } from "./index.js";
 import { metadataFileName } from "./internal/persistence.js";
+import { createLocalGameHost } from "./local-game-host.js";
 import { makeNewBuildId } from "./model.js";
 
 const fileExists = async (filePath: string): Promise<boolean> => {
@@ -180,6 +182,65 @@ const installRuntimePlugin = (input: {
     return source;
   });
 
+const SHIP_PLUGIN_ID = "@tileborne-plugins/ship-mode";
+
+/**
+ * Mode plugin fixture for the M5 S1 ship build: declares a runtime system (so
+ * it is discoverable as a game mode) and a node entry exposing the generic
+ * `exportModeData` + `resolvePlayerModels` exports the build host discovers.
+ */
+const installShipModePlugin = () =>
+  Effect.gen(function* () {
+    const source = yield* Effect.promise(() => mkdtemp(path.join(tmpdir(), "tileborne-ship-plugin-")));
+    const manifest = Schema.decodeUnknownSync(PluginManifest)(
+      materializePluginManifestInput({
+        schemaVersion: 1,
+        id: SHIP_PLUGIN_ID,
+        name: SHIP_PLUGIN_ID,
+        version: "0.0.1",
+        displayName: "Ship Mode",
+        description: "Ship pipeline fixture plugin",
+        author: "Tileborne",
+        license: "MIT",
+        engines: { tileborne: "^0.1.0" },
+        entry: { server: "./server.mjs", runtime: "./dist/runtime.js" },
+        permissions: [],
+        dependsOn: [],
+        contributes: {
+          runtime: {
+            systems: [
+              {
+                _tag: "ExecutableRuntimeSystemContribution",
+                id: "ship-mode-runtime",
+                kind: "executable",
+                display: { label: "Ship Mode Runtime" },
+                entry: "./dist/runtime.js",
+              },
+            ],
+          },
+        },
+      }),
+    );
+    yield* Effect.promise(async () => {
+      await mkdir(path.join(source, "dist"), { recursive: true });
+      await writeFile(
+        path.join(source, "tileborne-plugin.json"),
+        `${JSON.stringify(Schema.encodeSync(PluginManifest)(manifest), null, 2)}\n`,
+      );
+      await writeFile(
+        path.join(source, "dist", "runtime.js"),
+        "export const createRuntimeAdapter = () => ({});\n",
+      );
+      await writeFile(
+        path.join(source, "server.mjs"),
+        "export const exportModeData = () => ({ _tag: 'Success', success: { fixture: true } });\nexport const resolvePlayerModels = () => [];\n",
+      );
+    });
+    const installer = yield* PluginInstallerService;
+    yield* installer.install(new LocalPluginSource({ path: source }));
+    return source;
+  });
+
 const runBuild = (projectId: import("@tileborne/core").ProjectId, options?: BuildOptions) =>
   Effect.gen(function* () {
     const builds = yield* BuildService;
@@ -241,6 +302,156 @@ describe("BuildService", () => {
       );
       expect(artifact.project.name).toBe("From Services");
     }));
+
+  it("buildGame cloudflare --project assembles + bakes the runtime map package (M5 S1)", () =>
+    withTempHome(async () => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject("Ship Arena");
+          yield* installShipModePlugin();
+          const outDir = yield* Effect.promise(() =>
+            mkdtemp(path.join(tmpdir(), "tileborne-ship-out-")),
+          );
+          const builds = yield* BuildService;
+          const artifact = yield* builds.buildGame(
+            new GameBuildOptions({
+              pluginId: SHIP_PLUGIN_ID,
+              target: "cloudflare",
+              outputDirectory: Option.some(outDir),
+              assetPackIds: Option.none(),
+              siteName: Option.none(),
+              projectId: Option.some(projectId),
+              mapIds: Option.none(),
+            }),
+          );
+          const mapDir = `maps/${mapId.replaceAll(":", "-")}`;
+          expect(artifact.files).toContain(`${mapDir}/manifest.json`);
+          expect(artifact.files).toContain(`${mapDir}/map.json`);
+          const manifest = JSON.parse(
+            yield* Effect.promise(() => readFile(path.join(outDir, "manifest.json"), "utf8")),
+          ) as {
+            readonly maps: readonly {
+              readonly mapId: string;
+              readonly packageId: string;
+              readonly files: readonly { readonly path: string; readonly hash: string; readonly size: number }[];
+            }[];
+          };
+          expect(manifest.maps).toHaveLength(1);
+          expect(manifest.maps[0]?.mapId).toBe(mapId);
+          expect(manifest.maps[0]?.packageId).toMatch(/^mappkg:/);
+          expect(manifest.maps[0]?.files.length).toBeGreaterThan(0);
+          for (const entry of manifest.maps[0]?.files ?? []) {
+            expect(entry.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+            expect(entry.size).toBeGreaterThan(0);
+          }
+          // The mode's exporter section + the package id are baked into the
+          // worker bundle for packageless /rooms/create resolution.
+          const worker = yield* Effect.promise(() =>
+            readFile(path.join(outDir, "worker.js"), "utf8"),
+          );
+          expect(worker).toContain(manifest.maps[0]!.packageId);
+          const packageManifest = JSON.parse(
+            yield* Effect.promise(() =>
+              readFile(path.join(outDir, mapDir, "manifest.json"), "utf8"),
+            ),
+          ) as { readonly mapId: string; readonly entryHashes: Record<string, string> };
+          expect(packageManifest.mapId).toBe(mapId);
+          expect(Object.keys(packageManifest.entryHashes)).toContain("modeData");
+        }).pipe(Effect.provide(testLayer)),
+      );
+    }), 120_000);
+
+  it("buildGame local emits the canonical artifact plus serve README and boots a joinable room in miniflare (M5 S2)", () =>
+    withTempHome(async () => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject("Local Ship Arena");
+          yield* installShipModePlugin();
+          const outDir = yield* Effect.promise(() =>
+            mkdtemp(path.join(tmpdir(), "tileborne-local-out-")),
+          );
+          const builds = yield* BuildService;
+          const artifact = yield* builds.buildGame(
+            new GameBuildOptions({
+              pluginId: SHIP_PLUGIN_ID,
+              target: "local",
+              outputDirectory: Option.some(outDir),
+              assetPackIds: Option.none(),
+              siteName: Option.none(),
+              projectId: Option.some(projectId),
+              mapIds: Option.none(),
+            }),
+          );
+          expect(artifact.target).toBe("local");
+          // The local target is the SAME canonical export as cloudflare …
+          expect(artifact.files).toContain("worker.js");
+          expect(artifact.files).toContain("manifest.json");
+          expect(artifact.files).toContain(`maps/${mapId.replaceAll(":", "-")}/map.json`);
+          expect(artifact.bundlePath).toBe(path.join(outDir, "worker.js"));
+          // … plus the local serve convention.
+          expect(artifact.files).toContain("README.md");
+          const readme = yield* Effect.promise(() =>
+            readFile(path.join(outDir, "README.md"), "utf8"),
+          );
+          expect(readme).toContain(`tileborne game serve --dir "${outDir}"`);
+
+          // The artifact boots locally into a joinable room (no Cloudflare).
+          const host = yield* Effect.promise(() =>
+            createLocalGameHost({ port: 18092, workerPath: path.join(outDir, "worker.js") }),
+          );
+          try {
+            const health = yield* Effect.promise(() => host.fetch(`${host.baseUrl}/health`));
+            expect(health.status).toBe(200);
+            const created = yield* Effect.promise(() =>
+              host.fetch(`${host.baseUrl}/rooms/create`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ mapId }),
+              }),
+            );
+            expect(created.status).toBe(201);
+            const room = (yield* Effect.promise(() => created.json())) as {
+              readonly roomId: string;
+              readonly wsUrl: string;
+            };
+            expect(room.roomId.length).toBeGreaterThan(0);
+            expect(room.wsUrl).toContain(`/rooms/${room.roomId}/connect`);
+          } finally {
+            yield* Effect.promise(() => host.stop());
+          }
+        }).pipe(Effect.provide(testLayer)),
+      );
+    }), 180_000);
+
+  it("buildGame cloudflare --project fails fast when the selected map is not in the project", () =>
+    withTempHome(async () => {
+      const result = await Effect.runPromise(
+        Effect.result(
+          Effect.gen(function* () {
+            const { projectId } = yield* seedProject("Ship Arena");
+            yield* installShipModePlugin();
+            const builds = yield* BuildService;
+            return yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: "cloudflare",
+                outputDirectory: Option.none(),
+                assetPackIds: Option.none(),
+                siteName: Option.none(),
+                projectId: Option.some(projectId),
+                mapIds: Option.some(["map:00000000-0000-4000-8000-00000000dead"]),
+              }),
+            );
+          }).pipe(Effect.provide(testLayer)),
+        ),
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        expect(String((result.failure as { message?: string }).message)).toContain(
+          "is not part of project",
+        );
+      }
+    }), 60_000);
 
   it("detects manifest tampering on get", () =>
     withTempHome(async () => {

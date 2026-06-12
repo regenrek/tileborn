@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { bundledPlugin, createBundledPluginLoader } from "./bundled-plugin-loader.js";
-import { defaultMapPackage } from "./.generated/default-map-package.js";
+import { bundledMapPackages } from "./.generated/bundled-map-packages.js";
 
 const generatedRuntimeTypesPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,7 +23,7 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
  * single authored spawn at (10, 20) and one loot crate at (12, 18).
  */
 const makeMapPackage = (): unknown => {
-  const pkg = clone(defaultMapPackage) as {
+  const pkg = clone(bundledMapPackages[0]!.mapPackage) as {
     placements: unknown;
     modeData: Record<string, { maxPlayers: number; lootTables: unknown }>;
   };

@@ -4,6 +4,8 @@ export type {
   BundledManifest,
   BundledManifestDiscoverSummary,
   BundledManifestFileEntry,
+  BundledMapPackage,
+  BundledMapPackageSummary,
   BundledPluginSummary,
   Env,
   PlaytestRoomMeta,

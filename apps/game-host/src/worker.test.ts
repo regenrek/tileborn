@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Env, PlaytestRoomNamespace } from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
 import { bundledSamplePackId } from './.generated/bundled-assets.js';
+import { PLACEHOLDER_HANDOFF_SIGNING_KEY } from './rooms/handoff-token.js';
 import { createWorkerApp } from './worker.js';
 
 const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
@@ -111,6 +112,16 @@ describe('game-host worker routes', () => {
     expect(response.status).toBe(503);
   });
 
+  it('GET /health returns 503 when signing key is the known placeholder', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/health',
+      {},
+      { ...env, HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY },
+    );
+    expect(response.status).toBe(503);
+  });
+
   it('GET /discover returns bundled manifest summary', async () => {
     const app = createWorkerApp(runtimeManifest);
     const response = await app.request('http://localhost/discover', {}, env);
@@ -121,9 +132,13 @@ describe('game-host worker routes', () => {
       readonly protocolVersion: number;
       readonly buildId: string;
       readonly assetPacks: readonly { readonly id: string; readonly version: string }[];
+      readonly maps: readonly { readonly mapId: string; readonly packageId: string }[];
     };
     expect(body.plugin.id).toBe('@tileborne-plugins/battle-royale');
     expect(body.assetPacks.some((pack) => pack.id === bundledSamplePackId)).toBe(true);
+    // The bundled dev map package is discoverable (M5 S1).
+    expect(body.maps).toHaveLength(1);
+    expect(body.maps[0]?.packageId).toMatch(/^mappkg:/);
     expect(body.runtimeVersion.length).toBeGreaterThan(0);
     expect(body.protocolVersion).toBe(1);
     expect(body.buildId).toMatch(/^sha256:/);
@@ -234,6 +249,99 @@ describe('game-host worker routes', () => {
     expect(response.status).toBe(400);
     const body = (await response.json()) as { readonly error: string };
     expect(body.error).toContain('mapPackage is not a valid RuntimeMapPackage');
+  });
+
+  it('POST /rooms/create resolves the bundled map package for the requested mapId (M5 S1)', async () => {
+    let initBody: unknown;
+    const bundled = [
+      { mapId: 'map:bundled-a', packageId: 'mappkg:a', mapPackage: { manifest: { packageId: 'mappkg:a' } } },
+      { mapId: 'map:bundled-b', packageId: 'mappkg:b', mapPackage: { manifest: { packageId: 'mappkg:b' } } },
+    ];
+    const app = createWorkerApp(runtimeManifest, bundled);
+    const response = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:bundled-b' }),
+      },
+      {
+        ...env,
+        PLAYTEST_ROOM: makePlaytestNamespace(async (request) => {
+          initBody = await request.json();
+          return Response.json({ ok: true });
+        }),
+      },
+    );
+    expect(response.status).toBe(201);
+    expect(initBody).toMatchObject({
+      mapId: 'map:bundled-b',
+      mapPackage: { manifest: { packageId: 'mappkg:b' } },
+    });
+  });
+
+  it('POST /rooms/create falls back to the single bundled package for any mapId', async () => {
+    let initBody: unknown;
+    const bundled = [
+      { mapId: 'map:bundled-only', packageId: 'mappkg:only', mapPackage: { manifest: { packageId: 'mappkg:only' } } },
+    ];
+    const app = createWorkerApp(runtimeManifest, bundled);
+    const response = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:something-else' }),
+      },
+      {
+        ...env,
+        PLAYTEST_ROOM: makePlaytestNamespace(async (request) => {
+          initBody = await request.json();
+          return Response.json({ ok: true });
+        }),
+      },
+    );
+    expect(response.status).toBe(201);
+    expect(initBody).toMatchObject({
+      mapPackage: { manifest: { packageId: 'mappkg:only' } },
+    });
+  });
+
+  it('POST /rooms/create returns a structured 400 when no bundled package matches', async () => {
+    const bundled = [
+      { mapId: 'map:bundled-a', packageId: 'mappkg:a', mapPackage: { manifest: { packageId: 'mappkg:a' } } },
+      { mapId: 'map:bundled-b', packageId: 'mappkg:b', mapPackage: { manifest: { packageId: 'mappkg:b' } } },
+    ];
+    const app = createWorkerApp(runtimeManifest, bundled);
+    const response = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:unknown' }),
+      },
+      env,
+    );
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { readonly error: string };
+    expect(body.error).toContain('map:unknown');
+    expect(body.error).toContain('map:bundled-a');
+  });
+
+  it('POST /rooms/create returns a structured 400 when the build bundles no packages', async () => {
+    const app = createWorkerApp(runtimeManifest, []);
+    const response = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture' }),
+      },
+      env,
+    );
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { readonly error: string };
+    expect(body.error).toContain('no map package bundled');
   });
 
   it('POST /rooms/create is idempotent for the same idempotency key', async () => {

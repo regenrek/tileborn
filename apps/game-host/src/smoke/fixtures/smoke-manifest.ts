@@ -25,6 +25,7 @@ export const smokeBundledManifest = (): BundledManifest => ({
       files: [{ path: "assets/tiles/terrain.png", hash: SMOKE_BUILD_ID, size: 8 }],
     },
   ],
+  maps: [],
   runtimeVersion: SMOKE_RUNTIME_VERSION,
   protocolVersion: 1,
   workerFiles: [{ path: "worker.js", hash: SMOKE_BUILD_ID, size: 1024 }],

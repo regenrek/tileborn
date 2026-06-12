@@ -5,7 +5,7 @@ import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { decodeMessage, makePluginHost, ServerNotice } from '@tileborne/runtime';
 import type { PluginHostApi, RuntimeMessage, RuntimePlugin } from '@tileborne/runtime';
 
-import { defaultMapPackage } from '../.generated/default-map-package.js';
+import { bundledMapPackages } from '../.generated/bundled-map-packages.js';
 import { mintHandoffToken } from './handoff-token.js';
 import { MAX_QUEUED_INPUTS_PER_PLAYER, PlaytestRoom } from './room-object.js';
 import { STORAGE_KEY, type RoomStorage } from './storage-schema.js';
@@ -35,7 +35,7 @@ const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
 
 /** Valid encoded `RuntimeMapPackage` wire JSON (rooms validate at /create). */
 const cloneDefaultMapPackage = (): Record<string, unknown> =>
-  JSON.parse(JSON.stringify(defaultMapPackage)) as Record<string, unknown>;
+  JSON.parse(JSON.stringify(bundledMapPackages[0]!.mapPackage)) as Record<string, unknown>;
 
 const mapPackageWithCapacity = (playerCapacity: number): Record<string, unknown> => {
   const pkg = cloneDefaultMapPackage();
@@ -657,7 +657,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     // The second joiner spawns at the SECOND spawn point of the generated
     // default package (deterministic spawn assignment) — derive the expected
     // coordinates from the package instead of pinning magic numbers.
-    const packageMap = (defaultMapPackage as {
+    const packageMap = (bundledMapPackages[0]!.mapPackage as unknown as {
       map: { objects: readonly { x: number; y: number }[] };
     }).map;
     const secondSpawn = packageMap.objects[1]!;

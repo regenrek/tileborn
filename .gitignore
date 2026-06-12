@@ -2,6 +2,10 @@
 node_modules/
 dist/
 build/
+# `src/build/` directories are SOURCE (e.g. apps/game-host/src/build,
+# packages/services-build/src/build), not build output — re-include them.
+!**/src/build/
+!**/src/build/**
 out/
 coverage/
 *.lcov

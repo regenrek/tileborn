@@ -25,6 +25,7 @@ export default defineConfig({
             { label: "Plugin SDK", slug: "plugins/sdk" },
             { label: "Asset Pipeline", slug: "asset-pipeline" },
             { label: "Security", slug: "security" },
+            { label: "Ship Pipeline", slug: "deploy/ship-pipeline" },
             { label: "Cloudflare Deploy", slug: "deploy/cloudflare" },
           ],
         },

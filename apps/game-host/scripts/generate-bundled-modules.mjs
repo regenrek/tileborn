@@ -5,7 +5,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { generateDefaultMapPackage } from "./generate-default-map-package.mjs";
+import { generateBundledMapPackages } from "./generate-bundled-map-packages.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const gameHostRoot = path.resolve(scriptDir, "..");
@@ -186,10 +186,25 @@ export const generateBundledModules = async (options = {}) => {
     files: sampleEntries,
   };
 
+  await mkdir(generatedDir, { recursive: true });
+  const bundledMapPackages = await generateBundledMapPackages();
+
+  const mapSummaries = bundledMapPackages.map((entry) => ({
+    mapId: entry.mapId,
+    packageId: entry.packageId,
+    files: [
+      fileEntry(
+        `maps/${entry.mapId.replaceAll(":", "-")}/package.json`,
+        Buffer.from(`${JSON.stringify(entry.mapPackage, null, 2)}\n`, "utf8"),
+      ),
+    ],
+  }));
+
   const manifestWithoutBuildId = {
     schemaVersion: 1,
     plugin: pluginSummary,
     assetPacks: [assetPackSummary],
+    maps: mapSummaries,
     runtimeVersion: workerVersion,
     protocolVersion: 1,
     workerFiles,
@@ -201,8 +216,6 @@ export const generateBundledModules = async (options = {}) => {
     buildId,
   };
 
-  await mkdir(generatedDir, { recursive: true });
-  await generateDefaultMapPackage();
   const pluginRuntimeSource = (await readFile(PLUGIN_RUNTIME_PATH, "utf8"))
     .replace(/\n\/\/# sourceMappingURL=.*$/u, "\n");
   assertBrowserSafeRuntimeSource(pluginRuntimeSource);
@@ -317,6 +330,7 @@ export const runtimeManifest: BundledManifest = ${JSON.stringify(runtimeManifest
     manifest: runtimeManifest,
     pluginSummary,
     assetPackSummary,
+    mapSummaries,
     pluginRuntimeBytes,
   };
 };

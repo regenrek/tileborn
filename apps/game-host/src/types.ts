@@ -26,13 +26,45 @@ export interface BundledAssetPackSummary {
   readonly files: readonly BundledManifestFileEntry[];
 }
 
+/**
+ * One `RuntimeMapPackage` baked into the build (ADR-0030 / M5 S1): the
+ * canonical on-disk package files live under `maps/<mapId>/` in the artifact
+ * and are summarized here with hashes like every other bundled file group.
+ */
+export interface BundledMapPackageSummary {
+  readonly mapId: string;
+  readonly packageId: string;
+  readonly files: readonly BundledManifestFileEntry[];
+}
+
+/**
+ * One bundled `RuntimeMapPackage` as the worker consumes it: the encoded wire
+ * JSON baked into the worker bundle so `/rooms/create` can boot rooms without
+ * a caller-supplied `mapPackage`.
+ */
+export interface BundledMapPackage {
+  readonly mapId: string;
+  readonly packageId: string;
+  readonly mapPackage: JsonObject;
+}
+
 export interface BundledManifest {
   readonly schemaVersion: 1;
   readonly buildId: ContentHash;
   readonly plugin: BundledPluginSummary;
   readonly assetPacks: readonly BundledAssetPackSummary[];
+  readonly maps: readonly BundledMapPackageSummary[];
   readonly runtimeVersion: string;
   readonly protocolVersion: number;
+  /**
+   * CONVENTION (fixed-point, pinned by ship-pipeline-boundary.test.ts):
+   * `workerFiles` entries hash the PRE-EMBED worker bytes — the pass-1 bundle
+   * built with an empty `workerFiles` manifest embedded. The builder then
+   * re-bundles embedding this final manifest, so the shipped `worker.js` does
+   * NOT hash to these entries (every other manifest section hashes the exact
+   * on-disk bytes). `buildId` covers the worker via these pre-embed hashes;
+   * verifiers must not compare `sha256(worker.js)` against `workerFiles`.
+   */
   readonly workerFiles: readonly BundledManifestFileEntry[];
   readonly createdAt: string;
 }
@@ -40,6 +72,7 @@ export interface BundledManifest {
 export interface BundledManifestDiscoverSummary {
   readonly plugin: { readonly id: string; readonly version: string };
   readonly assetPacks: readonly { readonly id: string; readonly version: string }[];
+  readonly maps: readonly { readonly mapId: string; readonly packageId: string }[];
   readonly runtimeVersion: string;
   readonly protocolVersion: number;
   readonly buildId: ContentHash;
@@ -156,6 +189,7 @@ export const workerBuildId = (): ContentHash => __BUILD_ID__ as ContentHash;
 export const toDiscoverSummary = (manifest: BundledManifest): BundledManifestDiscoverSummary => ({
   plugin: { id: manifest.plugin.id, version: manifest.plugin.version },
   assetPacks: manifest.assetPacks.map((pack) => ({ id: pack.id, version: pack.version })),
+  maps: manifest.maps.map((map) => ({ mapId: map.mapId, packageId: map.packageId })),
   runtimeVersion: manifest.runtimeVersion,
   protocolVersion: manifest.protocolVersion,
   buildId: manifest.buildId,

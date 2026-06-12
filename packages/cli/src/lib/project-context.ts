@@ -20,17 +20,20 @@ export const readProjectSlugArg = (
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-const readProjectIdFromPath = (projectRoot: string) =>
-  Effect.tryPromise({
-    try: async () => {
+// A missing/invalid project.json means "not resolved here", not a failure —
+// resolveExplicitProjectId falls through to its other strategies.
+const readProjectIdFromPath = (projectRoot: string): Effect.Effect<ProjectId | undefined> =>
+  Effect.promise(async () => {
+    try {
       const manifestPath = path.join(projectRoot, "project.json");
       await access(manifestPath);
       const raw = await readFile(manifestPath, "utf8");
       const parsed: unknown = JSON.parse(raw);
       const manifest = Schema.decodeUnknownSync(ProjectManifestSchema)(parsed);
       return manifest.id;
-    },
-    catch: () => undefined as ProjectId | undefined,
+    } catch {
+      return undefined;
+    }
   });
 
 const resolveExplicitProjectId = (

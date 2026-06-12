@@ -249,6 +249,21 @@ describe("ADR-0030 BR modeData section stays engine-opaque", () => {
 
 const HOST_ROOTS = ["apps/desktop/src/main", "apps/game-host/src"] as const;
 
+// M5 S4 extension: the retired identifiers must not reappear in ANY engine
+// package either — the ship pipeline (game build → bundled map packages →
+// packageless /rooms/create) replaced the artifact handoff end to end.
+const ENGINE_PACKAGE_ROOTS = [
+  "packages/core/src",
+  "packages/runtime/src",
+  "packages/simulation/src",
+  "packages/services-app/src",
+  "packages/services-build/src",
+  "packages/services-foundation/src",
+  "packages/services-plugin/src",
+  "packages/plugin-api/src",
+  "packages/ipc-contracts/src",
+] as const;
+
 const FORBIDDEN_HOST_IDENTIFIER = /\b(?:runtimeArtifact|exportArtifact|getArtifact)\b/;
 
 // Host inputs that must reference the package by its `mapPackage` handle.
@@ -264,23 +279,39 @@ const hostSourceFiles = (): readonly string[] =>
     walkFiles({ rootDir: path.join(repoRoot, root), extensions: [".ts", ".tsx"] }),
   );
 
+const engineSourceFiles = (): readonly string[] =>
+  ENGINE_PACKAGE_ROOTS.flatMap((root) =>
+    walkFiles({ rootDir: path.join(repoRoot, root), extensions: [".ts", ".tsx"] }),
+  );
+
+const retiredIdentifierViolations = (files: readonly string[]): readonly string[] => {
+  const violations: string[] = [];
+  for (const filePath of files) {
+    const content = fs.readFileSync(filePath, "utf8");
+    const lines = content.split("\n");
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const line = lines[lineIndex] ?? "";
+      if (FORBIDDEN_HOST_IDENTIFIER.test(line)) {
+        violations.push(`${relativeRepoPath(filePath)}:${lineIndex + 1}: ${line.trim()}`);
+      }
+    }
+  }
+  return violations;
+};
+
 describe("ADR-0030 host package boundary", () => {
   it("scans a non-empty set of host source files", () => {
     expect(hostSourceFiles().length).toBeGreaterThan(0);
   });
 
   it("no host references the retired untyped-artifact identifiers", () => {
-    const violations: string[] = [];
-    for (const filePath of hostSourceFiles()) {
-      const content = fs.readFileSync(filePath, "utf8");
-      const lines = content.split("\n");
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-        const line = lines[lineIndex] ?? "";
-        if (FORBIDDEN_HOST_IDENTIFIER.test(line)) {
-          violations.push(`${relativeRepoPath(filePath)}:${lineIndex + 1}: ${line.trim()}`);
-        }
-      }
-    }
+    const violations = retiredIdentifierViolations(hostSourceFiles());
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("no engine package references the retired untyped-artifact identifiers (M5)", () => {
+    expect(engineSourceFiles().length).toBeGreaterThan(0);
+    const violations = retiredIdentifierViolations(engineSourceFiles());
     expect(violations, violations.join("\n")).toEqual([]);
   });
 

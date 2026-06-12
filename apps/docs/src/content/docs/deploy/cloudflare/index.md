@@ -12,7 +12,7 @@ Tileborne separates **building** the game-host worker artifact from **deploying*
 Produce the bundled worker from a Tileborne project:
 
 ```bash
-tileborne game build --target cloudflare --plugin <plugin-id> [--out dist/game-host-cloudflare]
+tileborne game build --target cloudflare --plugin <plugin-id> [--project <slug>] [--map <map-id>] [--out dist/game-host-cloudflare]
 ```
 
 Default output layout:
@@ -21,14 +21,15 @@ Default output layout:
 dist/game-host-cloudflare/
   worker.js
   worker.js.map
-  manifest.json          # BundledManifest (content-addressed buildId)
+  manifest.json          # BundledManifest (content-addressed buildId, hashed maps entries)
   wrangler.toml          # generated hints
   plugin/
   assets/
+  maps/                  # RuntimeMapPackage per shipped map (--project)
   build-artifact.json
 ```
 
-The CLI resolves the plugin and asset packs from `~/.tileborne`, bundles executable runtime code with esbuild, and embeds manifest metadata for `/discover`.
+The CLI resolves the plugin and asset packs from `~/.tileborne`, bundles executable runtime code with esbuild, and embeds manifest metadata for `/discover`. With `--project`, every selected map is assembled into a `RuntimeMapPackage` and baked into the artifact so `POST /rooms/create` works without a caller-supplied `mapPackage` — see [Ship Pipeline](/deploy/ship-pipeline/) for the full authored → build → deploy → play flow.
 
 **Build** = deterministic artifact on disk. **Deploy** = Alchemy/Wrangler applying Cloudflare bindings.
 

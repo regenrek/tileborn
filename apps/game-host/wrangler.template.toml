@@ -12,5 +12,9 @@ tag = "v1"
 new_sqlite_classes = ["PlaytestRoom"]
 
 [vars]
-HANDOFF_SIGNING_KEY = "{{HANDOFF_SIGNING_KEY}}"
 ROOM_IDLE_TIMEOUT_SECONDS = "60"
+
+# HANDOFF_SIGNING_KEY is a SECRET, never a plaintext var: the worker rejects
+# missing, short (< 32 chars), and known-placeholder keys. Set it once before
+# the first deploy:
+#   wrangler secret put HANDOFF_SIGNING_KEY --config <this file>

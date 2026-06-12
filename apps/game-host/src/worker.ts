@@ -7,6 +7,7 @@ import {
 } from './rooms/handoff-token.js';
 import type {
   BundledManifest,
+  BundledMapPackage,
   Env,
   PlaytestStartRequest,
   PlaytestStartResponse,
@@ -16,6 +17,7 @@ import type {
 } from './types.js';
 import { toDiscoverSummary, workerBuildId, workerVersion } from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
+import { bundledMapPackages } from './.generated/bundled-map-packages.js';
 import { PlaytestRoom } from './room.js';
 
 export type WorkerBindings = Env;
@@ -106,8 +108,36 @@ const readJsonError = async (response: Response, fallback: string): Promise<stri
   }
 };
 
+/**
+ * Resolve the `RuntimeMapPackage` a packageless `/rooms/create` boots from
+ * (M5 S1): an exact bundled `mapId` match wins; a single-map build is the
+ * implicit default for any requested `mapId`; ambiguous or empty builds are a
+ * structured 400 instead of deferring the failure to room start.
+ */
+const resolveBundledMapPackage = (
+  mapId: string,
+  bundled: readonly BundledMapPackage[],
+): { readonly mapPackage: BundledMapPackage } | { readonly error: string } => {
+  const exact = bundled.find((candidate) => candidate.mapId === mapId);
+  if (exact !== undefined) {
+    return { mapPackage: exact };
+  }
+  if (bundled.length === 1) {
+    return { mapPackage: bundled[0]! };
+  }
+  if (bundled.length === 0) {
+    return { error: 'no map package bundled in this build; supply mapPackage in the request body' };
+  }
+  return {
+    error: `no bundled map package for mapId ${mapId}; bundled maps: ${bundled
+      .map((candidate) => candidate.mapId)
+      .join(', ')}`,
+  };
+};
+
 export const createWorkerApp = (
   manifest: BundledManifest = runtimeManifest,
+  mapPackages: readonly BundledMapPackage[] = bundledMapPackages,
 ): Hono<{ Bindings: Env }> => {
   const app = new Hono<{ Bindings: Env }>();
 
@@ -146,6 +176,14 @@ export const createWorkerApp = (
     if (typeof body.mapId !== 'string' || body.mapId.length === 0) {
       return context.json({ error: 'mapId is required' }, 400);
     }
+    let mapPackage = body.mapPackage;
+    if (mapPackage === undefined) {
+      const resolved = resolveBundledMapPackage(body.mapId, mapPackages);
+      if ('error' in resolved) {
+        return context.json({ error: resolved.error }, 400);
+      }
+      mapPackage = resolved.mapPackage.mapPackage;
+    }
     const idempotencyKey =
       body.options?.idempotencyKey !== undefined && typeof body.options.idempotencyKey === 'string'
         ? body.options.idempotencyKey
@@ -160,7 +198,7 @@ export const createWorkerApp = (
           mapId: body.mapId,
           ...(body.seed === undefined ? {} : { seed: body.seed }),
           ...(body.options === undefined ? {} : { options: body.options }),
-          ...(body.mapPackage === undefined ? {} : { mapPackage: body.mapPackage }),
+          mapPackage,
           ...(body.playerModelSelections === undefined
             ? {}
             : { playerModelSelections: body.playerModelSelections }),

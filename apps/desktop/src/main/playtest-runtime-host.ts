@@ -216,31 +216,6 @@ const resolveRuntimeEntry = async (rootPath: string): Promise<string> => {
   return path.resolve(rootPath, runtimeEntry);
 };
 
-const resolveNodeEntry = async (rootPath: string): Promise<string | undefined> => {
-  const manifestPath = path.join(rootPath, "tileborne-plugin.json");
-  const manifestRaw = await readFile(manifestPath, "utf8");
-  const manifest = JSON.parse(manifestRaw) as {
-    entry?: { server?: string; editor?: string };
-  };
-  const nodeEntry = manifest.entry?.server ?? manifest.entry?.editor;
-  return nodeEntry ? path.resolve(rootPath, nodeEntry) : undefined;
-};
-
-/**
- * Discover the active mode's `RuntimeModeDataExporter` on the installed
- * plugin's node entry so package assembly can bake `modeData.<pluginId>`.
- */
-export const loadPlaytestModeDataExporter = async (
-  rootPath: string,
-): Promise<RuntimeModeDataExporter | undefined> => {
-  const nodeEntry = await resolveNodeEntry(rootPath);
-  if (nodeEntry === undefined) {
-    return undefined;
-  }
-  const nodeModule = await loadRuntimeModule(nodeEntry);
-  return typeof nodeModule.exportModeData === "function" ? nodeModule.exportModeData : undefined;
-};
-
 interface PlainRuntimeStubModule {
   readonly default?: PlaytestTickPlugin;
 }

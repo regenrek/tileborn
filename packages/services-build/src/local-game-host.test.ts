@@ -1,4 +1,11 @@
-import { createLocalGameHost } from "@tileborne/services-build/local-game-host";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  createLocalGameHost,
+  resolveBundledGameHostWorkerPath,
+} from "@tileborne/services-build/local-game-host";
 import { describe, expect, it } from "vitest";
 
 describe("createLocalGameHost", () => {
@@ -15,6 +22,22 @@ describe("createLocalGameHost", () => {
     }
 
     await expect(fetch("http://127.0.0.1:18080/health")).rejects.toThrow();
+  });
+
+  it("boots a worker.js from an explicit artifact directory (game serve --dir contract)", async () => {
+    const artifactDir = await mkdtemp(path.join(tmpdir(), "tileborne-artifact-serve-"));
+    await cp(resolveBundledGameHostWorkerPath(), path.join(artifactDir, "worker.js"));
+    const host = await createLocalGameHost({
+      port: 18082,
+      workerPath: path.join(artifactDir, "worker.js"),
+    });
+    try {
+      const response = await host.fetch(`${host.baseUrl}/health`);
+      expect(response.status).toBe(200);
+    } finally {
+      await host.stop();
+      await rm(artifactDir, { recursive: true, force: true });
+    }
   });
 
   it("creates a multiplayer room via POST /rooms/create", async () => {

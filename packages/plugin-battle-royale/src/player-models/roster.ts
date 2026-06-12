@@ -104,6 +104,24 @@ export const resolveBattleRoyalePlayerModels = (
   return projectModels.length === 0 ? DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS : projectModels;
 };
 
+/**
+ * Wire-boundary roster resolver: takes the WIRE (encoded) project manifest and
+ * returns WIRE `PlayerModelRef[]`. Exported from the plugin's node entry under
+ * the generic `resolvePlayerModels` name (mirrors `exportModeData`) so build
+ * hosts discover the roster without a plugin-id literal and without sharing
+ * schema class instances across bundle copies of `@tileborne/core`.
+ */
+export const resolveBattleRoyalePlayerModelsWire = (
+  project: Pick<ProjectManifest, "settings"> | undefined,
+): readonly JsonObject[] =>
+  JSON.parse(
+    JSON.stringify(
+      Schema.encodeSync(PlayerModelArray)(
+        resolveBattleRoyalePlayerModels(project as ProjectManifest | undefined),
+      ),
+    ),
+  ) as JsonObject[];
+
 /** Persist a new BR player-model roster onto the project manifest settings. */
 export const applyBattleRoyalePlayerModels = (
   project: ProjectManifest,

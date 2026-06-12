@@ -11,7 +11,7 @@ import {
   type RuntimeClientFrameView,
   type RuntimeClientInputFrame,
 } from "./.generated/plugin-runtime.js";
-import { defaultMapPackage } from "./.generated/default-map-package.js";
+import { bundledMapPackages } from "./.generated/bundled-map-packages.js";
 
 interface BundledComponentStore<T extends object> {
   readonly get: (entity: number) => T | undefined;
@@ -143,7 +143,9 @@ export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = 
       if (pluginId !== bundledPlugin.id) {
         throw new Error(`no bundled runtime plugin for ${pluginId}`);
       }
-      const mapPackage = options.mapPackage ?? defaultMapPackage;
+      // Worker-created rooms always carry a resolved package (M5 S1); the
+      // first bundled package only covers DO-direct dev/test rooms.
+      const mapPackage = options.mapPackage ?? bundledMapPackages[0]?.mapPackage;
       const adapter = createRuntimeAdapter({
         getMapPackage: () => mapPackage,
         ...(options.getPlayerModelSelections === undefined

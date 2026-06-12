@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultMapPackage } from "./.generated/default-map-package.js";
+import { bundledMapPackages } from "./.generated/bundled-map-packages.js";
 import {
   broadcastBinaryFrame,
   createRoomMeta,
@@ -23,7 +23,7 @@ describe("PlaytestRoom stub helpers", () => {
   });
 
   it("parsePlaytestInitBody preserves the ORIGINAL mapPackage wire and selections", () => {
-    const wire = JSON.parse(JSON.stringify(defaultMapPackage)) as Record<string, unknown>;
+    const wire = JSON.parse(JSON.stringify(bundledMapPackages[0]!.mapPackage)) as Record<string, unknown>;
     const parsed = parsePlaytestInitBody(
       JSON.stringify({
         mapId: "map:1",

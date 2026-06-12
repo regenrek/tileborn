@@ -29,7 +29,7 @@ const AppLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
 
 const BuildLayer = BuildServiceLive.pipe(
   Layer.provideMerge(AppLayer),
-  Layer.provideMerge(PluginRegistryLayer),
+  Layer.provideMerge(PluginLayer),
 );
 
 const ExportLayer = ExportServiceLive.pipe(Layer.provideMerge(BuildLayer), Layer.provideMerge(PluginLayer));

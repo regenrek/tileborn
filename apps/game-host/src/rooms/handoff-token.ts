@@ -13,14 +13,25 @@ export interface HandoffSigningEnv {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/**
+ * The historical scaffold/template placeholder key. It is long enough to pass
+ * the length check, so it is rejected explicitly: a deployed worker must never
+ * sign handoff tokens with a publicly-known key.
+ */
+export const PLACEHOLDER_HANDOFF_SIGNING_KEY = "replace-me-in-production-32-chars-minimum";
+
 export const isHandoffSigningKeyValid = (env: HandoffSigningEnv): boolean => {
   const key = env.HANDOFF_SIGNING_KEY;
-  return typeof key === "string" && key.length >= MIN_HANDOFF_SIGNING_KEY_LENGTH;
+  return (
+    typeof key === "string" &&
+    key.length >= MIN_HANDOFF_SIGNING_KEY_LENGTH &&
+    key !== PLACEHOLDER_HANDOFF_SIGNING_KEY
+  );
 };
 
 export const assertHandoffSigningKey = (env: HandoffSigningEnv): void => {
   if (!isHandoffSigningKeyValid(env)) {
-    throw new Error("HANDOFF_SIGNING_KEY is missing or too short");
+    throw new Error("HANDOFF_SIGNING_KEY is missing, too short, or the known placeholder");
   }
 };
 

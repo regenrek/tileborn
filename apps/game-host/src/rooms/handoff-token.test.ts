@@ -4,6 +4,7 @@ import {
   assertHandoffSigningKey,
   isHandoffSigningKeyValid,
   mintHandoffToken,
+  PLACEHOLDER_HANDOFF_SIGNING_KEY,
   verifyHandoffToken,
 } from "../rooms/handoff-token.js";
 
@@ -63,5 +64,15 @@ describe("handoff token", () => {
     expect(isHandoffSigningKeyValid(env)).toBe(true);
     expect(isHandoffSigningKeyValid({ HANDOFF_SIGNING_KEY: "short" })).toBe(false);
     expect(() => assertHandoffSigningKey({ HANDOFF_SIGNING_KEY: "short" })).toThrow(/HANDOFF_SIGNING_KEY/);
+  });
+
+  it("rejects the known placeholder key even though it passes the length check", () => {
+    expect(PLACEHOLDER_HANDOFF_SIGNING_KEY.length).toBeGreaterThanOrEqual(32);
+    expect(isHandoffSigningKeyValid({ HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY })).toBe(
+      false,
+    );
+    expect(() =>
+      assertHandoffSigningKey({ HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY }),
+    ).toThrow(/placeholder/);
   });
 });

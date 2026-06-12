@@ -131,6 +131,7 @@ export interface GameServeStatusPayload {
   readonly signingKeyFingerprint: string;
   readonly port: number;
   readonly bind: string;
+  readonly workerPath: string;
 }
 
 const gameServeStatusRows = (payload: GameServeStatusPayload): readonly [string, string][] => [
@@ -138,6 +139,7 @@ const gameServeStatusRows = (payload: GameServeStatusPayload): readonly [string,
   ["Signing key", payload.signingKeyFingerprint],
   ["Port", String(payload.port)],
   ["Bind", payload.bind],
+  ["Worker", payload.workerPath],
 ];
 
 export const renderGameServeStatus = (ctx: RenderContext, payload: GameServeStatusPayload): void => {

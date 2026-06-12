@@ -8,7 +8,6 @@ import { Effect, Option, Schema, Stream } from 'effect';
 import { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
   hashJsonStable,
-  readPluginMapSettings,
   type ContentHash,
   type GameModeId,
   type JsonObject,
@@ -47,6 +46,8 @@ import {
   RuntimeDeployTarget,
   activePlaytestPluginIds,
   assembleRuntimeMapPackage,
+  loadPluginModeDataExporter,
+  resolvePackagePlayerCapacity,
   SupportService,
   type PlaytestSession,
 } from '@tileborne/services-build';
@@ -85,7 +86,6 @@ import {
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
   loadPlaytestMapPackage,
-  loadPlaytestModeDataExporter,
   setPlaytestRuntimeChangedNotifier,
   setPlaytestRuntimeInput,
   setPlaytestRuntimeSnapshotNotifier,
@@ -104,23 +104,6 @@ import { createPlaytestJoinWindow } from '../window.js';
 const triggerPayload = {};
 const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
 
-/**
- * Fallback NEUTRAL player capacity when the active mode's authored settings
- * declare no `maxPlayers` (matches the game-host room default).
- */
-const DEFAULT_PLAYTEST_PLAYER_CAPACITY = 32;
-
-/**
- * Source the package's neutral `manifest.playerCapacity` the same way the
- * mode-data export reads it today: the active plugin's namespaced map
- * settings (`map.properties.<pluginId>.maxPlayers`, ADR-0023 §A).
- */
-const resolvePlaytestPlayerCapacity = (map: TileborneMap, activePluginId: string): number => {
-  const value = readPluginMapSettings(map, activePluginId).maxPlayers;
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-    ? value
-    : DEFAULT_PLAYTEST_PLAYER_CAPACITY;
-};
 const TILED_MAP_SOURCE_EXTENSION_SET = new Set(TILED_MAP_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
 const TILED_TILESET_SOURCE_EXTENSION_SET = new Set(TILED_TILESET_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
 const SPRITE_SHEET_IMAGE_EXTENSION_SET = new Set(SPRITE_SHEET_IMAGE_EXTENSIONS.map((extension) => `.${extension}`));
@@ -368,10 +351,10 @@ const buildHandlers = Effect.gen(function* () {
       }
       // The active mode's narrowed exporter bakes `modeData.<pluginId>` into
       // the package; without it the mode's runtime cannot boot from the package.
-      const modeDataExporter = yield* Effect.tryPromise({
-        try: () => loadPlaytestModeDataExporter(input.pluginRootPath),
-        catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
-      });
+      // Discovery is the SAME shared producer the ship build uses (M5).
+      const modeDataExporter = yield* loadPluginModeDataExporter(input.pluginRootPath).pipe(
+        Effect.mapError((error) => new Error(error.message)),
+      );
       if (modeDataExporter === undefined) {
         return yield* Effect.fail(
           new Error(
@@ -386,7 +369,7 @@ const buildHandlers = Effect.gen(function* () {
         pluginCatalogs: sources.pluginCatalogs,
         projectObjectTypes: sources.projectObjectTypes,
         playerModels: input.playerModels,
-        playerCapacity: resolvePlaytestPlayerCapacity(map, input.activePluginId),
+        playerCapacity: resolvePackagePlayerCapacity(map, input.activePluginId),
         mergeDeps: { resolveWeapon: (id) => sources.weaponIds.has(id) },
         modeDataExporter,
         engineVersion: project.engineVersion,

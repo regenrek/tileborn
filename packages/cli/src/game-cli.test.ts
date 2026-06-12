@@ -409,10 +409,10 @@ describe.sequential('game CLI families', () => {
     await server.close();
   });
 
-  it('game build --target node writes manifest artifact', async () => {
+  it('game build --target local writes the canonical artifact with serve README', async () => {
     const home = await makeTempHome();
     const source = await mkdtemp(path.join(tmpdir(), 'tileborne-plugin-game-build-'));
-    await mkdir(source, { recursive: true });
+    await mkdir(path.join(source, 'dist'), { recursive: true });
     await writeFile(
       path.join(source, 'tileborne-plugin.json'),
       `{
@@ -432,6 +432,10 @@ describe.sequential('game CLI families', () => {
 `,
     );
     await writeFile(path.join(source, 'README.md'), 'fixture\n');
+    await writeFile(
+      path.join(source, 'dist', 'runtime.js'),
+      "export const createRuntimeAdapter = () => ({ id: '@tileborne-plugins/cli-game-build' });\n",
+    );
     expect((await runCli(['plugin', 'install', '--local', source, '--json'], home)).code).toBe(0);
     const outDir = path.join(source, 'dist-game');
     const build = await runCli(
@@ -441,7 +445,7 @@ describe.sequential('game CLI families', () => {
         '--plugin',
         '@tileborne-plugins/cli-game-build',
         '--target',
-        'node',
+        'local',
         '--out',
         outDir,
         '--json',
@@ -449,10 +453,87 @@ describe.sequential('game CLI families', () => {
       home,
     );
     expect(build.code, build.stderr + build.stdout).toBe(0);
-    const payload = JSON.parse(build.stdout) as { readonly data: { readonly directory: string } };
-    await expect(
-      readFile(path.join(payload.data.directory, 'manifest.json'), 'utf8'),
-    ).resolves.toContain('integrityHash');
+    const payload = JSON.parse(build.stdout) as {
+      readonly data: {
+        readonly outDir: string;
+        readonly target: string;
+        readonly files: readonly string[];
+        readonly bundlePath: string;
+        readonly serveCommand: string;
+      };
+    };
+    expect(payload.data.target).toBe('local');
+    // Same canonical export as the cloudflare target …
+    expect(payload.data.files).toContain('worker.js');
+    expect(payload.data.files).toContain('manifest.json');
+    expect(payload.data.bundlePath).toContain('worker.js');
+    // … plus the single-command local serve convention.
+    expect(payload.data.files).toContain('README.md');
+    expect(payload.data.serveCommand).toBe(`tileborne game serve --dir "${payload.data.outDir}"`);
+    await expect(readFile(path.join(payload.data.outDir, 'README.md'), 'utf8')).resolves.toContain(
+      'tileborne game serve --dir',
+    );
+  }, 60_000);
+
+  it('game build rejects removed stub targets (hard cut)', async () => {
+    const home = await makeTempHome();
+    const result = await runCli(
+      ['game', 'build', '--plugin', '@tileborne-plugins/any', '--target', 'node', '--json'],
+      home,
+    );
+    expect(result.code).not.toBe(0);
+  });
+
+  it('game serve --dir without a worker.js fails fast with a validation error', async () => {
+    const home = await makeTempHome();
+    const emptyDir = await mkdtemp(path.join(tmpdir(), 'tileborne-serve-empty-'));
+    const result = await runCli(
+      ['game', 'serve', '--port', '0', '--dir', emptyDir, '--json'],
+      home,
+    );
+    expect(result.code).not.toBe(0);
+    expect(result.stderr + result.stdout).toContain('no worker.js');
+    await rm(emptyDir, { recursive: true, force: true });
+  });
+
+  it('game build --map without --project fails with a validation error', async () => {
+    const home = await makeTempHome();
+    const result = await runCli(
+      [
+        'game',
+        'build',
+        '--plugin',
+        '@tileborne-plugins/cli-game-build',
+        '--target',
+        'cloudflare',
+        '--map',
+        'map:00000000-0000-4000-8000-000000000001',
+        '--json',
+      ],
+      home,
+    );
+    expect(result.code).not.toBe(0);
+    expect(result.stderr + result.stdout).toContain('--map requires --project');
+  });
+
+  it('game build --project with unknown slug fails before building', async () => {
+    const home = await makeTempHome();
+    const result = await runCli(
+      [
+        'game',
+        'build',
+        '--plugin',
+        '@tileborne-plugins/cli-game-build',
+        '--target',
+        'cloudflare',
+        '--project',
+        'no-such-project',
+        '--json',
+      ],
+      home,
+    );
+    expect(result.code).not.toBe(0);
+    expect(result.stderr + result.stdout).toMatch(/no-such-project|not found/i);
   });
 
   it('dev desktop spawn uses pnpm desktop filter (stubbed)', async () => {
@@ -627,6 +708,12 @@ describe.sequential('game CLI families', () => {
     expect(payload.data.outDir.length).toBeGreaterThan(0);
     expect(payload.data.files).toContain('worker.js');
     expect(payload.data.manifestHash).toMatch(/^sha256:/);
+    // A cloudflare build without --project bundles zero maps: legal, but
+    // loud — the deployed host could not create rooms.
+    expect(build.stderr).toContain('zero runtime map packages');
+    expect((payload.data as { readonly warnings?: readonly string[] }).warnings?.[0]).toContain(
+      'no maps bundled',
+    );
   });
 
   it('runtime discover emits backend json', async () => {

@@ -230,7 +230,7 @@ describe.sequential('desktop smoke lifecycle', () => {
     const { page, tileborneHome } = smokeContext!;
 
     const buildJobId = await page.evaluate(async (pid) => {
-      const { jobId } = await window.tileborne.builds.build({ projectId: pid, target: 'node' });
+      const { jobId } = await window.tileborne.builds.build({ projectId: pid, target: 'local' });
       return jobId;
     }, projectId);
 

@@ -8,6 +8,7 @@ import {
   makeProjectId,
   makeProjectManifest,
 } from "@tileborne/core";
+import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -18,6 +19,7 @@ import {
   readBattleRoyalePlayerModels,
   removeBattleRoyalePlayerModel,
   resolveBattleRoyalePlayerModels,
+  resolveBattleRoyalePlayerModelsWire,
   upsertBattleRoyalePlayerModel,
   validateBattleRoyalePlayerModelRoster,
 } from "../roster.js";
@@ -65,6 +67,14 @@ describe("battle-royale-player-models", () => {
     const resolved = resolveBattleRoyalePlayerModels(baseProject());
     expect(resolved.map((entry) => entry.id)).toEqual(["maltipoo-mae", "maltipoo-max"]);
     expect(validateBattleRoyalePlayerModelRoster(resolved)).toEqual([]);
+  });
+
+  it("resolves the WIRE roster for node-entry hosts (generic resolvePlayerModels, M5 S1)", () => {
+    const wire = resolveBattleRoyalePlayerModelsWire(undefined);
+    // Plain JSON across the bundle boundary, decodable by the host's own core copy.
+    expect(JSON.parse(JSON.stringify(wire))).toEqual(wire);
+    const decoded = Schema.decodeUnknownSync(Schema.Array(PlayerModelRef))(wire);
+    expect(decoded.map((entry) => entry.id)).toEqual(["maltipoo-mae", "maltipoo-max"]);
   });
 
   it("persists + round-trips a roster through project settings", () => {

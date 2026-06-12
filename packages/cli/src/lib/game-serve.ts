@@ -1,4 +1,11 @@
-import { createLocalGameHost, type LocalGameHost } from "@tileborne/services-build/local-game-host";
+import { access } from "node:fs/promises";
+import path from "node:path";
+
+import {
+  createLocalGameHost,
+  resolveBundledGameHostWorkerPath,
+  type LocalGameHost,
+} from "@tileborne/services-build/local-game-host";
 
 import { findAvailablePort } from "./listen-port.js";
 import { signingKeyFingerprint } from "./multiplayer-playtest.js";
@@ -13,6 +20,8 @@ export interface GameServeInput {
   readonly port: number;
   readonly signingKey: string | undefined;
   readonly bind: string;
+  /** Built game artifact directory (`game build --target local`); undefined = dev game-host bundle. */
+  readonly dir: string | undefined;
 }
 
 export interface GameServeReady {
@@ -20,6 +29,7 @@ export interface GameServeReady {
   readonly signingKeyFingerprint: string;
   readonly port: number;
   readonly bind: string;
+  readonly workerPath: string;
 }
 
 const readPortArg = (port: number): number => {
@@ -36,6 +46,22 @@ const readBindArg = (bind: string): string => {
     });
   }
   return bind;
+};
+
+/** Resolve the worker bundle to boot: a built artifact directory or the dev game-host bundle. */
+const resolveWorkerPath = async (dir: string | undefined): Promise<string> => {
+  if (dir === undefined) {
+    return resolveBundledGameHostWorkerPath();
+  }
+  const workerPath = path.resolve(dir, "worker.js");
+  try {
+    await access(workerPath);
+  } catch {
+    throw new CliValidationError({
+      message: `no worker.js found in ${path.resolve(dir)} — build one with \`tileborne game build --target local --out ${path.resolve(dir)}\``,
+    });
+  }
+  return workerPath;
 };
 
 const installGameServeSignalHandlers = (shutdown: () => Promise<void>): void => {
@@ -57,12 +83,14 @@ const installGameServeSignalHandlers = (shutdown: () => Promise<void>): void => 
 
 export const runGameServe = async (ctx: RenderContext, input: GameServeInput): Promise<never> => {
   const bind = readBindArg(input.bind);
+  const workerPath = await resolveWorkerPath(input.dir);
   const port = await findAvailablePort(readPortArg(input.port), bind);
   requestSignalExitCode(0);
 
   let host: LocalGameHost | undefined;
   host = await createLocalGameHost({
     port,
+    workerPath,
     ...(input.signingKey === undefined ? {} : { signingKey: input.signingKey }),
   });
 
@@ -71,6 +99,7 @@ export const runGameServe = async (ctx: RenderContext, input: GameServeInput): P
     signingKeyFingerprint: signingKeyFingerprint(host.signingKey),
     port,
     bind,
+    workerPath,
   };
 
   renderGameServeStatus(ctx, ready);

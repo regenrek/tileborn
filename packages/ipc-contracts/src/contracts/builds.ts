@@ -7,7 +7,7 @@ import { createRegistry } from "../registry.js";
 import { EmptyResponse, IpcContractErrors } from "./common.js";
 import { JobId } from "./assets.js";
 
-export const BuildTarget = Schema.Literals(["cloudflare", "node", "web"]);
+export const BuildTarget = Schema.Literals(["cloudflare", "local"]);
 
 export const BuildSummary = Schema.Struct({
   id: BuildId,

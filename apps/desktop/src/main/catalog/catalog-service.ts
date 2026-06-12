@@ -3,6 +3,7 @@ import {
   GameObjectType,
   type GameObjectTypeId,
   type JsonValue,
+  PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY,
   ProjectManifest,
   type ProjectId,
   makeCatalogId,
@@ -50,15 +51,9 @@ const toValidationReport = (
     ),
   });
 
-/**
- * Project manifest `settings` key under which the project-authored catalog
- * fragment is persisted (ADR-0025 D4). A fragment is a serialized
- * `GameObjectCatalog` pack, stored alongside other project-scoped editor data
- * (e.g. the per-project player-model roster) in the brand/mode-neutral settings
- * bag — distinct from the read-only plugin-shipped catalogs, which import/export
- * never mutate. The key is namespaced + neutral (no game-mode/brand literal).
- */
-export const PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY = 'tileborne:catalogFragment';
+// Re-exported for existing desktop consumers; @tileborne/core owns the key
+// (ADR-0025 D4) so the ship-build assembly reads the SAME project fragment.
+export { PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY };
 
 /** Contribution id used for the project-authored fragment in the editor merge. */
 export const PROJECT_CATALOG_FRAGMENT_CONTRIBUTION_ID = 'project-catalog-fragment';

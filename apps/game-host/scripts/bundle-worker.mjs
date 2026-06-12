@@ -26,6 +26,7 @@ const hashFile = async (filePath) => {
 
 const bundleWorker = async (manifest, runtimeVersion) => {
   const stagingManifestPath = path.join(gameHostRoot, "src/.generated/runtime-manifest.ts");
+  const stagingMapPackagesPath = path.join(gameHostRoot, "src/.generated/bundled-map-packages.ts");
   const moduleShimPath = path.join(gameHostRoot, "src/.generated/module-shim.js");
   await writeFile(
     moduleShimPath,
@@ -63,6 +64,17 @@ const bundleWorker = async (manifest, runtimeVersion) => {
           });
         },
       },
+      {
+        name: "bundled-map-packages-alias",
+        setup(buildApi) {
+          buildApi.onResolve({ filter: /bundled-map-packages\.js$/ }, (args) => {
+            if (args.importer.includes("game-host")) {
+              return { path: stagingMapPackagesPath };
+            }
+            return undefined;
+          });
+        },
+      },
     ],
   });
 };
@@ -95,6 +107,7 @@ const workerFiles = [
 const finalManifest = buildBundledManifest({
   plugin: initial.pluginSummary,
   assetPacks: [initial.assetPackSummary],
+  maps: initial.mapSummaries,
   runtimeVersion,
   workerFiles,
   createdAt,

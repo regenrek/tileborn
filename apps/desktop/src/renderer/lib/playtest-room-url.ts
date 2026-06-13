@@ -1,3 +1,8 @@
+import {
+  createGameHostLobbyClient,
+  type LobbyCreateRequest,
+} from '@tileborne/game-client';
+
 const PLAYTEST_DEEPLINK_PREFIX = 'tileborne://playtest/';
 
 export interface ParsedPlaytestRoomRef {
@@ -11,6 +16,8 @@ export interface LocalMultiplayerRoomReady {
   readonly roomUrl: string;
   readonly wsUrl: string;
   readonly deeplink: string;
+  readonly joinCode?: string;
+  readonly joinUrl?: string;
 }
 
 export const buildPlaytestDeeplink = (roomId: string): string =>
@@ -72,36 +79,36 @@ export const createLocalMultiplayerRoom = async (
   mapId: string,
   options: {
     /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from. */
-    readonly mapPackage?: unknown;
+    readonly mapPackage?: LobbyCreateRequest['mapPackage'];
     readonly playerModelSelections?: readonly LocalRoomPlayerModelSelection[];
     readonly maxPlayers?: number;
   } = {},
 ): Promise<LocalMultiplayerRoomReady> => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/rooms/create`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      mapId,
-      ...(options.mapPackage === undefined ? {} : { mapPackage: options.mapPackage }),
-      ...(options.playerModelSelections === undefined || options.playerModelSelections.length === 0
-        ? {}
-        : { playerModelSelections: options.playerModelSelections }),
-      options: {
-        ...(options.maxPlayers ? { maxPlayers: options.maxPlayers } : {}),
-      },
-    }),
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const lobbyClient = createGameHostLobbyClient({ baseUrl: normalizedBaseUrl });
+  const roomOptions =
+    options.maxPlayers === undefined
+      ? undefined
+      : {
+          maxPlayers: options.maxPlayers,
+        };
+  const created = await lobbyClient.createLobby({
+    mapId,
+    visibility: 'private',
+    ...(options.mapPackage === undefined ? {} : { mapPackage: options.mapPackage }),
+    ...(options.playerModelSelections === undefined || options.playerModelSelections.length === 0
+      ? {}
+      : { playerModelSelections: options.playerModelSelections }),
+    ...(roomOptions === undefined ? {} : { options: roomOptions }),
   });
-  if (!response.ok) {
-    throw new Error(`Room create failed: HTTP ${response.status}`);
-  }
-  const created = (await response.json()) as { readonly roomId: string; readonly wsUrl: string };
-  const wsUrl = toWebSocketUrl(created.wsUrl);
   return {
-    baseUrl: baseUrl.replace(/\/$/, ''),
+    baseUrl: normalizedBaseUrl,
     roomId: created.roomId,
     roomUrl: buildRoomUrl(baseUrl, created.roomId),
-    wsUrl,
+    wsUrl: created.wsUrl,
     deeplink: buildPlaytestDeeplink(created.roomId),
+    joinCode: created.joinCode,
+    joinUrl: created.joinUrl,
   };
 };
 

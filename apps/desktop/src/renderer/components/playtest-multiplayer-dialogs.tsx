@@ -52,6 +52,31 @@ export function PlaytestHostDialog({
 
         {room ? (
           <div className="space-y-3">
+            {room.joinCode ? (
+              <div className="block space-y-1">
+                <Label htmlFor="playtest-host-join-code" className={typography.sectionLabelAccent}>
+                  Join code
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="playtest-host-join-code"
+                    readOnly
+                    value={room.joinCode}
+                    data-testid="playtest-host-join-code"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Copy join code"
+                    onClick={() => void onCopy('Join code', room.joinCode ?? '')}
+                  >
+                    <CopyIcon />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="block space-y-1">
               <Label htmlFor="playtest-host-room-url" className={typography.sectionLabelAccent}>
                 Room URL

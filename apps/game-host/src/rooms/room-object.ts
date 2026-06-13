@@ -29,7 +29,7 @@ import {
   toPlaytestSummary,
   type BinarySocket,
 } from '../room.js';
-import type { Env, PlaytestRoomMeta, PlaytestSummary } from '../types.js';
+import type { Env, PlaytestRoomMeta, PlaytestSummary, RoomLobbySummary } from '../types.js';
 import { isHandoffSigningKeyValid, verifyHandoffToken } from './handoff-token.js';
 import {
   INVALID_HANDOFF_CLOSE_CODE,
@@ -40,15 +40,24 @@ import {
   TICK_HZ,
   TICK_INTERVAL_MS,
   heartbeatTimeoutMs,
+  roomReconnectWindowMs,
   roomIdleTimeoutMs,
 } from './room-config.js';
 import {
   RoomAdmissionRejectedError,
+  RoomLifecycleRejectedError,
   admitPlayerToRoom,
   advanceLifecycleForAlarm,
   archiveRoom,
   finishRoomIfEmpty,
+  createRoomJoinCode,
+  markRoomPlayerDisconnected,
+  projectRoomPresence,
   reserveRoomPlayer,
+  resolveRoomPlayerCapacity,
+  resolveRoomReadyGate,
+  resolveRoomReconnectEligibility,
+  setRoomPlayerReady,
   shouldHydrateRuntime,
   validateRoomOptions,
 } from './room-lifecycle.js';
@@ -57,6 +66,8 @@ import {
   emptyRoomStorage,
   migrateRoomStorage,
   type PersistedRoomStorage,
+  type RoomJoinCode,
+  type RoomLobbyVisibility,
   type RoomPlayerModelSelection,
   type RoomPlayerRecord,
   type RoomStorage,
@@ -106,6 +117,36 @@ interface RoomSocketAttachment {
 
 interface RoomPlayerReservationRequest {
   readonly playerId?: unknown;
+  readonly displayName?: unknown;
+}
+
+interface RoomPlayerReservationPayload {
+  readonly playerId?: string;
+  readonly displayName?: string;
+}
+
+interface RoomLobbyConfigRequest {
+  readonly joinCode?: unknown;
+  readonly visibility?: unknown;
+  readonly displayName?: unknown;
+  readonly createdByPlayerId?: unknown;
+}
+
+interface RoomLobbyConfigPayload {
+  readonly joinCode: RoomJoinCode;
+  readonly visibility?: RoomLobbyVisibility;
+  readonly displayName?: string;
+  readonly createdByPlayerId?: string;
+}
+
+interface RoomReadyRequest {
+  readonly playerId?: unknown;
+  readonly ready?: unknown;
+}
+
+interface RoomReadyPayload {
+  readonly playerId: string;
+  readonly ready: boolean;
 }
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
@@ -118,10 +159,12 @@ const defaultSeed = (): string | number => crypto.randomUUID();
 
 export { MAX_QUEUED_INPUTS_PER_PLAYER } from './room-transport.js';
 
-const parseRoomPlayerReservationBody = async (request: Request): Promise<string | undefined> => {
+const parseRoomPlayerReservationBody = async (
+  request: Request,
+): Promise<RoomPlayerReservationPayload> => {
   const text = await request.text();
   if (text.trim().length === 0) {
-    return undefined;
+    return {};
   }
   let body: RoomPlayerReservationRequest;
   try {
@@ -130,12 +173,81 @@ const parseRoomPlayerReservationBody = async (request: Request): Promise<string 
     throw new Error('reservation body must be valid JSON');
   }
   if (body.playerId === undefined) {
-    return undefined;
+    if (body.displayName !== undefined) {
+      if (typeof body.displayName !== 'string' || body.displayName.length === 0) {
+        throw new Error('displayName must be a non-empty string');
+      }
+      return { displayName: body.displayName };
+    }
+    return {};
   }
   if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
     throw new Error('playerId must be a non-empty string');
   }
-  return body.playerId;
+  if (body.displayName !== undefined) {
+    if (typeof body.displayName !== 'string' || body.displayName.length === 0) {
+      throw new Error('displayName must be a non-empty string');
+    }
+    return { playerId: body.playerId, displayName: body.displayName };
+  }
+  return { playerId: body.playerId };
+};
+
+const parseRoomLobbyConfigBody = async (request: Request): Promise<RoomLobbyConfigPayload> => {
+  let body: RoomLobbyConfigRequest;
+  try {
+    body = (await request.json()) as RoomLobbyConfigRequest;
+  } catch {
+    throw new Error('lobby config body must be valid JSON');
+  }
+  if (typeof body.joinCode !== 'string') {
+    throw new Error('joinCode is required');
+  }
+  const joinCode = createRoomJoinCode(body.joinCode);
+  if (
+    body.visibility !== undefined &&
+    body.visibility !== 'private' &&
+    body.visibility !== 'public'
+  ) {
+    throw new Error('visibility must be private or public');
+  }
+  if (
+    body.displayName !== undefined &&
+    (typeof body.displayName !== 'string' || body.displayName.length === 0)
+  ) {
+    throw new Error('displayName must be a non-empty string');
+  }
+  if (
+    body.createdByPlayerId !== undefined &&
+    (typeof body.createdByPlayerId !== 'string' || body.createdByPlayerId.length === 0)
+  ) {
+    throw new Error('createdByPlayerId must be a non-empty string');
+  }
+  return {
+    joinCode,
+    ...(body.visibility === undefined ? {} : { visibility: body.visibility }),
+    ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
+    ...(body.createdByPlayerId === undefined ? {} : { createdByPlayerId: body.createdByPlayerId }),
+  };
+};
+
+const parseRoomReadyBody = async (request: Request): Promise<RoomReadyPayload> => {
+  let body: RoomReadyRequest;
+  try {
+    body = (await request.json()) as RoomReadyRequest;
+  } catch {
+    throw new Error('ready body must be valid JSON');
+  }
+  if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+    throw new Error('playerId is required');
+  }
+  if (typeof body.ready !== 'boolean') {
+    throw new Error('ready must be a boolean');
+  }
+  return {
+    playerId: body.playerId,
+    ready: body.ready,
+  };
 };
 
 const websocketUpgradeResponse = (client: WebSocket): Response => {
@@ -260,6 +372,88 @@ export class PlaytestRoom implements DurableObject {
       transportClients: [...this.socketByPlayerId.values()].map(toClientTransportStats),
       generatedAt: this.nowIso(),
     });
+  }
+
+  private connectedPlayerIds(): readonly string[] {
+    return [...this.socketByPlayerId.values()]
+      .filter((record) => record.socket.readyState === WebSocket.OPEN)
+      .map((record) => record.playerId);
+  }
+
+  private buildLobbySummary(roomId: string, storage: RoomStorage): RoomLobbySummary {
+    const readyGate = resolveRoomReadyGate(storage);
+    return {
+      roomId,
+      mapId: storage.mapId,
+      phase: storage.lifecycle.phase,
+      lobby: storage.lobby,
+      playerCount: Object.keys(storage.players).length,
+      maxPlayers: resolveRoomPlayerCapacity(storage),
+      minReadyPlayers: readyGate.minPlayers,
+      canStart: readyGate.canStart,
+      players: projectRoomPresence(storage, {
+        connectedPlayerIds: this.connectedPlayerIds(),
+        now: this.nowIso(),
+      }),
+    };
+  }
+
+  private async configureLobby(input: RoomLobbyConfigPayload): Promise<RoomStorage> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new Error('room not initialized');
+    }
+    const next: RoomStorage = {
+      ...storage,
+      lobby: {
+        ...storage.lobby,
+        joinCode: input.joinCode,
+        ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
+        ...(input.displayName === undefined ? {} : { title: input.displayName }),
+        ...(input.createdByPlayerId === undefined
+          ? {}
+          : { createdByPlayerId: input.createdByPlayerId }),
+      },
+    };
+    await this.writeStorage(next);
+    return next;
+  }
+
+  private reconnectExpiresAt(now: string): string {
+    return new Date(
+      Date.parse(now) + roomReconnectWindowMs(this.env.ROOM_RECONNECT_WINDOW_SECONDS),
+    ).toISOString();
+  }
+
+  private async setReady(input: RoomReadyPayload): Promise<{
+    readonly storage: RoomStorage;
+    readonly readyGate: ReturnType<typeof resolveRoomReadyGate>;
+  }> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    const result = setRoomPlayerReady(storage, input.playerId, input.ready, this.nowIso());
+    await this.writeStorage(result.storage);
+    if (result.storage.lifecycle.phase === 'countdown') {
+      await this.scheduleNextAlarm();
+    }
+    return result;
+  }
+
+  private async validateReconnect(playerId: string): Promise<RoomStorage> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    const eligibility = resolveRoomReconnectEligibility(storage, playerId, this.nowIso());
+    if (!eligibility.eligible) {
+      throw new RoomLifecycleRejectedError(
+        eligibility.reason ?? 'player is not eligible to reconnect',
+        eligibility.reason === 'player seat is not reserved' ? 404 : 409,
+      );
+    }
+    return storage;
   }
 
   private async ensureRuntime(): Promise<void> {
@@ -400,7 +594,10 @@ export class PlaytestRoom implements DurableObject {
     playtestId: string,
     options: { readonly broadcast?: boolean } = {},
   ): Promise<void> {
-    const verified = await verifyHandoffToken(this.env, sessionToken, { playtestId });
+    const verified = await verifyHandoffToken(this.env, sessionToken, {
+      playtestId,
+      purpose: 'handoff',
+    });
     if (!verified || verified.playerId !== playerId) {
       throw new Error('invalid handoff token');
     }
@@ -427,12 +624,34 @@ export class PlaytestRoom implements DurableObject {
     }
     const players = { ...storage.players };
     delete players[playerId];
+    const readyPlayers = { ...storage.ready.players };
+    delete readyPlayers[playerId];
+    const reconnectSeats = { ...storage.reconnect.seats };
+    delete reconnectSeats[playerId];
+    const now = this.nowIso();
+    const previousPresence = storage.presence.players[playerId];
     const removed: RoomStorage = {
       ...storage,
       players,
-      emptySince: Object.keys(players).length === 0 ? this.nowIso() : null,
+      ready: { players: readyPlayers },
+      presence: {
+        players: {
+          ...storage.presence.players,
+          [playerId]: {
+            playerId,
+            status: 'disconnected',
+            lastSeenAt: now,
+            ...(previousPresence?.connectedAt === undefined
+              ? {}
+              : { connectedAt: previousPresence.connectedAt }),
+            disconnectedAt: now,
+          },
+        },
+      },
+      reconnect: { seats: reconnectSeats },
+      emptySince: Object.keys(players).length === 0 ? now : null,
     };
-    const next = finishRoomIfEmpty(removed, this.nowIso(), reason);
+    const next = finishRoomIfEmpty(removed, now, reason);
     await this.writeStorage(next);
     if (this.legacyEnvelopeEnabled) {
       this.broadcast(new PlayerLeft({ playerId, reason }));
@@ -445,6 +664,27 @@ export class PlaytestRoom implements DurableObject {
     if (Object.keys(players).length === 0) {
       await this.scheduleEmptyRoomCheck();
     }
+  }
+
+  private async disconnectPlayer(playerId: string, reason: string): Promise<void> {
+    const storage = await this.readStorage();
+    if (!storage || !storage.players[playerId]) {
+      return;
+    }
+    const now = this.nowIso();
+    const next = markRoomPlayerDisconnected(
+      storage,
+      playerId,
+      now,
+      this.reconnectExpiresAt(now),
+    );
+    await this.writeStorage(next);
+    await this.scheduleReconnectExpiryCheck(next);
+    const socket = this.socketByPlayerId.get(playerId)?.socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.close(1000, reason);
+    }
+    this.socketByPlayerId.delete(playerId);
   }
 
   private broadcast(message: RuntimeMessage): void {
@@ -543,6 +783,28 @@ export class PlaytestRoom implements DurableObject {
     await this.state.storage.setAlarm(timestampMs);
   }
 
+  private nextReconnectExpiryMs(storage: RoomStorage): number | undefined {
+    const expiries = Object.values(storage.reconnect.seats)
+      .filter((seat) => storage.presence.players[seat.playerId]?.status === 'disconnected')
+      .map((seat) => (seat.expiresAt === undefined ? Number.NaN : Date.parse(seat.expiresAt)))
+      .filter(Number.isFinite);
+    if (expiries.length === 0) {
+      return undefined;
+    }
+    return Math.min(...expiries);
+  }
+
+  private async scheduleReconnectExpiryCheck(storage: RoomStorage): Promise<void> {
+    const nextExpiryMs = this.nextReconnectExpiryMs(storage);
+    if (nextExpiryMs === undefined) {
+      return;
+    }
+    const currentAlarm = await this.state.storage.getAlarm();
+    if (currentAlarm === null || nextExpiryMs < currentAlarm) {
+      await this.scheduleAlarmAt(nextExpiryMs);
+    }
+  }
+
   async alarm(): Promise<void> {
     this.tickAlarmScheduled = false;
     const storage = await this.readStorage();
@@ -575,7 +837,9 @@ export class PlaytestRoom implements DurableObject {
     if (lifecycleStep.runSimulation) {
       await this.runSimulationTick();
       await this.scheduleNextAlarm();
+      return;
     }
+    await this.scheduleReconnectExpiryCheck(lifecycleStep.changed ? lifecycleStep.storage : latest);
   }
 
   private async disconnectStalePlayers(): Promise<void> {
@@ -585,9 +849,17 @@ export class PlaytestRoom implements DurableObject {
     }
     const nowMs = this.deps.now?.() ?? Date.now();
     for (const player of Object.values(storage.players)) {
+      const presence = storage.presence.players[player.id];
+      if (presence?.status === 'disconnected') {
+        const eligibility = resolveRoomReconnectEligibility(storage, player.id, this.nowIso());
+        if (!eligibility.eligible && eligibility.reason === 'reconnect seat expired') {
+          await this.removePlayer(player.id, 'reconnect expired');
+        }
+        continue;
+      }
       const lastHeartbeatMs = Date.parse(player.lastHeartbeatAt);
       if (nowMs - lastHeartbeatMs >= heartbeatTimeoutMs(this.env.HEARTBEAT_TIMEOUT_SECONDS)) {
-        await this.removePlayer(player.id, 'heartbeat timeout');
+        await this.disconnectPlayer(player.id, 'heartbeat timeout');
       }
     }
   }
@@ -712,13 +984,26 @@ export class PlaytestRoom implements DurableObject {
     if (!storage || !storage.players[playerId]) {
       return;
     }
+    const now = this.nowIso();
+    const previousPresence = storage.presence.players[playerId];
     const next: RoomStorage = {
       ...storage,
       players: {
         ...storage.players,
         [playerId]: {
           ...storage.players[playerId],
-          lastHeartbeatAt: this.nowIso(),
+          lastHeartbeatAt: now,
+        },
+      },
+      presence: {
+        players: {
+          ...storage.presence.players,
+          [playerId]: {
+            playerId,
+            status: 'connected',
+            lastSeenAt: now,
+            connectedAt: previousPresence?.connectedAt ?? now,
+          },
         },
       },
     };
@@ -785,13 +1070,67 @@ export class PlaytestRoom implements DurableObject {
       });
     }
 
+    if (request.method === 'POST' && url.pathname === '/lobby/configure') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let config: RoomLobbyConfigPayload;
+      try {
+        config = await parseRoomLobbyConfigBody(request);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid lobby config request' },
+          { status: 400 },
+        );
+      }
+      try {
+        const storage = await this.configureLobby(config);
+        const roomId = url.searchParams.get('roomId') ?? 'local';
+        return Response.json({ lobby: this.buildLobbySummary(roomId, storage) });
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'failed to configure lobby' },
+          { status: 404 },
+        );
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/lobby/ready') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let input: RoomReadyPayload;
+      try {
+        input = await parseRoomReadyBody(request);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid ready request' },
+          { status: 400 },
+        );
+      }
+      try {
+        const result = await this.setReady(input);
+        const roomId = url.searchParams.get('roomId') ?? 'local';
+        return Response.json({
+          lobby: this.buildLobbySummary(roomId, result.storage),
+          canStart: result.readyGate.canStart,
+          ...(result.readyGate.reason === undefined ? {} : { reason: result.readyGate.reason }),
+        });
+      } catch (error) {
+        if (error instanceof RoomLifecycleRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to update ready state' }, { status: 500 });
+      }
+    }
+
     if (request.method === 'POST' && url.pathname === '/players/reserve') {
       if (!isHandoffSigningKeyValid(this.env)) {
         return Response.json({ error: 'room unavailable' }, { status: 503 });
       }
-      let requestedPlayerId: string | undefined;
+      let reservationRequest: RoomPlayerReservationPayload;
       try {
-        requestedPlayerId = await parseRoomPlayerReservationBody(request);
+        reservationRequest = await parseRoomPlayerReservationBody(request);
       } catch (error) {
         return Response.json(
           { error: error instanceof Error ? error.message : 'invalid reservation request' },
@@ -803,7 +1142,14 @@ export class PlaytestRoom implements DurableObject {
         return Response.json({ error: 'playtest not initialized' }, { status: 404 });
       }
       try {
-        const reservation = reserveRoomPlayer(storage, requestedPlayerId, this.nowIso());
+        const reservation = reserveRoomPlayer(
+          storage,
+          reservationRequest.playerId,
+          this.nowIso(),
+          reservationRequest.displayName === undefined
+            ? {}
+            : { displayName: reservationRequest.displayName },
+        );
         const playerWasPresent = storage.players[reservation.playerId] !== undefined;
         await this.writeStorage(reservation.storage);
         await this.restartRuntimeForPreActiveRosterChange(reservation.storage);
@@ -817,6 +1163,53 @@ export class PlaytestRoom implements DurableObject {
         }
         return Response.json({ error: 'failed to reserve player' }, { status: 500 });
       }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/players/reconnect') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let input: { readonly playerId: string };
+      try {
+        const parsed = await parseRoomPlayerReservationBody(request);
+        if (parsed.playerId === undefined) {
+          throw new Error('playerId is required');
+        }
+        input = { playerId: parsed.playerId };
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid reconnect request' },
+          { status: 400 },
+        );
+      }
+      try {
+        const storage = await this.validateReconnect(input.playerId);
+        const roomId = url.searchParams.get('roomId') ?? 'local';
+        return Response.json({ playerId: input.playerId, lobby: this.buildLobbySummary(roomId, storage) });
+      } catch (error) {
+        if (error instanceof RoomLifecycleRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to reconnect player' }, { status: 500 });
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/lobby/summary') {
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const roomId = url.searchParams.get('roomId') ?? 'unknown';
+      return Response.json({ lobby: this.buildLobbySummary(roomId, storage) });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/results') {
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const roomId = url.searchParams.get('roomId') ?? 'unknown';
+      return Response.json({ roomId, results: storage.results });
     }
 
     if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
@@ -943,8 +1336,7 @@ export class PlaytestRoom implements DurableObject {
     if (!current || current.socket !== ws || current.socketId !== attachment.socketId) {
       return;
     }
-    this.socketByPlayerId.delete(playerId);
-    await this.removePlayer(playerId, 'disconnect');
+    await this.disconnectPlayer(playerId, 'disconnect');
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {

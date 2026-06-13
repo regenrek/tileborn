@@ -13,7 +13,7 @@ import {
 } from "../state/menu-machine.js";
 import { useMenuMachine } from "../state/use-menu-machine.js";
 import { brandThemeVars } from "../theming/brand-theme.js";
-import { MenuShell } from "./menu-shell.js";
+import { MenuShell, type RuntimeLobbyRenderProps } from "./menu-shell.js";
 import type { ControlsTabConfig } from "./controls-tab.js";
 import type { MatchResults } from "./results-screen.js";
 
@@ -43,6 +43,8 @@ export interface RuntimeRootProps {
    * the static Controls blurb.
    */
   readonly controls?: ControlsTabConfig;
+  /** Optional app-owned lobby surface that reuses the shell state machine. */
+  readonly renderLobby?: ((props: RuntimeLobbyRenderProps) => ReactNode) | undefined;
   /**
    * In-match HUD wiring (ADR-0027). The app supplies the live HUD metrics
    * stream, the effective `HudLayout` (plugin default ⊕ user overlay), custom
@@ -73,6 +75,7 @@ export function RuntimeRoot({
   initialState = initialMenuState,
   bootProgress,
   controls,
+  renderLobby,
   hudMetrics,
   hudLayout,
   hudWidgets,
@@ -166,6 +169,7 @@ export function RuntimeRoot({
           results={results}
           bootProgress={bootProgress}
           onQuit={onQuit}
+          renderLobby={renderLobby}
           {...(controls ? { controls } : {})}
         />
       </div>

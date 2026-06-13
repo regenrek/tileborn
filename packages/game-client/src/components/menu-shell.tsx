@@ -1,6 +1,6 @@
 import type { BrandConfig } from "@tileborne/core";
 import { Button } from "@tileborne/ui";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
 import type { MenuEvent, MenuState, SettingsTab } from "../state/menu-machine.js";
@@ -12,6 +12,13 @@ import { ResultsScreen, type MatchResults } from "./results-screen.js";
 import { SettingsDialog } from "./settings-dialog.js";
 import type { ControlsTabConfig } from "./controls-tab.js";
 
+export interface RuntimeLobbyRenderProps {
+  readonly matchmaking: boolean;
+  readonly onFindMatch: () => void;
+  readonly onStartMatch: () => void;
+  readonly onBack: () => void;
+}
+
 export interface MenuShellProps {
   readonly state: MenuState;
   readonly dispatch: (event: MenuEvent) => void;
@@ -22,6 +29,7 @@ export interface MenuShellProps {
   readonly onQuit?: (() => void) | undefined;
   /** Controls-tab remap editor wiring (ADR-0024); see {@link SettingsDialog}. */
   readonly controls?: ControlsTabConfig | undefined;
+  readonly renderLobby?: ((props: RuntimeLobbyRenderProps) => ReactNode) | undefined;
 }
 
 function CreditsView({ brand, onBack }: { brand: BrandConfig; onBack: () => void }): ReactElement {
@@ -56,6 +64,7 @@ export function MenuShell({
   bootProgress,
   onQuit,
   controls,
+  renderLobby,
 }: MenuShellProps): ReactElement | null {
   const selectTab = (tab: SettingsTab) => dispatch({ type: "SET_SETTINGS_TAB", tab });
 
@@ -99,6 +108,18 @@ export function MenuShell({
     case "lobby":
     case "matchmaking": {
       const matchmaking = state.phase === "matchmaking";
+      if (renderLobby) {
+        return (
+          <>
+            {renderLobby({
+              matchmaking,
+              onFindMatch: () => dispatch({ type: "MATCHMAKING_START" }),
+              onStartMatch: () => dispatch({ type: "MATCH_START" }),
+              onBack: () => dispatch({ type: "BACK" }),
+            })}
+          </>
+        );
+      }
       return (
         <div className="tb-scrim">
           <div className="tb-panel" data-testid="lobby">

@@ -1,10 +1,61 @@
 import {
   DEFAULT_ROOM_COUNTDOWN_SECONDS,
   DEFAULT_ROOM_MAX_PLAYERS,
+  DEFAULT_ROOM_MIN_READY_PLAYERS,
   ROOM_CLOSED_CLOSE_CODE,
   ROOM_FULL_CLOSE_CODE,
 } from './room-config.js';
-import type { RoomLifecycleState, RoomPlayerRecord, RoomStorage } from './storage-schema.js';
+import type {
+  RoomJoinCode,
+  RoomLifecyclePhase,
+  RoomLifecycleState,
+  RoomPlayerPresenceStatus,
+  RoomPlayerRecord,
+  RoomResultsSummary,
+  RoomStorage,
+} from './storage-schema.js';
+
+export const ROOM_JOIN_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+
+export interface RoomReadyGateState {
+  readonly phase: RoomLifecyclePhase;
+  readonly canStart: boolean;
+  readonly playerCount: number;
+  readonly readyPlayerCount: number;
+  readonly requiredPlayerCount: number;
+  readonly minPlayers: number;
+  readonly missingReadyPlayerIds: readonly string[];
+  readonly reason?: string;
+}
+
+export interface RoomReadyGateOptions {
+  readonly minPlayers?: number;
+  readonly requiredPlayerIds?: readonly string[];
+}
+
+export interface RoomReconnectEligibility {
+  readonly playerId: string;
+  readonly phase: RoomLifecyclePhase;
+  readonly eligible: boolean;
+  readonly expiresAt?: string;
+  readonly reason?: string;
+}
+
+export interface RoomPresenceProjection {
+  readonly playerId: string;
+  readonly status: RoomPlayerPresenceStatus;
+  readonly ready: boolean;
+  readonly reconnectEligible: boolean;
+  readonly lastSeenAt: string | null;
+  readonly displayName?: string;
+  readonly connectedAt?: string;
+  readonly disconnectedAt?: string;
+}
+
+export interface RoomPresenceProjectionOptions {
+  readonly connectedPlayerIds?: readonly string[];
+  readonly now?: string;
+}
 
 export interface RoomAdmissionState {
   readonly phase: RoomLifecycleState['phase'];
@@ -27,9 +78,28 @@ export class RoomAdmissionRejectedError extends Error {
   }
 }
 
+export class RoomLifecycleRejectedError extends Error {
+  readonly httpStatus: number;
+
+  constructor(message: string, httpStatus = 409) {
+    super(message);
+    this.name = 'RoomLifecycleRejectedError';
+    this.httpStatus = httpStatus;
+  }
+}
+
 export interface RoomPlayerReservation {
   readonly playerId: string;
   readonly storage: RoomStorage;
+}
+
+export interface RoomPlayerAdmissionOptions {
+  readonly displayName?: string;
+}
+
+export interface RoomReadyUpdateResult {
+  readonly storage: RoomStorage;
+  readonly readyGate: RoomReadyGateState;
 }
 
 const optionNumber = (
@@ -38,6 +108,20 @@ const optionNumber = (
 ): number | undefined => {
   const value = options[key];
   return typeof value === 'number' ? value : undefined;
+};
+
+export const normalizeRoomJoinCode = (value: string): string =>
+  value.trim().toUpperCase().replace(/[\s-]+/g, '');
+
+export const isRoomJoinCode = (value: string): value is RoomJoinCode =>
+  ROOM_JOIN_CODE_PATTERN.test(normalizeRoomJoinCode(value));
+
+export const createRoomJoinCode = (value: string): RoomJoinCode => {
+  const normalized = normalizeRoomJoinCode(value);
+  if (!ROOM_JOIN_CODE_PATTERN.test(normalized)) {
+    throw new Error('join code must be 6 characters using A-Z and 2-9, excluding I, O, 0, and 1');
+  }
+  return normalized;
 };
 
 export const resolveRoomMaxPlayers = (
@@ -71,6 +155,18 @@ export const validateRoomOptions = (
 ): void => {
   resolveRoomMaxPlayers(options);
   resolveRoomCountdownMs(options);
+  resolveRoomMinReadyPlayers(options);
+};
+
+export const resolveRoomMinReadyPlayers = (
+  options: Record<string, string | number | boolean | null>,
+  override?: number,
+): number => {
+  const value = override ?? optionNumber(options, 'minReadyPlayers') ?? DEFAULT_ROOM_MIN_READY_PLAYERS;
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error('minReadyPlayers must be a positive integer');
+  }
+  return value;
 };
 
 const playerCount = (players: Record<string, RoomPlayerRecord>): number =>
@@ -117,6 +213,9 @@ export const resolveRoomPlayerCapacity = (storage: RoomStorage): number => {
     : Math.min(configuredMaxPlayers, runtimeCapacity);
 };
 
+export const allowsRoomAdmissionPhase = (phase: RoomLifecyclePhase): boolean =>
+  phase === 'lobby' || phase === 'countdown' || phase === 'active';
+
 const assertRuntimePlayerSlot = (
   storage: RoomStorage,
   playerId: string,
@@ -141,7 +240,7 @@ export const resolveRoomAdmission = (
 ): RoomAdmissionState => {
   const count = playerCount(storage.players);
   const maxPlayers = resolveRoomPlayerCapacity(storage);
-  if (storage.lifecycle.phase === 'finished' || storage.lifecycle.phase === 'archived') {
+  if (!allowsRoomAdmissionPhase(storage.lifecycle.phase)) {
     return {
       phase: storage.lifecycle.phase,
       playerCount: count,
@@ -184,6 +283,145 @@ export const resolveRoomAdmission = (
   };
 };
 
+const sortedPlayerIds = (players: Record<string, unknown>): readonly string[] =>
+  Object.keys(players).sort((left, right) => left.localeCompare(right));
+
+export const resolveRoomReadyGate = (
+  storage: RoomStorage,
+  options: RoomReadyGateOptions = {},
+): RoomReadyGateState => {
+  const minPlayers = resolveRoomMinReadyPlayers(storage.options, options.minPlayers);
+  const rosterPlayerIds = sortedPlayerIds(storage.players);
+  const requiredPlayerIds = [...(options.requiredPlayerIds ?? rosterPlayerIds)].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  const missingReadyPlayerIds = requiredPlayerIds.filter(
+    (playerId) => storage.ready.players[playerId]?.isReady !== true,
+  );
+  const readyPlayerCount = requiredPlayerIds.length - missingReadyPlayerIds.length;
+  const count = rosterPlayerIds.length;
+  if (storage.lifecycle.phase !== 'lobby' && storage.lifecycle.phase !== 'countdown') {
+    return {
+      phase: storage.lifecycle.phase,
+      canStart: false,
+      playerCount: count,
+      readyPlayerCount,
+      requiredPlayerCount: requiredPlayerIds.length,
+      minPlayers,
+      missingReadyPlayerIds,
+      reason: 'room is not waiting for match start',
+    };
+  }
+  if (count < minPlayers) {
+    return {
+      phase: storage.lifecycle.phase,
+      canStart: false,
+      playerCount: count,
+      readyPlayerCount,
+      requiredPlayerCount: requiredPlayerIds.length,
+      minPlayers,
+      missingReadyPlayerIds,
+      reason: 'not enough players ready to start',
+    };
+  }
+  if (missingReadyPlayerIds.length > 0) {
+    return {
+      phase: storage.lifecycle.phase,
+      canStart: false,
+      playerCount: count,
+      readyPlayerCount,
+      requiredPlayerCount: requiredPlayerIds.length,
+      minPlayers,
+      missingReadyPlayerIds,
+      reason: 'waiting for required players to ready up',
+    };
+  }
+  return {
+    phase: storage.lifecycle.phase,
+    canStart: true,
+    playerCount: count,
+    readyPlayerCount,
+    requiredPlayerCount: requiredPlayerIds.length,
+    minPlayers,
+    missingReadyPlayerIds,
+  };
+};
+
+export const resolveRoomReconnectEligibility = (
+  storage: RoomStorage,
+  playerId: string,
+  now: string,
+): RoomReconnectEligibility => {
+  const seat = storage.reconnect.seats[playerId];
+  const player = storage.players[playerId];
+  if (!allowsRoomAdmissionPhase(storage.lifecycle.phase)) {
+    return {
+      playerId,
+      phase: storage.lifecycle.phase,
+      eligible: false,
+      ...(seat?.expiresAt === undefined ? {} : { expiresAt: seat.expiresAt }),
+      reason: 'room is closed',
+    };
+  }
+  if (player === undefined && seat === undefined) {
+    return {
+      playerId,
+      phase: storage.lifecycle.phase,
+      eligible: false,
+      reason: 'player seat is not reserved',
+    };
+  }
+  if (seat?.expiresAt !== undefined && Date.parse(now) >= Date.parse(seat.expiresAt)) {
+    return {
+      playerId,
+      phase: storage.lifecycle.phase,
+      eligible: false,
+      expiresAt: seat.expiresAt,
+      reason: 'reconnect seat expired',
+    };
+  }
+  return {
+    playerId,
+    phase: storage.lifecycle.phase,
+    eligible: true,
+    ...(seat?.expiresAt === undefined ? {} : { expiresAt: seat.expiresAt }),
+  };
+};
+
+export const projectRoomPresence = (
+  storage: RoomStorage,
+  options: RoomPresenceProjectionOptions = {},
+): readonly RoomPresenceProjection[] => {
+  const connectedPlayerIds = new Set(options.connectedPlayerIds ?? []);
+  const playerIds = new Set<string>([
+    ...Object.keys(storage.players),
+    ...Object.keys(storage.presence.players),
+    ...Object.keys(storage.reconnect.seats),
+  ]);
+  return [...playerIds].sort((left, right) => left.localeCompare(right)).map((playerId) => {
+    const player = storage.players[playerId];
+    const presence = storage.presence.players[playerId];
+    const status: RoomPlayerPresenceStatus = connectedPlayerIds.has(playerId)
+      ? 'connected'
+      : presence?.status ?? 'disconnected';
+    const reconnectEligibility = resolveRoomReconnectEligibility(
+      storage,
+      playerId,
+      options.now ?? new Date(0).toISOString(),
+    );
+    return {
+      playerId,
+      status,
+      ready: storage.ready.players[playerId]?.isReady === true,
+      reconnectEligible: reconnectEligibility.eligible,
+      lastSeenAt: presence?.lastSeenAt ?? player?.lastHeartbeatAt ?? player?.joinedAt ?? null,
+      ...(player?.displayName === undefined ? {} : { displayName: player.displayName }),
+      ...(presence?.connectedAt === undefined ? {} : { connectedAt: presence.connectedAt }),
+      ...(presence?.disconnectedAt === undefined ? {} : { disconnectedAt: presence.disconnectedAt }),
+    };
+  });
+};
+
 export const assertRoomAdmission = (storage: RoomStorage, playerId: string): void => {
   const admission = resolveRoomAdmission(storage, playerId);
   if (!admission.acceptsPlayers) {
@@ -208,37 +446,196 @@ const startCountdown = (
   };
 };
 
+const resetCountdownToLobby = (
+  lifecycle: RoomLifecycleState,
+  now: string,
+  reason: string,
+): RoomLifecycleState => ({
+  phase: 'lobby',
+  enteredAt: now,
+  reason,
+});
+
+export const setRoomPlayerReady = (
+  storage: RoomStorage,
+  playerId: string,
+  isReady: boolean,
+  now: string,
+): RoomReadyUpdateResult => {
+  if (storage.players[playerId] === undefined) {
+    throw new RoomLifecycleRejectedError('player is not in the room', 404);
+  }
+  if (storage.lifecycle.phase !== 'lobby' && storage.lifecycle.phase !== 'countdown') {
+    throw new RoomLifecycleRejectedError('room is not waiting for match start');
+  }
+  const readyStorage: RoomStorage = {
+    ...storage,
+    ready: {
+      players: {
+        ...storage.ready.players,
+        [playerId]: {
+          playerId,
+          isReady,
+          updatedAt: now,
+        },
+      },
+    },
+  };
+  const readyGate = resolveRoomReadyGate(readyStorage);
+  if (readyGate.canStart) {
+    return {
+      storage:
+        readyStorage.lifecycle.phase === 'lobby'
+          ? {
+              ...readyStorage,
+              lifecycle: startCountdown(
+                readyStorage.lifecycle,
+                now,
+                resolveRoomCountdownMs(readyStorage.options),
+              ),
+            }
+          : readyStorage,
+      readyGate,
+    };
+  }
+  if (readyStorage.lifecycle.phase === 'countdown') {
+    return {
+      storage: {
+        ...readyStorage,
+        lifecycle: resetCountdownToLobby(
+          readyStorage.lifecycle,
+          now,
+          readyGate.reason ?? 'ready gate no longer satisfied',
+        ),
+      },
+      readyGate,
+    };
+  }
+  return { storage: readyStorage, readyGate };
+};
+
 export const admitPlayerToRoom = (
   storage: RoomStorage,
   playerId: string,
   now: string,
+  options: RoomPlayerAdmissionOptions = {},
 ): RoomStorage => {
   assertRoomAdmission(storage, playerId);
   const existing = storage.players[playerId];
+  const displayName = options.displayName ?? existing?.displayName;
   const players = {
     ...storage.players,
     [playerId]: {
       id: playerId,
       joinedAt: existing?.joinedAt ?? now,
       lastHeartbeatAt: now,
-      ...(existing?.displayName === undefined ? {} : { displayName: existing.displayName }),
+      ...(displayName === undefined ? {} : { displayName }),
     },
   };
-  const shouldStartCountdown = storage.lifecycle.phase === 'lobby' && playerCount(players) > 0;
+  const readyPlayers = {
+    ...storage.ready.players,
+    [playerId]: storage.ready.players[playerId] ?? {
+      playerId,
+      isReady: false,
+      updatedAt: now,
+    },
+  };
+  const previousPresence = storage.presence.players[playerId];
+  const previousReconnectSeat = storage.reconnect.seats[playerId];
+  const presencePlayers = {
+    ...storage.presence.players,
+    [playerId]: {
+      playerId,
+      status: 'connected' as const,
+      lastSeenAt: now,
+      connectedAt: previousPresence?.connectedAt ?? now,
+    },
+  };
+  const reconnectSeats = {
+    ...storage.reconnect.seats,
+    [playerId]: {
+      playerId,
+      issuedAt: previousReconnectSeat?.issuedAt ?? now,
+    },
+  };
   return {
     ...storage,
     players,
+    ready: { players: readyPlayers },
+    presence: { players: presencePlayers },
+    reconnect: { seats: reconnectSeats },
     emptySince: null,
-    lifecycle: shouldStartCountdown
-      ? startCountdown(storage.lifecycle, now, resolveRoomCountdownMs(storage.options))
-      : storage.lifecycle,
+    lifecycle: storage.lifecycle,
   };
 };
+
+export const markRoomPlayerDisconnected = (
+  storage: RoomStorage,
+  playerId: string,
+  now: string,
+  reconnectExpiresAt: string,
+): RoomStorage => {
+  if (storage.players[playerId] === undefined) {
+    return storage;
+  }
+  const previousPresence = storage.presence.players[playerId];
+  return {
+    ...storage,
+    presence: {
+      players: {
+        ...storage.presence.players,
+        [playerId]: {
+          playerId,
+          status: 'disconnected',
+          lastSeenAt: now,
+          ...(previousPresence?.connectedAt === undefined
+            ? {}
+            : { connectedAt: previousPresence.connectedAt }),
+          disconnectedAt: now,
+        },
+      },
+    },
+    reconnect: {
+      seats: {
+        ...storage.reconnect.seats,
+        [playerId]: {
+          playerId,
+          issuedAt: storage.reconnect.seats[playerId]?.issuedAt ?? now,
+          expiresAt: reconnectExpiresAt,
+        },
+      },
+    },
+  };
+};
+
+const sortedResultPlayerIds = (storage: RoomStorage): readonly string[] =>
+  [
+    ...new Set([
+      ...Object.keys(storage.players),
+      ...Object.keys(storage.ready.players),
+      ...Object.keys(storage.presence.players),
+      ...Object.keys(storage.reconnect.seats),
+    ]),
+  ].sort((left, right) => left.localeCompare(right));
+
+export const createRoomResultsSummary = (
+  storage: RoomStorage,
+  now: string,
+  reason: string,
+): RoomResultsSummary => ({
+  completedAt: now,
+  reason,
+  players: sortedResultPlayerIds(storage).map((playerId) => ({
+    playerId,
+    outcome: reason === 'match complete' ? 'completed' : 'abandoned',
+  })),
+});
 
 export const reserveRoomPlayer = (
   storage: RoomStorage,
   requestedPlayerId: string | undefined,
   now: string,
+  options: RoomPlayerAdmissionOptions = {},
 ): RoomPlayerReservation => {
   const maxPlayers = resolveRoomPlayerCapacity(storage);
   if (requestedPlayerId !== undefined) {
@@ -252,7 +649,7 @@ export const reserveRoomPlayer = (
     assertRuntimePlayerSlot(storage, requestedPlayerId, maxPlayers);
     return {
       playerId: requestedPlayerId,
-      storage: admitPlayerToRoom(storage, requestedPlayerId, now),
+      storage: admitPlayerToRoom(storage, requestedPlayerId, now, options),
     };
   }
 
@@ -261,7 +658,7 @@ export const reserveRoomPlayer = (
     if (storage.players[playerId] === undefined) {
       return {
         playerId,
-        storage: admitPlayerToRoom(storage, playerId, now),
+        storage: admitPlayerToRoom(storage, playerId, now, options),
       };
     }
   }
@@ -280,6 +677,7 @@ export const finishRoomIfEmpty = (
   return {
     ...storage,
     emptySince: now,
+    results: storage.results ?? createRoomResultsSummary(storage, now, reason),
     lifecycle: {
       phase: 'finished',
       enteredAt: now,
@@ -318,6 +716,21 @@ export const advanceLifecycleForAlarm = (
   );
   if (nowMs < countdownEndsAt) {
     return { storage, changed: false, runSimulation: false, rescheduleAtMs: countdownEndsAt };
+  }
+  const readyGate = resolveRoomReadyGate(storage);
+  if (!readyGate.canStart) {
+    return {
+      storage: {
+        ...storage,
+        lifecycle: resetCountdownToLobby(
+          storage.lifecycle,
+          now,
+          readyGate.reason ?? 'ready gate no longer satisfied',
+        ),
+      },
+      changed: true,
+      runSimulation: false,
+    };
   }
   return {
     storage: {

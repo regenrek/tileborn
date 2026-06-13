@@ -21,6 +21,15 @@ import {
   type PlaytestStartPayload,
   type StructuredErrorPayload,
 } from './wire-helpers.js';
+import type {
+  LobbyCreateResponse,
+  LobbyJoinResponse,
+  LobbyReadyResponse,
+  PlaytestSummary,
+  RoomLobbySummary,
+  RoomReconnectResponse,
+  RoomResultsResponse,
+} from '../types.js';
 import type { WebSocket as MiniflareWebSocket } from 'miniflare';
 
 /**
@@ -62,6 +71,94 @@ const joinPlaytest = async (
       options: { idempotencyKey: roomId },
     }),
   });
+
+type ReservedLobbyCreateResponse = LobbyCreateResponse & {
+  readonly playerId: string;
+  readonly handoffToken: string;
+  readonly reconnectToken: string;
+};
+
+type ReservedLobbyJoinResponse = LobbyJoinResponse & {
+  readonly reconnectToken: string;
+};
+
+type SmokeHarness = Awaited<ReturnType<typeof bootMiniflare>>;
+type SmokeFetchResponse = Awaited<ReturnType<SmokeHarness['fetch']>>;
+type ReadyPlayerCredential = {
+  readonly playerId: string;
+  readonly reconnectToken: string;
+};
+
+const postJson = (
+  harness: SmokeHarness,
+  path: string,
+  body: unknown,
+): Promise<SmokeFetchResponse> =>
+  harness.fetch(`http://localhost${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+const lobbyPlayer = (
+  lobby: RoomLobbySummary,
+  playerId: string,
+): RoomLobbySummary['players'][number] | undefined =>
+  lobby.players.find((player) => player.playerId === playerId);
+
+const waitForLobbyPlayer = async (
+  harness: Awaited<ReturnType<typeof bootMiniflare>>,
+  roomId: string,
+  playerId: string,
+  predicate: (player: RoomLobbySummary['players'][number], lobby: RoomLobbySummary) => boolean,
+  label: string,
+): Promise<RoomLobbySummary> => {
+  const deadline = performance.now() + 1_000;
+  let lastSummary: RoomLobbySummary | null = null;
+  while (performance.now() < deadline) {
+    const response = await harness.fetch(`http://localhost/lobbies/${roomId}`);
+    expect(response.status).toBe(200);
+    const lobby = await parseJson<RoomLobbySummary>(response);
+    lastSummary = lobby;
+    const player = lobbyPlayer(lobby, playerId);
+    if (player !== undefined && predicate(player, lobby)) {
+      return lobby;
+    }
+    await delay(25);
+  }
+  throw new Error(`timed out waiting for ${label}; last lobby=${JSON.stringify(lastSummary)}`);
+};
+
+const readyPlayersAndStart = async (
+  harness: Awaited<ReturnType<typeof bootMiniflare>>,
+  roomId: string,
+  players: readonly ReadyPlayerCredential[],
+): Promise<RoomLobbySummary> => {
+  for (const player of players) {
+    const response = await postJson(harness, `/lobbies/${roomId}/ready`, {
+      playerId: player.playerId,
+      ready: true,
+      reconnectToken: player.reconnectToken,
+    });
+    expect(response.status).toBe(200);
+  }
+  await harness.triggerRoomAlarm(roomId);
+  const response = await harness.fetch(`http://localhost/lobbies/${roomId}`);
+  expect(response.status).toBe(200);
+  const lobby = await parseJson<RoomLobbySummary>(response);
+  expect(lobby.phase).toBe('active');
+  return lobby;
+};
+
+const closeSocketQuietly = (socket: MiniflareWebSocket): void => {
+  try {
+    socket.close(1000, 'done');
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('already closed')) {
+      throw error;
+    }
+  }
+};
 
 describe('game-host smoke — health and discover', () => {
   let dispose: (() => Promise<void>) | null = null;
@@ -135,8 +232,8 @@ describe('game-host smoke — playtest creation', () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
     const roomId = await createRoom(harness, 'playtest-idem-smoke');
-    const first = await joinPlaytest(harness, roomId, 'player-one');
-    const second = await joinPlaytest(harness, roomId, 'player-two');
+    const first = await joinPlaytest(harness, roomId, 'player-1');
+    const second = await joinPlaytest(harness, roomId, 'player-2');
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     const firstBody = await parseJson<PlaytestStartPayload>(first);
@@ -171,6 +268,198 @@ describe('game-host smoke — playtest creation', () => {
     expect(response.status).toBe(400);
     const body = await parseJson<StructuredErrorPayload>(response);
     expect(body.error).toContain('mapId');
+  });
+});
+
+describe('game-host smoke — M4 two-client lobby proof', () => {
+  let dispose: (() => Promise<void>) | null = null;
+
+  afterEach(async () => {
+    if (dispose) {
+      await dispose();
+      dispose = null;
+    }
+  });
+
+  it('proves join-code lobby, ready start, reconnect resume, and observable results summary', async () => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const sockets: MiniflareWebSocket[] = [];
+
+    try {
+      const createResponse = await postJson(harness, '/lobbies/create', {
+        mapId: 'map:smoke',
+        displayName: 'M4 smoke lobby',
+        visibility: 'private',
+        reserveCreator: true,
+        playerDisplayName: 'Ada',
+      });
+      expect(createResponse.status).toBe(201);
+      const created = await parseJson<ReservedLobbyCreateResponse>(createResponse);
+      expect(created.joinCode).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+      expect(created.roomId).toBe(`lobby-${created.joinCode}`);
+      expect(created.joinUrl).toBe(`http://localhost/lobbies/join?code=${created.joinCode}`);
+      expect(created.wsUrl).toContain(`/rooms/${created.roomId}/connect`);
+      expect(created.wsUrl).toContain(`playerId=${created.playerId}`);
+      expect(created.handoffToken.length).toBeGreaterThan(0);
+      expect(created.reconnectToken.length).toBeGreaterThan(0);
+      expect(created.lobby.players).toHaveLength(1);
+      expect(lobbyPlayer(created.lobby, created.playerId)).toMatchObject({
+        displayName: 'Ada',
+        ready: false,
+        reconnectEligible: true,
+      });
+
+      const creatorSocket = await harness.websocketConnect(created.wsUrl);
+      sockets.push(creatorSocket);
+      await waitForMessage(creatorSocket, (message) => isWelcomeForPlayer(message, created.playerId), {
+        timeoutMs: 1_000,
+        label: 'creator WelcomeSnapshot',
+      });
+
+      const joinResponse = await postJson(harness, '/lobbies/join', {
+        joinCode: created.joinCode.toLowerCase(),
+        displayName: 'Grace',
+      });
+      expect(joinResponse.status).toBe(201);
+      const joined = await parseJson<ReservedLobbyJoinResponse>(joinResponse);
+      expect(joined.roomId).toBe(created.roomId);
+      expect(joined.playerId).not.toBe(created.playerId);
+      expect(joined.wsUrl).toContain(`/rooms/${created.roomId}/connect`);
+      expect(joined.wsUrl).toContain(`playerId=${joined.playerId}`);
+      expect(joined.handoffToken.length).toBeGreaterThan(0);
+      expect(joined.reconnectToken.length).toBeGreaterThan(0);
+      expect(joined.lobby.players.map((player) => player.playerId).sort()).toEqual([
+        created.playerId,
+        joined.playerId,
+      ]);
+      expect(lobbyPlayer(joined.lobby, joined.playerId)).toMatchObject({
+        displayName: 'Grace',
+        ready: false,
+        reconnectEligible: true,
+      });
+
+      const joinerSocket = await harness.websocketConnect(joined.wsUrl);
+      sockets.push(joinerSocket);
+      await waitForMessage(joinerSocket, (message) => isWelcomeForPlayer(message, joined.playerId), {
+        timeoutMs: 1_000,
+        label: 'joiner WelcomeSnapshot',
+      });
+
+      const codeSummary = await parseJson<RoomLobbySummary>(
+        await harness.fetch(`http://localhost/lobbies/code/${created.joinCode}`),
+      );
+      expect(codeSummary).toMatchObject({
+        roomId: created.roomId,
+        playerCount: 2,
+        minReadyPlayers: 2,
+        canStart: false,
+      });
+      expect(codeSummary.players.map((player) => player.playerId).sort()).toEqual([
+        created.playerId,
+        joined.playerId,
+      ]);
+
+      const firstReadyResponse = await postJson(harness, `/lobbies/${created.roomId}/ready`, {
+        playerId: created.playerId,
+        ready: true,
+        reconnectToken: created.reconnectToken,
+      });
+      expect(firstReadyResponse.status).toBe(200);
+      const firstReady = await parseJson<LobbyReadyResponse>(firstReadyResponse);
+      expect(firstReady.canStart).toBe(false);
+      expect(firstReady.lobby.phase).toBe('lobby');
+      expect(lobbyPlayer(firstReady.lobby, created.playerId)).toMatchObject({ ready: true });
+
+      const secondReadyResponse = await postJson(harness, `/lobbies/${created.roomId}/ready`, {
+        playerId: joined.playerId,
+        ready: true,
+        reconnectToken: joined.reconnectToken,
+      });
+      expect(secondReadyResponse.status).toBe(200);
+      const secondReady = await parseJson<LobbyReadyResponse>(secondReadyResponse);
+      expect(secondReady.canStart).toBe(true);
+      expect(secondReady.lobby.phase).toBe('countdown');
+      expect(secondReady.lobby.players.map((player) => player.ready)).toEqual([true, true]);
+
+      await harness.triggerRoomAlarm(created.roomId);
+      const activeSummary = await waitForLobbyPlayer(
+        harness,
+        created.roomId,
+        created.playerId,
+        (_player, lobby) => lobby.phase === 'active',
+        'active lobby phase',
+      );
+      expect(activeSummary.canStart).toBe(false);
+      expect(activeSummary.players.map((player) => player.ready)).toEqual([true, true]);
+
+      const playtestSummary = await parseJson<PlaytestSummary>(
+        await harness.fetch(`http://localhost/playtest/${created.roomId}`),
+      );
+      expect(playtestSummary.metrics).toMatchObject({
+        lifecyclePhase: 'active',
+        playerCount: 2,
+        connectedClients: 2,
+      });
+
+      const liveResults = await parseJson<RoomResultsResponse>(
+        await harness.fetch(`http://localhost/rooms/${created.roomId}/results`),
+      );
+      expect(liveResults).toEqual({ roomId: created.roomId, results: null });
+
+      creatorSocket.close(1000, 'simulate disconnect');
+      const disconnectedSummary = await waitForLobbyPlayer(
+        harness,
+        created.roomId,
+        created.playerId,
+        (player) => player.status === 'disconnected' && player.reconnectEligible === true,
+        'creator disconnect presence',
+      );
+      expect(lobbyPlayer(disconnectedSummary, created.playerId)).toMatchObject({
+        ready: true,
+        status: 'disconnected',
+      });
+
+      const reconnectResponse = await postJson(harness, '/rooms/reconnect', {
+        roomId: created.roomId,
+        playerId: created.playerId,
+        reconnectToken: created.reconnectToken,
+      });
+      expect(reconnectResponse.status).toBe(200);
+      const reconnected = await parseJson<RoomReconnectResponse>(reconnectResponse);
+      expect(reconnected.roomId).toBe(created.roomId);
+      expect(reconnected.playerId).toBe(created.playerId);
+      expect(reconnected.wsUrl).toContain(`/rooms/${created.roomId}/connect`);
+      expect(reconnected.wsUrl).toContain(`playerId=${created.playerId}`);
+      expect(reconnected.handoffToken.length).toBeGreaterThan(0);
+      expect(reconnected.reconnectToken?.length).toBeGreaterThan(0);
+
+      const reconnectedSocket = await harness.websocketConnect(reconnected.wsUrl);
+      sockets.push(reconnectedSocket);
+      await waitForMessage(
+        reconnectedSocket,
+        (message) => isWelcomeForPlayer(message, created.playerId),
+        {
+          timeoutMs: 1_000,
+          label: 'reconnected creator WelcomeSnapshot',
+        },
+      );
+      const resumedSummary = await waitForLobbyPlayer(
+        harness,
+        created.roomId,
+        created.playerId,
+        (player, lobby) => lobby.phase === 'active' && player.status === 'connected',
+        'creator reconnect presence',
+      );
+      expect(lobbyPlayer(resumedSummary, created.playerId)).toMatchObject({
+        ready: true,
+        status: 'connected',
+      });
+    } finally {
+      for (const socket of sockets) {
+        closeSocketQuietly(socket);
+      }
+    }
   });
 });
 
@@ -217,18 +506,18 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
       return parseJson<PlaytestStartPayload>(response);
     };
 
-    const first = await start('player-a');
+    const first = await start('player-1');
     const firstSocket = await harness.websocketConnect(first.wsUrl);
     await waitForMessage(
       firstSocket,
-      (message) => isWelcomeForPlayer(message, 'player-a'),
+      (message) => isWelcomeForPlayer(message, 'player-1'),
       {
         timeoutMs: 500,
-        label: 'player-a WelcomeSnapshot',
+        label: 'player-1 WelcomeSnapshot',
       },
     );
 
-    const second = await joinPlaytest(harness, roomId, 'player-b');
+    const second = await joinPlaytest(harness, roomId);
     expect(second.status).toBe(409);
     expect(await parseJson<{ readonly error: string }>(second)).toEqual({
       error: 'room capacity reached',
@@ -306,15 +595,17 @@ describe('game-host smoke — live simulation fanout', () => {
       const roomKey = `smoke-room-load-${playerCount}`;
       const players = Array.from(
         { length: playerCount },
-        (_, index) => `player-${playerCount}-${String(index + 1).padStart(2, '0')}`,
+        (_, index) => `player-${index + 1}`,
       );
       const sockets: MiniflareWebSocket[] = [];
+      const readyCredentials: ReadyPlayerCredential[] = [];
       const cleanupAcks: (() => void)[] = [];
       const connectStarted = performance.now();
       try {
         for (const playerId of players) {
           const started = await startSharedRoom(harness, roomKey, playerId, playerCount);
           expect(started.playtestId).toBe(roomKey);
+          readyCredentials.push({ playerId, reconnectToken: started.reconnectToken });
           const socket = await harness.websocketConnect(started.wsUrl);
           cleanupAcks.push(attachSnapshotAck(socket));
           await waitForMessage(socket, (message) => isWelcomeForPlayer(message, playerId), {
@@ -323,6 +614,7 @@ describe('game-host smoke — live simulation fanout', () => {
           });
           sockets.push(socket);
         }
+        await readyPlayersAndStart(harness, roomKey, readyCredentials);
         const connectElapsedMs = performance.now() - connectStarted;
         expect(connectElapsedMs).toBeLessThan(5_000);
 
@@ -389,10 +681,12 @@ describe('game-host smoke — live simulation fanout', () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
     const roomKey = 'smoke-room-fanout';
-    const players = ['player-a', 'player-b', 'player-c'] as const;
+    const players = ['player-1', 'player-2', 'player-3'] as const;
     const sockets: MiniflareWebSocket[] = [];
+    const readyCredentials: ReadyPlayerCredential[] = [];
     for (const playerId of players) {
       const started = await startSharedRoom(harness, roomKey, playerId);
+      readyCredentials.push({ playerId, reconnectToken: started.reconnectToken });
       const socket = await harness.websocketConnect(started.wsUrl);
       await waitForMessage(socket, (message) => isWelcomeForPlayer(message, playerId), {
         timeoutMs: 1_000,
@@ -400,6 +694,7 @@ describe('game-host smoke — live simulation fanout', () => {
       });
       sockets.push(socket);
     }
+    await readyPlayersAndStart(harness, roomKey, readyCredentials);
     const deltaWaits = sockets.map((socket, index) =>
       waitForMessage(socket, (message) => message._tag === 'DeltaSnapshot', {
         timeoutMs: 1_000,
@@ -416,12 +711,14 @@ describe('game-host smoke — live simulation fanout', () => {
   it('delivers SnapshotDelta within two ticks after InputCommand', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
-    const sender = await startSharedRoom(harness, 'smoke-input-room', 'sender');
-    const observer = await startSharedRoom(harness, 'smoke-input-room', 'observer');
+    const senderId = 'player-1';
+    const observerId = 'player-2';
+    const sender = await startSharedRoom(harness, 'smoke-input-room', senderId);
+    const observer = await startSharedRoom(harness, 'smoke-input-room', observerId);
     const senderSocket = await harness.websocketConnect(sender.wsUrl);
     const senderJoin = waitForMessage(
       senderSocket,
-      (message) => isWelcomeForPlayer(message, 'sender'),
+      (message) => isWelcomeForPlayer(message, senderId),
       {
         timeoutMs: 500,
         label: 'sender WelcomeSnapshot',
@@ -430,15 +727,19 @@ describe('game-host smoke — live simulation fanout', () => {
     const observerSocket = await harness.websocketConnect(observer.wsUrl);
     const observerJoin = waitForMessage(
       observerSocket,
-      (message) => isWelcomeForPlayer(message, 'observer'),
+      (message) => isWelcomeForPlayer(message, observerId),
       { timeoutMs: 500, label: 'observer WelcomeSnapshot' },
     );
     await Promise.all([senderJoin, observerJoin]);
-    const deltaWait = waitForMessage(observerSocket, (message) => isDeltaForPlayer(message, 'sender'), {
+    await readyPlayersAndStart(harness, sender.playtestId, [
+      { playerId: senderId, reconnectToken: sender.reconnectToken },
+      { playerId: observerId, reconnectToken: observer.reconnectToken },
+    ]);
+    const deltaWait = waitForMessage(observerSocket, (message) => isDeltaForPlayer(message, senderId), {
       timeoutMs: 1_000,
       label: 'sender DeltaSnapshot',
     });
-    senderSocket.send(encodeInputCommand('sender', 1, { move: 'north' }));
+    senderSocket.send(encodeInputCommand(senderId, 1, { move: 'north' }));
     await harness.triggerRoomAlarm(sender.playtestId);
     await harness.triggerRoomAlarm(sender.playtestId);
     const delta = await deltaWait;
@@ -454,11 +755,11 @@ describe('game-host smoke — live simulation fanout', () => {
     const harness = await bootMiniflare({ heartbeatTimeoutSeconds: 1 });
     dispose = harness.mfDispose;
     const roomKey = 'smoke-heartbeat-room';
-    const stale = await startSharedRoom(harness, roomKey, 'stale-player');
+    const stale = await startSharedRoom(harness, roomKey, 'player-1');
     const staleSocket = await harness.websocketConnect(stale.wsUrl);
     await waitForMessage(
       staleSocket,
-      (message) => isWelcomeForPlayer(message, 'stale-player'),
+      (message) => isWelcomeForPlayer(message, 'player-1'),
       {
         timeoutMs: 500,
         label: 'stale WelcomeSnapshot',
@@ -479,23 +780,33 @@ describe('game-host smoke — live simulation fanout', () => {
       };
     }>(await harness.fetch(`http://localhost/playtest/${roomKey}`));
     expect(summary.connectedClients).toBe(0);
-    expect(summary.metrics.lifecyclePhase).toBe('finished');
+    expect(summary.metrics.lifecyclePhase).toBe('lobby');
     expect(summary.metrics.connectedClients).toBe(0);
-    expect(summary.metrics.playerCount).toBe(0);
+    expect(summary.metrics.playerCount).toBe(1);
     expect(summary.metrics.transport.trackedClients).toBe(0);
-    staleSocket.close(1000, 'done');
+
+    const lobby = await parseJson<RoomLobbySummary>(
+      await harness.fetch(`http://localhost/lobbies/${roomKey}`),
+    );
+    expect(lobbyPlayer(lobby, 'player-1')).toMatchObject({
+      status: 'disconnected',
+      reconnectEligible: true,
+    });
+    closeSocketQuietly(staleSocket);
   });
 
-  it('removes a peer from room state when a websocket disconnects', async () => {
+  it('marks a peer disconnected while keeping its reconnect seat', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
     const roomKey = 'smoke-cancel-room';
-    const leaver = await startSharedRoom(harness, roomKey, 'leaver');
-    const peer = await startSharedRoom(harness, roomKey, 'peer');
+    const leaverId = 'player-1';
+    const peerId = 'player-2';
+    const leaver = await startSharedRoom(harness, roomKey, leaverId);
+    const peer = await startSharedRoom(harness, roomKey, peerId);
     const leaverSocket = await harness.websocketConnect(leaver.wsUrl);
     await waitForMessage(
       leaverSocket,
-      (message) => isWelcomeForPlayer(message, 'leaver'),
+      (message) => isWelcomeForPlayer(message, leaverId),
       {
         timeoutMs: 500,
         label: 'leaver WelcomeSnapshot',
@@ -504,7 +815,7 @@ describe('game-host smoke — live simulation fanout', () => {
     const peerSocket = await harness.websocketConnect(peer.wsUrl);
     const peerJoin = waitForMessage(
       peerSocket,
-      (message) => isWelcomeForPlayer(message, 'peer'),
+      (message) => isWelcomeForPlayer(message, peerId),
       {
         timeoutMs: 500,
         label: 'peer WelcomeSnapshot',
@@ -522,7 +833,16 @@ describe('game-host smoke — live simulation fanout', () => {
     }>(await harness.fetch(`http://localhost/playtest/${roomKey}`));
     expect(summary.connectedClients).toBe(1);
     expect(summary.metrics.connectedClients).toBe(1);
-    expect(summary.metrics.playerCount).toBe(1);
+    expect(summary.metrics.playerCount).toBe(2);
+
+    const lobby = await parseJson<RoomLobbySummary>(
+      await harness.fetch(`http://localhost/lobbies/${roomKey}`),
+    );
+    expect(lobbyPlayer(lobby, leaverId)).toMatchObject({
+      status: 'disconnected',
+      reconnectEligible: true,
+    });
+    expect(lobbyPlayer(lobby, peerId)).toMatchObject({ status: 'connected' });
     peerSocket.close(1000, 'done');
   });
 });

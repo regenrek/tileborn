@@ -65,6 +65,8 @@ const roomReady = {
   roomUrl: 'http://127.0.0.1:8787/rooms/room-test',
   wsUrl: 'ws://127.0.0.1:8787/rooms/room-test/connect',
   deeplink: 'tileborne://playtest/room-test',
+  joinCode: 'ABC234',
+  joinUrl: 'http://127.0.0.1:8787/lobbies/join?code=ABC234',
 };
 
 describe('playtest multiplayer modal flow', () => {
@@ -100,7 +102,23 @@ describe('playtest multiplayer modal flow', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ roomId: 'room-test', wsUrl: 'http://127.0.0.1:8787/rooms/room-test/connect' }),
+        json: async () => ({
+          roomId: 'room-test',
+          wsUrl: 'http://127.0.0.1:8787/rooms/room-test/connect',
+          joinCode: 'ABC234',
+          joinUrl: 'http://127.0.0.1:8787/lobbies/join?code=ABC234',
+          lobby: {
+            roomId: 'room-test',
+            mapId: 'map:test',
+            phase: 'lobby',
+            lobby: { visibility: 'private', joinCode: 'ABC234' },
+            playerCount: 0,
+            maxPlayers: 8,
+            minReadyPlayers: 2,
+            canStart: false,
+            players: [],
+          },
+        }),
       }),
     );
   });
@@ -138,6 +156,9 @@ describe('playtest multiplayer modal flow', () => {
     expect((screen.getByTestId('playtest-host-ws-url') as HTMLInputElement).value).toBe(
       roomReady.wsUrl,
     );
+    expect((screen.getByTestId('playtest-host-join-code') as HTMLInputElement).value).toBe(
+      roomReady.joinCode,
+    );
   });
 
   it('runs hostLocalMatch store action through mocked IPC and fetch', async () => {
@@ -151,17 +172,19 @@ describe('playtest multiplayer modal flow', () => {
     });
     expect(window.tileborne.runtime.startLocalHost).toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:8787/rooms/create',
+      'http://127.0.0.1:8787/lobbies/create',
       expect.objectContaining({ method: 'POST' }),
     );
     const fetchMock = vi.mocked(fetch);
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       mapId: 'map:test',
+      visibility: 'private',
       mapPackage: { manifest: { schemaVersion: 1 } },
       playerModelSelections: [{ playerId: 'player-1', modelId: 'model:test' }],
       options: { maxPlayers: 8 },
     });
     expect(usePlaytestMultiplayerStore.getState().roomReady?.wsUrl).toBe(roomReady.wsUrl);
+    expect(usePlaytestMultiplayerStore.getState().roomReady?.joinCode).toBe(roomReady.joinCode);
   });
 
   it('submits join dialog input to join handler', () => {

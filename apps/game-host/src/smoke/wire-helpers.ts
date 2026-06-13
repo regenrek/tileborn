@@ -13,6 +13,7 @@ export interface PlaytestStartPayload {
   readonly playtestId: string;
   readonly wsUrl: string;
   readonly handoffToken: string;
+  readonly reconnectToken: string;
   readonly playerId: string;
 }
 

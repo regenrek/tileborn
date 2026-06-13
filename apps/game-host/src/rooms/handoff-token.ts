@@ -1,14 +1,21 @@
 import { MIN_HANDOFF_SIGNING_KEY_LENGTH } from "./room-config.js";
 
 export interface HandoffTokenPayload {
+  readonly aud: typeof ROOM_ACCESS_TOKEN_AUDIENCE;
   readonly playtestId: string;
   readonly playerId: string;
-  readonly exp: number;
+  readonly purpose: RoomAccessTokenPurpose;
+  /** Omitted for durable reconnect credentials; room reconnect seats own expiry. */
+  readonly exp?: number;
 }
+
+export type RoomAccessTokenPurpose = "handoff" | "reconnect";
 
 export interface HandoffSigningEnv {
   readonly HANDOFF_SIGNING_KEY?: string;
 }
+
+export const ROOM_ACCESS_TOKEN_AUDIENCE = "tileborne.game-host.room" as const;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -46,12 +53,25 @@ const importHmacKey = async (env: HandoffSigningEnv): Promise<CryptoKey> => {
   );
 };
 
-const canonicalPayload = (payload: HandoffTokenPayload): string =>
-  JSON.stringify({
-    exp: payload.exp,
+const canonicalPayload = (payload: HandoffTokenPayload): string => {
+  const body: {
+    readonly aud: typeof ROOM_ACCESS_TOKEN_AUDIENCE;
+    readonly exp?: number;
+    readonly playerId: string;
+    readonly playtestId: string;
+    readonly purpose: RoomAccessTokenPurpose;
+  } = {
+    aud: payload.aud,
+    ...(payload.exp === undefined ? {} : { exp: payload.exp }),
     playerId: payload.playerId,
     playtestId: payload.playtestId,
-  });
+    purpose: payload.purpose,
+  };
+  return JSON.stringify(body);
+};
+
+const isRoomAccessTokenPurpose = (value: unknown): value is RoomAccessTokenPurpose =>
+  value === "handoff" || value === "reconnect";
 
 const toBase64Url = (bytes: Uint8Array): string =>
   btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -68,14 +88,26 @@ const fromBase64Url = (value: string): Uint8Array => {
 
 export const mintHandoffToken = async (
   env: HandoffSigningEnv,
-  input: { readonly playtestId: string; readonly playerId: string; readonly ttlSeconds: number },
+  input: {
+    readonly playtestId: string;
+    readonly playerId: string;
+    readonly ttlSeconds?: number;
+    readonly purpose?: RoomAccessTokenPurpose;
+  },
 ): Promise<string> => {
   const key = await importHmacKey(env);
-  const exp = Math.floor(Date.now() / 1000) + input.ttlSeconds;
+  const purpose = input.purpose ?? "handoff";
+  if (purpose === "handoff" && input.ttlSeconds === undefined) {
+    throw new Error("handoff tokens require ttlSeconds");
+  }
+  const exp =
+    input.ttlSeconds === undefined ? undefined : Math.floor(Date.now() / 1000) + input.ttlSeconds;
   const payload: HandoffTokenPayload = {
+    aud: ROOM_ACCESS_TOKEN_AUDIENCE,
     playtestId: input.playtestId,
     playerId: input.playerId,
-    exp,
+    purpose,
+    ...(exp === undefined ? {} : { exp }),
   };
   const canonical = canonicalPayload(payload);
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(canonical));
@@ -85,7 +117,7 @@ export const mintHandoffToken = async (
 export const verifyHandoffToken = async (
   env: HandoffSigningEnv,
   token: string,
-  expected: { readonly playtestId: string },
+  expected: { readonly playtestId: string; readonly purpose?: RoomAccessTokenPurpose },
 ): Promise<{ readonly playerId: string } | null> => {
   if (!isHandoffSigningKeyValid(env)) {
     return null;
@@ -112,16 +144,24 @@ export const verifyHandoffToken = async (
     return null;
   }
   if (
+    parsed.aud !== ROOM_ACCESS_TOKEN_AUDIENCE ||
     typeof parsed.playtestId !== "string" ||
     typeof parsed.playerId !== "string" ||
-    typeof parsed.exp !== "number"
+    !isRoomAccessTokenPurpose(parsed.purpose) ||
+    (parsed.exp !== undefined && typeof parsed.exp !== "number")
   ) {
     return null;
   }
   if (parsed.playtestId !== expected.playtestId) {
     return null;
   }
-  if (parsed.exp < Math.floor(Date.now() / 1000)) {
+  if (parsed.purpose !== (expected.purpose ?? "handoff")) {
+    return null;
+  }
+  if (parsed.purpose === "handoff" && parsed.exp === undefined) {
+    return null;
+  }
+  if (parsed.exp !== undefined && parsed.exp < Math.floor(Date.now() / 1000)) {
     return null;
   }
   const key = await importHmacKey(env);

@@ -70,6 +70,30 @@ describe("RuntimeRoot", () => {
     expect(screen.getByTestId("lobby")).toBeInTheDocument();
   });
 
+  it("lets products replace the lobby surface while reusing shell navigation", async () => {
+    const user = userEvent.setup();
+    render(
+      <RuntimeRoot
+        renderLobby={({ onStartMatch, onBack }) => (
+          <div data-testid="custom-lobby">
+            <button type="button" data-testid="custom-start" onClick={onStartMatch}>
+              Start
+            </button>
+            <button type="button" data-testid="custom-back" onClick={onBack}>
+              Back
+            </button>
+          </div>
+        )}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("main-menu")).toBeInTheDocument());
+
+    await user.click(screen.getByTestId("play-button"));
+    expect(screen.getByTestId("custom-lobby")).toBeInTheDocument();
+    await user.click(screen.getByTestId("custom-start"));
+    expect(screen.getByTestId("in-match")).toBeInTheDocument();
+  });
+
   it("surfaces a boot failure in the error panel", async () => {
     const user = userEvent.setup();
     render(<RuntimeRoot onBoot={() => Promise.reject(new Error("atlas missing"))} />);

@@ -43,6 +43,50 @@ curl -X POST <baseUrl>/rooms/create \
   -d '{"mapId":"<map-id>"}'
 ```
 
+For the M4 lobby flow, create a join-code lobby instead of asking players to share a raw room id:
+
+```bash
+curl -X POST <baseUrl>/lobbies/create \
+  -H 'content-type: application/json' \
+  -d '{"mapId":"<map-id>","displayName":"Friday lobby","reserveCreator":true,"playerDisplayName":"Ada"}'
+```
+
+The response includes `roomId`, `joinCode`, `joinUrl`, `playerId`, `handoffToken`, `reconnectToken`, `wsUrl`, and a `lobby` summary. A second client joins with the code:
+
+```bash
+curl -X POST <baseUrl>/lobbies/join \
+  -H 'content-type: application/json' \
+  -d '{"joinCode":"<join-code>","displayName":"Grace"}'
+```
+
+Each client connects to its returned `wsUrl`, then marks readiness:
+
+```bash
+curl -X POST <baseUrl>/lobbies/<room-id>/ready \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer <reconnect-token>' \
+  -d '{"playerId":"<player-id>","ready":true}'
+```
+
+Ready changes require the player's room-scoped reconnect credential, either as the bearer header above or as `reconnectToken` in the JSON body. The room stays in `lobby` until the configured minimum ready player count is met. When all required players are ready, the lobby summary moves to `countdown`, then the room lifecycle advances to `active` on the game-host tick. Clients can poll `GET /lobbies/<room-id>` or `GET /lobbies/code/<join-code>` for the same public summary.
+
+Reconnect uses the same stable `playerId` plus the latest `reconnectToken`:
+
+```bash
+curl -X POST <baseUrl>/rooms/reconnect \
+  -H 'content-type: application/json' \
+  -d '{"roomId":"<room-id>","playerId":"<player-id>","reconnectToken":"<reconnect-token>"}'
+```
+
+That returns a fresh handoff `wsUrl` and a new `reconnectToken`. If the same player opens a replacement socket, the old socket is closed and the durable room state keeps the same player seat, ready state, and reconnect eligibility.
+
+Operational policy for shipped rooms:
+
+- Join codes are room-scoped, six-character codes (`A-HJ-NP-Z2-9`) and map to `lobby-<code>` room ids.
+- The host has no accounts, profiles, friends, matchmaking, leaderboards, or long-lived player identity; the room's `playerId` is only a per-room seat.
+- `maxPlayers`, `minReadyPlayers`, `countdownSeconds`, idle timeout, heartbeat timeout, and reconnect window are room/host policy, not client-side trust decisions.
+- `GET /rooms/<room-id>/results` is the structured results endpoint. It returns `results: null` while a match is live; final winner/placement results are deferred until the runtime exposes a deterministic match-finish transition.
+
 ## 3b. Deploy: `wrangler deploy`
 
 ```bash

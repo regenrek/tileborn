@@ -1,8 +1,30 @@
 import type { ContentHash, JsonObject } from '@tileborne/core';
 
-import type { RoomLifecyclePhase, RoomPlayerModelSelection } from './rooms/storage-schema.js';
+import type { RoomPresenceProjection } from './rooms/room-lifecycle.js';
+import type {
+  RoomJoinCode,
+  RoomLifecyclePhase,
+  RoomLobbyState,
+  RoomLobbyVisibility,
+  RoomPlayerModelSelection,
+  RoomResultsSummary,
+} from './rooms/storage-schema.js';
 
-export type { RoomLifecyclePhase, RoomPlayerModelSelection } from './rooms/storage-schema.js';
+export type {
+  RoomJoinCode,
+  RoomLifecyclePhase,
+  RoomLobbyState,
+  RoomLobbyVisibility,
+  RoomPlayerModelSelection,
+  RoomPlayerPresenceRecord,
+  RoomPlayerPresenceStatus,
+  RoomPlayerReadyRecord,
+  RoomReadyState,
+  RoomReconnectSeatRecord,
+  RoomReconnectState,
+  RoomResultsSummary,
+} from './rooms/storage-schema.js';
+export type { RoomPresenceProjection } from './rooms/room-lifecycle.js';
 
 /** Matches `@tileborne/runtime` PROTOCOL_VERSION SSOT. */
 export const PROTOCOL_VERSION = 1;
@@ -92,6 +114,7 @@ export interface PlaytestStartResponse {
   readonly playtestId: string;
   readonly wsUrl: string;
   readonly handoffToken: string;
+  readonly reconnectToken?: string;
   readonly playerId: string;
 }
 
@@ -111,6 +134,82 @@ export interface RoomCreateRequest {
 export interface RoomCreateResponse {
   readonly roomId: string;
   readonly wsUrl: string;
+}
+
+export interface RoomLobbySummary {
+  readonly roomId: string;
+  readonly mapId: string;
+  readonly phase: RoomLifecyclePhase;
+  readonly lobby: RoomLobbyState;
+  readonly playerCount: number;
+  readonly maxPlayers: number;
+  readonly minReadyPlayers: number;
+  readonly canStart: boolean;
+  readonly players: readonly RoomPresenceProjection[];
+}
+
+export interface LobbyCreateRequest extends RoomCreateRequest {
+  readonly displayName?: string;
+  readonly visibility?: RoomLobbyVisibility;
+  readonly reserveCreator?: boolean;
+  readonly playerId?: string;
+  readonly playerDisplayName?: string;
+}
+
+export interface LobbyCreateResponse extends RoomCreateResponse {
+  readonly joinCode: RoomJoinCode;
+  readonly joinUrl: string;
+  readonly playerId?: string;
+  readonly handoffToken?: string;
+  readonly reconnectToken?: string;
+  readonly lobby: RoomLobbySummary;
+}
+
+export interface LobbyJoinRequest {
+  readonly joinCode: string;
+  readonly displayName?: string;
+  readonly playerId?: string;
+}
+
+export interface LobbyJoinResponse {
+  readonly roomId: string;
+  readonly playerId: string;
+  readonly wsUrl: string;
+  readonly handoffToken: string;
+  readonly reconnectToken?: string;
+  readonly lobby: RoomLobbySummary;
+}
+
+export interface LobbyReadyRequest {
+  readonly playerId: string;
+  readonly ready: boolean;
+  readonly reconnectToken?: string;
+}
+
+export interface LobbyReadyResponse {
+  readonly lobby: RoomLobbySummary;
+  readonly canStart: boolean;
+  readonly reason?: string;
+}
+
+export interface RoomReconnectRequest {
+  readonly roomId: string;
+  readonly playerId: string;
+  readonly reconnectToken: string;
+}
+
+export interface RoomReconnectResponse {
+  readonly roomId: string;
+  readonly playerId: string;
+  readonly wsUrl: string;
+  readonly handoffToken: string;
+  readonly reconnectToken?: string;
+  readonly lobby: RoomLobbySummary;
+}
+
+export interface RoomResultsResponse {
+  readonly roomId: string;
+  readonly results: RoomResultsSummary | null;
 }
 
 export interface PlaytestSummary {
@@ -176,6 +275,7 @@ export interface Env {
   readonly HANDOFF_SIGNING_KEY?: string;
   readonly ROOM_IDLE_TIMEOUT_SECONDS?: number;
   readonly HEARTBEAT_TIMEOUT_SECONDS?: number | string;
+  readonly ROOM_RECONNECT_WINDOW_SECONDS?: number | string;
   readonly SITE_NAME?: string;
   readonly ASSETS?: StaticAssetsFetcher;
 }

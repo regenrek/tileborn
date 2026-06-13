@@ -29,7 +29,7 @@ import {
   MemoryWebSocket,
   type FakeDurableObjectState,
 } from '../test-helpers/do-fake.js';
-import type { Env, PlaytestSummary } from '../types.js';
+import type { Env, PlaytestSummary, RoomLobbySummary } from '../types.js';
 
 const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
 
@@ -101,6 +101,18 @@ const connectPlayer = async (
 };
 
 const connectPlayerViaFetch = connectPlayer;
+
+const readyPlayer = async (
+  room: PlaytestRoom,
+  playerId: string,
+  ready = true,
+): Promise<Response> =>
+  room.fetch(
+    new Request('https://do/lobby/ready?roomId=room-1', {
+      method: 'POST',
+      body: JSON.stringify({ playerId, ready }),
+    }),
+  );
 
 const decodeBattleRoyaleMessages = (
   server: MemoryWebSocket,
@@ -259,9 +271,18 @@ describe('PlaytestRoom lifecycle', () => {
     expect(stored?.mapPackage).toBeUndefined();
   });
 
-  it('transitions lobby to countdown and then active before ticking', async () => {
+  it('keeps one ready player pending until all required players ready up', async () => {
     await connectPlayer(room, state, 'room-1', 'player-a');
+    await connectPlayer(room, state, 'room-1', 'player-b');
+    const firstReady = await readyPlayer(room, 'player-a');
+    expect(firstReady.status).toBe(200);
     let stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.lifecycle.phase).toBe('lobby');
+    expect(stored?.ready.players['player-a']?.isReady).toBe(true);
+
+    const secondReady = await readyPlayer(room, 'player-b');
+    expect(secondReady.status).toBe(200);
+    stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
     expect(stored?.lifecycle.phase).toBe('countdown');
 
     await room.alarm();
@@ -277,9 +298,11 @@ describe('PlaytestRoom lifecycle', () => {
       countdownState,
       makeEnv(),
       { now: () => nowMs },
-      { countdownSeconds: 2 },
+      { countdownSeconds: 2, minReadyPlayers: 1 },
     );
     await connectPlayer(countdownRoom, countdownState, 'room-1', 'player-a');
+    const readyResponse = await readyPlayer(countdownRoom, 'player-a');
+    expect(readyResponse.status).toBe(200);
     await countdownRoom.alarm();
 
     let stored = await countdownState.storage.get<RoomStorage>(STORAGE_KEY);
@@ -302,6 +325,9 @@ describe('PlaytestRoom lifecycle', () => {
 
   it('fans out BR DeltaSnapshot on simulation ticks', async () => {
     await connectPlayer(room, state, 'room-1', 'player-a');
+    await connectPlayer(room, state, 'room-1', 'player-b');
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-b')).status).toBe(200);
     await room.alarm();
     const server = state.sockets[0] as MemoryWebSocket;
     const delta = decodeBattleRoyaleMessages(server).find(
@@ -375,6 +401,64 @@ describe('PlaytestRoom lifecycle', () => {
     expect(Object.keys(stored?.players ?? {})).toEqual(['player-1', 'player-2']);
   });
 
+  it('configures lobby metadata and exposes ready/presence summary from room storage', async () => {
+    const configured = await room.fetch(
+      new Request('https://do/lobby/configure?roomId=room-1', {
+        method: 'POST',
+        body: JSON.stringify({
+          joinCode: 'ABC2D3',
+          visibility: 'public',
+          displayName: 'Friday lobby',
+        }),
+      }),
+    );
+    expect(configured.status).toBe(200);
+
+    const reserved = await room.fetch(
+      new Request('https://do/players/reserve', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: 'Ada' }),
+      }),
+    );
+    expect(reserved.status).toBe(200);
+
+    const response = await room.fetch(new Request('https://do/lobby/summary?roomId=room-1'));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { readonly lobby: RoomLobbySummary };
+    expect(body.lobby).toMatchObject({
+      roomId: 'room-1',
+      mapId: 'map:fixture',
+      phase: 'lobby',
+      playerCount: 1,
+      maxPlayers: 32,
+      minReadyPlayers: 2,
+      canStart: false,
+      lobby: {
+        visibility: 'public',
+        joinCode: 'ABC2D3',
+        title: 'Friday lobby',
+      },
+    });
+    expect(body.lobby.players[0]).toMatchObject({
+      playerId: 'player-1',
+      displayName: 'Ada',
+      status: 'connected',
+      ready: false,
+      reconnectEligible: true,
+    });
+  });
+
+  it('rejects malformed lobby configuration payloads', async () => {
+    const response = await room.fetch(
+      new Request('https://do/lobby/configure?roomId=room-1', {
+        method: 'POST',
+        body: JSON.stringify({ joinCode: 'ABC10I' }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'join code must be 6 characters using A-Z and 2-9, excluding I, O, 0, and 1' });
+  });
+
   it('caps reserved generated slots to the manifest playerCapacity', async () => {
     const packageState = createFakeDurableObjectState();
     const packageRoom = await initRoom(
@@ -435,14 +519,14 @@ describe('PlaytestRoom websocket auth', () => {
   it('closes with 4001 when token is missing', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await expect(room.addPlayer('player-a', '', 'room-1')).rejects.toThrow(/invalid handoff token/);
   });
 
   it('closes with 4001 when token is invalid', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await expect(room.addPlayer('player-a', 'bad.token', 'room-1')).rejects.toThrow(
       /invalid handoff token/,
     );
@@ -459,7 +543,49 @@ describe('PlaytestRoom heartbeat and idle destroy', () => {
     nowMs += 31_000;
     await room.alarm();
     const stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.players['player-a']).toBeDefined();
+    expect(stored?.presence.players['player-a']).toMatchObject({
+      status: 'disconnected',
+    });
+    expect(stored?.reconnect.seats['player-a']?.expiresAt).toBeDefined();
+  });
+
+  it('expires disconnected lobby seats on the reconnect-window alarm', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    let nowMs = Date.now();
+    const room = await initRoom(
+      state,
+      makeEnv({ ROOM_RECONNECT_WINDOW_SECONDS: 1 }),
+      { now: () => nowMs },
+      { maxPlayers: 1 },
+    );
+    const server = await connectPlayer(room, state, 'room-1', 'player-a');
+
+    nowMs += 10 * 60 * 1000;
+    await room.webSocketClose(server as WebSocket);
+
+    const reconnect = await room.fetch(
+      new Request('https://do/players/reconnect?roomId=room-1', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: 'player-a' }),
+      }),
+    );
+    expect(reconnect.status).toBe(200);
+    let stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.players['player-a']).toBeDefined();
+    expect(stored?.reconnect.seats['player-a']?.expiresAt).toBeDefined();
+
+    nowMs += 2_000;
+    await state.advanceTime(2_000);
+
+    stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
     expect(stored?.players['player-a']).toBeUndefined();
+    expect(stored?.reconnect.seats['player-a']).toBeUndefined();
+    expect(stored?.results).toMatchObject({
+      reason: 'reconnect expired',
+      players: [{ playerId: 'player-a', outcome: 'abandoned' }],
+    });
   });
 
   it('destroys an empty room after idle timeout', async () => {
@@ -482,8 +608,9 @@ describe('PlaytestRoom persistence and recovery', () => {
   it('persists state every N ticks', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await connectPlayer(room, state, 'room-1', 'player-a');
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
     for (let index = 0; index < PERSIST_EVERY_N_TICKS; index += 1) {
       await room.alarm();
     }
@@ -495,8 +622,9 @@ describe('PlaytestRoom persistence and recovery', () => {
   it('rehydrates storage on a new DO instance', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await connectPlayer(room, state, 'room-1', 'player-a');
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
     await room.alarm();
     const snapshot = await state.storage.get<RoomStorage>(STORAGE_KEY);
     const reloadedState = createFakeDurableObjectState();
@@ -546,7 +674,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('forwards plugin welcome bytes verbatim to a BR decoder', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const firstFrame = server.sent[0];
 
@@ -562,7 +690,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('connects, receives welcome, drains input, and emits movement delta', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -578,6 +706,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       server as WebSocket,
       encodeBrInputFrame({ tick: 1, seq: 1, dir: 0 }),
     );
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     await room.alarm();
     const delta = decodeBattleRoyaleMessages(server).find(
       (message) =>
@@ -640,8 +769,9 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('sends active late joiners a replay welcome that includes their spawned player', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     await room.alarm();
 
     const late = await connectPlayerViaFetch(room, state, 'room-1', 'player-2');
@@ -667,7 +797,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('routes a reserved generated player slot into BR shooting simulation', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const reserved = await room.fetch(
       new Request('https://do/players/reserve', {
         method: 'POST',
@@ -677,6 +807,8 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     expect(await reserved.json()).toEqual({ playerId: 'player-1' });
 
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.alarm();
     await room.webSocketMessage(
       server as WebSocket,
       encodeBrInputFrame({ tick: 1, seq: 1, shoot: true, aimDeg: 90, swapSlot: 2 }),
@@ -742,7 +874,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('sends the current BR baseline to late joiners', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const first = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const initialWelcome = decodeBattleRoyaleMessages(first).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -757,6 +889,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       first as WebSocket,
       encodeBrInputFrame({ tick: 1, seq: 1, dir: 0 }),
     );
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     await room.alarm();
 
     const late = await connectPlayerViaFetch(room, state, 'room-1', 'player-2');
@@ -774,7 +907,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('replaces a same-player socket without losing durable player state', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const first = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const initialWelcome = decodeBattleRoyaleMessages(first).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -789,6 +922,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       first as WebSocket,
       encodeBrInputFrame({ tick: 1, seq: 1, dir: 0 }),
     );
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     await room.alarm();
     const beforeReconnect = await state.storage.get<RoomStorage>(STORAGE_KEY);
     const joinedAt = beforeReconnect?.players['player-1']?.joinedAt;
@@ -812,7 +946,11 @@ describe('PlaytestRoom wire protocol and plugins', () => {
 
     await room.webSocketClose(replacement as WebSocket);
     const afterReplacementClose = await state.storage.get<RoomStorage>(STORAGE_KEY);
-    expect(afterReplacementClose?.players['player-1']).toBeUndefined();
+    expect(afterReplacementClose?.players['player-1']?.joinedAt).toBe(joinedAt);
+    expect(afterReplacementClose?.presence.players['player-1']).toMatchObject({
+      status: 'disconnected',
+    });
+    expect(afterReplacementClose?.reconnect.seats['player-1']?.expiresAt).toBeDefined();
   });
 
   it('accepts snapshot acks and clears per-client lag counters', async () => {
@@ -853,7 +991,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('rejects stale and future snapshot acks deterministically', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -880,7 +1018,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('resyncs lagging clients before dropping overloaded transport', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -888,7 +1026,11 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     if (welcome?._tag !== 'WelcomeSnapshot') {
       throw new Error('expected BR welcome snapshot');
     }
-    await room.webSocketMessage(server as WebSocket, encodeBrSnapshotAckFrame(welcome.tick));
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.alarm();
+    const activeBaselineTick =
+      room.getClientTransportStats('player-1')?.lastSentSnapshotTick ?? welcome.tick;
+    await room.webSocketMessage(server as WebSocket, encodeBrSnapshotAckFrame(activeBaselineTick));
 
     for (let index = 0; index <= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_RESYNC + 1; index += 1) {
       await room.alarm();
@@ -921,7 +1063,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
     let nowMs = Date.parse('2026-01-01T00:00:00.000Z');
-    const room = await initRoom(state, makeEnv(), { now: () => nowMs });
+    const room = await initRoom(state, makeEnv(), { now: () => nowMs }, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -930,6 +1072,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       throw new Error('expected BR welcome snapshot');
     }
     await room.webSocketMessage(server as WebSocket, encodeBrSnapshotAckFrame(welcome.tick));
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
 
     for (let index = 0; index <= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_RESYNC + 1; index += 1) {
       nowMs += 50;
@@ -963,7 +1106,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('closes buffered clients after one resync attempt', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -972,6 +1115,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       throw new Error('expected BR welcome snapshot');
     }
     await room.webSocketMessage(server as WebSocket, encodeBrSnapshotAckFrame(welcome.tick));
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
 
     server.bufferedAmount = MAX_OUTBOUND_BUFFERED_BYTES + 1;
     await room.alarm();
@@ -986,7 +1130,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('coalesces input floods to the latest queued frame per player', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',
@@ -1005,6 +1149,7 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     }
 
     expect(queuedInputCount(room)).toBe(MAX_QUEUED_INPUTS_PER_PLAYER);
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     await room.alarm();
     expect(queuedInputCount(room)).toBe(0);
 
@@ -1040,8 +1185,14 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       void Effect.runSync(host.register(plugin));
       return host;
     };
-    const room = await initRoom(state, makeEnv(), { createPluginHost: pluginHostFactory });
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      { createPluginHost: pluginHostFactory },
+      { minReadyPlayers: 1 },
+    );
     const server = await connectPlayer(room, state, 'room-1', 'player-a');
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
     await room.alarm();
     expect(tickCalls).toBeGreaterThan(0);
     const notice = server.sent
@@ -1059,6 +1210,9 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       connectPlayer(room, state, 'room-1', 'player-b'),
       connectPlayer(room, state, 'room-1', 'player-c'),
     ]);
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-b')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-c')).status).toBe(200);
     await room.alarm();
     for (const socket of sockets) {
       const delta = decodeBattleRoyaleMessages(socket).some(
@@ -1073,8 +1227,9 @@ describe('PlaytestRoom alarm cadence', () => {
   it('schedules repeated alarms while running', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv());
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
     await connectPlayer(room, state, 'room-1', 'player-a');
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
     await room.alarm();
     const firstTick = (await state.storage.get<RoomStorage>(STORAGE_KEY))?.tick ?? 0;
     await state.advanceTime(60);

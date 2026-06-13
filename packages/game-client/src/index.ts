@@ -35,10 +35,45 @@ export { defaultBrandConfig } from "./config/default-brand.js";
 
 // Components
 export { RuntimeRoot, type RuntimeRootProps } from "./components/runtime-root.js";
-export { MenuShell, type MenuShellProps } from "./components/menu-shell.js";
+export {
+  MenuShell,
+  type MenuShellProps,
+  type RuntimeLobbyRenderProps,
+} from "./components/menu-shell.js";
 export { MainMenu, type MainMenuProps } from "./components/main-menu.js";
 export { SettingsDialog, type SettingsDialogProps } from "./components/settings-dialog.js";
 export { ControlsTab, type ControlsTabConfig } from "./components/controls-tab.js";
+export {
+  LobbyPanel,
+  type LobbyPanelProps,
+  type LobbyPanelSession,
+  type LobbyPanelStatus,
+  type LobbyReconnectPrompt,
+} from "./components/lobby-panel.js";
+export {
+  LobbyClientError,
+  createGameHostLobbyClient,
+  normalizeHostBaseUrl,
+  toLobbyWebSocketUrl,
+  type GameHostLobbyClient,
+  type GameHostLobbyClientOptions,
+  type LobbyCreateRequest,
+  type LobbyCreateResponse,
+  type LobbyFetch,
+  type LobbyJoinRequest,
+  type LobbyJoinResponse,
+  type LobbyReadyRequest,
+  type LobbyReadyResponse,
+  type RoomLifecyclePhase,
+  type RoomLobbyState,
+  type RoomLobbySummary,
+  type RoomLobbyVisibility,
+  type RoomPlayerModelSelection,
+  type RoomPlayerPresenceStatus,
+  type RoomPresenceProjection,
+  type RoomReconnectRequest,
+  type RoomReconnectResponse,
+} from "./lobby-client.js";
 
 // Input remap (Controls tab) model + persistence (ADR-0024)
 export {

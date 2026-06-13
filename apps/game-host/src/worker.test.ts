@@ -1,18 +1,195 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Env, PlaytestRoomNamespace } from './types.js';
+import type {
+  Env,
+  PlaytestRoomNamespace,
+  RoomLobbySummary,
+  RoomPlayerPresenceRecord,
+  RoomPlayerReadyRecord,
+  RoomResultsSummary,
+} from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
 import { bundledSamplePackId } from './.generated/bundled-assets.js';
-import { PLACEHOLDER_HANDOFF_SIGNING_KEY } from './rooms/handoff-token.js';
+import { PLACEHOLDER_HANDOFF_SIGNING_KEY, mintHandoffToken } from './rooms/handoff-token.js';
 import { createWorkerApp } from './worker.js';
 
 const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
 
 const makePlaytestNamespace = (
-  handler: (request: Request) => Promise<Response>,
+  handler: (request: Request, roomId: string) => Promise<Response>,
 ): PlaytestRoomNamespace => ({
   idFromName: (name: string) => ({ toString: () => name }) as DurableObjectId,
-  get: () => ({ fetch: handler }),
+  get: (id: DurableObjectId) => ({ fetch: (request) => handler(request, id.toString()) }),
+});
+
+interface FakeLobbyRoom {
+  readonly roomId: string;
+  readonly mapId: string;
+  readonly maxPlayers: number;
+  phase: RoomLobbySummary['phase'];
+  lobby: RoomLobbySummary['lobby'];
+  players: Record<string, { readonly id: string; readonly displayName?: string }>;
+  ready: Record<string, RoomPlayerReadyRecord>;
+  presence: Record<string, RoomPlayerPresenceRecord>;
+  results: RoomResultsSummary | null;
+}
+
+const makeLobbyNamespace = (): PlaytestRoomNamespace => {
+  const rooms = new Map<string, FakeLobbyRoom>();
+  return makePlaytestNamespace(async (request, roomId) => {
+    const url = new URL(request.url);
+    const room = rooms.get(roomId);
+    if (request.method === 'GET' && url.pathname === '/lobby/summary') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      return Response.json({ lobby: toFakeLobbySummary(room) });
+    }
+    if (request.method === 'POST' && url.pathname === '/create') {
+      const body = (await request.json()) as {
+        readonly mapId: string;
+        readonly options?: Record<string, string | number | boolean | null>;
+      };
+      rooms.set(roomId, {
+        roomId,
+        mapId: body.mapId,
+        maxPlayers: typeof body.options?.maxPlayers === 'number' ? body.options.maxPlayers : 32,
+        phase: 'lobby',
+        lobby: { visibility: 'private' },
+        players: {},
+        ready: {},
+        presence: {},
+        results: null,
+      });
+      return Response.json({ ok: true });
+    }
+    if (request.method === 'POST' && url.pathname === '/lobby/configure') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as {
+        readonly joinCode: string;
+        readonly visibility?: 'private' | 'public';
+        readonly displayName?: string;
+        readonly createdByPlayerId?: string;
+      };
+      room.lobby = {
+        ...room.lobby,
+        joinCode: body.joinCode,
+        ...(body.visibility === undefined ? {} : { visibility: body.visibility }),
+        ...(body.displayName === undefined ? {} : { title: body.displayName }),
+        ...(body.createdByPlayerId === undefined ? {} : { createdByPlayerId: body.createdByPlayerId }),
+      };
+      return Response.json({ lobby: toFakeLobbySummary(room) });
+    }
+    if (request.method === 'POST' && url.pathname === '/players/reserve') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as {
+        readonly playerId?: string;
+        readonly displayName?: string;
+      };
+      const existingPlayerCount = Object.keys(room.players).length;
+      const playerId = body.playerId ?? `player-${existingPlayerCount + 1}`;
+      if (room.players[playerId] === undefined && existingPlayerCount >= room.maxPlayers) {
+        return Response.json({ error: 'room capacity reached' }, { status: 409 });
+      }
+      const now = '2026-01-01T00:00:00.000Z';
+      room.players[playerId] = {
+        id: playerId,
+        ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
+      };
+      room.ready[playerId] = { playerId, isReady: false, updatedAt: now };
+      room.presence[playerId] = {
+        playerId,
+        status: 'connected',
+        lastSeenAt: now,
+        connectedAt: now,
+      };
+      return Response.json({ playerId });
+    }
+    if (request.method === 'POST' && url.pathname === '/lobby/ready') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as {
+        readonly playerId?: string;
+        readonly ready?: boolean;
+      };
+      if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+        return Response.json({ error: 'playerId is required' }, { status: 400 });
+      }
+      if (room.players[body.playerId] === undefined) {
+        return Response.json({ error: 'player is not in the room' }, { status: 404 });
+      }
+      if (room.phase !== 'lobby' && room.phase !== 'countdown') {
+        return Response.json({ error: 'room is not waiting for match start' }, { status: 409 });
+      }
+      if (typeof body.ready !== 'boolean') {
+        return Response.json({ error: 'ready must be a boolean' }, { status: 400 });
+      }
+      const now = '2026-01-01T00:00:00.000Z';
+      room.ready[body.playerId] = { playerId: body.playerId, isReady: body.ready, updatedAt: now };
+      const canStart =
+        Object.keys(room.players).length >= 2 &&
+        Object.keys(room.players).every((playerId) => room.ready[playerId]?.isReady === true);
+      if (canStart) {
+        room.phase = 'countdown';
+      }
+      return Response.json({
+        lobby: toFakeLobbySummary(room),
+        canStart,
+        ...(canStart ? {} : { reason: 'waiting for required players to ready up' }),
+      });
+    }
+    if (request.method === 'POST' && url.pathname === '/players/reconnect') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as { readonly playerId?: string };
+      if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+        return Response.json({ error: 'playerId is required' }, { status: 400 });
+      }
+      if (room.players[body.playerId] === undefined) {
+        return Response.json({ error: 'player seat is not reserved' }, { status: 404 });
+      }
+      return Response.json({ playerId: body.playerId, lobby: toFakeLobbySummary(room) });
+    }
+    if (request.method === 'GET' && url.pathname === '/results') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      return Response.json({ roomId, results: room.results });
+    }
+    return new Response('missing', { status: 404 });
+  });
+};
+
+const toFakeLobbySummary = (room: FakeLobbyRoom): RoomLobbySummary => ({
+  roomId: room.roomId,
+  mapId: room.mapId,
+  phase: room.phase,
+  lobby: room.lobby,
+  playerCount: Object.keys(room.players).length,
+  maxPlayers: room.maxPlayers,
+  minReadyPlayers: 2,
+  canStart: false,
+  players: Object.keys(room.players)
+    .sort((left, right) => left.localeCompare(right))
+    .map((playerId) => ({
+      playerId,
+      status: room.presence[playerId]?.status ?? 'disconnected',
+      ready: room.ready[playerId]?.isReady === true,
+      reconnectEligible: true,
+      lastSeenAt: room.presence[playerId]?.lastSeenAt ?? null,
+      ...(room.players[playerId]?.displayName === undefined
+        ? {}
+        : { displayName: room.players[playerId]?.displayName }),
+      ...(room.presence[playerId]?.connectedAt === undefined
+        ? {}
+        : { connectedAt: room.presence[playerId]?.connectedAt }),
+    })),
 });
 
 describe('game-host worker routes', () => {
@@ -160,6 +337,7 @@ describe('game-host worker routes', () => {
       readonly playtestId: string;
       readonly wsUrl: string;
       readonly handoffToken: string;
+      readonly reconnectToken: string;
       readonly playerId: string;
     };
     expect(body.playtestId.length).toBeGreaterThan(0);
@@ -167,6 +345,7 @@ describe('game-host worker routes', () => {
     expect(body.wsUrl).toContain('token=');
     expect(body.wsUrl).toContain('playerId=player-1');
     expect(body.handoffToken.length).toBeGreaterThan(0);
+    expect(body.reconnectToken.length).toBeGreaterThan(0);
     expect(body.playerId).toBe('player-1');
   });
 
@@ -372,6 +551,483 @@ describe('game-host worker routes', () => {
     const secondBody = (await second.json()) as { readonly roomId: string };
     expect(firstBody.roomId).toBe('room-idem');
     expect(secondBody.roomId).toBe('room-idem');
+  });
+
+  it('POST /lobbies/create creates a join-code lobby and can reserve the creator', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mapId: 'map:fixture',
+          displayName: 'Friday lobby',
+          visibility: 'public',
+          reserveCreator: true,
+          playerDisplayName: 'Ada',
+        }),
+      },
+      { ...env, PLAYTEST_ROOM: makeLobbyNamespace() },
+    );
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      readonly roomId: string;
+      readonly joinCode: string;
+      readonly joinUrl: string;
+      readonly wsUrl: string;
+      readonly handoffToken: string;
+      readonly reconnectToken: string;
+      readonly playerId: string;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(body.joinCode).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(body.roomId).toBe(`lobby-${body.joinCode}`);
+    expect(body.joinUrl).toBe(`http://localhost/lobbies/join?code=${body.joinCode}`);
+    expect(body.wsUrl).toContain(`/rooms/${body.roomId}/connect`);
+    expect(body.wsUrl).toContain('token=');
+    expect(body.handoffToken.length).toBeGreaterThan(0);
+    expect(body.reconnectToken.length).toBeGreaterThan(0);
+    expect(body.playerId).toBe('player-1');
+    expect(body.lobby.lobby).toMatchObject({
+      visibility: 'public',
+      joinCode: body.joinCode,
+      title: 'Friday lobby',
+      createdByPlayerId: 'player-1',
+    });
+    expect(body.lobby.players[0]).toMatchObject({
+      playerId: 'player-1',
+      displayName: 'Ada',
+      status: 'connected',
+      ready: false,
+      reconnectEligible: true,
+    });
+  });
+
+  it('POST /lobbies/join resolves a join code and issues a handoff token', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture' }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as { readonly joinCode: string; readonly roomId: string };
+
+    const joined = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          joinCode: createdBody.joinCode.toLowerCase(),
+          playerId: 'player-custom',
+          displayName: 'Grace',
+        }),
+      },
+      lobbyEnv,
+    );
+
+    expect(joined.status).toBe(201);
+    const body = (await joined.json()) as {
+      readonly roomId: string;
+      readonly playerId: string;
+      readonly wsUrl: string;
+      readonly handoffToken: string;
+      readonly reconnectToken: string;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(body.roomId).toBe(createdBody.roomId);
+    expect(body.playerId).toBe('player-custom');
+    expect(body.wsUrl).toContain(`/rooms/${createdBody.roomId}/connect`);
+    expect(body.wsUrl).toContain('playerId=player-custom');
+    expect(body.handoffToken.length).toBeGreaterThan(0);
+    expect(body.reconnectToken.length).toBeGreaterThan(0);
+    expect(body.lobby.players[0]).toMatchObject({
+      playerId: 'player-custom',
+      displayName: 'Grace',
+    });
+  });
+
+  it('POST /lobbies/:id/ready updates readiness and starts countdown when all players are ready', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture', reserveCreator: true }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as {
+      readonly joinCode: string;
+      readonly roomId: string;
+      readonly playerId: string;
+      readonly reconnectToken: string;
+    };
+    const joined = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ joinCode: createdBody.joinCode }),
+      },
+      lobbyEnv,
+    );
+    expect(joined.status).toBe(201);
+    const joinedBody = (await joined.clone().json()) as {
+      readonly playerId: string;
+      readonly reconnectToken: string;
+    };
+
+    const missingToken = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId: createdBody.playerId, ready: true }),
+      },
+      lobbyEnv,
+    );
+    expect(missingToken.status).toBe(401);
+    expect(await missingToken.json()).toEqual({ error: 'missing ready token' });
+
+    const mismatchedToken = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: createdBody.playerId,
+          ready: true,
+          reconnectToken: joinedBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(mismatchedToken.status).toBe(401);
+    expect(await mismatchedToken.json()).toEqual({ error: 'invalid ready token' });
+
+    const firstReady = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: createdBody.playerId,
+          ready: true,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(firstReady.status).toBe(200);
+    const firstBody = (await firstReady.json()) as {
+      readonly canStart: boolean;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(firstBody.canStart).toBe(false);
+    expect(firstBody.lobby.phase).toBe('lobby');
+    expect(firstBody.lobby.players[0]).toMatchObject({ playerId: 'player-1', ready: true });
+
+    const secondReady = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${joinedBody.reconnectToken}`,
+        },
+        body: JSON.stringify({ playerId: joinedBody.playerId, ready: true }),
+      },
+      lobbyEnv,
+    );
+    expect(secondReady.status).toBe(200);
+    const secondBody = (await secondReady.json()) as {
+      readonly canStart: boolean;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(secondBody.canStart).toBe(true);
+    expect(secondBody.lobby.phase).toBe('countdown');
+    expect(secondBody.lobby.players.map((player) => player.ready)).toEqual([true, true]);
+  });
+
+  it('POST /rooms/reconnect validates a reconnect token and returns a fresh handoff', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture', reserveCreator: true }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as {
+      readonly roomId: string;
+      readonly playerId: string;
+      readonly handoffToken: string;
+      readonly reconnectToken: string;
+    };
+
+    const reconnectAsHandoff = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/connect?playerId=${createdBody.playerId}&token=${encodeURIComponent(createdBody.reconnectToken)}`,
+      { headers: { Upgrade: 'websocket' } },
+      lobbyEnv,
+    );
+    expect(reconnectAsHandoff.status).toBe(401);
+    expect(await reconnectAsHandoff.text()).toBe('invalid handoff token');
+
+    const handoffAsReconnect = await app.request(
+      'http://localhost/rooms/reconnect',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: createdBody.roomId,
+          playerId: createdBody.playerId,
+          reconnectToken: createdBody.handoffToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(handoffAsReconnect.status).toBe(401);
+
+    const reconnected = await app.request(
+      'http://localhost/rooms/reconnect',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: createdBody.roomId,
+          playerId: createdBody.playerId,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(reconnected.status).toBe(200);
+    const body = (await reconnected.json()) as {
+      readonly roomId: string;
+      readonly playerId: string;
+      readonly wsUrl: string;
+      readonly handoffToken: string;
+      readonly reconnectToken: string;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(body.roomId).toBe(createdBody.roomId);
+    expect(body.playerId).toBe(createdBody.playerId);
+    expect(body.wsUrl).toContain(`/rooms/${createdBody.roomId}/connect`);
+    expect(body.handoffToken.length).toBeGreaterThan(0);
+    expect(body.reconnectToken.length).toBeGreaterThan(0);
+    expect(body.lobby.players[0]).toMatchObject({ playerId: createdBody.playerId });
+  });
+
+  it('POST /rooms/reconnect returns structured 4xx for invalid tokens and missing seats', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture', reserveCreator: true }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as {
+      readonly roomId: string;
+    };
+
+    const invalid = await app.request(
+      'http://localhost/rooms/reconnect',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: createdBody.roomId,
+          playerId: 'player-1',
+          reconnectToken: 'bad.token',
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(invalid.status).toBe(401);
+
+    const missingSeatToken = await mintHandoffToken(
+      { HANDOFF_SIGNING_KEY: TEST_KEY },
+      { playtestId: createdBody.roomId, playerId: 'player-missing', purpose: 'reconnect' },
+    );
+    const missingSeat = await app.request(
+      'http://localhost/rooms/reconnect',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: createdBody.roomId,
+          playerId: 'player-missing',
+          reconnectToken: missingSeatToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(missingSeat.status).toBe(404);
+    expect(await missingSeat.json()).toEqual({ error: 'player seat is not reserved' });
+  });
+
+  it('GET /rooms/:id/results returns the room-owned results summary', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture' }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as { readonly roomId: string };
+
+    const results = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/results`,
+      {},
+      lobbyEnv,
+    );
+    expect(results.status).toBe(200);
+    expect(await results.json()).toEqual({ roomId: createdBody.roomId, results: null });
+  });
+
+  it('GET /lobbies/:id and /lobbies/code/:code return lobby presence summaries', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture', reserveCreator: true }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as { readonly joinCode: string; readonly roomId: string };
+
+    const byRoomId = await app.request(`http://localhost/lobbies/${createdBody.roomId}`, {}, lobbyEnv);
+    const byJoinCode = await app.request(
+      `http://localhost/lobbies/code/${createdBody.joinCode}`,
+      {},
+      lobbyEnv,
+    );
+
+    expect(byRoomId.status).toBe(200);
+    expect(byJoinCode.status).toBe(200);
+    const roomSummary = (await byRoomId.json()) as RoomLobbySummary;
+    const codeSummary = (await byJoinCode.json()) as RoomLobbySummary;
+    expect(roomSummary).toMatchObject({
+      roomId: createdBody.roomId,
+      playerCount: 1,
+      canStart: false,
+      minReadyPlayers: 2,
+    });
+    expect(roomSummary.players[0]).toMatchObject({
+      playerId: 'player-1',
+      status: 'connected',
+      ready: false,
+      reconnectEligible: true,
+    });
+    expect(codeSummary).toEqual(roomSummary);
+  });
+
+  it('POST /lobbies/join returns 404 for an unknown join code', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ joinCode: 'ABC2D3' }),
+      },
+      { ...env, PLAYTEST_ROOM: makeLobbyNamespace() },
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'join code not found' });
+  });
+
+  it('POST /lobbies/join surfaces capacity failures from the room owner', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mapId: 'map:fixture',
+          options: { maxPlayers: 1 },
+          reserveCreator: true,
+        }),
+      },
+      lobbyEnv,
+    );
+    const createdBody = (await created.json()) as { readonly joinCode: string };
+
+    const joined = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ joinCode: createdBody.joinCode }),
+      },
+      lobbyEnv,
+    );
+
+    expect(joined.status).toBe(409);
+    expect(await joined.json()).toEqual({ error: 'room capacity reached' });
+  });
+
+  it('lobby endpoints reject malformed payloads and invalid signing configuration', async () => {
+    const app = createWorkerApp(runtimeManifest);
+    const malformedCreate = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{bad json',
+      },
+      { ...env, PLAYTEST_ROOM: makeLobbyNamespace() },
+    );
+    expect(malformedCreate.status).toBe(400);
+
+    const invalidJoin = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ joinCode: 'abc10i' }),
+      },
+      { ...env, PLAYTEST_ROOM: makeLobbyNamespace() },
+    );
+    expect(invalidJoin.status).toBe(400);
+
+    const unavailable = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mapId: 'map:fixture' }),
+      },
+      { ...env, HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY, PLAYTEST_ROOM: makeLobbyNamespace() },
+    );
+    expect(unavailable.status).toBe(503);
   });
 
   it('POST /playtest/start returns 404 for an unknown room (joining never creates)', async () => {

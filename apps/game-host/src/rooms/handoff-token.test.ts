@@ -51,6 +51,33 @@ describe("handoff token", () => {
     expect(await verifyHandoffToken(env, token, { playtestId: "room-2" })).toBeNull();
   });
 
+  it("rejects tokens minted for a different purpose", async () => {
+    const reconnectToken = await mintHandoffToken(env, {
+      playtestId: "room-1",
+      playerId: "player-1",
+      purpose: "reconnect",
+    });
+    const handoffToken = await mintHandoffToken(env, {
+      playtestId: "room-1",
+      playerId: "player-1",
+      purpose: "handoff",
+      ttlSeconds: 120,
+    });
+
+    expect(
+      await verifyHandoffToken(env, reconnectToken, {
+        playtestId: "room-1",
+        purpose: "handoff",
+      }),
+    ).toBeNull();
+    expect(
+      await verifyHandoffToken(env, handoffToken, {
+        playtestId: "room-1",
+        purpose: "reconnect",
+      }),
+    ).toBeNull();
+  });
+
   it("returns null when signing key is missing", async () => {
     const token = await mintHandoffToken(env, {
       playtestId: "room-1",

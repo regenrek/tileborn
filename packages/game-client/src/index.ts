@@ -33,6 +33,16 @@ export {
 export { brandThemeVars, type BrandThemeVars } from "./theming/brand-theme.js";
 export { defaultBrandConfig } from "./config/default-brand.js";
 
+// Browser audio engine
+export {
+  bindBrowserRuntimeAudioFocusState,
+  createBrowserRuntimeAudioEngine,
+  type BrowserRuntimeAudioEngineConfig,
+  type RuntimeAudioCueRequest,
+  type RuntimeAudioEngineSnapshot,
+  type RuntimeAudioPlaybackEngine,
+} from "./audio/browser-audio-engine.js";
+
 // Components
 export { RuntimeRoot, type RuntimeRootProps } from "./components/runtime-root.js";
 export {
@@ -42,6 +52,12 @@ export {
 } from "./components/menu-shell.js";
 export { MainMenu, type MainMenuProps } from "./components/main-menu.js";
 export { SettingsDialog, type SettingsDialogProps } from "./components/settings-dialog.js";
+export {
+  AudioTab,
+  type AudioBusControl,
+  type AudioSettingsValue,
+  type AudioTabConfig,
+} from "./components/audio-tab.js";
 export { ControlsTab, type ControlsTabConfig } from "./components/controls-tab.js";
 export {
   LobbyPanel,

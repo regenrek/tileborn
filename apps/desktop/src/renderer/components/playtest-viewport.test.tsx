@@ -112,6 +112,9 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
   const br = await vi.importActual<typeof import('@tileborne/plugin-battle-royale/renderer')>(
     '@tileborne/plugin-battle-royale/renderer',
   );
+  const brAudio = await vi.importActual<typeof import('@tileborne/plugin-battle-royale')>(
+    '@tileborne/plugin-battle-royale',
+  );
   const inputMap = br.battleRoyaleDefaultInputMap();
   const scheme = core.controlScheme(core.CONTROL_SCHEMES.KeyboardMouse);
   const bindings = inputMap.schemeDefaults[scheme] ?? [];
@@ -138,6 +141,22 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
       inputMap,
       controlScheme: scheme,
       inputCaptureProfile: { boundKeyCodes, usesMouseButtons },
+      audio: {
+        buses: [brAudio.battleRoyaleSfxBus],
+        cues: brAudio.battleRoyaleAudioCues,
+        cueForIntent: (
+          intent: ReturnType<typeof br.resolveBattleRoyaleInputIntent>,
+          previousIntent: ReturnType<typeof br.resolveBattleRoyaleInputIntent> | undefined,
+        ) => {
+          if (intent.shoot && previousIntent?.shoot !== true) {
+            return brAudio.BR_AUDIO_CUES.WeaponFire;
+          }
+          if (intent.reload && previousIntent?.reload !== true) {
+            return brAudio.BR_AUDIO_CUES.WeaponReload;
+          }
+          return undefined;
+        },
+      },
       resolveInputIntent: br.resolveBattleRoyaleInputIntent,
     })),
   };
@@ -556,6 +575,12 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(afterPress.shoot).toBe(true);
     expect(afterPress.tick).toBe(5);
     expect(afterPress).not.toHaveProperty('dir');
+    expect(window.__tilebornePlaytestAudio?.snapshot()).toEqual(
+      expect.objectContaining({
+        playCount: 1,
+        lastRequest: { cueId: 'battle-royale.weapon.fire' },
+      }),
+    );
 
     // A live tick refresh arrives (session metrics update). The capture must NOT
     // be recreated, so the resolver keeps the held mouse button.
@@ -576,6 +601,7 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(afterTick.shoot).toBe(true);
     expect(afterTick.dir).toBe(0);
     expect(afterTick.tick).toBe(6);
+    expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(1);
     // The capture was set up once and never torn down by the tick change.
     expect(controllerCtorMock).toHaveBeenCalledTimes(1);
   });

@@ -245,6 +245,40 @@
   letter-spacing: 0.06em;
 }
 
+/* Audio mixer controls (Settings -> Audio). */
+.tb-audio-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.tb-audio-toggle,
+.tb-audio-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 10%, transparent);
+  font-size: 0.8125rem;
+}
+
+.tb-audio-toggle {
+  grid-template-columns: auto 1fr;
+}
+
+.tb-audio-slider input {
+  width: min(12rem, 36vw);
+}
+
+.tb-audio-slider output {
+  min-width: 2.75rem;
+  text-align: right;
+  color: var(--tb-menu-text-muted, #94a3b8);
+}
+
 /*
  * Baseline button styling so the chassis looks reasonable even when the host
  * app does not compile @tileborne/ui's Tailwind layer. @tileborne/ui's Button

@@ -10,6 +10,7 @@ import { MainMenu } from "./main-menu.js";
 import { PauseOverlay } from "./pause-overlay.js";
 import { ResultsScreen, type MatchResults } from "./results-screen.js";
 import { SettingsDialog } from "./settings-dialog.js";
+import type { AudioTabConfig } from "./audio-tab.js";
 import type { ControlsTabConfig } from "./controls-tab.js";
 
 export interface RuntimeLobbyRenderProps {
@@ -29,6 +30,8 @@ export interface MenuShellProps {
   readonly onQuit?: (() => void) | undefined;
   /** Controls-tab remap editor wiring (ADR-0024); see {@link SettingsDialog}. */
   readonly controls?: ControlsTabConfig | undefined;
+  /** Audio-tab mixer settings wiring; see {@link SettingsDialog}. */
+  readonly audio?: AudioTabConfig | undefined;
   readonly renderLobby?: ((props: RuntimeLobbyRenderProps) => ReactNode) | undefined;
 }
 
@@ -64,6 +67,7 @@ export function MenuShell({
   bootProgress,
   onQuit,
   controls,
+  audio,
   renderLobby,
 }: MenuShellProps): ReactElement | null {
   const selectTab = (tab: SettingsTab) => dispatch({ type: "SET_SETTINGS_TAB", tab });
@@ -87,6 +91,7 @@ export function MenuShell({
             onSelectTab={selectTab}
             onBack={() => dispatch({ type: "BACK" })}
             {...(controls ? { controls } : {})}
+            {...(audio ? { audio } : {})}
           />
         );
       }

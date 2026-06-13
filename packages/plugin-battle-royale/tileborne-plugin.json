@@ -332,6 +332,66 @@
           }
         }
       ],
+      "audioBuses": [
+        {
+          "_tag": "DeclarativeRuntimeAudioBusContribution",
+          "id": "br-audio-bus",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale SFX",
+            "description": "Battle Royale runtime SFX bus and cue vocabulary for weapon, pickup, player, and zone events."
+          },
+          "data": {
+            "schemaVersion": 1,
+            "buses": [
+              {
+                "id": "battle-royale.sfx",
+                "label": "Battle Royale SFX",
+                "kind": "sfx",
+                "defaultVolume": 0.85
+              }
+            ],
+            "cues": [
+              {
+                "id": "battle-royale.weapon.fire",
+                "label": "Weapon fire",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.72
+              },
+              {
+                "id": "battle-royale.weapon.reload",
+                "label": "Weapon reload",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.62
+              },
+              {
+                "id": "battle-royale.player.hit",
+                "label": "Player hit",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.8
+              },
+              {
+                "id": "battle-royale.player.eliminated",
+                "label": "Player eliminated",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.88
+              },
+              {
+                "id": "battle-royale.pickup.collect",
+                "label": "Pickup collect",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.58
+              },
+              {
+                "id": "battle-royale.zone.warning",
+                "label": "Zone warning",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.76
+              }
+            ]
+          }
+        }
+      ],
       "hudLayouts": [
         {
           "_tag": "DeclarativeRuntimeHudLayoutContribution",

@@ -1,4 +1,5 @@
 export * from "./clock/deterministic-clock.js";
+export * from "./audio/index.js";
 export * from "./assets/index.js";
 export * from "./collision/index.js";
 export * from "./ecs/components.js";

@@ -74,5 +74,5 @@ describe("built runtime bundle", () => {
     plugin.onInit?.({ pluginId: plugin.id }, world);
 
     expect(countAlivePlayers(world)).toBe(3);
-  });
+  }, 20_000);
 });

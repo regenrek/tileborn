@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,6 +49,9 @@ const createStorage = (): Storage => {
     setItem: (key, value) => values.set(key, value),
   };
 };
+
+const USER_INPUT_OVERLAY_STORAGE_KEY = "tileborne:input:user-overlay:v1";
+const PRIMARY_ACTION = "core.PrimaryAction";
 
 describe("game-client template App", () => {
   beforeEach(() => {
@@ -144,6 +147,56 @@ describe("game-client template App", () => {
     await waitFor(() => expect(screen.getByTestId("main-menu")).not.toBeNull());
     await user.click(screen.getByTestId("settings-button"));
     expect(screen.getByTestId("br-match-rules")).not.toBeNull();
+  });
+
+  it("surfaces BR audio settings in the runtime shell", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("main-menu")).not.toBeNull());
+
+    await user.click(screen.getByTestId("settings-button"));
+    await user.click(screen.getByTestId("settings-tab-audio"));
+
+    expect(screen.getByTestId("audio-settings")).not.toBeNull();
+    expect((screen.getByTestId("audio-bus-battle-royale.sfx") as HTMLInputElement).value).toBe("85");
+
+    fireEvent.change(screen.getByTestId("audio-master-volume"), { target: { value: "60" } });
+    expect((screen.getByTestId("audio-master-volume") as HTMLInputElement).value).toBe("60");
+    await user.click(screen.getByTestId("audio-muted"));
+    expect((screen.getByTestId("audio-muted") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("persists BR keybind remaps from the runtime shell Controls tab", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("main-menu")).not.toBeNull());
+
+    await user.click(screen.getByTestId("settings-button"));
+    await user.click(screen.getByTestId("settings-tab-controls"));
+    expect(screen.getByTestId(`controls-binding-${PRIMARY_ACTION}`).textContent).toContain("Space");
+
+    await user.click(screen.getByTestId(`controls-rebind-${PRIMARY_ACTION}`));
+    await user.keyboard("f");
+    expect(screen.getByTestId(`controls-binding-${PRIMARY_ACTION}`).textContent).toBe("F");
+
+    await user.click(screen.getByTestId("controls-save"));
+    const stored = JSON.parse(String(window.localStorage.getItem(USER_INPUT_OVERLAY_STORAGE_KEY))) as {
+      readonly schemeDefaults?: Record<
+        string,
+        readonly {
+          readonly action: string;
+          readonly trigger: { readonly _tag: string; readonly code?: string };
+        }[]
+      >;
+    };
+    const primary = stored.schemeDefaults?.["keyboard-mouse"]?.find(
+      (binding) => binding.action === PRIMARY_ACTION,
+    );
+    expect(primary?.trigger).toEqual({ _tag: "key", code: "KeyF" });
+
+    await user.click(screen.getByTestId(`controls-reset-${PRIMARY_ACTION}`));
+    await user.click(screen.getByTestId("controls-save"));
+    expect(window.localStorage.getItem(USER_INPUT_OVERLAY_STORAGE_KEY)).toBeNull();
   });
 
   it("joins a lobby by code with mocked fetch", async () => {

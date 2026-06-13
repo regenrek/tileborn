@@ -12,12 +12,17 @@ import { Button } from '@tileborne/ui';
 import { PencilRulerIcon } from 'lucide-react';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 import {
+  defaultRuntimeAudioSettings,
   interpolateRenderableEntities,
   PixiRendererAdapter,
   SnapshotEntityStore,
   type RenderableEntity,
   type RenderableEntityProjector,
 } from '@tileborne/runtime';
+import {
+  bindBrowserRuntimeAudioFocusState,
+  createBrowserRuntimeAudioEngine,
+} from '@tileborne/game-client';
 import { Effect } from 'effect';
 
 import { PlaytestOverlay } from '@/components/playtest-overlay';
@@ -384,7 +389,21 @@ function usePlaytestInputBridge({
     if (!plugin) {
       return undefined;
     }
+    const audioEngine =
+      plugin.audio === undefined
+        ? undefined
+        : createBrowserRuntimeAudioEngine({
+            buses: plugin.audio.buses,
+            cues: plugin.audio.cues,
+            settings: defaultRuntimeAudioSettings(),
+          });
+    const unbindAudioFocusState =
+      audioEngine === undefined ? undefined : bindBrowserRuntimeAudioFocusState(audioEngine);
+    if (audioEngine !== undefined) {
+      window.__tilebornePlaytestAudio = audioEngine;
+    }
     let seq = 0;
+    let previousIntent: ReturnType<ResolvedPlaytestPlugin['resolveInputIntent']> | undefined;
 
     const handle = attachPlaytestInputCapture({
       container: containerRef.current,
@@ -394,6 +413,11 @@ function usePlaytestInputBridge({
       resolveIntent: plugin.resolveInputIntent,
       onIntent: (intent) => {
         seq += 1;
+        const audioCueId = plugin.audio?.cueForIntent(intent, previousIntent);
+        if (audioCueId !== undefined) {
+          audioEngine?.playCue(audioCueId);
+        }
+        previousIntent = intent;
         const idle =
           intent.dir === undefined &&
 	          !intent.shoot &&
@@ -423,6 +447,11 @@ function usePlaytestInputBridge({
 
     return () => {
       handle.dispose();
+      unbindAudioFocusState?.();
+      if (window.__tilebornePlaytestAudio === audioEngine) {
+        window.__tilebornePlaytestAudio = undefined;
+      }
+      audioEngine?.dispose();
     };
   }, [containerRef, pluginId, sessionId]);
 }

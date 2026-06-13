@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 
 import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
 import { SETTINGS_TABS, type SettingsTab } from "../state/menu-machine.js";
+import { AudioTab, type AudioTabConfig } from "./audio-tab.js";
 import { ControlsTab, type ControlsTabConfig } from "./controls-tab.js";
 import { SlotHost } from "./slot-host.js";
 
@@ -20,6 +21,8 @@ export interface SettingsDialogProps {
    * not run the engine input pipeline (the blurb remains).
    */
   readonly controls?: ControlsTabConfig;
+  /** Runtime mixer settings wiring. Omit to keep the static Audio blurb. */
+  readonly audio?: AudioTabConfig;
 }
 
 const TAB_LABELS: Record<SettingsTab, string> = {
@@ -44,8 +47,10 @@ export function SettingsDialog({
   onSelectTab,
   onBack,
   controls,
+  audio,
 }: SettingsDialogProps): ReactElement {
   const showControlsEditor = activeTab === "controls" && controls !== undefined;
+  const showAudioEditor = activeTab === "audio" && audio !== undefined;
   return (
     <div className="tb-scrim">
       <div className="tb-panel" role="dialog" aria-label="Settings" data-testid="settings-dialog">
@@ -65,7 +70,9 @@ export function SettingsDialog({
             </Button>
           ))}
         </div>
-        {showControlsEditor && controls !== undefined ? (
+        {showAudioEditor && audio !== undefined ? (
+          <AudioTab {...audio} />
+        ) : showControlsEditor && controls !== undefined ? (
           <ControlsTab {...controls} />
         ) : (
           <p className="tb-tagline" data-testid="settings-tab-body">

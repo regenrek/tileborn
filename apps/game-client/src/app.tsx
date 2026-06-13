@@ -10,10 +10,16 @@ import {
   type LobbyPanelStatus,
   type LobbyReconnectPrompt,
   type RoomReconnectResponse,
+  type AudioSettingsValue,
+  type AudioTabConfig,
   RuntimeRoot,
   type ControlsTabConfig,
 } from "@tileborne/game-client";
-import { battleRoyaleDefaultInputMap } from "@tileborne/plugin-battle-royale";
+import {
+  battleRoyaleAudioCues,
+  battleRoyaleDefaultInputMap,
+  battleRoyaleSfxBus,
+} from "@tileborne/plugin-battle-royale";
 import { battleRoyaleMenuSections } from "@tileborne/plugin-battle-royale/menu";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 
@@ -106,6 +112,12 @@ export function App(): ReactElement {
   const [joinCode, setJoinCode] = useState("");
   const [mapId, setMapId] = useState(DEFAULT_LOBBY_MAP_ID);
   const [lobbySession, setLobbySession] = useState<LobbyPanelSession | null>(null);
+  const [audioSettings, setAudioSettings] = useState<AudioSettingsValue>(() => ({
+    masterVolume: 1,
+    muted: false,
+    muteOnFocusLoss: true,
+    busVolumes: { [battleRoyaleSfxBus.id]: battleRoyaleSfxBus.defaultVolume },
+  }));
   const [storedReconnect, setStoredReconnect] = useState<StoredLobbyReconnect | null>(() =>
     readStoredLobbyReconnect(),
   );
@@ -121,6 +133,23 @@ export function App(): ReactElement {
       store: createLocalStorageBindingsStore(),
     }),
     [],
+  );
+
+  const audio = useMemo<AudioTabConfig>(
+    () => ({
+      settings: audioSettings,
+      buses: [
+        {
+          id: battleRoyaleSfxBus.id,
+          label: battleRoyaleSfxBus.label,
+          kind: battleRoyaleSfxBus.kind,
+          defaultVolume: battleRoyaleSfxBus.defaultVolume,
+        },
+      ],
+      cues: battleRoyaleAudioCues,
+      onChange: setAudioSettings,
+    }),
+    [audioSettings],
   );
 
   const persistSession = useCallback((session: LobbyPanelSession) => {
@@ -243,6 +272,7 @@ export function App(): ReactElement {
     <RuntimeRoot
       brand={defaultBrandConfig}
       sections={battleRoyaleMenuSections}
+      audio={audio}
       controls={controls}
       renderLobby={({ matchmaking, onStartMatch, onBack }) => (
         <LobbyPanel

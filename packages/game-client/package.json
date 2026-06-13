@@ -27,6 +27,7 @@
     "@tileborne/core": "workspace:*",
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
+    "@tileborne/runtime": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "effect": "4.0.0-beta.70"
   },

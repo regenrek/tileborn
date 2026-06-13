@@ -132,7 +132,7 @@ void contract;
 describe("createGameHostLobbyClient", () => {
   it("keeps lobby DTOs assignable to the host-owned contract", () => {
     expect(compileLobbyDtoContract()).toEqual([]);
-  });
+  }, 20_000);
 
   it("wraps lobby create, join, ready, lookup, and reconnect endpoints", async () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {

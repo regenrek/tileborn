@@ -1,8 +1,9 @@
 import { CORE_HUD_WIDGETS, HudLayout } from "@tileborne/core";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { useState, type ReactElement } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
 import { initialMenuState } from "../state/menu-machine.js";
@@ -44,6 +45,118 @@ describe("RuntimeRoot", () => {
 
     await user.click(screen.getByTestId("settings-back"));
     expect(screen.getByTestId("main-menu")).toBeInTheDocument();
+  });
+
+  it("renders live audio mixer settings and binds them to the runtime audio engine", async () => {
+    const user = userEvent.setup();
+    const setSettings = vi.fn();
+    const setFocusState = vi.fn();
+    const dispose = vi.fn();
+    const engineFactory = vi.fn(() => ({
+      playCue: vi.fn(),
+      setSettings,
+      setFocusState,
+      snapshot: vi.fn(() => ({
+        supported: true,
+        focusState: "focused" as const,
+        settings: {
+          masterVolume: 0.8,
+          muted: false,
+          muteOnFocusLoss: true,
+          busVolumes: {},
+        },
+        playCount: 0,
+        audiblePlayCount: 0,
+        unsupportedPlayCount: 0,
+      })),
+      dispose,
+    }));
+    function AudioHarness(): ReactElement {
+      const [settings, setAudioSettings] = useState({
+        masterVolume: 0.8,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: {},
+      });
+      return (
+        <RuntimeRoot
+          audio={{
+            settings,
+            buses: [
+              {
+                id: "battle-royale.sfx",
+                label: "Battle Royale SFX",
+                kind: "sfx",
+                defaultVolume: 0.85,
+              },
+            ],
+            cues: [
+              {
+                id: "battle-royale.weapon.fire",
+                label: "Weapon fire",
+                busId: "battle-royale.sfx",
+                defaultVolume: 0.72,
+              },
+            ],
+            engineFactory,
+            onChange: setAudioSettings,
+          }}
+        />
+      );
+    }
+    render(<AudioHarness />);
+    await waitFor(() => expect(screen.getByTestId("main-menu")).toBeInTheDocument());
+    expect(engineFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buses: [expect.objectContaining({ id: "battle-royale.sfx" })],
+        cues: [expect.objectContaining({ id: "battle-royale.weapon.fire" })],
+      }),
+    );
+
+    await user.click(screen.getByTestId("settings-button"));
+    await user.click(screen.getByTestId("settings-tab-audio"));
+
+    expect(screen.getByTestId("audio-settings")).toBeInTheDocument();
+    expect(screen.getByTestId("audio-master-volume")).toHaveValue("80");
+    expect(screen.getByTestId("audio-bus-battle-royale.sfx")).toHaveValue("85");
+
+    fireEvent.change(screen.getByTestId("audio-master-volume"), { target: { value: "55" } });
+    await waitFor(() => {
+      expect(setSettings).toHaveBeenLastCalledWith({
+        masterVolume: 0.55,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: {},
+      });
+    });
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(dispose).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId("audio-bus-battle-royale.sfx"), { target: { value: "40" } });
+    await waitFor(() => {
+      expect(setSettings).toHaveBeenLastCalledWith({
+        masterVolume: 0.55,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: { "battle-royale.sfx": 0.4 },
+      });
+    });
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(dispose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId("audio-muted"));
+    await waitFor(() => {
+      expect(setSettings).toHaveBeenLastCalledWith({
+        masterVolume: 0.55,
+        muted: true,
+        muteOnFocusLoss: true,
+        busVolumes: { "battle-royale.sfx": 0.4 },
+      });
+    });
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(dispose).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event("blur"));
+    expect(setFocusState).toHaveBeenLastCalledWith("backgrounded");
   });
 
   it("renders contributed sections into named slots and lets them drive the shell", async () => {

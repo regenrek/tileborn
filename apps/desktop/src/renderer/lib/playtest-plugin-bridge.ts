@@ -35,6 +35,11 @@ import {
   serverFrameToView,
 } from '@tileborne/plugin-battle-royale/renderer';
 import {
+  BR_AUDIO_CUES,
+  battleRoyaleAudioCues,
+  battleRoyaleSfxBus,
+} from '@tileborne/plugin-battle-royale';
+import {
   ARENA_INPUT_MAP_CONTRIBUTION_ID,
   ARENA_PLUGIN_ID,
   buildArenaInputMapData,
@@ -91,6 +96,8 @@ import type {
   RenderableEntityProjector,
   RuntimePluginRenderManifest,
   RegisteredBundledAsset,
+  RuntimeAudioBusDefinition,
+  RuntimeAudioCueDefinition,
 } from '@tileborne/runtime';
 import { createBundledAssetRegistry } from '@tileborne/runtime';
 
@@ -257,6 +264,19 @@ export interface ResolvedPlaytestPlugin {
   /** Which key codes / mouse buttons are bound in the active scheme. */
   readonly inputCaptureProfile: InputCaptureProfile;
   /**
+   * Optional plugin-owned audio contribution. The shell stays generic: it asks
+   * the active mode which cue, if any, should fire for the resolved input
+   * intent, then sends that cue through the shared browser runtime audio engine.
+   */
+  readonly audio?: {
+    readonly buses: readonly RuntimeAudioBusDefinition[];
+    readonly cues: readonly RuntimeAudioCueDefinition[];
+    readonly cueForIntent: (
+      intent: ResolvedInputIntent,
+      previousIntent: ResolvedInputIntent | undefined,
+    ) => string | undefined;
+  } | undefined;
+  /**
    * The plugin's action→intent adapter: maps a neutral `ActionState` into the
    * `{ dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot }` intent the runtime expects, with
    * `dir` omitted when there is no movement. This is the ONLY place the
@@ -346,6 +366,19 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
     inputMap,
     controlScheme: scheme,
     inputCaptureProfile: deriveInputCaptureProfile(inputMap, scheme),
+    audio: {
+      buses: [battleRoyaleSfxBus],
+      cues: battleRoyaleAudioCues,
+      cueForIntent: (intent, previousIntent) => {
+        if (intent.shoot && previousIntent?.shoot !== true) {
+          return BR_AUDIO_CUES.WeaponFire;
+        }
+        if (intent.reload && previousIntent?.reload !== true) {
+          return BR_AUDIO_CUES.WeaponReload;
+        }
+        return undefined;
+      },
+    },
     resolveInputIntent: (actions, context) => resolveBattleRoyaleInputIntent(actions, context),
   };
 };

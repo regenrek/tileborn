@@ -15,6 +15,7 @@
     { "path": "../core" },
     { "path": "../ipc-contracts" },
     { "path": "../plugin-api" },
+    { "path": "../runtime" },
     { "path": "../ui" }
   ]
 }

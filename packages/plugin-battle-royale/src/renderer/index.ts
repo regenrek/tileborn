@@ -28,6 +28,21 @@ export {
   WEAPON_RIFLE_TEXTURE_ASSET_ID,
 } from "./bundled-assets.js";
 export {
+  BR_AUDIO_BUS_CONTRIBUTION_ID,
+  BR_AUDIO_BUS_ID,
+  BR_AUDIO_CUES,
+  battleRoyaleAudioCueDefinitionForEvent,
+  battleRoyaleAudioCueForEvent,
+  battleRoyaleAudioCues,
+  battleRoyaleSfxBus,
+  buildBattleRoyaleAudioBusData,
+} from "../audio.js";
+export type {
+  BattleRoyaleAudioContributionData,
+  BattleRoyaleAudioCueId,
+  BattleRoyaleAudioEvent,
+} from "../audio.js";
+export {
   BR_INPUT_MAP_CONTRIBUTION_ID,
   BR_INPUT_MAP_ID,
   battleRoyaleDefaultInputMap,

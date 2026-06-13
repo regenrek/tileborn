@@ -13,7 +13,9 @@ import {
 } from "../state/menu-machine.js";
 import { useMenuMachine } from "../state/use-menu-machine.js";
 import { brandThemeVars } from "../theming/brand-theme.js";
+import { useRuntimeAudio } from "../audio/use-runtime-audio.js";
 import { MenuShell, type RuntimeLobbyRenderProps } from "./menu-shell.js";
+import type { AudioTabConfig } from "./audio-tab.js";
 import type { ControlsTabConfig } from "./controls-tab.js";
 import type { MatchResults } from "./results-screen.js";
 
@@ -43,6 +45,8 @@ export interface RuntimeRootProps {
    * the static Controls blurb.
    */
   readonly controls?: ControlsTabConfig;
+  /** Runtime mixer settings shown in Settings -> Audio. */
+  readonly audio?: AudioTabConfig;
   /** Optional app-owned lobby surface that reuses the shell state machine. */
   readonly renderLobby?: ((props: RuntimeLobbyRenderProps) => ReactNode) | undefined;
   /**
@@ -75,6 +79,7 @@ export function RuntimeRoot({
   initialState = initialMenuState,
   bootProgress,
   controls,
+  audio,
   renderLobby,
   hudMetrics,
   hudLayout,
@@ -82,6 +87,7 @@ export function RuntimeRoot({
   hudInsets,
 }: RuntimeRootProps): ReactElement {
   const { state, dispatch } = useMenuMachine(initialState);
+  useRuntimeAudio(audio);
 
   const dispatchWithEffects = useCallback(
     (event: MenuEvent) => {
@@ -171,6 +177,7 @@ export function RuntimeRoot({
           onQuit={onQuit}
           renderLobby={renderLobby}
           {...(controls ? { controls } : {})}
+          {...(audio ? { audio } : {})}
         />
       </div>
     </div>

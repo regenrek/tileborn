@@ -653,6 +653,9 @@ importers:
       '@tileborne/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@tileborne/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@tileborne/ui':
         specifier: workspace:*
         version: link:../ui

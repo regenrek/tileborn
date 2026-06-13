@@ -144,7 +144,7 @@ export const usePlaytestMultiplayerStore = create<
     set({ flowPhase: 'starting-host' });
     useEditorUiStore.getState().setPlaytestHostModalOpen(true);
     try {
-      await useEditorCommandsBridge.getState().flushPersist?.();
+      await useEditorCommandsBridge.getState().flushPersistFor(projectId, mapId);
       const selectedPlayerModelId = readLobbyModelSelection(projectId);
       const prepared = await window.tileborne.runtime.prepareLocalRoomArtifact({
         projectId: projectId as never,

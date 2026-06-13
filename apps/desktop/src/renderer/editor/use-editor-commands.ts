@@ -80,6 +80,8 @@ export function useEditorCommands({
       applyCommandFn: (command: EditorCommand) => void,
     ) => {
       setBridgeCommands({
+        projectId,
+        mapId,
         undo: undoFn,
         redo: redoFn,
         flushPersist: flushPersistFn,
@@ -121,9 +123,9 @@ export function useEditorCommands({
         cancelFrame(cacheFrameRef.current);
         cacheFrameRef.current = undefined;
       }
-      clearBridgeCommands();
+      clearBridgeCommands({ projectId, mapId });
     },
-    [clearBridgeCommands],
+    [clearBridgeCommands, mapId, projectId],
   );
 
   const writeCache = useCallback(

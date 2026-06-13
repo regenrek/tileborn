@@ -23,7 +23,7 @@ export function usePlaytestControls() {
       options: { readonly selectedPlayerModelId?: string } = {},
     ) => {
       try {
-        await useEditorCommandsBridge.getState().flushPersist?.();
+        await useEditorCommandsBridge.getState().flushPersistFor(projectId, mapId);
         const selectedPlayerModelId =
           options.selectedPlayerModelId ?? readLobbyModelSelection(projectId);
         const result = await startPlaytest.mutateAsync({

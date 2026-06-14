@@ -34,6 +34,7 @@ Plugins extend the editor and runtime through declarative manifests and build-ti
 | [Plugins](/plugins/) | Manifest schema, contribution points, battle-royale reference |
 | [CLI Reference](/cli/) | Generated `tileborne --help` command tree |
 | [API Reference](/reference/) | TypeDoc output for public packages |
+| [Release Readiness](/release-readiness/) | Release-candidate gates, Cloudflare proof, secrets, rollback, caveats |
 
 ## Public packages
 

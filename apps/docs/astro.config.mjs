@@ -27,6 +27,7 @@ export default defineConfig({
             { label: "Security", slug: "security" },
             { label: "Ship Pipeline", slug: "deploy/ship-pipeline" },
             { label: "Cloudflare Deploy", slug: "deploy/cloudflare" },
+            { label: "Release Readiness", slug: "release-readiness" },
           ],
         },
         { label: "CLI Reference", slug: "cli" },

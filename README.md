@@ -97,6 +97,7 @@ Run `pnpm --filter @tileborne/desktop dev:cdp` to explore the editor locally.
 - [Changelog](CHANGELOG.md)
 - [Security](SECURITY.md)
 - [Docs site](apps/docs/) — build with `pnpm docs:dev`
+- [Release readiness](apps/docs/src/content/docs/release-readiness/index.md)
 
 ## Contributing
 

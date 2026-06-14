@@ -82,6 +82,24 @@ Optional downstream bindings (uncomment in template): D1, KV, R2 asset buckets, 
 
 Production/staging deploys should refuse to run without `ALCHEMY_PASSWORD` when secrets are required.
 
+## Production 1.0 release proof
+
+For a release-candidate gate, record both the local-compatible artifact proof and the operator decision for the credentialed deploy:
+
+1. Build/prove the deployable artifact without Cloudflare credentials:
+
+   ```bash
+   pnpm --filter @tileborne/cli exec vitest --run src/ship-pipeline.integration.test.ts
+   pnpm --filter @tileborne/game-host test
+   pnpm --filter @tileborne/game-host test:smoke
+   ```
+
+   This proves the thin product-repo scaffold, bundled map package, generated `worker.js`, generated `wrangler.toml`, local Miniflare host, `/discover`, room creation, lobby readiness, reconnect, and results endpoints without mutating a Cloudflare account.
+
+2. For a real bring-your-own account deploy, the operator must explicitly approve the target account/stage and provide credentials out of band. Do not commit `.env` files, API tokens, `HANDOFF_SIGNING_KEY`, `ALCHEMY_PASSWORD`, or generated account-specific Wrangler/Alchemy state.
+
+3. If credentials or publish approval are unavailable, record that exact blocker in the release receipt and preserve the local-compatible proof above. The blocker is the credentialed deploy step only; docs, security hygiene, package readiness, and final local gates can still continue.
+
 ## Health and discovery
 
 After deploy:

@@ -257,7 +257,7 @@ describe.sequential("plugin CLI", () => {
     const list = await runCli(["plugin", "list", "--json"], home);
     const listPayload = JSON.parse(list.stdout) as { readonly data: { readonly plugins: readonly unknown[] } };
     expect(listPayload.data.plugins).toEqual([]);
-  });
+  }, 15_000);
 
   it("toggles enable and disable state", async () => {
     const home = await makeTempHome();

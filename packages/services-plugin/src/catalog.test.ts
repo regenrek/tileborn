@@ -16,6 +16,21 @@ import { materializePluginManifestInput } from "./filesystem.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const battleRoyaleRoot = path.join(repoRoot, "packages/plugin-battle-royale");
+const expectedBattleRoyaleObjectTypes = [
+  { family: "spawn", label: "Spawn Point" },
+  { family: "zone", label: "Shrink Zone Anchor" },
+  { family: "loot", label: "Loot Crate" },
+  { family: "hazard", label: "Trap" },
+  { family: "prop", label: "Decoy" },
+  { family: "obstacle", label: "Barrier" },
+  { family: "weapon", label: "Pulse Carbine" },
+  { family: "projectile", label: "Projectile Bolt" },
+  { family: "vfx", label: "Muzzle Flash" },
+  { family: "vfx", label: "Impact Burst" },
+  { family: "vfx", label: "Shield Bubble" },
+  { family: "vfx", label: "Player Shadow" },
+  { family: "vfx", label: "Hazard Flame" },
+];
 
 /** Decode the shipped Battle Royale manifest the same way the registry does. */
 const battleRoyaleManifest = (): PluginManifest => {
@@ -35,8 +50,9 @@ describe("resolvePluginGameObjectCatalogs (real Battle Royale manifest)", () => 
 
     expect(contributions).toHaveLength(1);
     expect(contributions[0]?.contributionId).toBe("br-game-object-catalog");
-    // 6 map objects + 4 weapon-family entities (ADR-0028).
-    expect(contributions[0]?.catalog.objectTypes).toHaveLength(10);
+    expect(
+      contributions[0]?.catalog.objectTypes.map(({ family, label }) => ({ family, label })),
+    ).toEqual(expectedBattleRoyaleObjectTypes);
   });
 
   it("merges the resolved catalog with the expected object-type ids", async () => {

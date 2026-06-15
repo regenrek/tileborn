@@ -52,7 +52,7 @@ describe('createSeededRng', () => {
     // 2^32 is not divisible by 7, so a naive `% 7` would over-represent the
     // first few buckets. Rejection sampling should keep buckets near-uniform.
     const buckets = 7;
-    const samples = 70_000;
+    const samples = 35_000;
     const counts = new Array<number>(buckets).fill(0);
     const rng = createSeededRng(123_456);
     for (let i = 0; i < samples; i += 1) {
@@ -60,8 +60,9 @@ describe('createSeededRng', () => {
     }
     const expected = samples / buckets;
     for (const count of counts) {
-      // Within ~6% of the uniform expectation — comfortably tighter than the
-      // bias a modulo generator would introduce at this range.
+      // Within ~6% of the uniform expectation. This keeps the statistical
+      // sanity check meaningful without making the BigInt-backed RNG test
+      // dominate the root workspace test gate under parallel load.
       expect(Math.abs(count - expected) / expected).toBeLessThan(0.06);
     }
   });

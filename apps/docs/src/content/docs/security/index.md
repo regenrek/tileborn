@@ -29,6 +29,17 @@ Root `pnpm-workspace.yaml` configures pnpm trust policy:
 
 Pinned exclusions must include a dated comment and be removed once the dependency has been stable for more than seven days. See [CONTRIBUTING.md](https://github.com/tileborne/tileborne/blob/main/CONTRIBUTING.md) on the monorepo.
 
+## Release audit gate
+
+Production release candidates must pass the local security hygiene gate before handoff:
+
+- Run `pnpm audit --audit-level moderate`.
+- Review secret-scan hits for `CLOUDFLARE_API_TOKEN`, `ALCHEMY_PASSWORD`, `HANDOFF_SIGNING_KEY`, API keys, tokens, passwords, and private keys.
+- Keep production secrets in the operator's Cloudflare, Alchemy, or environment secret store; do not commit `.env` files or plaintext credentials.
+- Treat remaining moderate-or-higher advisories as release blockers unless the release owner records an explicit acceptance decision.
+
+For the 2026-06-15 Production 1.0 audit, mature patched releases removed the actionable Playwright, Wrangler, Hono, Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core` findings. `esbuild >=0.17.0 <0.28.1` remains blocked because the patched `0.28.1` release is still inside the repository's seven-day `minimumReleaseAge` window.
+
 ## Path traversal and symlink escape
 
 All filesystem writes under user data (`~/.tileborne`) and project directories go through services that call `@tileborne/asset-pipeline` guards:

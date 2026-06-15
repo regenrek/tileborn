@@ -21,6 +21,16 @@ overrides:
   msgpackr-extract: 3.0.3
   # @electron/rebuild pulls node-gyp from git; pin to registry for blockExoticSubdeps.
   "@electron/node-gyp": 10.2.0-electron.2
+  # Production 1.0 audit hygiene: mature patched transitive pins, kept at the
+  # narrowest package names that current upstream ranges can tolerate.
+  "@babel/core": 7.29.7
+  js-yaml: 4.2.0
+  qs: 6.15.2
+  tar: 7.5.16
+  tmp: 0.2.7
+  "vite@7.3.3": 7.3.5
+  "vite@8.0.12": 8.0.16
+  ws: 8.21.0
 
 # Vitest 4.1.7 pinned for current scaffold; revisit once stable >7d (see plandb c-ebql).
 # Root dev toolchain (eslint/turbo/typescript-eslint) pinned; remove excludes once stable >7d.

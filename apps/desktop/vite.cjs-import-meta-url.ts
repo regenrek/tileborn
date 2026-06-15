@@ -12,13 +12,6 @@ export function cjsImportMetaUrl(): Plugin {
   return {
     name: "tileborne:cjs-import-meta-url",
     enforce: "pre",
-    config() {
-      return {
-        define: {
-          "import.meta.url": CJS_IMPORT_META_URL,
-        },
-      };
-    },
     renderChunk(code, _chunk, options) {
       if (options.format !== "cjs") {
         return null;

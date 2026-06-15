@@ -5,6 +5,40 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.0] - 2026-06-15
+
+Production 1.0 release candidate. Focus: committed BR vertical proof, BYO
+Cloudflare deploy readiness, release/security docs, and package metadata
+prepared for maintainer go/no-go.
+
+### Added
+
+- Production release-readiness docs covering local gates, BYO Cloudflare deploy
+  proof, required secrets, rollback, support matrix, and go/no-go criteria.
+- Cloudflare deploy documentation for the local-compatible proof boundary and
+  credentialed deploy blocker.
+- Top-level release handoff checklist in `RELEASE.md`.
+
+### Changed
+
+- First-party MIT-licensed app and package manifests now use
+  `1.0.0-rc.0` for release-candidate builds.
+- `@tileborne/game-client-app` now declares the monorepo MIT license.
+- Dependency hygiene refreshed for mature patched Playwright, Wrangler, Hono,
+  Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core`
+  advisories.
+
+### Security
+
+- Production secret handling now requires Cloudflare, Alchemy, or operator
+  environment secret stores instead of committed plaintext credentials.
+- Release candidates must pass local secret scanning and treat remaining
+  moderate-or-higher dependency advisories as release blockers unless the
+  release owner records an explicit acceptance decision.
+- Known RC blocker: `esbuild >=0.17.0 <0.28.1` remains in the dependency graph
+  until patched `0.28.1` clears the repository's seven-day `minimumReleaseAge`
+  policy or a release owner accepts an override.
+
 ## [0.1.0] - 2026-05-23
 
 First open-source, local-first release. Focus: editor + SDK tileset pipeline + Battle Royale demo + multiplayer playtest on your machine.
@@ -78,3 +112,4 @@ First open-source, local-first release. Focus: editor + SDK tileset pipeline + B
 - Bundled asset loader validates manifest hashes and rejects fetch failures
 
 [0.1.0]: https://github.com/tileborne/tileborne/releases/tag/v0.1.0
+[1.0.0-rc.0]: https://github.com/tileborne/tileborne/compare/v0.1.0...v1.0.0-rc.0

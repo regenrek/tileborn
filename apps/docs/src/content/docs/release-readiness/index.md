@@ -11,6 +11,8 @@ This page is the maintainer checklist for preparing a Tileborne production 1.0 r
 
 - Node.js 22 and pnpm 11.
 - A clean git tree before final gates.
+- Package manifests prepared for `1.0.0-rc.0` and a matching `CHANGELOG.md`
+  entry plus top-level `RELEASE.md`.
 - No committed `.env` files, API tokens, `HANDOFF_SIGNING_KEY`, `ALCHEMY_PASSWORD`, Wrangler account state, or Cloudflare credentials.
 - Explicit maintainer approval before any command that pushes, publishes, deploys, tags, or mutates a Cloudflare account.
 
@@ -28,6 +30,18 @@ pnpm -r build
 ```
 
 The ship-pipeline integration proves the thin product-repo scaffold, bundled runtime map packages, generated Worker artifact, generated Wrangler config, local Miniflare host, lobby flow, reconnect, and results endpoint without Cloudflare credentials.
+
+## Version and tag readiness
+
+The Production 1.0 release-candidate package version is `1.0.0-rc.0`.
+MIT-licensed first-party app and package manifests use that version for RC
+builds. Workspace-only private test tools remain unpublishable as
+`0.0.0`/`UNLICENSED`.
+
+The candidate tag is `v1.0.0-rc.0`, but tagging, pushing, GitHub release
+creation, npm publishing, Homebrew publishing, and Cloudflare deployment all
+require explicit maintainer approval. See the root `RELEASE.md` handoff before
+running any publishing or deploy command.
 
 ## Build and deploy walkthrough
 

@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/game-client-app",
-  "version": "0.0.0",
+  "version": "1.0.0-rc.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -33,5 +33,6 @@
     "typescript": "6.0.3",
     "vite": "8.0.16",
     "vitest": "4.1.7"
-  }
+  },
+  "license": "MIT"
 }

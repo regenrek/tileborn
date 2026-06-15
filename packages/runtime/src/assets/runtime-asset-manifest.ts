@@ -1,5 +1,6 @@
-import { AssetPackManifest, AssetPackManifestAsset, License } from "@tileborne/asset-pipeline";
 import type { AssetId, ContentHash, PackId } from "@tileborne/core";
+import { License } from "@tileborne/asset-pipeline/license";
+import { AssetPackManifest, AssetPackManifestAsset } from "@tileborne/asset-pipeline/pack";
 import { Option } from "effect";
 
 import type { RuntimeAssetManifest } from "./runtime-asset-loader.js";

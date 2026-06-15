@@ -1,5 +1,5 @@
 import { JsonObject, PluginId, type SchemaMigrationChain } from "@tileborne/core";
-import { License } from "@tileborne/asset-pipeline";
+import { License } from "@tileborne/asset-pipeline/license";
 import { Option, Schema } from "effect";
 
 import { DuplicateContributionError } from "./errors.js";

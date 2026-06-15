@@ -1,4 +1,4 @@
-import type { AssetPackManifest, AssetPackManifestAsset } from "@tileborne/asset-pipeline";
+import type { AssetPackManifest, AssetPackManifestAsset } from "@tileborne/asset-pipeline/pack";
 import type { AssetId } from "@tileborne/core";
 import { Effect } from "effect";
 

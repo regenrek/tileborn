@@ -100,6 +100,12 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname, "src/renderer"),
   server: {
+    // Vite 8's Rolldown-backed React refresh wrapper currently fails in the
+    // Electron renderer dev server with esbuild@0.28.1 ("Missing field
+    // `moduleType`"), blanking the app before React mounts. Disable HMR here
+    // so the renderer uses the normal transform path; production builds and
+    // automated smoke tests are unaffected.
+    hmr: false,
     // fsevents-based watching is unreliable in this electron-forge + Vite dev
     // setup (edits/HMR were intermittently missed, forcing full restarts).
     // Polling detects renderer source changes deterministically. Dev-only; the

@@ -90,6 +90,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     typeof options === "string" ? ({ initialRoutePath: options } satisfies CreateMainWindowOptions) : options;
   const initialRoutePath = resolvedOptions.initialRoutePath ?? "/";
   const iconPath = resolveRuntimeIconPath();
+  const devServerUrl = resolveDevServerUrl();
   const mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
@@ -103,10 +104,11 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // The preload bridge is a pure browser-safe adapter: it imports Electron
-      // only, exposes the reviewed channel/event surface, and leaves schema
-      // validation in the main IPC boundary.
-      sandbox: true,
+      // Keep the packaged/smoke preload sandboxed. Electron Forge dev loads the
+      // renderer from Vite's http origin; with the current Vite/Rolldown/esbuild
+      // stack, the sandboxed preload bridge does not reach that renderer, so dev
+      // uses the standard isolated preload context instead.
+      sandbox: devServerUrl === undefined,
       preload: path.join(__dirname, "preload.cjs"),
     },
   });

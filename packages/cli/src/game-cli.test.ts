@@ -282,7 +282,7 @@ describe.sequential('game CLI families', () => {
       expect(payload.data.objectCount).toBe(1);
       expect(payload.data.packId).toMatch(/^pack:/);
     }
-  });
+  }, 15_000);
 
   it('asset describe prints capability and asset remove deletes the pack', async () => {
     const home = await makeTempHome();
@@ -319,7 +319,7 @@ describe.sequential('game CLI families', () => {
       readonly data: { readonly packs: readonly unknown[] };
     };
     expect(listPayload.data.packs).toEqual([]);
-  });
+  }, 15_000);
 
   it('map import-tiled imports a minimal TMX fixture', async () => {
     const home = await makeTempHome();

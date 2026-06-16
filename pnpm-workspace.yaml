@@ -4,7 +4,10 @@ packages:
 
 nodeLinker: hoisted
 
-minimumReleaseAge: 10080
+# Release-owner override approved 2026-06-16 for GHSA-gv7w-rqvm-qjhr.
+# Temporarily relax from 7d to 3d so esbuild@0.28.1 can clear pnpm's
+# lockfile verifier; restore to 10080 after 2026-06-19T22:47:05Z.
+minimumReleaseAge: 4320
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 blockExoticSubdeps: true
@@ -29,6 +32,7 @@ overrides:
   qs: 6.15.2
   tar: 7.5.16
   tmp: 0.2.7
+  esbuild: 0.28.1
   "vite@7.3.3": 7.3.5
   "vite@8.0.12": 8.0.16
   ws: 8.21.0

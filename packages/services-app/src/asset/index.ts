@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -841,7 +841,14 @@ const readSourceManifest = (
 
 const preflightImportSource = (source: AssetPackSource): Effect.Effect<void, AssetImportError> =>
   source._tag === 'directory'
-    ? readSourceManifest(path.resolve(source.path)).pipe(Effect.asVoid)
+    ? Effect.gen(function* () {
+        const sourceRoot = path.resolve(source.path);
+        yield* Effect.tryPromise({
+          try: () => stat(sourceRoot),
+          catch: (cause) => new AssetImportError({ path: sourceRoot, message: errorMessage(cause) }),
+        });
+        yield* readSourceManifest(sourceRoot).pipe(Effect.asVoid);
+      })
     : Effect.void;
 
 const runTarCommand = (args: readonly string[], cwd: string): Promise<void> =>
@@ -1519,6 +1526,7 @@ export const AssetServiceLive = Layer.effect(
     const importPackNow = Effect.fn('AssetService.importPackNow')(function* (
       source: AssetPackSource,
     ) {
+      yield* preflightImportSource(source);
       const pack = yield* source._tag === 'directory'
         ? importDirectoryPack(paths.assets, source.path)
         : Effect.gen(function* () {

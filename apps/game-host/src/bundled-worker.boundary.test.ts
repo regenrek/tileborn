@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { bundledSamplePackId, bundledAssetPackBlobs } from "./.generated/bundled-assets.js";
 import { bundledPlugin } from "./.generated/bundled-plugin.js";
@@ -38,6 +38,10 @@ const expectNoNodeNativeMarkers = (source: string): void => {
 };
 
 describe("bundled worker boundary", () => {
+  beforeAll(async () => {
+    await import("../scripts/bundle-worker.mjs");
+  }, 20_000);
+
   it("keeps sample pack blobs under 200KB gzip", () => {
     const payload = JSON.stringify(bundledAssetPackBlobs);
     const gzippedBytes = gzipSync(payload).byteLength;
@@ -52,7 +56,6 @@ describe("bundled worker boundary", () => {
   });
 
   it("built worker.js excludes placeholder module markers", async () => {
-    await import("../scripts/bundle-worker.mjs");
     const source = await readFile(workerPath, "utf8");
 
     for (const token of PLACEHOLDER_TOKENS) {
@@ -65,7 +68,6 @@ describe("bundled worker boundary", () => {
   });
 
   it("built worker.js excludes Node filesystem imports", async () => {
-    await import("../scripts/bundle-worker.mjs");
     const source = await readFile(workerPath, "utf8");
 
     expect(source).not.toContain("node:fs");
@@ -75,7 +77,6 @@ describe("bundled worker boundary", () => {
   });
 
   it("generated plugin runtime excludes Node/native msgpack scaffolding", async () => {
-    await import("../scripts/bundle-worker.mjs");
     const source = await readFile(generatedPluginRuntimePath, "utf8");
 
     expect(source).not.toMatch(STATIC_NODE_IMPORT);

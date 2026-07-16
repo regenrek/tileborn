@@ -62,8 +62,20 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
       'aria-checked',
       'true',
     );
-    await page.getByLabel('Project name').fill(projectName);
-    await page.getByTestId('create-project-submit').click();
+    const projectNameInput = page.getByLabel('Project name');
+    await projectNameInput.press('Enter');
+    const validationAlert = page.getByRole('alert').filter({
+      hasText: 'Project name is required.',
+    });
+    await expect(validationAlert).toBeVisible();
+    await expect(projectNameInput).toBeFocused();
+    await expect(projectNameInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(projectNameInput).toHaveAttribute(
+      'aria-describedby',
+      await validationAlert.getAttribute('id'),
+    );
+    await projectNameInput.fill(projectName);
+    await projectNameInput.press('Enter');
 
     await expect(page.getByRole('heading', { name: projectName })).toBeVisible({
       timeout: 15_000,
@@ -271,6 +283,61 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     await expect
       .poll(async () => smokeContext!.page.title(), { timeout: 10_000 })
       .toMatch(/Tileborne/i);
+  });
+
+  it('restores an unsaved creator draft after an ungraceful process exit', async () => {
+    const context = smokeContext!;
+    const created = await context.page.evaluate(async () =>
+      window.tileborne.projects.createGame({
+        name: 'Crash Recovery Smoke Game',
+        gameType: 'battle-royale',
+        idempotencyKey: 'crash-recovery-smoke-request',
+      }),
+    );
+    await navigateToRoute(context.page, `/projects/${created.projectId}/game-content`);
+    await context.page.getByTestId('content-tab-items').click();
+    await context.page.getByTestId('content-name').fill('Crash Recovered Potion');
+    await expect(context.page.getByTestId('content-document-status')).toHaveText('dirty');
+    const recoveryKey = `tileborne:document-recovery:v1:game-content:${created.projectId}`;
+    await expect
+      .poll(async () => {
+        const raw = await context.page.evaluate((key) => localStorage.getItem(key), recoveryKey);
+        if (raw === null) return undefined;
+        return (JSON.parse(raw) as { snapshot?: { label?: string } }).snapshot?.label;
+      })
+      .toBe('Crash Recovered Potion');
+    // Chromium persists localStorage asynchronously. Let its durable commit finish
+    // before simulating the process crash so this test exercises recovery rather
+    // than an OS-level power-loss window inside the browser storage engine.
+    await context.page.waitForTimeout(1_000);
+
+    const appClosed = context.app.waitForEvent('close');
+    context.app.process().kill('SIGKILL');
+    await appClosed;
+
+    smokeContext = await launchElectron(context.tileborneHome);
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate((key) => localStorage.getItem(key) !== null, recoveryKey),
+      )
+      .toBe(true);
+    await navigateToRoute(smokeContext.page, `/projects/${created.projectId}/game-content`);
+    await smokeContext.page.getByTestId('content-tab-items').click();
+    await expect(smokeContext.page.getByTestId('content-name')).toHaveValue(
+      'Crash Recovered Potion',
+    );
+    await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('dirty');
+
+    let discardPrompt = 0;
+    smokeContext.page.on('dialog', async (dialog) => {
+      discardPrompt += 1;
+      if (discardPrompt === 1) await dialog.dismiss();
+      else await dialog.accept();
+    });
+    const recoveredAppClosed = smokeContext.app.waitForEvent('close');
+    await smokeContext.app.evaluate(({ app }) => app.quit());
+    await recoveredAppClosed;
+    smokeContext = await launchElectron(context.tileborneHome);
   });
 
   it('completes an IPC ping round-trip after project creation', async () => {

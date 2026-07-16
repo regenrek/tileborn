@@ -29,6 +29,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const addRecentProject = useEditorUiStore((s) => s.addRecentProject);
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | undefined>(undefined);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const idempotencyKey = useRef<string | undefined>(undefined);
   const currentIdempotencyKey = idempotencyKey.current ?? crypto.randomUUID();
   idempotencyKey.current = currentIdempotencyKey;
@@ -40,6 +41,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       setNameError('Project name is required.');
+      nameInputRef.current?.focus();
       return;
     }
     setNameError(undefined);
@@ -94,13 +96,20 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                 </span>
               </button>
             </fieldset>
-            <FormField label="Project name" htmlFor="create-project-name" message={nameError}>
+            <FormField
+              label="Project name"
+              htmlFor="create-project-name"
+              message={nameError}
+              messageId="create-project-name-error"
+            >
               <Input
+                ref={nameInputRef}
                 id="create-project-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="My game"
                 aria-invalid={nameError !== undefined}
+                aria-describedby={nameError === undefined ? undefined : 'create-project-name-error'}
               />
             </FormField>
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2">

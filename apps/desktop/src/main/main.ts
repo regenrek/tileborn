@@ -12,6 +12,7 @@ import {
   type StartupStatusStore,
 } from '../shared/startup-status.js';
 import type { DesktopStartupController } from './startup.js';
+import { APP_RECOVERY_STORAGE_FLUSH_CHANNEL } from '../shared/app-lifecycle.js';
 
 // Dev-only: expose CDP for native-devtools-mcp (and other CDP clients). Never in packaged builds.
 const cdpPort =
@@ -62,6 +63,9 @@ if (!gotSingleInstanceLock) {
 
   const registerStartupIpc = (status: StartupStatusStore): (() => void) => {
     ipcMain.handle(STARTUP_STATUS_GET_CHANNEL, () => status.getSnapshot());
+    ipcMain.handle(APP_RECOVERY_STORAGE_FLUSH_CHANNEL, async (event) => {
+      await event.sender.session.flushStorageData();
+    });
     const unsubscribe = status.subscribe((snapshot) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {
@@ -72,6 +76,7 @@ if (!gotSingleInstanceLock) {
     return () => {
       unsubscribe();
       ipcMain.removeHandler(STARTUP_STATUS_GET_CHANNEL);
+      ipcMain.removeHandler(APP_RECOVERY_STORAGE_FLUSH_CHANNEL);
     };
   };
 

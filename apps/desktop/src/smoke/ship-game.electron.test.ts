@@ -45,7 +45,7 @@ describe('guided Ship Game (fresh-profile Electron)', () => {
     await page.getByTestId('overview-ship-game').click();
     const dialog = page.getByTestId('ship-game-dialog');
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Close' }).first().click();
+    await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
 
     await page.getByLabel('Ship Game', { exact: true }).click();
@@ -54,9 +54,14 @@ describe('guided Ship Game (fresh-profile Electron)', () => {
     await dialog.getByRole('button', { name: 'Close' }).first().click();
     await expect(dialog).toBeHidden();
 
-    await page.getByRole('button', { name: 'Command' }).click();
-    await page.getByPlaceholder('Search commands, maps, plugins…').fill('Ship Game');
-    await page.getByRole('option', { name: 'Ship Game…', exact: true }).click();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
+    const commandSearch = page.getByPlaceholder('Search commands, maps, plugins…');
+    await expect(commandSearch).toBeFocused();
+    await commandSearch.fill('Ship Game');
+    const shipCommand = page.getByRole('option', { name: 'Ship Game…', exact: true });
+    await expect(shipCommand).toBeVisible();
+    await commandSearch.press('ArrowDown');
+    await commandSearch.press('Enter');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Starter Battle Royale Arena')).toBeVisible();
     await expect(dialog.getByText(String(created.mapId), { exact: true })).toHaveCount(0);

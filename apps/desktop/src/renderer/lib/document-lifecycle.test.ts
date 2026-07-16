@@ -46,10 +46,21 @@ const registration = (overrides: Partial<DocumentRegistration> = {}): DocumentRe
 });
 
 describe('document lifecycle', () => {
+  const flushRecoveryStorage = vi.fn().mockResolvedValue(undefined);
+
   beforeEach(() => {
     cleanup();
     localStorage.clear();
     documentLifecycle.resetForTests();
+    flushRecoveryStorage.mockClear();
+    Object.defineProperty(window, 'tileborneAppLifecycle', {
+      configurable: true,
+      value: {
+        onCloseRequested: vi.fn(),
+        resolveClose: vi.fn(),
+        flushRecoveryStorage,
+      },
+    });
   });
 
   it('tracks dirty, saving and saved without reporting a failed write as success', async () => {
@@ -169,6 +180,14 @@ describe('document lifecycle', () => {
     expect(recover).toHaveBeenCalledWith({ title: 'draft-v2' });
   });
 
+  it('requests a debounced durable browser-storage flush for crash recovery', async () => {
+    documentLifecycle.register(registration());
+    documentLifecycle.markDirty('map:project-1:map-1');
+    documentLifecycle.markDirty('map:project-1:map-1');
+
+    await vi.waitFor(() => expect(flushRecoveryStorage).toHaveBeenCalledOnce());
+  });
+
   it('blocks graceful app close when a confirmed save fails', async () => {
     const save = vi.fn().mockRejectedValue(new Error('read only disk'));
     documentLifecycle.register(registration({ save }));
@@ -182,6 +201,7 @@ describe('document lifecycle', () => {
           return vi.fn();
         },
         resolveClose,
+        flushRecoveryStorage,
       },
       vi.fn(() => true),
     );

@@ -54,6 +54,18 @@ const RECOVERY_PREFIX = 'tileborne:document-recovery:v1:';
 const states = new Map<string, DocumentLifecycleState>();
 const registrations = new Map<string, DocumentRegistration>();
 const listeners = new Set<Listener>();
+let recoveryFlushTimer: ReturnType<typeof setTimeout> | undefined;
+
+const scheduleRecoveryStorageFlush = (): void => {
+  if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
+  recoveryFlushTimer = setTimeout(() => {
+    recoveryFlushTimer = undefined;
+    void globalThis.window?.tileborneAppLifecycle?.flushRecoveryStorage().catch(() => {
+      // The in-memory recovery record remains usable during this process. A
+      // later edit retries the durable Chromium storage flush.
+    });
+  }, 100);
+};
 
 const emit = () => {
   for (const listener of listeners) listener();
@@ -102,6 +114,7 @@ const writeRecovery = (state: DocumentLifecycleState): void => {
     snapshot: registration.snapshot(),
   };
   storage()?.setItem(recoveryKey(state.id), JSON.stringify(record));
+  scheduleRecoveryStorageFlush();
 };
 
 const clearRecovery = (documentId: string): void => {
@@ -309,6 +322,8 @@ export const documentLifecycle = {
   },
 
   resetForTests(): void {
+    if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
+    recoveryFlushTimer = undefined;
     states.clear();
     registrations.clear();
     listeners.clear();

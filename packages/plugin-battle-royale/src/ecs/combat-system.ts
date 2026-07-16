@@ -224,9 +224,9 @@ const recordDefeat = (
 const isDefeat = (outcome: DamageOutcome): outcome is EntityDefeated =>
   outcome._tag === 'EntityDefeated';
 
-const isDamageEvent = (
-  event: { readonly _tag: string },
-): event is Extract<DamageOutcome, { readonly _tag: 'DamageApplied' | 'EntityDefeated' }> =>
+const isDamageEvent = (event: {
+  readonly _tag: string;
+}): event is Extract<DamageOutcome, { readonly _tag: 'DamageApplied' | 'EntityDefeated' }> =>
   event._tag === 'DamageApplied' || event._tag === 'EntityDefeated';
 
 const normalizeDegrees = (degrees: number): number => {
@@ -299,10 +299,7 @@ const advanceWeapons = (ctx: CombatSystemContext, state: CombatSystemState): voi
 
 const ammoKind = (ctx: CombatSystemContext): string => String(ctx.weapon.id);
 
-const reserveAmount = (
-  reserve: AmmoReserve | undefined,
-  kind: string,
-): number =>
+const reserveAmount = (reserve: AmmoReserve | undefined, kind: string): number =>
   reserve?.stacks.find((stack) => stack.ammoKind === kind)?.amount ?? 0;
 
 const setReserveAmount = (
@@ -356,7 +353,9 @@ const syncWeaponRuntimeComponents = (
   const equippedWeapons = world.getComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
   const ammoReserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
   const reloadStates = world.getComponent<ReloadState>(RELOAD_STATE_COMPONENT);
-  const weaponRuntimeStates = world.getComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT);
+  const weaponRuntimeStates = world.getComponent<WeaponRuntimeState>(
+    WEAPON_RUNTIME_STATE_COMPONENT,
+  );
   const kind = ammoKind(ctx);
   for (const [entity, player] of players.entries()) {
     const weaponState = state.weaponStateByPlayerId.get(player.playerId);
@@ -364,7 +363,9 @@ const syncWeaponRuntimeComponents = (
     equippedWeapons.set(entity, { weaponId: kind, slot });
     if (!weaponState) {
       if (!ammoReserves.has(entity)) {
-        ammoReserves.set(entity, { stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }] });
+        ammoReserves.set(entity, {
+          stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }],
+        });
       }
       reloadStates.set(entity, { active: false, weaponId: kind, remainingTicks: 0 });
       weaponRuntimeStates.set(entity, {
@@ -379,7 +380,9 @@ const syncWeaponRuntimeComponents = (
       continue;
     }
     if (!ammoReserves.has(entity)) {
-      ammoReserves.set(entity, { stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }] });
+      ammoReserves.set(entity, {
+        stacks: [{ ammoKind: kind, amount: ctx.initialAmmoReserve ?? 0 }],
+      });
     }
     reloadStates.set(entity, {
       active: weaponState.reloadRemaining > 0,
@@ -592,11 +595,9 @@ const findBreakableProjectileHit = (
         nearest === undefined ||
         distanceFromProjectile < nearest.distanceFromProjectile ||
         (distanceFromProjectile === nearest.distanceFromProjectile && entity < nearest.entity) ||
-        (
-          distanceFromProjectile === nearest.distanceFromProjectile &&
+        (distanceFromProjectile === nearest.distanceFromProjectile &&
           entity === nearest.entity &&
-          bodyEntity < nearest.bodyEntity
-        )
+          bodyEntity < nearest.bodyEntity)
       ) {
         nearest = { entity, bodyEntity, distanceFromProjectile };
       }
@@ -648,12 +649,7 @@ const advanceProjectiles = (
       x: position.x + projectile.dirX * projectile.speed,
       y: position.y + projectile.dirY * projectile.speed,
     };
-    const breakableHit = findBreakableProjectileHit(
-      world,
-      from,
-      to,
-      ctx.delivery.radius,
-    );
+    const breakableHit = findBreakableProjectileHit(world, from, to, ctx.delivery.radius);
     if (breakableHit !== undefined) {
       applyBreakableProjectileDamage(world, breakableHit.entity, ctx.delivery.damage);
       toDestroy.push(entity);
@@ -678,7 +674,14 @@ const advanceProjectiles = (
 
     for (const event of step.events) {
       if (isDamageEvent(event)) {
-        recordDamageIndicator(world, event.target, projectile.ownerId, event.amount, ctx.tick ?? 0, from);
+        recordDamageIndicator(
+          world,
+          event.target,
+          projectile.ownerId,
+          event.amount,
+          ctx.tick ?? 0,
+          from,
+        );
       }
       if (event._tag === 'EntityDefeated') {
         recordDefeat(world, ctx.damageState, event.target, projectile.ownerId);

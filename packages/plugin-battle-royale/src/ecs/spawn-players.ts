@@ -1,11 +1,11 @@
-import { DAMAGE } from "../constants.js";
-import type { ExportedArtifact, SpawnPointArtifact } from "../types/artifact.js";
+import { DAMAGE } from '../constants.js';
+import type { ExportedArtifact, SpawnPointArtifact } from '../types/artifact.js';
 import {
   assertBattleRoyaleTeamTopology,
   selectBattleRoyaleSpawnTeamSlots,
   type BattleRoyaleMatchMode,
-} from "../team-topology.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+} from '../team-topology.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 import {
   ANIMATION_STATE_COMPONENT,
   FACING_COMPONENT,
@@ -21,7 +21,7 @@ import {
   type Position,
   type Team,
   type Velocity,
-} from "./components.js";
+} from './components.js';
 
 export interface SpawnSlot {
   readonly x: number;
@@ -59,7 +59,7 @@ const resolvePlayerModelId = (artifact: ExportedArtifact, playerId: string): str
   const selected = artifact.playerModelSelections?.find((entry) => entry.playerId === playerId);
   const modelId = selected?.modelId ?? artifact.defaultPlayerModelId;
   if (modelId === undefined) {
-    throw new Error("runtime artifact is missing defaultPlayerModelId");
+    throw new Error('runtime artifact is missing defaultPlayerModelId');
   }
   return modelId;
 };
@@ -127,7 +127,7 @@ export const spawnPlayersFromArtifact = (
       team: slot.team,
       modelId,
     });
-    animations.set(entity, { modelId, clipKey: "idle", facingDeg: 0, moving: false });
+    animations.set(entity, { modelId, clipKey: 'idle', facingDeg: 0, moving: false });
     stats.set(entity, { kills: 0, deaths: 0 });
     teams.set(entity, { team: slot.team });
     facings.set(entity, { dir: 0 });

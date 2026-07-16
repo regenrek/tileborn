@@ -118,15 +118,11 @@ export const createBattleRoyaleCombatWorldView = (
       if (!position || !player) {
         return Option.none();
       }
-      const body = physicsForPlayer(
-        player,
-        config.bodyByModelId,
-        {
-          radius: DEFAULT_PLAYER_PHYSICS.radius,
-          offsetX: config.footprintOffsetX ?? DEFAULT_PLAYER_PHYSICS.offsetX,
-          offsetY: config.footprintOffsetY,
-        },
-      );
+      const body = physicsForPlayer(player, config.bodyByModelId, {
+        radius: DEFAULT_PLAYER_PHYSICS.radius,
+        offsetX: config.footprintOffsetX ?? DEFAULT_PLAYER_PHYSICS.offsetX,
+        offsetY: config.footprintOffsetY,
+      });
       return Option.some(new Vec2({ x: position.x + body.offsetX, y: position.y + body.offsetY }));
     },
     blockers: () => blockers,
@@ -167,15 +163,15 @@ export const buildCombatBlockers = (
   return environment.rects
     .filter((rect) => rect.blocksProjectiles || rect.blocksVision)
     .map(
-    (rect) =>
-      new CombatBlocker({
-        minX: rect.x,
-        minY: rect.y,
-        maxX: rect.x + rect.width,
-        maxY: rect.y + rect.height,
-        blocksProjectiles: rect.blocksProjectiles,
-        blocksVision: rect.blocksVision,
-      }),
+      (rect) =>
+        new CombatBlocker({
+          minX: rect.x,
+          minY: rect.y,
+          maxX: rect.x + rect.width,
+          maxY: rect.y + rect.height,
+          blocksProjectiles: rect.blocksProjectiles,
+          blocksVision: rect.blocksVision,
+        }),
     );
 };
 

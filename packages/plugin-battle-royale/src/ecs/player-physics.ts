@@ -1,8 +1,8 @@
-import type { PlayerModelRef } from "@tileborne/core";
+import type { PlayerModelRef } from '@tileborne/core';
 
-import { MOVEMENT } from "../constants.js";
-import type { ExportedArtifact } from "../types/artifact.js";
-import type { Player } from "./components.js";
+import { MOVEMENT } from '../constants.js';
+import type { ExportedArtifact } from '../types/artifact.js';
+import type { Player } from './components.js';
 
 export interface PlayerPhysicsProfile {
   readonly radius: number;
@@ -61,7 +61,12 @@ export const buildPlayerPhysicsByModelId = (
   artifact: ExportedArtifact,
   defaults: PlayerPhysicsDefaults = DEFAULT_PLAYER_PHYSICS,
 ): ReadonlyMap<string, PlayerPhysicsProfile> =>
-  new Map((artifact.playerModels ?? []).map((model) => [model.id, playerPhysicsFromModel(model, defaults)]));
+  new Map(
+    (artifact.playerModels ?? []).map((model) => [
+      model.id,
+      playerPhysicsFromModel(model, defaults),
+    ]),
+  );
 
 export const physicsForPlayer = (
   player: Player,

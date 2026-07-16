@@ -1,6 +1,6 @@
-import type { PlayerModelClipKey } from "@tileborne/core";
+import type { PlayerModelClipKey } from '@tileborne/core';
 
-import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
+import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
 import {
   ANIMATION_STATE_COMPONENT,
   FACING_COMPONENT,
@@ -9,8 +9,8 @@ import {
   type Direction8,
   type Facing,
   type Player,
-} from "./components.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+} from './components.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 
 const DEFAULT_FACING_DEG = 0;
 
@@ -22,16 +22,14 @@ const isAimDeg = (value: number | undefined): value is number =>
 
 export const direction8ToFacingDeg = (dir: Direction8): number => dir * 45;
 
-const clipKeyForInput = (
-  input: RuntimePlayerInput | undefined,
-): PlayerModelClipKey => {
+const clipKeyForInput = (input: RuntimePlayerInput | undefined): PlayerModelClipKey => {
   if (input?.reload) {
-    return "reload";
+    return 'reload';
   }
   if (input?.shoot) {
-    return "shoot";
+    return 'shoot';
   }
-  return isDirection8(input?.dir) ? "run" : "idle";
+  return isDirection8(input?.dir) ? 'run' : 'idle';
 };
 
 const animationFor = (

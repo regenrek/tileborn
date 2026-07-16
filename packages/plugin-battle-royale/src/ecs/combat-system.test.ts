@@ -24,7 +24,14 @@ import { CombatBlocker, createSeededRng, type ProjectileDelivery } from '@tilebo
 import { Option, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { DAMAGE, INVENTORY, LOOT_PICKUP_RADIUS, MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from '../constants.js';
+import {
+  DAMAGE,
+  INVENTORY,
+  LOOT_PICKUP_RADIUS,
+  MOVEMENT,
+  PROJECTILE,
+  SPAWN_POINT_KIND,
+} from '../constants.js';
 import { DEFAULT_BATTLE_ROYALE_CONFIG } from '../battle-royale-config.js';
 import {
   AMMO_RESERVE_COMPONENT,
@@ -63,10 +70,7 @@ import {
   type CombatSystemContext,
   type MapBounds,
 } from './combat-system.js';
-import {
-  createInventoryLootSystemState,
-  runInventoryLootSystem,
-} from './inventory-loot-system.js';
+import { createInventoryLootSystemState, runInventoryLootSystem } from './inventory-loot-system.js';
 import {
   createDamageSystemState,
   runDamageSystem,
@@ -163,42 +167,42 @@ const makeContext = (
 });
 
 const shooterInput = (
-	  overrides: Partial<{
-	    readonly aimDeg: number;
-	    readonly dir: RuntimePlayerInput['dir'];
-	    readonly swapSlot: number;
-	    readonly shoot: boolean;
-	    readonly reload: boolean;
-	    readonly interact: boolean;
-	  }> = {},
+  overrides: Partial<{
+    readonly aimDeg: number;
+    readonly dir: RuntimePlayerInput['dir'];
+    readonly swapSlot: number;
+    readonly shoot: boolean;
+    readonly reload: boolean;
+    readonly interact: boolean;
+  }> = {},
 ): RuntimePlayerInput => ({
   tick: 1,
   seq: 1,
   dir: 0,
-	  shoot: true,
-	  reload: false,
-	  interact: false,
-	  drop: false,
-	  abilities: [],
-	  ...overrides,
-	});
+  shoot: true,
+  reload: false,
+  interact: false,
+  drop: false,
+  abilities: [],
+  ...overrides,
+});
 
 const idleShooterInput = (
-	  overrides: Partial<{
-	    readonly aimDeg: number;
-	    readonly swapSlot: number;
-	    readonly shoot: boolean;
-	  }> = {},
+  overrides: Partial<{
+    readonly aimDeg: number;
+    readonly swapSlot: number;
+    readonly shoot: boolean;
+  }> = {},
 ): RuntimePlayerInput => ({
   tick: 1,
   seq: 1,
-	  shoot: true,
-	  reload: false,
-	  interact: false,
-	  drop: false,
-	  abilities: [],
-	  ...overrides,
-	});
+  shoot: true,
+  reload: false,
+  interact: false,
+  drop: false,
+  abilities: [],
+  ...overrides,
+});
 
 const inputForPlayer =
   (playerId: string, input: RuntimePlayerInput = shooterInput()) =>
@@ -525,7 +529,9 @@ describe('combat system (neutral engine)', () => {
     );
     expect(spawnOrigin.x).toBeCloseTo(10);
     expect(spawnOrigin.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET);
-    expect(visiblePosition.y).toBeCloseTo(10 + PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed);
+    expect(visiblePosition.y).toBeCloseTo(
+      10 + PROJECTILE_MUZZLE_OFFSET + WEAPON_ENTRY.delivery.speed,
+    );
   });
 
   it('keeps the shooter stationary when firing with and without movement direction', () => {
@@ -686,7 +692,10 @@ describe('combat system (neutral engine)', () => {
     );
     const damageState = createDamageSystemState();
     const collector = createMsgCollector();
-    const ctx = makeContext(world, damageState, { getPlayerInput: inputForPlayer('player-1'), tick: 7 });
+    const ctx = makeContext(world, damageState, {
+      getPlayerInput: inputForPlayer('player-1'),
+      tick: 7,
+    });
 
     runCombatSystem(world, ctx, createCombatSystemState());
     runDamageSystem(world, 1, { msgOut: collector.msgOut }, damageState);

@@ -1,6 +1,6 @@
-import { LOOT_PICKUP_RADIUS } from "../constants.js";
-import type { ExportedArtifact, ObjectPlacement } from "../types/artifact.js";
-import type { PluginWorld, RuntimePlayerInput } from "../types/runtime-plugin.js";
+import { LOOT_PICKUP_RADIUS } from '../constants.js';
+import type { ExportedArtifact, ObjectPlacement } from '../types/artifact.js';
+import type { PluginWorld, RuntimePlayerInput } from '../types/runtime-plugin.js';
 import {
   ABILITY_STATE_COMPONENT,
   AIM_COMPONENT,
@@ -61,12 +61,12 @@ import {
   type Team,
   type VisionBlocker,
   type WeaponRuntimeState,
-} from "./components.js";
+} from './components.js';
 import {
   DEFAULT_PLAYER_PHYSICS,
   physicsForPlayer,
   type PlayerPhysicsProfile,
-} from "./player-physics.js";
+} from './player-physics.js';
 
 export interface RuntimeEcsOptions {
   readonly playerHealth: number;
@@ -119,10 +119,7 @@ const isAimDeg = (value: number | undefined): value is number =>
 
 const facingDeg = (facing: Facing | undefined): number => (facing?.dir ?? 0) * 45;
 
-const bodyForPlayer = (
-  player: Player,
-  options: RuntimeEcsOptions,
-): PlayerPhysicsProfile =>
+const bodyForPlayer = (player: Player, options: RuntimeEcsOptions): PlayerPhysicsProfile =>
   physicsForPlayer(
     player,
     options.bodyByModelId,
@@ -158,7 +155,9 @@ const initializePlayerRuntimeComponents = (
   const equippedWeapons = world.getComponent<EquippedWeapon>(EQUIPPED_WEAPON_COMPONENT);
   const ammoReserves = world.getComponent<AmmoReserve>(AMMO_RESERVE_COMPONENT);
   const reloadStates = world.getComponent<ReloadState>(RELOAD_STATE_COMPONENT);
-  const weaponRuntimeStates = world.getComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT);
+  const weaponRuntimeStates = world.getComponent<WeaponRuntimeState>(
+    WEAPON_RUNTIME_STATE_COMPONENT,
+  );
   const abilityStates = world.getComponent<AbilityState>(ABILITY_STATE_COMPONENT);
   const statusEffects = world.getComponent<StatusEffects>(STATUS_EFFECTS_COMPONENT);
   const shields = world.getComponent<Shield>(SHIELD_COMPONENT);
@@ -208,7 +207,7 @@ const initializePlayerRuntimeComponents = (
     facings.set(entity, facings.get(entity) ?? { dir: 0 });
     aims.set(entity, { deg: aim });
     muzzles.set(entity, muzzleFor(position, body, aim));
-    respawns.set(entity, { state: player.alive === 1 ? "alive" : "dead" });
+    respawns.set(entity, { state: player.alive === 1 ? 'alive' : 'dead' });
   }
 };
 
@@ -233,7 +232,7 @@ const spawnRuntimeObjects = (
   for (const placement of [...artifact.objectPlacements].sort(comparePlacements)) {
     const entity = world.createEntity();
     positions.set(entity, { x: placement.x, y: placement.y });
-    if (placement.role === "loot-crate") {
+    if (placement.role === 'loot-crate') {
       pickups.set(entity, {
         itemKind: placement.properties.itemKind,
         tier: placement.properties.tier,
@@ -247,29 +246,29 @@ const spawnRuntimeObjects = (
         collected: false,
       });
       interactables.set(entity, {
-        action: "pickup-loot",
+        action: 'pickup-loot',
         radius: LOOT_PICKUP_RADIUS,
         enabled: true,
       });
       breakables.set(entity, { health: 100, maxHealth: 100, destroyed: false });
     }
-    if (placement.role === "shrink-zone-anchor") {
+    if (placement.role === 'shrink-zone-anchor') {
       hazards.set(entity, { damagePerSecond: options.zoneDamagePerSecond, enabled: true });
     }
-    if (placement.role === "trap") {
+    if (placement.role === 'trap') {
       deployables.set(entity, {
-        kind: "trap",
-        ownerId: "environment",
+        kind: 'trap',
+        ownerId: 'environment',
         radius: placement.properties.radius,
         remainingTicks: Number.MAX_SAFE_INTEGER,
         armedTicks: 0,
         triggered: false,
       });
     }
-    if (placement.role === "decoy") {
+    if (placement.role === 'decoy') {
       deployables.set(entity, {
-        kind: "decoy",
-        ownerId: "environment",
+        kind: 'decoy',
+        ownerId: 'environment',
         radius: placement.properties.radius,
         remainingTicks: placement.properties.durationTicks,
         armedTicks: 0,
@@ -278,8 +277,9 @@ const spawnRuntimeObjects = (
     }
   }
 
-  for (const rect of [...(artifact.objectCollisionRects ?? [])].sort((left, right) =>
-    left.objectId.localeCompare(right.objectId) || left.y - right.y || left.x - right.x,
+  for (const rect of [...(artifact.objectCollisionRects ?? [])].sort(
+    (left, right) =>
+      left.objectId.localeCompare(right.objectId) || left.y - right.y || left.x - right.x,
   )) {
     const entity = world.createEntity();
     collisionBodies.set(entity, { ...rect });
@@ -322,7 +322,8 @@ export const syncPlayerInputRuntimeComponents = (
     if (player.alive === 1 && isDirection8(input?.dir)) {
       facings.set(entity, { dir: input.dir });
     }
-    const aim = player.alive === 1 && isAimDeg(input?.aimDeg) ? input.aimDeg : facingDeg(facings.get(entity));
+    const aim =
+      player.alive === 1 && isAimDeg(input?.aimDeg) ? input.aimDeg : facingDeg(facings.get(entity));
     const body = bodyForPlayer(player, options);
     const position = positions.get(entity);
     if (player.alive === 1) {

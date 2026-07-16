@@ -1,12 +1,12 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { MOVEMENT, ZONE } from "../constants.js";
+import { MOVEMENT, ZONE } from '../constants.js';
 
-import type { ExportedArtifact } from "../types/artifact.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+import type { ExportedArtifact } from '../types/artifact.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 
 /** Battle royale safe-zone singleton tracked by the runtime adapter. */
-export class ZoneComponent extends Schema.Class<ZoneComponent>("ZoneComponent")({
+export class ZoneComponent extends Schema.Class<ZoneComponent>('ZoneComponent')({
   cx: Schema.Number,
   cy: Schema.Number,
   currentRadius: Schema.Number,
@@ -19,7 +19,7 @@ export class ZoneComponent extends Schema.Class<ZoneComponent>("ZoneComponent")(
   phaseStartTick: Schema.Int,
 }) {}
 
-export const ZONE_COMPONENT = "Zone";
+export const ZONE_COMPONENT = 'Zone';
 
 export type Zone = typeof ZoneComponent.Type;
 
@@ -103,10 +103,7 @@ export const distanceOutsideZone = (zone: Zone, x: number, y: number): number =>
 export const isOutsideZone = (zone: Zone, x: number, y: number): boolean =>
   distanceOutsideZone(zone, x, y) > 0;
 
-export const phaseDurationTicks = (
-  phaseIndex: number,
-  schedule: ZoneScheduleConfig,
-): number => {
+export const phaseDurationTicks = (phaseIndex: number, schedule: ZoneScheduleConfig): number => {
   if (phaseIndex === 0) {
     return schedule.waitSec * schedule.tickRate;
   }

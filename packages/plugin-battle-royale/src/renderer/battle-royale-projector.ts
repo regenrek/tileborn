@@ -6,18 +6,18 @@
  * The frontend bridge should preload textures for these ids before calling
  * PixiRendererAdapter.renderFromEntities().
  */
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { type PlayerModelClipKey } from "@tileborne/core";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { type PlayerModelClipKey } from '@tileborne/core';
 
-import { BR_OVERLAY_SLOTS } from "../constants.js";
+import { BR_OVERLAY_SLOTS } from '../constants.js';
 import type {
   RenderableAnimationFrame,
   RenderableEntityAnimation,
   RenderableEntity,
   RenderableEntityProjector,
   RuntimePluginRenderManifest,
-} from "@tileborne/runtime";
-import { Option } from "effect";
+} from '@tileborne/runtime';
+import { Option } from 'effect';
 
 import {
   createBattleRoyaleBundledAssets,
@@ -25,8 +25,8 @@ import {
   SCAN_PULSE_TEXTURE_ASSET_ID,
   TRAP_TEXTURE_ASSET_ID,
   UI_PIXEL_TEXTURE_ASSET_ID,
-} from "./bundled-assets.js";
-import { BATTLE_ROYALE_VISUAL_ORACLE, type VisualSize } from "./visual-oracle.js";
+} from './bundled-assets.js';
+import { BATTLE_ROYALE_VISUAL_ORACLE, type VisualSize } from './visual-oracle.js';
 
 type BattleRoyaleSnapshot =
   | BattleRoyaleProtocol.WelcomeSnapshot
@@ -188,7 +188,7 @@ interface ObjectProjectionState {
 }
 
 interface BattleRoyaleFullState {
-  readonly _tag: "BattleRoyaleFullState";
+  readonly _tag: 'BattleRoyaleFullState';
   readonly tick: number;
   readonly players: ReadonlyMap<PlayerId, PlayerProjectionState>;
   readonly projectiles: ReadonlyMap<string, ProjectileProjectionState>;
@@ -256,14 +256,14 @@ export interface ZoneView {
 
 export type ServerFrameView =
   | {
-      readonly kind: "initial";
+      readonly kind: 'initial';
       readonly tick: number;
       readonly players: readonly InitialFramePlayerView[];
       readonly objects?: readonly FrameObjectView[];
       readonly zone: ZoneView;
     }
   | {
-      readonly kind: "delta";
+      readonly kind: 'delta';
       readonly tick: number;
       readonly removed: readonly string[];
       readonly updated: readonly FramePlayerUpdateView[];
@@ -271,10 +271,15 @@ export type ServerFrameView =
       readonly objectsRemoved?: readonly string[];
       readonly zone: ZoneView | undefined;
     }
-  | { readonly kind: "joined"; readonly id: string }
-  | { readonly kind: "left"; readonly id: string }
-  | { readonly kind: "killed"; readonly killer: string; readonly victim: string; readonly tick: number }
-  | { readonly kind: "game-over"; readonly winner: string };
+  | { readonly kind: 'joined'; readonly id: string }
+  | { readonly kind: 'left'; readonly id: string }
+  | {
+      readonly kind: 'killed';
+      readonly killer: string;
+      readonly victim: string;
+      readonly tick: number;
+    }
+  | { readonly kind: 'game-over'; readonly winner: string };
 
 export interface InitialFrameInput {
   readonly tick: number;
@@ -296,11 +301,11 @@ export interface ClientInputFrame {
 }
 
 export type ClientFrameView =
-  | { readonly kind: "heartbeat"; readonly tick: number }
-  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
-  | ({ readonly kind: "input" } & ClientInputFrame);
+  | { readonly kind: 'heartbeat'; readonly tick: number }
+  | { readonly kind: 'ack'; readonly tick: number; readonly receivedAtMs: number }
+  | ({ readonly kind: 'input' } & ClientInputFrame);
 
-export { PLAYER_TEXTURE_ASSET_ID, PROJECTILE_TEXTURE_ASSET_ID } from "./bundled-assets.js";
+export { PLAYER_TEXTURE_ASSET_ID, PROJECTILE_TEXTURE_ASSET_ID } from './bundled-assets.js';
 
 const renderManifest: RuntimePluginRenderManifest = {
   fixedZoom: 4,
@@ -316,26 +321,25 @@ const CRATE_HEALTH_BAR_WIDTH = 20;
 const IMPACT_LIFETIME_TICKS = 5;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const isBattleRoyaleSnapshot = (snapshot: unknown): snapshot is BattleRoyaleSnapshot =>
-  isRecord(snapshot) &&
-  (snapshot._tag === "WelcomeSnapshot" || snapshot._tag === "DeltaSnapshot");
+  isRecord(snapshot) && (snapshot._tag === 'WelcomeSnapshot' || snapshot._tag === 'DeltaSnapshot');
 
 const isWelcomeFrame = (snapshot: unknown): snapshot is BattleRoyaleProtocol.WelcomeSnapshot =>
-  isRecord(snapshot) && snapshot._tag === "WelcomeSnapshot";
+  isRecord(snapshot) && snapshot._tag === 'WelcomeSnapshot';
 
 const isDeltaFrame = (snapshot: unknown): snapshot is BattleRoyaleProtocol.DeltaSnapshot =>
-  isRecord(snapshot) && snapshot._tag === "DeltaSnapshot";
+  isRecord(snapshot) && snapshot._tag === 'DeltaSnapshot';
 
 const isBattleRoyaleFullState = (snapshot: unknown): snapshot is BattleRoyaleFullState =>
   isRecord(snapshot) &&
-  snapshot._tag === "BattleRoyaleFullState" &&
+  snapshot._tag === 'BattleRoyaleFullState' &&
   snapshot.players instanceof Map &&
-    snapshot.projectiles instanceof Map &&
-    snapshot.impacts instanceof Map &&
-    snapshot.deployables instanceof Map &&
-    snapshot.objects instanceof Map;
+  snapshot.projectiles instanceof Map &&
+  snapshot.impacts instanceof Map &&
+  snapshot.deployables instanceof Map &&
+  snapshot.objects instanceof Map;
 
 const optionOr = <Value>(value: Option.Option<Value> | undefined, fallback: Value): Value =>
   value !== undefined && Option.isSome(value) ? value.value : fallback;
@@ -404,17 +408,23 @@ export const mergeBattleRoyaleFrame = (
     return previousFullState;
   }
 
-  if (frame._tag === "WelcomeSnapshot") {
+  if (frame._tag === 'WelcomeSnapshot') {
     return {
-      _tag: "BattleRoyaleFullState",
+      _tag: 'BattleRoyaleFullState',
       tick: frame.tick,
       players: new Map(frame.players.map((player) => [player.id, toPlayerState(player)])),
       projectiles: new Map(
-        frame.projectiles.map((projectile) => [projectileKey(projectile.id), toProjectileState(projectile)]),
+        frame.projectiles.map((projectile) => [
+          projectileKey(projectile.id),
+          toProjectileState(projectile),
+        ]),
       ),
       impacts: new Map(),
       deployables: new Map(
-        (frame.deployables ?? []).map((deployable) => [deployableKey(deployable.id), toDeployableState(deployable)]),
+        (frame.deployables ?? []).map((deployable) => [
+          deployableKey(deployable.id),
+          toDeployableState(deployable),
+        ]),
       ),
       objects: new Map(
         (frame.objects ?? []).map((object) => [objectKey(object.id), toObjectState(object)]),
@@ -469,8 +479,9 @@ export const mergeBattleRoyaleFrame = (
     isBattleRoyaleFullState(previousFullState) ? previousFullState.projectiles : [],
   );
   const impacts = new Map(
-    [...(isBattleRoyaleFullState(previousFullState) ? previousFullState.impacts : [])]
-      .filter(([, impact]) => frame.tick - impact.startedTick <= IMPACT_LIFETIME_TICKS),
+    [...(isBattleRoyaleFullState(previousFullState) ? previousFullState.impacts : [])].filter(
+      ([, impact]) => frame.tick - impact.startedTick <= IMPACT_LIFETIME_TICKS,
+    ),
   );
   for (const projectileId of frame.projectilesRemoved) {
     const id = projectileKey(projectileId);
@@ -491,7 +502,7 @@ export const mergeBattleRoyaleFrame = (
       x: 0,
       y: 0,
       rot: 0,
-      ownerId: BattleRoyaleProtocol.makePlayerId("unknown"),
+      ownerId: BattleRoyaleProtocol.makePlayerId('unknown'),
     };
     projectiles.set(id, {
       x: optionOr(update.x, current.x),
@@ -510,8 +521,8 @@ export const mergeBattleRoyaleFrame = (
   for (const update of frame.deployablesUpdated ?? []) {
     const id = deployableKey(update.id);
     const current = deployables.get(id) ?? {
-      kind: "trap" as const,
-      ownerId: BattleRoyaleProtocol.makeDeployableOwnerId("unknown"),
+      kind: 'trap' as const,
+      ownerId: BattleRoyaleProtocol.makeDeployableOwnerId('unknown'),
       x: 0,
       y: 0,
       radius: 0,
@@ -542,14 +553,19 @@ export const mergeBattleRoyaleFrame = (
   }
 
   return {
-    _tag: "BattleRoyaleFullState",
+    _tag: 'BattleRoyaleFullState',
     tick: frame.tick,
     players,
     projectiles,
     impacts,
     deployables,
     objects,
-    zone: optionOr(frame.zone, isBattleRoyaleFullState(previousFullState) ? previousFullState.zone : { cx: 0, cy: 0, radius: 0 }),
+    zone: optionOr(
+      frame.zone,
+      isBattleRoyaleFullState(previousFullState)
+        ? previousFullState.zone
+        : { cx: 0, cy: 0, radius: 0 },
+    ),
   } satisfies BattleRoyaleFullState;
 };
 
@@ -568,19 +584,22 @@ const healthTint = (health: number): number => {
 };
 
 const tierTint = (tier: string | undefined): number => {
-  if (tier === "legendary") {
+  if (tier === 'legendary') {
     return 0xf97316;
   }
-  if (tier === "epic") {
+  if (tier === 'epic') {
     return 0xa78bfa;
   }
-  if (tier === "rare") {
+  if (tier === 'rare') {
     return 0x38bdf8;
   }
   return 0xeab308;
 };
 
-const playerHealthEntities = (id: PlayerId, player: PlayerProjectionState): readonly RenderableEntity[] => {
+const playerHealthEntities = (
+  id: PlayerId,
+  player: PlayerProjectionState,
+): readonly RenderableEntity[] => {
   const pct = Math.max(0, Math.min(1, player.health / 100));
   if (pct <= 0) {
     return [];
@@ -613,7 +632,10 @@ const playerHealthEntities = (id: PlayerId, player: PlayerProjectionState): read
   ];
 };
 
-const playerStatusEntities = (id: PlayerId, player: PlayerProjectionState): readonly RenderableEntity[] =>
+const playerStatusEntities = (
+  id: PlayerId,
+  player: PlayerProjectionState,
+): readonly RenderableEntity[] =>
   (player.statusEffects ?? []).map((effect, index) => ({
     id: `br:status:${id}:${effect.effectId}`,
     assetId: SCAN_PULSE_TEXTURE_ASSET_ID,
@@ -621,7 +643,7 @@ const playerStatusEntities = (id: PlayerId, player: PlayerProjectionState): read
     y: player.y,
     anchor: CENTER_ANCHOR,
     scale: 1.05 + index * 0.18,
-    tint: effect.effectId.includes("shield") ? 0x38bdf8 : 0xa78bfa,
+    tint: effect.effectId.includes('shield') ? 0x38bdf8 : 0xa78bfa,
     opacity: Math.min(0.85, 0.35 + effect.stacks * 0.15),
     layerIndex: 9,
   }));
@@ -711,9 +733,16 @@ const weaponMountPoint = (
   model: PlayerModelRenderData | undefined,
   clip: PlayerModelClipRenderData | undefined,
 ): { readonly x: number; readonly y: number } => {
-  const hand = model?.anchors?.["hand"]?.point;
+  const hand = model?.anchors?.['hand']?.point;
   const uv = clip?.frames[0]?.uv;
-  if (model !== undefined && clip !== undefined && hand !== undefined && uv !== undefined && uv.w > 0 && uv.h > 0) {
+  if (
+    model !== undefined &&
+    clip !== undefined &&
+    hand !== undefined &&
+    uv !== undefined &&
+    uv.w > 0 &&
+    uv.h > 0
+  ) {
     const pivot = model.anchor ?? CENTER_ANCHOR;
     const { scaleX, scaleY } = playerDisplayScale(model, clip);
     return {
@@ -728,7 +757,7 @@ const weaponMountPoint = (
 };
 
 const weaponAttachAnchor = (weapon: WeaponVisualRenderData | undefined): string =>
-  weapon?.attachAnchor ?? "grip";
+  weapon?.attachAnchor ?? 'grip';
 
 const weaponMuzzlePoint = (
   player: PlayerProjectionState,
@@ -750,8 +779,12 @@ const weaponMuzzlePoint = (
   if (frameSize === undefined) {
     return mount;
   }
-  const grip = spriteVisualAnchorPoint(weaponVisual, attachAnchor, weaponVisual.anchor ?? CENTER_ANCHOR);
-  const muzzle = spriteVisualAnchorPoint(weaponVisual, "muzzle", { x: 0.92, y: 0.5 });
+  const grip = spriteVisualAnchorPoint(
+    weaponVisual,
+    attachAnchor,
+    weaponVisual.anchor ?? CENTER_ANCHOR,
+  );
+  const muzzle = spriteVisualAnchorPoint(weaponVisual, 'muzzle', { x: 0.92, y: 0.5 });
   const { scaleX, scaleY } = weaponDisplayScale(weaponVisual);
   const dx = (muzzle.x - grip.x) * frameSize.width * scaleX;
   const dy = (muzzle.y - grip.y) * frameSize.height * scaleY;
@@ -772,7 +805,9 @@ const spriteVisualAnimation = (
     clipId: visual.visualId,
     frames: visual.frames,
     loop: visual.loop,
-    ...(visual.defaultDurationMs === undefined ? {} : { defaultDurationMs: visual.defaultDurationMs }),
+    ...(visual.defaultDurationMs === undefined
+      ? {}
+      : { defaultDurationMs: visual.defaultDurationMs }),
     clockMs,
   };
 };
@@ -780,7 +815,7 @@ const spriteVisualAnimation = (
 const spriteVisualBase = (
   visual: SpriteVisualRenderData,
   clockMs: number,
-): Pick<RenderableEntity, "assetId" | "anchor" | "animation"> | undefined => {
+): Pick<RenderableEntity, 'assetId' | 'anchor' | 'animation'> | undefined => {
   const animation = spriteVisualAnimation(visual, clockMs);
   if (animation === undefined) {
     return undefined;
@@ -806,17 +841,19 @@ const playerShadowEntity = (
     return [];
   }
   const scale = spriteVisualScale(visual);
-  return [{
-    id: `br:shadow:${id}`,
-    ...base,
-    x: player.x,
-    y: player.y + 8,
-    scaleX: 1.15 * scale,
-    scaleY: 0.42 * scale,
-    tint: 0x020617,
-    opacity: 0.34,
-    layerIndex: 6,
-  }];
+  return [
+    {
+      id: `br:shadow:${id}`,
+      ...base,
+      x: player.x,
+      y: player.y + 8,
+      scaleX: 1.15 * scale,
+      scaleY: 0.42 * scale,
+      tint: 0x020617,
+      opacity: 0.34,
+      layerIndex: 6,
+    },
+  ];
 };
 
 const playerWorldSize = (model: PlayerModelRenderData): VisualSize => {
@@ -867,19 +904,21 @@ const equippedWeaponEntity = (
   const weaponRotation = radians + spriteVisualAnchorRotation(visual, attachAnchor);
   const mount = weaponMountPoint(player, radians, model, clip);
   const { scaleX, scaleY } = weaponDisplayScale(visual);
-  return [{
-    id: `br:weapon:${id}`,
-    ...base,
-    x: mount.x,
-    y: mount.y,
-    rotation: weaponRotation,
-    anchor: spriteVisualAnchorPoint(visual, attachAnchor, base.anchor ?? CENTER_ANCHOR),
-    scaleX,
-    scaleY,
-    tint: 0xe5e7eb,
-    opacity: player.health <= 0 ? 0.3 : 0.95,
-    layerIndex: 18 + spriteVisualAnchorZOffset(visual, attachAnchor),
-  }];
+  return [
+    {
+      id: `br:weapon:${id}`,
+      ...base,
+      x: mount.x,
+      y: mount.y,
+      rotation: weaponRotation,
+      anchor: spriteVisualAnchorPoint(visual, attachAnchor, base.anchor ?? CENTER_ANCHOR),
+      scaleX,
+      scaleY,
+      tint: 0xe5e7eb,
+      opacity: player.health <= 0 ? 0.3 : 0.95,
+      layerIndex: 18 + spriteVisualAnchorZOffset(visual, attachAnchor),
+    },
+  ];
 };
 
 const muzzleFlashEntity = (
@@ -892,7 +931,7 @@ const muzzleFlashEntity = (
 ): readonly RenderableEntity[] => {
   const animation = player.animation;
   const visual = weapon?.muzzleFlash;
-  if (animation?.clipKey !== "shoot" || visual === undefined) {
+  if (animation?.clipKey !== 'shoot' || visual === undefined) {
     return [];
   }
   const base = spriteVisualBase(visual, clockMs);
@@ -904,22 +943,35 @@ const muzzleFlashEntity = (
   const radians = facingDegToRadians(aimDeg);
   const attachAnchor = weaponAttachAnchor(weapon);
   const weaponRotation = radians + spriteVisualAnchorRotation(weaponVisual, attachAnchor);
-  const muzzleRotation = weaponRotation + spriteVisualAnchorRotation(weaponVisual, "muzzle");
-  const muzzle = weaponMuzzlePoint(player, weaponVisual, attachAnchor, radians, weaponRotation, model, clip);
-  return [{
-    id: `br:muzzle:${id}`,
-    ...base,
-    x: muzzle.x,
-    y: muzzle.y,
-    rotation: muzzleRotation,
-    scale: 0.55 * spriteVisualScale(visual),
-    tint: 0xfacc15,
-    opacity: 0.9,
-    layerIndex: 22 + spriteVisualAnchorZOffset(weaponVisual, "muzzle"),
-  }];
+  const muzzleRotation = weaponRotation + spriteVisualAnchorRotation(weaponVisual, 'muzzle');
+  const muzzle = weaponMuzzlePoint(
+    player,
+    weaponVisual,
+    attachAnchor,
+    radians,
+    weaponRotation,
+    model,
+    clip,
+  );
+  return [
+    {
+      id: `br:muzzle:${id}`,
+      ...base,
+      x: muzzle.x,
+      y: muzzle.y,
+      rotation: muzzleRotation,
+      scale: 0.55 * spriteVisualScale(visual),
+      tint: 0xfacc15,
+      opacity: 0.9,
+      layerIndex: 22 + spriteVisualAnchorZOffset(weaponVisual, 'muzzle'),
+    },
+  ];
 };
 
-const crateHealthEntities = (id: string, object: ObjectProjectionState): readonly RenderableEntity[] => {
+const crateHealthEntities = (
+  id: string,
+  object: ObjectProjectionState,
+): readonly RenderableEntity[] => {
   const breakable = object.breakable;
   if (breakable === undefined || breakable.destroyed || breakable.health >= breakable.maxHealth) {
     return [];
@@ -960,7 +1012,10 @@ const objectRenderableEntities = (
   clockMs: number,
 ): readonly RenderableEntity[] => {
   const entities: RenderableEntity[] = [];
-  const isCrate = object.lootSource !== undefined || object.pickup !== undefined || object.breakable !== undefined;
+  const isCrate =
+    object.lootSource !== undefined ||
+    object.pickup !== undefined ||
+    object.breakable !== undefined;
   const hazardVisual = overlayFor(config, BR_OVERLAY_SLOTS.hazard);
   // Crate/pickup visuals come from a weapon's pickup companion ENTITY
   // (weapon-ref.pickupEntityId -> e.g. the Loot Crate object type), not from
@@ -1047,18 +1102,17 @@ export const projectBattleRoyaleFullStateWith = (
   const shieldVisual = overlayFor(config, BR_OVERLAY_SLOTS.shield);
   const shadowVisual = overlayFor(config, BR_OVERLAY_SLOTS.shadow);
 
-  const zoneEntity: RenderableEntity =
-    {
-      id: "br:zone:safe-area",
-      assetId: SCAN_PULSE_TEXTURE_ASSET_ID,
-      x: snapshot.zone.cx,
-      y: snapshot.zone.cy,
-      anchor: CENTER_ANCHOR,
-      scale: Math.max(1, (snapshot.zone.radius * 2) / 24),
-      tint: 0x38bdf8,
-      opacity: 0.16,
-      layerIndex: 4,
-    };
+  const zoneEntity: RenderableEntity = {
+    id: 'br:zone:safe-area',
+    assetId: SCAN_PULSE_TEXTURE_ASSET_ID,
+    x: snapshot.zone.cx,
+    y: snapshot.zone.cy,
+    anchor: CENTER_ANCHOR,
+    scale: Math.max(1, (snapshot.zone.radius * 2) / 24),
+    tint: 0x38bdf8,
+    opacity: 0.16,
+    layerIndex: 4,
+  };
 
   const playerEntities = [...snapshot.players.entries()]
     .sort(([left], [right]) => String(left).localeCompare(String(right)))
@@ -1073,16 +1127,23 @@ export const projectBattleRoyaleFullStateWith = (
               const base = spriteVisualBase(shieldVisual, clockMs);
               return base === undefined
                 ? []
-                : [{
-                    id: `br:shield:${id}`,
-                    ...base,
-                    x: player.x,
-                    y: player.y,
-                    scale: 1.35 * spriteVisualScale(shieldVisual),
-                    layerIndex: 11,
-                  }];
+                : [
+                    {
+                      id: `br:shield:${id}`,
+                      ...base,
+                      x: player.x,
+                      y: player.y,
+                      scale: 1.35 * spriteVisualScale(shieldVisual),
+                      layerIndex: 11,
+                    },
+                  ];
             })();
-      if (animation !== undefined && model !== undefined && clip !== undefined && clip.frames.length > 0) {
+      if (
+        animation !== undefined &&
+        model !== undefined &&
+        clip !== undefined &&
+        clip.frames.length > 0
+      ) {
         const displayScale = playerDisplayScale(model, clip);
         const weapon = weaponVisualsForPlayer(config, player);
         return [
@@ -1120,8 +1181,7 @@ export const projectBattleRoyaleFullStateWith = (
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([id, projectile]): readonly RenderableEntity[] => {
       const owner = snapshot.players.get(projectile.ownerId);
-      const weapon =
-        owner === undefined ? defaultWeapon : weaponVisualsForPlayer(config, owner);
+      const weapon = owner === undefined ? defaultWeapon : weaponVisualsForPlayer(config, owner);
       const projectileVisual = weapon?.projectile;
       if (projectileVisual === undefined) {
         return [];
@@ -1175,37 +1235,42 @@ export const projectBattleRoyaleFullStateWith = (
       }
       const age = Math.max(0, snapshot.tick - impact.startedTick);
       const pct = Math.max(0, 1 - age / IMPACT_LIFETIME_TICKS);
-      return [{
-        id: `br:impact:${id}`,
-        ...base,
-        x: impact.x,
-        y: impact.y,
-        rotation: impact.rot,
-        scale: (0.55 + age * 0.12) * spriteVisualScale(impactVisual),
-        tint: 0xfef08a,
-        opacity: 0.75 * pct,
-        layerIndex: 21,
-      }];
+      return [
+        {
+          id: `br:impact:${id}`,
+          ...base,
+          x: impact.x,
+          y: impact.y,
+          rotation: impact.rot,
+          scale: (0.55 + age * 0.12) * spriteVisualScale(impactVisual),
+          tint: 0xfef08a,
+          opacity: 0.75 * pct,
+          layerIndex: 21,
+        },
+      ];
     });
 
   const deployableEntities = [...snapshot.deployables.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([id, deployable]): RenderableEntity => ({
-      id: `br:deployable:${id}`,
-      assetId:
-        deployable.kind === "trap"
-          ? TRAP_TEXTURE_ASSET_ID
-          : deployable.kind === "decoy"
-            ? DECOY_TEXTURE_ASSET_ID
-            : SCAN_PULSE_TEXTURE_ASSET_ID,
-      x: deployable.x,
-      y: deployable.y,
-      anchor: CENTER_ANCHOR,
-      scale: deployable.kind === "scan-pulse" ? Math.max(1, deployable.radius / 24) : 1,
-      opacity: deployable.triggered ? 0.95 : 0.75,
-      tint: deployable.kind === "trap" ? 0xf97316 : deployable.kind === "decoy" ? 0xa78bfa : 0x38bdf8,
-      layerIndex: deployable.kind === "trap" ? 8 : 12,
-    }));
+    .map(
+      ([id, deployable]): RenderableEntity => ({
+        id: `br:deployable:${id}`,
+        assetId:
+          deployable.kind === 'trap'
+            ? TRAP_TEXTURE_ASSET_ID
+            : deployable.kind === 'decoy'
+              ? DECOY_TEXTURE_ASSET_ID
+              : SCAN_PULSE_TEXTURE_ASSET_ID,
+        x: deployable.x,
+        y: deployable.y,
+        anchor: CENTER_ANCHOR,
+        scale: deployable.kind === 'scan-pulse' ? Math.max(1, deployable.radius / 24) : 1,
+        opacity: deployable.triggered ? 0.95 : 0.75,
+        tint:
+          deployable.kind === 'trap' ? 0xf97316 : deployable.kind === 'decoy' ? 0xa78bfa : 0x38bdf8,
+        layerIndex: deployable.kind === 'trap' ? 8 : 12,
+      }),
+    );
 
   const objectEntities = [...snapshot.objects.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -1231,7 +1296,10 @@ export const createTypedBattleRoyaleProjector = (
   project: (snapshot) => projectBattleRoyaleFullStateWith(config, snapshot),
   mergeFrame: mergeBattleRoyaleFrame,
   getFrameTimestamp: (frame) => {
-    if ((isWelcomeFrame(frame) || isDeltaFrame(frame)) && Number.isFinite(frame.serverTimestampMs)) {
+    if (
+      (isWelcomeFrame(frame) || isDeltaFrame(frame)) &&
+      Number.isFinite(frame.serverTimestampMs)
+    ) {
       return frame.serverTimestampMs;
     }
     return undefined;
@@ -1269,7 +1337,7 @@ export const decodeServerFrame = (bytes: Uint8Array): unknown =>
 
 export const encodeServerFrame = (frame: unknown): Uint8Array => {
   if (!isRecord(frame)) {
-    throw new Error("Cannot encode non-object server frame");
+    throw new Error('Cannot encode non-object server frame');
   }
   return BattleRoyaleProtocol.encodeServerMessage(
     frame as BattleRoyaleProtocol.ServerToClientMessage,
@@ -1296,7 +1364,9 @@ export const createInitialFrame = (input: InitialFrameInput): unknown =>
       ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
       ...(player.stats === undefined ? {} : { stats: player.stats }),
       ...(player.statusEffects === undefined ? {} : { statusEffects: [...player.statusEffects] }),
-      ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: [...player.abilityCooldowns] }),
+      ...(player.abilityCooldowns === undefined
+        ? {}
+        : { abilityCooldowns: [...player.abilityCooldowns] }),
       ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
       ...(player.animation === undefined ? {} : { animation: player.animation }),
     })),
@@ -1310,7 +1380,9 @@ export const encodeHeartbeatFrame = (tick: number): Uint8Array =>
   BattleRoyaleProtocol.encodeClientMessage(new BattleRoyaleProtocol.Heartbeat({ tick }));
 
 export const encodeSnapshotAckFrame = (tick: number, receivedAtMs: number): Uint8Array =>
-  BattleRoyaleProtocol.encodeClientMessage(new BattleRoyaleProtocol.SnapshotAck({ tick, receivedAtMs }));
+  BattleRoyaleProtocol.encodeClientMessage(
+    new BattleRoyaleProtocol.SnapshotAck({ tick, receivedAtMs }),
+  );
 
 export const encodeClientInputFrame = (input: ClientInputFrame): Uint8Array =>
   BattleRoyaleProtocol.encodeClientMessage(
@@ -1330,15 +1402,15 @@ export const encodeClientInputFrame = (input: ClientInputFrame): Uint8Array =>
 
 export const decodeClientFrameView = (bytes: Uint8Array): ClientFrameView | undefined => {
   const frame = BattleRoyaleProtocol.decodeClientMessage(bytes);
-  if (frame._tag === "Heartbeat") {
-    return { kind: "heartbeat", tick: frame.tick };
+  if (frame._tag === 'Heartbeat') {
+    return { kind: 'heartbeat', tick: frame.tick };
   }
-  if (frame._tag === "SnapshotAck") {
-    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
+  if (frame._tag === 'SnapshotAck') {
+    return { kind: 'ack', tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
-  if (frame._tag === "PlayerInput") {
+  if (frame._tag === 'PlayerInput') {
     return {
-      kind: "input",
+      kind: 'input',
       tick: frame.tick,
       seq: frame.seq,
       ...(Option.isSome(frame.dir) ? { dir: frame.dir.value } : {}),
@@ -1366,12 +1438,12 @@ const objectFrameView = (object: BattleRoyaleProtocol.ObjectSnapshot): FrameObje
 });
 
 export const serverFrameToView = (frame: unknown): ServerFrameView | undefined => {
-  if (!isRecord(frame) || typeof frame._tag !== "string") {
+  if (!isRecord(frame) || typeof frame._tag !== 'string') {
     return undefined;
   }
   if (isWelcomeFrame(frame)) {
     return {
-      kind: "initial",
+      kind: 'initial',
       tick: frame.tick,
       players: frame.players.map((player) => ({
         playerId: player.id,
@@ -1385,10 +1457,14 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
         ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
         ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
         ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
-        ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
+        ...(player.damageIndicator === undefined
+          ? {}
+          : { damageIndicator: player.damageIndicator }),
         ...(player.stats === undefined ? {} : { stats: player.stats }),
         ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
-        ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: player.abilityCooldowns }),
+        ...(player.abilityCooldowns === undefined
+          ? {}
+          : { abilityCooldowns: player.abilityCooldowns }),
         ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
         ...(player.animation === undefined ? {} : { animation: player.animation }),
       })),
@@ -1398,7 +1474,7 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
   }
   if (isDeltaFrame(frame)) {
     return {
-      kind: "delta",
+      kind: 'delta',
       tick: frame.tick,
       removed: frame.removed,
       updated: frame.updated.map((update) => ({
@@ -1413,10 +1489,16 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
         ...(Option.isSome(update.inventory) ? { inventory: update.inventory.value } : {}),
         ...(Option.isSome(update.pickupPrompt) ? { pickupPrompt: update.pickupPrompt.value } : {}),
         ...(Option.isSome(update.pickupToast) ? { pickupToast: update.pickupToast.value } : {}),
-        ...(Option.isSome(update.damageIndicator) ? { damageIndicator: update.damageIndicator.value } : {}),
+        ...(Option.isSome(update.damageIndicator)
+          ? { damageIndicator: update.damageIndicator.value }
+          : {}),
         ...(Option.isSome(update.stats) ? { stats: update.stats.value } : {}),
-        ...(Option.isSome(update.statusEffects) ? { statusEffects: update.statusEffects.value } : {}),
-        ...(Option.isSome(update.abilityCooldowns) ? { abilityCooldowns: update.abilityCooldowns.value } : {}),
+        ...(Option.isSome(update.statusEffects)
+          ? { statusEffects: update.statusEffects.value }
+          : {}),
+        ...(Option.isSome(update.abilityCooldowns)
+          ? { abilityCooldowns: update.abilityCooldowns.value }
+          : {}),
         ...(Option.isSome(update.animation) ? { animation: update.animation.value } : {}),
       })),
       objectsUpdated: (frame.objectsUpdated ?? []).map(objectFrameView),
@@ -1424,25 +1506,25 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
       zone: Option.isSome(frame.zone) ? frame.zone.value : undefined,
     };
   }
-  if (frame._tag === "PlayerJoined" && "id" in frame && typeof frame.id === "string") {
-    return { kind: "joined", id: frame.id };
+  if (frame._tag === 'PlayerJoined' && 'id' in frame && typeof frame.id === 'string') {
+    return { kind: 'joined', id: frame.id };
   }
-  if (frame._tag === "PlayerLeft" && "id" in frame && typeof frame.id === "string") {
-    return { kind: "left", id: frame.id };
+  if (frame._tag === 'PlayerLeft' && 'id' in frame && typeof frame.id === 'string') {
+    return { kind: 'left', id: frame.id };
   }
   if (
-    frame._tag === "PlayerKilled" &&
-    "killer" in frame &&
-    typeof frame.killer === "string" &&
-    "victim" in frame &&
-    typeof frame.victim === "string" &&
-    "tick" in frame &&
-    typeof frame.tick === "number"
+    frame._tag === 'PlayerKilled' &&
+    'killer' in frame &&
+    typeof frame.killer === 'string' &&
+    'victim' in frame &&
+    typeof frame.victim === 'string' &&
+    'tick' in frame &&
+    typeof frame.tick === 'number'
   ) {
-    return { kind: "killed", killer: frame.killer, victim: frame.victim, tick: frame.tick };
+    return { kind: 'killed', killer: frame.killer, victim: frame.victim, tick: frame.tick };
   }
-  if (frame._tag === "GameOver" && "winner" in frame && typeof frame.winner === "string") {
-    return { kind: "game-over", winner: frame.winner };
+  if (frame._tag === 'GameOver' && 'winner' in frame && typeof frame.winner === 'string') {
+    return { kind: 'game-over', winner: frame.winner };
   }
   return undefined;
 };

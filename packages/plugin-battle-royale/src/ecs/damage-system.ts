@@ -86,10 +86,7 @@ const registerDamageComponents = (world: PluginWorld): void => {
   world.registerComponent<Team>(TEAM_COMPONENT);
 };
 
-export const ensureMatchPhase = (
-  world: PluginWorld,
-  state: DamageSystemState,
-): void => {
+export const ensureMatchPhase = (world: PluginWorld, state: DamageSystemState): void => {
   world.registerComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
   const phases = world.getComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
   if (state.matchEntity === undefined) {
@@ -117,11 +114,7 @@ const ensurePlayerStats = (world: PluginWorld, entity: number): void => {
   }
 };
 
-const setRespawnState = (
-  world: PluginWorld,
-  entity: number,
-  value: RespawnState,
-): void => {
+const setRespawnState = (world: PluginWorld, entity: number, value: RespawnState): void => {
   world.getComponent<RespawnState>(RESPAWN_STATE_COMPONENT).set(entity, value);
 };
 
@@ -297,9 +290,12 @@ const emitGameOverIfNeeded = (
     return;
   }
 
-  const lastAlivePlayerId = alivePlayers.length > 0
-    ? alivePlayers.map(([, player]) => player.playerId).sort((left, right) => left.localeCompare(right))[0]
-    : [...state.lastEliminatedPlayerIds].sort((left, right) => left.localeCompare(right))[0];
+  const lastAlivePlayerId =
+    alivePlayers.length > 0
+      ? alivePlayers
+          .map(([, player]) => player.playerId)
+          .sort((left, right) => left.localeCompare(right))[0]
+      : [...state.lastEliminatedPlayerIds].sort((left, right) => left.localeCompare(right))[0];
   if (lastAlivePlayerId === undefined) {
     return;
   }

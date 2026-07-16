@@ -1,6 +1,6 @@
-import { MOVEMENT } from "../constants.js";
-import type { ExportedArtifact } from "../types/artifact.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+import { MOVEMENT } from '../constants.js';
+import type { ExportedArtifact } from '../types/artifact.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 import {
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
@@ -8,13 +8,13 @@ import {
   type Player,
   type Position,
   type Velocity,
-} from "./components.js";
-import { PluginCollisionEnvironment, resolvePlayerCollision } from "./collision.js";
+} from './components.js';
+import { PluginCollisionEnvironment, resolvePlayerCollision } from './collision.js';
 import {
   DEFAULT_PLAYER_PHYSICS,
   physicsForPlayer,
   type PlayerPhysicsProfile,
-} from "./player-physics.js";
+} from './player-physics.js';
 
 export type Direction8 = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -26,16 +26,20 @@ export interface MovementInput {
 export type MovementInputMap = ReadonlyMap<string, MovementInput>;
 
 /** Eight-way unit vector: 0 = east, increasing clockwise. */
-export const direction8ToUnitVector = (dir: Direction8): { readonly x: number; readonly y: number } => {
+export const direction8ToUnitVector = (
+  dir: Direction8,
+): { readonly x: number; readonly y: number } => {
   const angle = (dir * Math.PI) / 4;
   return { x: Math.cos(angle), y: Math.sin(angle) };
 };
 
-export const buildCollisionEnvironment = (artifact: ExportedArtifact): PluginCollisionEnvironment | undefined =>
-  PluginCollisionEnvironment.fromArtifact(artifact);
+export const buildCollisionEnvironment = (
+  artifact: ExportedArtifact,
+): PluginCollisionEnvironment | undefined => PluginCollisionEnvironment.fromArtifact(artifact);
 
-export const buildTileCollisionEnvironment = (artifact: ExportedArtifact): PluginCollisionEnvironment | undefined =>
-  PluginCollisionEnvironment.fromTileArtifact(artifact);
+export const buildTileCollisionEnvironment = (
+  artifact: ExportedArtifact,
+): PluginCollisionEnvironment | undefined => PluginCollisionEnvironment.fromTileArtifact(artifact);
 
 export interface MovementOptions {
   readonly speed?: number;

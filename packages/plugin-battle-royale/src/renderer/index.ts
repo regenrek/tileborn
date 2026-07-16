@@ -12,7 +12,7 @@ export {
   requiredBattleRoyaleRenderableAssetIds,
   serverFrameToView,
   textureManifestForAtlas,
-} from "./battle-royale-projector.js";
+} from './battle-royale-projector.js';
 export {
   createBattleRoyaleBundledAssets,
   DECOY_TEXTURE_ASSET_ID,
@@ -26,7 +26,7 @@ export {
   TRAP_TEXTURE_ASSET_ID,
   UI_PIXEL_TEXTURE_ASSET_ID,
   WEAPON_RIFLE_TEXTURE_ASSET_ID,
-} from "./bundled-assets.js";
+} from './bundled-assets.js';
 export {
   BR_AUDIO_BUS_CONTRIBUTION_ID,
   BR_AUDIO_BUS_ID,
@@ -36,26 +36,26 @@ export {
   battleRoyaleAudioCues,
   battleRoyaleSfxBus,
   buildBattleRoyaleAudioBusData,
-} from "../audio.js";
+} from '../audio.js';
 export type {
   BattleRoyaleAudioContributionData,
   BattleRoyaleAudioCueId,
   BattleRoyaleAudioEvent,
-} from "../audio.js";
+} from '../audio.js';
 export {
   BR_INPUT_MAP_CONTRIBUTION_ID,
   BR_INPUT_MAP_ID,
   battleRoyaleDefaultInputMap,
   buildBattleRoyaleInputMapData,
   resolveBattleRoyaleInputIntent,
-} from "../input-map.js";
+} from '../input-map.js';
 export {
   BR_HUD_LAYOUT_CONTRIBUTION_ID,
   BR_HUD_LAYOUT_ID,
   battleRoyaleDefaultHudLayout,
   buildBattleRoyaleHudLayoutData,
-} from "../hud-layout.js";
-export { BR_PRIMARY_WEAPON_ID, PLUGIN_ID } from "../constants.js";
+} from '../hud-layout.js';
+export { BR_PRIMARY_WEAPON_ID, PLUGIN_ID } from '../constants.js';
 export type {
   BattleRoyaleProjectorConfig,
   ClientFrameView,
@@ -70,5 +70,5 @@ export type {
   SpriteVisualRenderData,
   WeaponVisualRenderData,
   ZoneView,
-} from "./battle-royale-projector.js";
-export type { BattleRoyaleAimContext, BattleRoyaleInputIntent } from "../input-map.js";
+} from './battle-royale-projector.js';
+export type { BattleRoyaleAimContext, BattleRoyaleInputIntent } from '../input-map.js';

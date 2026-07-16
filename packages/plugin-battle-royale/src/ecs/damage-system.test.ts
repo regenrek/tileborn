@@ -166,10 +166,15 @@ describe('damage system', () => {
 
     eliminate(world, state, beta1, 'alpha-1');
     eliminate(world, state, beta2, 'alpha-2');
-    runDamageTick(world, 5, {
-      msgOut: collector.msgOut,
-      roomRules: { matchMode: 'squad', matchEndPolicy: 'last-standing' },
-    }, state);
+    runDamageTick(
+      world,
+      5,
+      {
+        msgOut: collector.msgOut,
+        roomRules: { matchMode: 'squad', matchEndPolicy: 'last-standing' },
+      },
+      state,
+    );
 
     const gameOvers = collector.decodeAll().filter((message) => message._tag === 'GameOver');
     expect(gameOvers).toHaveLength(1);
@@ -212,10 +217,15 @@ describe('damage system', () => {
     const collector = createMsgCollector();
 
     eliminate(world, state, victim, 'player-standing');
-    runDamageTick(world, 1, {
-      msgOut: collector.msgOut,
-      roomRules: { respawnEnabled: false, matchEndPolicy: 'continuous' },
-    }, state);
+    runDamageTick(
+      world,
+      1,
+      {
+        msgOut: collector.msgOut,
+        roomRules: { respawnEnabled: false, matchEndPolicy: 'continuous' },
+      },
+      state,
+    );
 
     expect(collector.decodeAll().filter((message) => message._tag === 'GameOver')).toHaveLength(0);
   });

@@ -1,20 +1,20 @@
-import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from "@tileborne/core";
-import { Schema } from "effect";
+import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
+import { Schema } from 'effect';
 
 /** World-space tile position for a spawned entity. */
-export class PositionComponent extends Schema.Class<PositionComponent>("PositionComponent")({
+export class PositionComponent extends Schema.Class<PositionComponent>('PositionComponent')({
   x: Schema.Number,
   y: Schema.Number,
 }) {}
 
 /** Per-tick velocity in tile units per second. */
-export class VelocityComponent extends Schema.Class<VelocityComponent>("VelocityComponent")({
+export class VelocityComponent extends Schema.Class<VelocityComponent>('VelocityComponent')({
   vx: Schema.Number,
   vy: Schema.Number,
 }) {}
 
 /** Battle royale player identity/vitality tracked by the playtest runtime metrics bridge. */
-export class PlayerComponent extends Schema.Class<PlayerComponent>("PlayerComponent")({
+export class PlayerComponent extends Schema.Class<PlayerComponent>('PlayerComponent')({
   playerId: Schema.String,
   health: Schema.Number,
   alive: Schema.Union([Schema.Literal(0), Schema.Literal(1)]),
@@ -24,28 +24,30 @@ export class PlayerComponent extends Schema.Class<PlayerComponent>("PlayerCompon
 }) {}
 
 /** Per-player kill/death counters consumed by the HUD overlay. */
-export class PlayerStatsComponent extends Schema.Class<PlayerStatsComponent>("PlayerStatsComponent")({
+export class PlayerStatsComponent extends Schema.Class<PlayerStatsComponent>(
+  'PlayerStatsComponent',
+)({
   kills: Schema.Int,
   deaths: Schema.Int,
 }) {}
 
 /** Runtime-owned team membership used by combat policy and match rules. */
-export class TeamComponent extends Schema.Class<TeamComponent>("TeamComponent")({
+export class TeamComponent extends Schema.Class<TeamComponent>('TeamComponent')({
   team: Schema.String,
 }) {}
 
 /** Last eight-way facing direction used when shooting without movement velocity. */
-export class FacingComponent extends Schema.Class<FacingComponent>("FacingComponent")({
+export class FacingComponent extends Schema.Class<FacingComponent>('FacingComponent')({
   dir: Schema.Literals([0, 1, 2, 3, 4, 5, 6, 7] as const),
 }) {}
 
 /** Current aim direction in degrees, normalized to [0, 359]. */
-export class AimComponent extends Schema.Class<AimComponent>("AimComponent")({
+export class AimComponent extends Schema.Class<AimComponent>('AimComponent')({
   deg: Schema.Number,
 }) {}
 
 /** Runtime-computed muzzle origin in world coordinates. */
-export class MuzzleComponent extends Schema.Class<MuzzleComponent>("MuzzleComponent")({
+export class MuzzleComponent extends Schema.Class<MuzzleComponent>('MuzzleComponent')({
   x: Schema.Number,
   y: Schema.Number,
 }) {}
@@ -54,7 +56,9 @@ export const PlayerAnimationClipKey = Schema.Literals(REQUIRED_PLAYER_MODEL_CLIP
 export type PlayerAnimationClipKey = typeof PlayerAnimationClipKey.Type;
 
 /** Runtime-owned animation state emitted in BR snapshots and consumed by the projector. */
-export class AnimationStateComponent extends Schema.Class<AnimationStateComponent>("AnimationStateComponent")({
+export class AnimationStateComponent extends Schema.Class<AnimationStateComponent>(
+  'AnimationStateComponent',
+)({
   modelId: Schema.String,
   clipKey: PlayerAnimationClipKey,
   facingDeg: Schema.Number,
@@ -63,13 +67,15 @@ export class AnimationStateComponent extends Schema.Class<AnimationStateComponen
 }) {}
 
 /** Runtime inventory slots. S6 owns pickup semantics; S5 owns the authoritative column. */
-export class InventoryComponent extends Schema.Class<InventoryComponent>("InventoryComponent")({
+export class InventoryComponent extends Schema.Class<InventoryComponent>('InventoryComponent')({
   itemIds: Schema.Array(Schema.String),
   capacity: Schema.Int,
 }) {}
 
 /** Equipped weapon slot resolved from runtime input and weapon catalog data. */
-export class EquippedWeaponComponent extends Schema.Class<EquippedWeaponComponent>("EquippedWeaponComponent")({
+export class EquippedWeaponComponent extends Schema.Class<EquippedWeaponComponent>(
+  'EquippedWeaponComponent',
+)({
   weaponId: Schema.String,
   slot: Schema.Int,
 }) {}
@@ -79,17 +85,23 @@ const AmmoStackSchema = Schema.Struct({
   amount: Schema.Int,
 });
 
-export class AmmoReserveComponent extends Schema.Class<AmmoReserveComponent>("AmmoReserveComponent")({
+export class AmmoReserveComponent extends Schema.Class<AmmoReserveComponent>(
+  'AmmoReserveComponent',
+)({
   stacks: Schema.Array(AmmoStackSchema),
 }) {}
 
-export class ReloadStateComponent extends Schema.Class<ReloadStateComponent>("ReloadStateComponent")({
+export class ReloadStateComponent extends Schema.Class<ReloadStateComponent>(
+  'ReloadStateComponent',
+)({
   active: Schema.Boolean,
   weaponId: Schema.optional(Schema.String),
   remainingTicks: Schema.Int,
 }) {}
 
-export class WeaponRuntimeStateComponent extends Schema.Class<WeaponRuntimeStateComponent>("WeaponRuntimeStateComponent")({
+export class WeaponRuntimeStateComponent extends Schema.Class<WeaponRuntimeStateComponent>(
+  'WeaponRuntimeStateComponent',
+)({
   weaponId: Schema.String,
   slot: Schema.Int,
   ammoInMagazine: Schema.Int,
@@ -99,62 +111,70 @@ export class WeaponRuntimeStateComponent extends Schema.Class<WeaponRuntimeState
   reloadTotalTicks: Schema.Int,
 }) {}
 
-export class DamageIndicatorComponent extends Schema.Class<DamageIndicatorComponent>("DamageIndicatorComponent")({
+export class DamageIndicatorComponent extends Schema.Class<DamageIndicatorComponent>(
+  'DamageIndicatorComponent',
+)({
   sourceId: Schema.String,
   angleDeg: Schema.Number,
   amount: Schema.Number,
   tick: Schema.Int,
 }) {}
 
-export class PickupToastComponent extends Schema.Class<PickupToastComponent>("PickupToastComponent")({
+export class PickupToastComponent extends Schema.Class<PickupToastComponent>(
+  'PickupToastComponent',
+)({
   itemKind: Schema.String,
   tier: Schema.String,
   quantity: Schema.Int,
   tick: Schema.Int,
 }) {}
 
-export class PickupComponent extends Schema.Class<PickupComponent>("PickupComponent")({
+export class PickupComponent extends Schema.Class<PickupComponent>('PickupComponent')({
   itemKind: Schema.String,
   tier: Schema.String,
   quantity: Schema.Int,
   available: Schema.Boolean,
 }) {}
 
-export class PickupPromptComponent extends Schema.Class<PickupPromptComponent>("PickupPromptComponent")({
+export class PickupPromptComponent extends Schema.Class<PickupPromptComponent>(
+  'PickupPromptComponent',
+)({
   targetEntity: Schema.optional(Schema.Int),
   itemKind: Schema.optional(Schema.String),
   tier: Schema.optional(Schema.String),
   distance: Schema.optional(Schema.Number),
-  action: Schema.Literals(["pickup-loot"] as const),
+  action: Schema.Literals(['pickup-loot'] as const),
   available: Schema.Boolean,
 }) {}
 
-export class LootSourceComponent extends Schema.Class<LootSourceComponent>("LootSourceComponent")({
+export class LootSourceComponent extends Schema.Class<LootSourceComponent>('LootSourceComponent')({
   tableId: Schema.String,
   tier: Schema.String,
   weight: Schema.Number,
   collected: Schema.Boolean,
 }) {}
 
-export class InteractableComponent extends Schema.Class<InteractableComponent>("InteractableComponent")({
+export class InteractableComponent extends Schema.Class<InteractableComponent>(
+  'InteractableComponent',
+)({
   action: Schema.String,
   radius: Schema.Number,
   enabled: Schema.Boolean,
 }) {}
 
-export class BreakableComponent extends Schema.Class<BreakableComponent>("BreakableComponent")({
+export class BreakableComponent extends Schema.Class<BreakableComponent>('BreakableComponent')({
   health: Schema.Number,
   maxHealth: Schema.Number,
   destroyed: Schema.Boolean,
 }) {}
 
-export class HazardComponent extends Schema.Class<HazardComponent>("HazardComponent")({
+export class HazardComponent extends Schema.Class<HazardComponent>('HazardComponent')({
   damagePerSecond: Schema.Number,
   enabled: Schema.Boolean,
 }) {}
 
-export class DeployableComponent extends Schema.Class<DeployableComponent>("DeployableComponent")({
-  kind: Schema.Literals(["trap", "decoy", "scan-pulse"] as const),
+export class DeployableComponent extends Schema.Class<DeployableComponent>('DeployableComponent')({
+  kind: Schema.Literals(['trap', 'decoy', 'scan-pulse'] as const),
   ownerId: Schema.String,
   radius: Schema.Number,
   remainingTicks: Schema.Int,
@@ -162,7 +182,9 @@ export class DeployableComponent extends Schema.Class<DeployableComponent>("Depl
   triggered: Schema.Boolean,
 }) {}
 
-export class AbilityStateComponent extends Schema.Class<AbilityStateComponent>("AbilityStateComponent")({
+export class AbilityStateComponent extends Schema.Class<AbilityStateComponent>(
+  'AbilityStateComponent',
+)({
   activeAbilityId: Schema.optional(Schema.String),
   charges: Schema.Int,
   cooldownTicks: Schema.Int,
@@ -181,28 +203,32 @@ const StatusEffectEntrySchema = Schema.Struct({
   sourcePlayerId: Schema.optional(Schema.String),
 });
 
-export class StatusEffectsComponent extends Schema.Class<StatusEffectsComponent>("StatusEffectsComponent")({
+export class StatusEffectsComponent extends Schema.Class<StatusEffectsComponent>(
+  'StatusEffectsComponent',
+)({
   effects: Schema.Array(StatusEffectEntrySchema),
 }) {}
 
-export class ShieldComponent extends Schema.Class<ShieldComponent>("ShieldComponent")({
+export class ShieldComponent extends Schema.Class<ShieldComponent>('ShieldComponent')({
   current: Schema.Number,
   max: Schema.Number,
 }) {}
 
-export class ArmorComponent extends Schema.Class<ArmorComponent>("ArmorComponent")({
+export class ArmorComponent extends Schema.Class<ArmorComponent>('ArmorComponent')({
   mitigation: Schema.Number,
   durability: Schema.Number,
 }) {}
 
-export class HitboxComponent extends Schema.Class<HitboxComponent>("HitboxComponent")({
+export class HitboxComponent extends Schema.Class<HitboxComponent>('HitboxComponent')({
   x: Schema.Number,
   y: Schema.Number,
   width: Schema.Number,
   height: Schema.Number,
 }) {}
 
-export class CollisionBodyComponent extends Schema.Class<CollisionBodyComponent>("CollisionBodyComponent")({
+export class CollisionBodyComponent extends Schema.Class<CollisionBodyComponent>(
+  'CollisionBodyComponent',
+)({
   objectId: Schema.optional(Schema.String),
   x: Schema.Number,
   y: Schema.Number,
@@ -213,7 +239,9 @@ export class CollisionBodyComponent extends Schema.Class<CollisionBodyComponent>
   blocksVision: Schema.Boolean,
 }) {}
 
-export class VisionBlockerComponent extends Schema.Class<VisionBlockerComponent>("VisionBlockerComponent")({
+export class VisionBlockerComponent extends Schema.Class<VisionBlockerComponent>(
+  'VisionBlockerComponent',
+)({
   objectId: Schema.optional(Schema.String),
   x: Schema.Number,
   y: Schema.Number,
@@ -221,19 +249,21 @@ export class VisionBlockerComponent extends Schema.Class<VisionBlockerComponent>
   height: Schema.Number,
 }) {}
 
-export class MatchPhaseComponent extends Schema.Class<MatchPhaseComponent>("MatchPhaseComponent")({
-  phase: Schema.Literals(["active", "game-over"] as const),
+export class MatchPhaseComponent extends Schema.Class<MatchPhaseComponent>('MatchPhaseComponent')({
+  phase: Schema.Literals(['active', 'game-over'] as const),
   tick: Schema.Int,
   winnerPlayerId: Schema.optional(Schema.String),
 }) {}
 
-export class RespawnStateComponent extends Schema.Class<RespawnStateComponent>("RespawnStateComponent")({
-  state: Schema.Literals(["alive", "dead", "scheduled"] as const),
+export class RespawnStateComponent extends Schema.Class<RespawnStateComponent>(
+  'RespawnStateComponent',
+)({
+  state: Schema.Literals(['alive', 'dead', 'scheduled'] as const),
   respawnTick: Schema.optional(Schema.Int),
 }) {}
 
 /** Projectile motion and combat payload owned by the projectile system. */
-export class ProjectileComponent extends Schema.Class<ProjectileComponent>("ProjectileComponent")({
+export class ProjectileComponent extends Schema.Class<ProjectileComponent>('ProjectileComponent')({
   ownerId: Schema.String,
   weaponSlot: Schema.Int,
   dirX: Schema.Number,
@@ -247,39 +277,39 @@ export class ProjectileComponent extends Schema.Class<ProjectileComponent>("Proj
   ttlTicks: Schema.Int,
 }) {}
 
-export const POSITION_COMPONENT = "Position";
-export const VELOCITY_COMPONENT = "Velocity";
-export const PLAYER_COMPONENT = "Player";
-export const PLAYER_STATS_COMPONENT = "PlayerStats";
-export const TEAM_COMPONENT = "Team";
-export const FACING_COMPONENT = "Facing";
-export const AIM_COMPONENT = "Aim";
-export const MUZZLE_COMPONENT = "Muzzle";
-export const ANIMATION_STATE_COMPONENT = "AnimationState";
-export const INVENTORY_COMPONENT = "Inventory";
-export const EQUIPPED_WEAPON_COMPONENT = "EquippedWeapon";
-export const AMMO_RESERVE_COMPONENT = "AmmoReserve";
-export const RELOAD_STATE_COMPONENT = "ReloadState";
-export const WEAPON_RUNTIME_STATE_COMPONENT = "WeaponRuntimeState";
-export const DAMAGE_INDICATOR_COMPONENT = "DamageIndicator";
-export const PICKUP_TOAST_COMPONENT = "PickupToast";
-export const PICKUP_COMPONENT = "Pickup";
-export const PICKUP_PROMPT_COMPONENT = "PickupPrompt";
-export const LOOT_SOURCE_COMPONENT = "LootSource";
-export const INTERACTABLE_COMPONENT = "Interactable";
-export const BREAKABLE_COMPONENT = "Breakable";
-export const HAZARD_COMPONENT = "Hazard";
-export const DEPLOYABLE_COMPONENT = "Deployable";
-export const ABILITY_STATE_COMPONENT = "AbilityState";
-export const STATUS_EFFECTS_COMPONENT = "StatusEffects";
-export const SHIELD_COMPONENT = "Shield";
-export const ARMOR_COMPONENT = "Armor";
-export const HITBOX_COMPONENT = "Hitbox";
-export const COLLISION_BODY_COMPONENT = "CollisionBody";
-export const VISION_BLOCKER_COMPONENT = "VisionBlocker";
-export const MATCH_PHASE_COMPONENT = "MatchPhase";
-export const RESPAWN_STATE_COMPONENT = "RespawnState";
-export const PROJECTILE_COMPONENT = "Projectile";
+export const POSITION_COMPONENT = 'Position';
+export const VELOCITY_COMPONENT = 'Velocity';
+export const PLAYER_COMPONENT = 'Player';
+export const PLAYER_STATS_COMPONENT = 'PlayerStats';
+export const TEAM_COMPONENT = 'Team';
+export const FACING_COMPONENT = 'Facing';
+export const AIM_COMPONENT = 'Aim';
+export const MUZZLE_COMPONENT = 'Muzzle';
+export const ANIMATION_STATE_COMPONENT = 'AnimationState';
+export const INVENTORY_COMPONENT = 'Inventory';
+export const EQUIPPED_WEAPON_COMPONENT = 'EquippedWeapon';
+export const AMMO_RESERVE_COMPONENT = 'AmmoReserve';
+export const RELOAD_STATE_COMPONENT = 'ReloadState';
+export const WEAPON_RUNTIME_STATE_COMPONENT = 'WeaponRuntimeState';
+export const DAMAGE_INDICATOR_COMPONENT = 'DamageIndicator';
+export const PICKUP_TOAST_COMPONENT = 'PickupToast';
+export const PICKUP_COMPONENT = 'Pickup';
+export const PICKUP_PROMPT_COMPONENT = 'PickupPrompt';
+export const LOOT_SOURCE_COMPONENT = 'LootSource';
+export const INTERACTABLE_COMPONENT = 'Interactable';
+export const BREAKABLE_COMPONENT = 'Breakable';
+export const HAZARD_COMPONENT = 'Hazard';
+export const DEPLOYABLE_COMPONENT = 'Deployable';
+export const ABILITY_STATE_COMPONENT = 'AbilityState';
+export const STATUS_EFFECTS_COMPONENT = 'StatusEffects';
+export const SHIELD_COMPONENT = 'Shield';
+export const ARMOR_COMPONENT = 'Armor';
+export const HITBOX_COMPONENT = 'Hitbox';
+export const COLLISION_BODY_COMPONENT = 'CollisionBody';
+export const VISION_BLOCKER_COMPONENT = 'VisionBlocker';
+export const MATCH_PHASE_COMPONENT = 'MatchPhase';
+export const RESPAWN_STATE_COMPONENT = 'RespawnState';
+export const PROJECTILE_COMPONENT = 'Projectile';
 
 export type Position = typeof PositionComponent.Type;
 export type Velocity = typeof VelocityComponent.Type;
@@ -314,4 +344,4 @@ export type VisionBlocker = typeof VisionBlockerComponent.Type;
 export type MatchPhase = typeof MatchPhaseComponent.Type;
 export type RespawnState = typeof RespawnStateComponent.Type;
 export type Projectile = typeof ProjectileComponent.Type;
-export type Direction8 = Facing["dir"];
+export type Direction8 = Facing['dir'];

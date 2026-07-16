@@ -1,11 +1,11 @@
-import type { ExportedArtifact } from "../types/artifact.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
-import { COLLISION_BODY_COMPONENT, type CollisionBody } from "./components.js";
-import type { CollisionRect } from "./rect.js";
-import { resolveCircleRect } from "./circle-rect.js";
+import type { ExportedArtifact } from '../types/artifact.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
+import { COLLISION_BODY_COMPONENT, type CollisionBody } from './components.js';
+import type { CollisionRect } from './rect.js';
+import { resolveCircleRect } from './circle-rect.js';
 
-export type { CollisionRect } from "./rect.js";
-export { resolveCircleRect } from "./circle-rect.js";
+export type { CollisionRect } from './rect.js';
+export { resolveCircleRect } from './circle-rect.js';
 
 export interface PluginCollisionRect extends CollisionRect {
   readonly blocksMovement: boolean;
@@ -47,17 +47,17 @@ type CollisionMaskValue = {
   readonly blocksMovement?: unknown;
 };
 
-type RuntimeTilesetPack = NonNullable<ExportedArtifact["tilesetPack"]>;
-type RuntimeCollisionArtifact = NonNullable<ExportedArtifact["collision"]>;
+type RuntimeTilesetPack = NonNullable<ExportedArtifact['tilesetPack']>;
+type RuntimeCollisionArtifact = NonNullable<ExportedArtifact['collision']>;
 
 const readCollisionMask = (input: unknown): CollisionMaskValue | undefined => {
-  if (typeof input !== "object" || input === null) {
+  if (typeof input !== 'object' || input === null) {
     return undefined;
   }
-  if ("_tag" in input && input._tag === "None") {
+  if ('_tag' in input && input._tag === 'None') {
     return undefined;
   }
-  if ("_tag" in input && input._tag === "Some" && "value" in input) {
+  if ('_tag' in input && input._tag === 'Some' && 'value' in input) {
     return readCollisionMask(input.value);
   }
   return input as CollisionMaskValue;
@@ -65,7 +65,7 @@ const readCollisionMask = (input: unknown): CollisionMaskValue | undefined => {
 
 const collisionMaskByTileIndex = (
   pack: RuntimeTilesetPack,
-  tileIdByIndex: RuntimeCollisionArtifact["tileIdByIndex"],
+  tileIdByIndex: RuntimeCollisionArtifact['tileIdByIndex'],
 ): ReadonlyMap<number, CollisionMaskValue> => {
   const masksByTileId = new Map<string, CollisionMaskValue>();
   for (const tileset of pack.tilesets) {
@@ -91,13 +91,15 @@ const collisionMaskByTileIndex = (
 };
 
 const collisionMaskBlocksMovement = (mask: CollisionMaskValue): boolean => {
-  if (mask._tag === "bitmask") {
-    return typeof mask.blocked === "number" && mask.blocked !== 0;
+  if (mask._tag === 'bitmask') {
+    return typeof mask.blocked === 'number' && mask.blocked !== 0;
   }
   return mask.blocksMovement === true;
 };
 
-const tileCollisionRectsFromArtifact = (artifact: ExportedArtifact): readonly PluginCollisionRect[] => {
+const tileCollisionRectsFromArtifact = (
+  artifact: ExportedArtifact,
+): readonly PluginCollisionRect[] => {
   const rects: PluginCollisionRect[] = [];
   const collision = artifact.collision;
   if (collision === undefined || artifact.tilesetPack === undefined) {

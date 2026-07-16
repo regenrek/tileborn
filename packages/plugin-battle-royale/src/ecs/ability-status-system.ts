@@ -1,5 +1,5 @@
-import { ABILITY, STATUS_EFFECT } from "../constants.js";
-import type { PluginWorld, RuntimePlayerInput } from "../types/runtime-plugin.js";
+import { ABILITY, STATUS_EFFECT } from '../constants.js';
+import type { PluginWorld, RuntimePlayerInput } from '../types/runtime-plugin.js';
 import {
   ABILITY_STATE_COMPONENT,
   AIM_COMPONENT,
@@ -20,17 +20,17 @@ import {
   type Position,
   type Shield,
   type StatusEffects,
-} from "./components.js";
-import { type PluginCollisionEnvironment, resolvePlayerCollision } from "./collision.js";
-import type { DamageSystemState, RoomRulesConfig } from "./damage-system.js";
-import { direction8ToUnitVector } from "./movement.js";
+} from './components.js';
+import { type PluginCollisionEnvironment, resolvePlayerCollision } from './collision.js';
+import type { DamageSystemState, RoomRulesConfig } from './damage-system.js';
+import { direction8ToUnitVector } from './movement.js';
 import {
   DEFAULT_PLAYER_PHYSICS,
   physicsForPlayer,
   type PlayerPhysicsProfile,
-} from "./player-physics.js";
+} from './player-physics.js';
 
-type AbilityId = RuntimePlayerInput["abilities"][number];
+type AbilityId = RuntimePlayerInput['abilities'][number];
 
 export interface AbilityStatusSystemState {
   componentsRegistered: boolean;
@@ -79,7 +79,10 @@ const setCooldown = (state: AbilityState, abilityId: AbilityId, ticks: number): 
   return {
     ...state,
     activeAbilityId: abilityId,
-    cooldownTicks: nextCooldowns.reduce((max, cooldown) => Math.max(max, cooldown.remainingTicks), 0),
+    cooldownTicks: nextCooldowns.reduce(
+      (max, cooldown) => Math.max(max, cooldown.remainingTicks),
+      0,
+    ),
     cooldowns: nextCooldowns,
   };
 };
@@ -98,13 +101,17 @@ const tickCooldowns = (state: AbilityState): AbilityState => {
 };
 
 const hasStatus = (status: StatusEffects | undefined, effectId: string): boolean =>
-  status?.effects.some((effect) => effect.effectId === effectId && effect.remainingTicks > 0) ?? false;
+  status?.effects.some((effect) => effect.effectId === effectId && effect.remainingTicks > 0) ??
+  false;
 
 const statusEffectsFor = (world: PluginWorld, entity: number): StatusEffects | undefined => {
   try {
     return world.getComponent<StatusEffects>(STATUS_EFFECTS_COMPONENT).get(entity);
   } catch (cause) {
-    if (cause instanceof Error && cause.message === `component not registered: ${STATUS_EFFECTS_COMPONENT}`) {
+    if (
+      cause instanceof Error &&
+      cause.message === `component not registered: ${STATUS_EFFECTS_COMPONENT}`
+    ) {
       return undefined;
     }
     throw cause;
@@ -139,10 +146,9 @@ const addStatus = (
     ...(sourcePlayerId === undefined ? {} : { sourcePlayerId }),
   };
   statuses.set(entity, {
-    effects: [
-      ...current.filter((effect) => effect.effectId !== effectId),
-      nextEffect,
-    ].sort((left, right) => left.effectId.localeCompare(right.effectId)),
+    effects: [...current.filter((effect) => effect.effectId !== effectId), nextEffect].sort(
+      (left, right) => left.effectId.localeCompare(right.effectId),
+    ),
   });
 };
 
@@ -175,10 +181,7 @@ const applyDamageWithShield = (
   }
 };
 
-const tickStatuses = (
-  world: PluginWorld,
-  damageState: DamageSystemState,
-): void => {
+const tickStatuses = (world: PluginWorld, damageState: DamageSystemState): void => {
   const statuses = world.getComponent<StatusEffects>(STATUS_EFFECTS_COMPONENT);
   const shields = world.getComponent<Shield>(SHIELD_COMPONENT);
   for (const [entity, status] of [...statuses.entries()].sort(([left], [right]) => left - right)) {
@@ -188,7 +191,7 @@ const tickStatuses = (
           world,
           entity,
           STATUS_EFFECT.damageOverTime.damagePerTick,
-          effect.sourcePlayerId ?? "damage-over-time",
+          effect.sourcePlayerId ?? 'damage-over-time',
           damageState,
         );
       }
@@ -216,7 +219,7 @@ const isHostilePlayer = (
   if (source.playerId === target.playerId) {
     return false;
   }
-  if (ctx.roomRules.matchMode === "solo" || ctx.roomRules.friendlyFire) {
+  if (ctx.roomRules.matchMode === 'solo' || ctx.roomRules.friendlyFire) {
     return true;
   }
   return source.team !== target.team;
@@ -246,7 +249,10 @@ const moveWithCollision = (
     next.x += dx / steps;
     next.y += dy / steps;
     if (collisionEnvironment) {
-      resolvePlayerCollision(next, collisionEnvironment, body.radius, { x: body.offsetX, y: body.offsetY });
+      resolvePlayerCollision(next, collisionEnvironment, body.radius, {
+        x: body.offsetX,
+        y: body.offsetY,
+      });
     }
   }
   return next;
@@ -276,7 +282,11 @@ const activateDash = (
     world.getComponent<Aim>(AIM_COMPONENT).get(entity),
     world.getComponent<Facing>(FACING_COMPONENT).get(entity),
   );
-  const body = physicsForPlayer(player, ctx.bodyByModelId, ctx.defaultPlayerPhysics ?? DEFAULT_PLAYER_PHYSICS);
+  const body = physicsForPlayer(
+    player,
+    ctx.bodyByModelId,
+    ctx.defaultPlayerPhysics ?? DEFAULT_PLAYER_PHYSICS,
+  );
   positions.set(
     entity,
     moveWithCollision(
@@ -299,7 +309,7 @@ const activateShield = (world: PluginWorld, entity: number): void => {
 
 const createDeployable = (
   world: PluginWorld,
-  kind: Deployable["kind"],
+  kind: Deployable['kind'],
   ownerId: string,
   position: Position,
   radius: number,
@@ -331,21 +341,28 @@ const activateScan = (
   }
   createDeployable(
     world,
-    "scan-pulse",
+    'scan-pulse',
     player.playerId,
     position,
     ABILITY.scanPulse.radius,
     ABILITY.scanPulse.durationTicks,
     0,
   );
-  applyRevealInRadius(world, player, position, ABILITY.scanPulse.radius, ABILITY.scanPulse.revealTicks, ctx);
+  applyRevealInRadius(
+    world,
+    player,
+    position,
+    ABILITY.scanPulse.radius,
+    ABILITY.scanPulse.revealTicks,
+    ctx,
+  );
 };
 
 const activateTrapOrDecoy = (
   world: PluginWorld,
   entity: number,
   player: Player,
-  kind: "trap" | "decoy",
+  kind: 'trap' | 'decoy',
 ): void => {
   const position = world.getComponent<Position>(POSITION_COMPONENT).get(entity);
   if (!position) {
@@ -355,7 +372,7 @@ const activateTrapOrDecoy = (
     world.getComponent<Aim>(AIM_COMPONENT).get(entity),
     world.getComponent<Facing>(FACING_COMPONENT).get(entity),
   );
-  const config = kind === "trap" ? ABILITY.trap : ABILITY.decoy;
+  const config = kind === 'trap' ? ABILITY.trap : ABILITY.decoy;
   const deployedEntity = createDeployable(
     world,
     kind,
@@ -363,9 +380,9 @@ const activateTrapOrDecoy = (
     deployPosition(position, direction, config.deployDistance),
     config.radius,
     config.durationTicks,
-    kind === "trap" ? ABILITY.trap.armTicks : 0,
+    kind === 'trap' ? ABILITY.trap.armTicks : 0,
   );
-  if (kind === "decoy") {
+  if (kind === 'decoy') {
     const deployedPosition = world.getComponent<Position>(POSITION_COMPONENT).get(deployedEntity)!;
     world.getComponent<CollisionBody>(COLLISION_BODY_COMPONENT).set(deployedEntity, {
       objectId: `deployable:${deployedEntity}`,
@@ -411,9 +428,15 @@ const triggerTrap = (
 ): boolean => {
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
-  for (const [entity, target] of [...players.entries()].sort(([, left], [, right]) => left.playerId.localeCompare(right.playerId))) {
+  for (const [entity, target] of [...players.entries()].sort(([, left], [, right]) =>
+    left.playerId.localeCompare(right.playerId),
+  )) {
     const position = positions.get(entity);
-    if (!position || target.alive !== 1 || (source !== undefined && !isHostilePlayer(world, source, target, ctx))) {
+    if (
+      !position ||
+      target.alive !== 1 ||
+      (source !== undefined && !isHostilePlayer(world, source, target, ctx))
+    ) {
       continue;
     }
     if (Math.hypot(position.x - trapPosition.x, position.y - trapPosition.y) > trap.radius) {
@@ -421,7 +444,13 @@ const triggerTrap = (
     }
     addStatus(world, entity, STATUS_EFFECT.slow.id, ABILITY.trap.slowTicks, source?.playerId);
     addStatus(world, entity, STATUS_EFFECT.stun.id, ABILITY.trap.stunTicks, source?.playerId);
-    addStatus(world, entity, STATUS_EFFECT.damageOverTime.id, ABILITY.trap.damageTicks, source?.playerId);
+    addStatus(
+      world,
+      entity,
+      STATUS_EFFECT.damageOverTime.id,
+      ABILITY.trap.damageTicks,
+      source?.playerId,
+    );
     world.getComponent<Deployable>(DEPLOYABLE_COMPONENT).set(trapEntity, {
       ...trap,
       triggered: true,
@@ -444,7 +473,9 @@ const playerById = (world: PluginWorld, playerId: string): Player | undefined =>
 const tickDeployables = (world: PluginWorld, ctx: AbilityStatusSystemContext): void => {
   const deployables = world.getComponent<Deployable>(DEPLOYABLE_COMPONENT);
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
-  for (const [entity, deployable] of [...deployables.entries()].sort(([left], [right]) => left - right)) {
+  for (const [entity, deployable] of [...deployables.entries()].sort(
+    ([left], [right]) => left - right,
+  )) {
     const remainingTicks = deployable.remainingTicks - 1;
     const armedTicks = Math.max(0, deployable.armedTicks - 1);
     const position = positions.get(entity);
@@ -455,7 +486,7 @@ const tickDeployables = (world: PluginWorld, ctx: AbilityStatusSystemContext): v
     }
     const next = { ...deployable, remainingTicks, armedTicks };
     deployables.set(entity, next);
-    if (next.kind === "trap" && !next.triggered && next.armedTicks === 0) {
+    if (next.kind === 'trap' && !next.triggered && next.armedTicks === 0) {
       triggerTrap(world, entity, next, position, owner, ctx);
     }
   }
@@ -496,10 +527,10 @@ const activateAbility = (
       activateScan(world, entity, player, ctx);
       break;
     case ABILITY.trap.id:
-      activateTrapOrDecoy(world, entity, player, "trap");
+      activateTrapOrDecoy(world, entity, player, 'trap');
       break;
     case ABILITY.decoy.id:
-      activateTrapOrDecoy(world, entity, player, "decoy");
+      activateTrapOrDecoy(world, entity, player, 'decoy');
       break;
   }
 };
@@ -511,7 +542,9 @@ const processAbilityInputs = (
 ): void => {
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const abilityStates = world.getComponent<AbilityState>(ABILITY_STATE_COMPONENT);
-  for (const [entity, player] of [...players.entries()].sort(([, left], [, right]) => left.playerId.localeCompare(right.playerId))) {
+  for (const [entity, player] of [...players.entries()].sort(([, left], [, right]) =>
+    left.playerId.localeCompare(right.playerId),
+  )) {
     const current = abilityStateFor(abilityStates.get(entity));
     abilityStates.set(entity, tickCooldowns(current));
     if (player.alive !== 1 || isBlockedByStun(world, entity)) {

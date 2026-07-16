@@ -151,12 +151,14 @@ const toBodyAabb = (body: CollisionBody): AabbLike => ({
 });
 
 /** A player without a collision body measures gaps from its point position. */
-const toSeekerAabb = (
-  playerPosition: Position,
-  playerBody: CollisionBody | undefined,
-): AabbLike =>
+const toSeekerAabb = (playerPosition: Position, playerBody: CollisionBody | undefined): AabbLike =>
   playerBody === undefined
-    ? { minX: playerPosition.x, minY: playerPosition.y, maxX: playerPosition.x, maxY: playerPosition.y }
+    ? {
+        minX: playerPosition.x,
+        minY: playerPosition.y,
+        maxX: playerPosition.x,
+        maxY: playerPosition.y,
+      }
     : toBodyAabb(playerBody);
 
 const gapToClosestBody = (
@@ -194,11 +196,7 @@ const spawnPickupEntity = (world: PluginWorld, spawn: PickupSpawned): void => {
   });
 };
 
-const grantInventoryItem = (
-  world: PluginWorld,
-  playerEntity: number,
-  itemId: string,
-): void => {
+const grantInventoryItem = (world: PluginWorld, playerEntity: number, itemId: string): void => {
   const inventories = world.getComponent<Inventory>(INVENTORY_COMPONENT);
   const inventory = inventories.get(playerEntity);
   if (!inventory) {
@@ -271,14 +269,20 @@ const consumeDropInput = (
   state: InventoryLootSystemState,
   playerId: string,
   input: RuntimePlayerInput | undefined,
-): boolean => consumeSequencedInput(state.consumedDropInputByPlayerId, playerId, input, input?.drop === true);
+): boolean =>
+  consumeSequencedInput(state.consumedDropInputByPlayerId, playerId, input, input?.drop === true);
 
 const consumeInteractInput = (
   state: InventoryLootSystemState,
   playerId: string,
   input: RuntimePlayerInput | undefined,
 ): boolean =>
-  consumeSequencedInput(state.consumedInteractInputByPlayerId, playerId, input, input?.interact === true);
+  consumeSequencedInput(
+    state.consumedInteractInputByPlayerId,
+    playerId,
+    input,
+    input?.interact === true,
+  );
 
 // ---------------------------------------------------------------------------
 // Loot effects (BR item semantics stay plugin-side)
@@ -315,7 +319,10 @@ const grantLoot = (
     case 'health-pack':
       players.set(playerEntity, {
         ...player,
-        health: Math.min(ctx.playerHealth, player.health + (ctx.healthPackAmount ?? INVENTORY.healthPackAmount)),
+        health: Math.min(
+          ctx.playerHealth,
+          player.health + (ctx.healthPackAmount ?? INVENTORY.healthPackAmount),
+        ),
       });
       return;
     case 'armor-vest':
@@ -408,10 +415,7 @@ const setPrompt = (
   );
 };
 
-const disableCollisionForObject = (
-  world: PluginWorld,
-  source: LootSource,
-): void => {
+const disableCollisionForObject = (world: PluginWorld, source: LootSource): void => {
   const collisionBodies = world.getComponent<CollisionBody>(COLLISION_BODY_COMPONENT);
   for (const [entity, body] of collisionBodies.entries()) {
     if (body.objectId !== source.tableId) {
@@ -453,7 +457,12 @@ const collectPickup = (
     quantity: pickup.quantity,
     tick,
   });
-  pickups.set(pickupEntity, { ...pickup, itemKind: entry.itemKind, tier: entry.tier, available: false });
+  pickups.set(pickupEntity, {
+    ...pickup,
+    itemKind: entry.itemKind,
+    tier: entry.tier,
+    available: false,
+  });
   if (source) {
     lootSources.set(pickupEntity, { ...source, collected: true });
     disableCollisionForObject(world, source);

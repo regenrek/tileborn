@@ -1,8 +1,9 @@
-import type { MainTileborneBridge } from "@tileborne/ipc-contracts";
+import type { MainTileborneBridge } from '@tileborne/ipc-contracts';
 
-import type { TileborneIpcTransport } from "../shared/ipc-transport";
-import type { TileborneStartupBridge } from "../shared/startup-status";
-import type { MultiplayerSessionState } from "@/lib/playtest-multiplayer-client";
+import type { TileborneIpcTransport } from '../shared/ipc-transport';
+import type { TileborneStartupBridge } from '../shared/startup-status';
+import type { TileborneAppLifecycleBridge } from '../shared/app-lifecycle';
+import type { MultiplayerSessionState } from '@/lib/playtest-multiplayer-client';
 
 declare global {
   interface Window {
@@ -11,6 +12,7 @@ declare global {
     /** Raw channel-allowlisted transport exposed by the preload script. */
     readonly tileborneIpc: TileborneIpcTransport;
     readonly tileborneStartup: TileborneStartupBridge;
+    readonly tileborneAppLifecycle: TileborneAppLifecycleBridge;
     __tileborne_e2e?: {
       readonly getMultiplayerSessionState?: () => MultiplayerSessionState | null;
     };

@@ -1,12 +1,14 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   FolderOpenIcon,
+  Gamepad2Icon,
   MapIcon,
   PackageIcon,
   PuzzleIcon,
   SettingsIcon,
   ShapesIcon,
   UserIcon,
+  WorkflowIcon,
 } from 'lucide-react';
 
 import type { WorkspaceTabKind } from '@/stores/editor-ui-store';
@@ -21,7 +23,9 @@ export type WorkspaceViewRoute =
   | '/projects/$projectId/plugins'
   | '/projects/$projectId/settings'
   | '/projects/$projectId/player-models'
-  | '/projects/$projectId/entities';
+  | '/projects/$projectId/entities'
+  | '/projects/$projectId/game-content'
+  | '/projects/$projectId/behaviors';
 
 /**
  * Single source of truth for one project-scoped workspace view: identity
@@ -92,6 +96,25 @@ export const WORKSPACE_VIEWS: readonly WorkspaceViewDef[] = [
     pathPattern: /^\/projects\/([^/]+)\/entities$/,
     commandId: 'view.entity-editor',
     keywords: ['entity', 'catalog', 'object', 'component', 'weapon', 'anchor', 'capability'],
+    tool: true,
+  },
+  {
+    kind: 'game-content',
+    label: 'Gameplay content',
+    icon: Gamepad2Icon,
+    route: '/projects/$projectId/game-content',
+    pathPattern: /^\/projects\/([^/]+)\/game-content$/,
+    keywords: ['gameplay', 'content', 'weapons', 'items', 'loot'],
+    tool: true,
+  },
+  {
+    kind: 'behaviors',
+    label: 'Behavior Editor',
+    icon: WorkflowIcon,
+    route: '/projects/$projectId/behaviors',
+    pathPattern: /^\/projects\/([^/]+)\/behaviors$/,
+    commandId: 'view.behavior-editor',
+    keywords: ['behavior', 'events', 'when', 'if', 'do', 'logic'],
     tool: true,
   },
   {

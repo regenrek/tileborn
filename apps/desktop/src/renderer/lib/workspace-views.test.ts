@@ -43,6 +43,8 @@ describe('workspace-views registry', () => {
   it('exposes the tool editors in the Tools section', () => {
     expect(WORKSPACE_TOOL_VIEWS.map((view) => view.kind)).toEqual([
       'entity-editor',
+      'game-content',
+      'behaviors',
       'player-model-editor',
     ]);
   });

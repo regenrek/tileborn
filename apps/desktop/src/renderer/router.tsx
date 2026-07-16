@@ -17,6 +17,8 @@ import { normalizeRouteParam } from '@/lib/route-params';
 import { AssetLibraryPage } from '@/routes/asset-library-page';
 import { EntityEditorPage } from '@/routes/entity-editor-page';
 import { HomePage } from '@/routes/home-page';
+import { GameContentPage } from '@/routes/game-content-page';
+import { BehaviorEditorPage } from '@/routes/behavior-editor-page';
 import { MapEditorPage } from '@/routes/map-editor-page';
 import { PlayerModelEditorPage } from '@/routes/player-model-editor-page';
 import { PluginManagerPage } from '@/routes/plugin-manager-page';
@@ -136,6 +138,12 @@ const playerModelEditorRoute = createRoute({
   getParentRoute: () => editorRoute,
   path: '/projects/$projectId/player-models',
   params: projectParams,
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.modelId === 'string' && search.modelId.length > 0
+      ? { modelId: search.modelId }
+      : {}),
+    ...(typeof search.path === 'string' && search.path.length > 0 ? { path: search.path } : {}),
+  }),
   component: PlayerModelEditorPage,
 });
 
@@ -144,6 +152,20 @@ const entityEditorRoute = createRoute({
   path: '/projects/$projectId/entities',
   params: projectParams,
   component: EntityEditorPage,
+});
+
+const gameContentRoute = createRoute({
+  getParentRoute: () => editorRoute,
+  path: '/projects/$projectId/game-content',
+  params: projectParams,
+  component: GameContentPage,
+});
+
+const behaviorEditorRoute = createRoute({
+  getParentRoute: () => editorRoute,
+  path: '/projects/$projectId/behaviors',
+  params: projectParams,
+  component: BehaviorEditorPage,
 });
 
 const projectSettingsRoute = createRoute({
@@ -176,6 +198,8 @@ const routeTree = rootRoute.addChildren([
     pluginManagerRoute,
     playerModelEditorRoute,
     entityEditorRoute,
+    gameContentRoute,
+    behaviorEditorRoute,
     projectSettingsRoute,
     mapsIndexRoute,
   ]),

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import type { GameObjectTypeId, PackId, PluginId, ProjectId } from '@tileborne/core';
+import type { ProjectDefinitionKind } from '@tileborne/ipc-contracts';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 
 import type { MapId } from '@tileborne/core';
@@ -9,8 +10,11 @@ import type {
   AssetPackRemoveResponse,
   AssetPacksListResponse,
   CatalogExportResponse,
+  CatalogDuplicateDefinitionResponse,
   CatalogImportResponse,
+  CatalogRemoveDefinitionResponse,
   CatalogRemoveTypeResponse,
+  CatalogUpsertDefinitionResponse,
   CatalogUpsertTypeResponse,
   MapsImportTiledResponse,
   MapsGenerateResponse,
@@ -18,6 +22,7 @@ import type {
   MapsSetMapTilesetPackResponse,
   PluginsInstallResponse,
   ProjectsCreateResponse,
+  ProjectsCreateGameResponse,
   PlaytestStartResponse,
   TiledImportApplyResponse,
   TiledImportPlanResponse,
@@ -32,7 +37,7 @@ import {
   mutationSuccessToast,
   isMutationSilent,
 } from '@/lib/mutation-notifications';
-import { queryKeys } from '@/lib/query-client';
+import { invalidateAssetUseSites, invalidateBehaviorReferences, queryKeys } from '@/lib/query-client';
 import { localPluginSource, type PluginInstallSource } from '@/lib/plugin-source';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 import { useWorkingPalettesStore } from '@/stores/working-palettes-store';
@@ -52,9 +57,7 @@ type AssetLibraryCacheMutationResult = {
 };
 
 type AssetLibraryCacheMutationBridge = {
-  readonly reloadPackCache?:
-    | typeof window.tileborne.assetLibrary.reloadPackCache
-    | undefined;
+  readonly reloadPackCache?: typeof window.tileborne.assetLibrary.reloadPackCache | undefined;
 };
 
 type CatalogImportMutationInput = {
@@ -88,7 +91,8 @@ const removeAssetPackQueries = (queryClient: ReturnType<typeof useQueryClient>, 
       const queryKey = query.queryKey;
       return (
         (queryKey[0] === 'assets' && queryKeyPackId(queryKey) === packId) ||
-        (queryKey[0] === 'assetLibrary' && queryKeyPackId(queryKey) === packId)
+        (queryKey[0] === 'assetLibrary' && queryKeyPackId(queryKey) === packId) ||
+        (queryKey[0] === 'assetLibrary' && queryKey[1] === 'useSites' && queryKey[3] === packId)
       );
     },
   });
@@ -110,6 +114,24 @@ export function useCreateProject() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+    },
+  });
+}
+
+export function useCreateGame() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ProjectsCreateGameResponse,
+    TileborneQueryError,
+    { name: string; gameType: 'battle-royale'; idempotencyKey: string }
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.projects.createGame(input)),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.maps.list(data.projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
     },
   });
 }
@@ -123,8 +145,65 @@ export function useCreateMap() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.maps.list(input.projectId),
       });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
     },
+  });
+}
+
+const invalidateBehaviors = (queryClient: ReturnType<typeof useQueryClient>, projectId: string) => {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.documents(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+  void invalidateBehaviorReferences(queryClient, projectId, 'behavior');
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.behaviorReferences.resolveAll(projectId),
+  });
+};
+
+export function useCreateVisualBehavior() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.behaviors.createVisual>[0]) =>
+      invokeIpc(() => window.tileborne.behaviors.createVisual(input)),
+    onSuccess: (_data, input) => invalidateBehaviors(queryClient, input.projectId),
+  });
+}
+
+export function useSaveVisualBehavior() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.behaviors.saveVisual>[0]) =>
+      invokeIpc(() => window.tileborne.behaviors.saveVisual(input)),
+    onSuccess: (_data, input) => invalidateBehaviors(queryClient, input.projectId),
+  });
+}
+
+export function useConvertBehaviorToTypeScript() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.behaviors.convertToTypeScript>[0]) =>
+      invokeIpc(() => window.tileborne.behaviors.convertToTypeScript(input)),
+    onSuccess: (_data, input) => invalidateBehaviors(queryClient, input.projectId),
+  });
+}
+
+export function useSaveTypeScriptBehavior() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.behaviors.saveTypeScript>[0]) =>
+      invokeIpc(() => window.tileborne.behaviors.saveTypeScript(input)),
+    onSuccess: (_data, input) => invalidateBehaviors(queryClient, input.projectId),
+  });
+}
+
+export function useRemoveBehavior() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof window.tileborne.behaviors.remove>[0]) =>
+      invokeIpc(() => window.tileborne.behaviors.remove(input)),
+    onSuccess: (_data, input) => invalidateBehaviors(queryClient, input.projectId),
   });
 }
 
@@ -148,6 +227,9 @@ export function useGenerateMap(): UseMutationResult<
         queryKey: queryKeys.maps.detail(input.projectId, data.map.id),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
     },
   });
 }
@@ -171,6 +253,9 @@ export function useSetMapTilesetPack(): UseMutationResult<
       void queryClient.invalidateQueries({
         queryKey: queryKeys.maps.detail(input.projectId, input.mapId as MapId),
       });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
       mutationSuccessToast(
         `Updated map tileset pack to ${input.packId}`,
         mutationMeta(context.meta),
@@ -209,6 +294,9 @@ export function useImportTiledMap(): UseMutationResult<
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
     },
   });
 }
@@ -247,6 +335,9 @@ export function useTiledImportApply(): UseMutationResult<
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
     },
   });
 }
@@ -268,6 +359,9 @@ export function useUpdateProject() {
         queryKey: queryKeys.projects.detail(input.project.id),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.project.id);
+      void invalidateBehaviorReferences(queryClient, input.project.id);
     },
   });
 }
@@ -281,6 +375,12 @@ export function useUpdateMap() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.maps.list(input.projectId),
       });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.maps.detail(input.projectId, input.map.id),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient, input.projectId);
+      void invalidateBehaviorReferences(queryClient, input.projectId);
     },
     onError: (error, _variables, _onMutateResult, context) => {
       mutationErrorToast(
@@ -304,6 +404,9 @@ export function useImportAssetPack() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
+      void invalidateBehaviorReferences(queryClient);
     },
   });
 }
@@ -322,6 +425,9 @@ export function useImportSpriteSheet() {
       invokeIpc(() => window.tileborne.assets.importSpriteSheet(input)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
+      void invalidateBehaviorReferences(queryClient);
     },
   });
 }
@@ -359,6 +465,7 @@ export function useImportProjectFromDirectory() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
     },
   });
 }
@@ -399,7 +506,9 @@ export function useInvokePluginEditorCommand() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
       if (input.projectId !== undefined) {
+        void invalidateAssetUseSites(queryClient, input.projectId);
         void queryClient.invalidateQueries({
           queryKey: queryKeys.projects.detail(input.projectId),
         });
@@ -435,6 +544,11 @@ export function useRemoveAssetPack() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.workingPalettes.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.maps.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      for (const projectId of _data.affectedProjectIds) {
+        void invalidateAssetUseSites(queryClient, projectId);
+        void invalidateBehaviorReferences(queryClient, projectId);
+      }
       const editorUi = useEditorUiStore.getState();
       if (editorUi.activePalettePackId === packId) {
         editorUi.setActivePalettePackId(null);
@@ -442,7 +556,8 @@ export function useRemoveAssetPack() {
       const workingPalettes = useWorkingPalettesStore.getState();
       const selectedBrushWasRemoved = workingPalettes.palettes.some((palette) =>
         palette.items.some(
-          (item) => item.ref.packId === packId && brushIntentMatchesItem(editorUi.brushIntent, item),
+          (item) =>
+            item.ref.packId === packId && brushIntentMatchesItem(editorUi.brushIntent, item),
         ),
       );
       workingPalettes.prunePackReferences(packId);
@@ -476,6 +591,7 @@ export function useReloadAssetLibraryCache() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.assets.tilesetPack(input.packId, input.integrityHash ?? ''),
       });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
     },
   });
 }
@@ -487,6 +603,8 @@ export function useInstallPlugin() {
       invokeIpc(() => window.tileborne.plugins.install({ source })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
     },
   });
 }
@@ -497,6 +615,8 @@ export function useInstallBattleRoyalePlugin() {
     mutationFn: () => invokeIpc(() => window.tileborne.plugins.installBundledBattleRoyale({})),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
     },
   });
 }
@@ -506,9 +626,13 @@ export function useInstallPluginFromPath() {
   const installPlugin = useInstallPlugin();
   return useMutation({
     mutationFn: (path: string) =>
-      installPlugin.mutateAsync(localPluginSource(path.startsWith('file://') ? path.slice(7) : path)),
+      installPlugin.mutateAsync(
+        localPluginSource(path.startsWith('file://') ? path.slice(7) : path),
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
     },
   });
 }
@@ -522,6 +646,8 @@ export function useEnablePlugin() {
     },
     onSuccess: (_data, variables, _onMutateResult, context) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
       const silent =
         (typeof variables === 'object' && variables.silent === true) ||
         isMutationSilent(mutationMeta(context.meta));
@@ -549,6 +675,8 @@ export function useDisablePlugin() {
       invokeIpc(() => window.tileborne.plugins.disable({ pluginId: pluginId as PluginId })),
     onSuccess: (_data, pluginId, _onMutateResult, context) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+      void invalidateAssetUseSites(queryClient);
       mutationSuccessToast(`Disabled plugin ${pluginId}`, mutationMeta(context.meta));
     },
     onError: (error, _variables, _onMutateResult, context) => {
@@ -575,11 +703,7 @@ export function useImportCatalog(): UseMutationResult<
   CatalogImportMutationInput
 > {
   const queryClient = useQueryClient();
-  return useMutation<
-    CatalogImportResponse,
-    TileborneQueryError,
-    CatalogImportMutationInput
-  >({
+  return useMutation<CatalogImportResponse, TileborneQueryError, CatalogImportMutationInput>({
     mutationFn: ({ projectId, catalogJson }) =>
       invokeIpc(() =>
         window.tileborne.catalog.import({ projectId: projectId as ProjectId, catalogJson }),
@@ -595,6 +719,9 @@ export function useImportCatalog(): UseMutationResult<
         void queryClient.invalidateQueries({
           queryKey: queryKeys.catalog.validate(input.projectId),
         });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+        void invalidateAssetUseSites(queryClient, input.projectId);
+        void invalidateBehaviorReferences(queryClient, input.projectId);
       }
     },
   });
@@ -615,6 +742,9 @@ export function useExportCatalog() {
 const invalidateCatalog = (queryClient: ReturnType<typeof useQueryClient>, projectId: string) => {
   void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.resolve(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.validate(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+  void invalidateAssetUseSites(queryClient, projectId);
+  void invalidateBehaviorReferences(queryClient, projectId);
 };
 
 /**
@@ -677,6 +807,86 @@ export function useRemoveCatalogType(): UseMutationResult<
   });
 }
 
+/** Genre-neutral creator CRUD for project-owned weapons, items and loot tables. */
+export function useUpsertCatalogDefinition(): UseMutationResult<
+  CatalogUpsertDefinitionResponse,
+  TileborneQueryError,
+  {
+    readonly projectId: string;
+    readonly kind: ProjectDefinitionKind;
+    readonly definitionJson: unknown;
+    readonly label?: string;
+  }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, kind, definitionJson, label }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.upsertDefinition({
+          projectId: projectId as ProjectId,
+          kind,
+          definitionJson,
+          ...(label === undefined ? {} : { label }),
+        }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.saved) invalidateCatalog(queryClient, input.projectId);
+    },
+  });
+}
+
+export function useDuplicateCatalogDefinition(): UseMutationResult<
+  CatalogDuplicateDefinitionResponse,
+  TileborneQueryError,
+  {
+    readonly projectId: string;
+    readonly kind: ProjectDefinitionKind;
+    readonly definitionId: string;
+    readonly label?: string;
+  }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, kind, definitionId, label }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.duplicateDefinition({
+          projectId: projectId as ProjectId,
+          kind,
+          definitionId,
+          ...(label === undefined ? {} : { label }),
+        }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.duplicated) invalidateCatalog(queryClient, input.projectId);
+    },
+  });
+}
+
+export function useRemoveCatalogDefinition(): UseMutationResult<
+  CatalogRemoveDefinitionResponse,
+  TileborneQueryError,
+  {
+    readonly projectId: string;
+    readonly kind: ProjectDefinitionKind;
+    readonly definitionId: string;
+  }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, kind, definitionId }) =>
+      invokeIpc(() =>
+        window.tileborne.catalog.removeDefinition({
+          projectId: projectId as ProjectId,
+          kind,
+          definitionId,
+        }),
+      ),
+    onSuccess: (data, input) => {
+      if (data.removed) invalidateCatalog(queryClient, input.projectId);
+    },
+  });
+}
+
 export function useStartBuild() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -725,6 +935,22 @@ export function useStopPlaytest() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.playtest.all });
+    },
+  });
+}
+
+export function useControlPlaytestBehaviorDebug() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      readonly sessionId: PlaytestSessionId;
+      readonly command: 'pause' | 'step' | 'continue';
+    }) => invokeIpc(() => window.tileborne.playtest.behaviorDebugControl(input)),
+    onSuccess: (response) => {
+      queryClient.setQueryData(
+        queryKeys.playtest.behaviorDebug(response.snapshot.sessionId),
+        response,
+      );
     },
   });
 }

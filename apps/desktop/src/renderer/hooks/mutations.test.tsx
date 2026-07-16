@@ -13,7 +13,19 @@ import {
 } from '@tileborne/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useRemoveAssetPack, useSetMapTilesetPack } from '@/hooks/mutations';
+import {
+  useCreateVisualBehavior,
+  useConvertBehaviorToTypeScript,
+  useImportSpriteSheet,
+  useRemoveAssetPack,
+  useRemoveBehavior,
+  useSaveVisualBehavior,
+  useSaveTypeScriptBehavior,
+  useSetMapTilesetPack,
+  useTiledImportApply,
+  useUpdateMap,
+  useUpdateProject,
+} from '@/hooks/mutations';
 import { TileborneQueryError } from '@/lib/ipc';
 import { queryKeys } from '@/lib/query-client';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -21,15 +33,48 @@ import { useWorkingPalettesStore } from '@/stores/working-palettes-store';
 
 const setMapTilesetPackBridgeMock = vi.fn();
 const removePackBridgeMock = vi.fn();
+const updateProjectBridgeMock = vi.fn();
+const updateMapBridgeMock = vi.fn();
+const createVisualBehaviorBridgeMock = vi.fn();
+const convertBehaviorBridgeMock = vi.fn();
+const saveVisualBehaviorBridgeMock = vi.fn();
+const saveTypeScriptBehaviorBridgeMock = vi.fn();
+const removeBehaviorBridgeMock = vi.fn();
+const importSpriteSheetBridgeMock = vi.fn();
+const tiledImportApplyBridgeMock = vi.fn();
 
 const tileborneStub = {
-  maps: { setMapTilesetPack: setMapTilesetPackBridgeMock },
-  assets: { removePack: removePackBridgeMock },
+  projects: { update: updateProjectBridgeMock },
+  maps: {
+    setMapTilesetPack: setMapTilesetPackBridgeMock,
+    update: updateMapBridgeMock,
+  },
+  behaviors: {
+    createVisual: createVisualBehaviorBridgeMock,
+    convertToTypeScript: convertBehaviorBridgeMock,
+    saveVisual: saveVisualBehaviorBridgeMock,
+    saveTypeScript: saveTypeScriptBehaviorBridgeMock,
+    remove: removeBehaviorBridgeMock,
+  },
+  assets: {
+    removePack: removePackBridgeMock,
+    importSpriteSheet: importSpriteSheetBridgeMock,
+  },
+  tiledImport: { apply: tiledImportApplyBridgeMock },
 };
 
 beforeEach(() => {
   setMapTilesetPackBridgeMock.mockReset();
   removePackBridgeMock.mockReset();
+  updateProjectBridgeMock.mockReset();
+  updateMapBridgeMock.mockReset();
+  createVisualBehaviorBridgeMock.mockReset();
+  convertBehaviorBridgeMock.mockReset();
+  saveVisualBehaviorBridgeMock.mockReset();
+  saveTypeScriptBehaviorBridgeMock.mockReset();
+  removeBehaviorBridgeMock.mockReset();
+  importSpriteSheetBridgeMock.mockReset();
+  tiledImportApplyBridgeMock.mockReset();
   (globalThis as { window: typeof window }).window = Object.assign(globalThis.window ?? {}, {
     tileborne: tileborneStub,
   }) as Window & typeof globalThis & { tileborne: typeof tileborneStub };
@@ -58,6 +103,8 @@ const wrapperWithClient =
 
 describe('useSetMapTilesetPack', () => {
   it('returns the updated map summary on success and is not pending', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
     setMapTilesetPackBridgeMock.mockResolvedValue({
       map: {
         id: 'map-1',
@@ -68,7 +115,9 @@ describe('useSetMapTilesetPack', () => {
         objectCount: 0,
       },
     });
-    const { result } = renderHook(() => useSetMapTilesetPack(), { wrapper });
+    const { result } = renderHook(() => useSetMapTilesetPack(), {
+      wrapper: wrapperWithClient(client),
+    });
     const response = await result.current.mutateAsync({
       projectId: 'project-1' as never,
       mapId: 'map-1' as never,
@@ -76,6 +125,10 @@ describe('useSetMapTilesetPack', () => {
     });
     expect(setMapTilesetPackBridgeMock).toHaveBeenCalledTimes(1);
     expect(response.map.id).toBe('map-1');
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.readiness.all });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.assetLibrary.useSitesProject('project-1'),
+    });
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
     });
@@ -96,6 +149,104 @@ describe('useSetMapTilesetPack', () => {
     ).rejects.toBeInstanceOf(TileborneQueryError);
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
+    });
+  });
+});
+
+describe('asset use-site invalidation', () => {
+  it('refreshes the project-scoped projection after a player-model/project save', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    updateProjectBridgeMock.mockResolvedValue({ project: { id: 'project-models' } });
+    const { result } = renderHook(() => useUpdateProject(), {
+      wrapper: wrapperWithClient(client),
+    });
+
+    await result.current.mutateAsync({ project: { id: 'project-models' } } as never);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.assetLibrary.useSitesProject('project-models'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviorReferences.project('project-models'),
+    });
+  });
+
+  it('refreshes the project-scoped projection after a map/object save', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    updateMapBridgeMock.mockResolvedValue({ map: { id: 'map-1' } });
+    const { result } = renderHook(() => useUpdateMap(), {
+      wrapper: wrapperWithClient(client),
+    });
+
+    await result.current.mutateAsync({ projectId: 'project-maps', map: { id: 'map-1' } } as never);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.maps.detail('project-maps', 'map-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.assetLibrary.useSitesProject('project-maps'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviorReferences.project('project-maps'),
+    });
+  });
+});
+
+describe('behavior reference invalidation', () => {
+  it.each([
+    ['create', useCreateVisualBehavior, createVisualBehaviorBridgeMock],
+    ['convert', useConvertBehaviorToTypeScript, convertBehaviorBridgeMock],
+    ['save', useSaveVisualBehavior, saveVisualBehaviorBridgeMock],
+    ['save TypeScript', useSaveTypeScriptBehavior, saveTypeScriptBehaviorBridgeMock],
+    ['remove', useRemoveBehavior, removeBehaviorBridgeMock],
+  ] as const)('refreshes the project registry after behavior %s', async (_operation, useHook, bridgeMock) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    bridgeMock.mockResolvedValue({});
+    const { result } = renderHook(() => useHook(), {
+      wrapper: wrapperWithClient(client),
+    });
+
+    await result.current.mutateAsync({ projectId: 'project-behaviors' } as never);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviorReferences.kind('project-behaviors', 'behavior'),
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviors.registry('project-behaviors'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviorReferences.resolveAll('project-behaviors'),
+    });
+  });
+
+  it('refreshes all registries after importing a sprite sheet', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    importSpriteSheetBridgeMock.mockResolvedValue({});
+    const { result } = renderHook(() => useImportSpriteSheet(), {
+      wrapper: wrapperWithClient(client),
+    });
+
+    await result.current.mutateAsync({} as never);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.behaviorReferences.all });
+  });
+
+  it('refreshes the project registry after applying a Tiled import', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    tiledImportApplyBridgeMock.mockResolvedValue({});
+    const { result } = renderHook(() => useTiledImportApply(), {
+      wrapper: wrapperWithClient(client),
+    });
+
+    await result.current.mutateAsync({ projectId: 'project-tiled' } as never);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.behaviorReferences.project('project-tiled'),
     });
   });
 });
@@ -207,23 +358,29 @@ describe('useRemoveAssetPack', () => {
     await result.current.mutateAsync(removedPackId);
 
     expect(removePackBridgeMock).toHaveBeenCalledWith({ packId: removedPackId });
-    expect(client.getQueryData<{ packs: readonly { id: string }[] }>(queryKeys.assets.list())?.packs).toEqual([
-      expect.objectContaining({ id: otherPackId }),
-    ]);
+    expect(
+      client.getQueryData<{ packs: readonly { id: string }[] }>(queryKeys.assets.list())?.packs,
+    ).toEqual([expect.objectContaining({ id: otherPackId })]);
     expect(client.getQueryData(queryKeys.assets.detail(removedPackId))).toBeUndefined();
     expect(
       client
         .getQueryCache()
         .findAll()
-        .some((query) => query.queryKey[0] === 'assetLibrary' && query.queryKey[1] === removedPackId),
+        .some(
+          (query) => query.queryKey[0] === 'assetLibrary' && query.queryKey[1] === removedPackId,
+        ),
     ).toBe(false);
-    expect(useWorkingPalettesStore.getState().palettes[0]?.items.map((item) => item.ref.packId)).toEqual([
-      otherPackId,
-    ]);
+    expect(
+      useWorkingPalettesStore.getState().palettes[0]?.items.map((item) => item.ref.packId),
+    ).toEqual([otherPackId]);
     expect(useEditorUiStore.getState().activePalettePackId).toBeNull();
     expect(useEditorUiStore.getState().brushIntent).toEqual({ kind: 'eraser' });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.assets.list() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.assetLibrary.all });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.workingPalettes.all });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.readiness.all });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.assetLibrary.useSitesProject(String(projectId)),
+    });
   });
 });

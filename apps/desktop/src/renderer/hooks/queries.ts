@@ -9,12 +9,15 @@ import {
 import type {
   AssetLibraryGroupKind,
   AssetLibraryReference,
+  BehaviorReference,
   MapId,
   PackId,
   PluginId,
   ProjectId,
 } from '@tileborne/core';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
+import type { BehaviorReferenceKind } from '@tileborne/ipc-contracts';
+import type { PlaytestSessionId } from '@tileborne/services-build';
 import { useCallback, useMemo } from 'react';
 
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
@@ -25,8 +28,13 @@ import type {
   AssetDataUrlResponse,
   AssetLibraryGetPackCacheStatusResponse,
   AssetLibraryGetPackLibraryResponse,
+  AssetLibraryGetPackUseSitesResponse,
   AssetLibraryResolvePreviewsResponse,
   AssetPackGetResponse,
+  BehaviorsOpenResponse,
+  BehaviorsReferencesResponse,
+  BehaviorsResolveReferencesResponse,
+  BehaviorsRegistryResponse,
   AssetPacksListResponse,
   CatalogResolveResponse,
   CatalogValidateResponse,
@@ -41,6 +49,7 @@ import type {
   PluginsListResponse,
   ProjectGetResponse,
   ProjectsListResponse,
+  ReadinessCheckResponse,
   SystemVersionResponse,
 } from '@/lib/bridge-types';
 import { invokeIpc } from '@/lib/ipc';
@@ -52,6 +61,7 @@ const ASSET_LIBRARY_METADATA_STALE_MS = 30 * 60 * 1_000;
 const ASSET_LIBRARY_METADATA_GC_MS = 2 * 60 * 60 * 1_000;
 const ASSET_LIBRARY_THUMBNAIL_STALE_MS = 60 * 60 * 1_000;
 const ASSET_LIBRARY_THUMBNAIL_GC_MS = 4 * 60 * 60 * 1_000;
+const WORKING_PALETTE_PREVIEW_BATCH_SIZE = 64;
 
 export const ASSET_LIBRARY_PAGE_SIZE = 64;
 
@@ -90,6 +100,7 @@ export interface AssetLibraryPageQueryInput {
   readonly offset: number;
   readonly limit?: number | undefined;
   readonly cacheVersion?: string | undefined;
+  readonly keepPreviousData?: boolean | undefined;
 }
 
 const assetLibraryPerformanceBridge = (): AssetLibraryPerformanceBridge =>
@@ -183,7 +194,7 @@ export const assetLibraryStatusQueryOptions = (input: {
 export const assetLibraryPageQueryOptions = (input: AssetLibraryPageQueryInput) => {
   const normalizedQuery = input.query?.trim() ?? '';
   const limit = input.limit ?? ASSET_LIBRARY_PAGE_SIZE;
-  return queryOptions({
+  return queryOptions<AssetLibraryGetPackLibraryResponse>({
     queryKey: queryKeys.assetLibrary.packLibraryPage(
       input.packId ?? '',
       queryIdentity(input.integrityHash, UNKNOWN_INTEGRITY_HASH),
@@ -193,18 +204,20 @@ export const assetLibraryPageQueryOptions = (input: AssetLibraryPageQueryInput) 
       limit,
       queryIdentity(input.cacheVersion, UNKNOWN_CACHE_VERSION),
     ),
-    queryFn: () =>
-      invokeIpc(() =>
-        window.tileborne.assetLibrary.getPackLibrary({
-          packId: input.packId! as PackId,
-          groupKind: input.groupKind,
-          query: normalizedQuery,
-          offset: input.offset,
-          limit,
-        }),
+    queryFn: ({ signal }) =>
+      runAbortableQuery(signal, () =>
+        invokeIpc(() =>
+          window.tileborne.assetLibrary.getPackLibrary({
+            packId: input.packId! as PackId,
+            groupKind: input.groupKind,
+            query: normalizedQuery,
+            offset: input.offset,
+            limit,
+          }),
+        ),
       ),
     enabled: input.packId !== undefined && input.packId.length > 0,
-    placeholderData: keepPreviousData,
+    ...(input.keepPreviousData === false ? {} : { placeholderData: keepPreviousData }),
     staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
     gcTime: ASSET_LIBRARY_METADATA_GC_MS,
   });
@@ -345,15 +358,48 @@ const groupRefsByPackId = (
 const refsIdentity = (refs: readonly AssetLibraryReference[]): string =>
   refs.map(assetLibraryReferenceKey).join('|');
 
-const workingPalettePreviewsQueryOptions = (
+export const runAbortableQuery = <T>(
+  signal: AbortSignal,
+  operation: () => Promise<T>,
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const abortError = () =>
+      signal.reason instanceof Error
+        ? signal.reason
+        : new DOMException('Query was aborted', 'AbortError');
+    const onAbort = () => reject(abortError());
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    void operation().then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        if (signal.aborted) {
+          reject(abortError());
+          return;
+        }
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+
+export const workingPalettePreviewsQueryOptions = (
   packId: string,
   refs: readonly AssetLibraryReference[],
 ) =>
   queryOptions({
     queryKey: queryKeys.assetLibrary.previews(packId, refsIdentity(refs)),
-    queryFn: (): Promise<AssetLibraryResolvePreviewsResponse> =>
-      invokeIpc(() =>
-        window.tileborne.assetLibrary.resolvePreviews({ packId: packId as PackId, refs }),
+    queryFn: ({ signal }): Promise<AssetLibraryResolvePreviewsResponse> =>
+      runAbortableQuery(signal, () =>
+        invokeIpc(() =>
+          window.tileborne.assetLibrary.resolvePreviews({ packId: packId as PackId, refs }),
+        ),
       ),
     enabled: packId.length > 0 && refs.length > 0,
     staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
@@ -374,11 +420,21 @@ export function useWorkingPalettePreviews(
   refs: readonly AssetLibraryReference[],
 ): WorkingPalettePreviews {
   const refsByPack = useMemo(() => groupRefsByPackId(refs), [refs]);
-  const packIds = useMemo(() => [...refsByPack.keys()], [refsByPack]);
+  const batches = useMemo(() => {
+    const result: { readonly packId: string; readonly refs: readonly AssetLibraryReference[] }[] =
+      [];
+    for (const [packId, packRefs] of refsByPack) {
+      for (let offset = 0; offset < packRefs.length; offset += WORKING_PALETTE_PREVIEW_BATCH_SIZE) {
+        result.push({
+          packId,
+          refs: packRefs.slice(offset, offset + WORKING_PALETTE_PREVIEW_BATCH_SIZE),
+        });
+      }
+    }
+    return result;
+  }, [refsByPack]);
   return useQueries({
-    queries: packIds.map((packId) =>
-      workingPalettePreviewsQueryOptions(packId, refsByPack.get(packId) ?? []),
-    ),
+    queries: batches.map((batch) => workingPalettePreviewsQueryOptions(batch.packId, batch.refs)),
     combine: (results) => {
       const previewByKey = new Map<string, LibraryPreviewRef>();
       for (const result of results) {
@@ -405,33 +461,43 @@ export function useAssetPackLibrary(
     readonly limit?: number | undefined;
     readonly integrityHash?: string | undefined;
     readonly cacheVersion?: string | undefined;
+    readonly keepPreviousData?: boolean | undefined;
   },
 ): UseQueryResult<AssetLibraryGetPackLibraryResponse> {
   const normalizedQuery = options.query?.trim() ?? '';
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
-  return useQuery<AssetLibraryGetPackLibraryResponse>({
-    queryKey: queryKeys.assetLibrary.packLibraryPage(
-      packId ?? '',
-      queryIdentity(options.integrityHash, UNKNOWN_INTEGRITY_HASH),
-      options.groupKind,
-      normalizedQuery,
+  return useQuery(
+    assetLibraryPageQueryOptions({
+      packId,
+      groupKind: options.groupKind,
+      query: normalizedQuery,
       offset,
       limit,
-      queryIdentity(options.cacheVersion, UNKNOWN_CACHE_VERSION),
-    ),
+      integrityHash: options.integrityHash,
+      cacheVersion: options.cacheVersion,
+      keepPreviousData: options.keepPreviousData,
+    }),
+  );
+}
+
+export function useAssetPackUseSites(
+  projectId: string | undefined,
+  packId: string | undefined,
+  limit = 100,
+): UseQueryResult<AssetLibraryGetPackUseSitesResponse> {
+  return useQuery<AssetLibraryGetPackUseSitesResponse>({
+    queryKey: queryKeys.assetLibrary.useSites(projectId ?? '', packId ?? '', limit),
     queryFn: () =>
       invokeIpc(() =>
-        window.tileborne.assetLibrary.getPackLibrary({
+        window.tileborne.assetLibrary.getPackUseSites({
+          projectId: projectId! as ProjectId,
           packId: packId! as PackId,
-          groupKind: options.groupKind,
-          query: normalizedQuery,
-          offset,
           limit,
         }),
       ),
-    enabled: packId !== undefined && packId.length > 0,
-    placeholderData: keepPreviousData,
+    enabled:
+      projectId !== undefined && projectId.length > 0 && packId !== undefined && packId.length > 0,
     staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
     gcTime: ASSET_LIBRARY_METADATA_GC_MS,
   });
@@ -518,6 +584,148 @@ export function usePluginsList() {
   });
 }
 
+export function useBehaviors(projectId: string | undefined): UseQueryResult<BehaviorsOpenResponse> {
+  return useQuery<BehaviorsOpenResponse>({
+    queryKey: queryKeys.behaviors.documents(projectId ?? ''),
+    queryFn: () => invokeIpc(() => window.tileborne.behaviors.open({ projectId: projectId! as ProjectId })),
+    enabled: projectId !== undefined && projectId.length > 0,
+    staleTime: 0,
+  });
+}
+
+export function useBehaviorRegistry(
+  projectId: string | undefined,
+): UseQueryResult<BehaviorsRegistryResponse> {
+  return useQuery<BehaviorsRegistryResponse>({
+    queryKey: queryKeys.behaviors.registry(projectId ?? ''),
+    queryFn: () => invokeIpc(() => window.tileborne.behaviors.registry({ projectId: projectId! as ProjectId })),
+    enabled: projectId !== undefined && projectId.length > 0,
+  });
+}
+
+export const BEHAVIOR_REFERENCE_PAGE_SIZE = 32;
+
+export const behaviorReferencePageQueryOptions = (input: {
+  readonly projectId: string | undefined;
+  readonly kind: BehaviorReferenceKind;
+  readonly query?: string | undefined;
+  readonly offset?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly enabled?: boolean | undefined;
+}) => {
+  const query = input.query?.trim() ?? '';
+  const offset = input.offset ?? 0;
+  const limit = input.limit ?? BEHAVIOR_REFERENCE_PAGE_SIZE;
+  return queryOptions<BehaviorsReferencesResponse>({
+    queryKey: queryKeys.behaviorReferences.page(
+      input.projectId ?? '',
+      input.kind,
+      query,
+      offset,
+      limit,
+    ),
+    queryFn: ({ signal }) =>
+      runAbortableQuery(signal, () =>
+        invokeIpc(() =>
+          window.tileborne.behaviors.references({
+            projectId: input.projectId! as ProjectId,
+            kind: input.kind,
+            query,
+            offset,
+            limit,
+          }),
+        ),
+      ),
+    enabled:
+      input.enabled !== false &&
+      input.projectId !== undefined &&
+      input.projectId.length > 0,
+    placeholderData: keepPreviousData,
+  });
+};
+
+export function useBehaviorReferences(input: {
+  readonly projectId: string | undefined;
+  readonly kind: BehaviorReferenceKind;
+  readonly query?: string | undefined;
+  readonly offset?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly enabled?: boolean | undefined;
+}): UseQueryResult<BehaviorsReferencesResponse> {
+  return useQuery(behaviorReferencePageQueryOptions(input));
+}
+
+const behaviorReferenceIdentity = (reference: BehaviorReference): string => {
+  switch (reference._tag) {
+    case 'entity': return `${reference._tag}:${reference.objectId}`;
+    case 'asset': return `${reference._tag}:${reference.assetId}`;
+    case 'catalog': return `${reference._tag}:${reference.objectTypeId}`;
+    case 'behavior': return `${reference._tag}:${reference.behaviorId}`;
+  }
+};
+
+export const behaviorReferenceResolveQueryOptions = (
+  projectId: string | undefined,
+  references: readonly BehaviorReference[],
+) => {
+  if (references.length > 64) throw new Error('Behavior reference resolve chunks are limited to 64 items');
+  const referencesKey = references.map(behaviorReferenceIdentity).sort().join('|');
+  return queryOptions<BehaviorsResolveReferencesResponse>({
+    queryKey: queryKeys.behaviorReferences.resolve(projectId ?? '', referencesKey),
+    queryFn: ({ signal }) =>
+      runAbortableQuery(signal, () =>
+        invokeIpc(() => window.tileborne.behaviors.resolveReferences({
+          projectId: projectId! as ProjectId,
+          references,
+        })),
+      ),
+    enabled:
+      projectId !== undefined &&
+      projectId.length > 0 &&
+      references.length > 0,
+  });
+};
+
+export const chunkBehaviorReferences = (
+  references: readonly BehaviorReference[],
+): readonly (readonly BehaviorReference[])[] => {
+  const unique = new Map(references.map((reference) => [behaviorReferenceIdentity(reference), reference]));
+  const stable = [...unique].sort(([left], [right]) => left.localeCompare(right)).map(([, reference]) => reference);
+  return Array.from({ length: Math.ceil(stable.length / 64) }, (_, index) =>
+    stable.slice(index * 64, (index + 1) * 64),
+  );
+};
+
+export const behaviorReferenceResolveQueries = (
+  projectId: string | undefined,
+  references: readonly BehaviorReference[],
+) => chunkBehaviorReferences(references).map((chunk) =>
+  behaviorReferenceResolveQueryOptions(projectId, chunk),
+);
+
+export function useResolveBehaviorReferences(
+  projectId: string | undefined,
+  references: readonly BehaviorReference[],
+) {
+  return useQueries({
+    queries: behaviorReferenceResolveQueries(projectId, references),
+    combine: (results) => {
+      const settled = results.every(({ data }) => data !== undefined);
+      return {
+        data: settled
+          ? {
+              options: results.flatMap(({ data }) => data?.options ?? []),
+              missing: results.flatMap(({ data }) => data?.missing ?? []),
+            }
+          : undefined,
+        isFetching: results.some(({ isFetching }) => isFetching),
+        isError: results.some(({ isError }) => isError),
+        error: results.find(({ error }) => error !== null)?.error ?? null,
+      };
+    },
+  });
+}
+
 /**
  * Resolves the merged (plugin + project) game-object catalog for a project via
  * the slice-3 `tileborne:catalog:resolve` IPC. The renderer browses/places
@@ -573,6 +781,27 @@ export function usePluginManifest(
   });
 }
 
+/** Canonical project/map readiness report used by Problems and execution UI. */
+export function useReadiness(
+  projectId: string | undefined,
+  mapId: string | undefined,
+  purpose: 'authoring' | 'playtest' | 'build' = 'authoring',
+): UseQueryResult<ReadinessCheckResponse> {
+  return useQuery<ReadinessCheckResponse>({
+    queryKey: queryKeys.readiness.check(projectId ?? '', mapId ?? '', purpose),
+    queryFn: () =>
+      invokeIpc(() =>
+        window.tileborne.readiness.check({
+          projectId: projectId! as ProjectId,
+          ...(mapId === undefined ? {} : { mapId: mapId as MapId }),
+          purpose,
+        }),
+      ),
+    enabled: projectId !== undefined && projectId.length > 0,
+    staleTime: 0,
+  });
+}
+
 export function useJobs() {
   return useQuery<JobsListResponse>({
     queryKey: queryKeys.jobs.list(),
@@ -587,10 +816,26 @@ export function useLogs() {
   });
 }
 
-export function usePlaytestSessions(options?: { refetchInterval?: number | false }) {
+export function usePlaytestSessions(
+  options?: { refetchInterval?: number | false },
+): UseQueryResult<PlaytestListResponse> {
   return useQuery<PlaytestListResponse>({
     queryKey: queryKeys.playtest.list(),
     queryFn: () => invokeIpc(() => window.tileborne.playtest.list({})),
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function usePlaytestBehaviorDebug(
+  sessionId: string | null,
+  options?: { refetchInterval?: number | false },
+) {
+  return useQuery({
+    queryKey: queryKeys.playtest.behaviorDebug(sessionId ?? ''),
+    queryFn: () => invokeIpc(() => window.tileborne.playtest.behaviorDebugInspect({
+      sessionId: sessionId! as PlaytestSessionId,
+    })),
+    enabled: sessionId !== null,
     refetchInterval: options?.refetchInterval ?? false,
   });
 }

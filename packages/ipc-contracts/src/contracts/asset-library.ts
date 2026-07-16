@@ -7,11 +7,13 @@ import {
   AssetLibraryReference,
   ContentHash,
   PackId,
+  ProjectId,
 } from '@tileborne/core';
 
 import { defineContract } from '../contract.js';
 import { createRegistry } from '../registry.js';
 import { IpcContractErrors } from './common.js';
+import { ReadinessNavigationTarget } from './readiness.js';
 
 export const AssetLibraryGetPackLibraryRequest = Schema.Struct({
   packId: PackId,
@@ -83,6 +85,40 @@ export const AssetLibraryGetEditorIndexResponse = Schema.Struct({
   indexJson: Schema.String,
 });
 
+export const AssetLibraryUseSiteKind = Schema.Literals([
+  'project-dependency',
+  'player-model',
+  'animation',
+  'entity',
+  'map',
+  'map-object',
+]);
+export type AssetLibraryUseSiteKind = typeof AssetLibraryUseSiteKind.Type;
+
+/** One exact consumer of an installed pack, projected from canonical project state. */
+export class AssetLibraryUseSite extends Schema.Class<AssetLibraryUseSite>('AssetLibraryUseSite')({
+  id: Schema.String,
+  kind: AssetLibraryUseSiteKind,
+  label: Schema.String,
+  detail: Schema.String,
+  navigation: ReadinessNavigationTarget,
+}) {}
+
+export const AssetLibraryGetPackUseSitesRequest = Schema.Struct({
+  projectId: ProjectId,
+  packId: PackId,
+  limit: Schema.optional(Schema.Number),
+});
+
+export const AssetLibraryGetPackUseSitesResponse = Schema.Struct({
+  projectId: ProjectId,
+  packId: PackId,
+  useSites: Schema.Array(AssetLibraryUseSite),
+  total: Schema.Number,
+  scannedMapCount: Schema.Number,
+  truncated: Schema.Boolean,
+});
+
 export const AssetLibraryGetPackLibraryContract = defineContract({
   channel: 'tileborne:asset-library:getPackLibrary',
   request: AssetLibraryGetPackLibraryRequest,
@@ -118,12 +154,20 @@ export const AssetLibraryGetEditorIndexContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const AssetLibraryGetPackUseSitesContract = defineContract({
+  channel: 'tileborne:asset-library:getPackUseSites',
+  request: AssetLibraryGetPackUseSitesRequest,
+  response: AssetLibraryGetPackUseSitesResponse,
+  errors: IpcContractErrors,
+});
+
 export const AssetLibraryContracts = [
   AssetLibraryGetPackLibraryContract,
   AssetLibraryGetPackCacheStatusContract,
   AssetLibraryReloadPackCacheContract,
   AssetLibraryResolvePreviewsContract,
   AssetLibraryGetEditorIndexContract,
+  AssetLibraryGetPackUseSitesContract,
 ] as const;
 
 export const AssetLibraryIpcRegistry = createRegistry(AssetLibraryContracts);

@@ -36,6 +36,7 @@ const capability = {
   diagnostics: [
     {
       _tag: "PACK.no-tilesets",
+      severity: "warning",
       message: "Pack does not contain paintable tilesets.",
     },
   ],

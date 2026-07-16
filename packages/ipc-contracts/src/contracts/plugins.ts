@@ -63,6 +63,19 @@ export const GameSettingsFormView = Schema.Struct({
   invalidMessage: Schema.String,
 });
 
+export const GameModeStarterView = Schema.Struct({
+  templateId: Schema.String,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+});
+
+export const GameModeCreatorChecklistFactView = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+  sources: Schema.Array(Schema.Literals(["game-mode", "map", "catalog", "asset", "visual-model"])),
+});
+
 export const PluginsListRequest = Schema.Struct({});
 export const PluginsListResponse = Schema.Struct({
   plugins: Schema.Array(PluginSummary),
@@ -112,6 +125,10 @@ export const GameModeView = Schema.Struct({
   label: Schema.String,
   runtimeSystemId: Schema.optional(Schema.String),
   authoringSettingsPanelId: Schema.optional(Schema.String),
+  authoringCapabilityId: Schema.optional(Schema.String),
+  rendererCapabilityId: Schema.optional(Schema.String),
+  readinessCapabilityId: Schema.optional(Schema.String),
+  starterCapabilityId: Schema.optional(Schema.String),
   gameSettingsFormId: Schema.optional(Schema.String),
   gameSettingsForm: Schema.optional(GameSettingsFormView),
   hudLayoutContributionId: Schema.optional(Schema.String),
@@ -122,6 +139,9 @@ export const GameModeView = Schema.Struct({
    * top via `resolveEffectiveHudLayout`.
    */
   hudLayout: Schema.optional(HudLayout),
+  mapValidatorId: Schema.optional(Schema.String),
+  starter: Schema.optional(GameModeStarterView),
+  creatorChecklistFacts: Schema.Array(GameModeCreatorChecklistFactView),
   hasAuthoringPanel: Schema.Boolean,
 });
 

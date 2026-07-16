@@ -8,6 +8,10 @@ import {
   PluginId,
   ProjectId,
 } from '@tileborne/core';
+import {
+  ProjectDefinitionProvenance,
+  WeaponCatalogEntry,
+} from '@tileborne/plugin-api';
 
 import { defineContract } from '../contract.js';
 import { createRegistry } from '../registry.js';
@@ -26,6 +30,24 @@ export const GameObjectCatalogEntryView = Schema.Struct({
   sourcePluginId: Schema.optional(PluginId),
 });
 export type GameObjectCatalogEntryView = typeof GameObjectCatalogEntryView.Type;
+
+/** Discoverable weapon picker entry; runtime data stays simulation-owned. */
+export const WeaponCatalogEntryView = Schema.Struct({
+  entry: WeaponCatalogEntry,
+  label: Schema.String,
+  origin: Schema.Literals(['plugin', 'project']),
+  sourcePluginId: Schema.optional(PluginId),
+  provenance: Schema.optional(ProjectDefinitionProvenance),
+});
+export type WeaponCatalogEntryView = typeof WeaponCatalogEntryView.Type;
+
+export const ProjectDefinitionKind = Schema.Literals([
+  'object-type',
+  'weapon',
+  'item',
+  'loot-table',
+]);
+export type ProjectDefinitionKind = typeof ProjectDefinitionKind.Type;
 
 /** Structured, navigable validation issue (its own ipc-contracts type). */
 export class CatalogValidationIssue extends Schema.Class<CatalogValidationIssue>(
@@ -54,6 +76,9 @@ export const CatalogResolveResponse = Schema.Struct({
   objectTypes: Schema.Array(GameObjectCatalogEntryView),
   lootTables: Schema.Array(LootTable),
   items: Schema.Array(ItemDefinition),
+  weapons: Schema.Array(WeaponCatalogEntryView),
+  /** Immutable creation provenance for every project-owned definition family. */
+  definitionProvenance: Schema.Record(Schema.String, ProjectDefinitionProvenance),
 });
 
 /** `tileborne:catalog:validate` — validate the project fragment merged with plugin catalogs. */
@@ -120,6 +145,37 @@ export const CatalogRemoveTypeResponse = Schema.Struct({
   removed: Schema.Boolean,
 });
 
+/** Genre-neutral CRUD boundary for every project-owned definition family. */
+export const CatalogUpsertDefinitionRequest = Schema.Struct({
+  projectId: ProjectId,
+  kind: ProjectDefinitionKind,
+  definitionJson: Schema.Unknown,
+  label: Schema.optional(Schema.String),
+});
+export const CatalogUpsertDefinitionResponse = CatalogUpsertTypeResponse;
+
+export const CatalogDuplicateDefinitionRequest = Schema.Struct({
+  projectId: ProjectId,
+  kind: ProjectDefinitionKind,
+  definitionId: Schema.String,
+  label: Schema.optional(Schema.String),
+});
+export const CatalogDuplicateDefinitionResponse = Schema.Struct({
+  duplicated: Schema.Boolean,
+  definitionId: Schema.optional(Schema.String),
+  report: CatalogValidationReport,
+});
+
+export const CatalogRemoveDefinitionRequest = Schema.Struct({
+  projectId: ProjectId,
+  kind: ProjectDefinitionKind,
+  definitionId: Schema.String,
+});
+export const CatalogRemoveDefinitionResponse = Schema.Struct({
+  removed: Schema.Boolean,
+  blockedBy: Schema.Array(Schema.String),
+});
+
 export const CatalogResolveContract = defineContract({
   channel: 'tileborne:catalog:resolve',
   request: CatalogResolveRequest,
@@ -163,6 +219,27 @@ export const CatalogRemoveTypeContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const CatalogUpsertDefinitionContract = defineContract({
+  channel: 'tileborne:catalog:upsertDefinition',
+  request: CatalogUpsertDefinitionRequest,
+  response: CatalogUpsertDefinitionResponse,
+  errors: IpcContractErrors,
+});
+
+export const CatalogDuplicateDefinitionContract = defineContract({
+  channel: 'tileborne:catalog:duplicateDefinition',
+  request: CatalogDuplicateDefinitionRequest,
+  response: CatalogDuplicateDefinitionResponse,
+  errors: IpcContractErrors,
+});
+
+export const CatalogRemoveDefinitionContract = defineContract({
+  channel: 'tileborne:catalog:removeDefinition',
+  request: CatalogRemoveDefinitionRequest,
+  response: CatalogRemoveDefinitionResponse,
+  errors: IpcContractErrors,
+});
+
 export const CatalogContracts = [
   CatalogResolveContract,
   CatalogValidateContract,
@@ -170,6 +247,9 @@ export const CatalogContracts = [
   CatalogExportContract,
   CatalogUpsertTypeContract,
   CatalogRemoveTypeContract,
+  CatalogUpsertDefinitionContract,
+  CatalogDuplicateDefinitionContract,
+  CatalogRemoveDefinitionContract,
 ] as const;
 
 export const CatalogIpcRegistry = createRegistry(CatalogContracts);

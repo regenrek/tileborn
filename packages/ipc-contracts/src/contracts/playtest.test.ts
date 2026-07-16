@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { makeMapId, makeProjectId } from "@tileborne/core";
 
 import {
+  PlaytestBehaviorDebugControlRequest,
+  PlaytestBehaviorDebugInspectResponse,
   PlaytestListResponse,
   PlaytestRuntimeMetrics,
   PlaytestSessionView,
@@ -106,24 +108,20 @@ describe("playtest IPC contracts", () => {
             { objectId: "crate-1", x: 15, y: 18, kind: "pickup", tier: "rare", available: true },
           ],
         },
-        recentEvents: [
+        gameplayEvents: [
           {
-            _tag: "PlayerKilled",
-            victimId: "player-2",
-            victimDisplayName: "Player 2",
-            killerId: "zone",
+            _tag: "EntityDefeated",
+            targetId: "player-2",
+            sourceId: "zone",
             tick: 120,
-            emittedAtMs: 1_714_000_000_100,
           },
           {
-            _tag: "PickupCollected",
-            playerId: "player-1",
-            playerDisplayName: "Player 1",
-            itemKind: "ammo-box",
-            tier: "common",
+            _tag: "ItemGranted",
+            targetId: "player-1",
+            itemId: "ammo-box:common",
+            slot: 0,
             quantity: 1,
             tick: 121,
-            emittedAtMs: 1_714_000_000_110,
           },
         ],
         gameOver: {
@@ -229,5 +227,47 @@ describe("playtest IPC contracts", () => {
     };
     roundTrip(PlaytestStartResponse, { session });
     roundTrip(PlaytestListResponse, { sessions: [session] });
+  });
+
+  it("round-trips bounded behavior inspector snapshots and debug controls", () => {
+    roundTrip(PlaytestBehaviorDebugControlRequest, {
+      sessionId,
+      command: "step",
+    });
+    roundTrip(PlaytestBehaviorDebugInspectResponse, {
+      snapshot: {
+        sessionId,
+        status: "paused",
+        tick: 12,
+        traces: [{
+          sequence: 4,
+          tick: 12,
+          behaviorId: `behavior:${UUID}`,
+          instanceId: `behavior:${UUID}`,
+          sourceKind: "visual",
+          eventId: "player.spawned",
+          event: { playerId: "player-1" },
+          stateBefore: { spawned: false },
+          commands: [{ kind: "entity.spawn", payload: { entityId: "player-1" } }],
+          state: { spawned: true },
+          steps: [
+            { kind: "branch", nodeId: "branch-1", branch: "then" },
+            { kind: "action", nodeId: "spawn-1", actionId: "entity.spawn" },
+          ],
+          source: {
+            sourceKind: "visual",
+            filePath: "behaviors/player-spawn.behavior.json",
+            nodeId: "spawn-1",
+          },
+        }],
+        diagnostics: [],
+        states: [{ behaviorId: `behavior:${UUID}`, state: { spawned: true } }],
+        lastReload: {
+          behaviorId: `behavior:${UUID}`,
+          status: "applied",
+          hash: "sha256:fixture",
+        },
+      },
+    });
   });
 });

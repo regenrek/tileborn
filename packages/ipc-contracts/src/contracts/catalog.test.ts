@@ -44,12 +44,15 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('catalog IPC contracts', () => {
   it('registers all catalog channels with the expected naming', () => {
-    expect(CatalogContracts).toHaveLength(6);
+    expect(CatalogContracts).toHaveLength(9);
     expect(Object.keys(CatalogIpcRegistry.byChannel).sort()).toEqual([
+      'tileborne:catalog:duplicateDefinition',
       'tileborne:catalog:export',
       'tileborne:catalog:import',
+      'tileborne:catalog:removeDefinition',
       'tileborne:catalog:removeType',
       'tileborne:catalog:resolve',
+      'tileborne:catalog:upsertDefinition',
       'tileborne:catalog:upsertType',
       'tileborne:catalog:validate',
     ]);
@@ -71,6 +74,8 @@ describe('catalog IPC contracts', () => {
       ],
       lootTables: [{ id: lootTableId, label: 'common', entries: [] }],
       items: [{ id: itemId, label: 'potion', category: 'consumable', data: {} }],
+      weapons: [],
+      definitionProvenance: {},
     });
   });
 
@@ -78,8 +83,10 @@ describe('catalog IPC contracts', () => {
     expect(() =>
       Schema.decodeUnknownSync(CatalogResolveContract.response)({
         objectTypes: [{ objectType: pluginGameObjectType, origin: 'engine' }],
-        lootTables: [],
-        items: [],
+      lootTables: [],
+      items: [],
+      weapons: [],
+      definitionProvenance: {},
       }),
     ).toThrow();
   });

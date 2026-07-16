@@ -8,6 +8,7 @@ import { EmptyResponse, IpcContractErrors } from './common.js';
 
 export const MapSummary = Schema.Struct({
   id: MapId,
+  label: Schema.optional(Schema.String),
   path: Schema.String,
   width: Schema.Number,
   height: Schema.Number,

@@ -1,10 +1,11 @@
 import { Schema } from "effect";
 
-import { MapId, ProjectId } from "@tileborne/core";
+import { BehaviorId, JsonObject, MapId, ProjectId } from "@tileborne/core";
 
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";
 import { IpcContractErrors } from "./common.js";
+import { GameplayEvent } from "./gameplay-event.js";
 
 export const PlaytestSessionId = Schema.String.check(
   Schema.isPattern(/^playtest:[0-9a-f-]{36}$/),
@@ -139,36 +140,6 @@ export const PlaytestRuntimeMinimap = Schema.Struct({
   ),
 });
 
-export const PlaytestRuntimeHudEvent = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal("PlayerKilled"),
-    victimId: Schema.String,
-    victimDisplayName: Schema.String,
-    killerId: Schema.String,
-    tick: Schema.Int,
-    emittedAtMs: Schema.Number,
-  }),
-  Schema.Struct({
-    _tag: Schema.Literal("PickupCollected"),
-    playerId: Schema.String,
-    playerDisplayName: Schema.String,
-    itemKind: Schema.String,
-    tier: Schema.String,
-    quantity: Schema.Int,
-    tick: Schema.Int,
-    emittedAtMs: Schema.Number,
-  }),
-  Schema.Struct({
-    _tag: Schema.Literal("GameOver"),
-    winnerId: Schema.String,
-    winnerDisplayName: Schema.String,
-    alivePlayers: Schema.Int,
-    totalPlayers: Schema.Int,
-    tickCount: Schema.Int,
-    emittedAtMs: Schema.Number,
-  }),
-]);
-
 export const PlaytestRuntimeGameOver = Schema.Struct({
   winnerId: Schema.String,
   winnerDisplayName: Schema.String,
@@ -183,7 +154,7 @@ export const PlaytestRuntimeHud = Schema.Struct({
   zoneStatus: Schema.optional(PlaytestRuntimeZoneStatus),
   scoreboard: Schema.optional(Schema.Array(PlaytestRuntimeScoreboardEntry)),
   minimap: Schema.optional(PlaytestRuntimeMinimap),
-  recentEvents: Schema.Array(PlaytestRuntimeHudEvent),
+  gameplayEvents: Schema.Array(GameplayEvent),
   gameOver: Schema.optional(PlaytestRuntimeGameOver),
 });
 
@@ -308,6 +279,77 @@ export const PlaytestListResponse = Schema.Struct({
   sessions: Schema.Array(PlaytestSessionView),
 });
 
+export const PlaytestBehaviorDebugSource = Schema.Struct({
+  sourceKind: Schema.Literals(["visual", "typescript"] as const),
+  filePath: Schema.String,
+  nodeId: Schema.optional(Schema.String),
+});
+
+export const PlaytestBehaviorDebugStep = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("branch"),
+    nodeId: Schema.String,
+    branch: Schema.Literals(["then", "else"] as const),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("action"),
+    nodeId: Schema.String,
+    actionId: Schema.String,
+  }),
+]);
+
+export const PlaytestBehaviorDebugTrace = Schema.Struct({
+  sequence: Schema.Int,
+  tick: Schema.Int,
+  behaviorId: BehaviorId,
+  instanceId: Schema.String,
+  sourceKind: Schema.Literals(["visual", "typescript"] as const),
+  eventId: Schema.String,
+  event: JsonObject,
+  stateBefore: JsonObject,
+  commands: Schema.Array(Schema.Struct({ kind: Schema.String, payload: JsonObject })),
+  state: JsonObject,
+  steps: Schema.Array(PlaytestBehaviorDebugStep),
+  source: PlaytestBehaviorDebugSource,
+});
+
+export const PlaytestBehaviorDebugDiagnostic = Schema.Struct({
+  code: Schema.String,
+  severity: Schema.Literals(["error", "warning"] as const),
+  message: Schema.String,
+  behaviorId: Schema.optional(BehaviorId),
+  eventId: Schema.optional(Schema.String),
+  suggestion: Schema.String,
+  details: Schema.optional(JsonObject),
+});
+
+export const PlaytestBehaviorReloadStatus = Schema.Struct({
+  behaviorId: BehaviorId,
+  status: Schema.Literals(["applied", "rejected-using-last-known-good"] as const),
+  hash: Schema.optional(Schema.String),
+  diagnostic: Schema.optional(PlaytestBehaviorDebugDiagnostic),
+});
+
+export const PlaytestBehaviorDebugSnapshot = Schema.Struct({
+  sessionId: PlaytestSessionId,
+  status: Schema.Literals(["running", "paused"] as const),
+  tick: Schema.Int,
+  traces: Schema.Array(PlaytestBehaviorDebugTrace).check(Schema.isMaxLength(256)),
+  diagnostics: Schema.Array(PlaytestBehaviorDebugDiagnostic).check(Schema.isMaxLength(256)),
+  states: Schema.Array(Schema.Struct({ behaviorId: BehaviorId, state: JsonObject })),
+  lastReload: Schema.optional(PlaytestBehaviorReloadStatus),
+});
+
+export const PlaytestBehaviorDebugInspectRequest = Schema.Struct({ sessionId: PlaytestSessionId });
+export const PlaytestBehaviorDebugInspectResponse = Schema.Struct({
+  snapshot: PlaytestBehaviorDebugSnapshot,
+});
+export const PlaytestBehaviorDebugControlRequest = Schema.Struct({
+  sessionId: PlaytestSessionId,
+  command: Schema.Literals(["pause", "step", "continue"] as const),
+});
+export const PlaytestBehaviorDebugControlResponse = PlaytestBehaviorDebugInspectResponse;
+
 export const PlaytestStartContract = defineContract({
   channel: "tileborne:playtest:start",
   request: PlaytestStartRequest,
@@ -329,10 +371,26 @@ export const PlaytestListContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const PlaytestBehaviorDebugInspectContract = defineContract({
+  channel: "tileborne:playtest:behaviorDebugInspect",
+  request: PlaytestBehaviorDebugInspectRequest,
+  response: PlaytestBehaviorDebugInspectResponse,
+  errors: IpcContractErrors,
+});
+
+export const PlaytestBehaviorDebugControlContract = defineContract({
+  channel: "tileborne:playtest:behaviorDebugControl",
+  request: PlaytestBehaviorDebugControlRequest,
+  response: PlaytestBehaviorDebugControlResponse,
+  errors: IpcContractErrors,
+});
+
 export const PlaytestContracts = [
   PlaytestStartContract,
   PlaytestStopContract,
   PlaytestListContract,
+  PlaytestBehaviorDebugInspectContract,
+  PlaytestBehaviorDebugControlContract,
 ] as const;
 
 export const PlaytestIpcRegistry = createRegistry(PlaytestContracts);

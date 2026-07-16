@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { ProjectId, ProjectManifest } from "@tileborne/core";
+import { MapId, ProjectId, ProjectManifest } from "@tileborne/core";
 
 import { defineContract } from "../contract.js";
 import { createRegistry } from "../registry.js";
@@ -34,6 +34,17 @@ export const ProjectsCreateRequest = Schema.Struct({
 });
 export const ProjectsCreateResponse = Schema.Struct({
   projectId: ProjectId,
+});
+
+export const ProjectsCreateGameRequest = Schema.Struct({
+  name: Schema.String,
+  gameType: Schema.Literal('battle-royale'),
+  idempotencyKey: Schema.String,
+});
+export const ProjectsCreateGameResponse = Schema.Struct({
+  projectId: ProjectId,
+  mapId: MapId,
+  resumed: Schema.Boolean,
 });
 
 export const ProjectsUpdateRequest = Schema.Struct({
@@ -73,6 +84,14 @@ export const ProjectsCreateContract = defineContract({
   response: ProjectsCreateResponse,
   errors: IpcContractErrors,
   meta: { timeoutMs: 30_000, requiresApproval: true },
+});
+
+export const ProjectsCreateGameContract = defineContract({
+  channel: 'tileborne:projects:createGame',
+  request: ProjectsCreateGameRequest,
+  response: ProjectsCreateGameResponse,
+  errors: IpcContractErrors,
+  meta: { timeoutMs: 60_000, requiresApproval: true },
 });
 
 export const ProjectsUpdateContract = defineContract({
@@ -141,6 +160,7 @@ export const ProjectsContracts = [
   ProjectsListContract,
   ProjectsGetContract,
   ProjectsCreateContract,
+  ProjectsCreateGameContract,
   ProjectsUpdateContract,
   ProjectsDeleteContract,
   ProjectsOpenContract,

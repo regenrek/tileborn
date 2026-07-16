@@ -29,6 +29,7 @@
     "@tileborne/core": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/sdk-tileset": "workspace:*",
+    "@tileborne/simulation": "workspace:*",
     "effect": "4.0.0-beta.70",
     "msgpackr": "2.0.1"
   },

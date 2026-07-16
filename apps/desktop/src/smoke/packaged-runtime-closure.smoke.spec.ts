@@ -94,7 +94,9 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     const buildDirectory = path.join(packagedAppRoot, '.vite', 'build');
     const buildEntries = (await readdir(buildDirectory)).filter((entry) => entry.endsWith('.cjs'));
     const bundleSource = (
-      await Promise.all(buildEntries.map((entry) => readFile(path.join(buildDirectory, entry), 'utf8')))
+      await Promise.all(
+        buildEntries.map((entry) => readFile(path.join(buildDirectory, entry), 'utf8')),
+      )
     ).join('\n');
 
     // CJS runtime edges are what Node resolves during packaged startup. A
@@ -108,17 +110,14 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     const nodeModules = path.join(packagedAppRoot, 'node_modules');
     expect(await findEscapingSymlinks(nodeModules)).toEqual([]);
 
-    const buildAssetsRoot = path.join(
-      copiedApp,
-      'Contents',
-      'Resources',
-      'game-host-build-assets',
-    );
-    await expect(Promise.all([
-      readFile(path.join(buildAssetsRoot, 'worker-entry.js'), 'utf8'),
-      readFile(path.join(buildAssetsRoot, 'behavior/workerd/service-worker.js'), 'utf8'),
-      readFile(path.join(buildAssetsRoot, 'wrangler.template.toml'), 'utf8'),
-    ])).resolves.toHaveLength(3);
+    const buildAssetsRoot = path.join(copiedApp, 'Contents', 'Resources', 'game-host-build-assets');
+    await expect(
+      Promise.all([
+        readFile(path.join(buildAssetsRoot, 'worker-entry.js'), 'utf8'),
+        readFile(path.join(buildAssetsRoot, 'behavior/workerd/service-worker.js'), 'utf8'),
+        readFile(path.join(buildAssetsRoot, 'wrangler.template.toml'), 'utf8'),
+      ]),
+    ).resolves.toHaveLength(3);
   });
 
   it('boots the copied app to a visible renderer using only its Resources directory', async () => {
@@ -160,29 +159,43 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
 
   it('ships from the packaged app with an external cwd and boots a copied artifact', async () => {
     const page = await waitForAppPage(app!, 60_000);
-    await expect.poll(async () => page.evaluate(async () => {
-      try {
-        await window.tileborne.projects.list({});
-        return true;
-      } catch {
-        return false;
-      }
-    }), { timeout: 30_000 }).toBe(true);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () => {
+            try {
+              await window.tileborne.projects.list({});
+              return true;
+            } catch {
+              return false;
+            }
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
 
-    const created = await page.evaluate(async () => window.tileborne.projects.createGame({
-      name: 'Packaged Ship Oracle',
-      gameType: 'battle-royale',
-      idempotencyKey: 'packaged-ship-oracle',
-    }));
+    const created = await page.evaluate(async () =>
+      window.tileborne.projects.createGame({
+        name: 'Packaged Ship Oracle',
+        gameType: 'battle-royale',
+        idempotencyKey: 'packaged-ship-oracle',
+      }),
+    );
     await navigateToRoute(page, `/projects/${created.projectId}`);
     await page.getByTestId('overview-ship-game').click();
     await expect.poll(async () => page.getByTestId('ship-game-dialog').isVisible()).toBe(true);
     await page.getByTestId('ship-game-start').click();
 
-    await expect.poll(async () => page.evaluate(async () => {
-      const { jobs } = await window.tileborne.jobs.list({});
-      return jobs.some(({ id }) => String(id).startsWith('job:'));
-    }), { timeout: 30_000 }).toBe(true);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () => {
+            const { jobs } = await window.tileborne.jobs.list({});
+            return jobs.some(({ id }) => String(id).startsWith('job:'));
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
     const jobId = await page.evaluate(async () => {
       const { jobs } = await window.tileborne.jobs.list({});
       const job = jobs.find(({ id }) => String(id).startsWith('job:'));
@@ -191,17 +204,22 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     });
     const completed = await waitForJob(page, jobId, 120_000);
     expect(completed.status, completed.errorMessage).toBe('Completed');
-    await expect.poll(async () => page.getByTestId('ship-logs').textContent()).toContain(
-      'Artifact verified',
-    );
+    await expect
+      .poll(async () => page.getByTestId('ship-logs').textContent())
+      .toContain('Artifact verified');
 
     const artifact = await page.evaluate(async (startupMapId) => {
       const { jobs } = await window.tileborne.jobs.list({});
       const result = jobs
         .filter(({ status }) => status === 'Completed')
         .map(({ result }) => result)
-        .find((value) => typeof value === 'object' && value !== null
-          && 'startupMapId' in value && value.startupMapId === startupMapId);
+        .find(
+          (value) =>
+            typeof value === 'object' &&
+            value !== null &&
+            'startupMapId' in value &&
+            value.startupMapId === startupMapId,
+        );
       if (typeof result !== 'object' || result === null || !('directory' in result)) {
         throw new Error('Packaged Ship Game artifact missing');
       }
@@ -229,7 +247,7 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
         }),
       });
       expect(room.status, await room.clone().text()).toBe(201);
-      const createdRoom = await room.json() as { readonly roomId: string };
+      const createdRoom = (await room.json()) as { readonly roomId: string };
       const summary = await host.fetch(`/playtest/${createdRoom.roomId}`);
       expect(summary.status, await summary.clone().text()).toBe(200);
       expect(await summary.json()).toMatchObject({ mapId: created.mapId });
@@ -237,5 +255,4 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
       await host.stop();
     }
   }, 240_000);
-
 });

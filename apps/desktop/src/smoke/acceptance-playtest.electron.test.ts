@@ -37,20 +37,17 @@ describe('acceptance: playtest', () => {
     }, projectId);
     await addBattleRoyaleSpawnAnchors(page, projectId, mapId);
 
-    await page.evaluate(
-      async (pluginId) => {
-        await window.tileborne.plugins.installBundledBattleRoyale({});
-        const { plugins } = await window.tileborne.plugins.list({});
-        const installed = plugins.find((plugin) => plugin.id === pluginId);
-        if (!installed) {
-          throw new Error('No plugin installed');
-        }
-        if (!installed.enabled) {
-          await window.tileborne.plugins.enable({ pluginId: installed.id });
-        }
-      },
-      BATTLE_ROYALE_PLUGIN_ID,
-    );
+    await page.evaluate(async (pluginId) => {
+      await window.tileborne.plugins.installBundledBattleRoyale({});
+      const { plugins } = await window.tileborne.plugins.list({});
+      const installed = plugins.find((plugin) => plugin.id === pluginId);
+      if (!installed) {
+        throw new Error('No plugin installed');
+      }
+      if (!installed.enabled) {
+        await window.tileborne.plugins.enable({ pluginId: installed.id });
+      }
+    }, BATTLE_ROYALE_PLUGIN_ID);
     await setProjectActiveGameMode(page, projectId, BATTLE_ROYALE_PLUGIN_ID);
   }, 60_000);
 

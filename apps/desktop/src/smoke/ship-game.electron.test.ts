@@ -69,7 +69,9 @@ describe('guided Ship Game (fresh-profile Electron)', () => {
     await expect
       .poll(async () => {
         const games = path.join(tileborneHome, 'cache', 'builds', 'games');
-        return (await readdir(games).catch(() => [])).filter((entry) => entry.includes('.building-'));
+        return (await readdir(games).catch(() => [])).filter((entry) =>
+          entry.includes('.building-'),
+        );
       })
       .toEqual([]);
 
@@ -120,9 +122,7 @@ describe('guided Ship Game (fresh-profile Electron)', () => {
         .map((job) => job.result)
         .filter(
           (result): result is Record<string, unknown> =>
-            typeof result === 'object' &&
-            result !== null &&
-            result.startupMapId === startupMapId,
+            typeof result === 'object' && result !== null && result.startupMapId === startupMapId,
         );
       return results.at(-1);
     }, created.mapId);
@@ -173,10 +173,17 @@ describe('guided Ship Game (fresh-profile Electron)', () => {
       const { jobs } = await window.tileborne.jobs.list({});
       const artifact = jobs
         .map((job) => job.result)
-        .find((result) => typeof result === 'object' && result !== null && 'bundlePath' in result) as Record<string, unknown>;
+        .find(
+          (result) => typeof result === 'object' && result !== null && 'bundlePath' in result,
+        ) as Record<string, unknown>;
       try {
         await window.tileborne.ship.launchPreview({
-          artifact: { ...artifact, directory: '/tmp', manifestPath: '/tmp/manifest.json', bundlePath: '/tmp/worker.js' } as never,
+          artifact: {
+            ...artifact,
+            directory: '/tmp',
+            manifestPath: '/tmp/manifest.json',
+            bundlePath: '/tmp/worker.js',
+          } as never,
         });
         return undefined;
       } catch (error) {

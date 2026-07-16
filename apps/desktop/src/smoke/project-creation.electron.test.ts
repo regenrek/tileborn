@@ -49,9 +49,11 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     const { page, tileborneHome } = smokeContext!;
     const projectName = 'Smoke Test Project';
 
-    const createButton = page.getByRole('button', {
-      name: /New game/i,
-    }).first();
+    const createButton = page
+      .getByRole('button', {
+        name: /New game/i,
+      })
+      .first();
     await expect(createButton).toBeVisible();
     await createButton.click();
 
@@ -90,21 +92,24 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
   it('resumes the same wizard request without duplicating project or starter map', async () => {
     const { page, tileborneHome } = smokeContext!;
     const name = 'Retry-safe BR Game';
-    const result = await page.evaluate(async ({ name }) => {
-      const request = {
-        name,
-        gameType: 'battle-royale' as const,
-        idempotencyKey: 'smoke-idempotency-request',
-      };
-      const first = await window.tileborne.projects.createGame(request);
-      const second = await window.tileborne.projects.createGame(request);
-      const projects = await window.tileborne.projects.list({});
-      return {
-        first,
-        second,
-        matchingProjects: projects.projects.filter((project) => project.name === name).length,
-      };
-    }, { name });
+    const result = await page.evaluate(
+      async ({ name }) => {
+        const request = {
+          name,
+          gameType: 'battle-royale' as const,
+          idempotencyKey: 'smoke-idempotency-request',
+        };
+        const first = await window.tileborne.projects.createGame(request);
+        const second = await window.tileborne.projects.createGame(request);
+        const projects = await window.tileborne.projects.list({});
+        return {
+          first,
+          second,
+          matchingProjects: projects.projects.filter((project) => project.name === name).length,
+        };
+      },
+      { name },
+    );
 
     expect(result.second).toMatchObject({
       projectId: result.first.projectId,
@@ -118,16 +123,15 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
 
   it('coordinates regular window close with cancel, failed save, discard, save and reopen', async () => {
     const context = smokeContext!;
-    const created = await context.page.evaluate(async () => window.tileborne.projects.createGame({
-      name: 'Lifecycle Smoke Game',
-      gameType: 'battle-royale',
-      idempotencyKey: 'lifecycle-smoke-request',
-    }));
-
-    await navigateToRoute(
-      context.page,
-      `/projects/${created.projectId}/maps/${created.mapId}`,
+    const created = await context.page.evaluate(async () =>
+      window.tileborne.projects.createGame({
+        name: 'Lifecycle Smoke Game',
+        gameType: 'battle-royale',
+        idempotencyKey: 'lifecycle-smoke-request',
+      }),
     );
+
+    await navigateToRoute(context.page, `/projects/${created.projectId}/maps/${created.mapId}`);
     const maxPlayers = context.page.getByTestId('br-setting-maxPlayers');
     await expect(maxPlayers).toBeVisible({ timeout: 15_000 });
     await maxPlayers.fill('31');
@@ -157,10 +161,7 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     expect(persistedAfterClose.properties).toMatchObject({
       '@tileborne-plugins/battle-royale': { maxPlayers: 31 },
     });
-    await navigateToRoute(
-      context.page,
-      `/projects/${created.projectId}/maps/${created.mapId}`,
-    );
+    await navigateToRoute(context.page, `/projects/${created.projectId}/maps/${created.mapId}`);
     await expect(context.page.getByTestId('br-setting-maxPlayers')).toHaveValue('31');
 
     await navigateToRoute(context.page, `/projects/${created.projectId}/game-content`);
@@ -206,10 +207,7 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     });
     await discardedWindowClosed;
     smokeContext = await reopenAfterRegularClose(context);
-    await navigateToRoute(
-      smokeContext.page,
-      `/projects/${created.projectId}/game-content`,
-    );
+    await navigateToRoute(smokeContext.page, `/projects/${created.projectId}/game-content`);
     await smokeContext.page.getByTestId('content-tab-items').click();
     await expect(smokeContext.page.getByTestId('content-name')).toHaveValue('');
     await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('clean');
@@ -237,11 +235,13 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
 
   it('coordinates app quit with renderer cancel and discard before relaunch', async () => {
     const context = smokeContext!;
-    const created = await context.page.evaluate(async () => window.tileborne.projects.createGame({
-      name: 'App Quit Smoke Game',
-      gameType: 'battle-royale',
-      idempotencyKey: 'app-quit-smoke-request',
-    }));
+    const created = await context.page.evaluate(async () =>
+      window.tileborne.projects.createGame({
+        name: 'App Quit Smoke Game',
+        gameType: 'battle-royale',
+        idempotencyKey: 'app-quit-smoke-request',
+      }),
+    );
     await navigateToRoute(context.page, `/projects/${created.projectId}/game-content`);
     await context.page.getByTestId('content-tab-items').click();
     await context.page.getByTestId('content-name').fill('Quit Guard Draft');
@@ -268,7 +268,9 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     await context.app.evaluate(({ app }) => app.quit());
     await appClosed;
     smokeContext = await launchElectron(context.tileborneHome);
-    await expect.poll(async () => smokeContext!.page.title(), { timeout: 10_000 }).toMatch(/Tileborne/i);
+    await expect
+      .poll(async () => smokeContext!.page.title(), { timeout: 10_000 })
+      .toMatch(/Tileborne/i);
   });
 
   it('completes an IPC ping round-trip after project creation', async () => {

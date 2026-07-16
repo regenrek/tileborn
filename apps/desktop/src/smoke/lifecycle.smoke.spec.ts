@@ -83,9 +83,7 @@ describe.sequential('desktop smoke lifecycle', () => {
   it('1. app boot — main window appears and renderer mounts', async () => {
     const { page } = smokeContext!;
     await expect(page).toHaveTitle(/Tileborne/i);
-    await expect(
-      page.getByRole('heading', { name: /Tileborne|Projects/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Tileborne|Projects/i })).toBeVisible();
   });
 
   it('2. IPC ping — window.tileborne.system.ping responds', async () => {
@@ -179,9 +177,9 @@ describe.sequential('desktop smoke lifecycle', () => {
     const { tileborneHome } = smokeContext!;
 
     const saved = await readMapJson(tileborneHome, projectId, mapId);
-    const tileLayer = (saved.layers as Array<{ kind: string; chunks?: Array<{ tiles: number[] }> }>).find(
-      (layer) => layer.kind === 'tile',
-    );
+    const tileLayer = (
+      saved.layers as Array<{ kind: string; chunks?: Array<{ tiles: number[] }> }>
+    ).find((layer) => layer.kind === 'tile');
     expect(tileLayer).toBeDefined();
     expect(tileLayer?.chunks?.[0]?.tiles.length).toBeGreaterThan(0);
   });

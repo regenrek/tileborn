@@ -28,20 +28,27 @@ describe('acceptance: Example Arena game-mode extension contract', () => {
     resolveMainEntry();
     context = await launchElectron(await createTileborneHome());
     const { page } = context;
-    projectId = await page.evaluate(async () =>
-      (await window.tileborne.projects.create({ name: 'Example Arena Contract Proof' })).projectId,
+    projectId = await page.evaluate(
+      async () =>
+        (await window.tileborne.projects.create({ name: 'Example Arena Contract Proof' }))
+          .projectId,
     );
-    mapId = await page.evaluate(async (pid) =>
-      (await window.tileborne.maps.create({ projectId: pid, width: 32, height: 32 })).mapId,
-    projectId);
-    await page.evaluate(async ({ path, pluginId }) => {
-      const installed = await window.tileborne.plugins.install({
-        source: { _tag: 'local', path },
-      });
-      if (!installed.plugin.enabled) {
-        await window.tileborne.plugins.enable({ pluginId });
-      }
-    }, { path: resolveExampleArenaInstallPath(), pluginId: EXAMPLE_ARENA_PLUGIN_ID });
+    mapId = await page.evaluate(
+      async (pid) =>
+        (await window.tileborne.maps.create({ projectId: pid, width: 32, height: 32 })).mapId,
+      projectId,
+    );
+    await page.evaluate(
+      async ({ path, pluginId }) => {
+        const installed = await window.tileborne.plugins.install({
+          source: { _tag: 'local', path },
+        });
+        if (!installed.plugin.enabled) {
+          await window.tileborne.plugins.enable({ pluginId });
+        }
+      },
+      { path: resolveExampleArenaInstallPath(), pluginId: EXAMPLE_ARENA_PLUGIN_ID },
+    );
     await setProjectActiveGameMode(page, projectId, EXAMPLE_ARENA_PLUGIN_ID);
   }, 120_000);
 
@@ -59,34 +66,47 @@ describe('acceptance: Example Arena game-mode extension contract', () => {
     await page.getByTestId('mode-setting-arenaRadius').fill('48');
     await page.getByTestId('mode-setting-enemyCount').fill('10');
     await page.getByTestId('mode-setting-save').click();
-    await expect.poll(async () => page.evaluate(async ({ pid, mid, pluginId }) => {
-      const { map } = await window.tileborne.maps.get({ projectId: pid, mapId: mid });
-      return map.properties[pluginId];
-    }, { pid: projectId, mid: mapId, pluginId: EXAMPLE_ARENA_PLUGIN_ID })).toEqual({
-      arenaRadius: 48,
-      enemyCount: 10,
-    });
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          async ({ pid, mid, pluginId }) => {
+            const { map } = await window.tileborne.maps.get({ projectId: pid, mapId: mid });
+            return map.properties[pluginId];
+          },
+          { pid: projectId, mid: mapId, pluginId: EXAMPLE_ARENA_PLUGIN_ID },
+        ),
+      )
+      .toEqual({
+        arenaRadius: 48,
+        enemyCount: 10,
+      });
   });
 
   it('passes readiness, starts playtest, and completes Ship through generic paths', async () => {
     const { page } = context!;
-    const readiness = await page.evaluate(async ({ pid, mid }) =>
-      window.tileborne.readiness.check({ projectId: pid, mapId: mid, purpose: 'playtest' }),
-    { pid: projectId, mid: mapId });
+    const readiness = await page.evaluate(
+      async ({ pid, mid }) =>
+        window.tileborne.readiness.check({ projectId: pid, mapId: mid, purpose: 'playtest' }),
+      { pid: projectId, mid: mapId },
+    );
     expect(readiness.report.ok).toBe(true);
 
-    const session = await page.evaluate(async ({ pid, mid }) =>
-      (await window.tileborne.playtest.start({ projectId: pid, mapId: mid })).session,
-    { pid: projectId, mid: mapId });
+    const session = await page.evaluate(
+      async ({ pid, mid }) =>
+        (await window.tileborne.playtest.start({ projectId: pid, mapId: mid })).session,
+      { pid: projectId, mid: mapId },
+    );
     expect(session.status).toBe('Running');
     expect(session.activePlugins).toEqual([EXAMPLE_ARENA_PLUGIN_ID]);
     await page.evaluate(async (sessionId) => {
       await window.tileborne.playtest.stop({ sessionId });
     }, session.id);
 
-    const { jobId } = await page.evaluate(async ({ pid, mid }) =>
-      window.tileborne.ship.start({ projectId: pid, startupMapId: mid, target: 'cloudflare' }),
-    { pid: projectId, mid: mapId });
+    const { jobId } = await page.evaluate(
+      async ({ pid, mid }) =>
+        window.tileborne.ship.start({ projectId: pid, startupMapId: mid, target: 'cloudflare' }),
+      { pid: projectId, mid: mapId },
+    );
     const job = await waitForJob(page, jobId, 90_000);
     expect(job.status, job.errorMessage).toBe('Completed');
 

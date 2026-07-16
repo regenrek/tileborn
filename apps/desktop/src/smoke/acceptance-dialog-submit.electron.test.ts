@@ -58,7 +58,9 @@ describe('acceptance: generate map dialog submit', () => {
 
     await expect(page.getByTestId('generate-map-submit')).toBeEnabled({ timeout: 20_000 });
     await page.getByTestId('generate-map-submit').click();
-    await expect(page.getByRole('dialog', { name: /Generate map/i })).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByRole('dialog', { name: /Generate map/i })).toBeHidden({
+      timeout: 20_000,
+    });
 
     const sidebarMaps = page.getByTestId('sidebar-map-list');
     await expect(sidebarMaps.locator('a')).not.toHaveCount(0, { timeout: 5_000 });

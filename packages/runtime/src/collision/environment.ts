@@ -1,6 +1,6 @@
-import { CollisionLayer, makeLayerId, Size2D, TileChunk } from "@tileborne/core";
+import { CollisionLayer, makeLayerId, Size2D, TileChunk } from '@tileborne/core';
 
-import type { CollisionRect } from "./rect.js";
+import type { CollisionRect } from './rect.js';
 
 export class CollisionEnvironment {
   readonly blockingRects: readonly CollisionRect[];
@@ -40,7 +40,10 @@ export const buildCollisionLayerFromRects = (
   rects: readonly CollisionRect[],
   tileSize: number,
 ): CollisionLayer => {
-  const tilesByChunk = new Map<string, { readonly chunkX: number; readonly chunkY: number; tiles: number[] }>();
+  const tilesByChunk = new Map<
+    string,
+    { readonly chunkX: number; readonly chunkY: number; tiles: number[] }
+  >();
   for (const rect of rects) {
     const startTileX = Math.floor(rect.x / tileSize);
     const startTileY = Math.floor(rect.y / tileSize);
@@ -66,8 +69,8 @@ export const buildCollisionLayerFromRects = (
     }
   }
   return new CollisionLayer({
-    id: makeLayerId("00000000-0000-4000-8000-000000000002"),
-    name: "collision-fixture",
+    id: makeLayerId('00000000-0000-4000-8000-000000000002'),
+    name: 'collision-fixture',
     visible: true,
     opacity: 1,
     chunks: [...tilesByChunk.values()].map(

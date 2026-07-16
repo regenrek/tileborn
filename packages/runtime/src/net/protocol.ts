@@ -2,10 +2,10 @@
  * @deprecated for multiplayer hot path; only used by legacy RuntimeMessage clients,
  * game-host custom-plugin tests/smoke helpers, and non-Battle-Royale runtime callers.
  */
-import { Schema } from "effect";
-import { pack, unpack } from "msgpackr";
+import { Schema } from 'effect';
+import { pack, unpack } from 'msgpackr';
 
-import { InputCommand } from "../input/input.js";
+import { InputCommand } from '../input/input.js';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -14,7 +14,7 @@ const OptionalJson = Schema.OptionFromOptional(JsonValue);
 const OptionalJsonArray = Schema.OptionFromOptional(Schema.Array(JsonValue));
 const OptionalString = Schema.OptionFromOptional(Schema.String);
 
-export class Welcome extends Schema.TaggedClass<Welcome>()("Welcome", {
+export class Welcome extends Schema.TaggedClass<Welcome>()('Welcome', {
   entityId: Schema.String,
   slot: Schema.Int,
   mapWidth: Schema.Int,
@@ -23,71 +23,71 @@ export class Welcome extends Schema.TaggedClass<Welcome>()("Welcome", {
   seed: Schema.Union([Schema.String, Schema.Number]),
 }) {}
 
-export class ClientReady extends Schema.TaggedClass<ClientReady>()("ClientReady", {}) {}
+export class ClientReady extends Schema.TaggedClass<ClientReady>()('ClientReady', {}) {}
 
-export class InputBatch extends Schema.TaggedClass<InputBatch>()("InputBatch", {
+export class InputBatch extends Schema.TaggedClass<InputBatch>()('InputBatch', {
   commands: Schema.Array(InputCommand),
 }) {}
 
-export class SnapshotFull extends Schema.TaggedClass<SnapshotFull>()("SnapshotFull", {
+export class SnapshotFull extends Schema.TaggedClass<SnapshotFull>()('SnapshotFull', {
   players: OptionalJsonArray,
   pickups: OptionalJsonArray,
   decoys: OptionalJsonArray,
   safeZone: OptionalJson,
 }) {}
 
-export class SnapshotDelta extends Schema.TaggedClass<SnapshotDelta>()("SnapshotDelta", {
+export class SnapshotDelta extends Schema.TaggedClass<SnapshotDelta>()('SnapshotDelta', {
   tick: Schema.Int,
   baseTick: Schema.Int,
   diff: OptionalJsonArray,
 }) {}
 
-export class PlayerJoined extends Schema.TaggedClass<PlayerJoined>()("PlayerJoined", {
+export class PlayerJoined extends Schema.TaggedClass<PlayerJoined>()('PlayerJoined', {
   playerId: Schema.String,
   displayName: OptionalString,
 }) {}
 
-export class PlayerLeft extends Schema.TaggedClass<PlayerLeft>()("PlayerLeft", {
+export class PlayerLeft extends Schema.TaggedClass<PlayerLeft>()('PlayerLeft', {
   playerId: Schema.String,
   reason: Schema.String,
 }) {}
 
-export class WireInputCommand extends Schema.TaggedClass<WireInputCommand>()("InputCommand", {
+export class WireInputCommand extends Schema.TaggedClass<WireInputCommand>()('InputCommand', {
   playerId: Schema.String,
   frame: Schema.Int,
   command: JsonValue,
 }) {}
 
-export class Heartbeat extends Schema.TaggedClass<Heartbeat>()("Heartbeat", {}) {}
+export class Heartbeat extends Schema.TaggedClass<Heartbeat>()('Heartbeat', {}) {}
 
-export class WireError extends Schema.TaggedClass<WireError>()("Error", {
+export class WireError extends Schema.TaggedClass<WireError>()('Error', {
   code: Schema.Int,
   message: Schema.String,
 }) {}
 
-export class Events extends Schema.TaggedClass<Events>()("Events", {
+export class Events extends Schema.TaggedClass<Events>()('Events', {
   events: OptionalJsonArray,
 }) {}
 
-export class Ping extends Schema.TaggedClass<Ping>()("Ping", {
+export class Ping extends Schema.TaggedClass<Ping>()('Ping', {
   sentAtMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class Pong extends Schema.TaggedClass<Pong>()("Pong", {
+export class Pong extends Schema.TaggedClass<Pong>()('Pong', {
   sentAtMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class Chat extends Schema.TaggedClass<Chat>()("Chat", {
+export class Chat extends Schema.TaggedClass<Chat>()('Chat', {
   text: Schema.String,
   playerId: OptionalString,
 }) {}
 
-export class MatchEnd extends Schema.TaggedClass<MatchEnd>()("MatchEnd", {
+export class MatchEnd extends Schema.TaggedClass<MatchEnd>()('MatchEnd', {
   winner: OptionalString,
   results: OptionalJsonArray,
 }) {}
 
-export class ServerNotice extends Schema.TaggedClass<ServerNotice>()("ServerNotice", {
+export class ServerNotice extends Schema.TaggedClass<ServerNotice>()('ServerNotice', {
   message: Schema.String,
 }) {}
 
@@ -112,12 +112,12 @@ export const RuntimeMessage = Schema.Union([
 
 export type RuntimeMessage = Schema.Schema.Type<typeof RuntimeMessage>;
 
-export class ProtocolError extends Schema.TaggedErrorClass<ProtocolError>()("ProtocolError", {
+export class ProtocolError extends Schema.TaggedErrorClass<ProtocolError>()('ProtocolError', {
   message: Schema.String,
   cause: Schema.OptionFromOptional(Schema.Unknown),
 }) {}
 
-export class TransportError extends Schema.TaggedErrorClass<TransportError>()("TransportError", {
+export class TransportError extends Schema.TaggedErrorClass<TransportError>()('TransportError', {
   message: Schema.String,
   code: Schema.OptionFromOptional(Schema.Number),
   cause: Schema.OptionFromOptional(Schema.Unknown),

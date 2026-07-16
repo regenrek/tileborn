@@ -1,2 +1,2 @@
-export * from "./catalog-registry.js";
-export * from "./loader.js";
+export * from './catalog-registry.js';
+export * from './loader.js';

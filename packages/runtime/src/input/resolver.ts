@@ -8,10 +8,10 @@ import {
   type InputMap,
   type RawTrigger,
   type Vector2State,
-} from "@tileborne/core";
-import { Option } from "effect";
+} from '@tileborne/core';
+import { Option } from 'effect';
 
-import { InputState, type InputEvent } from "./input.js";
+import { InputState, type InputEvent } from './input.js';
 
 /**
  * Analog stick magnitude below which an axis trigger is treated as released
@@ -23,7 +23,7 @@ const AXIS_DEADZONE = 0.2;
 const clampAxis = (value: number): number =>
   Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
 
-const roleSignValue = (role: "x+" | "x-" | "y+" | "y-"): number => (role.endsWith("+") ? 1 : -1);
+const roleSignValue = (role: 'x+' | 'x-' | 'y+' | 'y-'): number => (role.endsWith('+') ? 1 : -1);
 
 /**
  * The single engine place where raw input becomes neutral meaning (ADR-0024).
@@ -72,19 +72,19 @@ export class InputResolver {
 
   private triggerHeld(trigger: RawTrigger): boolean {
     switch (trigger._tag) {
-      case "key":
+      case 'key':
         return this.state.pressedKeys.has(trigger.code);
-      case "mouseButton":
+      case 'mouseButton':
         return this.state.pressedMouseButtons.has(trigger.button);
-      case "axis": {
+      case 'axis': {
         const value = this.axisValue(trigger.axis);
         return trigger.sign > 0 ? value > AXIS_DEADZONE : value < -AXIS_DEADZONE;
       }
-      case "pointer":
+      case 'pointer':
         return true;
       // No raw gamepad-button source exists in the InputEvent union yet; such a
       // binding decodes + persists but resolves inactive until a source lands.
-      case "gamepadButton":
+      case 'gamepadButton':
         return false;
     }
   }
@@ -112,12 +112,12 @@ export class InputResolver {
       if (role === undefined) {
         continue;
       }
-      const toX = role.startsWith("x");
+      const toX = role.startsWith('x');
       if (oneDimensional && !toX) {
         continue;
       }
       const contribution =
-        binding.trigger._tag === "axis"
+        binding.trigger._tag === 'axis'
           ? this.axisValue(binding.trigger.axis)
           : this.triggerHeld(binding.trigger)
             ? roleSignValue(role)
@@ -132,7 +132,7 @@ export class InputResolver {
   }
 
   private resolvePointer(bindings: readonly InputBinding[]): Vector2State | undefined {
-    const hasPointer = bindings.some((binding) => binding.trigger._tag === "pointer");
+    const hasPointer = bindings.some((binding) => binding.trigger._tag === 'pointer');
     return hasPointer ? { x: this.state.mouse.x, y: this.state.mouse.y } : undefined;
   }
 
@@ -162,19 +162,19 @@ export class InputResolver {
     for (const declaration of this.effectiveMap.actions) {
       const actionBindings = byAction.get(declaration.action as string) ?? [];
       switch (declaration.valueKind) {
-        case "digital": {
+        case 'digital': {
           const resolved = this.resolveDigital(declaration.action, actionBindings);
           digital.set(declaration.action, resolved);
           nextDigital.set(declaration.action as string, resolved.pressed);
           break;
         }
-        case "analog1d":
+        case 'analog1d':
           analog.set(declaration.action, this.resolveAnalog(actionBindings, true));
           break;
-        case "analog2d":
+        case 'analog2d':
           analog.set(declaration.action, this.resolveAnalog(actionBindings, false));
           break;
-        case "pointer": {
+        case 'pointer': {
           const resolved = this.resolvePointer(actionBindings);
           if (resolved !== undefined) {
             pointer.set(declaration.action, resolved);

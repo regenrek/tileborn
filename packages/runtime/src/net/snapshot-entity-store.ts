@@ -1,10 +1,13 @@
-import { type InterpolatedFullState, SnapshotInterpolator } from "./snapshot-interpolator.js";
+import { type InterpolatedFullState, SnapshotInterpolator } from './snapshot-interpolator.js';
 
 export interface SnapshotEntityWithId {
   readonly id: string;
 }
 
-export type SnapshotFrameMerger = (previousFullState: unknown | undefined, frame: unknown) => unknown;
+export type SnapshotFrameMerger = (
+  previousFullState: unknown | undefined,
+  frame: unknown,
+) => unknown;
 export type SnapshotFrameTimestampExtractor = (frame: unknown) => number | undefined;
 
 export interface SnapshotEntityStoreOptions {
@@ -14,10 +17,10 @@ export interface SnapshotEntityStoreOptions {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const isSnapshotEntityWithId = (value: unknown): value is SnapshotEntityWithId =>
-  isRecord(value) && typeof value.id === "string";
+  isRecord(value) && typeof value.id === 'string';
 
 const numericProperty = (value: unknown, keys: readonly string[]): number | undefined => {
   if (!isRecord(value)) {
@@ -25,7 +28,7 @@ const numericProperty = (value: unknown, keys: readonly string[]): number | unde
   }
   for (const key of keys) {
     const candidate = value[key];
-    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
       return candidate;
     }
   }
@@ -33,7 +36,7 @@ const numericProperty = (value: unknown, keys: readonly string[]): number | unde
 };
 
 const extractServerTimestamp = (frame: unknown): number | undefined =>
-  numericProperty(frame, ["serverTimestampMs"]);
+  numericProperty(frame, ['serverTimestampMs']);
 
 const currentClientTimestampMs = (): number => globalThis.performance?.now() ?? Date.now();
 

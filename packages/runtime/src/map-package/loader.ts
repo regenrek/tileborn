@@ -10,8 +10,8 @@ import {
   RuntimeMapPackageVisuals,
   RuntimeObjectPlacement,
   decodePersistedTileborneMapJson,
-} from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * Worker-safe runtime map package loader (ADR-0030).
@@ -26,22 +26,20 @@ import { Option, Result, Schema } from "effect";
  */
 
 /** Reads one package-relative entry; `undefined` when the entry is missing. */
-export type RuntimeMapPackageEntryReader = (
-  entryPath: string,
-) => Promise<Uint8Array | undefined>;
+export type RuntimeMapPackageEntryReader = (entryPath: string) => Promise<Uint8Array | undefined>;
 
 /** Canonical on-disk layout: one JSON file per package section + manifest. */
-export const RUNTIME_MAP_PACKAGE_MANIFEST_FILE = "manifest.json";
+export const RUNTIME_MAP_PACKAGE_MANIFEST_FILE = 'manifest.json';
 export const RUNTIME_MAP_PACKAGE_ENTRY_FILES = {
-  map: "map.json",
-  catalog: "catalog.json",
-  placements: "placements.json",
-  settings: "settings.json",
-  content: "content.json",
-  behaviors: "behaviors.json",
-  visuals: "visuals.json",
-  assets: "assets.json",
-  modeData: "mode-data.json",
+  map: 'map.json',
+  catalog: 'catalog.json',
+  placements: 'placements.json',
+  settings: 'settings.json',
+  content: 'content.json',
+  behaviors: 'behaviors.json',
+  visuals: 'visuals.json',
+  assets: 'assets.json',
+  modeData: 'mode-data.json',
 } as const;
 export type RuntimeMapPackageEntryName = keyof typeof RUNTIME_MAP_PACKAGE_ENTRY_FILES;
 
@@ -52,14 +50,14 @@ class LoadFailure extends Error {
   }
 }
 
-const fail = (reason: "schema" | "version" | "integrity", message: string): never => {
+const fail = (reason: 'schema' | 'version' | 'integrity', message: string): never => {
   throw new LoadFailure(new RuntimeMapPackageInvalidError({ reason, message }));
 };
 
 const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
   const buffer = new Uint8Array(bytes).buffer;
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", buffer);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
 /** Hash one entry payload into the manifest's `sha256:<hex>` format. */
@@ -70,7 +68,7 @@ const parseJson = (entryName: string, bytes: Uint8Array): unknown => {
   try {
     return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch (error) {
-    return fail("schema", `entry ${entryName} is not valid JSON: ${String(error)}`);
+    return fail('schema', `entry ${entryName} is not valid JSON: ${String(error)}`);
   }
 };
 
@@ -78,7 +76,7 @@ const decodeEntry = <A, I>(entryName: string, schema: Schema.Codec<A, I>, value:
   const decoded = Schema.decodeUnknownOption(schema)(value);
   return Option.isSome(decoded)
     ? decoded.value
-    : fail("schema", `entry ${entryName} does not match the package schema`);
+    : fail('schema', `entry ${entryName} does not match the package schema`);
 };
 
 const CatalogEntries = Schema.Array(RuntimeCatalogEntry);
@@ -103,7 +101,7 @@ export const loadRuntimeMapPackage = async (
   try {
     const manifestBytes = await readEntry(RUNTIME_MAP_PACKAGE_MANIFEST_FILE);
     if (manifestBytes === undefined) {
-      return fail("schema", `package has no ${RUNTIME_MAP_PACKAGE_MANIFEST_FILE}`);
+      return fail('schema', `package has no ${RUNTIME_MAP_PACKAGE_MANIFEST_FILE}`);
     }
     const manifest = decodeEntry(
       RUNTIME_MAP_PACKAGE_MANIFEST_FILE,
@@ -112,7 +110,7 @@ export const loadRuntimeMapPackage = async (
     );
     if (manifest.schemaVersion !== RUNTIME_MAP_PACKAGE_SCHEMA_VERSION) {
       return fail(
-        "version",
+        'version',
         `package schema version ${manifest.schemaVersion} is not the supported version ${RUNTIME_MAP_PACKAGE_SCHEMA_VERSION}`,
       );
     }
@@ -121,7 +119,7 @@ export const loadRuntimeMapPackage = async (
       const fileName = RUNTIME_MAP_PACKAGE_ENTRY_FILES[entryName];
       const bytes = await readEntry(fileName);
       if (bytes === undefined) {
-        return fail("schema", `package is missing entry ${fileName}`);
+        return fail('schema', `package is missing entry ${fileName}`);
       }
       // Integrity is MANDATORY (M2 review, N2): every section entry the
       // loader reads must be pinned in the manifest — a missing hash is an
@@ -129,55 +127,51 @@ export const loadRuntimeMapPackage = async (
       const expected = manifest.entryHashes[entryName];
       if (expected === undefined) {
         return fail(
-          "integrity",
+          'integrity',
           `manifest has no entry hash for ${fileName} — every package section must be hashed`,
         );
       }
       const actual = await hashRuntimeMapPackageEntry(bytes);
       if (actual !== expected) {
         return fail(
-          "integrity",
+          'integrity',
           `entry ${fileName} hash ${actual} does not match manifest ${expected}`,
         );
       }
       return parseJson(fileName, bytes);
     };
 
-    let map: RuntimeMapPackage["map"];
-    const mapJson = await readVerified("map");
+    let map: RuntimeMapPackage['map'];
+    const mapJson = await readVerified('map');
     try {
       map = decodePersistedTileborneMapJson(mapJson);
     } catch (error) {
       if (error instanceof LoadFailure) {
         throw error;
       }
-      return fail("schema", `entry map.json is not a valid map: ${String(error)}`);
+      return fail('schema', `entry map.json is not a valid map: ${String(error)}`);
     }
 
     return Result.succeed(
       new RuntimeMapPackage({
         manifest,
         map,
-        catalog: decodeEntry("catalog.json", CatalogEntries, await readVerified("catalog")),
-        placements: decodeEntry("placements.json", Placements, await readVerified("placements")),
-        settings: decodeEntry("settings.json", NamespacedSections, await readVerified("settings")),
-        content: decodeEntry("content.json", JsonObject, await readVerified("content")),
+        catalog: decodeEntry('catalog.json', CatalogEntries, await readVerified('catalog')),
+        placements: decodeEntry('placements.json', Placements, await readVerified('placements')),
+        settings: decodeEntry('settings.json', NamespacedSections, await readVerified('settings')),
+        content: decodeEntry('content.json', JsonObject, await readVerified('content')),
         behaviors: decodeEntry(
-          "behaviors.json",
+          'behaviors.json',
           RuntimeBehaviorPackage,
-          await readVerified("behaviors"),
+          await readVerified('behaviors'),
         ),
         visuals: decodeEntry(
-          "visuals.json",
+          'visuals.json',
           RuntimeMapPackageVisuals,
-          await readVerified("visuals"),
+          await readVerified('visuals'),
         ),
-        assets: decodeEntry("assets.json", AssetEntries, await readVerified("assets")),
-        modeData: decodeEntry(
-          "mode-data.json",
-          NamespacedSections,
-          await readVerified("modeData"),
-        ),
+        assets: decodeEntry('assets.json', AssetEntries, await readVerified('assets')),
+        modeData: decodeEntry('mode-data.json', NamespacedSections, await readVerified('modeData')),
       }),
     );
   } catch (error) {

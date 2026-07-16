@@ -1,9 +1,9 @@
 /**
  * @deprecated Use SnapshotEntityStore for plugin-owned opaque snapshot frames.
  */
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { SnapshotDelta, SnapshotFull } from "./protocol.js";
+import type { SnapshotDelta, SnapshotFull } from './protocol.js';
 
 type PlayerRecord = Record<string, unknown>;
 
@@ -15,7 +15,7 @@ export class SnapshotWorldState {
   private readonly players = new Map<number, PlayerRecord>();
 
   apply(message: SnapshotFull | SnapshotDelta): void {
-    if (message._tag === "SnapshotFull") {
+    if (message._tag === 'SnapshotFull') {
       this.players.clear();
       for (const player of Option.getOrElse(message.players, () => [])) {
         const entityId = Number((player as { readonly entityId: number }).entityId);
@@ -26,7 +26,10 @@ export class SnapshotWorldState {
 
     for (const change of Option.getOrElse(message.diff, () => [])) {
       const entityId = Number((change as { readonly entityId: number }).entityId);
-      this.players.set(entityId, { ...(this.players.get(entityId) ?? {}), ...(change as PlayerRecord) });
+      this.players.set(entityId, {
+        ...(this.players.get(entityId) ?? {}),
+        ...(change as PlayerRecord),
+      });
     }
   }
 

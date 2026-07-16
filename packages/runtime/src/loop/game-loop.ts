@@ -1,4 +1,4 @@
-import { DeterministicClock } from "../clock/deterministic-clock.js";
+import { DeterministicClock } from '../clock/deterministic-clock.js';
 
 const ACCUMULATOR_EPSILON_MS = 1e-9;
 
@@ -31,7 +31,7 @@ export class GameLoop {
   constructor(options: GameLoopOptions) {
     this.tickRate = options.tickRate ?? 60;
     if (!Number.isFinite(this.tickRate) || this.tickRate <= 0) {
-      throw new RangeError("tickRate must be a positive finite number");
+      throw new RangeError('tickRate must be a positive finite number');
     }
     this.stepMs = 1000 / this.tickRate;
     this.maxCatchupTicks = options.maxCatchupTicks ?? 5;
@@ -63,7 +63,7 @@ export class GameLoop {
 
   step(ticks = 1): number {
     if (!Number.isInteger(ticks) || ticks < 0) {
-      throw new RangeError("step ticks must be a non-negative integer");
+      throw new RangeError('step ticks must be a non-negative integer');
     }
     for (let index = 0; index < ticks; index += 1) {
       this.currentTick += 1;
@@ -81,7 +81,10 @@ export class GameLoop {
     this.lastTimeMs = nowMs;
     this.accumulatorMs += deltaMs;
     let updates = 0;
-    while (this.accumulatorMs + ACCUMULATOR_EPSILON_MS >= this.stepMs && updates < this.maxCatchupTicks) {
+    while (
+      this.accumulatorMs + ACCUMULATOR_EPSILON_MS >= this.stepMs &&
+      updates < this.maxCatchupTicks
+    ) {
       this.accumulatorMs -= this.stepMs;
       if (Math.abs(this.accumulatorMs) <= ACCUMULATOR_EPSILON_MS) {
         this.accumulatorMs = 0;

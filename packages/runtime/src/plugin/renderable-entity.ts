@@ -41,7 +41,7 @@ export interface RenderableEntityAnchor {
 export interface RenderableEntityTextStyle {
   readonly fontFamily?: string;
   readonly fontSize?: number;
-  readonly fontWeight?: "normal" | "bold";
+  readonly fontWeight?: 'normal' | 'bold';
   readonly fill?: number;
   readonly stroke?: number;
   readonly strokeWidth?: number;

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 export const Button = {
   Up: 1 << 0,
@@ -14,41 +14,47 @@ export const Button = {
 
 export type ButtonMask = number;
 
-export class MousePosition extends Schema.Class<MousePosition>("MousePosition")({
+export class MousePosition extends Schema.Class<MousePosition>('MousePosition')({
   x: Schema.Number,
   y: Schema.Number,
 }) {}
 
-export class GamepadAxis extends Schema.Class<GamepadAxis>("GamepadAxis")({
+export class GamepadAxis extends Schema.Class<GamepadAxis>('GamepadAxis')({
   gamepadId: Schema.String,
   axis: Schema.Int,
   value: Schema.Number,
 }) {}
 
-export class KeyInputEvent extends Schema.TaggedClass<KeyInputEvent>()("key", {
+export class KeyInputEvent extends Schema.TaggedClass<KeyInputEvent>()('key', {
   tick: Schema.Int,
   code: Schema.String,
   pressed: Schema.Boolean,
 }) {}
 
-export class MouseMoveInputEvent extends Schema.TaggedClass<MouseMoveInputEvent>()("mouseMove", {
+export class MouseMoveInputEvent extends Schema.TaggedClass<MouseMoveInputEvent>()('mouseMove', {
   tick: Schema.Int,
   x: Schema.Number,
   y: Schema.Number,
 }) {}
 
-export class MouseButtonInputEvent extends Schema.TaggedClass<MouseButtonInputEvent>()("mouseButton", {
-  tick: Schema.Int,
-  button: Schema.Int,
-  pressed: Schema.Boolean,
-}) {}
+export class MouseButtonInputEvent extends Schema.TaggedClass<MouseButtonInputEvent>()(
+  'mouseButton',
+  {
+    tick: Schema.Int,
+    button: Schema.Int,
+    pressed: Schema.Boolean,
+  },
+) {}
 
-export class GamepadAxisInputEvent extends Schema.TaggedClass<GamepadAxisInputEvent>()("gamepadAxis", {
-  tick: Schema.Int,
-  gamepadId: Schema.String,
-  axis: Schema.Int,
-  value: Schema.Number,
-}) {}
+export class GamepadAxisInputEvent extends Schema.TaggedClass<GamepadAxisInputEvent>()(
+  'gamepadAxis',
+  {
+    tick: Schema.Int,
+    gamepadId: Schema.String,
+    axis: Schema.Int,
+    value: Schema.Number,
+  },
+) {}
 
 export const InputEvent = Schema.Union([
   KeyInputEvent,
@@ -59,7 +65,7 @@ export const InputEvent = Schema.Union([
 
 export type InputEvent = Schema.Schema.Type<typeof InputEvent>;
 
-export class InputCommand extends Schema.Class<InputCommand>("InputCommand")({
+export class InputCommand extends Schema.Class<InputCommand>('InputCommand')({
   tick: Schema.Int,
   buttons: Schema.Int,
   moveX: Schema.Number,
@@ -76,46 +82,46 @@ export class InputState {
 
   apply(event: InputEvent): void {
     switch (event._tag) {
-      case "key":
+      case 'key':
         if (event.pressed) {
           this.pressedKeys.add(event.code);
         } else {
           this.pressedKeys.delete(event.code);
         }
         break;
-      case "mouseMove":
+      case 'mouseMove':
         this.mouse = new MousePosition({ x: event.x, y: event.y });
         break;
-      case "mouseButton":
+      case 'mouseButton':
         if (event.pressed) {
           this.pressedMouseButtons.add(event.button);
         } else {
           this.pressedMouseButtons.delete(event.button);
         }
         break;
-      case "gamepadAxis":
+      case 'gamepadAxis':
         this.gamepadAxes.set(`${event.gamepadId}:${event.axis}`, event.value);
         break;
     }
   }
 
   snapshot(tick: number): InputCommand {
-    const left = this.pressedKeys.has("KeyA") || this.pressedKeys.has("ArrowLeft");
-    const right = this.pressedKeys.has("KeyD") || this.pressedKeys.has("ArrowRight");
-    const up = this.pressedKeys.has("KeyW") || this.pressedKeys.has("ArrowUp");
-    const down = this.pressedKeys.has("KeyS") || this.pressedKeys.has("ArrowDown");
-    const moveX = clampAxis((right ? 1 : 0) - (left ? 1 : 0) + (this.gamepadAxes.get("0:0") ?? 0));
-    const moveY = clampAxis((down ? 1 : 0) - (up ? 1 : 0) + (this.gamepadAxes.get("0:1") ?? 0));
+    const left = this.pressedKeys.has('KeyA') || this.pressedKeys.has('ArrowLeft');
+    const right = this.pressedKeys.has('KeyD') || this.pressedKeys.has('ArrowRight');
+    const up = this.pressedKeys.has('KeyW') || this.pressedKeys.has('ArrowUp');
+    const down = this.pressedKeys.has('KeyS') || this.pressedKeys.has('ArrowDown');
+    const moveX = clampAxis((right ? 1 : 0) - (left ? 1 : 0) + (this.gamepadAxes.get('0:0') ?? 0));
+    const moveY = clampAxis((down ? 1 : 0) - (up ? 1 : 0) + (this.gamepadAxes.get('0:1') ?? 0));
     let buttons = 0;
     if (up) buttons |= Button.Up;
     if (down) buttons |= Button.Down;
     if (left) buttons |= Button.Left;
     if (right) buttons |= Button.Right;
     if (this.pressedMouseButtons.has(0)) buttons |= Button.Fire;
-    if (this.pressedKeys.has("KeyR")) buttons |= Button.Reload;
-    if (this.pressedKeys.has("KeyE")) buttons |= Button.Interact;
-    if (this.pressedKeys.has("KeyQ")) buttons |= Button.Drop;
-    if (this.pressedKeys.has("Space")) buttons |= Button.Ability;
+    if (this.pressedKeys.has('KeyR')) buttons |= Button.Reload;
+    if (this.pressedKeys.has('KeyE')) buttons |= Button.Interact;
+    if (this.pressedKeys.has('KeyQ')) buttons |= Button.Drop;
+    if (this.pressedKeys.has('Space')) buttons |= Button.Ability;
     return new InputCommand({
       tick,
       buttons,
@@ -161,4 +167,5 @@ export class InputBuffer {
   }
 }
 
-const clampAxis = (value: number): number => Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
+const clampAxis = (value: number): number =>
+  Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));

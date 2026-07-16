@@ -1,4 +1,4 @@
-import type { RenderableEntity } from "../plugin/renderable-entity.js";
+import type { RenderableEntity } from '../plugin/renderable-entity.js';
 
 const lerp = (from: number, to: number, alpha: number): number => from + (to - from) * alpha;
 

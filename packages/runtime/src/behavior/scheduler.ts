@@ -148,7 +148,10 @@ const DEBUG_COMMAND_PREFIX = '__tileborne.debug.';
 const partitionExecutionCommands = (
   sourceKind: LoadedBehaviorModule['artifact']['sourceKind'],
   commands: ReadonlyArray<RuntimeBehaviorCommand>,
-): { readonly commands: ReadonlyArray<RuntimeBehaviorCommand>; readonly steps: ReadonlyArray<BehaviorExecutionStep> } => {
+): {
+  readonly commands: ReadonlyArray<RuntimeBehaviorCommand>;
+  readonly steps: ReadonlyArray<BehaviorExecutionStep>;
+} => {
   const executable: RuntimeBehaviorCommand[] = [];
   const steps: BehaviorExecutionStep[] = [];
   for (const command of commands) {
@@ -157,7 +160,9 @@ const partitionExecutionCommands = (
       continue;
     }
     if (sourceKind !== 'visual') {
-      throw new TypeError(`reserved runtime command ${command.kind} is only emitted by the visual compiler`);
+      throw new TypeError(
+        `reserved runtime command ${command.kind} is only emitted by the visual compiler`,
+      );
     }
     const nodeId = command.payload.nodeId;
     if (typeof nodeId !== 'string' || nodeId.length === 0) {
@@ -534,7 +539,8 @@ export class DeterministicBehaviorScheduler {
       if (elapsed > this.#budgets.maxHandlerMs) {
         throw new Error(`handler exceeded ${this.#budgets.maxHandlerMs}ms`);
       }
-      if (!rawCommands.every(isCommand)) throw new TypeError('handler returned a malformed command');
+      if (!rawCommands.every(isCommand))
+        throw new TypeError('handler returned a malformed command');
       if (!rawCommands.every((command) => isSerializable(command.payload))) {
         throw new TypeError('handler returned a command with a non-serializable payload');
       }

@@ -4,14 +4,14 @@ import {
   type GameObjectTypeId,
   type PluginId,
   RuntimeCatalogEntry,
-} from "@tileborne/core";
+} from '@tileborne/core';
 import {
   DuplicateCatalogObjectTypeError,
   mergeGameObjectCatalogs,
   type CatalogRegistryError,
   type MergeGameObjectCatalogsDeps,
-} from "@tileborne/plugin-api";
-import { Result } from "effect";
+} from '@tileborne/plugin-api';
+import { Result } from 'effect';
 
 /**
  * Runtime game-object catalog registry (ADR-0030).
@@ -97,7 +97,9 @@ export const buildRuntimeCatalogRegistry = (
     const pluginId = originByTypeId.get(objectType.id);
     return new RuntimeCatalogEntry({
       origin:
-        pluginId === undefined ? { _tag: "project" as const } : { _tag: "plugin" as const, pluginId },
+        pluginId === undefined
+          ? { _tag: 'project' as const }
+          : { _tag: 'plugin' as const, pluginId },
       objectType,
     });
   });
@@ -119,7 +121,7 @@ export const buildRuntimeCatalogRegistry = (
     seenIds.add(objectType.id);
     entries.push(
       new RuntimeCatalogEntry({
-        origin: { _tag: "project" as const },
+        origin: { _tag: 'project' as const },
         objectType,
       }),
     );

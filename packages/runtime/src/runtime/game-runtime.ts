@@ -1,22 +1,22 @@
-import { Context, Effect, Layer, Stream } from "effect";
+import { Context, Effect, Layer, Stream } from 'effect';
 
-import { DeterministicClock } from "../clock/deterministic-clock.js";
-import { World } from "../ecs/world.js";
-import { InputBuffer } from "../input/input.js";
-import { GameLoop, type GameLoopOptions } from "../loop/game-loop.js";
-import { SystemScheduler, type System, type SystemContext } from "../ecs/systems.js";
-import type { RuntimeAssetManifest } from "../assets/runtime-asset-loader.js";
-import type { NetClient } from "../net/client.js";
-import type { RuntimeTransportError } from "../net/transport.js";
-import type { TransportError } from "../net/protocol.js";
-import type { PluginHostApi } from "../plugin/plugin-host.js";
+import { DeterministicClock } from '../clock/deterministic-clock.js';
+import { World } from '../ecs/world.js';
+import { InputBuffer } from '../input/input.js';
+import { GameLoop, type GameLoopOptions } from '../loop/game-loop.js';
+import { SystemScheduler, type System, type SystemContext } from '../ecs/systems.js';
+import type { RuntimeAssetManifest } from '../assets/runtime-asset-loader.js';
+import type { NetClient } from '../net/client.js';
+import type { RuntimeTransportError } from '../net/transport.js';
+import type { TransportError } from '../net/protocol.js';
+import type { PluginHostApi } from '../plugin/plugin-host.js';
 import {
   capturePreviousPositions,
   rendererAssetError,
   rendererInitError,
   type RendererAdapter,
   type RendererError,
-} from "../renderer/renderer-adapter.js";
+} from '../renderer/renderer-adapter.js';
 
 export interface GameRuntimeConfig {
   readonly tickRate?: number;
@@ -42,7 +42,9 @@ export interface GameRuntimeState {
 }
 
 export interface GameRuntimeApi {
-  readonly init: (config?: GameRuntimeConfig) => Effect.Effect<GameRuntimeState, RendererError | RuntimeTransportError>;
+  readonly init: (
+    config?: GameRuntimeConfig,
+  ) => Effect.Effect<GameRuntimeState, RendererError | RuntimeTransportError>;
   readonly registerSystem: (system: System) => Effect.Effect<void>;
   readonly start: () => Effect.Effect<void>;
   readonly pause: () => Effect.Effect<void>;
@@ -52,10 +54,9 @@ export interface GameRuntimeApi {
   readonly state: () => Effect.Effect<GameRuntimeState>;
 }
 
-export class GameRuntime extends Context.Service<
-  GameRuntime,
-  GameRuntimeApi
->()("@tileborne/runtime/GameRuntime") {
+export class GameRuntime extends Context.Service<GameRuntime, GameRuntimeApi>()(
+  '@tileborne/runtime/GameRuntime',
+) {
   static readonly layer = Layer.sync(GameRuntime, () => makeGameRuntime());
 }
 
@@ -64,7 +65,7 @@ export const makeGameRuntime = (): GameRuntimeApi => {
 
   const ensureState = (): GameRuntimeState => {
     if (!runtimeState) {
-      throw new Error("runtime is not initialized");
+      throw new Error('runtime is not initialized');
     }
     return runtimeState;
   };
@@ -80,10 +81,13 @@ export const makeGameRuntime = (): GameRuntimeApi => {
       const pluginHost = config.pluginHost;
 
       if (renderer && config.rendererContainer === undefined) {
-        yield* rendererInitError("rendererContainer is required when renderer is configured");
+        yield* rendererInitError('rendererContainer is required when renderer is configured');
       }
       if (renderer && config.assetManifest === undefined) {
-        yield* rendererAssetError("<missing>", "assetManifest is required when renderer is configured");
+        yield* rendererAssetError(
+          '<missing>',
+          'assetManifest is required when renderer is configured',
+        );
       }
 
       const loopOptions: GameLoopOptions = {
@@ -106,7 +110,9 @@ export const makeGameRuntime = (): GameRuntimeApi => {
               },
             }),
         ...(config.tickRate === undefined ? {} : { tickRate: config.tickRate }),
-        ...(config.maxCatchupTicks === undefined ? {} : { maxCatchupTicks: config.maxCatchupTicks }),
+        ...(config.maxCatchupTicks === undefined
+          ? {}
+          : { maxCatchupTicks: config.maxCatchupTicks }),
       };
       const loop = new GameLoop(loopOptions);
       runtimeState = {
@@ -130,9 +136,13 @@ export const makeGameRuntime = (): GameRuntimeApi => {
       if (netClient && config.netUrl !== undefined) {
         yield* netClient.connect(config.netUrl);
         Effect.runFork(
-          netClient.receive().pipe(
-            Stream.runForEach((message) => (pluginHost ? pluginHost.dispatchMessage(message) : Effect.succeed(void 0))),
-          ),
+          netClient
+            .receive()
+            .pipe(
+              Stream.runForEach((message) =>
+                pluginHost ? pluginHost.dispatchMessage(message) : Effect.succeed(void 0),
+              ),
+            ),
         );
       }
 
@@ -141,36 +151,43 @@ export const makeGameRuntime = (): GameRuntimeApi => {
 
   return {
     init,
-    registerSystem: (system: System) => Effect.sync(() => {
-      ensureState().systems.add(system);
-    }),
-    start: () => Effect.sync(() => {
-      ensureState().loop.start();
-    }),
-    pause: () => Effect.sync(() => {
-      ensureState().loop.pause();
-    }),
-    step: (ticks = 1) => Effect.sync(() => {
-      return ensureState().loop.step(ticks);
-    }),
-    resume: () => Effect.sync(() => {
-      ensureState().loop.resume();
-    }),
-    stop: () => Effect.gen(function* () {
-      const state = ensureState();
-      state.loop.stop();
-      if (state.pluginHost) {
-        yield* state.pluginHost.dispatchShutdown();
-      }
-      if (state.netClient) {
-        yield* state.netClient.close();
-      }
-      if (state.renderer) {
-        yield* state.renderer.dispose();
-      }
-    }),
-    state: () => Effect.sync(() => {
-      return ensureState();
-    }),
+    registerSystem: (system: System) =>
+      Effect.sync(() => {
+        ensureState().systems.add(system);
+      }),
+    start: () =>
+      Effect.sync(() => {
+        ensureState().loop.start();
+      }),
+    pause: () =>
+      Effect.sync(() => {
+        ensureState().loop.pause();
+      }),
+    step: (ticks = 1) =>
+      Effect.sync(() => {
+        return ensureState().loop.step(ticks);
+      }),
+    resume: () =>
+      Effect.sync(() => {
+        ensureState().loop.resume();
+      }),
+    stop: () =>
+      Effect.gen(function* () {
+        const state = ensureState();
+        state.loop.stop();
+        if (state.pluginHost) {
+          yield* state.pluginHost.dispatchShutdown();
+        }
+        if (state.netClient) {
+          yield* state.netClient.close();
+        }
+        if (state.renderer) {
+          yield* state.renderer.dispose();
+        }
+      }),
+    state: () =>
+      Effect.sync(() => {
+        return ensureState();
+      }),
   };
 };

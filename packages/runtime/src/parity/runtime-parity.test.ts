@@ -1,14 +1,14 @@
-import { Size2D } from "@tileborne/core";
-import { Effect, Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { Size2D } from '@tileborne/core';
+import { Effect, Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   buildCollisionLayerFromRects,
   CollisionEnvironment,
   createCollisionSystem,
-} from "../collision/index.js";
-import { PositionComponent, VelocityComponent } from "../ecs/components.js";
-import { Button, InputCommand, KeyInputEvent } from "../input/input.js";
+} from '../collision/index.js';
+import { PositionComponent, VelocityComponent } from '../ecs/components.js';
+import { Button, InputCommand, KeyInputEvent } from '../input/input.js';
 import {
   Chat,
   ClientReady,
@@ -24,27 +24,27 @@ import {
   SnapshotDelta,
   SnapshotFull,
   Welcome,
-} from "../net/protocol.js";
-import { SnapshotWorldState } from "../net/snapshot-state.js";
-import { makePluginHost } from "../plugin/plugin-host.js";
-import { makeGameRuntime } from "../runtime/game-runtime.js";
+} from '../net/protocol.js';
+import { SnapshotWorldState } from '../net/snapshot-state.js';
+import { makePluginHost } from '../plugin/plugin-host.js';
+import { makeGameRuntime } from '../runtime/game-runtime.js';
 import {
   createPlayerInputMovementSystem,
   MOVEMENT_TICK_RATE_HZ,
   PLAYER_FOOTPRINT_OFFSET_Y,
   PLAYER_FOOTPRINT_RADIUS,
   PLAYER_SPEED_PX_PER_SECOND,
-} from "../simulation/player-movement.js";
+} from '../simulation/player-movement.js';
 
 const INITIAL_X = 100;
 const INITIAL_Y = 100;
 const STEP_SECONDS = 1 / MOVEMENT_TICK_RATE_HZ;
 const TILE_SIZE = 32;
 
-describe("player movement parity", () => {
-  it("maps WASD input to the same straight-line trajectory for W across 60 ticks", async () => {
+describe('player movement parity', () => {
+  it('maps WASD input to the same straight-line trajectory for W across 60 ticks', async () => {
     const ticks = 60;
-    const result = await runMovementParity([{ tick: 1, code: "KeyW", pressed: true }], ticks);
+    const result = await runMovementParity([{ tick: 1, code: 'KeyW', pressed: true }], ticks);
     // docs/03-runtime-game-host.md section 7.2 step 2: position integrates vx/vy * dt each tick.
     const expectedY = INITIAL_Y + -1 * PLAYER_SPEED_PX_PER_SECOND * STEP_SECONDS * ticks;
 
@@ -52,21 +52,21 @@ describe("player movement parity", () => {
     expect(result.y).toBeCloseTo(expectedY);
   });
 
-  it("maps WASD input to the same straight-line trajectory for D across 60 ticks", async () => {
+  it('maps WASD input to the same straight-line trajectory for D across 60 ticks', async () => {
     const ticks = 60;
-    const result = await runMovementParity([{ tick: 1, code: "KeyD", pressed: true }], ticks);
+    const result = await runMovementParity([{ tick: 1, code: 'KeyD', pressed: true }], ticks);
     const expectedX = INITIAL_X + 1 * PLAYER_SPEED_PX_PER_SECOND * STEP_SECONDS * ticks;
 
     expect(result.x).toBeCloseTo(expectedX);
     expect(result.y).toBeCloseTo(INITIAL_Y);
   });
 
-  it("normalizes diagonal WASD movement", async () => {
+  it('normalizes diagonal WASD movement', async () => {
     const ticks = 60;
     const result = await runMovementParity(
       [
-        { tick: 1, code: "KeyW", pressed: true },
-        { tick: 1, code: "KeyD", pressed: true },
+        { tick: 1, code: 'KeyW', pressed: true },
+        { tick: 1, code: 'KeyD', pressed: true },
       ],
       ticks,
     );
@@ -77,7 +77,7 @@ describe("player movement parity", () => {
     expect(result.y).toBeCloseTo(INITIAL_Y - normalizedDelta);
   });
 
-  it("keeps Tileborne button masks aligned with runtime constants", () => {
+  it('keeps Tileborne button masks aligned with runtime constants', () => {
     expect(Button.Up).toBe(1 << 0);
     expect(Button.Down).toBe(1 << 1);
     expect(Button.Left).toBe(1 << 2);
@@ -90,7 +90,7 @@ describe("player movement parity", () => {
   });
 });
 
-describe("circle-rect collision parity", () => {
+describe('circle-rect collision parity', () => {
   // Expected values are derived by hand from:
   //   - resolveCircleRect, mirrored at packages/runtime/src/collision/circle-rect.ts;
   //   - docs/03-runtime-game-host.md section 7.2 step 2 (integrate, then resolve);
@@ -101,7 +101,7 @@ describe("circle-rect collision parity", () => {
   // The runtime under test must reproduce these values; using resolveCircleRect inside
   // the test to compute "expected" would be tautological.
 
-  it("clamps a player trying to move into a tile-aligned blocking footprint from the left", async () => {
+  it('clamps a player trying to move into a tile-aligned blocking footprint from the left', async () => {
     // Input rect (100, 96, 32, 32) covers tiles (3,3) and (4,3) -> blocking rects at
     // (96,96,32,32) and (128,96,32,32). Player starts at (102, 100), moves +x.
     // 1. Integrate: dx = 260 * 1/60 = 4.333..., next = (106.333, 100).
@@ -113,7 +113,7 @@ describe("circle-rect collision parity", () => {
     const blockingRect = { x: 100, y: 96, width: 32, height: 32 };
     const position = await runCollisionParity({
       initial: { x: 102, y: 100 },
-      input: { tick: 1, code: "KeyD", pressed: true },
+      input: { tick: 1, code: 'KeyD', pressed: true },
       environment: collisionEnvironmentFromRect(blockingRect),
     });
 
@@ -121,7 +121,7 @@ describe("circle-rect collision parity", () => {
     expect(position.y).toBeCloseTo(100);
   });
 
-  it("clamps a player trying to move into a tile-aligned blocking footprint from above", async () => {
+  it('clamps a player trying to move into a tile-aligned blocking footprint from above', async () => {
     // Input rect (112, 100, 32, 32) covers tiles (3,3) (4,3) (3,4) (4,4) -> four 32x32
     // blocking rects at {96,128} x {96,128}. Player at (128, 90), moves +y.
     // 1. Integrate: dy = 4.333..., next = (128, 94.333).
@@ -136,7 +136,7 @@ describe("circle-rect collision parity", () => {
     const blockingRect = { x: 112, y: 100, width: 32, height: 32 };
     const position = await runCollisionParity({
       initial: { x: 128, y: 90 },
-      input: { tick: 1, code: "KeyS", pressed: true },
+      input: { tick: 1, code: 'KeyS', pressed: true },
       environment: collisionEnvironmentFromRect(blockingRect),
     });
 
@@ -145,8 +145,8 @@ describe("circle-rect collision parity", () => {
   });
 });
 
-describe("snapshot delta parity", () => {
-  it("applies SnapshotDelta changes to match an equivalent SnapshotFull world state", () => {
+describe('snapshot delta parity', () => {
+  it('applies SnapshotDelta changes to match an equivalent SnapshotFull world state', () => {
     const full = new SnapshotFull({
       players: Option.some([
         { entityId: 1, x: 10, y: 20, health: 100 },
@@ -183,7 +183,7 @@ describe("snapshot delta parity", () => {
     expect(fromDelta.playerEntries()).toEqual(fromFull.playerEntries());
   });
 
-  it("keeps SnapshotDelta application idempotent for repeated identical changes", () => {
+  it('keeps SnapshotDelta application idempotent for repeated identical changes', () => {
     const full = new SnapshotFull({
       players: Option.some([{ entityId: 1, x: 10, y: 20, health: 100 }]),
       pickups: Option.none(),
@@ -208,7 +208,7 @@ describe("snapshot delta parity", () => {
   });
 });
 
-describe("wire protocol round-trip parity", () => {
+describe('wire protocol round-trip parity', () => {
   for (const message of runtimeMessages) {
     it(`round-trips ${message._tag} through the canonical runtime codec`, () => {
       expect(decodeMessage(encodeMessage(message))).toEqual(message);
@@ -216,19 +216,24 @@ describe("wire protocol round-trip parity", () => {
   }
 });
 
-describe("plugin hook ordering parity", () => {
-  it("dispatches three plugins in insertion order for 60 ticks", async () => {
+describe('plugin hook ordering parity', () => {
+  it('dispatches three plugins in insertion order for 60 ticks', async () => {
     const host = makePluginHost();
     const calls: string[] = [];
-    for (const id of ["alpha", "bravo", "charlie"]) {
-      await Effect.runPromise(host.register({ id, onTick: () => Effect.sync(() => calls.push(id)) }));
+    for (const id of ['alpha', 'bravo', 'charlie']) {
+      await Effect.runPromise(
+        host.register({ id, onTick: () => Effect.sync(() => calls.push(id)) }),
+      );
     }
     const runtime = makeGameRuntime();
     await Effect.runPromise(runtime.init({ pluginHost: host }));
 
     await Effect.runPromise(runtime.step(60));
 
-    const expected = Array.from({ length: 60 * 3 }, (_, index) => ["alpha", "bravo", "charlie"][index % 3]!);
+    const expected = Array.from(
+      { length: 60 * 3 },
+      (_, index) => ['alpha', 'bravo', 'charlie'][index % 3]!,
+    );
     expect(calls).toEqual(expected);
   });
 });
@@ -276,19 +281,31 @@ const runCollisionParity = async (options: {
   return Option.getOrThrow(state.world.getComponent(entity, PositionComponent));
 };
 
-const collisionEnvironmentFromRect = (
-  rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-): CollisionEnvironment => {
+const collisionEnvironmentFromRect = (rect: {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}): CollisionEnvironment => {
   const collisionLayer = buildCollisionLayerFromRects([rect], TILE_SIZE);
   const tileSize = new Size2D({ width: TILE_SIZE, height: TILE_SIZE });
   return CollisionEnvironment.fromCollisionLayer(collisionLayer, tileSize);
 };
 
 const runtimeMessages: readonly RuntimeMessage[] = [
-  new Welcome({ entityId: "entity-1", slot: 1, mapWidth: 128, mapHeight: 64, snapshotHz: 20, seed: 123 }),
+  new Welcome({
+    entityId: 'entity-1',
+    slot: 1,
+    mapWidth: 128,
+    mapHeight: 64,
+    snapshotHz: 20,
+    seed: 123,
+  }),
   new ClientReady({}),
   new InputBatch({
-    commands: [new InputCommand({ tick: 1, buttons: Button.Up, moveX: 0, moveY: -1, aimX: 10, aimY: 20 })],
+    commands: [
+      new InputCommand({ tick: 1, buttons: Button.Up, moveX: 0, moveY: -1, aimX: 10, aimY: 20 }),
+    ],
   }),
   new SnapshotFull({
     players: Option.some([{ entityId: 1, x: 10, y: 20 }]),
@@ -297,10 +314,13 @@ const runtimeMessages: readonly RuntimeMessage[] = [
     safeZone: Option.some({ centerX: 32, centerY: 32, radiusPx: 64 }),
   }),
   new SnapshotDelta({ tick: 2, baseTick: 1, diff: Option.some([{ entityId: 1, x: 11 }]) }),
-  new Events({ events: Option.some([{ type: "pickup", entityId: 1 }]) }),
+  new Events({ events: Option.some([{ type: 'pickup', entityId: 1 }]) }),
   new Ping({ sentAtMs: Option.some(100) }),
   new Pong({ sentAtMs: Option.some(100) }),
-  new Chat({ text: "hello", playerId: Option.some("player-1") }),
-  new MatchEnd({ winner: Option.some("player-1"), results: Option.some([{ playerId: "player-1", rank: 1 }]) }),
-  new ServerNotice({ message: "Server restart in 60 s" }),
+  new Chat({ text: 'hello', playerId: Option.some('player-1') }),
+  new MatchEnd({
+    winner: Option.some('player-1'),
+    results: Option.some([{ playerId: 'player-1', rank: 1 }]),
+  }),
+  new ServerNotice({ message: 'Server restart in 60 s' }),
 ];

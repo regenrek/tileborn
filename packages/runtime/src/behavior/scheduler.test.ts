@@ -137,18 +137,28 @@ describe('deterministic behavior scheduler', () => {
       },
     });
     scheduler.register(
-      loaded(A, {
-        id: 'example.visual-debug',
-        sourceKind: 'visual',
-        state: { count: 0 },
-        on: {
-          test: ({ state }) => [
-            { kind: '__tileborne.debug.branch', payload: { nodeId: 'node:branch', branch: 'then' } },
-            { kind: '__tileborne.debug.action', payload: { nodeId: 'node:action', actionId: 'state.set' } },
-            state.set('count', 1),
-          ],
+      loaded(
+        A,
+        {
+          id: 'example.visual-debug',
+          sourceKind: 'visual',
+          state: { count: 0 },
+          on: {
+            test: ({ state }) => [
+              {
+                kind: '__tileborne.debug.branch',
+                payload: { nodeId: 'node:branch', branch: 'then' },
+              },
+              {
+                kind: '__tileborne.debug.action',
+                payload: { nodeId: 'node:action', actionId: 'state.set' },
+              },
+              state.set('count', 1),
+            ],
+          },
         },
-      }, 'visual'),
+        'visual',
+      ),
     );
 
     await scheduler.dispatch('test', { run: 1 });
@@ -178,17 +188,19 @@ describe('deterministic behavior scheduler', () => {
 
   it('rejects TypeScript attempts to spoof reserved visual trace commands', async () => {
     const scheduler = new DeterministicBehaviorScheduler({ budgets: { maxHandlerMs: 1_000 } });
-    scheduler.register(loaded(A, {
-      id: 'example.reserved',
-      sourceKind: 'typescript',
-      state: {},
-      on: {
-        test: () => ({
-          kind: '__tileborne.debug.action',
-          payload: { nodeId: 'spoofed', actionId: 'unsafe' },
-        }),
-      },
-    }));
+    scheduler.register(
+      loaded(A, {
+        id: 'example.reserved',
+        sourceKind: 'typescript',
+        state: {},
+        on: {
+          test: () => ({
+            kind: '__tileborne.debug.action',
+            payload: { nodeId: 'spoofed', actionId: 'unsafe' },
+          }),
+        },
+      }),
+    );
 
     expect(await scheduler.dispatch('test', {})).toEqual([]);
     expect(scheduler.diagnostics.at(-1)).toMatchObject({ code: 'TBRUNTIME3012', behaviorId: A });

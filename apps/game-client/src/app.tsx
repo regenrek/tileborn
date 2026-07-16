@@ -1,4 +1,4 @@
-import { CONTROL_SCHEMES, controlScheme } from "@tileborne/core";
+import { CONTROL_SCHEMES, controlScheme } from '@tileborne/core';
 import {
   createLocalStorageBindingsStore,
   createGameHostLobbyClient,
@@ -14,17 +14,17 @@ import {
   type AudioTabConfig,
   RuntimeRoot,
   type ControlsTabConfig,
-} from "@tileborne/game-client";
+} from '@tileborne/game-client';
 import {
   battleRoyaleAudioCues,
   battleRoyaleDefaultInputMap,
   battleRoyaleSfxBus,
-} from "@tileborne/plugin-battle-royale";
-import { battleRoyaleMenuSections } from "@tileborne/plugin-battle-royale/menu";
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+} from '@tileborne/plugin-battle-royale';
+import { battleRoyaleMenuSections } from '@tileborne/plugin-battle-royale/menu';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
 
-const DEFAULT_LOBBY_MAP_ID = "map:fixture";
-const LOBBY_RECONNECT_STORAGE_KEY = "tileborne.game-client.lobby-reconnect.v1";
+const DEFAULT_LOBBY_MAP_ID = 'map:fixture';
+const LOBBY_RECONNECT_STORAGE_KEY = 'tileborne.game-client.lobby-reconnect.v1';
 
 interface StoredLobbyReconnect {
   readonly roomId: string;
@@ -33,16 +33,16 @@ interface StoredLobbyReconnect {
 }
 
 const isStoredLobbyReconnect = (value: unknown): value is StoredLobbyReconnect => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false;
   }
   const record = value as Record<string, unknown>;
   return (
-    typeof record.roomId === "string" &&
+    typeof record.roomId === 'string' &&
     record.roomId.length > 0 &&
-    typeof record.playerId === "string" &&
+    typeof record.playerId === 'string' &&
     record.playerId.length > 0 &&
-    typeof record.reconnectToken === "string" &&
+    typeof record.reconnectToken === 'string' &&
     record.reconnectToken.length > 0
   );
 };
@@ -94,7 +94,7 @@ const toJoinSession = (response: LobbyJoinResponse | RoomReconnectResponse): Lob
 });
 
 const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Lobby request failed";
+  error instanceof Error ? error.message : 'Lobby request failed';
 
 /**
  * Brand-neutral game-client template app (ADR-0022 decision #3). Mounts the
@@ -105,11 +105,11 @@ const errorMessage = (error: unknown): string =>
  */
 export function App(): ReactElement {
   const lobbyClient = useMemo(() => createGameHostLobbyClient(), []);
-  const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>("idle");
+  const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>('idle');
   const [lobbyMessage, setLobbyMessage] = useState<string | undefined>(undefined);
   const [lobbyError, setLobbyError] = useState<string | undefined>(undefined);
-  const [displayName, setDisplayName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
+  const [displayName, setDisplayName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
   const [mapId, setMapId] = useState(DEFAULT_LOBBY_MAP_ID);
   const [lobbySession, setLobbySession] = useState<LobbyPanelSession | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettingsValue>(() => ({
@@ -160,8 +160,8 @@ export function App(): ReactElement {
   }, []);
 
   const createLobby = useCallback(async () => {
-    setLobbyStatus("loading");
-    setLobbyMessage("Creating lobby…");
+    setLobbyStatus('loading');
+    setLobbyMessage('Creating lobby…');
     setLobbyError(undefined);
     try {
       const response = await lobbyClient.createLobby({
@@ -173,18 +173,18 @@ export function App(): ReactElement {
       setLobbySession(session);
       setJoinCode(response.joinCode);
       persistSession(session);
-      setLobbyStatus("ready");
-      setLobbyMessage("Lobby created. Share the join code when you are ready.");
+      setLobbyStatus('ready');
+      setLobbyMessage('Lobby created. Share the join code when you are ready.');
     } catch (error) {
-      setLobbyStatus("error");
+      setLobbyStatus('error');
       setLobbyError(errorMessage(error));
       setLobbyMessage(undefined);
     }
   }, [displayName, lobbyClient, mapId, persistSession]);
 
   const joinLobby = useCallback(async () => {
-    setLobbyStatus("loading");
-    setLobbyMessage("Joining lobby…");
+    setLobbyStatus('loading');
+    setLobbyMessage('Joining lobby…');
     setLobbyError(undefined);
     try {
       const response = await lobbyClient.joinLobby({
@@ -194,10 +194,10 @@ export function App(): ReactElement {
       const session = toJoinSession(response);
       setLobbySession(session);
       persistSession(session);
-      setLobbyStatus("ready");
-      setLobbyMessage("Joined lobby. Ready up when everyone is here.");
+      setLobbyStatus('ready');
+      setLobbyMessage('Joined lobby. Ready up when everyone is here.');
     } catch (error) {
-      setLobbyStatus("error");
+      setLobbyStatus('error');
       setLobbyError(errorMessage(error));
       setLobbyMessage(undefined);
     }
@@ -211,13 +211,13 @@ export function App(): ReactElement {
         return;
       }
       if (!reconnectToken) {
-        setLobbyStatus("error");
-        setLobbyError("Missing lobby credentials.");
+        setLobbyStatus('error');
+        setLobbyError('Missing lobby credentials.');
         setLobbyMessage(undefined);
         return;
       }
-      setLobbyStatus("loading");
-      setLobbyMessage(ready ? "Setting ready…" : "Clearing ready…");
+      setLobbyStatus('loading');
+      setLobbyMessage(ready ? 'Setting ready…' : 'Clearing ready…');
       setLobbyError(undefined);
       try {
         const response = await lobbyClient.setReady(lobbySession.roomId, {
@@ -226,14 +226,14 @@ export function App(): ReactElement {
           reconnectToken,
         });
         setLobbySession({ ...lobbySession, lobby: response.lobby });
-        setLobbyStatus("ready");
+        setLobbyStatus('ready');
         setLobbyMessage(
           response.canStart
-            ? "Everyone is ready. Continue to match when the runtime is connected."
-            : response.reason ?? "Ready state updated.",
+            ? 'Everyone is ready. Continue to match when the runtime is connected.'
+            : (response.reason ?? 'Ready state updated.'),
         );
       } catch (error) {
-        setLobbyStatus("error");
+        setLobbyStatus('error');
         setLobbyError(errorMessage(error));
         setLobbyMessage(undefined);
       }
@@ -245,20 +245,20 @@ export function App(): ReactElement {
     if (!storedReconnect) {
       return;
     }
-    setLobbyStatus("loading");
-    setLobbyMessage("Reconnecting…");
+    setLobbyStatus('loading');
+    setLobbyMessage('Reconnecting…');
     setLobbyError(undefined);
     try {
       const response = await lobbyClient.reconnect(storedReconnect);
       const session = toJoinSession(response);
       setLobbySession(session);
       persistSession(session);
-      setLobbyStatus("ready");
-      setLobbyMessage("Reconnected. Fresh handoff token received.");
+      setLobbyStatus('ready');
+      setLobbyMessage('Reconnected. Fresh handoff token received.');
     } catch (error) {
       window.localStorage.removeItem(LOBBY_RECONNECT_STORAGE_KEY);
       setStoredReconnect(null);
-      setLobbyStatus("error");
+      setLobbyStatus('error');
       setLobbyError(errorMessage(error));
       setLobbyMessage(undefined);
     }
@@ -297,7 +297,7 @@ export function App(): ReactElement {
         />
       )}
       onQuit={() => window.close()}
-      canvas={<div data-testid="game-canvas" style={{ width: "100%", height: "100%" }} />}
+      canvas={<div data-testid="game-canvas" style={{ width: '100%', height: '100%' }} />}
     />
   );
 }

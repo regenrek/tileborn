@@ -124,7 +124,12 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/hooks/queries', () => ({
   useResolvedCatalog: () => ({ data: hoisted.catalogHolder.current, isLoading: false }),
   useValidateCatalog: () => ({
-    data: { report: { ok: hoisted.issuesHolder.current.length === 0, issues: hoisted.issuesHolder.current } },
+    data: {
+      report: {
+        ok: hoisted.issuesHolder.current.length === 0,
+        issues: hoisted.issuesHolder.current,
+      },
+    },
   }),
   useTilesetPack: () => ({
     data: { id: PACK_ID, placeables: [{ id: PLACEABLE_ID, name: 'Bow' }] },
@@ -174,7 +179,9 @@ describe('EntityEditorPage', () => {
     };
     hoisted.issuesHolder.current = [];
     hoisted.brushIntentHolder.current = { kind: 'eraser' } as BrushIntent;
-    hoisted.upsertMutate.mockReset().mockResolvedValue({ saved: true, report: { ok: true, issues: [] } });
+    hoisted.upsertMutate
+      .mockReset()
+      .mockResolvedValue({ saved: true, report: { ok: true, issues: [] } });
     hoisted.removeMutate.mockReset().mockResolvedValue({ removed: true });
     hoisted.notifySuccess.mockReset();
     hoisted.notifyError.mockReset();
@@ -197,7 +204,9 @@ describe('EntityEditorPage', () => {
 
   it('shows the assigned sprite as a resolved preview (name + pack + thumb) and on the canvas', () => {
     render(<EntityEditorPage />);
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!,
+    );
 
     const preview = screen.getByTestId('entity-visual-preview');
     expect(preview.textContent).toContain('Bow');
@@ -209,7 +218,9 @@ describe('EntityEditorPage', () => {
 
   it('keeps plugin entities read-only but offers duplicate-as-project-entity', async () => {
     render(<EntityEditorPage />);
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PLUGIN_TYPE_ID}`).querySelector('button')!);
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PLUGIN_TYPE_ID}`).querySelector('button')!,
+    );
 
     expect((screen.getByTestId('entity-editor-save') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId('entity-editor-delete') as HTMLButtonElement).disabled).toBe(true);
@@ -228,7 +239,9 @@ describe('EntityEditorPage', () => {
 
   it('edits and saves a project entity through catalog:upsertType', async () => {
     render(<EntityEditorPage />);
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!,
+    );
 
     fireEvent.change(screen.getByTestId('entity-editor-label'), { target: { value: 'Big Crate' } });
     fireEvent.click(screen.getByTestId('entity-editor-save'));
@@ -244,18 +257,31 @@ describe('EntityEditorPage', () => {
 
   it('routes the primary save through lifecycle saving and preserves a failed draft as error', async () => {
     let rejectSave!: (cause: Error) => void;
-    hoisted.upsertMutate.mockImplementation(() => new Promise((_resolve, reject) => {
-      rejectSave = reject;
-    }));
+    hoisted.upsertMutate.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
     render(<EntityEditorPage />);
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
-    fireEvent.change(screen.getByTestId('entity-editor-label'), { target: { value: 'Unsaved Crate' } });
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!,
+    );
+    fireEvent.change(screen.getByTestId('entity-editor-label'), {
+      target: { value: 'Unsaved Crate' },
+    });
     fireEvent.click(screen.getByTestId('entity-editor-save'));
 
-    await vi.waitFor(() => expect(screen.getByTestId('entity-document-status').textContent).toBe('saving'));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId('entity-document-status').textContent).toBe('saving'),
+    );
     rejectSave(new Error('catalog unavailable'));
-    await vi.waitFor(() => expect(screen.getByTestId('entity-document-status').textContent).toBe('error'));
-    expect((screen.getByTestId('entity-editor-label') as HTMLInputElement).value).toBe('Unsaved Crate');
+    await vi.waitFor(() =>
+      expect(screen.getByTestId('entity-document-status').textContent).toBe('error'),
+    );
+    expect((screen.getByTestId('entity-editor-label') as HTMLInputElement).value).toBe(
+      'Unsaved Crate',
+    );
     expect((screen.getByTestId('entity-editor-save') as HTMLButtonElement).disabled).toBe(false);
     expect(documentLifecycle.get(`entity-editor:${PROJECT_ID}`)).toMatchObject({
       status: 'error',
@@ -297,7 +323,9 @@ describe('EntityEditorPage', () => {
     render(<EntityEditorPage />);
     // Select an existing entity first, then create a new one: the selection
     // sync must not wipe the unsaved draft (regression).
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!,
+    );
     fireEvent.click(screen.getByTestId('entity-editor-new'));
     fireEvent.change(document.getElementById('entity-create-label')!, {
       target: { value: 'Fresh Entity' },
@@ -321,7 +349,9 @@ describe('EntityEditorPage', () => {
       },
     ];
     render(<EntityEditorPage />);
-    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
+    fireEvent.click(
+      screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!,
+    );
 
     expect(screen.getByTestId('entity-editor-issues').textContent).toContain(
       'references unknown weapon',

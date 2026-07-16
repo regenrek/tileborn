@@ -218,9 +218,12 @@ describe('PlayerModelEditorPage', () => {
 
   it('routes the primary save through lifecycle and leaves a rejected model dirty with error state', async () => {
     let rejectSave!: (cause: Error) => void;
-    hoisted.updateProjectMutate.mockImplementation(() => new Promise((_resolve, reject) => {
-      rejectSave = reject;
-    }));
+    hoisted.updateProjectMutate.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
     render(<PlayerModelEditorPage />);
     await waitFor(() => expect(screen.getByTestId('player-model-editor-label')).toBeTruthy());
     fireEvent.change(screen.getByTestId('player-model-editor-label'), {
@@ -228,11 +231,19 @@ describe('PlayerModelEditorPage', () => {
     });
     fireEvent.click(screen.getByTestId('player-model-editor-save'));
 
-    await waitFor(() => expect(screen.getByTestId('player-model-document-status').textContent).toBe('saving'));
+    await waitFor(() =>
+      expect(screen.getByTestId('player-model-document-status').textContent).toBe('saving'),
+    );
     rejectSave(new Error('project write failed'));
-    await waitFor(() => expect(screen.getByTestId('player-model-document-status').textContent).toBe('error'));
-    expect((screen.getByTestId('player-model-editor-label') as HTMLInputElement).value).toBe('Maltipoo Unsaved');
-    expect((screen.getByTestId('player-model-editor-save') as HTMLButtonElement).disabled).toBe(false);
+    await waitFor(() =>
+      expect(screen.getByTestId('player-model-document-status').textContent).toBe('error'),
+    );
+    expect((screen.getByTestId('player-model-editor-label') as HTMLInputElement).value).toBe(
+      'Maltipoo Unsaved',
+    );
+    expect((screen.getByTestId('player-model-editor-save') as HTMLButtonElement).disabled).toBe(
+      false,
+    );
     expect(documentLifecycle.get(`player-model-editor:${PROJECT_ID}`)).toMatchObject({
       status: 'error',
       hasRecovery: true,

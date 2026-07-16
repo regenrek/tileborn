@@ -45,8 +45,9 @@ vi.mock('@/stores/editor-ui-store', () => ({
 
 vi.mock('@/stores/playtest-multiplayer-store', () => ({
   disposePlaytestMultiplayerSession: vi.fn(),
-  usePlaytestMultiplayerStore: (selector: (state: { joinFromInput: () => Promise<void> }) => unknown) =>
-    selector({ joinFromInput: vi.fn(async () => undefined) }),
+  usePlaytestMultiplayerStore: (
+    selector: (state: { joinFromInput: () => Promise<void> }) => unknown,
+  ) => selector({ joinFromInput: vi.fn(async () => undefined) }),
 }));
 
 vi.mock('@/components/map-editor-toolbar', () => ({

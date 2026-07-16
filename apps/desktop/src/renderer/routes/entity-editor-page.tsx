@@ -1,5 +1,9 @@
 import { useParams } from '@tanstack/react-router';
-import { GameObjectType, type AuthoringFieldSchema, type VisualRefComponent } from '@tileborne/core';
+import {
+  GameObjectType,
+  type AuthoringFieldSchema,
+  type VisualRefComponent,
+} from '@tileborne/core';
 import { Badge, Button, Input, Label, cn, typography } from '@tileborne/ui';
 import { Option, Schema } from 'effect';
 import { CopyIcon, PlusIcon, RotateCcwIcon, SaveIcon, ShapesIcon, Trash2Icon } from 'lucide-react';
@@ -74,7 +78,9 @@ export function EntityEditorPage() {
   const removeType = useRemoveCatalogType();
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   const catalogTargetObjectTypeId = useEditorUiStore((state) => state.catalogTargetObjectTypeId);
-  const setCatalogTargetObjectTypeId = useEditorUiStore((state) => state.setCatalogTargetObjectTypeId);
+  const setCatalogTargetObjectTypeId = useEditorUiStore(
+    (state) => state.setCatalogTargetObjectTypeId,
+  );
 
   const entries = useMemo(() => catalogQuery.data?.objectTypes ?? [], [catalogQuery.data]);
   const lootTables = useMemo(() => catalogQuery.data?.lootTables ?? [], [catalogQuery.data]);
@@ -168,7 +174,10 @@ export function EntityEditorPage() {
     const issues = validateQuery.data?.report.issues ?? [];
     return draft === undefined
       ? []
-      : issues.filter((issue) => issue.objectTypeId !== undefined && String(issue.objectTypeId) === String(draft.id));
+      : issues.filter(
+          (issue) =>
+            issue.objectTypeId !== undefined && String(issue.objectTypeId) === String(draft.id),
+        );
   }, [validateQuery.data, draft]);
 
   const activePlaceable = useMemo(() => {
@@ -184,7 +193,7 @@ export function EntityEditorPage() {
   const assetPacksQuery = useAssetPacks();
   const needsAssetOptions = hasAssetReference(draft?.instanceFields);
   const authoringAssetPackId = needsAssetOptions
-    ? activePlaceable?.packId ?? assetPacksQuery.data?.packs[0]?.id
+    ? (activePlaceable?.packId ?? assetPacksQuery.data?.packs[0]?.id)
     : undefined;
   // A single bounded page keeps schema fields discoverable without pulling a
   // whole multi-thousand-asset library into the entity editor. The backend
@@ -208,19 +217,21 @@ export function EntityEditorPage() {
         if (ref === undefined) return [];
         const key = assetLibraryReferenceKey(ref);
         const preview = authoringAssetPreviews.previewByKey.get(key);
-        return [{
-          id: key,
-          label: group.label,
-          ...(preview === undefined || authoringAssetLibrary.data === undefined
-            ? {}
-            : {
-                previewUrl: assetThumbnailUrl(
-                  String(ref.packId),
-                  preview,
-                  authoringAssetLibrary.data.integrityHash,
-                ),
-              }),
-        }];
+        return [
+          {
+            id: key,
+            label: group.label,
+            ...(preview === undefined || authoringAssetLibrary.data === undefined
+              ? {}
+              : {
+                  previewUrl: assetThumbnailUrl(
+                    String(ref.packId),
+                    preview,
+                    authoringAssetLibrary.data.integrityHash,
+                  ),
+                }),
+          },
+        ];
       }),
     [authoringAssetLibrary.data, authoringAssetPreviews.previewByKey],
   );
@@ -248,7 +259,11 @@ export function EntityEditorPage() {
   const spriteImageUrl =
     assignedSprite?.preview === undefined
       ? undefined
-      : assetThumbnailUrl(assignedSprite.packId, assignedSprite.preview, assignedSprite.integrityHash);
+      : assetThumbnailUrl(
+          assignedSprite.packId,
+          assignedSprite.preview,
+          assignedSprite.integrityHash,
+        );
 
   const handles = useMemo((): readonly SpriteGeometryHandle[] => {
     if (visualRef === undefined) {
@@ -455,7 +470,10 @@ export function EntityEditorPage() {
               data-testid="entity-editor-search"
             />
             {createOpen ? (
-              <div className="space-y-2 rounded-md border border-border bg-background p-2" data-testid="entity-editor-create-form">
+              <div
+                className="space-y-2 rounded-md border border-border bg-background p-2"
+                data-testid="entity-editor-create-form"
+              >
                 <div className="space-y-1">
                   <Label htmlFor="entity-create-label">Label</Label>
                   <Input
@@ -484,7 +502,10 @@ export function EntityEditorPage() {
               </div>
             ) : null}
           </div>
-          <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto" data-testid="entity-editor-list">
+          <ul
+            className="min-h-0 flex-1 divide-y divide-border overflow-y-auto"
+            data-testid="entity-editor-list"
+          >
             {filteredEntries.map((entry) => {
               const id = String(entry.objectType.id);
               const selected = id === selectedId;
@@ -501,7 +522,9 @@ export function EntityEditorPage() {
                   >
                     <ShapesIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <p className={cn('truncate', typography.rowTitle)}>{entry.objectType.label}</p>
+                      <p className={cn('truncate', typography.rowTitle)}>
+                        {entry.objectType.label}
+                      </p>
                       <p className={cn('truncate', typography.rowMeta)}>
                         {String(entry.objectType.family)}
                       </p>
@@ -599,7 +622,9 @@ export function EntityEditorPage() {
                       id="entity-editor-label"
                       value={draft.label}
                       disabled={readOnly}
-                      onChange={(event) => updateDraft(entityWithLabel(draft, event.currentTarget.value))}
+                      onChange={(event) =>
+                        updateDraft(entityWithLabel(draft, event.currentTarget.value))
+                      }
                       data-testid="entity-editor-label"
                     />
                   </div>
@@ -609,7 +634,9 @@ export function EntityEditorPage() {
                       id="entity-editor-family"
                       value={String(draft.family)}
                       disabled={readOnly}
-                      onChange={(event) => updateDraft(entityWithFamily(draft, event.currentTarget.value))}
+                      onChange={(event) =>
+                        updateDraft(entityWithFamily(draft, event.currentTarget.value))
+                      }
                       data-testid="entity-editor-family"
                     />
                   </div>
@@ -623,7 +650,10 @@ export function EntityEditorPage() {
                     <p className={typography.rowTitle}>Validation issues</p>
                     <ul className="mt-1 list-disc space-y-1 pl-4">
                       {entityIssues.map((issue, index) => (
-                        <li key={`${issue.refKind ?? issue.kind}-${index}`} className={typography.rowMeta}>
+                        <li
+                          key={`${issue.refKind ?? issue.kind}-${index}`}
+                          className={typography.rowMeta}
+                        >
                           {issue.message}
                         </li>
                       ))}
@@ -649,7 +679,10 @@ export function EntityEditorPage() {
                     onHandleChange={readOnly ? () => undefined : updateHandle}
                     onHandleRotationChange={readOnly ? () => undefined : updateHandleRotation}
                   />
-                  <section className="rounded-md border border-border bg-card p-3" data-testid="entity-editor-anchors">
+                  <section
+                    className="rounded-md border border-border bg-card p-3"
+                    data-testid="entity-editor-anchors"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className={typography.panelTitle}>Anchors</p>
                       {readOnly ? null : (
@@ -689,7 +722,9 @@ export function EntityEditorPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="h-6 px-1.5 text-muted-foreground"
-                                onClick={() => patchVisualRef(visualRefWithoutAnchor(visualRef, name))}
+                                onClick={() =>
+                                  patchVisualRef(visualRefWithoutAnchor(visualRef, name))
+                                }
                                 data-testid={`entity-editor-anchor-remove-${name}`}
                               >
                                 <Trash2Icon className="size-3" aria-hidden />
@@ -708,7 +743,9 @@ export function EntityEditorPage() {
                                 onChange={(event) => {
                                   const rotationDeg = Number.parseFloat(event.currentTarget.value);
                                   if (Number.isFinite(rotationDeg)) {
-                                    patchVisualRef(visualRefWithAnchor(visualRef, name, { rotationDeg }));
+                                    patchVisualRef(
+                                      visualRefWithAnchor(visualRef, name, { rotationDeg }),
+                                    );
                                   }
                                 }}
                               />
@@ -724,7 +761,9 @@ export function EntityEditorPage() {
                                 onChange={(event) => {
                                   const zOffset = Number.parseFloat(event.currentTarget.value);
                                   if (Number.isFinite(zOffset)) {
-                                    patchVisualRef(visualRefWithAnchor(visualRef, name, { zOffset }));
+                                    patchVisualRef(
+                                      visualRefWithAnchor(visualRef, name, { zOffset }),
+                                    );
                                   }
                                 }}
                               />

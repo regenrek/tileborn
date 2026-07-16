@@ -27,13 +27,15 @@ const visualEntity = new GameObjectType({
   family: 'pickup' as GameObjectType['family'],
   category: Option.none(),
   layerHint: Option.some('objects'),
-  components: [new VisualRefComponent({
-    placeableId: Option.some(makePlaceableId(uuid('2'))),
-    assetId: Option.some(makeAssetId(uuid('3'))),
-    width: 32,
-    height: 32,
-    anchors: {},
-  })],
+  components: [
+    new VisualRefComponent({
+      placeableId: Option.some(makePlaceableId(uuid('2'))),
+      assetId: Option.some(makeAssetId(uuid('3'))),
+      width: 32,
+      height: 32,
+      anchors: {},
+    }),
+  ],
   instanceDefaults: {},
 });
 const brWeaponId = makeWeaponDefinitionId(uuid('11'));
@@ -50,7 +52,10 @@ const brWeaponVisual = new GameObjectType({
 let catalogData: unknown;
 
 const baseCatalog = () => ({
-  objectTypes: [{ objectType: visualEntity, origin: 'project' }, { objectType: brWeaponVisual, origin: 'plugin', sourcePluginId: 'plugin:br' }],
+  objectTypes: [
+    { objectType: visualEntity, origin: 'project' },
+    { objectType: brWeaponVisual, origin: 'plugin', sourcePluginId: 'plugin:br' },
+  ],
   weapons: [],
   items: [],
   lootTables: [],
@@ -84,7 +89,10 @@ vi.mock('@/hooks/mutations', () => ({
   useDuplicateCatalogDefinition: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRemoveCatalogDefinition: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
-vi.mock('@/stores/app-notifications-store', () => ({ notifyError: vi.fn(), notifySuccess: vi.fn() }));
+vi.mock('@/stores/app-notifications-store', () => ({
+  notifyError: vi.fn(),
+  notifySuccess: vi.fn(),
+}));
 
 describe('GameContentPage', () => {
   beforeEach(() => {
@@ -106,7 +114,9 @@ describe('GameContentPage', () => {
     fireEvent.click(screen.getByTestId('content-tab-items'));
     fireEvent.change(screen.getByTestId('content-name'), { target: { value: 'Field Medkit' } });
     fireEvent.change(screen.getByTestId('content-rarity'), { target: { value: 'rare' } });
-    fireEvent.change(screen.getByTestId('content-visual-entity'), { target: { value: String(visualEntity.id) } });
+    fireEvent.change(screen.getByTestId('content-visual-entity'), {
+      target: { value: String(visualEntity.id) },
+    });
     fireEvent.click(screen.getByTestId('content-create'));
 
     await waitFor(() => expect(upsertDefinition).toHaveBeenCalledOnce());
@@ -115,16 +125,24 @@ describe('GameContentPage', () => {
       definitionJson: { label: 'Field Medkit', data: { tier: 'rare' } },
     });
     await waitFor(() => expect(upsertType).toHaveBeenCalledOnce());
-    expect(upsertType.mock.calls[0]?.[0].objectTypeJson.components).toEqual(expect.arrayContaining([
-      expect.objectContaining({ _tag: 'loot-source', grantRefs: [expect.objectContaining({ _tag: 'item-grant' })] }),
-    ]));
+    expect(upsertType.mock.calls[0]?.[0].objectTypeJson.components).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _tag: 'loot-source',
+          grantRefs: [expect.objectContaining({ _tag: 'item-grant' })],
+        }),
+      ]),
+    );
   });
 
   it('routes Create through lifecycle and preserves the draft when persistence fails', async () => {
     let rejectSave!: (cause: Error) => void;
-    upsertDefinition.mockImplementation(() => new Promise((_resolve, reject) => {
-      rejectSave = reject;
-    }));
+    upsertDefinition.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
     render(<GameContentPage />);
     fireEvent.click(screen.getByTestId('content-tab-items'));
     fireEvent.change(screen.getByTestId('content-name'), { target: { value: 'Unsaved Medkit' } });
@@ -133,9 +151,13 @@ describe('GameContentPage', () => {
     });
     fireEvent.click(screen.getByTestId('content-create'));
 
-    await waitFor(() => expect(screen.getByTestId('content-document-status').textContent).toBe('saving'));
+    await waitFor(() =>
+      expect(screen.getByTestId('content-document-status').textContent).toBe('saving'),
+    );
     rejectSave(new Error('catalog write failed'));
-    await waitFor(() => expect(screen.getByTestId('content-document-status').textContent).toBe('error'));
+    await waitFor(() =>
+      expect(screen.getByTestId('content-document-status').textContent).toBe('error'),
+    );
     expect((screen.getByTestId('content-name') as HTMLInputElement).value).toBe('Unsaved Medkit');
     expect(documentLifecycle.get('game-content:project:test')).toMatchObject({
       status: 'error',
@@ -147,8 +169,18 @@ describe('GameContentPage', () => {
     catalogData = {
       ...baseCatalog(),
       weapons: [
-        { entry: { weapon: { id: brWeaponId }, delivery: { _tag: 'ProjectileDelivery' } }, label: 'Pulse Carbine', origin: 'plugin', sourcePluginId: 'plugin:br' },
-        { entry: { weapon: { id: arenaWeaponId }, delivery: { _tag: 'MeleeDelivery' } }, label: String(arenaWeaponId), origin: 'plugin', sourcePluginId: 'plugin:arena' },
+        {
+          entry: { weapon: { id: brWeaponId }, delivery: { _tag: 'ProjectileDelivery' } },
+          label: 'Pulse Carbine',
+          origin: 'plugin',
+          sourcePluginId: 'plugin:br',
+        },
+        {
+          entry: { weapon: { id: arenaWeaponId }, delivery: { _tag: 'MeleeDelivery' } },
+          label: String(arenaWeaponId),
+          origin: 'plugin',
+          sourcePluginId: 'plugin:arena',
+        },
       ],
     };
     render(<GameContentPage />);

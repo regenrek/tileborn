@@ -1,5 +1,9 @@
 import { Link, useParams, useSearch } from '@tanstack/react-router';
-import { decodePersistedTileborneMapJson, type ProjectId, type TileborneMap } from '@tileborne/core';
+import {
+  decodePersistedTileborneMapJson,
+  type ProjectId,
+  type TileborneMap,
+} from '@tileborne/core';
 import { Button, Skeleton } from '@tileborne/ui';
 import { MapIcon } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
@@ -155,7 +159,9 @@ export function MapEditorPage() {
                   notifySuccess(`Created map ${result.mapId}`);
                 })
                 .catch((error) => {
-                  notifyError(formatMutationError(error, 'create map', 'Adjust dimensions and retry.'));
+                  notifyError(
+                    formatMutationError(error, 'create map', 'Adjust dimensions and retry.'),
+                  );
                 });
             }}
           >
@@ -177,7 +183,9 @@ export function MapEditorPage() {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {showEditorViewport ? <MapEditorViewport projectId={projectId} mapId={mapId} map={map} /> : null}
+      {showEditorViewport ? (
+        <MapEditorViewport projectId={projectId} mapId={mapId} map={map} />
+      ) : null}
       {!playtestActive ? <MapEditorToolbar /> : null}
       {showSinglePlaytest ? (
         <PlaytestViewport

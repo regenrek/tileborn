@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   commitMapProjectRevision,
   commitProjectManifestRevision,
+  makeProjectRevisionFilesystemOwner,
   projectRevisionOwnerClaimPrefix,
   projectRevisionOwnerPath,
   projectRevisionTransactionPath,
@@ -209,6 +210,42 @@ afterEach(async () => {
 });
 
 describe('project revision transaction recovery', () => {
+  it('returns owner-maintained operation counts for a successful map revision', async () => {
+    const state = await fixture();
+    const observation = await commitMapProjectRevision({
+      projectRoot: state.projectRoot,
+      projectId: state.projectId,
+      mapId: state.mapId,
+      mapTarget: state.mapTarget,
+      buildSnapshots: () => state.next,
+    });
+
+    expect(observation).toEqual({
+      changedResources: 2,
+      contentFilesInstalled: 3,
+      phaseTransitions: 4,
+      fullProjectDirectoryCopies: 0,
+    });
+  });
+
+  it('counts only successful real directory copies at the canonical filesystem owner', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'tileborne-project-revision-copy-'));
+    roots.push(root);
+    const source = path.join(root, 'source');
+    await writeJson(path.join(source, 'project.json'), { id: 'fixture' });
+    const filesystem = makeProjectRevisionFilesystemOwner();
+
+    await expect(
+      filesystem.copyProjectDirectory(path.join(root, 'missing'), path.join(root, 'failed')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(filesystem.observe().fullProjectDirectoryCopies).toBe(0);
+
+    const destination = path.join(root, 'destination');
+    await filesystem.copyProjectDirectory(source, destination);
+    expect(filesystem.observe().fullProjectDirectoryCopies).toBe(1);
+    expect(await readJson(path.join(destination, 'project.json'))).toEqual({ id: 'fixture' });
+  });
+
   for (const faultPhase of [
     'prepared',
     'map-installed',

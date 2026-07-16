@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
+import { cp, mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import { PERSISTED_SCHEMA_VERSIONS, hashJsonStable } from '@tileborne/core';
@@ -102,6 +102,40 @@ export interface ProjectRevisionTransactionObserver {
   readonly onPhaseTransition?: ((phase: ProjectRevisionTransactionPhase) => void) | undefined;
   readonly onContentFileInstalled?: ((target: 'map' | 'project' | 'lock') => void) | undefined;
   readonly onProjectDirectoryCopied?: (() => void) | undefined;
+}
+
+export interface ProjectRevisionFilesystemObservation {
+  readonly fullProjectDirectoryCopies: number;
+}
+
+/**
+ * Canonical owner for any whole-project directory copy performed by revision
+ * persistence. Keeping the count beside the real `cp` call means a successful
+ * copy cannot bypass performance observation inside this owner.
+ */
+export interface ProjectRevisionFilesystemOwner {
+  readonly copyProjectDirectory: (source: string, destination: string) => Promise<void>;
+  readonly observe: () => ProjectRevisionFilesystemObservation;
+}
+
+export const makeProjectRevisionFilesystemOwner = (
+  observer?: Pick<ProjectRevisionTransactionObserver, 'onProjectDirectoryCopied'>,
+): ProjectRevisionFilesystemOwner => {
+  let fullProjectDirectoryCopies = 0;
+  return {
+    copyProjectDirectory: async (source, destination) => {
+      await cp(source, destination, { recursive: true });
+      fullProjectDirectoryCopies += 1;
+      observer?.onProjectDirectoryCopied?.();
+    },
+    observe: () => ({ fullProjectDirectoryCopies }),
+  };
+};
+
+export interface ProjectRevisionTransactionObservation extends ProjectRevisionFilesystemObservation {
+  readonly changedResources: number;
+  readonly contentFilesInstalled: number;
+  readonly phaseTransitions: number;
 }
 
 export interface CommitProjectManifestRevisionInput {
@@ -453,7 +487,7 @@ const installNewRevision = async (
   journal: ProjectRevisionTransactionJournal,
   faultAfterPhase?: CommitMapProjectRevisionInput['faultAfterPhase'],
   observer?: ProjectRevisionTransactionObserver,
-): Promise<void> => {
+): Promise<{ readonly contentFilesInstalled: number; readonly phaseTransitions: number }> => {
   const targets = targetPaths(projectRoot, journal);
   const steps =
     journal.kind === 'map-project-revision'
@@ -467,6 +501,8 @@ const installNewRevision = async (
           ['lock', 'lock-installed'],
         ] as const);
   let current = journal;
+  let contentFilesInstalled = 0;
+  let phaseTransitions = 0;
   for (const [key, phase] of steps) {
     const target = targets[key];
     if (target === undefined) {
@@ -477,11 +513,14 @@ const installNewRevision = async (
       : writeDurableJsonAtomic(target, current.snapshots[key]));
     current = { ...current, phase };
     await writeDurableJsonAtomic(transactionPath(projectRoot), current);
+    contentFilesInstalled += 1;
+    phaseTransitions += 1;
     observer?.onContentFileInstalled?.(key);
     observer?.onPhaseTransition?.(phase);
     await faultAfterPhase?.(phase);
   }
   await removeJournal(projectRoot);
+  return { contentFilesInstalled, phaseTransitions };
 };
 
 const recoverJournalWithoutAcquiringOwner = async (projectRoot: string): Promise<void> => {
@@ -701,12 +740,13 @@ export const recoverProjectRevisionTransaction = async (projectRoot: string): Pr
 
 export const commitMapProjectRevision = async (
   input: CommitMapProjectRevisionInput,
-): Promise<void> => {
+): Promise<ProjectRevisionTransactionObservation> => {
   const expectedMapTarget = path.join(input.projectRoot, 'maps', `${input.mapId}.json`);
   if (path.resolve(input.mapTarget) !== path.resolve(expectedMapTarget)) {
     throw new Error(`Map transaction target must be ${expectedMapTarget}`);
   }
   const owner = await acquireProjectRevisionOwner(input.projectRoot, input.faultAfterPhase);
+  const filesystem = makeProjectRevisionFilesystemOwner(input.observer);
   try {
     await input.faultAfterPhase?.('owner-acquired');
     await recoverJournalWithoutAcquiringOwner(input.projectRoot);
@@ -731,11 +771,10 @@ export const commitMapProjectRevision = async (
       project: hashJsonStable(snapshots.project),
       lock: hashJsonStable(snapshots.lock),
     };
-    input.observer?.onPrepared?.({
-      changedResources: (['map', 'project'] as const).filter(
-        (key) => oldHashes[key] !== newHashes[key],
-      ).length,
-    });
+    const changedResources = (['map', 'project'] as const).filter(
+      (key) => oldHashes[key] !== newHashes[key],
+    ).length;
+    input.observer?.onPrepared?.({ changedResources });
     const journal: ProjectRevisionTransactionJournal = decodeJournal(input.projectRoot, {
       schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
       id: randomUUID(),
@@ -764,7 +803,18 @@ export const commitMapProjectRevision = async (
     await syncDirectory(path.dirname(journalFile));
     input.observer?.onPhaseTransition?.('prepared');
     await input.faultAfterPhase?.('prepared');
-    await installNewRevision(input.projectRoot, journal, input.faultAfterPhase, input.observer);
+    const installed = await installNewRevision(
+      input.projectRoot,
+      journal,
+      input.faultAfterPhase,
+      input.observer,
+    );
+    return {
+      changedResources,
+      contentFilesInstalled: installed.contentFilesInstalled,
+      phaseTransitions: 1 + installed.phaseTransitions,
+      ...filesystem.observe(),
+    };
   } finally {
     await releaseProjectRevisionOwner(input.projectRoot, owner);
   }

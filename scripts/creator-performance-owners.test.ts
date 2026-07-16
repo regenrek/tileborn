@@ -29,7 +29,10 @@ import {
   validateProjectContentCorpus,
 } from '../packages/services-app/src/index.js';
 import { packDirectory } from '../packages/services-app/src/internal/layout.js';
-import { commitMapProjectRevision } from '../packages/services-app/src/internal/project-revision-transaction.js';
+import {
+  commitMapProjectRevision,
+  makeProjectRevisionFilesystemOwner,
+} from '../packages/services-app/src/internal/project-revision-transaction.js';
 import { HomeServiceLive } from '../packages/services-foundation/src/home/index.js';
 import { JobServiceLive } from '../packages/services-foundation/src/job/index.js';
 import {
@@ -44,7 +47,10 @@ import {
 } from '../apps/desktop/src/main/project-lifecycle.js';
 import { compileProjectBehaviorPackage } from '../packages/services-build/src/behavior/project-package.js';
 import { BuildService, makeBuildServiceLive } from '../packages/services-build/src/build/index.js';
-import { assembleRuntimeMapPackage } from '../packages/services-build/src/map-package/assemble.js';
+import {
+  assembleRuntimeMapPackage,
+  type AssembledRuntimeMapPackage,
+} from '../packages/services-build/src/map-package/assemble.js';
 import {
   makePlaytestServiceLive,
   PlaytestService,
@@ -79,6 +85,7 @@ describe('creator-v1 canonical owner execution', () => {
   let previousHome: string | undefined;
   let receipt: Record<string, unknown>;
   let regressedReceipt: Record<string, unknown>;
+  let copyRegressedReceipt: Record<string, unknown>;
 
   beforeAll(async () => {
     root = await mkdtemp(path.join(os.tmpdir(), 'tileborne-creator-owner-gate-'));
@@ -417,13 +424,7 @@ describe('creator-v1 canonical owner execution', () => {
       path.join(transactionRoot, 'maps', `${transactionMapId}.json`),
       `${JSON.stringify({ id: transactionMapId })}\n`,
     );
-    const revisionEvents = {
-      changed: [] as number[],
-      installed: [] as string[],
-      phases: [] as string[],
-      copies: 0,
-    };
-    await commitMapProjectRevision({
+    const revisionObservation = await commitMapProjectRevision({
       projectRoot: transactionRoot,
       projectId: transactionProjectId,
       mapId: transactionMapId,
@@ -439,15 +440,14 @@ describe('creator-v1 canonical owner execution', () => {
           },
         };
       },
-      observer: {
-        onPrepared: ({ changedResources }) => revisionEvents.changed.push(changedResources),
-        onContentFileInstalled: (target) => revisionEvents.installed.push(target),
-        onPhaseTransition: (phase) => revisionEvents.phases.push(phase),
-        onProjectDirectoryCopied: () => {
-          revisionEvents.copies += 1;
-        },
-      },
     });
+    const copyRegressionSource = path.join(root, 'revision-copy-source');
+    const copyRegressionTarget = path.join(root, 'revision-copy-target');
+    await mkdir(copyRegressionSource, { recursive: true });
+    await writeFile(path.join(copyRegressionSource, 'project.json'), '{}\n');
+    const copyRegressionOwner = makeProjectRevisionFilesystemOwner();
+    await copyRegressionOwner.copyProjectDirectory(copyRegressionSource, copyRegressionTarget);
+    const copyRegressionObservation = copyRegressionOwner.observe();
 
     const compilerEvents: Array<{ sourceBytes: number; modules: number }> = [];
     const registry = new BehaviorRegistryManifest({ schemaVersion: 1, entries: [] });
@@ -489,12 +489,14 @@ describe('creator-v1 canonical owner execution', () => {
       }
     }
 
-    const packageEvents = Array.from({ length: maps.length }, () => ({
-      inputs: [] as Array<{ assets: number; behaviorModules: number; assetPayloadBytes: number }>,
-      traversals: [] as string[],
-      files: [] as string[],
-    }));
-    const packageRoots: string[] = [];
+    const assembledPackages: Array<{
+      result: AssembledRuntimeMapPackage;
+      events: {
+        inputs: Array<{ assets: number; behaviorModules: number; assetPayloadBytes: number }>;
+        traversals: string[];
+        files: string[];
+      };
+    }> = [];
     const assets = assetRecords.map((asset) => ({
       path: asset.path,
       bytes: assetPayload,
@@ -502,7 +504,6 @@ describe('creator-v1 canonical owner execution', () => {
     }));
     for (let index = 0; index < maps.length; index += 1) {
       const outputDirectory = path.join(root, 'packages', String(index));
-      packageRoots.push(outputDirectory);
       const packageAssets = assets.slice(index * 256, (index + 1) * 256);
       const packageModules = behaviorModules.slice(index * 64, (index + 1) * 64);
       const behaviorPackage = Schema.decodeUnknownSync(RuntimeBehaviorPackage)({
@@ -516,7 +517,12 @@ describe('creator-v1 canonical owner execution', () => {
           hash: hashBytes(bytes),
         })),
       });
-      await Effect.runPromise(
+      const events = {
+        inputs: [] as Array<{ assets: number; behaviorModules: number; assetPayloadBytes: number }>,
+        traversals: [] as string[],
+        files: [] as string[],
+      };
+      const result = await Effect.runPromise(
         assembleRuntimeMapPackage({
           projectId: String(projectId),
           map: maps[index]!,
@@ -535,13 +541,15 @@ describe('creator-v1 canonical owner execution', () => {
           engineVersion: '0.1.0',
           outputDirectory,
           observer: {
-            onInputAccepted: (event) => packageEvents[index]!.inputs.push(event),
-            onInputTraversal: (phase) => packageEvents[index]!.traversals.push(phase),
-            onFileWritten: (file) => packageEvents[index]!.files.push(file),
+            onInputAccepted: (event) => events.inputs.push(event),
+            onInputTraversal: (phase) => events.traversals.push(phase),
+            onFileWritten: (file) => events.files.push(file),
           },
         }),
       );
+      assembledPackages.push({ result, events });
     }
+    const packageRoots = assembledPackages.map(({ result }) => result.directory);
 
     const pluginContributions = Schema.decodeUnknownSync(PluginContributions)({
       gameModes: [
@@ -623,13 +631,13 @@ describe('creator-v1 canonical owner execution', () => {
       }),
       { sourceBytes: 0, modules: 0 },
     );
-    const packageObservation = packageEvents.reduce(
-      (total, event) => ({
-        assets: total.assets + event.inputs[0]!.assets,
-        behaviorModules: total.behaviorModules + event.inputs[0]!.behaviorModules,
-        assetPayloadBytes: total.assetPayloadBytes + event.inputs[0]!.assetPayloadBytes,
-        files: total.files + event.files.length,
-        traversals: Math.max(total.traversals, event.traversals.length),
+    const packageObservation = assembledPackages.reduce(
+      (total, { events }) => ({
+        assets: total.assets + events.inputs[0]!.assets,
+        behaviorModules: total.behaviorModules + events.inputs[0]!.behaviorModules,
+        assetPayloadBytes: total.assetPayloadBytes + events.inputs[0]!.assetPayloadBytes,
+        files: total.files + events.files.length,
+        traversals: Math.max(total.traversals, events.traversals.length),
       }),
       { assets: 0, behaviorModules: 0, assetPayloadBytes: 0, files: 0, traversals: 0 },
     );
@@ -639,7 +647,10 @@ describe('creator-v1 canonical owner execution', () => {
       queryRecords: referenceEvents.queries[0]!,
       resolutionRecords: referenceEvents.resolutions[0]!,
     };
-    const buildReceipt = (assetPage: typeof normalPageEvent) => ({
+    const buildReceipt = (
+      assetPage: typeof normalPageEvent,
+      fullProjectDirectoryCopies = revisionObservation.fullProjectDirectoryCopies,
+    ) => ({
       schemaVersion: 1,
       fixtureId: fixture.id,
       budgetId: budgets.id,
@@ -690,10 +701,10 @@ describe('creator-v1 canonical owner execution', () => {
           metric('records-inspected', validation.recordsInspected),
         ]),
         flow('save', [
-          metric('changed-resources', revisionEvents.changed[0]!),
-          metric('content-files-rewritten', revisionEvents.installed.length),
-          metric('journal-phase-transitions', revisionEvents.phases.length),
-          metric('full-project-directory-copies', revisionEvents.copies),
+          metric('changed-resources', revisionObservation.changedResources),
+          metric('content-files-rewritten', revisionObservation.contentFilesInstalled),
+          metric('journal-phase-transitions', revisionObservation.phaseTransitions),
+          metric('full-project-directory-copies', fullProjectDirectoryCopies),
         ]),
         flow('playtest-start', [
           metric('selected-map-packages', playtestEvents.maps.length),
@@ -702,7 +713,7 @@ describe('creator-v1 canonical owner execution', () => {
           metric('session-start-transitions', playtestEvents.transitions.length),
         ]),
         flow('package', [
-          metric('runtime-map-packages', packageEvents.length),
+          metric('runtime-map-packages', assembledPackages.length),
           metric('input-assets', packageObservation.assets),
           metric('input-behavior-modules', packageObservation.behaviorModules),
           metric('asset-payload-input-bytes', packageObservation.assetPayloadBytes),
@@ -720,6 +731,10 @@ describe('creator-v1 canonical owner execution', () => {
     });
     receipt = buildReceipt(normalPageEvent);
     regressedReceipt = buildReceipt(regressedPageEvent);
+    copyRegressedReceipt = buildReceipt(
+      normalPageEvent,
+      copyRegressionObservation.fullProjectDirectoryCopies,
+    );
     assertCreatorPerformanceReceipt(budgets, receipt);
   }, 300_000);
 
@@ -742,6 +757,12 @@ describe('creator-v1 canonical owner execution', () => {
   it('fails when the real AssetLibraryService owner returns an oversized initial page', () => {
     expect(() => assertCreatorPerformanceReceipt(budgets, regressedReceipt)).toThrow(
       /asset-library-2000.asset-page-records/,
+    );
+  });
+
+  it('fails after the canonical revision filesystem owner performs a full directory copy', () => {
+    expect(() => assertCreatorPerformanceReceipt(budgets, copyRegressedReceipt)).toThrow(
+      /save.full-project-directory-copies/,
     );
   });
 });

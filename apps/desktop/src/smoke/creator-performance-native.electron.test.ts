@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -35,10 +35,11 @@ describe('creator native performance calibration (advisory)', () => {
   });
 
   it('records native startup, create, reopen, and route-ready timings with Playwright traces', async () => {
-    const artifactRoot =
+    const artifactBase =
       process.env.TILEBORNE_PERFORMANCE_ARTIFACT_DIR ??
       path.join(os.tmpdir(), 'tileborne-performance-evidence');
-    await mkdir(artifactRoot, { recursive: true });
+    await mkdir(artifactBase, { recursive: true });
+    const artifactRoot = await mkdtemp(path.join(artifactBase, 'run-'));
     const home = await createTileborneHome();
     const timings: NativeTiming[] = [];
 
@@ -130,11 +131,17 @@ describe('creator native performance calibration (advisory)', () => {
         totalMemoryBytes: os.totalmem(),
         ci: process.env.CI === 'true',
       },
+      provenance: {
+        runDirectory: artifactRoot,
+      },
       timings,
       traces: [await traceReceipt(createTracePath), await traceReceipt(reopenTracePath)],
     };
     const receiptPath = path.join(artifactRoot, 'creator-performance-native-receipt.json');
-    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    const pendingReceiptPath = `${receiptPath}.pending`;
+    await writeFile(pendingReceiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    await rename(pendingReceiptPath, receiptPath);
+    console.info(`creator-performance-native runDirectory=${artifactRoot}`);
     console.info(`creator-performance-native receipt=${receiptPath}`);
     console.info(JSON.stringify(receipt));
   }, 120_000);

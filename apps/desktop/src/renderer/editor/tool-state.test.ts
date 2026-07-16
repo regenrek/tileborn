@@ -165,8 +165,7 @@ const autotileResolver = createAutotilePaintResolver({
   directTileIndexByTerrainClass: new Map(),
 })!;
 const resolvedAutotileBrush = autotileResolver.brushForRuleId(edgeRuleId)!;
-const placeableId =
-  'placeable:00000000-0000-4000-8000-000000000041' as PlaceableId;
+const placeableId = 'placeable:00000000-0000-4000-8000-000000000041' as PlaceableId;
 const placeableBrush = {
   kind: 'placeable',
   placeableId,
@@ -817,7 +816,9 @@ describe('tool state machine', () => {
       y: 2 * 32,
       layerId: TEST_OBJECT_LAYER_ID,
     }).apply(baseMap);
-    const hidden = createSetLayerVisibilityCommand(placed, TEST_OBJECT_LAYER_ID, false)!.apply(placed);
+    const hidden = createSetLayerVisibilityCommand(placed, TEST_OBJECT_LAYER_ID, false)!.apply(
+      placed,
+    );
     const context = {
       map: hidden,
       activeTool: 'select' as const,
@@ -922,7 +923,11 @@ describe('tool state machine', () => {
     const context = {
       map,
       activeTool: 'objectPlace' as const,
-      brushIntent: { kind: 'plugin-object' as const, objectKind: 'loot-crate', label: 'Loot crate' },
+      brushIntent: {
+        kind: 'plugin-object' as const,
+        objectKind: 'loot-crate',
+        label: 'Loot crate',
+      },
       activeLayerId: TEST_OBJECT_LAYER_ID,
       selection: new Set<string>(),
       shiftKey: false,
@@ -932,7 +937,11 @@ describe('tool state machine', () => {
     const afterFirst = firstDown.result.command?.apply(map);
     // The session never carries a "single-shot done" signal; the brush stays
     // active so the next click on the freshly edited map places again.
-    const secondDown = dispatchPointerDown({ ...context, map: afterFirst! }, point(2, 2), firstDown.session);
+    const secondDown = dispatchPointerDown(
+      { ...context, map: afterFirst! },
+      point(2, 2),
+      firstDown.session,
+    );
     const afterSecond = secondDown.result.command?.apply(afterFirst!);
 
     expect(firstDown.result.command?.kind).toBe('object-place');

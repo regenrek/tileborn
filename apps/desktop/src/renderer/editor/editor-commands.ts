@@ -454,8 +454,7 @@ export const createCollisionPaintCommand = (
   tileY: number,
 ): CollisionPaintCommand => {
   const existingLayer = findCollisionLayer(map);
-  const layerId =
-    existingLayer?.id ?? makeLayerId('00000000-0000-4000-8000-000000000003');
+  const layerId = existingLayer?.id ?? makeLayerId('00000000-0000-4000-8000-000000000003');
   const { chunkX, chunkY } = chunkOriginAt(tileX, tileY);
   const createdLayer = !existingLayer;
   const createdChunk = existingLayer

@@ -160,10 +160,8 @@ export const findObjectLayer = (map: TileborneMap, layerId?: LayerId): ObjectLay
   return layer?._tag === 'object' ? layer : undefined;
 };
 
-export const findLayerById = (
-  map: TileborneMap,
-  layerId: LayerId,
-): MapLayer | undefined => map.layers.find((entry) => entry.id === layerId);
+export const findLayerById = (map: TileborneMap, layerId: LayerId): MapLayer | undefined =>
+  map.layers.find((entry) => entry.id === layerId);
 
 const cloneLayerWithVisible = (layer: MapLayer, visible: boolean): MapLayer => {
   if (layer._tag === 'tile') {

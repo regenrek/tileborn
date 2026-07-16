@@ -24,9 +24,7 @@ export interface AutotilePaintBrush {
 
 export interface AutotilePaintResolver {
   readonly brushForRuleId: (ruleId: AutotileRuleIdType) => AutotilePaintBrush | undefined;
-  readonly brushForTerrainClass: (
-    terrainClass: TerrainClassType,
-  ) => AutotilePaintBrush | undefined;
+  readonly brushForTerrainClass: (terrainClass: TerrainClassType) => AutotilePaintBrush | undefined;
   readonly brushForTileIndex: (tileIndex: number) => AutotilePaintBrush | undefined;
   readonly directTileIndexForTerrainClass: (terrainClass: TerrainClassType) => number | undefined;
 }
@@ -49,10 +47,7 @@ export const resolveAutotileTileIndex = (
   return tileId === undefined ? undefined : tileIndexForTileId(brush, tileId);
 };
 
-const tileIndexForTileId = (
-  brush: AutotilePaintBrush,
-  tileId: TileIdType,
-): number | undefined => {
+const tileIndexForTileId = (brush: AutotilePaintBrush, tileId: TileIdType): number | undefined => {
   for (const tileIndex of brush.tileIndexes) {
     if (brushTileIdByIndex.get(brush)?.get(tileIndex) === tileId) {
       return tileIndex;
@@ -160,10 +155,7 @@ const previewTileIdForRule = (rule: AutotileRule): TileIdType | undefined => {
   }
 };
 
-const resolveAutotileTileId = (
-  rule: AutotileRule,
-  mask: number,
-): TileIdType | undefined => {
+const resolveAutotileTileId = (rule: AutotileRule, mask: number): TileIdType | undefined => {
   try {
     return resolveAutotile(rule, mask).tileId;
   } catch {
@@ -171,13 +163,12 @@ const resolveAutotileTileId = (
   }
 };
 
-const closestAvailableTileId = (
-  rule: AutotileRule,
-  mask: number,
-): TileIdType | undefined => {
+const closestAvailableTileId = (rule: AutotileRule, mask: number): TileIdType | undefined => {
   const neighborhood = neighborhoodForRule(rule);
   const requestedKey = formatMaskKey(mask, neighborhood);
-  let best: { readonly distance: number; readonly commonBits: number; readonly tileId: TileIdType } | undefined;
+  let best:
+    | { readonly distance: number; readonly commonBits: number; readonly tileId: TileIdType }
+    | undefined;
 
   for (const [key, tileIds] of Object.entries(rule.maskToTileIds)) {
     const tileId = tileIds[0];

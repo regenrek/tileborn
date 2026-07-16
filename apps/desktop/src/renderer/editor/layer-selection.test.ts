@@ -44,15 +44,18 @@ describe('resolveToolActiveLayerId', () => {
   it('moves brush tools to the first compatible layer', () => {
     const map = createTestMap();
 
-    expect(resolveToolActiveLayerId(map, TEST_OBJECT_LAYER_ID, 'tileBrush', { kind: 'tile', tileId: 'tile:test' as never })).toBe(
-      TEST_TILE_LAYER_ID,
-    );
-    expect(resolveToolActiveLayerId(map, TEST_TILE_LAYER_ID, 'tileBrush', {
-      kind: 'placeable',
-      placeableId: 'placeable:test' as never,
-    })).toBe(
-      TEST_OBJECT_LAYER_ID,
-    );
+    expect(
+      resolveToolActiveLayerId(map, TEST_OBJECT_LAYER_ID, 'tileBrush', {
+        kind: 'tile',
+        tileId: 'tile:test' as never,
+      }),
+    ).toBe(TEST_TILE_LAYER_ID);
+    expect(
+      resolveToolActiveLayerId(map, TEST_TILE_LAYER_ID, 'tileBrush', {
+        kind: 'placeable',
+        placeableId: 'placeable:test' as never,
+      }),
+    ).toBe(TEST_OBJECT_LAYER_ID);
     expect(resolveToolActiveLayerId(map, TEST_TILE_LAYER_ID, 'collisionPaint')).toBe(
       TEST_COLLISION_LAYER_ID,
     );
@@ -70,10 +73,12 @@ describe('resolveToolActiveLayerId', () => {
     });
     expect(resolved).toBe(TILE_ONLY_LAYER_ID);
     // Fixed point: resolving again with the result must not change it (no loop).
-    expect(resolveToolActiveLayerId(map, resolved, 'tileBrush', {
-      kind: 'placeable',
-      placeableId: 'placeable:test' as never,
-    })).toBe(resolved);
+    expect(
+      resolveToolActiveLayerId(map, resolved, 'tileBrush', {
+        kind: 'placeable',
+        placeableId: 'placeable:test' as never,
+      }),
+    ).toBe(resolved);
     // And it must agree with the layers-panel resolver so they can't oscillate.
     expect(resolveActiveLayerId(map, resolved)).toBe(resolved);
   });

@@ -32,10 +32,7 @@ export interface UseEditorCommandsOptions {
   readonly mapId: string;
   readonly map: TileborneMap | undefined;
   readonly onMapPatched?: (map: TileborneMap, command: EditorCommand) => void;
-  readonly onPersistSettled?: (
-    map: TileborneMap,
-    status: 'saved' | 'rolled-back',
-  ) => void;
+  readonly onPersistSettled?: (map: TileborneMap, status: 'saved' | 'rolled-back') => void;
 }
 
 export interface UseEditorCommandsResult {
@@ -206,7 +203,15 @@ export function useEditorCommands({
       }
       throw error;
     }
-  }, [documentId, flushCachePatch, hasLocalPendingEdits, onPersistSettled, projectId, updateMap, writeCache]);
+  }, [
+    documentId,
+    flushCachePatch,
+    hasLocalPendingEdits,
+    onPersistSettled,
+    projectId,
+    updateMap,
+    writeCache,
+  ]);
 
   useDocumentLifecycle({
     id: documentId,

@@ -14,7 +14,9 @@ export interface MinimapViewportRect {
   readonly height: number;
 }
 
-export const mapPixelSize = (map: TileborneMap): { readonly width: number; readonly height: number } => ({
+export const mapPixelSize = (
+  map: TileborneMap,
+): { readonly width: number; readonly height: number } => ({
   width: map.size.width * map.tileSize.width,
   height: map.size.height * map.tileSize.height,
 });

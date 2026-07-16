@@ -115,7 +115,12 @@ export type ResolvedBrush =
       readonly frame: {
         readonly assetId: AssetId;
         readonly tileId: TileId;
-        readonly uv: { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
+        readonly uv: {
+          readonly x: number;
+          readonly y: number;
+          readonly w: number;
+          readonly h: number;
+        };
       };
     };
 
@@ -446,10 +451,7 @@ export const dispatchPointerUp = (
     );
     return { session: {}, result: { command, brushPreview: null } };
   }
-  if (
-    (context.activeTool === 'tileBrush' || context.activeTool === 'eraser') &&
-    session.dragging
-  ) {
+  if ((context.activeTool === 'tileBrush' || context.activeTool === 'eraser') && session.dragging) {
     const next =
       context.activeTool === 'tileBrush'
         ? applyTileCommand(context, point, session)
@@ -488,8 +490,7 @@ export const dispatchPointerUp = (
     return { session: {}, result: { command, brushPreview: null } };
   }
   if (context.activeTool === 'select' && session.origin && session.dragging) {
-    const sameTile =
-      session.origin.tileX === point.tileX && session.origin.tileY === point.tileY;
+    const sameTile = session.origin.tileX === point.tileX && session.origin.tileY === point.tileY;
     if (sameTile) {
       // No drag: the single-tile selection was already applied on pointer down
       // (which preserves shift-click toggling); only clear the marquee preview.
@@ -532,7 +533,9 @@ const handleSelectDown = (
     };
   }
   const tileId = `${point.tileX}:${point.tileY}`;
-  const base: ReadonlySet<string> = context.shiftKey ? new Set(context.selection) : new Set<string>();
+  const base: ReadonlySet<string> = context.shiftKey
+    ? new Set(context.selection)
+    : new Set<string>();
   const next = new Set(base);
   if (context.shiftKey && next.has(tileId)) {
     next.delete(tileId);
@@ -589,11 +592,17 @@ const objectTileFootprint = (
   const tileW = map.tileSize.width;
   const tileH = map.tileSize.height;
   const widthPx =
-    optionValue(object.width as number | { readonly _tag: string; readonly value?: number } | undefined) ??
+    optionValue(
+      object.width as number | { readonly _tag: string; readonly value?: number } | undefined,
+    ) ??
     (typeof object.properties.tileWidth === 'number' ? object.properties.tileWidth * tileW : tileW);
   const heightPx =
-    optionValue(object.height as number | { readonly _tag: string; readonly value?: number } | undefined) ??
-    (typeof object.properties.tileHeight === 'number' ? object.properties.tileHeight * tileH : tileH);
+    optionValue(
+      object.height as number | { readonly _tag: string; readonly value?: number } | undefined,
+    ) ??
+    (typeof object.properties.tileHeight === 'number'
+      ? object.properties.tileHeight * tileH
+      : tileH);
   return {
     w: Math.max(1, Math.round(widthPx / tileW)),
     h: Math.max(1, Math.round(heightPx / tileH)),
@@ -631,11 +640,17 @@ const objectContainsPoint = (
   const tileW = map.tileSize.width;
   const tileH = map.tileSize.height;
   const width =
-    optionValue(object.width as number | { readonly _tag: string; readonly value?: number } | undefined) ??
+    optionValue(
+      object.width as number | { readonly _tag: string; readonly value?: number } | undefined,
+    ) ??
     (typeof object.properties.tileWidth === 'number' ? object.properties.tileWidth * tileW : tileW);
   const height =
-    optionValue(object.height as number | { readonly _tag: string; readonly value?: number } | undefined) ??
-    (typeof object.properties.tileHeight === 'number' ? object.properties.tileHeight * tileH : tileH);
+    optionValue(
+      object.height as number | { readonly _tag: string; readonly value?: number } | undefined,
+    ) ??
+    (typeof object.properties.tileHeight === 'number'
+      ? object.properties.tileHeight * tileH
+      : tileH);
   const x = point.tileX * tileW;
   const y = point.tileY * tileH;
   return x >= object.x && x < object.x + width && y >= object.y && y < object.y + height;
@@ -713,7 +728,9 @@ const applyAutotilePaintCommand = (
   if (isSamePaintedCell(session, layerId, point, brush.previewTileIndex)) {
     return {
       session: paintSession,
-      result: { brushPreview: { x: point.tileX, y: point.tileY, w: 1, h: 1, tileIndex: previewTileIndex } },
+      result: {
+        brushPreview: { x: point.tileX, y: point.tileY, w: 1, h: 1, tileIndex: previewTileIndex },
+      },
     };
   }
 
@@ -850,7 +867,15 @@ const appendStrokeTileChange = (
     ...session,
     strokeTileChanges: {
       layerId,
-      cells: [...nextCells, { tileX: point.tileX, tileY: point.tileY, oldIndex: existing?.oldIndex ?? oldIndex, newIndex: tileIndex }],
+      cells: [
+        ...nextCells,
+        {
+          tileX: point.tileX,
+          tileY: point.tileY,
+          oldIndex: existing?.oldIndex ?? oldIndex,
+          newIndex: tileIndex,
+        },
+      ],
     },
   };
 };
@@ -916,7 +941,9 @@ const tileIndexWithStroke = (
 ): number => {
   const stroke = session.strokeTileChanges;
   if (stroke?.layerId === layerId) {
-    const cell = stroke.cells.find((candidate) => candidate.tileX === tileX && candidate.tileY === tileY);
+    const cell = stroke.cells.find(
+      (candidate) => candidate.tileX === tileX && candidate.tileY === tileY,
+    );
     if (cell !== undefined) {
       return cell.newIndex;
     }
@@ -971,10 +998,7 @@ const applyObjectPlace = (
   // dropped or persisted with an invalid tile layerId.
   const layerId = resolveObjectLayerId(context.map, context.activeLayerId);
   // A placeable brush stamps its placeable asset repeatedly (sticky).
-  if (
-    context.brushIntent.kind === 'placeable' &&
-    context.resolvedBrush?.kind === 'placeObject'
-  ) {
+  if (context.brushIntent.kind === 'placeable' && context.resolvedBrush?.kind === 'placeObject') {
     const command = createObjectPlaceCommand(context.map, {
       kind: PLACEABLE_OBJECT_TYPE_ID,
       x: point.tileX * tileSize,

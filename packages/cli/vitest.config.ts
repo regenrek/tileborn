@@ -21,5 +21,11 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'src/__e2e__/spec-section-12-sweep.test.ts'],
     exclude: ['dist/**', 'node_modules/**', ...e2eExclude],
+    // These integration-style unit suites spawn the built CLI and perform
+    // real filesystem/package work. Five seconds is not a valid correctness
+    // boundary under the full parallel workspace release gate; timing out a
+    // process.chdir test also lets cleanup invalidate the next child cwd.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

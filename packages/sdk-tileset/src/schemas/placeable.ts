@@ -1,20 +1,20 @@
-import { AssetId, JsonObject } from "@tileborne/core";
-import { Schema } from "effect";
+import { AssetId, JsonObject } from '@tileborne/core';
+import { Schema } from 'effect';
 
-import { ClipId, PlaceableId, TileId } from "./ids.js";
-import { UVRect } from "./uv-rect.js";
+import { ClipId, PlaceableId, TileId } from './ids.js';
+import { UVRect } from './uv-rect.js';
 
-export const PlaceablePlacementMode = Schema.Literals(["object", "tile-and-object"]);
+export const PlaceablePlacementMode = Schema.Literals(['object', 'tile-and-object']);
 export type PlaceablePlacementMode = typeof PlaceablePlacementMode.Type;
 
 /** Pixel size for an object that is placed as a whole asset. */
-export class PlaceableSize extends Schema.Class<PlaceableSize>("PlaceableSize")({
+export class PlaceableSize extends Schema.Class<PlaceableSize>('PlaceableSize')({
   width: Schema.Number,
   height: Schema.Number,
 }) {}
 
 /** One renderable frame for a placeable object. */
-export class PlaceableFrameRef extends Schema.Class<PlaceableFrameRef>("PlaceableFrameRef")({
+export class PlaceableFrameRef extends Schema.Class<PlaceableFrameRef>('PlaceableFrameRef')({
   assetId: AssetId,
   tileId: TileId,
   uv: UVRect,
@@ -26,7 +26,7 @@ export class PlaceableFrameRef extends Schema.Class<PlaceableFrameRef>("Placeabl
  * top-level `frames[]` remains the implicit default clip for back-compat with
  * Tiled placeables; named clips are additive and reference the same atlas tiles.
  */
-export class SpriteClip extends Schema.Class<SpriteClip>("SpriteClip")({
+export class SpriteClip extends Schema.Class<SpriteClip>('SpriteClip')({
   id: ClipId,
   name: Schema.String,
   frames: Schema.NonEmptyArray(PlaceableFrameRef),
@@ -35,8 +35,10 @@ export class SpriteClip extends Schema.Class<SpriteClip>("SpriteClip")({
 }) {}
 
 /** Tiled provenance retained for image-collection tiles and tile-object placement. */
-export class TiledPlaceableSource extends Schema.Class<TiledPlaceableSource>("TiledPlaceableSource")({
-  format: Schema.Literal("tiled"),
+export class TiledPlaceableSource extends Schema.Class<TiledPlaceableSource>(
+  'TiledPlaceableSource',
+)({
+  format: Schema.Literal('tiled'),
   tilesetName: Schema.String,
   localTileId: Schema.Int,
   image: Schema.OptionFromUndefinedOr(Schema.String),
@@ -48,7 +50,7 @@ export class TiledPlaceableSource extends Schema.Class<TiledPlaceableSource>("Ti
 }) {}
 
 /** Asset-pack object definition intended for object-layer placement, not cell painting. */
-export class Placeable extends Schema.Class<Placeable>("Placeable")({
+export class Placeable extends Schema.Class<Placeable>('Placeable')({
   id: PlaceableId,
   name: Schema.String,
   size: PlaceableSize,

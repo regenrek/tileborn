@@ -1,4 +1,4 @@
-import type { AnimationId, TileId } from "../schemas/ids.js";
+import type { AnimationId, TileId } from '../schemas/ids.js';
 
 /** Precomputed animation frame with cumulative timing within one loop cycle. */
 export type CompiledAnimationFrame = {
@@ -17,11 +17,11 @@ export type CompiledAnimation = {
 };
 
 export type AnimationCompileDiagnostic = {
-  readonly _tag: "EmptyAnimationFrames";
+  readonly _tag: 'EmptyAnimationFrames';
   readonly animationId: string;
   readonly path: string;
   readonly message: string;
-  readonly severity: "error";
+  readonly severity: 'error';
 };
 
 export type CompileAnimationResult = {

@@ -1,6 +1,6 @@
-import type { AssetId } from "@tileborne/core";
+import type { AssetId } from '@tileborne/core';
 
-import type { FrameLookupResult } from "./types.js";
+import type { FrameLookupResult } from './types.js';
 
 export type PixiFrameRect = {
   readonly x: number;

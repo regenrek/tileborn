@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Integer pixel rectangle inside an atlas image. */
-export class UVRect extends Schema.Class<UVRect>("UVRect")({
+export class UVRect extends Schema.Class<UVRect>('UVRect')({
   x: Schema.Int,
   y: Schema.Int,
   w: Schema.Int,

@@ -1,11 +1,11 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic } from "../../diagnostics.js";
-import type { AutotileRule } from "../../schemas/autotile-rule.js";
-import type { AutotileRuleId, TileId } from "../../schemas/ids.js";
-import type { TerrainClass } from "../../schemas/terrain-class.js";
-import { formatMaskKey, projectBlobMask } from "../mask.js";
-import { NEIGHBORHOODS, type Neighborhood } from "../neighborhoods.js";
+import type { ParseDiagnostic } from '../../diagnostics.js';
+import type { AutotileRule } from '../../schemas/autotile-rule.js';
+import type { AutotileRuleId, TileId } from '../../schemas/ids.js';
+import type { TerrainClass } from '../../schemas/terrain-class.js';
+import { formatMaskKey, projectBlobMask } from '../mask.js';
+import { NEIGHBORHOODS, type Neighborhood } from '../neighborhoods.js';
 
 export type MaskToTileIds = Record<string, readonly [TileId, ...TileId[]]>;
 
@@ -36,12 +36,11 @@ export const malformedLayout = (
   actualCells: number,
   message?: string,
 ): ParseDiagnostic => ({
-  _tag: "MalformedAutotileLayout",
+  _tag: 'MalformedAutotileLayout',
   path,
   message:
-    message ??
-    `Expected ${expectedCells} atlas cells for ${pattern}, received ${actualCells}`,
-  severity: "error",
+    message ?? `Expected ${expectedCells} atlas cells for ${pattern}, received ${actualCells}`,
+  severity: 'error',
   pattern,
   expectedCells,
   actualCells,
@@ -88,10 +87,10 @@ export const compileFromMaskIndexTable = (input: {
     const tileId = input.cells[tileIndex];
     if (!tileId) {
       diagnostics.push({
-        _tag: "MalformedAutotileLayout",
+        _tag: 'MalformedAutotileLayout',
         path: `${input.path}/cells/${tileIndex}`,
         message: `Missing tile for ${input.pattern} atlas index ${tileIndex}`,
-        severity: "error",
+        severity: 'error',
         pattern: input.pattern,
         expectedCells: input.expectedCells,
         actualCells: definedCells.length,
@@ -107,7 +106,7 @@ export const compileFromMaskIndexTable = (input: {
 
 export const finalizeRule = <TRule extends AutotileRule>(
   rule: TRule,
-  debug: Omit<CompileDebug, "mappedMaskCount"> & { readonly mappedMaskCount?: number },
+  debug: Omit<CompileDebug, 'mappedMaskCount'> & { readonly mappedMaskCount?: number },
   diagnostics: readonly ParseDiagnostic[],
 ): CompileResult => ({
   rule,

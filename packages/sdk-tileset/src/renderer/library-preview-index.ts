@@ -1,12 +1,9 @@
-import {
-  AssetLibraryReference,
-  type AssetLibraryGroup,
-} from "@tileborne/core";
-import { Option } from "effect";
+import { AssetLibraryReference, type AssetLibraryGroup } from '@tileborne/core';
+import { Option } from 'effect';
 
-import { resolveAnimatedTile } from "../animation/index.js";
-import type { Placeable, TileIdType, TilesetPack } from "../schemas/index.js";
-import { buildFrameIndex, type FrameIndex } from "./frame-index.js";
+import { resolveAnimatedTile } from '../animation/index.js';
+import type { Placeable, TileIdType, TilesetPack } from '../schemas/index.js';
+import { buildFrameIndex, type FrameIndex } from './frame-index.js';
 
 export interface LibraryPreviewRef {
   /** Asset image path relative to the pack root. */
@@ -104,14 +101,14 @@ export const buildLibraryPreviewIndex = (
   const makeTileRef = (tileId: TileIdType): AssetLibraryReference =>
     new AssetLibraryReference({
       packId: pack.id,
-      kind: "tile",
+      kind: 'tile',
       refId: tileId,
       tileId,
     });
   const makePlaceableRef = (placeable: Placeable): AssetLibraryReference =>
     new AssetLibraryReference({
       packId: pack.id,
-      kind: "placeable",
+      kind: 'placeable',
       refId: placeable.id,
       tileId: placeable.frames[0]?.tileId,
     });
@@ -149,7 +146,9 @@ export const buildLibraryPreviewIndex = (
       const fallbackTileId = Option.getOrUndefined(rule.fallbackTileId);
       tileRefsByAutotileRuleId.set(
         rule.id,
-        uniqueTileRefs(fallbackTileId === undefined ? ruleTileIds : [...ruleTileIds, fallbackTileId]),
+        uniqueTileRefs(
+          fallbackTileId === undefined ? ruleTileIds : [...ruleTileIds, fallbackTileId],
+        ),
       );
     }
   }
@@ -163,7 +162,7 @@ export const buildLibraryPreviewIndex = (
   }
 
   const previewForRef = (ref: AssetLibraryReference): LibraryPreviewRef | undefined => {
-    if (ref.kind === "placeable") {
+    if (ref.kind === 'placeable') {
       const placeable = placeableById.get(ref.refId);
       if (placeable !== undefined) {
         return placeablePreview(placeable, assetPathById);
@@ -173,11 +172,11 @@ export const buildLibraryPreviewIndex = (
     const terrainPreviewTileId = tileRefsByTerrainClass.get(ref.refId)?.[0]?.tileId;
     const tileId =
       ref.tileId ??
-      (ref.kind === "tile"
+      (ref.kind === 'tile'
         ? (ref.refId as TileIdType)
-        : ref.kind === "autotile"
+        : ref.kind === 'autotile'
           ? rulePreviewTileId
-          : ref.kind === "terrain"
+          : ref.kind === 'terrain'
             ? terrainPreviewTileId
             : undefined);
     return tileId === undefined ? undefined : tilePreview(tileId, frameIndex, animationTimeMs);
@@ -194,16 +193,18 @@ export const buildLibraryPreviewIndex = (
     groupOptions: { readonly limit?: number | undefined } = {},
   ): readonly AssetLibraryReference[] => {
     const refs =
-      group.kind === "tileset"
-        ? (tileRefsByTilesetId.get(group.metadata.tilesetId ?? "") ?? group.previewRefs)
-        : group.kind === "terrain"
-          ? (tileRefsByTerrainClass.get(group.metadata.terrainClass ?? group.primaryRef?.refId ?? "") ??
-            group.previewRefs)
-          : group.kind === "autotile"
-            ? (tileRefsByAutotileRuleId.get(group.metadata.ruleId ?? group.primaryRef?.refId ?? "") ??
-              group.previewRefs)
-            : group.kind === "source"
-              ? (placeableRefsBySource.get(group.metadata.source ?? "") ?? group.previewRefs)
+      group.kind === 'tileset'
+        ? (tileRefsByTilesetId.get(group.metadata.tilesetId ?? '') ?? group.previewRefs)
+        : group.kind === 'terrain'
+          ? (tileRefsByTerrainClass.get(
+              group.metadata.terrainClass ?? group.primaryRef?.refId ?? '',
+            ) ?? group.previewRefs)
+          : group.kind === 'autotile'
+            ? (tileRefsByAutotileRuleId.get(
+                group.metadata.ruleId ?? group.primaryRef?.refId ?? '',
+              ) ?? group.previewRefs)
+            : group.kind === 'source'
+              ? (placeableRefsBySource.get(group.metadata.source ?? '') ?? group.previewRefs)
               : group.primaryRef === undefined
                 ? group.previewRefs
                 : [group.primaryRef];

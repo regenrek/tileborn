@@ -1,6 +1,6 @@
-import type { CollisionMask } from "../schemas/collision-mask.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import type { TileId } from "../schemas/ids.js";
+import type { CollisionMask } from '../schemas/collision-mask.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import type { TileId } from '../schemas/ids.js';
 
 /** Pixel dimensions used when validating collision geometry. */
 export type CollisionCellSize = {
@@ -32,7 +32,9 @@ export type PathfindingHint = {
 };
 
 /** Custom properties grouped by namespace to avoid key collisions. */
-export type NamespacedProperties = Readonly<Record<string, Readonly<Record<string, string | number | boolean>>>>;
+export type NamespacedProperties = Readonly<
+  Record<string, Readonly<Record<string, string | number | boolean>>>
+>;
 
 /** Compiled per-tile metadata block consumed by importers and manifests. */
 export type CompiledTileMetadata = {

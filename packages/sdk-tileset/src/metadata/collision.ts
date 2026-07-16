@@ -1,12 +1,12 @@
-import type { TiledJsonObject } from "../tiled/types.js";
+import type { TiledJsonObject } from '../tiled/types.js';
 import {
   BitmaskCollisionMask,
   CollisionEdge,
   PolygonCollisionMask,
   type CollisionMask,
-} from "../schemas/collision-mask.js";
+} from '../schemas/collision-mask.js';
 
-import type { LdtkIntGridCollisionValue, UnityMetaSprite } from "./types.js";
+import type { LdtkIntGridCollisionValue, UnityMetaSprite } from './types.js';
 
 const BLOCKED_IDENTIFIER = /block|solid|wall|collision|obstacle/i;
 
@@ -25,7 +25,12 @@ const polygonEdgesFromPoints = (
     });
   });
 
-const rectangleEdges = (x: number, y: number, width: number, height: number): readonly CollisionEdge[] => [
+const rectangleEdges = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): readonly CollisionEdge[] => [
   new CollisionEdge({ x1: x, y1: y, x2: x + width, y2: y }),
   new CollisionEdge({ x1: x + width, y1: y, x2: x + width, y2: y + height }),
   new CollisionEdge({ x1: x + width, y1: y + height, x2: x, y2: y + height }),
@@ -41,7 +46,9 @@ const polygonCollision = (edges: readonly CollisionEdge[]): PolygonCollisionMask
   });
 
 /** Compile a Tiled tile object into a polygon collision mask. */
-export const compileCollisionFromTiledObject = (object: TiledJsonObject): CollisionMask | undefined => {
+export const compileCollisionFromTiledObject = (
+  object: TiledJsonObject,
+): CollisionMask | undefined => {
   const polygon = object.polygon ?? object.polyline;
   if (polygon && polygon.length > 0) {
     return polygonCollision(polygonEdgesFromPoints(polygon, object.x, object.y));
@@ -53,7 +60,12 @@ export const compileCollisionFromTiledObject = (object: TiledJsonObject): Collis
     return polygonCollision(rectangleEdges(object.x, object.y, width, height));
   }
 
-  if (object.width !== undefined && object.height !== undefined && object.width > 0 && object.height > 0) {
+  if (
+    object.width !== undefined &&
+    object.height !== undefined &&
+    object.width > 0 &&
+    object.height > 0
+  ) {
     return polygonCollision(rectangleEdges(object.x, object.y, object.width, object.height));
   }
 
@@ -108,7 +120,9 @@ export const compileCollisionFromLdtkIntGridValue = (
 export const collisionMaskFromManifest = (mask: CollisionMask): CollisionMask => mask;
 
 /** Best-effort Unity `.meta` sprite outline fallback into polygon collision. */
-export const compileCollisionFromUnityMetaSprite = (sprite: UnityMetaSprite): CollisionMask | undefined => {
+export const compileCollisionFromUnityMetaSprite = (
+  sprite: UnityMetaSprite,
+): CollisionMask | undefined => {
   const outline = sprite.outline?.find((entry) => entry.points.length >= 3);
   if (outline === undefined) {
     return undefined;

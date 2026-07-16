@@ -1,13 +1,13 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { buildFrameIndex } from "../renderer/frame-index.js";
-import { AutotileRule } from "../schemas/autotile-rule.js";
-import { CollisionMask } from "../schemas/collision-mask.js";
-import type { TileId } from "../schemas/ids.js";
-import { Placeable } from "../schemas/placeable.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import { TerrainTransition } from "../schemas/terrain-transition.js";
-import type { TilesetPack } from "../schemas/tileset-pack.js";
+import { buildFrameIndex } from '../renderer/frame-index.js';
+import { AutotileRule } from '../schemas/autotile-rule.js';
+import { CollisionMask } from '../schemas/collision-mask.js';
+import type { TileId } from '../schemas/ids.js';
+import { Placeable } from '../schemas/placeable.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import { TerrainTransition } from '../schemas/terrain-transition.js';
+import type { TilesetPack } from '../schemas/tileset-pack.js';
 
 import {
   EDITOR_TILESET_INDEX_SCHEMA_VERSION,
@@ -15,13 +15,13 @@ import {
   type EditorIndexFrame,
   type EditorIndexLicense,
   type EditorTilesetIndexJson,
-} from "./types.js";
+} from './types.js';
 
 const AutotileRulesCodec = Schema.Array(AutotileRule);
 const TerrainTransitionsCodec = Schema.Array(TerrainTransition);
 const PlaceablesCodec = Schema.Array(Placeable);
 
-const encodeLicense = (license: TilesetPack["license"]): EditorIndexLicense => ({
+const encodeLicense = (license: TilesetPack['license']): EditorIndexLicense => ({
   spdxId: license.spdxId,
   ...(Option.isSome(license.attribution) ? { attribution: license.attribution.value } : {}),
   ...(Option.isSome(license.sourceUrl) ? { sourceUrl: license.sourceUrl.value } : {}),
@@ -162,7 +162,9 @@ export const buildEditorTilesetIndex = (
     terrainTransitions: Schema.encodeUnknownSync(TerrainTransitionsCodec)(
       pack.tilesets.flatMap((tileset) => tileset.terrainTransitions),
     ) as readonly unknown[],
-    placeables: Schema.encodeUnknownSync(PlaceablesCodec)(pack.placeables ?? []) as readonly unknown[],
+    placeables: Schema.encodeUnknownSync(PlaceablesCodec)(
+      pack.placeables ?? [],
+    ) as readonly unknown[],
     atlasAssetPaths,
   };
 };

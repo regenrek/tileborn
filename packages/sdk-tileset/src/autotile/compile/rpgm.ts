@@ -2,10 +2,10 @@ import {
   RpgmA2AutotileRule,
   RpgmA3AutotileRule,
   RpgmA4AutotileRule,
-} from "../../schemas/autotile-rule.js";
-import type { TileId } from "../../schemas/ids.js";
+} from '../../schemas/autotile-rule.js';
+import type { TileId } from '../../schemas/ids.js';
 
-import type { CompileBlob47Input } from "./blob47.js";
+import type { CompileBlob47Input } from './blob47.js';
 import {
   around8Neighborhood,
   blobProjectMask,
@@ -15,15 +15,15 @@ import {
   ruleBase,
   type CompileResult,
   type RuleBaseInput,
-} from "./shared.js";
+} from './shared.js';
 import {
   BLOB47_MASK_TO_TILE_INDEX,
   BLOB47_TILE_COUNT,
   EDGE16_MASK_TO_TILE_INDEX,
   RPGM_EDGE_TILE_COUNT,
-} from "./tables.js";
+} from './tables.js';
 
-export type RpgmSetKind = "A2" | "A3" | "A4";
+export type RpgmSetKind = 'A2' | 'A3' | 'A4';
 
 export type CompileRpgmInput = RuleBaseInput & {
   readonly path?: string;
@@ -33,11 +33,11 @@ export type CompileRpgmInput = RuleBaseInput & {
 
 const rpgmRuleCtor = (set: RpgmSetKind) => {
   switch (set) {
-    case "A2":
+    case 'A2':
       return RpgmA2AutotileRule;
-    case "A3":
+    case 'A3':
       return RpgmA3AutotileRule;
-    case "A4":
+    case 'A4':
       return RpgmA4AutotileRule;
   }
 };
@@ -46,10 +46,10 @@ const rpgmRuleCtor = (set: RpgmSetKind) => {
 export const compileRpgm = (input: CompileRpgmInput): CompileResult => {
   const path = input.path ?? `/autotile/rpgm/${input.set}`;
 
-  if (input.set === "A2") {
+  if (input.set === 'A2') {
     const { maskToTileIds, sourceTileIndexes, diagnostics } = compileFromMaskIndexTable({
       path,
-      pattern: "rpgmA2",
+      pattern: 'rpgmA2',
       cells: input.cells,
       expectedCells: BLOB47_TILE_COUNT,
       neighborhood: around8Neighborhood,
@@ -57,32 +57,32 @@ export const compileRpgm = (input: CompileRpgmInput): CompileResult => {
       projectMask: blobProjectMask,
     });
 
-    const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === "error");
+    const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
     if (hasErrors) {
       return {
-        debug: { pattern: "rpgmA2", mappedMaskCount: 0, sourceTileIndexes },
+        debug: { pattern: 'rpgmA2', mappedMaskCount: 0, sourceTileIndexes },
         diagnostics,
       };
     }
 
     const rule = new RpgmA2AutotileRule(ruleBase(input, maskToTileIds));
-    return finalizeRule(rule, { pattern: "rpgmA2", sourceTileIndexes }, diagnostics);
+    return finalizeRule(rule, { pattern: 'rpgmA2', sourceTileIndexes }, diagnostics);
   }
 
   const { maskToTileIds, sourceTileIndexes, diagnostics } = compileFromMaskIndexTable({
     path,
-    pattern: input.set === "A3" ? "rpgmA3" : "rpgmA4",
+    pattern: input.set === 'A3' ? 'rpgmA3' : 'rpgmA4',
     cells: input.cells,
     expectedCells: RPGM_EDGE_TILE_COUNT,
     neighborhood: edge4Neighborhood,
     maskToIndex: EDGE16_MASK_TO_TILE_INDEX,
   });
 
-  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
   if (hasErrors) {
     return {
       debug: {
-        pattern: input.set === "A3" ? "rpgmA3" : "rpgmA4",
+        pattern: input.set === 'A3' ? 'rpgmA3' : 'rpgmA4',
         mappedMaskCount: 0,
         sourceTileIndexes,
       },
@@ -95,7 +95,7 @@ export const compileRpgm = (input: CompileRpgmInput): CompileResult => {
   return finalizeRule(
     rule,
     {
-      pattern: input.set === "A3" ? "rpgmA3" : "rpgmA4",
+      pattern: input.set === 'A3' ? 'rpgmA3' : 'rpgmA4',
       sourceTileIndexes,
     },
     diagnostics,
@@ -103,8 +103,9 @@ export const compileRpgm = (input: CompileRpgmInput): CompileResult => {
 };
 
 /** Convenience helper for callers that already validated A2 cell counts. */
-export const compileRpgmA2 = (input: Omit<CompileBlob47Input, "path"> & { readonly path?: string }): CompileResult =>
-  compileRpgm({ ...input, set: "A2" });
+export const compileRpgmA2 = (
+  input: Omit<CompileBlob47Input, 'path'> & { readonly path?: string },
+): CompileResult => compileRpgm({ ...input, set: 'A2' });
 
 export const expectedRpgmCellCount = (set: RpgmSetKind): number =>
-  set === "A2" ? BLOB47_TILE_COUNT : RPGM_EDGE_TILE_COUNT;
+  set === 'A2' ? BLOB47_TILE_COUNT : RPGM_EDGE_TILE_COUNT;

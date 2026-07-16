@@ -1,6 +1,6 @@
-import type { TileId } from "../schemas/ids.js";
+import type { TileId } from '../schemas/ids.js';
 
-import type { CompiledAnimation } from "./types.js";
+import type { CompiledAnimation } from './types.js';
 
 /**
  * Returns the tile id for the animation frame active at `timeMs`.
@@ -13,7 +13,7 @@ export const resolveAnimatedTile = (compiled: CompiledAnimation, timeMs: number)
   const { frames, totalDurationMs, loop } = compiled;
 
   if (frames.length === 0) {
-    throw new Error("Cannot resolve empty compiled animation");
+    throw new Error('Cannot resolve empty compiled animation');
   }
 
   if (timeMs < 0) {

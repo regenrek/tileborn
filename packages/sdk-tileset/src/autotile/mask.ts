@@ -1,4 +1,4 @@
-import { Around8Bits, Edge4Bits, type Neighborhood } from "./neighborhoods.js";
+import { Around8Bits, Edge4Bits, type Neighborhood } from './neighborhoods.js';
 
 /** Compute a bitmask from neighbor terrain membership. */
 export const computeMask = (
@@ -45,4 +45,4 @@ export const formatMaskKey = (mask: number, neighborhood: Neighborhood): string 
   [...neighborhood.bits]
     .sort((left, right) => left.bit - right.bit)
     .map(({ bit }) => ((mask >> bit) & 1).toString())
-    .join("");
+    .join('');

@@ -1,4 +1,4 @@
-import type { Neighborhood } from "./neighborhoods.js";
+import type { Neighborhood } from './neighborhoods.js';
 
 export type GridCell = {
   readonly x: number;

@@ -1,5 +1,9 @@
-export { buildEditorTilesetIndex } from "./build.js";
-export { decodeEditorTilesetIndex, type DecodedEditorTilesetIndex, type EditorTileFrame } from "./decode.js";
+export { buildEditorTilesetIndex } from './build.js';
+export {
+  decodeEditorTilesetIndex,
+  type DecodedEditorTilesetIndex,
+  type EditorTileFrame,
+} from './decode.js';
 export {
   EDITOR_TILESET_INDEX_SCHEMA_VERSION,
   type EditorIndexAsset,
@@ -9,4 +13,4 @@ export {
   type EditorIndexPackMeta,
   type EditorIndexUv,
   type EditorTilesetIndexJson,
-} from "./types.js";
+} from './types.js';

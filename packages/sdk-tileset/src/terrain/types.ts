@@ -1,8 +1,8 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { AutotileRuleId, TileId } from "../schemas/ids.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import type { TerrainTransition } from "../schemas/terrain-transition.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { AutotileRuleId, TileId } from '../schemas/ids.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import type { TerrainTransition } from '../schemas/terrain-transition.js';
 
 /** Resolved tile reference used by terrain base and overlay outputs. */
 export type TileRef = TileId;
@@ -22,7 +22,7 @@ export type TerrainNeighbor = {
   readonly terrainClass: TerrainClass;
 };
 
-export type TransitionMode = "mask-layer" | "autotile-derived" | "explicit-overlay";
+export type TransitionMode = 'mask-layer' | 'autotile-derived' | 'explicit-overlay';
 
 export type TerrainResolveDebug = {
   readonly fromClass: TerrainClass;

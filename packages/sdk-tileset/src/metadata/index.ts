@@ -6,10 +6,14 @@ export {
   compileCollisionFromUnityMetaSprite,
   polygonEdgesFromPoints,
   rectangleEdges,
-} from "./collision.js";
-export { compileTileMetadata, namespaceCustomProperties, KNOWN_NAMESPACES } from "./metadata-compile.js";
-export type { CompileTileMetadataInput } from "./metadata-compile.js";
-export { validateCollisionMask } from "./validate.js";
+} from './collision.js';
+export {
+  compileTileMetadata,
+  namespaceCustomProperties,
+  KNOWN_NAMESPACES,
+} from './metadata-compile.js';
+export type { CompileTileMetadataInput } from './metadata-compile.js';
+export { validateCollisionMask } from './validate.js';
 export type {
   AxisAlignedBounds,
   CollisionCellSize,
@@ -19,4 +23,4 @@ export type {
   PathfindingHint,
   SpawnAnchor,
   UnityMetaSprite,
-} from "./types.js";
+} from './types.js';

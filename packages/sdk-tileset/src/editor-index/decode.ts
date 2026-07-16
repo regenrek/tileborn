@@ -1,5 +1,5 @@
-import type { AssetId, JsonObject, PackId } from "@tileborne/core";
-import { Option } from "effect";
+import type { AssetId, JsonObject, PackId } from '@tileborne/core';
+import { Option } from 'effect';
 
 import {
   AutotileRule,
@@ -11,9 +11,9 @@ import {
   Wang2CornerAutotileRule,
   Wang2EdgeAutotileRule,
   Wang4CornerAutotileRule,
-} from "../schemas/autotile-rule.js";
-import type { CollisionMask } from "../schemas/collision-mask.js";
-import type { AutotileRuleId, TileId } from "../schemas/ids.js";
+} from '../schemas/autotile-rule.js';
+import type { CollisionMask } from '../schemas/collision-mask.js';
+import type { AutotileRuleId, TileId } from '../schemas/ids.js';
 import {
   Placeable,
   PlaceableFrameRef,
@@ -21,13 +21,13 @@ import {
   SpriteClip,
   TiledPlaceableSource,
   type PlaceablePlacementMode,
-} from "../schemas/placeable.js";
-import type { ClipId } from "../schemas/ids.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import { TerrainTransition } from "../schemas/terrain-transition.js";
-import { UVRect } from "../schemas/uv-rect.js";
+} from '../schemas/placeable.js';
+import type { ClipId } from '../schemas/ids.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import { TerrainTransition } from '../schemas/terrain-transition.js';
+import { UVRect } from '../schemas/uv-rect.js';
 
-import type { EditorIndexAsset, EditorIndexPackMeta, EditorTilesetIndexJson } from "./types.js";
+import type { EditorIndexAsset, EditorIndexPackMeta, EditorTilesetIndexJson } from './types.js';
 
 /** Precomputed tile frame, equivalent to `toPixiDescriptor(frameIndex.lookup(tileId))`. */
 export interface EditorTileFrame {
@@ -87,7 +87,7 @@ interface RawSpriteClip {
 }
 
 interface RawPlaceableSource {
-  readonly format: "tiled";
+  readonly format: 'tiled';
   readonly tilesetName: string;
   readonly localTileId: number;
   readonly image?: string;
@@ -130,21 +130,21 @@ const reconstructAutotileRule = (raw: RawAutotileRule): AutotileRule => {
     fallbackTileId: toOption(raw.fallbackTileId as TileId | undefined),
   };
   switch (raw._tag) {
-    case "wang2corner":
+    case 'wang2corner':
       return new Wang2CornerAutotileRule(base);
-    case "wang2edge":
+    case 'wang2edge':
       return new Wang2EdgeAutotileRule(base);
-    case "wang4corner":
+    case 'wang4corner':
       return new Wang4CornerAutotileRule(base);
-    case "blob47":
+    case 'blob47':
       return new Blob47AutotileRule(base);
-    case "rpgmA2":
+    case 'rpgmA2':
       return new RpgmA2AutotileRule(base);
-    case "rpgmA3":
+    case 'rpgmA3':
       return new RpgmA3AutotileRule(base);
-    case "rpgmA4":
+    case 'rpgmA4':
       return new RpgmA4AutotileRule(base);
-    case "custom":
+    case 'custom':
       return new CustomAutotileRule({ ...base, source: raw.source });
     default:
       throw new Error(`Unsupported autotile rule tag in editor index: ${raw._tag}`);
@@ -161,10 +161,13 @@ const reconstructPlaceableFrame = (frame: RawPlaceableFrame): PlaceableFrameRef 
 
 const reconstructPlaceable = (raw: RawPlaceable): Placeable =>
   new Placeable({
-    id: raw.id as Placeable["id"],
+    id: raw.id as Placeable['id'],
     name: raw.name,
     size: new PlaceableSize({ width: raw.size.width, height: raw.size.height }),
-    frames: raw.frames.map(reconstructPlaceableFrame) as [PlaceableFrameRef, ...PlaceableFrameRef[]],
+    frames: raw.frames.map(reconstructPlaceableFrame) as [
+      PlaceableFrameRef,
+      ...PlaceableFrameRef[],
+    ],
     ...(raw.clips === undefined
       ? {}
       : {

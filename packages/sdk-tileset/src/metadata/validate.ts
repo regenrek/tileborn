@@ -1,7 +1,7 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { CollisionMask } from "../schemas/collision-mask.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { CollisionMask } from '../schemas/collision-mask.js';
 
-import type { CollisionCellSize } from "./types.js";
+import type { CollisionCellSize } from './types.js';
 
 const bitmaskCellCount = (subgrid: CollisionCellSize): number => subgrid.width * subgrid.height;
 
@@ -16,7 +16,7 @@ const usedBitmaskBits = (value: number): number => {
 };
 
 const validateBitmaskCollision = (
-  mask: Extract<CollisionMask, { readonly _tag: "bitmask" }>,
+  mask: Extract<CollisionMask, { readonly _tag: 'bitmask' }>,
   subgrid: CollisionCellSize,
   tileId: string,
   path: string,
@@ -28,10 +28,10 @@ const validateBitmaskCollision = (
   if (actualBits > expectedBits) {
     return [
       {
-        _tag: "CollisionMaskSizeMismatch",
+        _tag: 'CollisionMaskSizeMismatch',
         path,
         message: `Collision bitmask uses ${actualBits} bits but cell grid expects ${expectedCells} cells (${subgrid.width}x${subgrid.height})`,
-        severity: "error",
+        severity: 'error',
         tileId,
         expected: expectedCells,
         actual: actualBits,
@@ -43,7 +43,7 @@ const validateBitmaskCollision = (
 };
 
 const validatePolygonCollision = (
-  mask: Extract<CollisionMask, { readonly _tag: "polygon" }>,
+  mask: Extract<CollisionMask, { readonly _tag: 'polygon' }>,
   cellSize: CollisionCellSize,
   tileId: string,
   path: string,
@@ -52,18 +52,18 @@ const validatePolygonCollision = (
 
   for (const edge of mask.edges) {
     for (const [axis, value] of [
-      ["x1", edge.x1],
-      ["y1", edge.y1],
-      ["x2", edge.x2],
-      ["y2", edge.y2],
+      ['x1', edge.x1],
+      ['y1', edge.y1],
+      ['x2', edge.x2],
+      ['y2', edge.y2],
     ] as const) {
-      const max = axis.startsWith("x") ? cellSize.width : cellSize.height;
+      const max = axis.startsWith('x') ? cellSize.width : cellSize.height;
       if (value < 0 || value > max) {
         diagnostics.push({
-          _tag: "InvalidCollisionVertex",
+          _tag: 'InvalidCollisionVertex',
           path,
           message: `Collision polygon vertex ${axis}=${value} is outside tile bounds ${cellSize.width}x${cellSize.height}`,
-          severity: "error",
+          severity: 'error',
           tileId,
           axis,
           value,
@@ -75,10 +75,10 @@ const validatePolygonCollision = (
 
   if (mask.edges.length > 0 && mask.edges.length < 3 && !mask.passable) {
     diagnostics.push({
-      _tag: "CollisionMaskSizeMismatch",
+      _tag: 'CollisionMaskSizeMismatch',
       path,
-      message: "Collision mask edge count does not match tile size",
-      severity: "error",
+      message: 'Collision mask edge count does not match tile size',
+      severity: 'error',
       tileId,
       expected: 4,
       actual: mask.edges.length,
@@ -98,14 +98,14 @@ export const validateCollisionMask = (
     readonly subgrid?: CollisionCellSize;
   } = {},
 ): ReadonlyArray<ParseDiagnostic> => {
-  const tileId = options.tileId ?? "unknown";
-  const path = options.path ?? "/collisionMask";
+  const tileId = options.tileId ?? 'unknown';
+  const path = options.path ?? '/collisionMask';
   const subgrid = options.subgrid ?? { width: 2, height: 2 };
 
   switch (mask._tag) {
-    case "bitmask":
+    case 'bitmask':
       return validateBitmaskCollision(mask, subgrid, tileId, path);
-    case "polygon":
+    case 'polygon':
       return validatePolygonCollision(mask, cellSize, tileId, path);
     default: {
       const unreachable: never = mask;

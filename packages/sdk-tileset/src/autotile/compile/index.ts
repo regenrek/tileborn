@@ -5,7 +5,7 @@ export {
   EDGE16_MASK_TO_TILE_INDEX,
   RPGM_EDGE_TILE_COUNT,
   edgeMaskFromEdge4Bits,
-} from "./tables.js";
+} from './tables.js';
 
 export {
   appendTileForMask,
@@ -17,11 +17,22 @@ export {
   type CompileResult,
   type MaskToTileIds,
   type RuleBaseInput,
-} from "./shared.js";
+} from './shared.js';
 
-export { assignBlob47Mask, blob47TileIndexForMask, compileBlob47, type CompileBlob47Input } from "./blob47.js";
+export {
+  assignBlob47Mask,
+  blob47TileIndexForMask,
+  compileBlob47,
+  type CompileBlob47Input,
+} from './blob47.js';
 
-export { compileWang, wangIdToMaskKey, type CompileWangInput, type WangPattern, type WangTileEntry } from "./wang.js";
+export {
+  compileWang,
+  wangIdToMaskKey,
+  type CompileWangInput,
+  type WangPattern,
+  type WangTileEntry,
+} from './wang.js';
 
 export {
   compileRpgm,
@@ -29,11 +40,11 @@ export {
   expectedRpgmCellCount,
   type CompileRpgmInput,
   type RpgmSetKind,
-} from "./rpgm.js";
+} from './rpgm.js';
 
 export {
   compileAutotileRule,
   type AutotileSourceFormat,
   type CompileAutotileRuleInput,
   type CompileAutotileRuleResult,
-} from "./rule-compiler.js";
+} from './rule-compiler.js';

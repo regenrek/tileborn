@@ -10,6 +10,7 @@ const ready = {
   gatekeeper: 'accepted',
   creatorSmoke: 'passed',
   artifactDigest: 'a'.repeat(64),
+  embeddedProvenance: 'valid',
 } as const;
 
 describe('native desktop binary closeout decision', () => {
@@ -25,6 +26,8 @@ describe('native desktop binary closeout decision', () => {
     ['gatekeeper', 'rejected', 'gatekeeper.assessment-rejected'],
     ['creatorSmoke', 'failed', 'native.creator-smoke-failed'],
     ['artifactDigest', 'not-a-digest', 'artifact.sha256-invalid'],
+    ['embeddedProvenance', 'missing', 'native.embedded-provenance-missing'],
+    ['embeddedProvenance', 'invalid', 'native.embedded-provenance-invalid'],
   ] as const)('fails closed when %s is not ready', (field, value, blocker) => {
     const result = deriveBinaryDecision({ ...ready, [field]: value });
     expect(result.decision).toBe('no-go');

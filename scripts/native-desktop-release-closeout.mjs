@@ -7,6 +7,7 @@ import {
   chmodSync,
   closeSync,
   copyFileSync,
+  existsSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
@@ -181,6 +182,7 @@ export const deriveBinaryDecision = ({
   gatekeeper,
   creatorSmoke,
   artifactDigest,
+  embeddedProvenance,
 }) => {
   const blockers = [];
   if (developerIdSignature !== 'valid') blockers.push('signing.developer-id-invalid');
@@ -189,6 +191,8 @@ export const deriveBinaryDecision = ({
   if (gatekeeper !== 'accepted') blockers.push('gatekeeper.assessment-rejected');
   if (creatorSmoke !== 'passed') blockers.push('native.creator-smoke-failed');
   if (!SHA256.test(artifactDigest)) blockers.push('artifact.sha256-invalid');
+  if (embeddedProvenance === 'missing') blockers.push('native.embedded-provenance-missing');
+  if (embeddedProvenance === 'invalid') blockers.push('native.embedded-provenance-invalid');
   if (canonicalDecision !== 'go') blockers.push('contract.not-go');
   return Object.freeze({
     decision: blockers.length === 0 ? 'go' : 'no-go',
@@ -437,6 +441,34 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
   const version = JSON.parse(
     readFileSync(path.join(checkoutRoot, 'apps/desktop/package.json'), 'utf8'),
   ).version;
+  const embeddedProvenancePath = path.join(
+    installedApp,
+    'Contents',
+    'Resources',
+    'tileborne-desktop-provenance.json',
+  );
+  const embeddedProvenanceValue = (() => {
+    if (!existsSync(embeddedProvenancePath)) return null;
+    try {
+      return JSON.parse(readFileSync(embeddedProvenancePath, 'utf8'));
+    } catch {
+      return false;
+    }
+  })();
+  const embeddedProvenance =
+    embeddedProvenanceValue !== null &&
+    embeddedProvenanceValue !== false &&
+    embeddedProvenanceValue.schemaVersion === 1 &&
+    embeddedProvenanceValue.policyId === 'tileborne-desktop-1.0' &&
+    embeddedProvenanceValue.sourceCommit === head &&
+    embeddedProvenanceValue.version === version &&
+    embeddedProvenanceValue.buildCommand === 'pnpm --filter @tileborne/desktop package' &&
+    typeof embeddedProvenanceValue.teamIdentifier === 'string' &&
+    /^[A-Z0-9]{10}$/.test(embeddedProvenanceValue.teamIdentifier)
+      ? 'valid'
+      : embeddedProvenanceValue !== null
+        ? 'invalid'
+        : 'missing';
   const manifest = {
     schemaVersion: 1,
     policyId: 'tileborne-desktop-1.0',
@@ -488,6 +520,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     gatekeeper: gatekeeperAssessment,
     creatorSmoke: 'passed',
     artifactDigest: dmg.sha256,
+    embeddedProvenance,
   });
   const canonicalBlockers = status.blockers.map(({ code }) => code);
   const blockerCodes = [
@@ -544,6 +577,8 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       notaryCredentials: notary.succeeded ? 'available' : 'missing',
       gatekeeper: gatekeeperAssessment,
       creatorOpenPlaytestShipSmoke: 'passed',
+      embeddedProvenance,
+      embeddedProvenancePath,
     },
     canonicalStatus: {
       decision: status.decision,

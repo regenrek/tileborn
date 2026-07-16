@@ -10,6 +10,7 @@ import {
   Option,
   Ref,
   Schema,
+  Semaphore,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -59,6 +60,7 @@ export interface JobSpec {
 
 interface JobEntry {
   readonly ref: SubscriptionRef.SubscriptionRef<JobState>;
+  readonly updateGate: Semaphore.Semaphore;
 }
 
 export class JobService extends Context.Service<
@@ -109,14 +111,17 @@ const updateJob = (
   update: (state: JobState) => JobState,
   persist?: (state: JobState) => Effect.Effect<void>,
 ): Effect.Effect<JobState> =>
-  SubscriptionRef.modifySome(entry.ref, (state) => {
-    if (isTerminal(state.status)) {
-      return [state, Option.none()];
-    }
+  entry.updateGate.withPermit(
+    Effect.gen(function* () {
+      const state = yield* SubscriptionRef.get(entry.ref);
+      if (isTerminal(state.status)) return state;
 
-    const next = update(state);
-    return [next, Option.some(next)];
-  }).pipe(Effect.tap((state) => persist?.(state) ?? Effect.void));
+      const next = update(state);
+      yield* persist?.(next) ?? Effect.void;
+      yield* SubscriptionRef.set(entry.ref, next);
+      return next;
+    }),
+  );
 
 export const JobServiceLive = Layer.effect(
   JobService,
@@ -127,7 +132,8 @@ export const JobServiceLive = Layer.effect(
     const create = Effect.fn('JobService.create')(function* (spec: JobSpec) {
       const id = makeJobId();
       const ref = yield* SubscriptionRef.make(initialState(id));
-      const entry: JobEntry = { ref };
+      const updateGate = yield* Semaphore.make(1);
+      const entry: JobEntry = { ref, updateGate };
       yield* Ref.update(jobs, (current) => new Map(current).set(id, entry));
 
       const run = spec.run;
@@ -342,7 +348,10 @@ export const JobServicePersistentLive = Layer.effect(
     for (const recovered of loaded) {
       createdAt.set(recovered.state.id, recovered.createdAt);
       const ref = yield* SubscriptionRef.make(recovered.state);
-      yield* Ref.update(jobs, (current) => new Map(current).set(recovered.state.id, { ref }));
+      const updateGate = yield* Semaphore.make(1);
+      yield* Ref.update(jobs, (current) =>
+        new Map(current).set(recovered.state.id, { ref, updateGate }),
+      );
       yield* persist(recovered.state);
     }
 
@@ -350,7 +359,8 @@ export const JobServicePersistentLive = Layer.effect(
       const id = makeJobId();
       createdAt.set(id, new Date().toISOString());
       const ref = yield* SubscriptionRef.make(initialState(id));
-      const entry: JobEntry = { ref };
+      const updateGate = yield* Semaphore.make(1);
+      const entry: JobEntry = { ref, updateGate };
       yield* Ref.update(jobs, (current) => new Map(current).set(id, entry));
       yield* persist(SubscriptionRef.getUnsafe(ref));
 

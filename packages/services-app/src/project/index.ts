@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { rejectSymlinkEscape } from '@tileborne/asset-pipeline';
 import {
   ContentHash,
-  CORE_SCHEMA_VERSIONS,
+  PERSISTED_SCHEMA_VERSIONS,
   MapId,
   PackId,
   ProjectAssetPackRef,
@@ -250,7 +250,7 @@ const markImportedBehaviorRegistryUntrusted = async (projectRoot: string): Promi
 
 const projectMigrationChain = defineMigrationChain<ProjectManifest>({
   entity: 'project',
-  latestVersion: CORE_SCHEMA_VERSIONS.project,
+  latestVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
   migrators: [],
 });
 
@@ -415,7 +415,7 @@ export const writeProjectWithLock = (
       ),
     );
     const lock = new ProjectIntegrityLock({
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
       projectHash: yield* projectHash(project),
       maps: [...maps],
     });
@@ -440,7 +440,11 @@ export const writeProjectPreservingMapLocks = (
     const lock = yield* readProjectLock(projectLockPath(projectDir)).pipe(
       Effect.catchTag('ProjectValidationError', () =>
         Effect.succeed(
-          new ProjectIntegrityLock({ schemaVersion: 1, projectHash: hashJsonStable({}), maps: [] }),
+          new ProjectIntegrityLock({
+            schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+            projectHash: hashJsonStable({}),
+            maps: [],
+          }),
         ),
       ),
     );
@@ -454,7 +458,7 @@ export const updateProjectMaps = (
   new ProjectManifest({
     id: project.id,
     name: project.name,
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
     engineVersion: project.engineVersion,
     plugins: [...project.plugins],
     assetPacks: [...project.assetPacks],
@@ -486,11 +490,14 @@ export const appendProjectImportRecord = (
     });
     const current =
       existing === undefined
-        ? { schemaVersion: 1, records: [] as ImportRecord[] }
+        ? {
+            schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectImportRecords,
+            records: [] as ImportRecord[],
+          }
         : yield* Effect.try({
             try: () =>
               JSON.parse(existing) as {
-                readonly schemaVersion: 1;
+                readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectImportRecords;
                 readonly records: readonly ImportRecord[];
               },
             catch: (cause) =>
@@ -501,7 +508,7 @@ export const appendProjectImportRecord = (
       catch: (cause) => new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
     });
     yield* writeJsonAtomic(filePath, {
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectImportRecords,
       records: [...current.records.filter((entry) => entry.id !== record.id), record],
     }).pipe(
       Effect.mapError(
@@ -668,7 +675,7 @@ export const ProjectServiceLive = Layer.effect(
       const project = new ProjectManifest({
         id: projectId,
         name: spec.name,
-        schemaVersion: 1,
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
         engineVersion: spec.engineVersion ?? '0.1.0',
         plugins: [...(spec.plugins ?? [])],
         assetPacks: [...(spec.assetPacks ?? [])],
@@ -828,7 +835,7 @@ export const ProjectServiceLive = Layer.effect(
       const manifest = new ProjectManifest({
         id: newProjectId(),
         name: projectName,
-        schemaVersion: 1,
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
         engineVersion: '0.1.0',
         plugins: (input.plugins ?? []).map(
           (pluginId) =>
@@ -892,13 +899,13 @@ export const ProjectServiceLive = Layer.effect(
               new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
           }),
       });
-      const changed = fromVersion !== CORE_SCHEMA_VERSIONS.project;
+      const changed = fromVersion !== PERSISTED_SCHEMA_VERSIONS.projectManifest;
       if (changed) {
         const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
           Effect.catchTag('ProjectValidationError', () =>
             Effect.succeed(
               new ProjectIntegrityLock({
-                schemaVersion: 1,
+                schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
                 projectHash: hashJsonStable({}),
                 maps: [],
               }),
@@ -911,7 +918,7 @@ export const ProjectServiceLive = Layer.effect(
         manifest,
         path: projectRoot,
         fromVersion,
-        toVersion: CORE_SCHEMA_VERSIONS.project,
+        toVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
         changed,
       };
     });

@@ -1,4 +1,4 @@
-import { AssetId, JsonObject, PackId } from '@tileborne/core';
+import { AssetId, JsonObject, PERSISTED_SCHEMA_VERSIONS, PackId } from '@tileborne/core';
 import { Schema } from 'effect';
 
 import { AutotileRulePattern } from '../schemas/autotile-rule.js';
@@ -19,7 +19,7 @@ import { UVRect } from '../schemas/uv-rect.js';
 import { ManifestProvenance } from './provenance.js';
 
 /** Current durable Tileborne tileset manifest schema version. */
-export const TILESET_MANIFEST_SCHEMA_VERSION = 1 as const;
+export const TILESET_MANIFEST_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.tilesetManifest;
 
 export type TilesetManifestSchemaVersion = typeof TILESET_MANIFEST_SCHEMA_VERSION;
 

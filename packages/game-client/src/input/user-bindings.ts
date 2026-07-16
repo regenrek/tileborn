@@ -1,5 +1,6 @@
 import {
   InputMap,
+  PERSISTED_SCHEMA_VERSIONS,
   RawTrigger,
   type ActionId,
   type ActionValueKind,
@@ -32,7 +33,7 @@ export const USER_OVERLAY_BINDING_SET_ID = 'user-overlay';
  * (`apps/desktop/.../playtest-user-bindings.ts`) — they share one durable
  * contract so a remap saved here is the overlay the playtest reads.
  */
-export const USER_INPUT_OVERLAY_STORAGE_KEY = 'tileborne:input:user-overlay:v1';
+export const USER_INPUT_OVERLAY_STORAGE_KEY = `tileborne:input:user-overlay:v${PERSISTED_SCHEMA_VERSIONS.userInputOverlay}`;
 
 /** Persistence port for the user remap overlay (localStorage-backed by default). */
 export interface UserInputBindingsStore {

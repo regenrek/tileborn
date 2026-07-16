@@ -20,7 +20,7 @@ import {
   rejectPathTraversal,
   rejectSymlinkEscape,
 } from '@tileborne/asset-pipeline';
-import { ContentHash, hashBytes } from '@tileborne/core';
+import { ContentHash, PERSISTED_SCHEMA_VERSIONS, hashBytes } from '@tileborne/core';
 import { Schema } from 'effect';
 
 import {
@@ -547,7 +547,7 @@ export const writeInstalledLock = async (plugin: InstalledPlugin): Promise<void>
     path.join(plugin.rootPath, PLUGIN_LOCK_FILE),
     `${JSON.stringify(
       {
-        schemaVersion: 1,
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.pluginInstallLock,
         pluginId: encoded.id,
         version: encoded.version,
         integrity: encoded.integrity,

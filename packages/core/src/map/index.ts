@@ -12,6 +12,7 @@ import {
   TileId,
 } from '../ids.js';
 import { JsonObject } from '../project/index.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 /** Size in tile or pixel units. */
 export class Size2D extends Schema.Class<Size2D>('Size2D')({
@@ -182,7 +183,7 @@ export class MapObject extends Schema.Class<MapObject>('MapObject')({
  */
 export class TileborneMap extends Schema.Class<TileborneMap>('TileborneMap')({
   id: MapId,
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.tileborneMap),
   size: Size2D,
   tileSize: Size2D,
   layers: Schema.Array(MapLayer),
@@ -209,7 +210,7 @@ export const makeTileborneMap = (input: {
 }): TileborneMap =>
   new TileborneMap({
     id: input.id,
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.tileborneMap,
     size: new Size2D({ width: input.width, height: input.height }),
     tileSize: new Size2D({ width: input.tileWidth, height: input.tileHeight }),
     layers: [...(input.layers ?? [])],

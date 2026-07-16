@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ProjectId } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, ProjectId } from '@tileborne/core';
 import { writeJsonAtomic } from '@tileborne/services-foundation';
 import { Effect, Schema } from 'effect';
 
@@ -18,13 +18,13 @@ export class ProjectRegistryEntry extends Schema.Class<ProjectRegistryEntry>(
 }) {}
 
 export class ProjectRegistry extends Schema.Class<ProjectRegistry>('ProjectRegistry')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectRegistry),
   projects: Schema.Array(ProjectRegistryEntry),
 }) {}
 
 const emptyRegistry = (): ProjectRegistry =>
   new ProjectRegistry({
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRegistry,
     projects: [],
   });
 
@@ -63,7 +63,7 @@ export const upsertProjectRegistryEntry = (
       (candidate) => candidate.id !== entry.id && candidate.path !== entry.path,
     );
     const updated = new ProjectRegistry({
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRegistry,
       projects: [...next, entry],
     });
     const encoded = Schema.encodeSync(ProjectRegistry)(updated);

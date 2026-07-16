@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { type ContentHash, hashBytes, hashJsonStable } from "@tileborne/core";
+import {
+  PERSISTED_SCHEMA_VERSIONS,
+  type ContentHash,
+  hashBytes,
+  hashJsonStable,
+} from "@tileborne/core";
 import { PROTOCOL_VERSION } from "@tileborne/runtime";
 
 import type {
@@ -52,7 +57,7 @@ export const hashManifestPayload = (payload: Omit<BundledManifest, "buildId">): 
 
 export const buildBundledManifest = (input: BuildManifestInput): BundledManifest => {
   const withoutBuildId = {
-    schemaVersion: 1 as const,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.bundledGameManifest,
     plugin: input.plugin,
     assetPacks: input.assetPacks,
     maps: input.maps,

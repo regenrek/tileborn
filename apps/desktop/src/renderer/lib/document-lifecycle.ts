@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 
 import type { TileborneAppLifecycleBridge } from '../../shared/app-lifecycle';
 
@@ -27,7 +28,7 @@ export interface DocumentLifecycleState {
 }
 
 export interface DocumentRecoveryRecord {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.documentRecovery;
   readonly documentId: string;
   readonly kind: DocumentKind;
   readonly label: string;
@@ -74,7 +75,7 @@ const readRecovery = (documentId: string): DocumentRecoveryRecord | undefined =>
   try {
     const value = JSON.parse(raw) as Partial<DocumentRecoveryRecord>;
     if (
-      value.schemaVersion !== 1 ||
+      value.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.documentRecovery ||
       value.documentId !== documentId ||
       typeof value.kind !== 'string' ||
       typeof value.label !== 'string' ||
@@ -92,7 +93,7 @@ const writeRecovery = (state: DocumentLifecycleState): void => {
   const registration = registrations.get(state.id);
   if (registration?.snapshot === undefined) return;
   const record: DocumentRecoveryRecord = {
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.documentRecovery,
     documentId: state.id,
     kind: state.kind,
     label: state.label,

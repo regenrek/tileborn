@@ -81,6 +81,14 @@ describe('decodeWeaponCatalog', () => {
     }
   });
 
+  it('rejects an unknown weapon catalog version', () => {
+    const result = decodeWeaponCatalog('c1', {
+      ...weaponCatalogJson(WEAPON_A),
+      schemaVersion: 2,
+    });
+    expect(Result.isFailure(result)).toBe(true);
+  });
+
   it('fails on an unknown delivery family', () => {
     const result = decodeWeaponCatalog('c1', {
       schemaVersion: 1,

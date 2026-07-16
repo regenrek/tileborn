@@ -2,6 +2,7 @@ import {
   GameObjectCatalog,
   ItemDefinition,
   LootTable,
+  PERSISTED_SCHEMA_VERSIONS,
   PluginId,
   type GameObjectType,
   type TileborneMap,
@@ -16,8 +17,9 @@ import {
   type WeaponCatalogRegistryError,
 } from './weapon-catalog-registry.js';
 
-export const PROJECT_CONTENT_SCHEMA_VERSION = 1;
-export const RUNTIME_PROJECT_CONTENT_SCHEMA_VERSION = 1;
+export const PROJECT_CONTENT_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.projectContent;
+export const RUNTIME_PROJECT_CONTENT_SCHEMA_VERSION =
+  PERSISTED_SCHEMA_VERSIONS.runtimeProjectContent;
 
 export class ProjectAuthoredProvenance extends Schema.TaggedClass<ProjectAuthoredProvenance>()(
   'project',
@@ -138,7 +140,10 @@ export const decodeProjectContentDocument = (
       new ProjectContentDocument({
         schemaVersion: PROJECT_CONTENT_SCHEMA_VERSION,
         catalog: legacy.value,
-        weapons: new WeaponCatalog({ schemaVersion: 1, weapons: [] }),
+        weapons: new WeaponCatalog({
+          schemaVersion: PERSISTED_SCHEMA_VERSIONS.weaponCatalog,
+          weapons: [],
+        }),
         weaponLabels: {},
         provenance: Object.fromEntries(
           [

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-import { hashJsonStable } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, hashJsonStable } from '@tileborne/core';
 
 const TRANSACTION_DIRECTORY = '.tileborne';
 const TRANSACTION_FILE = 'project-revision-transaction.json';
@@ -30,13 +30,13 @@ export type ProjectRevisionTransactionFaultPhase =
   | ProjectRevisionTransactionPhase;
 
 interface ProjectRevisionTransactionOwner {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectRevisionOwner;
   readonly id: string;
   readonly ownerPid: number;
 }
 
 interface ProjectRevisionTransactionJournal {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal;
   readonly id: string;
   readonly kind: 'map-project-revision';
   readonly ownerPid: number;
@@ -138,7 +138,11 @@ const requireString = (record: Record<string, unknown>, key: string): string => 
 };
 
 const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTransactionJournal => {
-  if (!isObject(value) || value.schemaVersion !== 1 || value.kind !== 'map-project-revision') {
+  if (
+    !isObject(value) ||
+    value.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal ||
+    value.kind !== 'map-project-revision'
+  ) {
     throw new Error('Invalid project revision journal header');
   }
   if (!Number.isSafeInteger(value.ownerPid) || Number(value.ownerPid) <= 0) {
@@ -213,7 +217,7 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
     throw new Error('Invalid project revision journal lock map hash');
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
     id,
     kind: 'map-project-revision',
     ownerPid: Number(value.ownerPid),
@@ -237,14 +241,14 @@ const processIsAlive = (pid: number): boolean => {
 };
 
 const decodeOwner = (value: unknown): ProjectRevisionTransactionOwner => {
-  if (!isObject(value) || value.schemaVersion !== 1) {
+  if (!isObject(value) || value.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectRevisionOwner) {
     throw new Error('Invalid project revision owner header');
   }
   if (!Number.isSafeInteger(value.ownerPid) || Number(value.ownerPid) <= 0) {
     throw new Error('Invalid project revision ownerPid');
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionOwner,
     id: requireString(value, 'id'),
     ownerPid: Number(value.ownerPid),
   };
@@ -534,7 +538,7 @@ const acquireProjectRevisionOwner = async (
   faultAfterPhase?: CommitMapProjectRevisionInput['faultAfterPhase'],
 ): Promise<ProjectRevisionTransactionOwner> => {
   const candidate: ProjectRevisionTransactionOwner = {
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionOwner,
     id: randomUUID(),
     ownerPid: process.pid,
   };
@@ -627,7 +631,7 @@ export const commitMapProjectRevision = async (
       lock: hashJsonStable(snapshots.lock),
     };
     const journal: ProjectRevisionTransactionJournal = decodeJournal(input.projectRoot, {
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
       id: randomUUID(),
       kind: 'map-project-revision',
       ownerPid: process.pid,

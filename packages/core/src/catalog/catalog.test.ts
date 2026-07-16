@@ -80,6 +80,32 @@ describe('GameObjectCatalog schema', () => {
     const decoded = Schema.decodeUnknownSync(GameObjectCatalog)(encoded);
     expect(decoded.objectTypes[0]?.components[0]?._tag).toBe('visual-ref');
   });
+
+  it('rejects unknown catalog and nested object-type versions', () => {
+    const current = Schema.encodeUnknownSync(GameObjectCatalog)(
+      new GameObjectCatalog({
+        id: makeCatalogId(UUID_A),
+        schemaVersion: 1,
+        objectTypes: [typeWith()],
+        lootTables: Option.none(),
+        items: Option.none(),
+      }),
+    ) as Record<string, unknown>;
+    expect(() =>
+      Schema.decodeUnknownSync(GameObjectCatalog)({ ...current, schemaVersion: 2 }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(GameObjectCatalog)({
+        ...current,
+        objectTypes: [
+          {
+            ...(current['objectTypes'] as readonly Record<string, unknown>[])[0],
+            schemaVersion: 2,
+          },
+        ],
+      }),
+    ).toThrow();
+  });
 });
 
 describe('validateCatalog', () => {

@@ -1,4 +1,4 @@
-import type { ContentHash, JsonObject } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, type ContentHash, type JsonObject } from '@tileborne/core';
 import type { RuntimeBehaviorArtifactIdentity } from '@tileborne/runtime/behavior';
 
 import type { RoomPresenceProjection } from './rooms/room-lifecycle.js';
@@ -81,7 +81,7 @@ export interface BundledBehaviorModule {
 }
 
 export interface BundledManifest {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.bundledGameManifest;
   readonly buildId: ContentHash;
   readonly plugin: BundledPluginSummary;
   readonly assetPacks: readonly BundledAssetPackSummary[];

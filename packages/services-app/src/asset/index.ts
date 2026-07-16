@@ -42,6 +42,7 @@ import {
   PackCapability,
   PackDuplicateIdDiagnostic,
   PackId,
+  PERSISTED_SCHEMA_VERSIONS,
   type PackCapabilityDiagnostic,
   ProjectId,
   ProjectManifest,
@@ -114,7 +115,7 @@ export class AssetIndexEntry extends Schema.Class<AssetIndexEntry>('AssetIndexEn
 }) {}
 
 export class ProjectAssetIndex extends Schema.Class<ProjectAssetIndex>('ProjectAssetIndex')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectAssetIndex),
   projectId: ProjectId,
   packs: Schema.Array(AssetIndexEntry),
 }) {}

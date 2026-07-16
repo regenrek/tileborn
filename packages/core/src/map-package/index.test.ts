@@ -110,6 +110,15 @@ describe('RuntimeMapPackage schema (ADR-0030)', () => {
     }
   });
 
+  it('rejects an unknown runtime package version at the schema boundary', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(RuntimeMapPackageManifest)({
+        ...manifestJson,
+        schemaVersion: RUNTIME_MAP_PACKAGE_SCHEMA_VERSION + 1,
+      }),
+    ).toThrow();
+  });
+
   it('placements carry no gameplay role — meaning comes from the catalog type', () => {
     const placement = Schema.decodeUnknownSync(RuntimeObjectPlacement)(packageJson.placements[0]);
     expect(Object.keys(Schema.encodeSync(RuntimeObjectPlacement)(placement)).sort()).toEqual([

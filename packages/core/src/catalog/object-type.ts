@@ -3,6 +3,7 @@ import { Schema } from 'effect';
 import { CatalogId, GameObjectTypeId, ItemDefinitionId, LootTableId } from '../ids.js';
 import { AuthoringFieldSchema } from '../authoring/field-schema.js';
 import { JsonObject } from '../project/index.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 import { GameObjectComponent, GrantRef, OpenTag } from './components.js';
 
 /**
@@ -27,7 +28,7 @@ export type CategoryTag = typeof CategoryTag.Type;
  */
 export class GameObjectType extends Schema.Class<GameObjectType>('GameObjectType')({
   id: GameObjectTypeId,
-  schemaVersion: Schema.Int,
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.gameObjectCatalog),
   label: Schema.String,
   family: FamilyTag,
   category: Schema.OptionFromOptional(CategoryTag),
@@ -75,7 +76,7 @@ export class ItemDefinition extends Schema.Class<ItemDefinition>('ItemDefinition
 /** A plugin-shipped (or engine-shipped) content pack of catalog definitions. */
 export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>('GameObjectCatalog')({
   id: CatalogId,
-  schemaVersion: Schema.Int,
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.gameObjectCatalog),
   objectTypes: Schema.Array(GameObjectType),
   lootTables: Schema.OptionFromOptional(Schema.Array(LootTable)),
   items: Schema.OptionFromOptional(Schema.Array(ItemDefinition)),

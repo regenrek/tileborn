@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { create } from 'zustand';
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 import { createJSONStorage, persist, subscribeWithSelector } from 'zustand/middleware';
 
 import type { LayerId, PackId } from '@tileborne/core';
@@ -729,6 +730,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
       }),
       {
         name: 'tileborne-editor-ui',
+        version: PERSISTED_SCHEMA_VERSIONS.editorUiStore,
         storage: editorStorage,
         partialize: (state): PersistedSlice => ({
           camera: state.camera,

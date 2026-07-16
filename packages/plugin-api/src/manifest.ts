@@ -1,4 +1,4 @@
-import { PluginId } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, PluginId } from '@tileborne/core';
 import { Schema } from 'effect';
 
 import { MigrationsTable, PluginContributions } from './contributions.js';
@@ -9,7 +9,7 @@ export class PluginEngines extends Schema.Class<PluginEngines>('PluginEngines')(
   tileborne: SemverRangeString,
 }) {}
 
-export const PLUGIN_MANIFEST_SCHEMA_VERSION = 1 as const;
+export const PLUGIN_MANIFEST_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.pluginManifest;
 
 export class PluginManifest extends Schema.Class<PluginManifest>('PluginManifest')({
   schemaVersion: Schema.Literal(PLUGIN_MANIFEST_SCHEMA_VERSION),

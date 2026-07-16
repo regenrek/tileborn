@@ -9,6 +9,7 @@ import { GameModeId } from '../game-mode/active-mode.js';
 import { ContentHash, GameObjectTypeId, MapId, ObjectId, PluginId, ProjectId } from '../ids.js';
 import { TileborneMap } from '../map/index.js';
 import { JsonObject } from '../project/index.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 /**
  * Neutral runtime map package (ADR-0030).
@@ -49,7 +50,7 @@ export type RuntimeMapPackageId = typeof RuntimeMapPackageId.Type;
  * carries typed manifests, visual definitions and compiled modules targeting
  * one scheduler; raw TypeScript is never executed from a map package.
  */
-export const RUNTIME_MAP_PACKAGE_SCHEMA_VERSION = 4;
+export const RUNTIME_MAP_PACKAGE_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.runtimeMapPackage;
 
 /**
  * Package manifest: identity, the active game mode the package was assembled
@@ -62,7 +63,7 @@ export class RuntimeMapPackageManifest extends Schema.Class<RuntimeMapPackageMan
   'RuntimeMapPackageManifest',
 )({
   packageId: RuntimeMapPackageId,
-  schemaVersion: Schema.Int,
+  schemaVersion: Schema.Literal(RUNTIME_MAP_PACKAGE_SCHEMA_VERSION),
   projectId: ProjectId,
   mapId: MapId,
   /** The discovered active game mode this package boots (ADR-0023 §B). */

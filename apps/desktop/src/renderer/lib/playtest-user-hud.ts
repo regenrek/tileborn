@@ -1,4 +1,4 @@
-import { HudLayout } from '@tileborne/core';
+import { HudLayout, PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 import { Option, Schema } from 'effect';
 
 /**
@@ -15,7 +15,7 @@ import { Option, Schema } from 'effect';
  */
 
 /** `localStorage` key for the user HUD overlay. Versioned for future migration. */
-export const USER_HUD_OVERLAY_STORAGE_KEY = 'tileborne:hud:user-overlay:v1';
+export const USER_HUD_OVERLAY_STORAGE_KEY = `tileborne:hud:user-overlay:v${PERSISTED_SCHEMA_VERSIONS.userHudOverlay}`;
 
 const resolveStorage = (storage?: Storage): Storage | undefined =>
   storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);

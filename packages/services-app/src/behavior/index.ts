@@ -8,6 +8,7 @@ import {
   BehaviorId,
   BehaviorManifest,
   BehaviorSourceKind,
+  PERSISTED_SCHEMA_VERSIONS,
   ProjectId,
   TypeScriptBehaviorSource,
   Uuid,
@@ -35,7 +36,7 @@ export type ProjectBehaviorTrust = typeof ProjectBehaviorTrust.Type;
 export class ProjectBehaviorRegistryDocument extends Schema.Class<ProjectBehaviorRegistryDocument>(
   'ProjectBehaviorRegistryDocument',
 )({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectBehaviorRegistry),
   projectId: ProjectId,
   revision: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   trust: ProjectBehaviorTrust,
@@ -78,7 +79,7 @@ export interface ProjectBehaviorSnapshot {
 type ProjectBehaviorTransactionOperation = 'create' | 'update' | 'remove' | 'convert';
 
 interface ProjectBehaviorTransactionJournal {
-  readonly schemaVersion: 2;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectBehaviorTransaction;
   readonly transactionId: string;
   readonly projectId: ProjectId;
   readonly operation: ProjectBehaviorTransactionOperation;
@@ -300,7 +301,7 @@ const readTextIfPresent = async (filePath: string): Promise<string | undefined> 
 
 const defaultRegistry = (projectId: ProjectId): ProjectBehaviorRegistryDocument =>
   new ProjectBehaviorRegistryDocument({
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectBehaviorRegistry,
     projectId,
     revision: 0,
     trust: 'trusted',
@@ -817,7 +818,7 @@ export const makeProjectBehaviorServiceLive = (
         }
         const journal = value as Record<string, unknown>;
         if (
-          journal.schemaVersion !== 2 ||
+          journal.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectBehaviorTransaction ||
           typeof journal.transactionId !== 'string' ||
           !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
             journal.transactionId,
@@ -854,7 +855,7 @@ export const makeProjectBehaviorServiceLive = (
         const baseRegistry = decodeRegistryDocument(journal.baseRegistry);
         const nextRegistry = decodeRegistryDocument(journal.nextRegistry);
         const decoded: DecodedProjectBehaviorTransactionJournal = {
-          schemaVersion: 2,
+          schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectBehaviorTransaction,
           transactionId: journal.transactionId,
           projectId,
           operation: journal.operation as ProjectBehaviorTransactionOperation,
@@ -1069,7 +1070,7 @@ export const makeProjectBehaviorServiceLive = (
               throw new Error(`behavior ${operation} transaction base source is conflicting`);
             }
             const journal: ProjectBehaviorTransactionJournal = {
-              schemaVersion: 2,
+              schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectBehaviorTransaction,
               transactionId,
               projectId,
               operation,
@@ -1140,7 +1141,7 @@ export const makeProjectBehaviorServiceLive = (
             const registry = yield* readRegistry(projectRoot, projectId);
             const id = makeBehaviorId(randomUUID() as Uuid);
             const definition = new BehaviorDefinition({
-              schemaVersion: 1,
+              schemaVersion: PERSISTED_SCHEMA_VERSIONS.behaviorDefinition,
               id,
               label: input.label,
               state: input.definition.state,
@@ -1149,7 +1150,7 @@ export const makeProjectBehaviorServiceLive = (
               do: input.definition.do,
             });
             const manifest = new BehaviorManifest({
-              schemaVersion: 1,
+              schemaVersion: PERSISTED_SCHEMA_VERSIONS.behaviorManifest,
               id,
               label: input.label,
               source: new VisualBehaviorSource({ definitionPath: visualPath(id) }),
@@ -1187,7 +1188,7 @@ export const makeProjectBehaviorServiceLive = (
             const registry = yield* readRegistry(projectRoot, projectId);
             const id = makeBehaviorId(randomUUID() as Uuid);
             const manifest = new BehaviorManifest({
-              schemaVersion: 1,
+              schemaVersion: PERSISTED_SCHEMA_VERSIONS.behaviorManifest,
               id,
               label: input.label,
               source: new TypeScriptBehaviorSource({

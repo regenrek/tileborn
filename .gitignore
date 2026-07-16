@@ -45,6 +45,7 @@ test-results/
 !/docs/battle-royale-creator-guide.md
 !/docs/battle-royale-release-evidence.md
 !/docs/game-mode-extension.md
+!/docs/persisted-schema-compatibility.md
 !/docs/03-runtime-game-host.md
 !/docs/follow-ups.md
 !/docs/adrs/

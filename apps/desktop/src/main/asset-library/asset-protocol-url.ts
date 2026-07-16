@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
 /**
  * Custom scheme that streams installed pack files to the renderer. Pure URL /
  * path helpers live here (no electron/runtime imports) so they are unit
@@ -20,7 +22,7 @@ export const ASSET_PROTOCOL_THUMB_HOST = 'thumb';
 /** Longest-side pixel box every precomputed thumbnail fits into. */
 export const THUMBNAIL_BOX_PX = 64;
 /** Bumped whenever the thumbnail encoding/box changes so caches invalidate. */
-export const THUMBNAIL_CACHE_SCHEMA_VERSION = 1;
+export const THUMBNAIL_CACHE_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.thumbnailCache;
 const THUMBNAIL_CACHE_DIR = 'asset-library/thumbnails';
 
 export interface AssetProtocolRequest {

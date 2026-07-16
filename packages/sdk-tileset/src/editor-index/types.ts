@@ -1,3 +1,5 @@
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
 /**
  * Compact, plain-JSON editor/runtime index for a tileset pack.
  *
@@ -15,7 +17,7 @@
  * them back into the exact same instances the manifest parser would have
  * produced — preserving autotile/terrain/placeable paint correctness.
  */
-export const EDITOR_TILESET_INDEX_SCHEMA_VERSION = 1;
+export const EDITOR_TILESET_INDEX_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.editorTilesetIndex;
 
 /** Atlas rectangle for one tile/frame (matches `UVRect`). */
 export interface EditorIndexUv {

@@ -9,12 +9,13 @@ import {
   ObjectId,
 } from '../ids.js';
 import { JsonObject, JsonValue } from '../project/index.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 /** Current persisted visual behavior resource version. */
-export const BEHAVIOR_DEFINITION_SCHEMA_VERSION = 1 as const;
+export const BEHAVIOR_DEFINITION_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.behaviorDefinition;
 
 /** Current runtime package payload version. Independent from the outer map package. */
-export const BEHAVIOR_PACKAGE_SCHEMA_VERSION = 1 as const;
+export const BEHAVIOR_PACKAGE_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.runtimeBehaviorPackage;
 
 /** Stable open identifier contributed by the engine or a plugin registry. */
 export const BehaviorRegistryEntryId = Schema.String.check(
@@ -218,7 +219,7 @@ export const BehaviorSource = Schema.Union([VisualBehaviorSource, TypeScriptBeha
 export type BehaviorSource = typeof BehaviorSource.Type;
 
 export class BehaviorManifest extends Schema.Class<BehaviorManifest>('BehaviorManifest')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.behaviorManifest),
   id: BehaviorId,
   label: Schema.String,
   source: BehaviorSource,
@@ -298,7 +299,7 @@ export class BehaviorRegistryEntry extends Schema.Class<BehaviorRegistryEntry>(
 export class BehaviorRegistryManifest extends Schema.Class<BehaviorRegistryManifest>(
   'BehaviorRegistryManifest',
 )({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.behaviorRegistryCatalog),
   entries: Schema.Array(BehaviorRegistryEntry),
 }) {}
 
@@ -354,7 +355,7 @@ const templateId = (value: string): BehaviorTemplateId =>
 
 /** Engine-owned capabilities available to every project and every game genre. */
 export const CORE_BEHAVIOR_REGISTRY = new BehaviorRegistryManifest({
-  schemaVersion: 1,
+  schemaVersion: PERSISTED_SCHEMA_VERSIONS.behaviorRegistryCatalog,
   entries: [
     new BehaviorRegistryEntry({
       id: registryEntryId('runtime.tick'),

@@ -10,6 +10,7 @@ import {
   WorkingPaletteItemId,
 } from '../ids.js';
 import { AttachmentAnchorMap } from './anchors.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 export const AssetLibraryReferenceKind = Schema.Literals([
   'tile',
@@ -334,7 +335,7 @@ export class WorkingPalette extends Schema.Class<WorkingPalette>('WorkingPalette
 }) {}
 
 export class WorkingPaletteStore extends Schema.Class<WorkingPaletteStore>('WorkingPaletteStore')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.workingPaletteStore),
   projectId: ProjectId,
   activePaletteId: Schema.optional(WorkingPaletteId),
   palettes: Schema.Array(WorkingPalette),

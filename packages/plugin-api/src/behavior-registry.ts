@@ -2,6 +2,7 @@ import {
   BehaviorRegistryManifest,
   CORE_BEHAVIOR_REGISTRY,
   CORE_BEHAVIOR_TEMPLATES,
+  PERSISTED_SCHEMA_VERSIONS,
   type BehaviorCapabilityId,
   type BehaviorRegistryEntry,
   type BehaviorRegistryEntryKind,
@@ -140,7 +141,10 @@ export const resolveBehaviorAuthoringRegistry = (
   }
 
   return {
-    registry: new BehaviorRegistryManifest({ schemaVersion: 1, entries: [...entries.values()] }),
+    registry: new BehaviorRegistryManifest({
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.behaviorRegistryCatalog,
+      entries: [...entries.values()],
+    }),
     templates: [...templates.values()],
     capabilities,
     entryOwners,

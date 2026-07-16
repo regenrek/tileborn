@@ -1,6 +1,7 @@
 import { Schema, SchemaGetter } from 'effect';
 
 import { ContentHash, PackId, PluginId, ProjectId } from '../ids.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 export type JsonValue = null | boolean | number | string | JsonObject | ReadonlyArray<JsonValue>;
 
@@ -98,7 +99,7 @@ export class ProjectMapRef extends Schema.Class<ProjectMapRef>('ProjectMapRef')(
 export class ProjectManifest extends Schema.Class<ProjectManifest>('ProjectManifest')({
   id: ProjectId,
   name: Schema.String,
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectManifest),
   engineVersion: Schema.String,
   plugins: Schema.Array(ProjectPluginRef),
   assetPacks: Schema.Array(ProjectAssetPackRef),
@@ -157,7 +158,7 @@ export const makeProjectManifest = (input: {
   new ProjectManifest({
     id: input.id,
     name: input.name,
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
     engineVersion: input.engineVersion ?? '0.1.0',
     plugins: [...(input.plugins ?? [])],
     assetPacks: [...(input.assetPacks ?? [])],

@@ -1,4 +1,4 @@
-import { AssetId, PackId } from '@tileborne/core';
+import { AssetId, PERSISTED_SCHEMA_VERSIONS, PackId } from '@tileborne/core';
 import { Schema } from 'effect';
 
 import { Placeable } from './placeable.js';
@@ -23,7 +23,7 @@ export class TilesetPackAsset extends Schema.Class<TilesetPackAsset>('TilesetPac
 
 /** Top-level durable tileset pack container. */
 export class TilesetPack extends Schema.Class<TilesetPack>('TilesetPack')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.tilesetManifest),
   id: PackId,
   name: Schema.String,
   version: Schema.String,

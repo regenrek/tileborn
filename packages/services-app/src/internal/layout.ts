@@ -1,6 +1,13 @@
 import path from 'node:path';
 
-import { ContentHash, MapId, PackCapability, PackId, ProjectId } from '@tileborne/core';
+import {
+  ContentHash,
+  MapId,
+  PERSISTED_SCHEMA_VERSIONS,
+  PackCapability,
+  PackId,
+  ProjectId,
+} from '@tileborne/core';
 import { Schema } from 'effect';
 
 export class MapIntegrityEntry extends Schema.Class<MapIntegrityEntry>('MapIntegrityEntry')({
@@ -12,7 +19,7 @@ export class MapIntegrityEntry extends Schema.Class<MapIntegrityEntry>('MapInteg
 export class ProjectIntegrityLock extends Schema.Class<ProjectIntegrityLock>(
   'ProjectIntegrityLock',
 )({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock),
   projectHash: ContentHash,
   maps: Schema.Array(MapIntegrityEntry),
 }) {}
@@ -34,7 +41,7 @@ export class AssetPackCapabilityLock extends Schema.Class<AssetPackCapabilityLoc
 export class AssetPackIntegrityLock extends Schema.Class<AssetPackIntegrityLock>(
   'AssetPackIntegrityLock',
 )({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.assetPackIntegrityLock),
   packId: PackId,
   version: Schema.String,
   manifestHash: ContentHash,

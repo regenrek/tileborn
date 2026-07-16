@@ -1,4 +1,4 @@
-import { InputMap } from '@tileborne/core';
+import { InputMap, PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 import { Option, Schema } from 'effect';
 
 /**
@@ -26,7 +26,7 @@ import { Option, Schema } from 'effect';
  * change can migrate rather than mis-decode. MUST stay in sync with the
  * `@tileborne/game-client` Controls store key (same durable contract).
  */
-export const USER_INPUT_OVERLAY_STORAGE_KEY = 'tileborne:input:user-overlay:v1';
+export const USER_INPUT_OVERLAY_STORAGE_KEY = `tileborne:input:user-overlay:v${PERSISTED_SCHEMA_VERSIONS.userInputOverlay}`;
 
 const resolveStorage = (storage?: Storage): Storage | undefined =>
   storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);

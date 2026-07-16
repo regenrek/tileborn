@@ -6,6 +6,7 @@ import {
   WeaponDefinition,
   type WeaponDefinitionId,
 } from '@tileborne/simulation';
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 import { Option, Result, Schema } from 'effect';
 
 /**
@@ -25,7 +26,7 @@ export class WeaponCatalogEntry extends Schema.Class<WeaponCatalogEntry>('Weapon
 
 /** A contributed weapon-content pack: a versioned list of weapon entries. */
 export class WeaponCatalog extends Schema.Class<WeaponCatalog>('WeaponCatalog')({
-  schemaVersion: Schema.Int,
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.weaponCatalog),
   weapons: Schema.Array(WeaponCatalogEntry),
 }) {}
 

@@ -11,6 +11,7 @@ import {
   AssetLibraryReference,
   ContentHash,
   PackId,
+  PERSISTED_SCHEMA_VERSIONS,
   ProjectId,
   Uuid,
   WorkingPalette,
@@ -64,7 +65,7 @@ const DEFAULT_GROUP_LIMIT = 100;
 const MAX_GROUP_LIMIT = 200;
 const PREVIEW_REF_LIMIT = 8;
 const DEFAULT_PALETTE_ITEM_LIMIT = 24;
-export const ASSET_LIBRARY_INDEX_SCHEMA_VERSION = 1;
+export const ASSET_LIBRARY_INDEX_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.assetLibraryIndex;
 const ASSET_LIBRARY_MEMORY_CACHE_LIMIT = 6;
 const ASSET_LIBRARY_CACHE_DIR = 'asset-library/index-metadata';
 const EDITOR_INDEX_CACHE_DIR = 'asset-library/editor-index';

@@ -1,4 +1,6 @@
-export const ROOM_SCHEMA_VERSION = 3 as const;
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
+export const ROOM_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.roomStorage;
 
 export const TICK_HZ = 20;
 export const TICK_INTERVAL_MS = 1000 / TICK_HZ;

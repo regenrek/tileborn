@@ -1,5 +1,7 @@
 import { Result } from 'effect';
 
+export * from './persisted-schema-registry.js';
+
 /** Single-step schema migrator between two integer versions. */
 export interface SchemaMigrator<From, To> {
   readonly entity: string;
@@ -66,13 +68,3 @@ export const readSchemaVersion = (input: unknown): number | undefined => {
   const version = (input as { schemaVersion: unknown }).schemaVersion;
   return typeof version === 'number' && Number.isInteger(version) ? version : undefined;
 };
-
-/** Current schema versions for core persisted entities. */
-export const CORE_SCHEMA_VERSIONS = {
-  project: 1,
-  map: 1,
-  assetPackManifest: 1,
-  brandConfig: 1,
-} as const;
-
-export type CoreSchemaEntity = keyof typeof CORE_SCHEMA_VERSIONS;

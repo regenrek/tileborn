@@ -1,5 +1,6 @@
 import {
   JsonObject,
+  RuntimeBehaviorPackage,
   RUNTIME_MAP_PACKAGE_SCHEMA_VERSION,
   RuntimeCatalogEntry,
   RuntimeMapPackage,
@@ -36,6 +37,8 @@ export const RUNTIME_MAP_PACKAGE_ENTRY_FILES = {
   catalog: "catalog.json",
   placements: "placements.json",
   settings: "settings.json",
+  content: "content.json",
+  behaviors: "behaviors.json",
   visuals: "visuals.json",
   assets: "assets.json",
   modeData: "mode-data.json",
@@ -158,6 +161,12 @@ export const loadRuntimeMapPackage = async (
         catalog: decodeEntry("catalog.json", CatalogEntries, await readVerified("catalog")),
         placements: decodeEntry("placements.json", Placements, await readVerified("placements")),
         settings: decodeEntry("settings.json", NamespacedSections, await readVerified("settings")),
+        content: decodeEntry("content.json", JsonObject, await readVerified("content")),
+        behaviors: decodeEntry(
+          "behaviors.json",
+          RuntimeBehaviorPackage,
+          await readVerified("behaviors"),
+        ),
         visuals: decodeEntry(
           "visuals.json",
           RuntimeMapPackageVisuals,

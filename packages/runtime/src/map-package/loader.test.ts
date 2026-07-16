@@ -47,6 +47,8 @@ const entryJson: Record<keyof typeof RUNTIME_MAP_PACKAGE_ENTRY_FILES, unknown> =
   catalog: catalogJson,
   placements: placementsJson,
   settings: { [PLUGIN]: { maxPlayers: 4 } },
+  content: { schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} },
+  behaviors: { schemaVersion: 1, manifests: [], visualDefinitions: [], modules: [] },
   visuals: { playerModels: [], overlayVisuals: [], weaponVisuals: [] },
   assets: [{ path: "assets/ab/cdef.png", hash: HASH, assetId: `asset:${UUID}` }],
   modeData: { [PLUGIN]: { zone: { phases: 3 } } },
@@ -97,6 +99,14 @@ describe("loadRuntimeMapPackage (ADR-0030)", () => {
     expect(loaded.catalog).toHaveLength(1);
     expect(loaded.placements[0]?.typeId).toBe(`gobj:${UUID}`);
     expect(loaded.assets[0]?.path).toBe("assets/ab/cdef.png");
+    expect(loaded.content).toEqual({
+      schemaVersion: 1,
+      items: [],
+      lootTables: [],
+      weapons: [],
+      provenance: {},
+    });
+    expect(loaded.behaviors.modules).toEqual([]);
     expect(loaded.modeData[PLUGIN]).toEqual({ zone: { phases: 3 } });
   });
 

@@ -12,7 +12,8 @@ import { navigateToRoute, waitForAppPage, waitForJob } from './helpers.js';
 const smokeDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(smokeDir, '../..');
 const packagedDirectory = path.join(desktopRoot, 'out', `Tileborne-darwin-${process.arch}`);
-const sourceApp = path.join(packagedDirectory, 'Tileborne.app');
+const sourceApp =
+  process.env.TILEBORNE_PACKAGED_APP_PATH ?? path.join(packagedDirectory, 'Tileborne.app');
 const isContainedPath = (root: string, candidate: string): boolean => {
   const relative = path.relative(path.resolve(root), path.resolve(candidate));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));

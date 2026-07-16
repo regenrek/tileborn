@@ -2,11 +2,11 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| --- | --- |
-| 1.0 release candidates | Yes |
+| Version                | Supported   |
+| ---------------------- | ----------- |
+| 1.0 release candidates | Yes         |
 | main pre-1.0 snapshots | Best effort |
-| < 0.1.0 | No |
+| < 0.1.0                | No          |
 
 Production 1.0 security fixes target the `main` branch until a release branch
 exists.

@@ -50,31 +50,31 @@ pnpm typecheck && pnpm lint && pnpm test:boundaries
   plugin-battle-royale    apps/game-host (miniflare DO template)
 ```
 
-| Layer | Role |
-| --- | --- |
-| **Electron main** | Window lifecycle, filesystem, plugin host, IPC bridge |
-| **Renderer** | React shell, map editor, tileset palette, playtest viewport |
-| **SDK packages** | Domain models, tileset parser, runtime ECS, typed IPC |
-| **Battle Royale plugin** | Deterministic BR loop with zone, combat, loot, and replay |
-| **Game host** | Local miniflare Worker + Durable Object for multiplayer playtest |
+| Layer                    | Role                                                             |
+| ------------------------ | ---------------------------------------------------------------- |
+| **Electron main**        | Window lifecycle, filesystem, plugin host, IPC bridge            |
+| **Renderer**             | React shell, map editor, tileset palette, playtest viewport      |
+| **SDK packages**         | Domain models, tileset parser, runtime ECS, typed IPC            |
+| **Battle Royale plugin** | Deterministic BR loop with zone, combat, loot, and replay        |
+| **Game host**            | Local miniflare Worker + Durable Object for multiplayer playtest |
 
 See [Architecture spec](docs/01-spec.md) for the full product boundary and invariants.
 
 ## Key packages
 
-| Package | Description |
-| --- | --- |
-| [`@tileborne/core`](packages/core/README.md) | Domain models, IDs, map/project schemas |
-| [`@tileborne/sdk-tileset`](packages/sdk-tileset/) | Canonical tileset parser — autotiles, variants, animations, collision |
-| [`@tileborne/runtime`](packages/runtime/README.md) | ECS simulation, networking helpers, Pixi renderer adapter |
-| [`@tileborne/plugin-api`](packages/plugin-api/README.md) | Plugin manifest schema and contribution registry |
-| [`@tileborne/ipc-contracts`](packages/ipc-contracts/README.md) | Typed desktop IPC channels (Effect Schema) |
-| [`@tileborne/cli`](packages/cli/README.md) | `tileborne` CLI — project, asset, map, plugin, playtest |
-| [`@tileborne/ui`](packages/ui/README.md) | Editor React shell and declarative plugin UI |
-| [`@tileborne/plugin-battle-royale`](packages/plugin-battle-royale/README.md) | Official battle royale plugin demo |
-| [`@tileborne/asset-pipeline`](packages/asset-pipeline/README.md) | Asset import, license reporting, path guards |
-| [`@tileborne/desktop`](apps/desktop/README.md) | Electron editor app |
-| [`@tileborne/game-host`](apps/game-host/README.md) | Cloudflare Worker + DO playtest template (local miniflare) |
+| Package                                                                      | Description                                                           |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`@tileborne/core`](packages/core/README.md)                                 | Domain models, IDs, map/project schemas                               |
+| [`@tileborne/sdk-tileset`](packages/sdk-tileset/)                            | Canonical tileset parser — autotiles, variants, animations, collision |
+| [`@tileborne/runtime`](packages/runtime/README.md)                           | ECS simulation, networking helpers, Pixi renderer adapter             |
+| [`@tileborne/plugin-api`](packages/plugin-api/README.md)                     | Plugin manifest schema and contribution registry                      |
+| [`@tileborne/ipc-contracts`](packages/ipc-contracts/README.md)               | Typed desktop IPC channels (Effect Schema)                            |
+| [`@tileborne/cli`](packages/cli/README.md)                                   | `tileborne` CLI — project, asset, map, plugin, playtest               |
+| [`@tileborne/ui`](packages/ui/README.md)                                     | Editor React shell and declarative plugin UI                          |
+| [`@tileborne/plugin-battle-royale`](packages/plugin-battle-royale/README.md) | Official battle royale plugin demo                                    |
+| [`@tileborne/asset-pipeline`](packages/asset-pipeline/README.md)             | Asset import, license reporting, path guards                          |
+| [`@tileborne/desktop`](apps/desktop/README.md)                               | Electron editor app                                                   |
+| [`@tileborne/game-host`](apps/game-host/README.md)                           | Cloudflare Worker + DO playtest template (local miniflare)            |
 
 ## Battle Royale plugin demo
 

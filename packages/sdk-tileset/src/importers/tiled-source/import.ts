@@ -1,6 +1,6 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import type { ParseDiagnostic, ParseResult } from "../../diagnostics.js";
+import type { ParseDiagnostic, ParseResult } from '../../diagnostics.js';
 import {
   Blob47AutotileRule,
   CustomAutotileRule,
@@ -11,35 +11,33 @@ import {
   Wang2EdgeAutotileRule,
   Wang4CornerAutotileRule,
   type AutotileRule,
-} from "../../schemas/autotile-rule.js";
-import { createManifestProvenance, type ManifestProvenance } from "../../manifest/index.js";
-import { inferAssetSemanticRoles } from "../../manifest/semantic-roles.js";
-import { compileTileMetadata, type CompiledTileMetadata } from "../../metadata/index.js";
-import { TerrainClass } from "../../schemas/terrain-class.js";
-import { TerrainTransition } from "../../schemas/terrain-transition.js";
-import { Tileset } from "../../schemas/tileset.js";
-import type { Placeable } from "../../schemas/placeable.js";
-import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../../schemas/tileset-pack.js";
-import type { TiledJsonTileset, TiledMapImport, TiledSourceInventory } from "../../tiled/types.js";
-import { buildTiledSourceInventory } from "../../tiled/source-inventory.js";
+} from '../../schemas/autotile-rule.js';
+import { createManifestProvenance, type ManifestProvenance } from '../../manifest/index.js';
+import { inferAssetSemanticRoles } from '../../manifest/semantic-roles.js';
+import { compileTileMetadata, type CompiledTileMetadata } from '../../metadata/index.js';
+import { TerrainClass } from '../../schemas/terrain-class.js';
+import { TerrainTransition } from '../../schemas/terrain-transition.js';
+import { Tileset } from '../../schemas/tileset.js';
+import type { Placeable } from '../../schemas/placeable.js';
+import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from '../../schemas/tileset-pack.js';
+import type { TiledJsonTileset, TiledMapImport, TiledSourceInventory } from '../../tiled/types.js';
+import { buildTiledSourceInventory } from '../../tiled/source-inventory.js';
 import {
   convertTiledXmlTileset,
   parseTiledXmlDocument,
   xmlTilesetRoot,
-} from "../../tiled/xml-common.js";
-import { parseTmx, parseTsx } from "../../tiled/index.js";
-import {
-  deterministicPackId,
-} from "../../tiled/deterministic-ids.js";
-import type { TileId } from "../../schemas/ids.js";
+} from '../../tiled/xml-common.js';
+import { parseTmx, parseTsx } from '../../tiled/index.js';
+import { deterministicPackId } from '../../tiled/deterministic-ids.js';
+import type { TileId } from '../../schemas/ids.js';
 
-import { applyUnityMetaAnimationFallback, parseUnityMetaSprites } from "./unity-meta-fallback.js";
+import { applyUnityMetaAnimationFallback, parseUnityMetaSprites } from './unity-meta-fallback.js';
 import {
   attachTileProvenanceTags,
   captureTileProvenance,
   type TiledSourceTileProvenance,
-} from "./provenance-meta.js";
-import { compileTiledSourceWallRulePhase } from "./wall-rules.js";
+} from './provenance-meta.js';
+import { compileTiledSourceWallRulePhase } from './wall-rules.js';
 
 export type TiledSourceReadFile = (
   path: string,
@@ -64,7 +62,7 @@ export type TiledSourceImportResult = ParseResult<TilesetPack> & {
   readonly sourceInventory: TiledSourceInventory;
 };
 
-const PACK_SEED = "tiled-source";
+const PACK_SEED = 'tiled-source';
 
 type ImportedTileset = {
   readonly sourcePath: string;
@@ -76,44 +74,43 @@ type ImportedTileset = {
 
 const normalizeRelativePath = (path: string): string => {
   const segments: string[] = [];
-  for (const segment of path.replaceAll("\\", "/").split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
+  for (const segment of path.replaceAll('\\', '/').split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
       segments.pop();
       continue;
     }
     segments.push(segment);
   }
-  return segments.join("/");
+  return segments.join('/');
 };
 
 const trimTrailingSlash = (path: string): string =>
-  path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
 
 const absolutePath = (sourceRoot: string, relativePath: string): string =>
   `${trimTrailingSlash(sourceRoot)}/${normalizeRelativePath(relativePath)}`;
 
 const dirname = (path: string): string => {
-  const normalized = path.replaceAll("\\", "/");
-  const index = normalized.lastIndexOf("/");
-  return index <= 0 ? "." : normalized.slice(0, index);
+  const normalized = path.replaceAll('\\', '/');
+  const index = normalized.lastIndexOf('/');
+  return index <= 0 ? '.' : normalized.slice(0, index);
 };
 
-const basename = (path: string): string => path.replaceAll("\\", "/").split("/").pop() ?? path;
+const basename = (path: string): string => path.replaceAll('\\', '/').split('/').pop() ?? path;
 
 const resolveRelative = (basePath: string, source: string): string => {
-  if (source.startsWith("/")) {
+  if (source.startsWith('/')) {
     return normalizeRelativePath(source);
   }
   return normalizeRelativePath(`${dirname(basePath)}/${source}`);
 };
 
-const tilesetSeed = (sourcePath: string): string =>
-  basename(sourcePath).replace(/\.tsx$/i, "");
+const tilesetSeed = (sourcePath: string): string => basename(sourcePath).replace(/\.tsx$/i, '');
 
 const readText = async (readFile: TiledSourceReadFile, path: string): Promise<string> => {
   const raw = await readFile(path);
-  return typeof raw === "string" ? raw : new TextDecoder().decode(raw);
+  return typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
 };
 
 const readOptionalText = async (
@@ -127,25 +124,19 @@ const readOptionalText = async (
   }
 };
 
-const tsxParseError = (
-  sourcePath: string,
-  message: string,
-): ParseDiagnostic => ({
-  _tag: "TiledSourceTsxParseError",
+const tsxParseError = (sourcePath: string, message: string): ParseDiagnostic => ({
+  _tag: 'TiledSourceTsxParseError',
   path: sourcePath,
   message,
-  severity: "error",
+  severity: 'error',
   sourcePath,
 });
 
-const missingImage = (
-  sourcePath: string,
-  imagePath: string,
-): ParseDiagnostic => ({
-  _tag: "TiledSourceMissingImageRef",
+const missingImage = (sourcePath: string, imagePath: string): ParseDiagnostic => ({
+  _tag: 'TiledSourceMissingImageRef',
   path: imagePath,
   message: `Referenced Tiled source image is missing: ${imagePath}`,
-  severity: "error",
+  severity: 'error',
   sourcePath,
   imagePath,
 });
@@ -155,10 +146,10 @@ const metadataCompileError = (
   localTileId: number,
   message: string,
 ): ParseDiagnostic => ({
-  _tag: "TiledSourceMetadataCompileError",
+  _tag: 'TiledSourceMetadataCompileError',
   path: `${sourcePath}/tile/${localTileId}`,
   message,
-  severity: "warning",
+  severity: 'warning',
   sourcePath,
   localTileId,
 });
@@ -173,7 +164,7 @@ const parseTilesetSource = (
   }
   const root = xmlTilesetRoot(parsed.value);
   if (!root) {
-    return { diagnostics: [tsxParseError(sourcePath, "TSX file is missing a <tileset> root")] };
+    return { diagnostics: [tsxParseError(sourcePath, 'TSX file is missing a <tileset> root')] };
   }
   try {
     return { value: convertTiledXmlTileset(root), diagnostics: [] };
@@ -185,7 +176,7 @@ const parseTilesetSource = (
 const discoverTsxRefs = (mapPath: string, raw: string): readonly string[] => {
   const refs: string[] = [];
   for (const match of raw.matchAll(/source="([^"]+\.tsx)"/g)) {
-    if (match[1] !== undefined && !match[1].startsWith(":")) {
+    if (match[1] !== undefined && !match[1].startsWith(':')) {
       refs.push(resolveRelative(mapPath, match[1]));
     }
   }
@@ -200,14 +191,12 @@ const resolveImagePaths = (sourcePath: string, source: TiledJsonTileset): readon
   return [...new Set(images.map((image) => resolveRelative(sourcePath, image)))];
 };
 
-const verifyImages = async (
-  input: {
-    readonly sourceRoot: string;
-    readonly sourcePath: string;
-    readonly source: TiledJsonTileset;
-    readonly readFile: TiledSourceReadFile;
-  },
-): Promise<readonly ParseDiagnostic[]> => {
+const verifyImages = async (input: {
+  readonly sourceRoot: string;
+  readonly sourcePath: string;
+  readonly source: TiledJsonTileset;
+  readonly readFile: TiledSourceReadFile;
+}): Promise<readonly ParseDiagnostic[]> => {
   const diagnostics: ParseDiagnostic[] = [];
   for (const imagePath of resolveImagePaths(input.sourcePath, input.source)) {
     try {
@@ -241,7 +230,7 @@ const tilesetHasAnimations = (tileset: Tileset): boolean =>
   );
 
 const terrainClassFromName = (name: string): typeof TerrainClass.Type =>
-  Schema.decodeUnknownSync(TerrainClass)(`tiled-source:${name.replace(/[^A-Za-z0-9:_-]+/g, "-")}`);
+  Schema.decodeUnknownSync(TerrainClass)(`tiled-source:${name.replace(/[^A-Za-z0-9:_-]+/g, '-')}`);
 
 const addInferredTerrainTransitions = (tileset: Tileset): Tileset => {
   if (tileset.terrainTransitions.length > 0 || tileset.autotileRules.length === 0) {
@@ -272,8 +261,13 @@ const addInferredTerrainTransitions = (tileset: Tileset): Tileset => {
 
 const compileImportedTilesetMetadata = (
   imported: ImportedTileset,
-): { readonly metadata: readonly CompiledTileMetadata[]; readonly diagnostics: readonly ParseDiagnostic[] } => {
-  const explicitTiles = new Map((imported.source.tiles ?? []).map((tile) => [tile.id, tile] as const));
+): {
+  readonly metadata: readonly CompiledTileMetadata[];
+  readonly diagnostics: readonly ParseDiagnostic[];
+} => {
+  const explicitTiles = new Map(
+    (imported.source.tiles ?? []).map((tile) => [tile.id, tile] as const),
+  );
   const metadata: CompiledTileMetadata[] = [];
   const diagnostics: ParseDiagnostic[] = [];
   for (const [localTileId, tile] of imported.tileset.tiles.entries()) {
@@ -288,31 +282,40 @@ const compileImportedTilesetMetadata = (
           ...(explicit?.properties === undefined ? {} : { properties: explicit.properties }),
           ...(explicit?.type === undefined ? {} : { type: explicit.type }),
           ...(explicit?.class === undefined ? {} : { class: explicit.class }),
-          ...(explicit?.objectgroup?.objects === undefined ? {} : { objectgroupObjects: explicit.objectgroup.objects }),
+          ...(explicit?.objectgroup?.objects === undefined
+            ? {}
+            : { objectgroupObjects: explicit.objectgroup.objects }),
         },
       });
       metadata.push(compiled.value);
       diagnostics.push(...compiled.diagnostics);
     } catch (error) {
-      diagnostics.push(metadataCompileError(imported.sourcePath, localTileId, (error as Error).message));
+      diagnostics.push(
+        metadataCompileError(imported.sourcePath, localTileId, (error as Error).message),
+      );
     }
   }
   return { metadata, diagnostics };
 };
 
-const compileTsx = async (
-  input: {
-    readonly sourceRoot: string;
-    readonly sourcePath: string;
-    readonly readFile: TiledSourceReadFile;
-  },
-): Promise<{ readonly value?: ImportedTileset; readonly diagnostics: readonly ParseDiagnostic[] }> => {
+const compileTsx = async (input: {
+  readonly sourceRoot: string;
+  readonly sourcePath: string;
+  readonly readFile: TiledSourceReadFile;
+}): Promise<{
+  readonly value?: ImportedTileset;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> => {
   const absPath = absolutePath(input.sourceRoot, input.sourcePath);
   let raw: string;
   try {
     raw = await readText(input.readFile, absPath);
   } catch (error) {
-    return { diagnostics: [tsxParseError(input.sourcePath, `Failed to read TSX: ${(error as Error).message}`)] };
+    return {
+      diagnostics: [
+        tsxParseError(input.sourcePath, `Failed to read TSX: ${(error as Error).message}`),
+      ],
+    };
   }
 
   const source = parseTilesetSource(raw, input.sourcePath);
@@ -325,7 +328,9 @@ const compileTsx = async (
     return {
       diagnostics: [
         ...diagnostics,
-        ...(compiled.value === undefined ? [tsxParseError(input.sourcePath, "TSX did not compile into a tileset")] : []),
+        ...(compiled.value === undefined
+          ? [tsxParseError(input.sourcePath, 'TSX did not compile into a tileset')]
+          : []),
       ],
     };
   }
@@ -340,9 +345,15 @@ const compileTsx = async (
   );
 
   let tileset = compiled.value.tileset;
-  const imagePath = source.value.image === undefined ? undefined : resolveRelative(input.sourcePath, source.value.image);
+  const imagePath =
+    source.value.image === undefined
+      ? undefined
+      : resolveRelative(input.sourcePath, source.value.image);
   if (imagePath !== undefined) {
-    const rawMeta = await readOptionalText(input.readFile, absolutePath(input.sourceRoot, `${imagePath}.meta`));
+    const rawMeta = await readOptionalText(
+      input.readFile,
+      absolutePath(input.sourceRoot, `${imagePath}.meta`),
+    );
     if (rawMeta !== undefined && !tilesetHasAnimations(tileset)) {
       const fallback = applyUnityMetaAnimationFallback({
         tileset,
@@ -397,10 +408,7 @@ const addWallRules = (
     };
   });
 
-const sanitizeAutotileRule = (
-  rule: AutotileRule,
-  tileIds: ReadonlySet<string>,
-): AutotileRule => {
+const sanitizeAutotileRule = (rule: AutotileRule, tileIds: ReadonlySet<string>): AutotileRule => {
   const maskToTileIds: Record<string, [TileId, ...TileId[]]> = {};
   for (const [mask, ids] of Object.entries(rule.maskToTileIds)) {
     const filtered = ids.filter((tileId) => tileIds.has(String(tileId)));
@@ -420,21 +428,21 @@ const sanitizeAutotileRule = (
     fallbackTileId,
   };
   switch (rule._tag) {
-    case "wang2corner":
+    case 'wang2corner':
       return new Wang2CornerAutotileRule(base);
-    case "wang2edge":
+    case 'wang2edge':
       return new Wang2EdgeAutotileRule(base);
-    case "wang4corner":
+    case 'wang4corner':
       return new Wang4CornerAutotileRule(base);
-    case "blob47":
+    case 'blob47':
       return new Blob47AutotileRule(base);
-    case "rpgmA2":
+    case 'rpgmA2':
       return new RpgmA2AutotileRule(base);
-    case "rpgmA3":
+    case 'rpgmA3':
       return new RpgmA3AutotileRule(base);
-    case "rpgmA4":
+    case 'rpgmA4':
       return new RpgmA4AutotileRule(base);
-    case "custom":
+    case 'custom':
       return new CustomAutotileRule({ ...base, source: rule.source });
   }
 };
@@ -482,11 +490,12 @@ export const importTiledSource = async (
   const bySource = new Map(imported.map((entry) => [entry.sourcePath, entry] as const));
   const byBasename = new Map(imported.map((entry) => [basename(entry.sourcePath), entry] as const));
   const tileIdForSource = (sourcePath: string, localTileId: number) => {
-    const entry = bySource.get(normalizeRelativePath(sourcePath)) ?? byBasename.get(basename(sourcePath));
+    const entry =
+      bySource.get(normalizeRelativePath(sourcePath)) ?? byBasename.get(basename(sourcePath));
     return entry?.tileset.tiles[localTileId]?.id;
   };
 
-  const rulesBySource = new Map<string, import("../../schemas/autotile-rule.js").AutotileRule[]>();
+  const rulesBySource = new Map<string, import('../../schemas/autotile-rule.js').AutotileRule[]>();
   for (const rulePath of input.ruleFiles ?? []) {
     const raw = await readOptionalText(input.readFile, absolutePath(input.sourceRoot, rulePath));
     if (raw === undefined) {
@@ -513,7 +522,7 @@ export const importTiledSource = async (
   for (const [mapPath, raw] of rawMaps) {
     const parsed = await parseTmx(raw, {
       packIdSeed: PACK_SEED,
-      packName: input.packName ?? "Tiled source",
+      packName: input.packName ?? 'Tiled source',
       projectRoot: trimTrailingSlash(input.sourceRoot),
       sourcePath: absolutePath(input.sourceRoot, mapPath),
       reader: { readFile: input.readFile },
@@ -542,11 +551,11 @@ export const importTiledSource = async (
   const packWithoutRoles = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(PACK_SEED),
-    name: input.packName ?? "Tiled source",
-    version: input.packVersion ?? "1.0.0",
+    name: input.packName ?? 'Tiled source',
+    version: input.packVersion ?? '1.0.0',
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
-      attribution: Option.some("Tiled source asset pack"),
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Tiled source asset pack'),
       sourceUrl: Option.none(),
       notes: Option.some(input.sourceRoot),
       redistributable: false,
@@ -565,12 +574,14 @@ export const importTiledSource = async (
     diagnostics,
     provenance: createManifestProvenance({
       sourcePath: input.sourceRoot,
-      originTool: "tileborne-tiled-source-importer",
+      originTool: 'tileborne-tiled-source-importer',
       ...(input.importedAt === undefined ? {} : { importedAt: input.importedAt }),
     }),
     maps,
     tileMetadata: metadataResults.flatMap((result) => result.metadata),
-    tileProvenance: withWallRules.flatMap((entry) => captureTileProvenance(entry.tileset, entry.sourcePath)),
+    tileProvenance: withWallRules.flatMap((entry) =>
+      captureTileProvenance(entry.tileset, entry.sourcePath),
+    ),
     sourceInventory,
   };
 };

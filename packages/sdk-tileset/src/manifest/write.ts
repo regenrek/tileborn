@@ -1,13 +1,13 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { Animation } from "../schemas/animation.js";
-import { CollisionMask } from "../schemas/collision-mask.js";
-import type { TilesetPack } from "../schemas/tileset-pack.js";
-import type { Tile } from "../schemas/tile.js";
-import type { AssetSemanticRole } from "../schemas/semantic-role.js";
-import type { ManifestProvenanceInput } from "./provenance.js";
-import { inferAssetSemanticRoles } from "./semantic-roles.js";
-import { TILESET_MANIFEST_SCHEMA_VERSION } from "./schema-version.js";
+import { Animation } from '../schemas/animation.js';
+import { CollisionMask } from '../schemas/collision-mask.js';
+import type { TilesetPack } from '../schemas/tileset-pack.js';
+import type { Tile } from '../schemas/tile.js';
+import type { AssetSemanticRole } from '../schemas/semantic-role.js';
+import type { ManifestProvenanceInput } from './provenance.js';
+import { inferAssetSemanticRoles } from './semantic-roles.js';
+import { TILESET_MANIFEST_SCHEMA_VERSION } from './schema-version.js';
 
 const optionProperty = <K extends string, A>(
   key: K,
@@ -18,30 +18,30 @@ const optionProperty = <K extends string, A>(
     onSome: (inner) => ({ [key]: inner }) as Record<K, A>,
   });
 
-const licenseToJson = (license: TilesetPack["license"]) => ({
+const licenseToJson = (license: TilesetPack['license']) => ({
   spdxId: license.spdxId,
-  ...optionProperty("attribution", license.attribution),
-  ...optionProperty("sourceUrl", license.sourceUrl),
-  ...optionProperty("notes", license.notes),
+  ...optionProperty('attribution', license.attribution),
+  ...optionProperty('sourceUrl', license.sourceUrl),
+  ...optionProperty('notes', license.notes),
   redistributable: license.redistributable,
 });
 
 const encodeCollisionMask = (mask: typeof CollisionMask.Type): unknown =>
   Schema.encodeUnknownSync(CollisionMask)(mask);
 
-const uvToJson = (uv: Tile["uv"]) => ({
+const uvToJson = (uv: Tile['uv']) => ({
   x: uv.x,
   y: uv.y,
   w: uv.w,
   h: uv.h,
 });
 
-const sizeToJson = (size: NonNullable<TilesetPack["placeables"]>[number]["size"]) => ({
+const sizeToJson = (size: NonNullable<TilesetPack['placeables']>[number]['size']) => ({
   width: size.width,
   height: size.height,
 });
 
-const cellSizeToJson = (cellSize: TilesetPack["tilesets"][number]["cellSize"]) => ({
+const cellSizeToJson = (cellSize: TilesetPack['tilesets'][number]['cellSize']) => ({
   width: cellSize.width,
   height: cellSize.height,
 });
@@ -55,14 +55,16 @@ const animationToJson = (animation: Animation) => ({
   loop: animation.loop,
 });
 
-const frameToJson = (frame: NonNullable<TilesetPack["placeables"]>[number]["frames"][number]) => ({
+const frameToJson = (frame: NonNullable<TilesetPack['placeables']>[number]['frames'][number]) => ({
   assetId: frame.assetId,
   tileId: frame.tileId,
   uv: uvToJson(frame.uv),
-  ...optionProperty("durationMs", frame.durationMs),
+  ...optionProperty('durationMs', frame.durationMs),
 });
 
-const clipToJson = (clip: NonNullable<NonNullable<TilesetPack["placeables"]>[number]["clips"]>[number]) => ({
+const clipToJson = (
+  clip: NonNullable<NonNullable<TilesetPack['placeables']>[number]['clips']>[number],
+) => ({
   id: clip.id,
   name: clip.name,
   frames: clip.frames.map(frameToJson),
@@ -70,7 +72,7 @@ const clipToJson = (clip: NonNullable<NonNullable<TilesetPack["placeables"]>[num
   defaultDurationMs: clip.defaultDurationMs,
 });
 
-const placeablesToJson = (placeables: TilesetPack["placeables"]) =>
+const placeablesToJson = (placeables: TilesetPack['placeables']) =>
   (placeables ?? []).map((placeable) => ({
     id: placeable.id,
     name: placeable.name,
@@ -83,11 +85,11 @@ const placeablesToJson = (placeables: TilesetPack["placeables"]) =>
       format: placeable.source.format,
       tilesetName: placeable.source.tilesetName,
       localTileId: placeable.source.localTileId,
-      ...optionProperty("image", placeable.source.image),
-      ...optionProperty("imageWidth", placeable.source.imageWidth),
-      ...optionProperty("imageHeight", placeable.source.imageHeight),
-      ...optionProperty("objectType", placeable.source.objectType),
-      ...optionProperty("objectClass", placeable.source.objectClass),
+      ...optionProperty('image', placeable.source.image),
+      ...optionProperty('imageWidth', placeable.source.imageWidth),
+      ...optionProperty('imageHeight', placeable.source.imageHeight),
+      ...optionProperty('objectType', placeable.source.objectType),
+      ...optionProperty('objectClass', placeable.source.objectClass),
       properties: placeable.source.properties,
     },
   }));
@@ -105,7 +107,7 @@ const tileToJson = (
 ): {
   readonly id: string;
   readonly tilesetId: string;
-  readonly uv: Tile["uv"];
+  readonly uv: Tile['uv'];
   readonly tags: readonly string[];
   readonly terrainClass?: string;
   readonly animationId?: string;
@@ -207,7 +209,7 @@ export const writeTilesetManifest = (
           onNone: () => ({}),
           onSome: (fallbackTileId) => ({ fallbackTileId }),
         }),
-        ...(rule._tag === "custom" ? { source: rule.source } : {}),
+        ...(rule._tag === 'custom' ? { source: rule.source } : {}),
       });
     }
 
@@ -265,7 +267,9 @@ export const writeTilesetManifest = (
     animations: [...animations.values()],
     terrainTransitions,
     collisionMasks,
-    ...(semanticRoles.length === 0 ? {} : { assetSemanticRoles: semanticRoles.map(semanticRoleToJson) }),
+    ...(semanticRoles.length === 0
+      ? {}
+      : { assetSemanticRoles: semanticRoles.map(semanticRoleToJson) }),
     ...(pack.placeables === undefined || pack.placeables.length === 0
       ? {}
       : { placeables: placeablesToJson(pack.placeables) }),

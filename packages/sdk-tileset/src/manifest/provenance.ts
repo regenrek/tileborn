@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Traceability metadata captured when a manifest is imported or authored. */
-export class ManifestProvenance extends Schema.Class<ManifestProvenance>("ManifestProvenance")({
+export class ManifestProvenance extends Schema.Class<ManifestProvenance>('ManifestProvenance')({
   sourcePath: Schema.String,
   originTool: Schema.String,
   importedAt: Schema.String,

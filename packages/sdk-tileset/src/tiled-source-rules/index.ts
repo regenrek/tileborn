@@ -1,4 +1,4 @@
-export * from "./model.js";
+export * from './model.js';
 export {
   buildTiledSourceRulePack,
   collectProjectedAssetKeys,
@@ -6,4 +6,4 @@ export {
   decodeTiledSourceSourceManifest,
   decodeTiledSourceRuleApplicationInput,
   projectTiledSourceRuleApplication,
-} from "./compiler.js";
+} from './compiler.js';

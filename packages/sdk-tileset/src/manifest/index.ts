@@ -1,6 +1,6 @@
-export { parseTilesetManifest } from "./parse.js";
-export { createManifestProvenance, ManifestProvenance } from "./provenance.js";
-export type { ManifestProvenanceInput } from "./provenance.js";
+export { parseTilesetManifest } from './parse.js';
+export { createManifestProvenance, ManifestProvenance } from './provenance.js';
+export type { ManifestProvenanceInput } from './provenance.js';
 export {
   ManifestAutotileRule,
   ManifestBlob47AutotileRule,
@@ -20,7 +20,7 @@ export {
   TilesetManifest,
   TilesetManifestEntry,
   TilesetManifestLicense,
-} from "./schema-version.js";
-export type { TilesetManifestSchemaVersion } from "./schema-version.js";
-export { writeTilesetManifest } from "./write.js";
-export { inferAssetSemanticRoles } from "./semantic-roles.js";
+} from './schema-version.js';
+export type { TilesetManifestSchemaVersion } from './schema-version.js';
+export { writeTilesetManifest } from './write.js';
+export { inferAssetSemanticRoles } from './semantic-roles.js';

@@ -1,14 +1,22 @@
-import { AssetId, JsonObject, PackId } from "@tileborne/core";
-import { Schema } from "effect";
+import { AssetId, JsonObject, PackId } from '@tileborne/core';
+import { Schema } from 'effect';
 
-import { AutotileRulePattern } from "../schemas/autotile-rule.js";
-import { Animation } from "../schemas/animation.js";
-import { CollisionMask } from "../schemas/collision-mask.js";
-import { AnimationId, AutotileRuleId, ClipId, PlaceableId, TileId, TilesetId, VariantFilterId } from "../schemas/ids.js";
-import { AssetSemanticRoleName, AssetSemanticRoleSource } from "../schemas/semantic-role.js";
-import { TerrainClass } from "../schemas/terrain-class.js";
-import { UVRect } from "../schemas/uv-rect.js";
-import { ManifestProvenance } from "./provenance.js";
+import { AutotileRulePattern } from '../schemas/autotile-rule.js';
+import { Animation } from '../schemas/animation.js';
+import { CollisionMask } from '../schemas/collision-mask.js';
+import {
+  AnimationId,
+  AutotileRuleId,
+  ClipId,
+  PlaceableId,
+  TileId,
+  TilesetId,
+  VariantFilterId,
+} from '../schemas/ids.js';
+import { AssetSemanticRoleName, AssetSemanticRoleSource } from '../schemas/semantic-role.js';
+import { TerrainClass } from '../schemas/terrain-class.js';
+import { UVRect } from '../schemas/uv-rect.js';
+import { ManifestProvenance } from './provenance.js';
 
 /** Current durable Tileborne tileset manifest schema version. */
 export const TILESET_MANIFEST_SCHEMA_VERSION = 1 as const;
@@ -50,44 +58,47 @@ const manifestAutotileRuleFields = {
 } as const;
 
 export class ManifestWang2CornerAutotileRule extends Schema.TaggedClass<ManifestWang2CornerAutotileRule>()(
-  "wang2corner",
+  'wang2corner',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestWang2EdgeAutotileRule extends Schema.TaggedClass<ManifestWang2EdgeAutotileRule>()(
-  "wang2edge",
+  'wang2edge',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestWang4CornerAutotileRule extends Schema.TaggedClass<ManifestWang4CornerAutotileRule>()(
-  "wang4corner",
+  'wang4corner',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestBlob47AutotileRule extends Schema.TaggedClass<ManifestBlob47AutotileRule>()(
-  "blob47",
+  'blob47',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestRpgmA2AutotileRule extends Schema.TaggedClass<ManifestRpgmA2AutotileRule>()(
-  "rpgmA2",
+  'rpgmA2',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestRpgmA3AutotileRule extends Schema.TaggedClass<ManifestRpgmA3AutotileRule>()(
-  "rpgmA3",
+  'rpgmA3',
   manifestAutotileRuleFields,
 ) {}
 
 export class ManifestRpgmA4AutotileRule extends Schema.TaggedClass<ManifestRpgmA4AutotileRule>()(
-  "rpgmA4",
+  'rpgmA4',
   manifestAutotileRuleFields,
 ) {}
 
-export class ManifestCustomAutotileRule extends Schema.TaggedClass<ManifestCustomAutotileRule>()("custom", {
-  ...manifestAutotileRuleFields,
-  source: Schema.Unknown,
-}) {}
+export class ManifestCustomAutotileRule extends Schema.TaggedClass<ManifestCustomAutotileRule>()(
+  'custom',
+  {
+    ...manifestAutotileRuleFields,
+    source: Schema.Unknown,
+  },
+) {}
 
 export const ManifestAutotileRule = Schema.Union([
   ManifestWang2CornerAutotileRule,
@@ -162,7 +173,7 @@ export type ManifestSpriteClip = typeof ManifestSpriteClip.Type;
 
 /** Tiled provenance retained for image-collection object definitions. */
 export const ManifestTiledPlaceableSource = Schema.Struct({
-  format: Schema.Literal("tiled"),
+  format: Schema.Literal('tiled'),
   tilesetName: Schema.String,
   localTileId: Schema.Int,
   image: Schema.optional(Schema.String),
@@ -185,7 +196,7 @@ export const ManifestPlaceable = Schema.Struct({
   frames: Schema.NonEmptyArray(ManifestPlaceableFrameRef),
   clips: Schema.optional(Schema.Array(ManifestSpriteClip)),
   tags: Schema.Array(Schema.String),
-  placementMode: Schema.optional(Schema.Literals(["object", "tile-and-object"])),
+  placementMode: Schema.optional(Schema.Literals(['object', 'tile-and-object'])),
   source: ManifestTiledPlaceableSource,
 });
 export type ManifestPlaceable = typeof ManifestPlaceable.Type;
@@ -234,4 +245,4 @@ export const TilesetManifest = Schema.Struct({
 export type TilesetManifest = typeof TilesetManifest.Type;
 
 export { AutotileRulePattern };
-export type { TilesetPack } from "../schemas/tileset-pack.js";
+export type { TilesetPack } from '../schemas/tileset-pack.js';

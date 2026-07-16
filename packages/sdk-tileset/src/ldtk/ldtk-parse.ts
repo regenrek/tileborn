@@ -1,22 +1,17 @@
-import { Option } from "effect";
-import { Schema } from "effect";
+import { Option } from 'effect';
+import { Schema } from 'effect';
 
-import type { ParseDiagnostic } from "../diagnostics.js";
-import { CellSize, Tileset } from "../schemas/tileset.js";
-import { Tile } from "../schemas/tile.js";
-import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../schemas/tileset-pack.js";
-import { TerrainClass } from "../schemas/terrain-class.js";
-import { UVRect } from "../schemas/uv-rect.js";
-import type { TileId } from "../schemas/ids.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import { CellSize, Tileset } from '../schemas/tileset.js';
+import { Tile } from '../schemas/tile.js';
+import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from '../schemas/tileset-pack.js';
+import { TerrainClass } from '../schemas/terrain-class.js';
+import { UVRect } from '../schemas/uv-rect.js';
+import type { TileId } from '../schemas/ids.js';
 
-import { compileLdtkAutoRules } from "./auto-rule.js";
-import {
-  ldtkAssetId,
-  ldtkPackId,
-  ldtkTileId,
-  ldtkTilesetId,
-} from "./deterministic-id.js";
-import { resolveExternalLevel, type FileReader } from "./external-resolve.js";
+import { compileLdtkAutoRules } from './auto-rule.js';
+import { ldtkAssetId, ldtkPackId, ldtkTileId, ldtkTilesetId } from './deterministic-id.js';
+import { resolveExternalLevel, type FileReader } from './external-resolve.js';
 import type {
   LdtkAutoLayer,
   LdtkEntityField,
@@ -33,26 +28,26 @@ import type {
   LdtkTileCell,
   LdtkTileLayer,
   LdtkEntitiesLayer,
-} from "./types.js";
+} from './types.js';
 
 type UnknownRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const readString = (record: UnknownRecord, key: string): string | undefined => {
   const value = record[key];
-  return typeof value === "string" ? value : undefined;
+  return typeof value === 'string' ? value : undefined;
 };
 
 const readNumber = (record: UnknownRecord, key: string): number | undefined => {
   const value = record[key];
-  return typeof value === "number" ? value : undefined;
+  return typeof value === 'number' ? value : undefined;
 };
 
 const readBoolean = (record: UnknownRecord, key: string): boolean | undefined => {
   const value = record[key];
-  return typeof value === "boolean" ? value : undefined;
+  return typeof value === 'boolean' ? value : undefined;
 };
 
 const readArray = (record: UnknownRecord, key: string): readonly unknown[] | undefined => {
@@ -65,7 +60,7 @@ const readPair = (value: unknown): readonly [number, number] | undefined => {
     return undefined;
   }
   const [x, y] = value;
-  if (typeof x !== "number" || typeof y !== "number") {
+  if (typeof x !== 'number' || typeof y !== 'number') {
     return undefined;
   }
   return [x, y];
@@ -98,26 +93,28 @@ const tileUv = (
 const compileTileset = (
   projectPath: string,
   tilesetDef: UnknownRecord,
-  autotileRulesByTileset: ReadonlyMap<number, Tileset["autotileRules"]>,
+  autotileRulesByTileset: ReadonlyMap<number, Tileset['autotileRules']>,
 ): { readonly tileset: Tileset; readonly asset?: TilesetPackAsset } => {
-  const uid = readNumber(tilesetDef, "uid") ?? 0;
-  const identifier = readString(tilesetDef, "identifier") ?? `tileset-${uid}`;
-  const relPath = readString(tilesetDef, "relPath");
-  const cellSize = readNumber(tilesetDef, "tileGridSize") ?? 16;
-  const margin = readNumber(tilesetDef, "padding") ?? 0;
-  const spacing = readNumber(tilesetDef, "spacing") ?? 0;
-  const columns = readNumber(tilesetDef, "__cWid") ?? 1;
-  const rows = readNumber(tilesetDef, "__cHei") ?? 1;
-  const tags = readArray(tilesetDef, "tags")?.filter((tag): tag is string => typeof tag === "string") ?? [];
+  const uid = readNumber(tilesetDef, 'uid') ?? 0;
+  const identifier = readString(tilesetDef, 'identifier') ?? `tileset-${uid}`;
+  const relPath = readString(tilesetDef, 'relPath');
+  const cellSize = readNumber(tilesetDef, 'tileGridSize') ?? 16;
+  const margin = readNumber(tilesetDef, 'padding') ?? 0;
+  const spacing = readNumber(tilesetDef, 'spacing') ?? 0;
+  const columns = readNumber(tilesetDef, '__cWid') ?? 1;
+  const rows = readNumber(tilesetDef, '__cHei') ?? 1;
+  const tags =
+    readArray(tilesetDef, 'tags')?.filter((tag): tag is string => typeof tag === 'string') ?? [];
 
-  const enumTags = readArray(tilesetDef, "enumTags") ?? [];
+  const enumTags = readArray(tilesetDef, 'enumTags') ?? [];
   const tileTags = new Map<number, string[]>();
   for (const enumTag of enumTags) {
     if (!isRecord(enumTag)) {
       continue;
     }
-    const enumValueId = readString(enumTag, "enumValueId");
-    const tileIds = readArray(enumTag, "tileIds")?.filter((id): id is number => typeof id === "number") ?? [];
+    const enumValueId = readString(enumTag, 'enumValueId');
+    const tileIds =
+      readArray(enumTag, 'tileIds')?.filter((id): id is number => typeof id === 'number') ?? [];
     if (enumValueId === undefined) {
       continue;
     }
@@ -145,7 +142,10 @@ const compileTileset = (
   const tileset = new Tileset({
     id: ldtkTilesetId(projectPath, uid),
     name: identifier,
-    atlasAssetId: relPath === null || relPath === undefined ? ldtkAssetId(projectPath, identifier) : ldtkAssetId(projectPath, relPath),
+    atlasAssetId:
+      relPath === null || relPath === undefined
+        ? ldtkAssetId(projectPath, identifier)
+        : ldtkAssetId(projectPath, relPath),
     cellSize: new CellSize({ width: cellSize, height: cellSize }),
     margin,
     spacing,
@@ -161,34 +161,35 @@ const compileTileset = (
       : new TilesetPackAsset({
           id: ldtkAssetId(projectPath, relPath),
           path: relPath,
-          mime: "image/png",
+          mime: 'image/png',
         });
 
   return asset === undefined ? { tileset } : { tileset, asset };
 };
 
 const compileEnums = (defs: UnknownRecord): readonly LdtkEnum[] => {
-  const enums = readArray(defs, "enums") ?? [];
+  const enums = readArray(defs, 'enums') ?? [];
   return enums.flatMap((entry): readonly LdtkEnum[] => {
     if (!isRecord(entry)) {
       return [];
     }
-    const identifier = readString(entry, "identifier");
-    const uid = readNumber(entry, "uid");
+    const identifier = readString(entry, 'identifier');
+    const uid = readNumber(entry, 'uid');
     if (identifier === undefined || uid === undefined) {
       return [];
     }
-    const values = (readArray(entry, "values") ?? []).flatMap((valueEntry) => {
+    const values = (readArray(entry, 'values') ?? []).flatMap((valueEntry) => {
       if (!isRecord(valueEntry)) {
         return [];
       }
-      const id = readString(valueEntry, "id");
+      const id = readString(valueEntry, 'id');
       if (id === undefined) {
         return [];
       }
       const tileIds =
-        readArray(valueEntry, "tileIds")?.filter((tileId): tileId is number => typeof tileId === "number") ??
-        [];
+        readArray(valueEntry, 'tileIds')?.filter(
+          (tileId): tileId is number => typeof tileId === 'number',
+        ) ?? [];
       return [{ id, tileIds }];
     });
     return [{ identifier, uid, values }];
@@ -196,14 +197,14 @@ const compileEnums = (defs: UnknownRecord): readonly LdtkEnum[] => {
 };
 
 const compileIntGridValues = (layerDef: UnknownRecord): readonly LdtkIntGridValue[] => {
-  const values = readArray(layerDef, "intGridValues") ?? [];
+  const values = readArray(layerDef, 'intGridValues') ?? [];
   return values.flatMap((entry, index): readonly LdtkIntGridValue[] => {
     if (!isRecord(entry)) {
       return [];
     }
-    const explicitValue = readNumber(entry, "value");
+    const explicitValue = readNumber(entry, 'value');
     const value = explicitValue ?? index + 1;
-    const identifier = readString(entry, "identifier") ?? null;
+    const identifier = readString(entry, 'identifier') ?? null;
     const terrainClass = terrainFromIdentifier(identifier);
     return [
       {
@@ -221,8 +222,9 @@ const terrainClassesForLayer = (
   if (intGridLayerDef === undefined) {
     return [];
   }
-  return compileIntGridValues(intGridLayerDef)
-    .flatMap((entry) => (entry.terrainClass === undefined ? [] : [entry.terrainClass]));
+  return compileIntGridValues(intGridLayerDef).flatMap((entry) =>
+    entry.terrainClass === undefined ? [] : [entry.terrainClass],
+  );
 };
 
 const compileAutoLayerRules = (
@@ -230,27 +232,29 @@ const compileAutoLayerRules = (
   defs: UnknownRecord,
   layerDefs: readonly UnknownRecord[],
 ): {
-  readonly autotileRulesByTileset: Map<number, Tileset["autotileRules"]>;
+  readonly autotileRulesByTileset: Map<number, Tileset['autotileRules']>;
   readonly diagnostics: ParseDiagnostic[];
 } => {
-  const autotileRulesByTileset = new Map<number, Tileset["autotileRules"]>();
+  const autotileRulesByTileset = new Map<number, Tileset['autotileRules']>();
   const diagnostics: ParseDiagnostic[] = [];
 
   for (const layerDef of layerDefs) {
-    if (readString(layerDef, "__type") !== "AutoLayer") {
+    if (readString(layerDef, '__type') !== 'AutoLayer') {
       continue;
     }
 
-    const layerUid = readNumber(layerDef, "uid") ?? 0;
-    const layerIdentifier = readString(layerDef, "identifier") ?? `layer-${layerUid}`;
-    const tilesetUid = readNumber(layerDef, "tilesetDefUid") ?? 0;
-    const sourceLayerUid = readNumber(layerDef, "autoSourceLayerDefUid") ?? 0;
-    const sourceLayerDef = layerDefs.find((candidate) => readNumber(candidate, "uid") === sourceLayerUid);
-    const tilesetDef = (readArray(defs, "tilesets") ?? []).find(
-      (candidate) => isRecord(candidate) && readNumber(candidate, "uid") === tilesetUid,
+    const layerUid = readNumber(layerDef, 'uid') ?? 0;
+    const layerIdentifier = readString(layerDef, 'identifier') ?? `layer-${layerUid}`;
+    const tilesetUid = readNumber(layerDef, 'tilesetDefUid') ?? 0;
+    const sourceLayerUid = readNumber(layerDef, 'autoSourceLayerDefUid') ?? 0;
+    const sourceLayerDef = layerDefs.find(
+      (candidate) => readNumber(candidate, 'uid') === sourceLayerUid,
     );
-    const columns = isRecord(tilesetDef) ? readNumber(tilesetDef, "__cWid") ?? 1 : 1;
-    const ruleGroups = (readArray(layerDef, "autoRuleGroups") ?? []).flatMap((group) =>
+    const tilesetDef = (readArray(defs, 'tilesets') ?? []).find(
+      (candidate) => isRecord(candidate) && readNumber(candidate, 'uid') === tilesetUid,
+    );
+    const columns = isRecord(tilesetDef) ? (readNumber(tilesetDef, '__cWid') ?? 1) : 1;
+    const ruleGroups = (readArray(layerDef, 'autoRuleGroups') ?? []).flatMap((group) =>
       isRecord(group) ? [group] : [],
     );
 
@@ -262,7 +266,9 @@ const compileAutoLayerRules = (
       columns,
       terrainClasses: terrainClassesForLayer(sourceLayerDef),
       ruleGroups: ruleGroups.map((group) => ({
-        rules: (readArray(group, "rules") ?? []).flatMap((rule) => (isRecord(rule) ? [rule as never] : [])),
+        rules: (readArray(group, 'rules') ?? []).flatMap((rule) =>
+          isRecord(rule) ? [rule as never] : [],
+        ),
       })),
       tileIdForIndex: (index) => ldtkTileId(projectPath, tilesetUid, index),
     });
@@ -277,15 +283,15 @@ const compileAutoLayerRules = (
 };
 
 const entityFields = (entity: UnknownRecord): readonly LdtkEntityField[] =>
-  (readArray(entity, "fieldInstances") ?? []).flatMap((field) => {
+  (readArray(entity, 'fieldInstances') ?? []).flatMap((field) => {
     if (!isRecord(field)) {
       return [];
     }
-    const identifier = readString(field, "__identifier") ?? readString(field, "defId");
+    const identifier = readString(field, '__identifier') ?? readString(field, 'defId');
     if (identifier === undefined) {
       return [];
     }
-    return [{ identifier, value: field["__value"] ?? field["realEditorValues"] ?? null }];
+    return [{ identifier, value: field['__value'] ?? field['realEditorValues'] ?? null }];
   });
 
 const isSpawnEntity = (identifier: string, fields: readonly LdtkEntityField[]): boolean => {
@@ -295,22 +301,26 @@ const isSpawnEntity = (identifier: string, fields: readonly LdtkEntityField[]): 
   return fields.some(
     (field) =>
       /spawn|player|start/i.test(field.identifier) &&
-      (field.value === true || field.value === 1 || field.value === "true"),
+      (field.value === true || field.value === 1 || field.value === 'true'),
   );
 };
 
-const compileEntity = (entity: UnknownRecord, entityDefs: readonly UnknownRecord[]): LdtkEntityInstance | undefined => {
-  const identifier = readString(entity, "__identifier");
-  const defUid = readNumber(entity, "defUid");
-  const px = readPair(entity["__pivot"] ?? entity["px"]);
-  const width = readNumber(entity, "width") ?? readNumber(entity, "__width") ?? 16;
-  const height = readNumber(entity, "height") ?? readNumber(entity, "__height") ?? 16;
+const compileEntity = (
+  entity: UnknownRecord,
+  entityDefs: readonly UnknownRecord[],
+): LdtkEntityInstance | undefined => {
+  const identifier = readString(entity, '__identifier');
+  const defUid = readNumber(entity, 'defUid');
+  const px = readPair(entity['__pivot'] ?? entity['px']);
+  const width = readNumber(entity, 'width') ?? readNumber(entity, '__width') ?? 16;
+  const height = readNumber(entity, 'height') ?? readNumber(entity, '__height') ?? 16;
   if (identifier === undefined || defUid === undefined || px === undefined) {
     return undefined;
   }
 
-  const def = entityDefs.find((candidate) => readNumber(candidate, "uid") === defUid);
-  const defIdentifier = def === undefined ? identifier : readString(def, "identifier") ?? identifier;
+  const def = entityDefs.find((candidate) => readNumber(candidate, 'uid') === defUid);
+  const defIdentifier =
+    def === undefined ? identifier : (readString(def, 'identifier') ?? identifier);
   const fields = entityFields(entity);
   const base = {
     identifier: defIdentifier,
@@ -321,10 +331,10 @@ const compileEntity = (entity: UnknownRecord, entityDefs: readonly UnknownRecord
   };
 
   if (isSpawnEntity(defIdentifier, fields)) {
-    return { kind: "spawn", ...base } satisfies LdtkSpawnAnchor;
+    return { kind: 'spawn', ...base } satisfies LdtkSpawnAnchor;
   }
 
-  return { kind: "prop", ...base } satisfies LdtkProp;
+  return { kind: 'prop', ...base } satisfies LdtkProp;
 };
 
 const tileIdForCell = (
@@ -344,8 +354,8 @@ const compileTileCells = (
     if (!isRecord(tile)) {
       return [];
     }
-    const px = readPair(tile["px"]);
-    const src = readPair(tile["src"] ?? tile["t"]);
+    const px = readPair(tile['px']);
+    const src = readPair(tile['src'] ?? tile['t']);
     if (px === undefined || src === undefined) {
       return [];
     }
@@ -365,67 +375,78 @@ const compileLayerInstance = (
   entityDefs: readonly UnknownRecord[],
   tilesetDefs: readonly UnknownRecord[],
 ): LdtkLayer | undefined => {
-  const layerDefUid = readNumber(layerInstance, "layerDefUid") ?? readNumber(layerInstance, "__uid");
+  const layerDefUid =
+    readNumber(layerInstance, 'layerDefUid') ?? readNumber(layerInstance, '__uid');
   const layerDef =
-    layerDefs.find((candidate) => readNumber(candidate, "uid") === layerDefUid) ??
+    layerDefs.find((candidate) => readNumber(candidate, 'uid') === layerDefUid) ??
     layerDefs.find(
       (candidate) =>
-        readString(candidate, "identifier") === readString(layerInstance, "__identifier"),
+        readString(candidate, 'identifier') === readString(layerInstance, '__identifier'),
     );
   const type =
-    (layerDef === undefined ? undefined : readString(layerDef, "__type")) ??
-    readString(layerInstance, "__type");
+    (layerDef === undefined ? undefined : readString(layerDef, '__type')) ??
+    readString(layerInstance, '__type');
   const identifier =
-    readString(layerInstance, "__identifier") ??
-    (layerDef === undefined ? undefined : readString(layerDef, "identifier")) ??
-    "layer";
-  const uid = readNumber(layerInstance, "__uid") ?? (layerDef === undefined ? undefined : readNumber(layerDef, "uid")) ?? 0;
+    readString(layerInstance, '__identifier') ??
+    (layerDef === undefined ? undefined : readString(layerDef, 'identifier')) ??
+    'layer';
+  const uid =
+    readNumber(layerInstance, '__uid') ??
+    (layerDef === undefined ? undefined : readNumber(layerDef, 'uid')) ??
+    0;
   const gridSize =
-    readNumber(layerInstance, "__gridSize") ??
-    (layerDef === undefined ? undefined : readNumber(layerDef, "gridSize")) ??
+    readNumber(layerInstance, '__gridSize') ??
+    (layerDef === undefined ? undefined : readNumber(layerDef, 'gridSize')) ??
     16;
   const tilesetUid =
-    readNumber(layerInstance, "__tilesetDefUid") ??
-    (layerDef === undefined ? undefined : readNumber(layerDef, "tilesetDefUid")) ??
+    readNumber(layerInstance, '__tilesetDefUid') ??
+    (layerDef === undefined ? undefined : readNumber(layerDef, 'tilesetDefUid')) ??
     0;
   const tilesetDef = tilesetDefs.find(
     (candidate): candidate is UnknownRecord =>
-      isRecord(candidate) && readNumber(candidate, "uid") === tilesetUid,
+      isRecord(candidate) && readNumber(candidate, 'uid') === tilesetUid,
   );
-  const columns = tilesetDef === undefined ? 1 : readNumber(tilesetDef, "__cWid") ?? 1;
+  const columns = tilesetDef === undefined ? 1 : (readNumber(tilesetDef, '__cWid') ?? 1);
 
-  if (type === "Tiles") {
+  if (type === 'Tiles') {
     return {
-      type: "tiles",
+      type: 'tiles',
       identifier,
       uid,
       gridSize,
       tilesetDefUid: tilesetUid,
-      cells: compileTileCells(projectPath, tilesetUid, columns, readArray(layerInstance, "gridTiles") ?? []),
+      cells: compileTileCells(
+        projectPath,
+        tilesetUid,
+        columns,
+        readArray(layerInstance, 'gridTiles') ?? [],
+      ),
     } satisfies LdtkTileLayer;
   }
 
-  if (type === "IntGrid") {
-    const width = readNumber(layerInstance, "__cWid") ?? 0;
-    const height = readNumber(layerInstance, "__cHei") ?? 0;
+  if (type === 'IntGrid') {
+    const width = readNumber(layerInstance, '__cWid') ?? 0;
+    const height = readNumber(layerInstance, '__cHei') ?? 0;
     return {
-      type: "intgrid",
+      type: 'intgrid',
       identifier,
       uid,
       gridSize,
       width,
       height,
-      intGridCsv: (readArray(layerInstance, "intGridCsv") ?? []).filter(
-        (value): value is number => typeof value === "number",
+      intGridCsv: (readArray(layerInstance, 'intGridCsv') ?? []).filter(
+        (value): value is number => typeof value === 'number',
       ),
       values: layerDef === undefined ? [] : compileIntGridValues(layerDef),
     } satisfies LdtkIntGridLayer;
   }
 
-  if (type === "AutoLayer") {
+  if (type === 'AutoLayer') {
     const sourceLayerUid =
-      layerDef === undefined ? 0 : readNumber(layerDef, "autoSourceLayerDefUid") ?? 0;
-    const sourceLayerDef = layerDefs.find((candidate) => readNumber(candidate, "uid") === sourceLayerUid);
+      layerDef === undefined ? 0 : (readNumber(layerDef, 'autoSourceLayerDefUid') ?? 0);
+    const sourceLayerDef = layerDefs.find(
+      (candidate) => readNumber(candidate, 'uid') === sourceLayerUid,
+    );
     const compiledRules = compileLdtkAutoRules({
       projectPath,
       layerUid: uid,
@@ -436,11 +457,11 @@ const compileLayerInstance = (
       ruleGroups:
         layerDef === undefined
           ? []
-          : (readArray(layerDef, "autoRuleGroups") ?? []).flatMap((group) =>
+          : (readArray(layerDef, 'autoRuleGroups') ?? []).flatMap((group) =>
               isRecord(group)
                 ? [
                     {
-                      rules: (readArray(group, "rules") ?? []).flatMap((rule) =>
+                      rules: (readArray(group, 'rules') ?? []).flatMap((rule) =>
                         isRecord(rule) ? [rule as never] : [],
                       ),
                     },
@@ -451,7 +472,7 @@ const compileLayerInstance = (
     }).rules;
 
     return {
-      type: "auto",
+      type: 'auto',
       identifier,
       uid,
       gridSize,
@@ -461,18 +482,18 @@ const compileLayerInstance = (
         projectPath,
         tilesetUid,
         columns,
-        readArray(layerInstance, "autoLayerTiles") ?? [],
+        readArray(layerInstance, 'autoLayerTiles') ?? [],
       ),
       autotileRules: compiledRules,
     } satisfies LdtkAutoLayer;
   }
 
-  if (type === "Entities") {
+  if (type === 'Entities') {
     return {
-      type: "entities",
+      type: 'entities',
       identifier,
       uid,
-      entities: (readArray(layerInstance, "entityInstances") ?? []).flatMap((entity) => {
+      entities: (readArray(layerInstance, 'entityInstances') ?? []).flatMap((entity) => {
         const compiled = isRecord(entity) ? compileEntity(entity, entityDefs) : undefined;
         return compiled === undefined ? [] : [compiled];
       }),
@@ -490,19 +511,25 @@ const compileLevel = (
 ): LdtkLevel | undefined => {
   void diagnostics;
   void diagnostics;
-  const identifier = readString(levelJson, "identifier");
-  const uid = readNumber(levelJson, "uid");
-  const pxWid = readNumber(levelJson, "pxWid") ?? 0;
-  const pxHei = readNumber(levelJson, "pxHei") ?? 0;
+  const identifier = readString(levelJson, 'identifier');
+  const uid = readNumber(levelJson, 'uid');
+  const pxWid = readNumber(levelJson, 'pxWid') ?? 0;
+  const pxHei = readNumber(levelJson, 'pxHei') ?? 0;
   if (identifier === undefined || uid === undefined) {
     return undefined;
   }
 
-  const layerDefs = (readArray(defs, "layers") ?? []).flatMap((layer) => (isRecord(layer) ? [layer] : []));
-  const entityDefs = (readArray(defs, "entities") ?? []).flatMap((entity) => (isRecord(entity) ? [entity] : []));
-  const tilesetDefs = (readArray(defs, "tilesets") ?? []).flatMap((tileset) => (isRecord(tileset) ? [tileset] : []));
+  const layerDefs = (readArray(defs, 'layers') ?? []).flatMap((layer) =>
+    isRecord(layer) ? [layer] : [],
+  );
+  const entityDefs = (readArray(defs, 'entities') ?? []).flatMap((entity) =>
+    isRecord(entity) ? [entity] : [],
+  );
+  const tilesetDefs = (readArray(defs, 'tilesets') ?? []).flatMap((tileset) =>
+    isRecord(tileset) ? [tileset] : [],
+  );
 
-  const layers = (readArray(levelJson, "layerInstances") ?? []).flatMap((layerInstance) => {
+  const layers = (readArray(levelJson, 'layerInstances') ?? []).flatMap((layerInstance) => {
     if (!isRecord(layerInstance)) {
       return [];
     }
@@ -534,11 +561,11 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
     return {
       pack: new TilesetPack({
         schemaVersion: 1,
-        id: ldtkPackId(options.projectPath, "invalid"),
-        name: "invalid-ldtk-project",
-        version: "0",
+        id: ldtkPackId(options.projectPath, 'invalid'),
+        name: 'invalid-ldtk-project',
+        version: '0',
         license: new TilesetPackLicense({
-          spdxId: "UNKNOWN",
+          spdxId: 'UNKNOWN',
           attribution: Option.none(),
           sourceUrl: Option.none(),
           notes: Option.none(),
@@ -548,31 +575,31 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
         assets: [],
       }),
       provenance: {
-        ldtkVersion: "unknown",
+        ldtkVersion: 'unknown',
         projectPath: options.projectPath,
-        projectIid: "invalid",
-        identifier: "invalid",
+        projectIid: 'invalid',
+        identifier: 'invalid',
       },
       enums: [],
       projectTags: [],
       levels: [],
       diagnostics: [
         {
-          _tag: "LdtkInvalidProject",
+          _tag: 'LdtkInvalidProject',
           path: options.projectPath,
-          message: "LDtk project JSON must be an object",
-          severity: "error",
+          message: 'LDtk project JSON must be an object',
+          severity: 'error',
         },
       ],
     };
   }
 
   const project = options.projectJson;
-  const defs = isRecord(project["defs"]) ? project["defs"] : {};
-  const jsonVersion = readString(project, "jsonVersion") ?? "unknown";
-  const projectIid = readString(project, "iid") ?? options.projectPath;
-  const identifier = readString(project, "identifier") ?? projectIid;
-  const externalLevels = readBoolean(project, "externalLevels") ?? false;
+  const defs = isRecord(project['defs']) ? project['defs'] : {};
+  const jsonVersion = readString(project, 'jsonVersion') ?? 'unknown';
+  const projectIid = readString(project, 'iid') ?? options.projectPath;
+  const identifier = readString(project, 'identifier') ?? projectIid;
+  const externalLevels = readBoolean(project, 'externalLevels') ?? false;
   const readFile = options.readFile;
 
   const provenance: LdtkProvenance = {
@@ -582,7 +609,9 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
     identifier,
   };
 
-  const layerDefs = (readArray(defs, "layers") ?? []).flatMap((layer) => (isRecord(layer) ? [layer] : []));
+  const layerDefs = (readArray(defs, 'layers') ?? []).flatMap((layer) =>
+    isRecord(layer) ? [layer] : [],
+  );
   const { autotileRulesByTileset, diagnostics: autoDiagnostics } = compileAutoLayerRules(
     options.projectPath,
     defs,
@@ -592,7 +621,7 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
 
   const tilesets: Tileset[] = [];
   const assets: TilesetPackAsset[] = [];
-  for (const tilesetDef of readArray(defs, "tilesets") ?? []) {
+  for (const tilesetDef of readArray(defs, 'tilesets') ?? []) {
     if (!isRecord(tilesetDef)) {
       continue;
     }
@@ -609,7 +638,7 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
     name: identifier,
     version: jsonVersion,
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
+      spdxId: 'UNKNOWN',
       attribution: Option.none(),
       sourceUrl: Option.none(),
       notes: Option.some(`Imported from LDtk ${jsonVersion} at ${options.projectPath}`),
@@ -620,21 +649,21 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
   });
 
   const levels: LdtkLevel[] = [];
-  for (const levelEntry of readArray(project, "levels") ?? []) {
+  for (const levelEntry of readArray(project, 'levels') ?? []) {
     if (!isRecord(levelEntry)) {
       continue;
     }
 
-    const externalRelPath = readString(levelEntry, "externalRelPath");
+    const externalRelPath = readString(levelEntry, 'externalRelPath');
     let levelJson: UnknownRecord = levelEntry;
 
     if (externalLevels && externalRelPath !== undefined) {
       if (readFile === undefined) {
         diagnostics.push({
-          _tag: "LdtkExternalLevelMissing",
+          _tag: 'LdtkExternalLevelMissing',
           path: `${options.projectPath}/${externalRelPath}`,
-          message: "External level reference requires an injected file reader",
-          severity: "error",
+          message: 'External level reference requires an injected file reader',
+          severity: 'error',
           externalRelPath,
         });
         continue;
@@ -653,16 +682,20 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
 
       if (!isRecord(resolved.level)) {
         diagnostics.push({
-          _tag: "LdtkExternalLevelMissing",
+          _tag: 'LdtkExternalLevelMissing',
           path: `${options.projectPath}/${externalRelPath}`,
-          message: "External level JSON is invalid",
-          severity: "error",
+          message: 'External level JSON is invalid',
+          severity: 'error',
           externalRelPath,
         });
         continue;
       }
 
-      levelJson = { ...levelEntry, ...resolved.level, layerInstances: resolved.level["layerInstances"] ?? levelEntry["layerInstances"] };
+      levelJson = {
+        ...levelEntry,
+        ...resolved.level,
+        layerInstances: resolved.level['layerInstances'] ?? levelEntry['layerInstances'],
+      };
     }
 
     const compiled = compileLevel(options.projectPath, levelJson, defs, diagnostics);
@@ -676,8 +709,8 @@ export const parseLdtkProject = (options: ParseLdtkProjectOptions): LdtkParseRes
     provenance,
     enums: compileEnums(defs),
     projectTags:
-      readArray(defs, "tags")?.filter((tag): tag is string => typeof tag === "string") ??
-      readArray(project, "tags")?.filter((tag): tag is string => typeof tag === "string") ??
+      readArray(defs, 'tags')?.filter((tag): tag is string => typeof tag === 'string') ??
+      readArray(project, 'tags')?.filter((tag): tag is string => typeof tag === 'string') ??
       [],
     levels,
     diagnostics,

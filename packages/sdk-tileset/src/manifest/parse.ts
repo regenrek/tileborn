@@ -1,7 +1,7 @@
-import { Option, Result, Schema, SchemaIssue } from "effect";
+import { Option, Result, Schema, SchemaIssue } from 'effect';
 
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
 import {
   Blob47AutotileRule,
   CustomAutotileRule,
@@ -11,13 +11,13 @@ import {
   Wang2CornerAutotileRule,
   Wang2EdgeAutotileRule,
   Wang4CornerAutotileRule,
-} from "../schemas/autotile-rule.js";
-import { Tile } from "../schemas/tile.js";
-import { AssetSemanticRole } from "../schemas/semantic-role.js";
-import { TerrainTransition } from "../schemas/terrain-transition.js";
-import { CellSize, Tileset } from "../schemas/tileset.js";
-import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../schemas/tileset-pack.js";
-import { VariantFilter } from "../schemas/variant-filter.js";
+} from '../schemas/autotile-rule.js';
+import { Tile } from '../schemas/tile.js';
+import { AssetSemanticRole } from '../schemas/semantic-role.js';
+import { TerrainTransition } from '../schemas/terrain-transition.js';
+import { CellSize, Tileset } from '../schemas/tileset.js';
+import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from '../schemas/tileset-pack.js';
+import { VariantFilter } from '../schemas/variant-filter.js';
 import {
   ManifestAutotileRule,
   TilesetManifest,
@@ -28,15 +28,15 @@ import {
   type ManifestAssetSemanticRole,
   type ManifestTiledPlaceableSource,
   type TilesetManifestLicense,
-} from "./schema-version.js";
-import { inferAssetSemanticRoles } from "./semantic-roles.js";
+} from './schema-version.js';
+import { inferAssetSemanticRoles } from './semantic-roles.js';
 import {
   Placeable,
   PlaceableFrameRef,
   PlaceableSize,
   SpriteClip,
   TiledPlaceableSource,
-} from "../schemas/placeable.js";
+} from '../schemas/placeable.js';
 
 const optionalToOption = <A>(value: A | undefined): Option.Option<A> =>
   value === undefined ? Option.none() : Option.some(value);
@@ -85,10 +85,13 @@ const toPlaceable = (placeable: ManifestPlaceable): Placeable =>
     id: placeable.id,
     name: placeable.name,
     size: new PlaceableSize(placeable.size),
-    frames: placeable.frames.map(toPlaceableFrameRef) as [PlaceableFrameRef, ...PlaceableFrameRef[]],
+    frames: placeable.frames.map(toPlaceableFrameRef) as [
+      PlaceableFrameRef,
+      ...PlaceableFrameRef[],
+    ],
     ...(placeable.clips === undefined ? {} : { clips: placeable.clips.map(toSpriteClip) }),
     tags: placeable.tags,
-    placementMode: placeable.placementMode ?? "object",
+    placementMode: placeable.placementMode ?? 'object',
     source: toTiledPlaceableSource(placeable.source),
   });
 
@@ -101,29 +104,29 @@ const toAssetSemanticRole = (role: ManifestAssetSemanticRole): AssetSemanticRole
   });
 
 const KNOWN_AUTOTILE_PATTERNS = new Set<string>([
-  "wang2corner",
-  "wang2edge",
-  "wang4corner",
-  "blob47",
-  "rpgmA2",
-  "rpgmA3",
-  "rpgmA4",
-  "custom",
+  'wang2corner',
+  'wang2edge',
+  'wang4corner',
+  'blob47',
+  'rpgmA2',
+  'rpgmA3',
+  'rpgmA4',
+  'custom',
 ]);
 
 const formatIssuePath = (segments: readonly (string | number)[]): string =>
-  segments.length === 0 ? "/" : `/${segments.map(String).join("/")}`;
+  segments.length === 0 ? '/' : `/${segments.map(String).join('/')}`;
 
 const issueMessage = (issue: SchemaIssue.Issue): string => {
   switch (issue._tag) {
-    case "MissingKey":
-      return "Missing required field";
-    case "UnexpectedKey":
-      return "Unexpected field";
-    case "InvalidType":
-      return "Invalid type";
-    case "InvalidValue":
-      return "Invalid value";
+    case 'MissingKey':
+      return 'Missing required field';
+    case 'UnexpectedKey':
+      return 'Unexpected field';
+    case 'InvalidType':
+      return 'Invalid type';
+    case 'InvalidValue':
+      return 'Invalid value';
     default:
       return SchemaIssue.makeFormatterDefault()(issue).trim();
   }
@@ -134,16 +137,16 @@ const flattenSchemaIssues = (
   path: readonly (string | number)[] = [],
 ): ReadonlyArray<{ readonly path: string; readonly message: string }> => {
   switch (issue._tag) {
-    case "Composite":
+    case 'Composite':
       return issue.issues.flatMap((child) => flattenSchemaIssues(child, path));
-    case "Pointer":
-      return flattenSchemaIssues(
-        issue.issue,
-        [...path, ...issue.path.filter((segment): segment is string | number => typeof segment !== "symbol")],
-      );
-    case "MissingKey":
+    case 'Pointer':
+      return flattenSchemaIssues(issue.issue, [
+        ...path,
+        ...issue.path.filter((segment): segment is string | number => typeof segment !== 'symbol'),
+      ]);
+    case 'MissingKey':
       return [{ path: formatIssuePath(path), message: issueMessage(issue) }];
-    case "UnexpectedKey":
+    case 'UnexpectedKey':
       return [{ path: formatIssuePath(path), message: issueMessage(issue) }];
     default:
       return [{ path: formatIssuePath(path), message: issueMessage(issue) }];
@@ -152,14 +155,14 @@ const flattenSchemaIssues = (
 
 const schemaFailureDiagnostics = (issue: SchemaIssue.Issue): readonly ParseDiagnostic[] =>
   flattenSchemaIssues(issue).map(({ path, message }) => ({
-    _tag: "InvalidManifestField" as const,
+    _tag: 'InvalidManifestField' as const,
     path,
     message,
-    severity: "error" as const,
+    severity: 'error' as const,
   }));
 
 const collectUnknownAutotilePatterns = (json: unknown): readonly ParseDiagnostic[] => {
-  if (typeof json !== "object" || json === null || !("autotileRules" in json)) {
+  if (typeof json !== 'object' || json === null || !('autotileRules' in json)) {
     return [];
   }
 
@@ -169,21 +172,21 @@ const collectUnknownAutotilePatterns = (json: unknown): readonly ParseDiagnostic
   }
 
   return rules.flatMap((rule, index) => {
-    if (typeof rule !== "object" || rule === null || !("_tag" in rule)) {
+    if (typeof rule !== 'object' || rule === null || !('_tag' in rule)) {
       return [];
     }
 
     const pattern = (rule as { _tag: unknown })._tag;
-    if (typeof pattern !== "string" || KNOWN_AUTOTILE_PATTERNS.has(pattern)) {
+    if (typeof pattern !== 'string' || KNOWN_AUTOTILE_PATTERNS.has(pattern)) {
       return [];
     }
 
     return [
       {
-        _tag: "UnknownAutotilePattern" as const,
+        _tag: 'UnknownAutotilePattern' as const,
         path: `/autotileRules/${index}`,
         message: `Unsupported autotile pattern: ${pattern}`,
-        severity: "error" as const,
+        severity: 'error' as const,
         pattern,
       },
     ];
@@ -201,10 +204,10 @@ const terrainClassRefDiagnostics = (
       return;
     }
     diagnostics.push({
-      _tag: "MissingTerrainClassRef",
+      _tag: 'MissingTerrainClassRef',
       path,
       message: `Terrain class is not declared in terrainClasses: ${terrainClass}`,
-      severity: "error",
+      severity: 'error',
       terrainClass,
     });
   };
@@ -235,7 +238,7 @@ const terrainClassRefDiagnostics = (
   return diagnostics;
 };
 
-type ManifestTile = TilesetManifest["tiles"][number];
+type ManifestTile = TilesetManifest['tiles'][number];
 
 /**
  * Groups tiles by tileset id in a single O(tiles) pass. Callers previously
@@ -271,10 +274,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
   manifest.tilesets.forEach((tileset, index) => {
     if (tileset.cellSize.width <= 0 || tileset.cellSize.height <= 0) {
       diagnostics.push({
-        _tag: "InvalidCellSize",
+        _tag: 'InvalidCellSize',
         path: `/tilesets/${index}/cellSize`,
-        message: "Cell size must be positive",
-        severity: "error",
+        message: 'Cell size must be positive',
+        severity: 'error',
         width: tileset.cellSize.width,
         height: tileset.cellSize.height,
       });
@@ -282,10 +285,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 
     if (tileset.margin < 0 || tileset.spacing < 0) {
       diagnostics.push({
-        _tag: "InvalidMarginSpacing",
+        _tag: 'InvalidMarginSpacing',
         path: `/tilesets/${index}`,
-        message: "Margin and spacing must be non-negative",
-        severity: "warning",
+        message: 'Margin and spacing must be non-negative',
+        severity: 'warning',
         margin: tileset.margin,
         spacing: tileset.spacing,
       });
@@ -293,10 +296,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 
     if (!assetIds.has(String(tileset.atlasAssetId))) {
       diagnostics.push({
-        _tag: "MissingAtlas",
+        _tag: 'MissingAtlas',
         path: `/tilesets/${index}/atlasAssetId`,
-        message: "Atlas asset is not declared in pack assets",
-        severity: "error",
+        message: 'Atlas asset is not declared in pack assets',
+        severity: 'error',
         atlasAssetId: String(tileset.atlasAssetId),
       });
     }
@@ -305,19 +308,19 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
   manifest.tiles.forEach((tile, index) => {
     if (!tilesetIds.has(String(tile.tilesetId))) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/tiles/${index}/tilesetId`,
-        message: "Tile references an unknown tileset",
-        severity: "error",
+        message: 'Tile references an unknown tileset',
+        severity: 'error',
       });
     }
 
     if (tile.uv.w <= 0 || tile.uv.h <= 0) {
       diagnostics.push({
-        _tag: "InvalidUvRect",
+        _tag: 'InvalidUvRect',
         path: `/tiles/${index}/uv`,
-        message: "UV rect must have positive width and height",
-        severity: "error",
+        message: 'UV rect must have positive width and height',
+        severity: 'error',
         x: tile.uv.x,
         y: tile.uv.y,
         w: tile.uv.w,
@@ -338,10 +341,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
       const tileId = String(tile.id);
       if (seenTileIds.has(tileId)) {
         diagnostics.push({
-          _tag: "DuplicateTileId",
+          _tag: 'DuplicateTileId',
           path: `/tiles/${index}/id`,
-          message: "Duplicate tile id in tileset",
-          severity: "error",
+          message: 'Duplicate tile id in tileset',
+          severity: 'error',
           tileId,
         });
       }
@@ -349,27 +352,29 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
     });
   }
 
-  const animationById = new Map(manifest.animations.map((animation) => [String(animation.id), animation]));
+  const animationById = new Map(
+    manifest.animations.map((animation) => [String(animation.id), animation]),
+  );
   manifest.tiles.forEach((tile, index) => {
     if (tile.animationId !== undefined) {
       const animationId = tile.animationId;
       const animation = animationById.get(String(animationId));
       if (animation === undefined) {
         diagnostics.push({
-          _tag: "InvalidManifestField",
+          _tag: 'InvalidManifestField',
           path: `/tiles/${index}/animationId`,
-          message: "Animation id is not declared in animations",
-          severity: "error",
+          message: 'Animation id is not declared in animations',
+          severity: 'error',
         });
       } else {
         animation.frames.forEach((frame, frameIndex) => {
           const tileIds = tileIdsByTileset.get(String(tile.tilesetId));
           if (tileIds === undefined || !tileIds.has(String(frame.tileId))) {
             diagnostics.push({
-              _tag: "AnimationFrameOutOfBounds",
+              _tag: 'AnimationFrameOutOfBounds',
               path: `/animations/${String(animationId)}/frames/${frameIndex}`,
-              message: "Animation frame references an unknown tile",
-              severity: "error",
+              message: 'Animation frame references an unknown tile',
+              severity: 'error',
               animationId: String(animationId),
               frameIndex,
             });
@@ -384,10 +389,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
     const ruleId = String(rule.id);
     if (seenRuleIds.has(ruleId)) {
       diagnostics.push({
-        _tag: "DuplicateAutotileRuleId",
+        _tag: 'DuplicateAutotileRuleId',
         path: `/autotileRules/${index}/id`,
-        message: "Duplicate autotile rule id in tileset",
-        severity: "error",
+        message: 'Duplicate autotile rule id in tileset',
+        severity: 'error',
         ruleId,
       });
     } else {
@@ -396,10 +401,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 
     if (!tilesetIds.has(String(rule.tilesetId))) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/autotileRules/${index}/tilesetId`,
-        message: "Autotile rule references an unknown tileset",
-        severity: "error",
+        message: 'Autotile rule references an unknown tileset',
+        severity: 'error',
       });
     }
 
@@ -409,10 +414,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
         for (const [tileIndex, tileId] of tileIdList.entries()) {
           if (!tileIds.has(String(tileId))) {
             diagnostics.push({
-              _tag: "InvalidManifestField",
+              _tag: 'InvalidManifestField',
               path: `/autotileRules/${index}/maskToTileIds/${mask}/${tileIndex}`,
-              message: "Autotile rule references an unknown tile",
-              severity: "warning",
+              message: 'Autotile rule references an unknown tile',
+              severity: 'warning',
             });
           }
         }
@@ -423,19 +428,19 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
   manifest.variantFilters.forEach((filter, index) => {
     if (!tilesetIds.has(String(filter.tilesetId))) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/variantFilters/${index}/tilesetId`,
-        message: "Variant filter references an unknown tileset",
-        severity: "error",
+        message: 'Variant filter references an unknown tileset',
+        severity: 'error',
       });
     }
 
     if (filter.weights.length !== filter.tileIds.length) {
       diagnostics.push({
-        _tag: "VariantWeightCountMismatch",
+        _tag: 'VariantWeightCountMismatch',
         path: `/variantFilters/${index}`,
-        message: "Variant filter weights must match tile id count",
-        severity: "error",
+        message: 'Variant filter weights must match tile id count',
+        severity: 'error',
         filterId: String(filter.id),
         tileCount: filter.tileIds.length,
         weightCount: filter.weights.length,
@@ -445,10 +450,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
     filter.weights.forEach((weight, weightIndex) => {
       if (weight < 0) {
         diagnostics.push({
-          _tag: "VariantWeightOutOfRange",
+          _tag: 'VariantWeightOutOfRange',
           path: `/variantFilters/${index}/weights/${weightIndex}`,
-          message: "Variant weight must be non-negative",
-          severity: "warning",
+          message: 'Variant weight must be non-negative',
+          severity: 'warning',
           filterId: String(filter.id),
           weightIndex,
           weight,
@@ -458,10 +463,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 
     if (filter.weights.every((weight) => weight <= 0)) {
       diagnostics.push({
-        _tag: "EmptyVariantSelection",
+        _tag: 'EmptyVariantSelection',
         path: `/variantFilters/${index}`,
-        message: "No positive variant weights; using first tile as fallback",
-        severity: "warning",
+        message: 'No positive variant weights; using first tile as fallback',
+        severity: 'warning',
         filterId: String(filter.id),
       });
     }
@@ -470,19 +475,19 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
   manifest.terrainTransitions.forEach((transition, index) => {
     if (!tilesetIds.has(String(transition.tilesetId))) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/terrainTransitions/${index}/tilesetId`,
-        message: "Terrain transition references an unknown tileset",
-        severity: "error",
+        message: 'Terrain transition references an unknown tileset',
+        severity: 'error',
       });
     }
 
     if (!seenRuleIds.has(String(transition.ruleId))) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/terrainTransitions/${index}/ruleId`,
-        message: "Terrain transition references an unknown autotile rule",
-        severity: "error",
+        message: 'Terrain transition references an unknown autotile rule',
+        severity: 'error',
       });
     }
   });
@@ -491,10 +496,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
     const tile = manifest.tiles.find((candidate) => String(candidate.id) === String(entry.tileId));
     if (tile === undefined) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/collisionMasks/${index}/tileId`,
-        message: "Collision mask references an unknown tile",
-        severity: "error",
+        message: 'Collision mask references an unknown tile',
+        severity: 'error',
       });
     }
   });
@@ -502,29 +507,29 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
   manifest.placeables?.forEach((placeable, placeableIndex) => {
     if (placeable.size.width <= 0 || placeable.size.height <= 0) {
       diagnostics.push({
-        _tag: "InvalidManifestField",
+        _tag: 'InvalidManifestField',
         path: `/placeables/${placeableIndex}/size`,
-        message: "Placeable size must be positive",
-        severity: "error",
+        message: 'Placeable size must be positive',
+        severity: 'error',
       });
     }
 
     placeable.frames.forEach((frame, frameIndex) => {
       if (!assetIds.has(String(frame.assetId))) {
         diagnostics.push({
-          _tag: "InvalidManifestField",
+          _tag: 'InvalidManifestField',
           path: `/placeables/${placeableIndex}/frames/${frameIndex}/assetId`,
-          message: "Placeable frame references an unknown asset",
-          severity: "error",
+          message: 'Placeable frame references an unknown asset',
+          severity: 'error',
         });
       }
 
       if (frame.uv.w <= 0 || frame.uv.h <= 0) {
         diagnostics.push({
-          _tag: "InvalidUvRect",
+          _tag: 'InvalidUvRect',
           path: `/placeables/${placeableIndex}/frames/${frameIndex}/uv`,
-          message: "UV rect must have positive width and height",
-          severity: "error",
+          message: 'UV rect must have positive width and height',
+          severity: 'error',
           x: frame.uv.x,
           y: frame.uv.y,
           w: frame.uv.w,
@@ -538,10 +543,10 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
       const clipId = String(clip.id);
       if (seenClipIds.has(clipId)) {
         diagnostics.push({
-          _tag: "InvalidManifestField",
+          _tag: 'InvalidManifestField',
           path: `/placeables/${placeableIndex}/clips/${clipIndex}/id`,
-          message: "Duplicate clip id on placeable",
-          severity: "error",
+          message: 'Duplicate clip id on placeable',
+          severity: 'error',
         });
       }
       seenClipIds.add(clipId);
@@ -549,19 +554,19 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
       clip.frames.forEach((frame, frameIndex) => {
         if (!assetIds.has(String(frame.assetId))) {
           diagnostics.push({
-            _tag: "InvalidManifestField",
+            _tag: 'InvalidManifestField',
             path: `/placeables/${placeableIndex}/clips/${clipIndex}/frames/${frameIndex}/assetId`,
-            message: "Clip frame references an unknown asset",
-            severity: "error",
+            message: 'Clip frame references an unknown asset',
+            severity: 'error',
           });
         }
 
         if (frame.uv.w <= 0 || frame.uv.h <= 0) {
           diagnostics.push({
-            _tag: "InvalidUvRect",
+            _tag: 'InvalidUvRect',
             path: `/placeables/${placeableIndex}/clips/${clipIndex}/frames/${frameIndex}/uv`,
-            message: "UV rect must have positive width and height",
-            severity: "error",
+            message: 'UV rect must have positive width and height',
+            severity: 'error',
             x: frame.uv.x,
             y: frame.uv.y,
             w: frame.uv.w,
@@ -576,27 +581,33 @@ const validateSemanticRules = (manifest: TilesetManifest): readonly ParseDiagnos
 };
 
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
-  diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  diagnostics.some((diagnostic) => diagnostic.severity === 'error');
 
 const sanitizeMaskToTileIds = (
-  maskToTileIds: ManifestAutotileRule["maskToTileIds"],
+  maskToTileIds: ManifestAutotileRule['maskToTileIds'],
   validTileIds: ReadonlySet<string> | undefined,
-): ManifestAutotileRule["maskToTileIds"] => {
+): ManifestAutotileRule['maskToTileIds'] => {
   if (validTileIds === undefined) {
     return maskToTileIds;
   }
-  const sanitized: Record<string, [ManifestAutotileRule["maskToTileIds"][string][number], ...ManifestAutotileRule["maskToTileIds"][string][number][]]> = {};
+  const sanitized: Record<
+    string,
+    [
+      ManifestAutotileRule['maskToTileIds'][string][number],
+      ...ManifestAutotileRule['maskToTileIds'][string][number][],
+    ]
+  > = {};
   for (const [mask, tileIds] of Object.entries(maskToTileIds)) {
     const valid = tileIds.filter((tileId) => validTileIds.has(String(tileId)));
     if (valid[0] !== undefined) {
-      sanitized[mask] = valid as [typeof valid[number], ...typeof valid[number][]];
+      sanitized[mask] = valid as [(typeof valid)[number], ...(typeof valid)[number][]];
     }
   }
   return sanitized;
 };
 
 const fallbackTileIdOption = (
-  fallbackTileId: ManifestAutotileRule["fallbackTileId"],
+  fallbackTileId: ManifestAutotileRule['fallbackTileId'],
   validTileIds: ReadonlySet<string> | undefined,
 ) =>
   fallbackTileId === undefined || validTileIds?.has(String(fallbackTileId)) === false
@@ -616,21 +627,21 @@ const toAutotileRule = (
   };
 
   switch (rule._tag) {
-    case "wang2corner":
+    case 'wang2corner':
       return new Wang2CornerAutotileRule(base);
-    case "wang2edge":
+    case 'wang2edge':
       return new Wang2EdgeAutotileRule(base);
-    case "wang4corner":
+    case 'wang4corner':
       return new Wang4CornerAutotileRule(base);
-    case "blob47":
+    case 'blob47':
       return new Blob47AutotileRule(base);
-    case "rpgmA2":
+    case 'rpgmA2':
       return new RpgmA2AutotileRule(base);
-    case "rpgmA3":
+    case 'rpgmA3':
       return new RpgmA3AutotileRule(base);
-    case "rpgmA4":
+    case 'rpgmA4':
       return new RpgmA4AutotileRule(base);
-    case "custom":
+    case 'custom':
       return new CustomAutotileRule({ ...base, source: rule.source });
     default: {
       const unreachable: never = rule;
@@ -640,7 +651,9 @@ const toAutotileRule = (
 };
 
 const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
-  const animationById = new Map(manifest.animations.map((animation) => [String(animation.id), animation]));
+  const animationById = new Map(
+    manifest.animations.map((animation) => [String(animation.id), animation]),
+  );
   const collisionByTileId = new Map(
     manifest.collisionMasks.map((entry) => [String(entry.tileId), entry.mask]),
   );
@@ -653,21 +666,20 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
 
   const tilesets = manifest.tilesets.map((entry) => {
     const tilesetId = String(entry.id);
-    const tiles = (tilesByTilesetId.get(tilesetId) ?? [])
-      .map(
-        (tile) =>
-          new Tile({
-            id: tile.id,
-            uv: tile.uv,
-            tags: tile.tags,
-            terrainClass: optionalToOption(tile.terrainClass),
-            collisionMask: Option.fromNullishOr(collisionByTileId.get(String(tile.id))),
-            animation:
-              tile.animationId === undefined
-                ? Option.none()
-                : Option.fromNullishOr(animationById.get(String(tile.animationId))),
-          }),
-      );
+    const tiles = (tilesByTilesetId.get(tilesetId) ?? []).map(
+      (tile) =>
+        new Tile({
+          id: tile.id,
+          uv: tile.uv,
+          tags: tile.tags,
+          terrainClass: optionalToOption(tile.terrainClass),
+          collisionMask: Option.fromNullishOr(collisionByTileId.get(String(tile.id))),
+          animation:
+            tile.animationId === undefined
+              ? Option.none()
+              : Option.fromNullishOr(animationById.get(String(tile.animationId))),
+        }),
+    );
 
     const autotileRules = manifest.autotileRules
       .filter((rule) => String(rule.tilesetId) === tilesetId)

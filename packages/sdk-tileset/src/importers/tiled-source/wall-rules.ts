@@ -1,19 +1,19 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import type { ParseDiagnostic } from "../../diagnostics.js";
-import type { AutotileRule } from "../../schemas/autotile-rule.js";
-import type { TileId } from "../../schemas/ids.js";
-import { TerrainClass } from "../../schemas/terrain-class.js";
-import { compileAutotileRule, type WangTileEntry } from "../../autotile/index.js";
-import { deterministicAutotileRuleId } from "../../tiled/deterministic-ids.js";
-import { decodeTileLayerDataSync } from "../../tiled/tile-data.js";
+import type { ParseDiagnostic } from '../../diagnostics.js';
+import type { AutotileRule } from '../../schemas/autotile-rule.js';
+import type { TileId } from '../../schemas/ids.js';
+import { TerrainClass } from '../../schemas/terrain-class.js';
+import { compileAutotileRule, type WangTileEntry } from '../../autotile/index.js';
+import { deterministicAutotileRuleId } from '../../tiled/deterministic-ids.js';
+import { decodeTileLayerDataSync } from '../../tiled/tile-data.js';
 import {
   childNode,
   parseTiledXmlDocument,
   readTiledXmlLayerDataNode,
   toArray,
   xmlMapRoot,
-} from "../../tiled/xml-common.js";
+} from '../../tiled/xml-common.js';
 
 type TiledXmlNode = Record<string, unknown>;
 
@@ -29,58 +29,59 @@ export type TiledSourceCompiledWallRule = {
 };
 
 const isRecord = (value: unknown): value is TiledXmlNode =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const readString = (value: unknown): string | undefined => {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return undefined;
 };
 
 const readInteger = (value: unknown): number | undefined => {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  const parsed =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   return Number.isSafeInteger(parsed) ? parsed : undefined;
 };
 
 const dirname = (path: string): string => {
-  const normalized = path.replaceAll("\\", "/");
-  const index = normalized.lastIndexOf("/");
-  return index <= 0 ? "." : normalized.slice(0, index);
+  const normalized = path.replaceAll('\\', '/');
+  const index = normalized.lastIndexOf('/');
+  return index <= 0 ? '.' : normalized.slice(0, index);
 };
 
 const resolveRelative = (basePath: string, source: string): string => {
-  if (source.startsWith(":")) {
+  if (source.startsWith(':')) {
     return source;
   }
   const segments: string[] = [];
-  for (const segment of `${dirname(basePath)}/${source}`.replaceAll("\\", "/").split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
+  for (const segment of `${dirname(basePath)}/${source}`.replaceAll('\\', '/').split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
       segments.pop();
       continue;
     }
     segments.push(segment);
   }
-  return segments.join("/");
+  return segments.join('/');
 };
 
 const baseName = (path: string): string =>
-  path.replaceAll("\\", "/").split("/").pop()?.replace(/\.tmx$/i, "") ?? path;
+  path
+    .replaceAll('\\', '/')
+    .split('/')
+    .pop()
+    ?.replace(/\.tmx$/i, '') ?? path;
 
 const wallTerrainClass = (sourcePath: string): typeof TerrainClass.Type =>
   Schema.decodeUnknownSync(TerrainClass)(
-    `tiled-source:${baseName(sourcePath).replace(/[^A-Za-z0-9:_-]+/g, "-")}`,
+    `tiled-source:${baseName(sourcePath).replace(/[^A-Za-z0-9:_-]+/g, '-')}`,
   );
 
-const unmapped = (
-  rulePath: string,
-  reason: string,
-  message = reason,
-): ParseDiagnostic => ({
-  _tag: "TiledSourceWallRuleUnmapped",
+const unmapped = (rulePath: string, reason: string, message = reason): ParseDiagnostic => ({
+  _tag: 'TiledSourceWallRuleUnmapped',
   path: rulePath,
   message,
-  severity: "warning",
+  severity: 'warning',
   rulePath,
   reason,
 });
@@ -90,10 +91,7 @@ type RuleTilesetRef = {
   readonly firstgid: number;
 };
 
-const readTilesetRefs = (
-  rulePath: string,
-  root: TiledXmlNode,
-): readonly RuleTilesetRef[] => {
+const readTilesetRefs = (rulePath: string, root: TiledXmlNode): readonly RuleTilesetRef[] => {
   const refs: RuleTilesetRef[] = [];
   for (const value of toArray(root.tileset)) {
     if (!isRecord(value)) {
@@ -105,7 +103,7 @@ const readTilesetRefs = (
       continue;
     }
     refs.push({
-      ...(rawSource === undefined || rawSource.startsWith(":")
+      ...(rawSource === undefined || rawSource.startsWith(':')
         ? {}
         : { sourcePath: resolveRelative(rulePath, rawSource) }),
       firstgid,
@@ -130,17 +128,24 @@ const locateTilesetRef = (
 
 const readLayer = (
   layer: TiledXmlNode,
-): {
-  readonly name: string;
-  readonly width: number;
-  readonly height: number;
-  readonly data: readonly number[];
-  readonly diagnostics: readonly ParseDiagnostic[];
-} | undefined => {
+):
+  | {
+      readonly name: string;
+      readonly width: number;
+      readonly height: number;
+      readonly data: readonly number[];
+      readonly diagnostics: readonly ParseDiagnostic[];
+    }
+  | undefined => {
   const name = readString(layer.name);
   const width = readInteger(layer.width);
   const height = readInteger(layer.height);
-  if (name === undefined || width === undefined || height === undefined || layer.data === undefined) {
+  if (
+    name === undefined ||
+    width === undefined ||
+    height === undefined ||
+    layer.data === undefined
+  ) {
     return undefined;
   }
 
@@ -193,14 +198,21 @@ const around8MaskAt = (
 
 export const compileTiledSourceWallRulePhase = (
   input: TiledSourceWallRuleCompileInput,
-): { readonly value?: TiledSourceCompiledWallRule; readonly diagnostics: readonly ParseDiagnostic[] } => {
+): {
+  readonly value?: TiledSourceCompiledWallRule;
+  readonly diagnostics: readonly ParseDiagnostic[];
+} => {
   const parsed = parseTiledXmlDocument(input.raw);
   if (!parsed.ok) {
-    return { diagnostics: [unmapped(input.rulePath, "parse-error", parsed.error)] };
+    return { diagnostics: [unmapped(input.rulePath, 'parse-error', parsed.error)] };
   }
   const root = xmlMapRoot(parsed.value);
   if (!root) {
-    return { diagnostics: [unmapped(input.rulePath, "missing-map-root", "Wall rule TMX is missing a map root")] };
+    return {
+      diagnostics: [
+        unmapped(input.rulePath, 'missing-map-root', 'Wall rule TMX is missing a map root'),
+      ],
+    };
   }
 
   try {
@@ -208,21 +220,25 @@ export const compileTiledSourceWallRulePhase = (
     const primaryTilesetRef = tilesetRefs.find((ref) => ref.sourcePath !== undefined);
     const primarySourcePath = primaryTilesetRef?.sourcePath;
     if (primarySourcePath === undefined) {
-      return { diagnostics: [unmapped(input.rulePath, "missing-tileset-ref")] };
+      return { diagnostics: [unmapped(input.rulePath, 'missing-tileset-ref')] };
     }
 
     const layers = toArray(root.layer).flatMap((value) => {
-      const node = childNode(value, "layer");
-      return node === undefined ? [] : [readLayer(node)].flatMap((layer) => (layer === undefined ? [] : [layer]));
+      const node = childNode(value, 'layer');
+      return node === undefined
+        ? []
+        : [readLayer(node)].flatMap((layer) => (layer === undefined ? [] : [layer]));
     });
     const inputLayer = layers.find((layer) => /input/i.test(layer.name));
     const outputLayer = layers.find((layer) => /output/i.test(layer.name));
     const diagnostics = layers.flatMap((layer) => layer.diagnostics);
     if (inputLayer === undefined || outputLayer === undefined) {
-      return { diagnostics: [...diagnostics, unmapped(input.rulePath, "missing-input-or-output-layer")] };
+      return {
+        diagnostics: [...diagnostics, unmapped(input.rulePath, 'missing-input-or-output-layer')],
+      };
     }
     if (inputLayer.width !== outputLayer.width || inputLayer.height !== outputLayer.height) {
-      return { diagnostics: [...diagnostics, unmapped(input.rulePath, "layer-size-mismatch")] };
+      return { diagnostics: [...diagnostics, unmapped(input.rulePath, 'layer-size-mismatch')] };
     }
 
     const entries: WangTileEntry[] = [];
@@ -238,7 +254,9 @@ export const compileTiledSourceWallRulePhase = (
       const localTileId = gid - tilesetRef.firstgid;
       const tileId = input.tileIdForSource(tilesetRef.sourcePath, localTileId);
       if (tileId === undefined) {
-        diagnostics.push(unmapped(input.rulePath, "missing-output-tile", `No tile found for wall rule gid ${gid}`));
+        diagnostics.push(
+          unmapped(input.rulePath, 'missing-output-tile', `No tile found for wall rule gid ${gid}`),
+        );
         continue;
       }
       const x = index % outputLayer.width;
@@ -253,7 +271,7 @@ export const compileTiledSourceWallRulePhase = (
     }
 
     if (entries.length === 0) {
-      return { diagnostics: [...diagnostics, unmapped(input.rulePath, "no-output-tiles")] };
+      return { diagnostics: [...diagnostics, unmapped(input.rulePath, 'no-output-tiles')] };
     }
 
     const compiled = compileAutotileRule({
@@ -261,14 +279,14 @@ export const compileTiledSourceWallRulePhase = (
       name: baseName(input.rulePath),
       terrainClasses: [wallTerrainClass(primarySourcePath)],
       source: {
-        kind: "tiledWang",
-        pattern: "wang4corner",
+        kind: 'tiledWang',
+        pattern: 'wang4corner',
         entries,
         wangSetName: baseName(input.rulePath),
       },
       path: input.rulePath,
       debug: {
-        provider: "tiled-source",
+        provider: 'tiled-source',
         rulePath: input.rulePath,
         tilesetSourcePath: primarySourcePath,
       },
@@ -285,7 +303,11 @@ export const compileTiledSourceWallRulePhase = (
   } catch (error) {
     return {
       diagnostics: [
-        unmapped(input.rulePath, "compile-error", `Failed to compile wall rule: ${(error as Error).message}`),
+        unmapped(
+          input.rulePath,
+          'compile-error',
+          `Failed to compile wall rule: ${(error as Error).message}`,
+        ),
       ],
     };
   }

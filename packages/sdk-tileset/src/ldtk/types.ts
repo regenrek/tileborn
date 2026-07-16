@@ -1,8 +1,8 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import type { TileId } from "../schemas/ids.js";
-import type { TilesetPack } from "../schemas/tileset-pack.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import type { TileId } from '../schemas/ids.js';
+import type { TilesetPack } from '../schemas/tileset-pack.js';
 
 export type LdtkProvenance = {
   readonly ldtkVersion: string;
@@ -28,7 +28,7 @@ export type LdtkEntityField = {
 };
 
 export type LdtkSpawnAnchor = {
-  readonly kind: "spawn";
+  readonly kind: 'spawn';
   readonly identifier: string;
   readonly entityDefUid: number;
   readonly px: readonly [number, number];
@@ -37,7 +37,7 @@ export type LdtkSpawnAnchor = {
 };
 
 export type LdtkProp = {
-  readonly kind: "prop";
+  readonly kind: 'prop';
   readonly identifier: string;
   readonly entityDefUid: number;
   readonly px: readonly [number, number];
@@ -54,7 +54,7 @@ export type LdtkTileCell = {
 };
 
 export type LdtkTileLayer = {
-  readonly type: "tiles";
+  readonly type: 'tiles';
   readonly identifier: string;
   readonly uid: number;
   readonly gridSize: number;
@@ -69,7 +69,7 @@ export type LdtkIntGridValue = {
 };
 
 export type LdtkIntGridLayer = {
-  readonly type: "intgrid";
+  readonly type: 'intgrid';
   readonly identifier: string;
   readonly uid: number;
   readonly gridSize: number;
@@ -80,7 +80,7 @@ export type LdtkIntGridLayer = {
 };
 
 export type LdtkAutoLayer = {
-  readonly type: "auto";
+  readonly type: 'auto';
   readonly identifier: string;
   readonly uid: number;
   readonly gridSize: number;
@@ -91,7 +91,7 @@ export type LdtkAutoLayer = {
 };
 
 export type LdtkEntitiesLayer = {
-  readonly type: "entities";
+  readonly type: 'entities';
   readonly identifier: string;
   readonly uid: number;
   readonly entities: readonly LdtkEntityInstance[];

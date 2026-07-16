@@ -1,20 +1,21 @@
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { makeTileId, type Uuid } from "@tileborne/core";
+import { makeTileId, type Uuid } from '@tileborne/core';
 
-import { compileTiledSourceWallRulePhase, importTiledSource } from "../index.js";
-import type { TiledSourceReadFile } from "../import.js";
+import { compileTiledSourceWallRulePhase, importTiledSource } from '../index.js';
+import type { TiledSourceReadFile } from '../import.js';
 
-const SOURCE_ROOT = "/tiled-source";
-const TILESET_PATH = "TiledMap Editor/Tilesets/test.tsx";
-const MAP_PATH = "TiledMap Editor/sample.tmx";
-const RULE_PATH = "TiledMap Editor/Rules/wall-test.tmx";
+const SOURCE_ROOT = '/tiled-source';
+const TILESET_PATH = 'TiledMap Editor/Tilesets/test.tsx';
+const MAP_PATH = 'TiledMap Editor/sample.tmx';
+const RULE_PATH = 'TiledMap Editor/Rules/wall-test.tmx';
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71]);
 
-const readFrom = (files: Readonly<Record<string, string | Uint8Array>>): TiledSourceReadFile =>
+const readFrom =
+  (files: Readonly<Record<string, string | Uint8Array>>): TiledSourceReadFile =>
   (path) => {
-    const normalized = path.replaceAll("\\", "/");
+    const normalized = path.replaceAll('\\', '/');
     const value = files[normalized];
     if (value === undefined) {
       throw new Error(`missing fixture: ${normalized}`);
@@ -98,7 +99,7 @@ const wallRule = `<?xml version="1.0" encoding="UTF-8"?>
 </map>`;
 
 const tileId = (localTileId: number) =>
-  makeTileId(`62656465-0000-4000-8000-${String(localTileId).padStart(12, "0")}` as Uuid);
+  makeTileId(`62656465-0000-4000-8000-${String(localTileId).padStart(12, '0')}` as Uuid);
 
 const hasAnimation = (tile: { readonly animation: Option.Option<unknown> }): boolean =>
   Option.match(tile.animation, {
@@ -106,8 +107,8 @@ const hasAnimation = (tile: { readonly animation: Option.Option<unknown> }): boo
     onSome: () => true,
   });
 
-describe("Tiled source importer", () => {
-  it("round-trips synthetic TSX and TMX fixtures into a TilesetPack", async () => {
+describe('Tiled source importer', () => {
+  it('round-trips synthetic TSX and TMX fixtures into a TilesetPack', async () => {
     const result = await importTiledSource({
       sourceRoot: SOURCE_ROOT,
       readFile: readFrom({
@@ -119,19 +120,21 @@ describe("Tiled source importer", () => {
       tsxFiles: [TILESET_PATH],
       mapFiles: [MAP_PATH],
       ruleFiles: [RULE_PATH],
-      importedAt: "2026-05-23T00:00:00.000Z",
+      importedAt: '2026-05-23T00:00:00.000Z',
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
     expect(result.value?.tilesets).toHaveLength(1);
     const tileset = result.value!.tilesets[0]!;
     expect(tileset.tiles).toHaveLength(4);
     expect(tileset.autotileRules.length).toBeGreaterThanOrEqual(2);
     expect(tileset.variantFilters).toHaveLength(1);
     expect(hasAnimation(tileset.tiles[1]!)).toBe(true);
-    expect(result.value?.semanticRoles?.map((role) => role.role)).toContain("wall");
-    expect(result.maps[0]?.layers.some((layer) => layer.kind === "object" && layer.role === "spawn")).toBe(true);
-    expect(result.provenance.importedAt).toBe("2026-05-23T00:00:00.000Z");
+    expect(result.value?.semanticRoles?.map((role) => role.role)).toContain('wall');
+    expect(
+      result.maps[0]?.layers.some((layer) => layer.kind === 'object' && layer.role === 'spawn'),
+    ).toBe(true);
+    expect(result.provenance.importedAt).toBe('2026-05-23T00:00:00.000Z');
     expect(result.sourceInventory.summary).toMatchObject({
       tilesetCount: 1,
       tileCount: 4,
@@ -148,11 +151,11 @@ describe("Tiled source importer", () => {
       tilesetPath: TILESET_PATH,
       probability: 0.5,
       animationFrameCount: 2,
-      wangSetNames: ["wall-test"],
+      wangSetNames: ['wall-test'],
     });
   });
 
-  it("uses Unity meta sprites as an animation fallback", async () => {
+  it('uses Unity meta sprites as an animation fallback', async () => {
     const result = await importTiledSource({
       sourceRoot: SOURCE_ROOT,
       readFile: readFrom({
@@ -169,8 +172,8 @@ describe("Tiled source importer", () => {
     expect(hasAnimation(tile)).toBe(true);
   });
 
-  it("keeps image-collection props as placeables", async () => {
-    const propsPath = "TiledMap Editor/Tilesets/props.tsx";
+  it('keeps image-collection props as placeables', async () => {
+    const propsPath = 'TiledMap Editor/Tilesets/props.tsx';
     const result = await importTiledSource({
       sourceRoot: SOURCE_ROOT,
       readFile: readFrom({
@@ -184,10 +187,10 @@ describe("Tiled source importer", () => {
 
     expect(result.value?.placeables).toHaveLength(1);
     expect(result.value?.placeables?.[0]?.size).toMatchObject({ width: 96, height: 128 });
-    expect(result.value?.assets.some((asset) => asset.path === "Props/statue.png")).toBe(true);
+    expect(result.value?.assets.some((asset) => asset.path === 'Props/statue.png')).toBe(true);
   });
 
-  it("reports missing referenced images", async () => {
+  it('reports missing referenced images', async () => {
     const result = await importTiledSource({
       sourceRoot: SOURCE_ROOT,
       readFile: readFrom({
@@ -198,21 +201,23 @@ describe("Tiled source importer", () => {
       ruleFiles: [],
     });
 
-    expect(result.diagnostics.some((diagnostic) => diagnostic._tag === "TiledSourceMissingImageRef")).toBe(true);
+    expect(
+      result.diagnostics.some((diagnostic) => diagnostic._tag === 'TiledSourceMissingImageRef'),
+    ).toBe(true);
   });
 
-  it("compiles Tiled source wall rule phases into wang rules", () => {
+  it('compiles Tiled source wall rule phases into wang rules', () => {
     const rule = compileTiledSourceWallRulePhase({
       rulePath: RULE_PATH,
       raw: wallRule,
       tileIdForSource: (_sourcePath, localTileId) => tileId(localTileId),
     });
 
-    expect(rule.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
-    expect(rule.value?.rule._tag).toBe("wang4corner");
+    expect(rule.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(rule.value?.rule._tag).toBe('wang4corner');
   });
 
-  it("preserves per-tile provenance in tags and importer metadata", async () => {
+  it('preserves per-tile provenance in tags and importer metadata', async () => {
     const result = await importTiledSource({
       sourceRoot: SOURCE_ROOT,
       readFile: readFrom({

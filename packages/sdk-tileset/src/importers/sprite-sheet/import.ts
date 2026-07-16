@@ -1,19 +1,19 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import { sliceAtlas } from "../../atlas/slice.js";
-import type { ParseDiagnostic, ParseResult } from "../../diagnostics.js";
-import { createManifestProvenance, type ManifestProvenance } from "../../manifest/index.js";
-import { CellSize, Tileset } from "../../schemas/tileset.js";
-import { Tile } from "../../schemas/tile.js";
-import { UVRect } from "../../schemas/uv-rect.js";
+import { sliceAtlas } from '../../atlas/slice.js';
+import type { ParseDiagnostic, ParseResult } from '../../diagnostics.js';
+import { createManifestProvenance, type ManifestProvenance } from '../../manifest/index.js';
+import { CellSize, Tileset } from '../../schemas/tileset.js';
+import { Tile } from '../../schemas/tile.js';
+import { UVRect } from '../../schemas/uv-rect.js';
 import {
   Placeable,
   PlaceableFrameRef,
   PlaceableSize,
   SpriteClip,
   TiledPlaceableSource,
-} from "../../schemas/placeable.js";
-import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from "../../schemas/tileset-pack.js";
+} from '../../schemas/placeable.js';
+import { TilesetPack, TilesetPackAsset, TilesetPackLicense } from '../../schemas/tileset-pack.js';
 import {
   deterministicAssetId,
   deterministicClipId,
@@ -21,27 +21,27 @@ import {
   deterministicPlaceableId,
   deterministicTileId,
   deterministicTilesetId,
-} from "../../tiled/deterministic-ids.js";
-import { parseAsepriteSheet, type ParsedAsepriteSheet } from "./aseprite.js";
+} from '../../tiled/deterministic-ids.js';
+import { parseAsepriteSheet, type ParsedAsepriteSheet } from './aseprite.js';
 
-const PACK_SEED = "sprite-sheet";
+const PACK_SEED = 'sprite-sheet';
 
 /**
  * Named sprite anchor (pivot). Matches the vocabulary understood by the Tiled
  * importer + `tileborne.anchor` map-object property so the value round-trips.
  */
-export type SpriteAnchorName = "top-left" | "center" | "bottom-left";
+export type SpriteAnchorName = 'top-left' | 'center' | 'bottom-left';
 
 /** Normalized pivot (0..1, origin top-left) for a named anchor. */
 export const anchorNameToPivot = (
   anchor: SpriteAnchorName,
 ): { readonly x: number; readonly y: number } => {
   switch (anchor) {
-    case "center":
+    case 'center':
       return { x: 0.5, y: 0.5 };
-    case "bottom-left":
+    case 'bottom-left':
       return { x: 0, y: 1 };
-    case "top-left":
+    case 'top-left':
       return { x: 0, y: 0 };
   }
 };
@@ -114,10 +114,10 @@ export interface SpriteSheetImportResult {
 const DEFAULT_FRAME_DURATION_MS = 100;
 
 const invalidConfig = (message: string): ParseDiagnostic => ({
-  _tag: "InvalidAtlasGrid",
-  path: "/spriteSheet",
+  _tag: 'InvalidAtlasGrid',
+  path: '/spriteSheet',
   message,
-  severity: "error",
+  severity: 'error',
   imageWidth: 0,
   imageHeight: 0,
   cellWidth: 0,
@@ -128,11 +128,13 @@ const invalidConfig = (message: string): ParseDiagnostic => ({
   rows: 0,
 });
 
-const clipNameToSeed = (name: string): string => name.replace(/[^A-Za-z0-9_-]+/g, "-").toLowerCase();
+const clipNameToSeed = (name: string): string =>
+  name.replace(/[^A-Za-z0-9_-]+/g, '-').toLowerCase();
 
 type FrameRect = { readonly uv: UVRect; readonly durationMs: number | undefined };
 
-const normalizedNumber = (value: number): boolean => Number.isFinite(value) && value >= 0 && value <= 1;
+const normalizedNumber = (value: number): boolean =>
+  Number.isFinite(value) && value >= 0 && value <= 1;
 
 const validatePlayerModelMetadata = (
   metadata: SpriteSheetPlayerModelMetadata | undefined,
@@ -151,16 +153,22 @@ const validatePlayerModelMetadata = (
     metadata.hitbox.x + metadata.hitbox.width > 1 ||
     metadata.hitbox.y + metadata.hitbox.height > 1
   ) {
-    diagnostics.push(invalidConfig("Player model hitbox must stay inside normalized 0..1 bounds"));
+    diagnostics.push(invalidConfig('Player model hitbox must stay inside normalized 0..1 bounds'));
   }
   if (!normalizedNumber(metadata.hand.x) || !normalizedNumber(metadata.hand.y)) {
-    diagnostics.push(invalidConfig("Player model hand anchor must use normalized 0..1 coordinates"));
+    diagnostics.push(
+      invalidConfig('Player model hand anchor must use normalized 0..1 coordinates'),
+    );
   }
   if (
     metadata.renderScale !== undefined &&
-    (!Number.isFinite(metadata.renderScale) || metadata.renderScale <= 0 || metadata.renderScale > 8)
+    (!Number.isFinite(metadata.renderScale) ||
+      metadata.renderScale <= 0 ||
+      metadata.renderScale > 8)
   ) {
-    diagnostics.push(invalidConfig("Player model render scale must be greater than 0 and at most 8"));
+    diagnostics.push(
+      invalidConfig('Player model render scale must be greater than 0 and at most 8'),
+    );
   }
   return diagnostics;
 };
@@ -171,16 +179,16 @@ const playerModelProperties = (
   metadata === undefined
     ? {}
     : {
-        "tileborne.playerModel": true,
+        'tileborne.playerModel': true,
         ...(metadata.renderScale === undefined
           ? {}
-          : { "tileborne.player.renderScale": metadata.renderScale }),
-        "tileborne.player.hitboxX": metadata.hitbox.x,
-        "tileborne.player.hitboxY": metadata.hitbox.y,
-        "tileborne.player.hitboxW": metadata.hitbox.width,
-        "tileborne.player.hitboxH": metadata.hitbox.height,
-        "tileborne.player.handX": metadata.hand.x,
-        "tileborne.player.handY": metadata.hand.y,
+          : { 'tileborne.player.renderScale': metadata.renderScale }),
+        'tileborne.player.hitboxX': metadata.hitbox.x,
+        'tileborne.player.hitboxY': metadata.hitbox.y,
+        'tileborne.player.hitboxW': metadata.hitbox.width,
+        'tileborne.player.hitboxH': metadata.hitbox.height,
+        'tileborne.player.handX': metadata.hand.x,
+        'tileborne.player.handY': metadata.hand.y,
       };
 
 /** Derive frame rects from Aseprite frames (each frame keeps its own duration). */
@@ -218,9 +226,7 @@ const framesFromGrid = (
   };
 };
 
-const clipsFromAsepriteTags = (
-  sheet: ParsedAsepriteSheet,
-): readonly SpriteSheetClipInput[] =>
+const clipsFromAsepriteTags = (sheet: ParsedAsepriteSheet): readonly SpriteSheetClipInput[] =>
   sheet.tags.map((tag) => {
     const frameIndices: number[] = [];
     const frameDurationsMs: number[] = [];
@@ -243,16 +249,16 @@ export const importSpriteSheet = (
   const diagnostics: ParseDiagnostic[] = [];
   const seed = input.seed ?? input.imagePath;
   const tilesetSeed = `${seed}/sheet`;
-  const anchor: SpriteAnchorName = input.anchor ?? "top-left";
+  const anchor: SpriteAnchorName = input.anchor ?? 'top-left';
   const anchorPivot = anchorNameToPivot(anchor);
   diagnostics.push(...validatePlayerModelMetadata(input.playerModel));
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     return { diagnostics };
   }
 
   const aseprite = input.aseprite === undefined ? undefined : parseAsepriteSheet(input.aseprite);
   if (input.aseprite !== undefined && aseprite === undefined) {
-    diagnostics.push(invalidConfig("Aseprite sidecar JSON is not a recognizable sprite sheet"));
+    diagnostics.push(invalidConfig('Aseprite sidecar JSON is not a recognizable sprite sheet'));
   }
 
   let frames: readonly FrameRect[];
@@ -268,7 +274,7 @@ export const importSpriteSheet = (
   }
 
   if (frames.length === 0) {
-    diagnostics.push(invalidConfig("Sprite sheet produced no frames"));
+    diagnostics.push(invalidConfig('Sprite sheet produced no frames'));
     return { diagnostics };
   }
 
@@ -276,7 +282,7 @@ export const importSpriteSheet = (
   const atlasAsset = new TilesetPackAsset({
     id: atlasAssetId,
     path: input.imagePath,
-    mime: input.mime ?? "image/png",
+    mime: input.mime ?? 'image/png',
   });
 
   const tileIds = frames.map((_, index) => deterministicTileId(`${tilesetSeed}/tile/${index}`));
@@ -292,8 +298,8 @@ export const importSpriteSheet = (
       }),
   );
 
-  const cellWidth = aseprite === undefined ? input.slice.cellWidth : (frames[0]!.uv.w);
-  const cellHeight = aseprite === undefined ? input.slice.cellHeight : (frames[0]!.uv.h);
+  const cellWidth = aseprite === undefined ? input.slice.cellWidth : frames[0]!.uv.w;
+  const cellHeight = aseprite === undefined ? input.slice.cellHeight : frames[0]!.uv.h;
 
   const frameRefFor = (index: number, durationMs: number | undefined): PlaceableFrameRef =>
     new PlaceableFrameRef({
@@ -304,9 +310,7 @@ export const importSpriteSheet = (
     });
 
   const requestedClips =
-    aseprite !== undefined
-      ? clipsFromAsepriteTags(aseprite)
-      : (input.clips ?? []);
+    aseprite !== undefined ? clipsFromAsepriteTags(aseprite) : (input.clips ?? []);
 
   // Always guarantee at least one clip ("default" = the full sheet in order) so a
   // freshly imported sheet animates without further authoring.
@@ -315,7 +319,7 @@ export const importSpriteSheet = (
       ? requestedClips
       : [
           {
-            name: "default",
+            name: 'default',
             frameIndices: frames.map((_, index) => index),
             loop: true,
           },
@@ -347,22 +351,22 @@ export const importSpriteSheet = (
     .filter((clip): clip is SpriteClip => clip !== undefined);
 
   if (clips.length === 0) {
-    diagnostics.push(invalidConfig("Sprite sheet produced no valid clips"));
+    diagnostics.push(invalidConfig('Sprite sheet produced no valid clips'));
     return { diagnostics };
   }
 
   const placeable = new Placeable({
     id: deterministicPlaceableId(`${tilesetSeed}/placeable`),
-    name: input.spriteName ?? input.packName ?? "Sprite",
+    name: input.spriteName ?? input.packName ?? 'Sprite',
     size: new PlaceableSize({ width: cellWidth, height: cellHeight }),
     // The first clip's frames double as the implicit default clip for back-compat.
     frames: clips[0]!.frames,
     clips,
-    tags: ["sprite"],
-    placementMode: "object",
+    tags: ['sprite'],
+    placementMode: 'object',
     source: new TiledPlaceableSource({
-      format: "tiled",
-      tilesetName: input.spriteName ?? "Sprite",
+      format: 'tiled',
+      tilesetName: input.spriteName ?? 'Sprite',
       localTileId: 0,
       image: Option.some(input.imagePath),
       imageWidth: Option.some(input.imageWidth),
@@ -370,10 +374,10 @@ export const importSpriteSheet = (
       objectType: Option.none(),
       objectClass: Option.none(),
       properties: {
-        "tileborne.anchor": anchor,
-        "tileborne.anchorX": anchorPivot.x,
-        "tileborne.anchorY": anchorPivot.y,
-        "tileborne.sprite": true,
+        'tileborne.anchor': anchor,
+        'tileborne.anchorX': anchorPivot.x,
+        'tileborne.anchorY': anchorPivot.y,
+        'tileborne.sprite': true,
         ...playerModelProperties(input.playerModel),
       },
     }),
@@ -381,7 +385,7 @@ export const importSpriteSheet = (
 
   const tileset = new Tileset({
     id: deterministicTilesetId(`${seed}/${tilesetSeed}`),
-    name: input.spriteName ?? "Sprite",
+    name: input.spriteName ?? 'Sprite',
     atlasAssetId,
     cellSize: new CellSize({ width: cellWidth, height: cellHeight }),
     margin: input.slice.margin ?? 0,
@@ -395,10 +399,10 @@ export const importSpriteSheet = (
   const pack = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(`${PACK_SEED}/${seed}`),
-    name: input.packName ?? input.spriteName ?? "Sprite Pack",
-    version: input.packVersion ?? "1.0.0",
+    name: input.packName ?? input.spriteName ?? 'Sprite Pack',
+    version: input.packVersion ?? '1.0.0',
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
+      spdxId: 'UNKNOWN',
       attribution: Option.none(),
       sourceUrl: Option.none(),
       notes: Option.some(input.imagePath),
@@ -414,7 +418,7 @@ export const importSpriteSheet = (
       pack,
       provenance: createManifestProvenance({
         sourcePath: input.imagePath,
-        originTool: "tileborne-sprite-sheet-importer",
+        originTool: 'tileborne-sprite-sheet-importer',
         ...(input.importedAt === undefined ? {} : { importedAt: input.importedAt }),
       }),
       frameCount: frames.length,

@@ -36,6 +36,9 @@ const SENSITIVE_RELEASE_ENVIRONMENT = Object.freeze([
   'GH_TOKEN',
 ]);
 const SHA256 = /^[a-f0-9]{64}$/;
+const TRACKED_DISTRIBUTION_INPUTS = new Set([
+  'packages/test-fixtures/fixtures/plugins/smoke-fixture/dist',
+]);
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const git = (root, args, allowFailure = false) => {
@@ -55,7 +58,7 @@ const assert = (condition, code, message) => {
   if (!condition) throw new Error(`${code}: ${message}`);
 };
 
-const outputDirectories = (root) => {
+export const outputDirectories = (root) => {
   const found = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -63,7 +66,8 @@ const outputDirectories = (root) => {
       const child = path.join(directory, entry.name);
       if (!entry.isDirectory()) continue;
       if (entry.name === 'dist' || entry.name === '.vite' || entry.name === 'out') {
-        found.push(path.relative(root, child));
+        const relative = path.relative(root, child);
+        if (!TRACKED_DISTRIBUTION_INPUTS.has(relative)) found.push(relative);
       } else {
         visit(child);
       }

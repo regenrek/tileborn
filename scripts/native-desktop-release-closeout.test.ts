@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-import { deriveBinaryDecision } from './native-desktop-release-closeout.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { deriveBinaryDecision, outputDirectories } from './native-desktop-release-closeout.mjs';
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true })));
+});
 
 const ready = {
   canonicalDecision: 'go',
@@ -32,5 +42,21 @@ describe('native desktop binary closeout decision', () => {
     const result = deriveBinaryDecision({ ...ready, [field]: value });
     expect(result.decision).toBe('no-go');
     expect(result.blockers).toContain(blocker);
+  });
+});
+
+describe('native desktop closeout preflight', () => {
+  it('permits only the tracked fixture dist input and rejects real build outputs', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'tileborne-closeout-preflight-'));
+    temporaryRoots.push(root);
+    await Promise.all([
+      mkdir(path.join(root, 'packages/test-fixtures/fixtures/plugins/smoke-fixture/dist'), {
+        recursive: true,
+      }),
+      mkdir(path.join(root, 'packages/core/dist'), { recursive: true }),
+      mkdir(path.join(root, 'apps/desktop/out'), { recursive: true }),
+    ]);
+
+    expect(outputDirectories(root)).toEqual(['apps/desktop/out', 'packages/core/dist']);
   });
 });

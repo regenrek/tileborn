@@ -22,15 +22,17 @@ export const roomIdleTimeoutMs = (seconds: number | undefined): number =>
   (seconds ?? DEFAULT_ROOM_IDLE_TIMEOUT_SECONDS) * 1000;
 
 export const heartbeatTimeoutMs = (seconds: number | string | undefined): number => {
-  const parsed =
-    typeof seconds === "string" ? Number.parseInt(seconds, 10) : seconds;
-  const resolved = parsed !== undefined && Number.isFinite(parsed) ? parsed : DEFAULT_HEARTBEAT_TIMEOUT_SECONDS;
+  const parsed = typeof seconds === 'string' ? Number.parseInt(seconds, 10) : seconds;
+  const resolved =
+    parsed !== undefined && Number.isFinite(parsed) ? parsed : DEFAULT_HEARTBEAT_TIMEOUT_SECONDS;
   return resolved * 1000;
 };
 
 export const roomReconnectWindowMs = (seconds: number | string | undefined): number => {
-  const parsed =
-    typeof seconds === "string" ? Number.parseInt(seconds, 10) : seconds;
-  const resolved = parsed !== undefined && Number.isFinite(parsed) ? parsed : DEFAULT_ROOM_RECONNECT_WINDOW_SECONDS;
+  const parsed = typeof seconds === 'string' ? Number.parseInt(seconds, 10) : seconds;
+  const resolved =
+    parsed !== undefined && Number.isFinite(parsed)
+      ? parsed
+      : DEFAULT_ROOM_RECONNECT_WINDOW_SECONDS;
   return resolved * 1000;
 };

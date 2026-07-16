@@ -1,8 +1,8 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
-import type { RuntimePlugin, RuntimePluginLoader } from "@tileborne/runtime/worker";
+import type { RuntimePlugin, RuntimePluginLoader } from '@tileborne/runtime/worker';
 
-import { bundledPlugin } from "./.generated/bundled-plugin.js";
+import { bundledPlugin } from './.generated/bundled-plugin.js';
 import {
   createRuntimeAdapter,
   decodeClientFrame,
@@ -11,8 +11,8 @@ import {
   type RuntimeClientFrameDecodeResult,
   type RuntimeClientFrameView,
   type RuntimeClientInputFrame,
-} from "./.generated/plugin-runtime.js";
-import { bundledMapPackages } from "./.generated/bundled-map-packages.js";
+} from './.generated/plugin-runtime.js';
+import { bundledMapPackages } from './.generated/bundled-map-packages.js';
 
 interface BundledComponentStore<T extends object> {
   readonly get: (entity: number) => T | undefined;
@@ -39,7 +39,7 @@ export interface BundledPluginProtocolBridge {
   readonly decodeClientFrame: (bytes: Uint8Array) => BundledClientFrameDecodeResult;
   readonly decodeServerLifecycleFrame: (
     bytes: Uint8Array,
-  ) => { readonly kind: "game-over"; readonly winnerPlayerId: string } | undefined;
+  ) => { readonly kind: 'game-over'; readonly winnerPlayerId: string } | undefined;
   readonly encodeInvalidClientFrame: () => Uint8Array;
 }
 
@@ -114,7 +114,9 @@ class InMemoryBundledPluginWorld implements BundledPluginWorld {
         values.delete(entity);
       },
       entries: () => {
-        const pairs = [...values.entries()].map(([entity, value]) => [entity, value as T] as [number, T]);
+        const pairs = [...values.entries()].map(
+          ([entity, value]) => [entity, value as T] as [number, T],
+        );
         return Object.assign(pairs[Symbol.iterator](), { length: pairs.length });
       },
     };
@@ -141,7 +143,9 @@ const toRuntimePlugin = (adapter: BundledRuntimeAdapter): RuntimePlugin => {
   };
 };
 
-export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = {}): RuntimePluginLoader => ({
+export const createBundledPluginLoader = (
+  options: BundledPluginLoaderOptions = {},
+): RuntimePluginLoader => ({
   loadExecutable: (pluginId) =>
     Effect.sync(() => {
       if (pluginId !== bundledPlugin.id) {
@@ -158,7 +162,9 @@ export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = 
         ...(options.getPlayerIds === undefined ? {} : { getPlayerIds: options.getPlayerIds }),
         ...(options.getInput === undefined ? {} : { getPlayerInput: options.getInput }),
         ...(options.emitFrame === undefined ? {} : { msgOut: { push: options.emitFrame } }),
-        ...(options.setReplayFrames === undefined ? {} : { setReplayFrames: options.setReplayFrames }),
+        ...(options.setReplayFrames === undefined
+          ? {}
+          : { setReplayFrames: options.setReplayFrames }),
         ...(options.seed === undefined ? {} : { seed: options.seed }),
       }) as BundledRuntimeAdapter;
       return { default: toRuntimePlugin(adapter) };

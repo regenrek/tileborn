@@ -1,4 +1,4 @@
-import { MIN_HANDOFF_SIGNING_KEY_LENGTH } from "./room-config.js";
+import { MIN_HANDOFF_SIGNING_KEY_LENGTH } from './room-config.js';
 
 export interface HandoffTokenPayload {
   readonly aud: typeof ROOM_ACCESS_TOKEN_AUDIENCE;
@@ -9,13 +9,13 @@ export interface HandoffTokenPayload {
   readonly exp?: number;
 }
 
-export type RoomAccessTokenPurpose = "handoff" | "reconnect";
+export type RoomAccessTokenPurpose = 'handoff' | 'reconnect';
 
 export interface HandoffSigningEnv {
   readonly HANDOFF_SIGNING_KEY?: string;
 }
 
-export const ROOM_ACCESS_TOKEN_AUDIENCE = "tileborne.game-host.room" as const;
+export const ROOM_ACCESS_TOKEN_AUDIENCE = 'tileborne.game-host.room' as const;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -25,12 +25,12 @@ const decoder = new TextDecoder();
  * the length check, so it is rejected explicitly: a deployed worker must never
  * sign handoff tokens with a publicly-known key.
  */
-export const PLACEHOLDER_HANDOFF_SIGNING_KEY = "replace-me-in-production-32-chars-minimum";
+export const PLACEHOLDER_HANDOFF_SIGNING_KEY = 'replace-me-in-production-32-chars-minimum';
 
 export const isHandoffSigningKeyValid = (env: HandoffSigningEnv): boolean => {
   const key = env.HANDOFF_SIGNING_KEY;
   return (
-    typeof key === "string" &&
+    typeof key === 'string' &&
     key.length >= MIN_HANDOFF_SIGNING_KEY_LENGTH &&
     key !== PLACEHOLDER_HANDOFF_SIGNING_KEY
   );
@@ -38,18 +38,18 @@ export const isHandoffSigningKeyValid = (env: HandoffSigningEnv): boolean => {
 
 export const assertHandoffSigningKey = (env: HandoffSigningEnv): void => {
   if (!isHandoffSigningKeyValid(env)) {
-    throw new Error("HANDOFF_SIGNING_KEY is missing, too short, or the known placeholder");
+    throw new Error('HANDOFF_SIGNING_KEY is missing, too short, or the known placeholder');
   }
 };
 
 const importHmacKey = async (env: HandoffSigningEnv): Promise<CryptoKey> => {
   assertHandoffSigningKey(env);
   return crypto.subtle.importKey(
-    "raw",
+    'raw',
     encoder.encode(env.HANDOFF_SIGNING_KEY),
-    { name: "HMAC", hash: "SHA-256" },
+    { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ["sign", "verify"],
+    ['sign', 'verify'],
   );
 };
 
@@ -71,13 +71,19 @@ const canonicalPayload = (payload: HandoffTokenPayload): string => {
 };
 
 const isRoomAccessTokenPurpose = (value: unknown): value is RoomAccessTokenPurpose =>
-  value === "handoff" || value === "reconnect";
+  value === 'handoff' || value === 'reconnect';
 
 const toBase64Url = (bytes: Uint8Array): string =>
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
 
 const fromBase64Url = (value: string): Uint8Array => {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const padded = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -96,9 +102,9 @@ export const mintHandoffToken = async (
   },
 ): Promise<string> => {
   const key = await importHmacKey(env);
-  const purpose = input.purpose ?? "handoff";
-  if (purpose === "handoff" && input.ttlSeconds === undefined) {
-    throw new Error("handoff tokens require ttlSeconds");
+  const purpose = input.purpose ?? 'handoff';
+  if (purpose === 'handoff' && input.ttlSeconds === undefined) {
+    throw new Error('handoff tokens require ttlSeconds');
   }
   const exp =
     input.ttlSeconds === undefined ? undefined : Math.floor(Date.now() / 1000) + input.ttlSeconds;
@@ -110,7 +116,7 @@ export const mintHandoffToken = async (
     ...(exp === undefined ? {} : { exp }),
   };
   const canonical = canonicalPayload(payload);
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(canonical));
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(canonical));
   return `${toBase64Url(encoder.encode(canonical))}.${toBase64Url(new Uint8Array(signature))}`;
 };
 
@@ -122,7 +128,7 @@ export const verifyHandoffToken = async (
   if (!isHandoffSigningKeyValid(env)) {
     return null;
   }
-  const parts = token.split(".");
+  const parts = token.split('.');
   if (parts.length !== 2) {
     return null;
   }
@@ -145,20 +151,20 @@ export const verifyHandoffToken = async (
   }
   if (
     parsed.aud !== ROOM_ACCESS_TOKEN_AUDIENCE ||
-    typeof parsed.playtestId !== "string" ||
-    typeof parsed.playerId !== "string" ||
+    typeof parsed.playtestId !== 'string' ||
+    typeof parsed.playerId !== 'string' ||
     !isRoomAccessTokenPurpose(parsed.purpose) ||
-    (parsed.exp !== undefined && typeof parsed.exp !== "number")
+    (parsed.exp !== undefined && typeof parsed.exp !== 'number')
   ) {
     return null;
   }
   if (parsed.playtestId !== expected.playtestId) {
     return null;
   }
-  if (parsed.purpose !== (expected.purpose ?? "handoff")) {
+  if (parsed.purpose !== (expected.purpose ?? 'handoff')) {
     return null;
   }
-  if (parsed.purpose === "handoff" && parsed.exp === undefined) {
+  if (parsed.purpose === 'handoff' && parsed.exp === undefined) {
     return null;
   }
   if (parsed.exp !== undefined && parsed.exp < Math.floor(Date.now() / 1000)) {
@@ -166,7 +172,7 @@ export const verifyHandoffToken = async (
   }
   const key = await importHmacKey(env);
   const valid = await crypto.subtle.verify(
-    "HMAC",
+    'HMAC',
     key,
     new Uint8Array(fromBase64Url(signaturePart)),
     encoder.encode(canonicalPayload(parsed)),

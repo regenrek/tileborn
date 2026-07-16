@@ -1,13 +1,19 @@
-import { ROOM_SCHEMA_VERSION } from "./room-config.js";
-import type { JsonObject } from "@tileborne/core";
+import { ROOM_SCHEMA_VERSION } from './room-config.js';
+import type { JsonObject } from '@tileborne/core';
 
-export const ROOM_LIFECYCLE_PHASES = ["lobby", "countdown", "active", "finished", "archived"] as const;
+export const ROOM_LIFECYCLE_PHASES = [
+  'lobby',
+  'countdown',
+  'active',
+  'finished',
+  'archived',
+] as const;
 
 export type RoomLifecyclePhase = (typeof ROOM_LIFECYCLE_PHASES)[number];
 export type RoomJoinCode = string;
-export type RoomLobbyVisibility = "private" | "public";
-export type RoomPlayerPresenceStatus = "connected" | "disconnected";
-export type RoomResultOutcome = "completed" | "abandoned" | "cancelled";
+export type RoomLobbyVisibility = 'private' | 'public';
+export type RoomPlayerPresenceStatus = 'connected' | 'disconnected';
+export type RoomResultOutcome = 'completed' | 'abandoned' | 'cancelled';
 
 export interface RoomLifecycleState {
   readonly phase: RoomLifecyclePhase;
@@ -89,7 +95,7 @@ interface RoomStorageLegacyV1 {
   readonly mapId: string;
   readonly seed: string | number;
   readonly createdAt: string;
-  readonly status: "lobby" | "running" | "finished" | "archived";
+  readonly status: 'lobby' | 'running' | 'finished' | 'archived';
   readonly options: Record<string, string | number | boolean | null>;
   readonly players: Record<string, RoomPlayerRecord>;
   readonly tick: number;
@@ -121,7 +127,7 @@ export interface RoomStorageV2 {
   readonly simState: Record<string, string | number | boolean | null>;
 }
 
-export interface RoomStorageV3 extends Omit<RoomStorageV2, "schemaVersion"> {
+export interface RoomStorageV3 extends Omit<RoomStorageV2, 'schemaVersion'> {
   readonly schemaVersion: typeof ROOM_SCHEMA_VERSION;
   readonly lobby: RoomLobbyState;
   readonly ready: RoomReadyState;
@@ -133,10 +139,10 @@ export interface RoomStorageV3 extends Omit<RoomStorageV2, "schemaVersion"> {
 export type PersistedRoomStorage = RoomStorageLegacyV1 | RoomStorageV2 | RoomStorageV3;
 export type RoomStorage = RoomStorageV3;
 
-export const STORAGE_KEY = "state";
+export const STORAGE_KEY = 'state';
 
 export const emptyRoomLobbyState = (): RoomLobbyState => ({
-  visibility: "private",
+  visibility: 'private',
 });
 
 export const emptyRoomReadyState = (): RoomReadyState => ({
@@ -169,7 +175,7 @@ export const emptyRoomStorage = (
     ? {}
     : { playerModelSelections }),
   lifecycle: {
-    phase: "lobby",
+    phase: 'lobby',
     enteredAt: createdAt,
   },
   options,
@@ -190,31 +196,31 @@ export const emptyRoomStorage = (
 
 const legacyLifecycle = (value: RoomStorageLegacyV1): RoomLifecycleState => {
   const enteredAt = value.lastTickAt ?? value.emptySince ?? value.createdAt;
-  if (value.status === "running") {
+  if (value.status === 'running') {
     return {
-      phase: "active",
+      phase: 'active',
       enteredAt,
       activeStartedAt: enteredAt,
     };
   }
-  if (value.status === "finished") {
+  if (value.status === 'finished') {
     return {
-      phase: "finished",
+      phase: 'finished',
       enteredAt,
       finishedAt: enteredAt,
-      reason: "legacy-finished",
+      reason: 'legacy-finished',
     };
   }
-  if (value.status === "archived") {
+  if (value.status === 'archived') {
     return {
-      phase: "archived",
+      phase: 'archived',
       enteredAt,
       archivedAt: enteredAt,
-      reason: "legacy-archived",
+      reason: 'legacy-archived',
     };
   }
   return {
-    phase: "lobby",
+    phase: 'lobby',
     enteredAt: value.createdAt,
   };
 };

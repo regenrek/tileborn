@@ -59,16 +59,14 @@ describe('WorkerdBehaviorRuntimeClient response boundary', () => {
   });
 
   it('never reports success or commits malformed and mismatched snapshots', async () => {
-    const fetch = vi
-      .fn<(request: Request) => Promise<Response>>()
-      .mockResolvedValue(
-        jsonResponse({
-          ok: true,
-          snapshot: { tick: 99, states: [] },
-          traces: [],
-          diagnostics: [],
-        }),
-      );
+    const fetch = vi.fn<(request: Request) => Promise<Response>>().mockResolvedValue(
+      jsonResponse({
+        ok: true,
+        snapshot: { tick: 99, states: [] },
+        traces: [],
+        diagnostics: [],
+      }),
+    );
     const client = new WorkerdBehaviorRuntimeClient({
       binding: { fetch },
       mapPackage: MAP_PACKAGE,

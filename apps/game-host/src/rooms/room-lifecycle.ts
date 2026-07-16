@@ -111,7 +111,10 @@ const optionNumber = (
 };
 
 export const normalizeRoomJoinCode = (value: string): string =>
-  value.trim().toUpperCase().replace(/[\s-]+/g, '');
+  value
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '');
 
 export const isRoomJoinCode = (value: string): value is RoomJoinCode =>
   ROOM_JOIN_CODE_PATTERN.test(normalizeRoomJoinCode(value));
@@ -162,7 +165,8 @@ export const resolveRoomMinReadyPlayers = (
   options: Record<string, string | number | boolean | null>,
   override?: number,
 ): number => {
-  const value = override ?? optionNumber(options, 'minReadyPlayers') ?? DEFAULT_ROOM_MIN_READY_PLAYERS;
+  const value =
+    override ?? optionNumber(options, 'minReadyPlayers') ?? DEFAULT_ROOM_MIN_READY_PLAYERS;
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error('minReadyPlayers must be a positive integer');
   }
@@ -292,8 +296,8 @@ export const resolveRoomReadyGate = (
 ): RoomReadyGateState => {
   const minPlayers = resolveRoomMinReadyPlayers(storage.options, options.minPlayers);
   const rosterPlayerIds = sortedPlayerIds(storage.players);
-  const requiredPlayerIds = [...(options.requiredPlayerIds ?? rosterPlayerIds)].sort((left, right) =>
-    left.localeCompare(right),
+  const requiredPlayerIds = [...(options.requiredPlayerIds ?? rosterPlayerIds)].sort(
+    (left, right) => left.localeCompare(right),
   );
   const missingReadyPlayerIds = requiredPlayerIds.filter(
     (playerId) => storage.ready.players[playerId]?.isReady !== true,
@@ -398,28 +402,32 @@ export const projectRoomPresence = (
     ...Object.keys(storage.presence.players),
     ...Object.keys(storage.reconnect.seats),
   ]);
-  return [...playerIds].sort((left, right) => left.localeCompare(right)).map((playerId) => {
-    const player = storage.players[playerId];
-    const presence = storage.presence.players[playerId];
-    const status: RoomPlayerPresenceStatus = connectedPlayerIds.has(playerId)
-      ? 'connected'
-      : presence?.status ?? 'disconnected';
-    const reconnectEligibility = resolveRoomReconnectEligibility(
-      storage,
-      playerId,
-      options.now ?? new Date(0).toISOString(),
-    );
-    return {
-      playerId,
-      status,
-      ready: storage.ready.players[playerId]?.isReady === true,
-      reconnectEligible: reconnectEligibility.eligible,
-      lastSeenAt: presence?.lastSeenAt ?? player?.lastHeartbeatAt ?? player?.joinedAt ?? null,
-      ...(player?.displayName === undefined ? {} : { displayName: player.displayName }),
-      ...(presence?.connectedAt === undefined ? {} : { connectedAt: presence.connectedAt }),
-      ...(presence?.disconnectedAt === undefined ? {} : { disconnectedAt: presence.disconnectedAt }),
-    };
-  });
+  return [...playerIds]
+    .sort((left, right) => left.localeCompare(right))
+    .map((playerId) => {
+      const player = storage.players[playerId];
+      const presence = storage.presence.players[playerId];
+      const status: RoomPlayerPresenceStatus = connectedPlayerIds.has(playerId)
+        ? 'connected'
+        : (presence?.status ?? 'disconnected');
+      const reconnectEligibility = resolveRoomReconnectEligibility(
+        storage,
+        playerId,
+        options.now ?? new Date(0).toISOString(),
+      );
+      return {
+        playerId,
+        status,
+        ready: storage.ready.players[playerId]?.isReady === true,
+        reconnectEligible: reconnectEligibility.eligible,
+        lastSeenAt: presence?.lastSeenAt ?? player?.lastHeartbeatAt ?? player?.joinedAt ?? null,
+        ...(player?.displayName === undefined ? {} : { displayName: player.displayName }),
+        ...(presence?.connectedAt === undefined ? {} : { connectedAt: presence.connectedAt }),
+        ...(presence?.disconnectedAt === undefined
+          ? {}
+          : { disconnectedAt: presence.disconnectedAt }),
+      };
+    });
 };
 
 export const assertRoomAdmission = (storage: RoomStorage, playerId: string): void => {
@@ -641,9 +649,9 @@ export const finishRoomFromMatchEnd = (
   if (storage.lifecycle.phase !== 'active' || storage.results !== null) {
     return storage;
   }
-  const playerIds = [
-    ...new Set([...sortedResultPlayerIds(storage), winnerPlayerId]),
-  ].sort((left, right) => left.localeCompare(right));
+  const playerIds = [...new Set([...sortedResultPlayerIds(storage), winnerPlayerId])].sort(
+    (left, right) => left.localeCompare(right),
+  );
   return {
     ...storage,
     results: {

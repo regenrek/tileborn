@@ -156,8 +156,7 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
     behaviorId: BehaviorId,
     tick: number,
   ): Promise<
-    | WorkerdBehaviorSuccessResponse
-    | (BehaviorRuntimeStepFailure & { readonly ok: false })
+    WorkerdBehaviorSuccessResponse | (BehaviorRuntimeStepFailure & { readonly ok: false })
   > {
     let lastFailure: WorkerdBehaviorFailureResponse = {
       ok: false,
@@ -188,9 +187,7 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
         return { ...lastFailure, behaviorId, attempts: attempt };
       }
 
-      const decoded = decodeWorkerdBehaviorResponse(
-        await response.json().catch(() => undefined),
-      );
+      const decoded = decodeWorkerdBehaviorResponse(await response.json().catch(() => undefined));
       if (!decoded.ok) {
         lastFailure = {
           ok: false,

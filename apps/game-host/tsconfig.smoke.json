@@ -6,8 +6,5 @@
     "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src/smoke/**/*.ts", "src/types.ts"],
-  "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/runtime" }
-  ]
+  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/runtime" }]
 }

@@ -27,27 +27,27 @@ export class MemoryWebSocket implements FakeWebSocketLike {
 
   readonly sent: ArrayBuffer[] = [];
   closeCode: number | null = null;
-  closeReason = "";
+  closeReason = '';
 
-  binaryType: BinaryType = "arraybuffer";
+  binaryType: BinaryType = 'arraybuffer';
   bufferedAmount = 0;
-  extensions = "";
-  protocol = "";
-  url = "";
+  extensions = '';
+  protocol = '';
+  url = '';
   onclose: ((this: WebSocket, ev: CloseEvent) => void) | null = null;
   onerror: ((this: WebSocket, ev: Event) => void) | null = null;
   onmessage: ((this: WebSocket, ev: MessageEvent) => void) | null = null;
   onopen: ((this: WebSocket, ev: Event) => void) | null = null;
 
   send(data: ArrayBuffer | string): void {
-    if (typeof data === "string") {
+    if (typeof data === 'string') {
       this.sent.push(new TextEncoder().encode(data).buffer);
       return;
     }
     this.sent.push(data);
   }
 
-  close(code = 1000, reason = ""): void {
+  close(code = 1000, reason = ''): void {
     this.readyState = WebSocket.CLOSED;
     this.closeCode = code;
     this.closeReason = reason;
@@ -74,7 +74,8 @@ export class MemoryWebSocket implements FakeWebSocketLike {
   }
 }
 
-export const asDurableObjectState = (state: FakeDurableObjectState): DurableObjectState => state as DurableObjectState;
+export const asDurableObjectState = (state: FakeDurableObjectState): DurableObjectState =>
+  state as DurableObjectState;
 
 export const createFakeDurableObjectState = (): FakeDurableObjectState => {
   const storageMap = new Map<string, unknown>();
@@ -95,9 +96,13 @@ export const createFakeDurableObjectState = (): FakeDurableObjectState => {
       delete: async (key: string) => {
         storageMap.delete(key);
       },
-      list: async () => ({ keys: [...storageMap.keys()].map((name) => ({ name })), cursor: "", list_complete: true }),
+      list: async () => ({
+        keys: [...storageMap.keys()].map((name) => ({ name })),
+        cursor: '',
+        list_complete: true,
+      }),
       setAlarm: async (scheduledTime: number | Date) => {
-        alarmAt = typeof scheduledTime === "number" ? scheduledTime : scheduledTime.getTime();
+        alarmAt = typeof scheduledTime === 'number' ? scheduledTime : scheduledTime.getTime();
       },
       getAlarm: async () => alarmAt,
       deleteAlarm: async () => {
@@ -129,7 +134,10 @@ export const createFakeDurableObjectState = (): FakeDurableObjectState => {
   return state;
 };
 
-export const registerAlarmHandler = (state: FakeDurableObjectState, handler: () => Promise<void>): void => {
+export const registerAlarmHandler = (
+  state: FakeDurableObjectState,
+  handler: () => Promise<void>,
+): void => {
   state.alarmHandlers.push(handler);
 };
 

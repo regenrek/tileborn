@@ -154,7 +154,16 @@ const bundlePortableAssemblyAssets = async () => {
     format: 'esm',
     platform: 'browser',
     target: 'es2022',
-    external: ['cloudflare:*', 'node:crypto', 'crypto', 'node:fs', 'node:fs/promises', 'node:path', 'node:url', 'node:os'],
+    external: [
+      'cloudflare:*',
+      'node:crypto',
+      'crypto',
+      'node:fs',
+      'node:fs/promises',
+      'node:path',
+      'node:url',
+      'node:os',
+    ],
     plugins: [
       {
         name: 'portable-generated-assembly-stubs',

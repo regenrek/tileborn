@@ -312,10 +312,14 @@ describe('game-host smoke — M4 two-client lobby proof', () => {
 
       const creatorSocket = await harness.websocketConnect(created.wsUrl);
       sockets.push(creatorSocket);
-      await waitForMessage(creatorSocket, (message) => isWelcomeForPlayer(message, created.playerId), {
-        timeoutMs: 1_000,
-        label: 'creator WelcomeSnapshot',
-      });
+      await waitForMessage(
+        creatorSocket,
+        (message) => isWelcomeForPlayer(message, created.playerId),
+        {
+          timeoutMs: 1_000,
+          label: 'creator WelcomeSnapshot',
+        },
+      );
 
       const joinResponse = await postJson(harness, '/lobbies/join', {
         joinCode: created.joinCode.toLowerCase(),
@@ -341,10 +345,14 @@ describe('game-host smoke — M4 two-client lobby proof', () => {
 
       const joinerSocket = await harness.websocketConnect(joined.wsUrl);
       sockets.push(joinerSocket);
-      await waitForMessage(joinerSocket, (message) => isWelcomeForPlayer(message, joined.playerId), {
-        timeoutMs: 1_000,
-        label: 'joiner WelcomeSnapshot',
-      });
+      await waitForMessage(
+        joinerSocket,
+        (message) => isWelcomeForPlayer(message, joined.playerId),
+        {
+          timeoutMs: 1_000,
+          label: 'joiner WelcomeSnapshot',
+        },
+      );
 
       const codeSummary = await parseJson<RoomLobbySummary>(
         await harness.fetch(`http://localhost/lobbies/code/${created.joinCode}`),
@@ -487,10 +495,14 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
     dispose = harness.mfDispose;
     const started = await startPlaytest(harness);
     const socket = await harness.websocketConnect(started.wsUrl);
-    const welcome = await waitForMessage(socket, (message) => isWelcomeForPlayer(message, started.playerId), {
-      timeoutMs: 200,
-      label: 'WelcomeSnapshot',
-    });
+    const welcome = await waitForMessage(
+      socket,
+      (message) => isWelcomeForPlayer(message, started.playerId),
+      {
+        timeoutMs: 200,
+        label: 'WelcomeSnapshot',
+      },
+    );
     expect(welcome._tag).toBe('WelcomeSnapshot');
     socket.close(1000, 'done');
   });
@@ -508,14 +520,10 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
 
     const first = await start('player-1');
     const firstSocket = await harness.websocketConnect(first.wsUrl);
-    await waitForMessage(
-      firstSocket,
-      (message) => isWelcomeForPlayer(message, 'player-1'),
-      {
-        timeoutMs: 500,
-        label: 'player-1 WelcomeSnapshot',
-      },
-    );
+    await waitForMessage(firstSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+      timeoutMs: 500,
+      label: 'player-1 WelcomeSnapshot',
+    });
 
     const second = await joinPlaytest(harness, roomId);
     expect(second.status).toBe(409);
@@ -593,10 +601,7 @@ describe('game-host smoke — live simulation fanout', () => {
       const harness = await bootMiniflare();
       dispose = harness.mfDispose;
       const roomKey = `smoke-room-load-${playerCount}`;
-      const players = Array.from(
-        { length: playerCount },
-        (_, index) => `player-${index + 1}`,
-      );
+      const players = Array.from({ length: playerCount }, (_, index) => `player-${index + 1}`);
       const sockets: MiniflareWebSocket[] = [];
       const readyCredentials: ReadyPlayerCredential[] = [];
       const cleanupAcks: (() => void)[] = [];
@@ -735,10 +740,14 @@ describe('game-host smoke — live simulation fanout', () => {
       { playerId: senderId, reconnectToken: sender.reconnectToken },
       { playerId: observerId, reconnectToken: observer.reconnectToken },
     ]);
-    const deltaWait = waitForMessage(observerSocket, (message) => isDeltaForPlayer(message, senderId), {
-      timeoutMs: 1_000,
-      label: 'sender DeltaSnapshot',
-    });
+    const deltaWait = waitForMessage(
+      observerSocket,
+      (message) => isDeltaForPlayer(message, senderId),
+      {
+        timeoutMs: 1_000,
+        label: 'sender DeltaSnapshot',
+      },
+    );
     senderSocket.send(encodeInputCommand(senderId, 1, { move: 'north' }));
     await harness.triggerRoomAlarm(sender.playtestId);
     await harness.triggerRoomAlarm(sender.playtestId);
@@ -757,14 +766,10 @@ describe('game-host smoke — live simulation fanout', () => {
     const roomKey = 'smoke-heartbeat-room';
     const stale = await startSharedRoom(harness, roomKey, 'player-1');
     const staleSocket = await harness.websocketConnect(stale.wsUrl);
-    await waitForMessage(
-      staleSocket,
-      (message) => isWelcomeForPlayer(message, 'player-1'),
-      {
-        timeoutMs: 500,
-        label: 'stale WelcomeSnapshot',
-      },
-    );
+    await waitForMessage(staleSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+      timeoutMs: 500,
+      label: 'stale WelcomeSnapshot',
+    });
     await delay(1_100);
     await harness.triggerRoomAlarm(roomKey);
     await delay(200);
@@ -804,23 +809,15 @@ describe('game-host smoke — live simulation fanout', () => {
     const leaver = await startSharedRoom(harness, roomKey, leaverId);
     const peer = await startSharedRoom(harness, roomKey, peerId);
     const leaverSocket = await harness.websocketConnect(leaver.wsUrl);
-    await waitForMessage(
-      leaverSocket,
-      (message) => isWelcomeForPlayer(message, leaverId),
-      {
-        timeoutMs: 500,
-        label: 'leaver WelcomeSnapshot',
-      },
-    );
+    await waitForMessage(leaverSocket, (message) => isWelcomeForPlayer(message, leaverId), {
+      timeoutMs: 500,
+      label: 'leaver WelcomeSnapshot',
+    });
     const peerSocket = await harness.websocketConnect(peer.wsUrl);
-    const peerJoin = waitForMessage(
-      peerSocket,
-      (message) => isWelcomeForPlayer(message, peerId),
-      {
-        timeoutMs: 500,
-        label: 'peer WelcomeSnapshot',
-      },
-    );
+    const peerJoin = waitForMessage(peerSocket, (message) => isWelcomeForPlayer(message, peerId), {
+      timeoutMs: 500,
+      label: 'peer WelcomeSnapshot',
+    });
     await peerJoin;
     leaverSocket.close(1000, 'sigint');
     await delay(200);

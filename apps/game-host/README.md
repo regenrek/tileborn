@@ -8,15 +8,15 @@ Uses **Hono** (`hono@4`) for HTTP routing and WebSocket upgrade forwarding. Hono
 
 ## Endpoints
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| GET | `/health` | Liveness; returns `503` when `HANDOFF_SIGNING_KEY` is missing or shorter than 32 bytes |
-| GET | `/discover` | Bundled manifest summary (plugin, asset packs, runtime/protocol version) |
-| POST | `/rooms/create` | Create or reuse a room (`options.idempotencyKey`) → `{ roomId, wsUrl }` |
-| GET | `/rooms/:id/connect` | WebSocket upgrade; requires `?token=<handoff>&playerId=<id>&roomId=<id>` |
-| POST | `/playtest/start` | Create playtest DO room → `{ playtestId, wsUrl, handoffToken, playerId }` |
-| GET | `/playtest/:id` | Playtest summary via DO RPC |
-| GET | `/playtest/:id/ws` | Legacy WebSocket upgrade proxied to `PlaytestRoom` DO |
+| Method | Path                 | Description                                                                            |
+| ------ | -------------------- | -------------------------------------------------------------------------------------- |
+| GET    | `/health`            | Liveness; returns `503` when `HANDOFF_SIGNING_KEY` is missing or shorter than 32 bytes |
+| GET    | `/discover`          | Bundled manifest summary (plugin, asset packs, runtime/protocol version)               |
+| POST   | `/rooms/create`      | Create or reuse a room (`options.idempotencyKey`) → `{ roomId, wsUrl }`                |
+| GET    | `/rooms/:id/connect` | WebSocket upgrade; requires `?token=<handoff>&playerId=<id>&roomId=<id>`               |
+| POST   | `/playtest/start`    | Create playtest DO room → `{ playtestId, wsUrl, handoffToken, playerId }`              |
+| GET    | `/playtest/:id`      | Playtest summary via DO RPC                                                            |
+| GET    | `/playtest/:id/ws`   | Legacy WebSocket upgrade proxied to `PlaytestRoom` DO                                  |
 
 ## Room lifecycle
 
@@ -92,11 +92,11 @@ Copy that file into your consumer project (e.g. `deploy/alchemy.run.ts`), custom
 
 ### Required bindings (consumer `Env`)
 
-| Binding | Type | Notes |
-| ------- | ---- | ----- |
-| `PLAYTEST_ROOM` | Durable Object namespace | Class `PlaytestRoom`, SQLite-backed (`sqlite: true` in Alchemy) |
-| `HANDOFF_SIGNING_KEY` | Secret | ≥ 32 characters; use `alchemy.secret()` in production stages |
-| `ROOM_IDLE_TIMEOUT_SECONDS` | optional string/number | Defaults to `60` in the reference stack |
+| Binding                     | Type                     | Notes                                                           |
+| --------------------------- | ------------------------ | --------------------------------------------------------------- |
+| `PLAYTEST_ROOM`             | Durable Object namespace | Class `PlaytestRoom`, SQLite-backed (`sqlite: true` in Alchemy) |
+| `HANDOFF_SIGNING_KEY`       | Secret                   | ≥ 32 characters; use `alchemy.secret()` in production stages    |
+| `ROOM_IDLE_TIMEOUT_SECONDS` | optional string/number   | Defaults to `60` in the reference stack                         |
 
 Optional vars (`HEARTBEAT_TIMEOUT_SECONDS`, `SITE_NAME`) are documented in [`src/types.ts`](./src/types.ts).
 

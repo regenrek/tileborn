@@ -6,10 +6,10 @@
  * Alchemy infra-as-code graph. Copy into your consumer repo, customize names/paths,
  * and run Alchemy from there. Do not execute this file from CI or package scripts.
  */
-import path from "node:path";
+import path from 'node:path';
 
-import alchemy, { type Secret } from "alchemy";
-import { DurableObjectNamespace, Worker, WranglerJson } from "alchemy/cloudflare";
+import alchemy, { type Secret } from 'alchemy';
+import { DurableObjectNamespace, Worker, WranglerJson } from 'alchemy/cloudflare';
 
 /** Aligns with `PlaytestRoom` exported from the bundled worker (`className: "PlaytestRoom"`). */
 type PlaytestRoomService = DurableObject;
@@ -17,7 +17,7 @@ type PlaytestRoomService = DurableObject;
 const alchemyPassword = process.env.ALCHEMY_PASSWORD ?? process.env.PASSWORD;
 
 const app = await alchemy(
-  "tileborne-game-host",
+  'tileborne-game-host',
   alchemyPassword ? { password: alchemyPassword } : {},
 );
 
@@ -28,18 +28,18 @@ const app = await alchemy(
  * Relative to the consumer's alchemy.run.ts working directory.
  */
 const gameHostWorkerScript =
-  process.env.TILEBORNE_GAME_HOST_SCRIPT ?? "dist/game-host-cloudflare/worker.js";
+  process.env.TILEBORNE_GAME_HOST_SCRIPT ?? 'dist/game-host-cloudflare/worker.js';
 
-const playtestRoom = DurableObjectNamespace<PlaytestRoomService>("playtest-room", {
-  className: "PlaytestRoom",
+const playtestRoom = DurableObjectNamespace<PlaytestRoomService>('playtest-room', {
+  className: 'PlaytestRoom',
   sqlite: true,
 });
 
-const handoffSigningKey = secretBinding("HANDOFF_SIGNING_KEY", {
+const handoffSigningKey = secretBinding('HANDOFF_SIGNING_KEY', {
   fallback:
-    app.stage !== "production" && app.stage !== "staging"
-      ? "tileborne-local-handoff-signing-key-32chars-min"
-      : "",
+    app.stage !== 'production' && app.stage !== 'staging'
+      ? 'tileborne-local-handoff-signing-key-32chars-min'
+      : '',
 });
 
 // Optional resources downstream products may add (uncomment and wire into bindings):
@@ -67,22 +67,22 @@ const handoffSigningKey = secretBinding("HANDOFF_SIGNING_KEY", {
 //   simple: { limit: 30, period: 60 },
 // });
 
-export const gameHostWorker = await Worker("game-host", {
+export const gameHostWorker = await Worker('game-host', {
   name: `${app.name}-${app.stage}-game-host`,
   script: gameHostWorkerScript,
   url: true,
-  compatibilityDate: "2024-12-01",
+  compatibilityDate: '2024-12-01',
   bindings: {
     PLAYTEST_ROOM: playtestRoom,
     HANDOFF_SIGNING_KEY: handoffSigningKey,
-    ROOM_IDLE_TIMEOUT_SECONDS: process.env.ROOM_IDLE_TIMEOUT_SECONDS ?? "60",
+    ROOM_IDLE_TIMEOUT_SECONDS: process.env.ROOM_IDLE_TIMEOUT_SECONDS ?? '60',
   },
 });
 
 const wranglerConfig = await WranglerJson({
   worker: gameHostWorker,
   main: gameHostWorkerScript,
-  path: path.join(process.cwd(), ".alchemy", app.stage, "wrangler.jsonc"),
+  path: path.join(process.cwd(), '.alchemy', app.stage, 'wrangler.jsonc'),
 });
 
 console.log({
@@ -96,12 +96,12 @@ await app.finalize();
 function secretBinding(name: string, options: { fallback?: string } = {}): string | Secret<string> {
   const value = process.env[name];
   if (!value) {
-    return options.fallback ?? "";
+    return options.fallback ?? '';
   }
   if (alchemyPassword) {
     return alchemy.secret(value);
   }
-  if (app.stage === "production" || app.stage === "staging") {
+  if (app.stage === 'production' || app.stage === 'staging') {
     throw new Error(`${name} requires ALCHEMY_PASSWORD for ${app.stage}.`);
   }
   return value;

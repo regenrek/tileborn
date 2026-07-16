@@ -31,7 +31,11 @@ import { toDiscoverSummary, workerBuildId, workerVersion } from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
 import { bundledMapPackages } from './.generated/bundled-map-packages.js';
 import { PlaytestRoom } from './room.js';
-import { createRoomJoinCode, isRoomJoinCode, normalizeRoomJoinCode } from './rooms/room-lifecycle.js';
+import {
+  createRoomJoinCode,
+  isRoomJoinCode,
+  normalizeRoomJoinCode,
+} from './rooms/room-lifecycle.js';
 
 export type WorkerBindings = Env;
 
@@ -146,10 +150,7 @@ const requiredString = (body: Record<string, unknown>, key: string): string => {
   return value;
 };
 
-const optionalNonEmptyString = (
-  body: Record<string, unknown>,
-  key: string,
-): string | undefined => {
+const optionalNonEmptyString = (body: Record<string, unknown>, key: string): string | undefined => {
   const value = body[key];
   if (value === undefined) {
     return undefined;
@@ -221,7 +222,10 @@ const parseLobbyCreateRequest = async (request: Request): Promise<LobbyCreateReq
     ...(parsed.mapPackage === undefined ? {} : { mapPackage: parsed.mapPackage as JsonObject }),
     ...(parsed.playerModelSelections === undefined
       ? {}
-      : { playerModelSelections: parsed.playerModelSelections as readonly RoomPlayerModelSelection[] }),
+      : {
+          playerModelSelections:
+            parsed.playerModelSelections as readonly RoomPlayerModelSelection[],
+        }),
     ...(displayName === undefined ? {} : { displayName }),
     ...(visibility === undefined ? {} : { visibility }),
     ...(reserveCreator === undefined ? {} : { reserveCreator }),
@@ -623,7 +627,10 @@ export const createWorkerApp = (
         if (body.playerId === undefined) {
           const creatorConfigureResponse = await configureLobby(playerId);
           if (!creatorConfigureResponse.ok) {
-            const error = await readJsonError(creatorConfigureResponse, 'failed to configure lobby');
+            const error = await readJsonError(
+              creatorConfigureResponse,
+              'failed to configure lobby',
+            );
             return context.json({ error }, creatorConfigureResponse.status === 400 ? 400 : 500);
           }
         }

@@ -370,9 +370,7 @@ describe('room results summary policy', () => {
       },
     });
 
-    expect(finishRoomFromMatchEnd(finished, '2026-01-01T00:02:00.000Z', 'player-1')).toBe(
-      finished,
-    );
+    expect(finishRoomFromMatchEnd(finished, '2026-01-01T00:02:00.000Z', 'player-1')).toBe(finished);
   });
 
   it('persists minimal abandoned results from known room participants', () => {

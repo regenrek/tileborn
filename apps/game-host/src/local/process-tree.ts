@@ -97,11 +97,11 @@ export const terminateProcessTree = async (
 
   let result: ProcessTreeCommandResult;
   try {
-    result = await adapter.runFile(
-      'taskkill.exe',
-      ['/PID', String(processId), '/T', '/F'],
-      { shell: false, windowsHide: true, stdio: 'ignore' },
-    );
+    result = await adapter.runFile('taskkill.exe', ['/PID', String(processId), '/T', '/F'], {
+      shell: false,
+      windowsHide: true,
+      stdio: 'ignore',
+    });
   } catch (error) {
     if (!adapter.isTreeAlive(processId)) return;
     throw new ProcessTreeTerminationError(

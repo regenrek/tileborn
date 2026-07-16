@@ -1,4 +1,4 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
 
 export interface QueuedInput<Input> {
   readonly playerId: string;
@@ -46,12 +46,12 @@ export interface ClientTransportStats {
 }
 
 export type SnapshotAckResult =
-  | { readonly kind: "accepted" }
-  | { readonly kind: "stale" }
-  | { readonly kind: "future" }
-  | { readonly kind: "invalid" };
+  | { readonly kind: 'accepted' }
+  | { readonly kind: 'stale' }
+  | { readonly kind: 'future' }
+  | { readonly kind: 'invalid' };
 
-export type SnapshotOutboundDecision = "send" | "resync" | "drop" | "close";
+export type SnapshotOutboundDecision = 'send' | 'resync' | 'drop' | 'close';
 
 export const MAX_QUEUED_INPUTS_PER_PLAYER = 1;
 export const MAX_OUTBOUND_FRAMES_PER_TICK = 64;
@@ -90,7 +90,7 @@ export const createRoomSocketRecord = (
 export const decodeSnapshotAckFrame = (bytes: Uint8Array): SnapshotAckFrame | undefined => {
   try {
     const frame = BattleRoyaleProtocol.decodeClientMessage(bytes);
-    return frame._tag === "SnapshotAck"
+    return frame._tag === 'SnapshotAck'
       ? { tick: frame.tick, receivedAtMs: frame.receivedAtMs }
       : undefined;
   } catch {
@@ -101,7 +101,9 @@ export const decodeSnapshotAckFrame = (bytes: Uint8Array): SnapshotAckFrame | un
 export const snapshotTickFromServerFrame = (bytes: Uint8Array): number | undefined => {
   try {
     const frame = BattleRoyaleProtocol.decodeServerMessage(bytes);
-    return frame._tag === "WelcomeSnapshot" || frame._tag === "DeltaSnapshot" ? frame.tick : undefined;
+    return frame._tag === 'WelcomeSnapshot' || frame._tag === 'DeltaSnapshot'
+      ? frame.tick
+      : undefined;
   } catch {
     return undefined;
   }
@@ -146,15 +148,15 @@ export const applySnapshotAck = (
 ): SnapshotAckResult => {
   if (!Number.isSafeInteger(ack.tick) || ack.tick < 0 || !Number.isFinite(ack.receivedAtMs)) {
     record.staleAckCount += 1;
-    return { kind: "invalid" };
+    return { kind: 'invalid' };
   }
   if (ack.tick > record.lastSentSnapshotTick) {
     record.staleAckCount += 1;
-    return { kind: "future" };
+    return { kind: 'future' };
   }
   if (ack.tick <= record.lastAckedSnapshotTick) {
     record.staleAckCount += 1;
-    return { kind: "stale" };
+    return { kind: 'stale' };
   }
   record.lastAckedSnapshotTick = ack.tick;
   record.lastAckReceivedAtMs = nowMs;
@@ -163,12 +165,13 @@ export const applySnapshotAck = (
   if (record.resyncSnapshotTick !== null && ack.tick >= record.resyncSnapshotTick) {
     record.resyncSnapshotTick = null;
   }
-  return { kind: "accepted" };
+  return { kind: 'accepted' };
 };
 
 export const socketBufferedAmount = (socket: WebSocket): number => {
   const maybeSocket = socket as WebSocket & { readonly bufferedAmount?: unknown };
-  return typeof maybeSocket.bufferedAmount === "number" && Number.isFinite(maybeSocket.bufferedAmount)
+  return typeof maybeSocket.bufferedAmount === 'number' &&
+    Number.isFinite(maybeSocket.bufferedAmount)
     ? maybeSocket.bufferedAmount
     : 0;
 };
@@ -180,18 +183,18 @@ export const decideSnapshotOutbound = (
 ): SnapshotOutboundDecision => {
   const lagTicks = pendingSnapshotLagTicks(record);
   if (lagTicks >= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP) {
-    return "close";
+    return 'close';
   }
   if (record.resyncSnapshotTick !== null) {
     if (bufferedAmount > MAX_OUTBOUND_BUFFERED_BYTES && currentTick > record.resyncSnapshotTick) {
-      return "close";
+      return 'close';
     }
-    return "drop";
+    return 'drop';
   }
   if (bufferedAmount > MAX_OUTBOUND_BUFFERED_BYTES) {
-    return "resync";
+    return 'resync';
   }
-  return lagTicks >= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_RESYNC ? "resync" : "send";
+  return lagTicks >= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_RESYNC ? 'resync' : 'send';
 };
 
 export const toClientTransportStats = (record: RoomSocketRecord): ClientTransportStats => ({

@@ -1,23 +1,25 @@
-import { RuntimeMapPackage, type JsonObject } from "@tileborne/core";
-import { Result, Schema } from "effect";
+import { RuntimeMapPackage, type JsonObject } from '@tileborne/core';
+import { Result, Schema } from 'effect';
 
-import type { PlaytestRoomMeta, PlaytestSummary } from "./types.js";
-import type { RoomPlayerModelSelection, RoomStorage } from "./rooms/storage-schema.js";
-import type { ClientTransportStats } from "./rooms/room-transport.js";
+import type { PlaytestRoomMeta, PlaytestSummary } from './types.js';
+import type { RoomPlayerModelSelection, RoomStorage } from './rooms/storage-schema.js';
+import type { ClientTransportStats } from './rooms/room-transport.js';
 
 const isJsonObject = (value: unknown): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const decodeMapPackageWire = Schema.decodeUnknownResult(RuntimeMapPackage);
 
 const isPlayerModelSelection = (value: unknown): value is RoomPlayerModelSelection =>
   isJsonObject(value) &&
-  typeof value.playerId === "string" &&
+  typeof value.playerId === 'string' &&
   value.playerId.length > 0 &&
-  typeof value.modelId === "string" &&
+  typeof value.modelId === 'string' &&
   value.modelId.length > 0;
 
-export const parsePlaytestInitBody = (body: string): {
+export const parsePlaytestInitBody = (
+  body: string,
+): {
   mapId: string;
   seed?: string | number;
   options?: Record<string, string | number | boolean | null>;
@@ -31,29 +33,29 @@ export const parsePlaytestInitBody = (body: string): {
     readonly mapPackage?: unknown;
     readonly playerModelSelections?: unknown;
   };
-  if (typeof parsed.mapId !== "string" || parsed.mapId.length === 0) {
-    throw new Error("mapId is required");
+  if (typeof parsed.mapId !== 'string' || parsed.mapId.length === 0) {
+    throw new Error('mapId is required');
   }
   if (parsed.mapPackage !== undefined) {
     // Boundary validation (M2 review, F1): a supplied package must decode as
     // a full `RuntimeMapPackage` before the room stores it. The ORIGINAL wire
     // JSON is what gets stored/forwarded — never a re-encode.
     if (!isJsonObject(parsed.mapPackage)) {
-      throw new Error("mapPackage must be a JSON object");
+      throw new Error('mapPackage must be a JSON object');
     }
     const decoded = decodeMapPackageWire(parsed.mapPackage);
     if (Result.isFailure(decoded)) {
-      throw new Error(
-        `mapPackage is not a valid RuntimeMapPackage: ${String(decoded.failure)}`,
-      );
+      throw new Error(`mapPackage is not a valid RuntimeMapPackage: ${String(decoded.failure)}`);
     }
   }
   if (
     parsed.playerModelSelections !== undefined &&
-    !(Array.isArray(parsed.playerModelSelections) &&
-      parsed.playerModelSelections.every(isPlayerModelSelection))
+    !(
+      Array.isArray(parsed.playerModelSelections) &&
+      parsed.playerModelSelections.every(isPlayerModelSelection)
+    )
   ) {
-    throw new Error("playerModelSelections must be an array of { playerId, modelId }");
+    throw new Error('playerModelSelections must be an array of { playerId, modelId }');
   }
   return {
     mapId: parsed.mapId,
@@ -63,7 +65,8 @@ export const parsePlaytestInitBody = (body: string): {
     ...(parsed.playerModelSelections === undefined
       ? {}
       : {
-          playerModelSelections: parsed.playerModelSelections as readonly RoomPlayerModelSelection[],
+          playerModelSelections:
+            parsed.playerModelSelections as readonly RoomPlayerModelSelection[],
         }),
   };
 };
@@ -85,7 +88,8 @@ interface PlaytestSessionMetricsInput {
   readonly generatedAt?: string;
 }
 
-const sum = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0);
+const sum = (values: readonly number[]): number =>
+  values.reduce((total, value) => total + value, 0);
 
 export const toPlaytestSessionMetrics = ({
   storage,
@@ -95,8 +99,10 @@ export const toPlaytestSessionMetrics = ({
   replayFrames = 0,
   transportClients = [],
   generatedAt = new Date().toISOString(),
-}: PlaytestSessionMetricsInput): PlaytestSummary["metrics"] => {
-  const clients = [...transportClients].sort((left, right) => left.playerId.localeCompare(right.playerId));
+}: PlaytestSessionMetricsInput): PlaytestSummary['metrics'] => {
+  const clients = [...transportClients].sort((left, right) =>
+    left.playerId.localeCompare(right.playerId),
+  );
   const pendingLagTicks = clients.map((client) => client.pendingSnapshotLagTicks);
   return {
     lifecyclePhase: storage.lifecycle.phase,
@@ -123,7 +129,7 @@ export const toPlaytestSessionMetrics = ({
 export const toPlaytestSummary = (
   playtestId: string,
   meta: PlaytestRoomMeta,
-  metrics: PlaytestSummary["metrics"],
+  metrics: PlaytestSummary['metrics'],
 ): PlaytestSummary => ({
   playtestId,
   mapId: meta.mapId,
@@ -140,7 +146,10 @@ export interface BinarySocket {
 
 const WEBSOCKET_OPEN = 1;
 
-export const broadcastBinaryFrame = (sockets: readonly BinarySocket[], message: ArrayBuffer): void => {
+export const broadcastBinaryFrame = (
+  sockets: readonly BinarySocket[],
+  message: ArrayBuffer,
+): void => {
   for (const socket of sockets) {
     if (socket.readyState === WEBSOCKET_OPEN) {
       socket.send(message);
@@ -148,4 +157,4 @@ export const broadcastBinaryFrame = (sockets: readonly BinarySocket[], message: 
   }
 };
 
-export { PlaytestRoom } from "./rooms/room-object.js";
+export { PlaytestRoom } from './rooms/room-object.js';

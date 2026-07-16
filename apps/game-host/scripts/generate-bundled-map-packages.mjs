@@ -1,8 +1,8 @@
-import { readFile, mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
-import { TextEncoder } from "node:util";
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import { TextEncoder } from 'node:util';
 
 /**
  * Generate the dev/test `bundled-map-packages` module from the REAL sources
@@ -22,42 +22,41 @@ import { TextEncoder } from "node:util";
  */
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const gameHostRoot = path.resolve(scriptDir, "..");
-const repoRoot = path.resolve(gameHostRoot, "../..");
-const generatedDir = path.join(gameHostRoot, "src/.generated");
+const gameHostRoot = path.resolve(scriptDir, '..');
+const repoRoot = path.resolve(gameHostRoot, '../..');
+const generatedDir = path.join(gameHostRoot, 'src/.generated');
 
 const CATALOG_PATH = path.join(
   repoRoot,
-  "packages/plugin-battle-royale/schemas/game-object-catalog.json",
+  'packages/plugin-battle-royale/schemas/game-object-catalog.json',
 );
 
-const MAP_ID = "map:ca95c595-fa38-4c5e-bfea-39ad975b8091";
-const OBJECT_LAYER_ID = "layer:a28be6c1-5827-40aa-ab9e-9f23f140f737";
+const MAP_ID = 'map:ca95c595-fa38-4c5e-bfea-39ad975b8091';
+const OBJECT_LAYER_ID = 'layer:a28be6c1-5827-40aa-ab9e-9f23f140f737';
 const MAP_SIZE_TILES = 64;
 const TILE_SIZE_PX = 32;
 const MAX_PLAYERS = 32;
 
 /** Deterministic `object:` ids so regeneration is byte-stable. */
-const objectId = (index) =>
-  `object:00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+const objectId = (index) => `object:00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 
-const DEFAULT_PACKAGE_ID = "mappkg:550e8400-e29b-41d4-a716-446655440777";
+const DEFAULT_PACKAGE_ID = 'mappkg:550e8400-e29b-41d4-a716-446655440777';
 
 export const generateBundledMapPackages = async () => {
   const [core, plugin, runtimeMapPackage] = await Promise.all([
-    import("@tileborne/core"),
-    import("@tileborne/plugin-battle-royale"),
-    import("@tileborne/runtime/map-package"),
+    import('@tileborne/core'),
+    import('@tileborne/plugin-battle-royale'),
+    import('@tileborne/runtime/map-package'),
   ]);
-  const { Result, Schema } = await import("effect");
+  const { Result, Schema } = await import('effect');
   const { hashRuntimeMapPackageEntry } = runtimeMapPackage;
 
-  const catalogJson = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
+  const catalogJson = JSON.parse(await readFile(CATALOG_PATH, 'utf8'));
   const shippedCatalog = Schema.decodeUnknownSync(core.GameObjectCatalog)(catalogJson);
   const pluginId = Schema.decodeUnknownSync(core.PluginId)(plugin.PLUGIN_ID);
   const catalog = shippedCatalog.objectTypes.map(
     (objectType) =>
-      new core.RuntimeCatalogEntry({ origin: { _tag: "plugin", pluginId }, objectType }),
+      new core.RuntimeCatalogEntry({ origin: { _tag: 'plugin', pluginId }, objectType }),
   );
 
   // A small authored dev arena: an 8x4 spawn grid (32 spawn points, all
@@ -92,9 +91,9 @@ export const generateBundledMapPackages = async () => {
     tileSize: { width: TILE_SIZE_PX, height: TILE_SIZE_PX },
     layers: [
       {
-        kind: "object",
+        kind: 'object',
         id: OBJECT_LAYER_ID,
-        name: "entities",
+        name: 'entities',
         visible: true,
         opacity: 1,
         objectIds: objects.map((object) => object.id),
@@ -154,9 +153,7 @@ export const generateBundledMapPackages = async () => {
       weapons: [],
       provenance: {},
     },
-    behaviors: Schema.encodeSync(core.RuntimeBehaviorPackage)(
-      core.EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
-    ),
+    behaviors: Schema.encodeSync(core.RuntimeBehaviorPackage)(core.EMPTY_RUNTIME_BEHAVIOR_PACKAGE),
     visuals: Schema.encodeSync(core.RuntimeMapPackageVisuals)(visuals),
     assets: [],
     modeData,
@@ -175,13 +172,13 @@ export const generateBundledMapPackages = async () => {
     manifest: {
       packageId: DEFAULT_PACKAGE_ID,
       schemaVersion: core.RUNTIME_MAP_PACKAGE_SCHEMA_VERSION,
-      projectId: "project:550e8400-e29b-41d4-a716-446655440888",
+      projectId: 'project:550e8400-e29b-41d4-a716-446655440888',
       mapId: MAP_ID,
       activeMode: plugin.PLUGIN_ID,
       // Neutral capacity from the authored settings (M2 review, F2).
       playerCapacity: MAX_PLAYERS,
-      engineVersion: "0.0.0-dev",
-      createdAt: "1970-01-01T00:00:00.000Z",
+      engineVersion: '0.0.0-dev',
+      createdAt: '1970-01-01T00:00:00.000Z',
       entryHashes,
     },
     ...sections,
@@ -191,7 +188,12 @@ export const generateBundledMapPackages = async () => {
   // RuntimeMapPackage after a JSON round-trip (the shape rooms receive).
   Schema.decodeUnknownSync(core.RuntimeMapPackage)(JSON.parse(JSON.stringify(wire)));
   for (const placement of placements) {
-    if (placement.x < 0 || placement.x > MAP_SIZE_TILES || placement.y < 0 || placement.y > MAP_SIZE_TILES) {
+    if (
+      placement.x < 0 ||
+      placement.x > MAP_SIZE_TILES ||
+      placement.y < 0 ||
+      placement.y > MAP_SIZE_TILES
+    ) {
       throw new Error(`default package placement out of map bounds: ${placement.objectId}`);
     }
   }
@@ -206,7 +208,7 @@ export const generateBundledMapPackages = async () => {
 
   await mkdir(generatedDir, { recursive: true });
   await writeFile(
-    path.join(generatedDir, "bundled-map-packages.ts"),
+    path.join(generatedDir, 'bundled-map-packages.ts'),
     `/**
  * GENERATED by scripts/generate-bundled-map-packages.mjs — do not edit.
  *
@@ -221,7 +223,7 @@ import type { BundledMapPackage } from "../types.js";
 
 export const bundledMapPackages: readonly BundledMapPackage[] = ${JSON.stringify(bundled, null, 2)} as unknown as readonly BundledMapPackage[];
 `,
-    "utf8",
+    'utf8',
   );
 
   return bundled;

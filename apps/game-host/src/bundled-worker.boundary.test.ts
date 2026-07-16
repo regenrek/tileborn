@@ -100,17 +100,16 @@ describe('bundled worker boundary', () => {
       readFile(portableBehaviorWorkerEntryPath, 'utf8'),
       readFile(portableWranglerTemplatePath, 'utf8'),
     ]);
-    const imports = (source: string): readonly string[] =>
-      source.match(/^import .*$/gmu) ?? [];
+    const imports = (source: string): readonly string[] => source.match(/^import .*$/gmu) ?? [];
 
-    expect(imports(worker)).toEqual(expect.arrayContaining([
-      expect.stringContaining('runtime-manifest.js'),
-      expect.stringContaining('bundled-map-packages.js'),
-    ]));
+    expect(imports(worker)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('runtime-manifest.js'),
+        expect.stringContaining('bundled-map-packages.js'),
+      ]),
+    );
     expect(imports(worker).every((line) => line.includes('/.generated/'))).toBe(true);
-    expect(imports(behaviorWorker)).toEqual([
-      expect.stringContaining('bundled-behaviors.js'),
-    ]);
+    expect(imports(behaviorWorker)).toEqual([expect.stringContaining('bundled-behaviors.js')]);
     expect(wrangler).toContain('{{SITE_NAME}}');
   });
 

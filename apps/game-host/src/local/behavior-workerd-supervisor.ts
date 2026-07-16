@@ -404,8 +404,7 @@ export class LocalBehaviorWorkerdSupervisor {
     this.#workerPath = options.workerPath;
     this.#maxWallTimeMs = options.maxWallTimeMs ?? 250;
     this.#maxStartupTimeMs = options.maxStartupTimeMs ?? DEFAULT_STARTUP_TIME_MS;
-    this.#maxColdStartupTimeMs =
-      options.maxColdStartupTimeMs ?? DEFAULT_COLD_STARTUP_TIME_MS;
+    this.#maxColdStartupTimeMs = options.maxColdStartupTimeMs ?? DEFAULT_COLD_STARTUP_TIME_MS;
     this.#maxDisposeTimeMs = options.maxDisposeTimeMs ?? DEFAULT_DISPOSE_TIME_MS;
     this.#createRuntime =
       options.createRuntime ??
@@ -460,7 +459,10 @@ export class LocalBehaviorWorkerdSupervisor {
       });
     }
     const decoded = decodeWorkerdBehaviorResponse(
-      await response.clone().json().catch(() => undefined),
+      await response
+        .clone()
+        .json()
+        .catch(() => undefined),
     );
     if (decoded.ok) return response;
     this.#scheduleRestart(instance);

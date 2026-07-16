@@ -78,7 +78,9 @@ const makeLobbyNamespace = (): PlaytestRoomNamespace => {
         joinCode: body.joinCode,
         ...(body.visibility === undefined ? {} : { visibility: body.visibility }),
         ...(body.displayName === undefined ? {} : { title: body.displayName }),
-        ...(body.createdByPlayerId === undefined ? {} : { createdByPlayerId: body.createdByPlayerId }),
+        ...(body.createdByPlayerId === undefined
+          ? {}
+          : { createdByPlayerId: body.createdByPlayerId }),
       };
       return Response.json({ lobby: toFakeLobbySummary(room) });
     }
@@ -433,8 +435,16 @@ describe('game-host worker routes', () => {
   it('POST /rooms/create resolves the bundled map package for the requested mapId (M5 S1)', async () => {
     let initBody: unknown;
     const bundled = [
-      { mapId: 'map:bundled-a', packageId: 'mappkg:a', mapPackage: { manifest: { packageId: 'mappkg:a' } } },
-      { mapId: 'map:bundled-b', packageId: 'mappkg:b', mapPackage: { manifest: { packageId: 'mappkg:b' } } },
+      {
+        mapId: 'map:bundled-a',
+        packageId: 'mappkg:a',
+        mapPackage: { manifest: { packageId: 'mappkg:a' } },
+      },
+      {
+        mapId: 'map:bundled-b',
+        packageId: 'mappkg:b',
+        mapPackage: { manifest: { packageId: 'mappkg:b' } },
+      },
     ];
     const app = createWorkerApp(runtimeManifest, bundled);
     const response = await app.request(
@@ -462,7 +472,11 @@ describe('game-host worker routes', () => {
   it('POST /rooms/create falls back to the single bundled package for any mapId', async () => {
     let initBody: unknown;
     const bundled = [
-      { mapId: 'map:bundled-only', packageId: 'mappkg:only', mapPackage: { manifest: { packageId: 'mappkg:only' } } },
+      {
+        mapId: 'map:bundled-only',
+        packageId: 'mappkg:only',
+        mapPackage: { manifest: { packageId: 'mappkg:only' } },
+      },
     ];
     const app = createWorkerApp(runtimeManifest, bundled);
     const response = await app.request(
@@ -488,8 +502,16 @@ describe('game-host worker routes', () => {
 
   it('POST /rooms/create returns a structured 400 when no bundled package matches', async () => {
     const bundled = [
-      { mapId: 'map:bundled-a', packageId: 'mappkg:a', mapPackage: { manifest: { packageId: 'mappkg:a' } } },
-      { mapId: 'map:bundled-b', packageId: 'mappkg:b', mapPackage: { manifest: { packageId: 'mappkg:b' } } },
+      {
+        mapId: 'map:bundled-a',
+        packageId: 'mappkg:a',
+        mapPackage: { manifest: { packageId: 'mappkg:a' } },
+      },
+      {
+        mapId: 'map:bundled-b',
+        packageId: 'mappkg:b',
+        mapPackage: { manifest: { packageId: 'mappkg:b' } },
+      },
     ];
     const app = createWorkerApp(runtimeManifest, bundled);
     const response = await app.request(
@@ -617,7 +639,10 @@ describe('game-host worker routes', () => {
       },
       lobbyEnv,
     );
-    const createdBody = (await created.json()) as { readonly joinCode: string; readonly roomId: string };
+    const createdBody = (await created.json()) as {
+      readonly joinCode: string;
+      readonly roomId: string;
+    };
 
     const joined = await app.request(
       'http://localhost/lobbies/join',
@@ -918,9 +943,16 @@ describe('game-host worker routes', () => {
       },
       lobbyEnv,
     );
-    const createdBody = (await created.json()) as { readonly joinCode: string; readonly roomId: string };
+    const createdBody = (await created.json()) as {
+      readonly joinCode: string;
+      readonly roomId: string;
+    };
 
-    const byRoomId = await app.request(`http://localhost/lobbies/${createdBody.roomId}`, {}, lobbyEnv);
+    const byRoomId = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}`,
+      {},
+      lobbyEnv,
+    );
     const byJoinCode = await app.request(
       `http://localhost/lobbies/code/${createdBody.joinCode}`,
       {},
@@ -1025,7 +1057,11 @@ describe('game-host worker routes', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ mapId: 'map:fixture' }),
       },
-      { ...env, HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY, PLAYTEST_ROOM: makeLobbyNamespace() },
+      {
+        ...env,
+        HANDOFF_SIGNING_KEY: PLACEHOLDER_HANDOFF_SIGNING_KEY,
+        PLAYTEST_ROOM: makeLobbyNamespace(),
+      },
     );
     expect(unavailable.status).toBe(503);
   });

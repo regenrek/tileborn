@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js start",
     "clean:vite-deps": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('node_modules/.vite/deps', { recursive: true, force: true }); console.log('Removed desktop Vite optimized deps cache. Restart the dev server to rebuild stale pre-bundled deps.');\"",
-    "predev:cdp": "echo \"[t-fix-r-f3-predev-build][ADR-0015] Building desktop workspace dist dependencies before CDP dev, then rebundling game-host worker.\" && pnpm -w -r --filter '@tileborne/desktop^...' --filter '!tileborne' build && pnpm --filter @tileborne/game-host build",
+    "predev:cdp": "echo \"[t-fix-r-f3-predev-build][ADR-0015] Building desktop workspace dist dependencies before CDP dev, then rebundling game-host worker.\" && pnpm -w -r --workspace-concurrency=1 --filter '@tileborne/desktop^...' --filter '!tileborne' build && pnpm --filter @tileborne/game-host build",
     "dev:cdp": "TILEBORNE_REMOTE_DEBUGGING_PORT=9323 node ../../node_modules/@electron-forge/cli/dist/electron-forge.js start",
     "prebuild": "node --input-type=module -e \"import { rmSync } from 'node:fs'; for (const path of ['out', '.vite/build']) rmSync(path, { recursive: true, force: true });\"",
     "build": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js package",

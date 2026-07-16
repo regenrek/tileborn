@@ -52,6 +52,8 @@ const itemDefinition = definePrefixedId('item', 'ItemDefinitionId');
 const lootTable = definePrefixedId('loot', 'LootTableId');
 const catalog = definePrefixedId('catalog', 'CatalogId');
 const weaponDefinition = definePrefixedId('weapon', 'WeaponDefinitionId');
+const behavior = definePrefixedId('behavior', 'BehaviorId');
+const behaviorNode = definePrefixedId('behavior-node', 'BehaviorNodeId');
 
 /** Branded asset identifier (`asset:<uuid>`). */
 export const AssetId = asset.schema;
@@ -157,6 +159,16 @@ export const WeaponDefinitionId = weaponDefinition.schema;
 export type WeaponDefinitionId = typeof WeaponDefinitionId.Type;
 export const makeWeaponDefinitionId = weaponDefinition.make;
 
+/** Branded gameplay-behavior identifier (`behavior:<uuid>`). */
+export const BehaviorId = behavior.schema;
+export type BehaviorId = typeof BehaviorId.Type;
+export const makeBehaviorId = behavior.make;
+
+/** Branded visual behavior node identifier (`behavior-node:<uuid>`). */
+export const BehaviorNodeId = behaviorNode.schema;
+export type BehaviorNodeId = typeof BehaviorNodeId.Type;
+export const makeBehaviorNodeId = behaviorNode.make;
+
 /** All prefixed domain id schemas keyed by prefix. */
 export const PrefixedIdSchemas = {
   asset: AssetId,
@@ -178,6 +190,8 @@ export const PrefixedIdSchemas = {
   loot: LootTableId,
   catalog: CatalogId,
   weapon: WeaponDefinitionId,
+  behavior: BehaviorId,
+  'behavior-node': BehaviorNodeId,
 } as const;
 
 const decodeSchema = <A, I>(

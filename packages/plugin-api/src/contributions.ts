@@ -1,4 +1,10 @@
-import { JsonObject, PluginId, type SchemaMigrationChain } from "@tileborne/core";
+import {
+  BehaviorRegistryEntry,
+  BehaviorTemplate,
+  JsonObject,
+  PluginId,
+  type SchemaMigrationChain,
+} from "@tileborne/core";
 import { License } from "@tileborne/asset-pipeline/license";
 import { Option, Schema } from "effect";
 
@@ -16,6 +22,69 @@ export class ContributionDisplay extends Schema.Class<ContributionDisplay>("Cont
 }) {}
 
 const ContributionCapability = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9.-]*$/i));
+
+/**
+ * A stable key implemented by a bundled host registration. Manifest data may
+ * opt into one of these capabilities, while neutral editor/runtime code only
+ * sees the key and never imports a concrete game-mode package.
+ */
+export const GameModeCapabilityId = ContributionCapability;
+export type GameModeCapabilityId = typeof GameModeCapabilityId.Type;
+
+export class GameModeCapabilities extends Schema.Class<GameModeCapabilities>("GameModeCapabilities")({
+  authoring: Schema.optional(GameModeCapabilityId),
+  renderer: Schema.optional(GameModeCapabilityId),
+  readiness: Schema.optional(GameModeCapabilityId),
+  starter: Schema.optional(GameModeCapabilityId),
+}) {}
+
+export class GameModeDisplay extends Schema.Class<GameModeDisplay>("GameModeDisplay")({
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+  icon: Schema.optional(IconName),
+  order: Schema.optional(Schema.Number),
+}) {}
+
+export class GameModeStarterDeclaration extends Schema.Class<GameModeStarterDeclaration>(
+  "GameModeStarterDeclaration",
+)({
+  templateId: ContributionId,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+}) {}
+
+export class GameModeCreatorChecklistFact extends Schema.Class<GameModeCreatorChecklistFact>(
+  "GameModeCreatorChecklistFact",
+)({
+  id: ContributionId,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+  /** Readiness diagnostic sources which satisfy this fact. */
+  sources: Schema.Array(Schema.Literals(["game-mode", "map", "catalog", "asset", "visual-model"])),
+}) {}
+
+/**
+ * The single owned registration point for a game mode. All other contribution
+ * ids are linked explicitly instead of being inferred from array order or
+ * plugin ids. Generic schema forms remain the default authoring UI; bundled
+ * executable behavior is opt-in through the typed capability keys above.
+ */
+export class GameModeContribution extends Schema.TaggedClass<GameModeContribution>()(
+  "GameModeContribution",
+  {
+    id: ContributionId,
+    kind: Schema.Literal("declarative"),
+    display: GameModeDisplay,
+    runtimeSystemId: ContributionId,
+    settingsPanelId: Schema.optional(ContributionId),
+    settingsFormId: Schema.optional(ContributionId),
+    mapValidatorId: Schema.optional(ContributionId),
+    hudLayoutId: Schema.optional(ContributionId),
+    starter: Schema.optional(GameModeStarterDeclaration),
+    checklistFacts: Schema.optional(Schema.Array(GameModeCreatorChecklistFact)),
+    capabilities: Schema.optional(GameModeCapabilities),
+  },
+) {}
 
 export class PluginPanelContribution extends Schema.Class<PluginPanelContribution>("PluginPanelContribution")({
   id: ContributionId,
@@ -444,11 +513,18 @@ export class MigrationsTable extends Schema.Class<MigrationsTable>("MigrationsTa
 }) {}
 
 export class PluginContributions extends Schema.Class<PluginContributions>("PluginContributions")({
+  // `optional` preserves schema-v1 manifest compatibility for non-mode plugins;
+  // mode plugins opt in explicitly with this one registration slot.
+  gameModes: Schema.optional(Schema.Array(GameModeContribution)),
   panels: Schema.OptionFromUndefinedOr(Schema.Array(PluginPanelContribution)),
   tools: Schema.OptionFromUndefinedOr(Schema.Array(PluginToolContribution)),
   assetPacks: Schema.OptionFromUndefinedOr(Schema.Array(AssetPackContribution)),
   tilesetPacks: Schema.OptionFromUndefinedOr(Schema.Array(TilesetPackContribution)),
   tiledImportProfiles: Schema.optional(Schema.Array(TiledImportProfileContribution)),
+  /** Genre-neutral blocks materialized into both the SDK compiler and event editor. */
+  behaviorEntries: Schema.optional(Schema.Array(BehaviorRegistryEntry)),
+  /** Optional visual starter sheets; orchestration never branches on plugin id. */
+  behaviorTemplates: Schema.optional(Schema.Array(BehaviorTemplate)),
   editor: Schema.OptionFromUndefinedOr(EditorContributions),
   runtime: Schema.OptionFromUndefinedOr(RuntimeContributions),
   server: Schema.OptionFromUndefinedOr(ServerContributions),
@@ -487,6 +563,15 @@ export const validatePluginContributions = (
   pluginId: PluginId,
   contributions: PluginContributions,
 ): void => {
+  const gameModes = optionalArray(contributions.gameModes);
+  assertUniqueContributionIds(pluginId, "game mode", gameModes);
+  if (gameModes.length > 1) {
+    throw new DuplicateContributionError({
+      pluginId,
+      contributionId: gameModes[1]!.id,
+      message: `plugin ${pluginId} declares ${gameModes.length} game modes; exactly one gameModes registration is supported per plugin`,
+    });
+  }
   assertUniqueContributionIds(pluginId, "panel", optionalArray(contributions.panels));
   assertUniqueContributionIds(pluginId, "tool", optionalArray(contributions.tools));
   assertUniqueContributionIds(
@@ -494,4 +579,59 @@ export const validatePluginContributions = (
     "tiled import profile",
     optionalArray(contributions.tiledImportProfiles),
   );
+  const behaviorEntryIds = new Set<string>();
+  for (const entry of optionalArray(contributions.behaviorEntries)) {
+    if (behaviorEntryIds.has(entry.id)) {
+      throw new DuplicateContributionError({
+        pluginId,
+        contributionId: entry.id,
+        message: `duplicate behavior registry entry id: ${entry.id}`,
+      });
+    }
+    behaviorEntryIds.add(entry.id);
+  }
+  const behaviorTemplateIds = new Set<string>();
+  for (const template of optionalArray(contributions.behaviorTemplates)) {
+    if (behaviorTemplateIds.has(template.id)) {
+      throw new DuplicateContributionError({
+        pluginId,
+        contributionId: template.id,
+        message: `duplicate behavior template id: ${template.id}`,
+      });
+    }
+    behaviorTemplateIds.add(template.id);
+  }
+
+  const runtime = Option.getOrUndefined(contributions.runtime);
+  const editor = Option.getOrUndefined(contributions.editor);
+  const server = Option.getOrUndefined(contributions.server);
+  const runtimeSystemIds = new Set(optionalArray(runtime?.systems).map(({ id }) => id));
+  const panelIds = new Set(optionalArray(contributions.panels).map(({ id }) => id));
+  const settingsFormIds = new Set(optionalArray(editor?.gameSettingsForms).map(({ id }) => id));
+  // Readiness executes in the main/server host. A game-mode validator link is
+  // therefore authoritative only when it targets an executable server slot;
+  // editor validators are separate UI contributions and cannot satisfy it.
+  const validatorIds = new Set(optionalArray(server?.mapValidators).map(({ id }) => id));
+  const hudLayoutIds = new Set(optionalArray(runtime?.hudLayouts).map(({ id }) => id));
+
+  for (const mode of gameModes) {
+    const requireReference = (
+      point: string,
+      id: ContributionId | undefined,
+      ids: ReadonlySet<string>,
+    ): void => {
+      if (id !== undefined && !ids.has(id)) {
+        throw new DuplicateContributionError({
+          pluginId,
+          contributionId: mode.id,
+          message: `game mode ${mode.id} references missing ${point} contribution: ${id}`,
+        });
+      }
+    };
+    requireReference("runtime system", mode.runtimeSystemId, runtimeSystemIds);
+    requireReference("settings panel", mode.settingsPanelId, panelIds);
+    requireReference("settings form", mode.settingsFormId, settingsFormIds);
+    requireReference("map validator", mode.mapValidatorId, validatorIds);
+    requireReference("HUD layout", mode.hudLayoutId, hudLayoutIds);
+  }
 };

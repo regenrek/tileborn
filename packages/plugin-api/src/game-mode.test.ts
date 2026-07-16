@@ -69,6 +69,7 @@ const EDITOR_DEFAULTS = {
 } as const;
 
 const CONTRIBUTIONS_DEFAULTS = {
+  gameModes: undefined,
   panels: undefined,
   tools: undefined,
   assetPacks: undefined,
@@ -122,6 +123,7 @@ const hudLayoutContribution = (id: string) => ({
 });
 
 const contributions = (parts: {
+  readonly gameModes?: readonly unknown[];
   readonly panels?: readonly unknown[];
   readonly systems?: readonly unknown[];
   readonly gameSettingsForms?: readonly unknown[];
@@ -129,6 +131,7 @@ const contributions = (parts: {
 }): PluginContributions =>
   decodeContributions({
     ...CONTRIBUTIONS_DEFAULTS,
+    gameModes: parts.gameModes,
     panels: parts.panels,
     editor:
       parts.gameSettingsForms === undefined
@@ -142,9 +145,46 @@ const contributions = (parts: {
 
 const BR_PLUGIN_ID = pluginId("@tileborne-plugins/battle-royale");
 
+const gameMode = (input: {
+  readonly runtimeSystemId: string;
+  readonly settingsPanelId?: string;
+  readonly settingsFormId?: string;
+  readonly hudLayoutId?: string;
+  readonly capabilities?: Record<string, string>;
+}) => ({
+  _tag: "GameModeContribution" as const,
+  id: "mode",
+  kind: "declarative" as const,
+  display: display("Mode"),
+  runtimeSystemId: input.runtimeSystemId,
+  settingsPanelId: input.settingsPanelId,
+  settingsFormId: input.settingsFormId,
+  mapValidatorId: undefined,
+  hudLayoutId: input.hudLayoutId,
+  starter: undefined,
+  checklistFacts: undefined,
+  capabilities:
+    input.capabilities === undefined
+      ? undefined
+      : {
+          authoring: input.capabilities.authoring,
+          renderer: input.capabilities.renderer,
+          readiness: input.capabilities.readiness,
+          starter: input.capabilities.starter,
+        },
+});
+
 // A battle-royale-shaped manifest: declares a runtime system + a settings panel
 // in the `plugins` zone (mirrors packages/plugin-battle-royale/tileborne-plugin.json).
 const brContributions = contributions({
+  gameModes: [
+    gameMode({
+      runtimeSystemId: "battle-royale-runtime",
+      settingsPanelId: "battle-royale-settings",
+      settingsFormId: "battle-royale-settings-form",
+      capabilities: { authoring: "battle-royale.authoring", renderer: "battle-royale.renderer" },
+    }),
+  ],
   panels: [panel({ id: "battle-royale-settings", zone: "plugins", title: "Battle Royale Settings", capabilities: ["settings"] })],
   systems: [runtimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")],
   gameSettingsForms: [gameSettingsForm("battle-royale-settings-form")],
@@ -161,10 +201,12 @@ describe("game-mode discovery", () => {
     expect(descriptor?.authoringSettingsPanelId).toBe("battle-royale-settings");
     expect(descriptor?.gameSettingsFormId).toBe("battle-royale-settings-form");
     expect(descriptor?.gameSettingsForm?.fields.map((field) => field.key)).toEqual(["maxPlayers"]);
-    expect(descriptor?.label).toBe("Battle Royale Settings");
+    expect(descriptor?.label).toBe("Mode");
+    expect(descriptor?.authoringCapabilityId).toBe("battle-royale.authoring");
+    expect(descriptor?.rendererCapabilityId).toBe("battle-royale.renderer");
   });
 
-  it("does not treat a plugin without a runtime system as a game mode", () => {
+  it("does not infer a game mode without an explicit registration", () => {
     const editorOnly = contributions({
       panels: [panel({ id: "some-panel", zone: "plugins", title: "Some Panel", capabilities: ["settings"] })],
     });
@@ -173,19 +215,42 @@ describe("game-mode discovery", () => {
     ).toBeUndefined();
   });
 
-  it("discovers a mode with a runtime system but no settings panel", () => {
-    const noPanel = contributions({ systems: [runtimeSystem("shooter-runtime", "Top-Down Shooter")] });
+  it("rejects multiple gameModes registrations instead of selecting index zero", () => {
+    const duplicated = contributions({
+      gameModes: [
+        gameMode({ runtimeSystemId: "first-runtime" }),
+        { ...gameMode({ runtimeSystemId: "second-runtime" }), id: "second-mode" },
+      ],
+      systems: [
+        runtimeSystem("first-runtime", "First"),
+        runtimeSystem("second-runtime", "Second"),
+      ],
+    });
+    expect(() =>
+      describeGameMode({
+        pluginId: pluginId("@tileborne-plugins/ambiguous"),
+        contributions: duplicated,
+      }),
+    ).toThrow(/exactly one gameModes registration/);
+  });
+
+  it("discovers a registered mode with a runtime system but no settings panel", () => {
+    const noPanel = contributions({
+      gameModes: [gameMode({ runtimeSystemId: "shooter-runtime" })],
+      systems: [runtimeSystem("shooter-runtime", "Top-Down Shooter")],
+    });
     const descriptor = describeGameMode({
       pluginId: pluginId("@tileborne-plugins/top-down-shooter"),
       contributions: noPanel,
     });
     expect(descriptor?.hasAuthoringPanel).toBe(false);
     expect(descriptor?.authoringSettingsPanelId).toBeUndefined();
-    expect(descriptor?.label).toBe("Top-Down Shooter");
+    expect(descriptor?.label).toBe("Mode");
   });
 
   it("discovers a first-class settings form without reading panel data", () => {
     const formOnly = contributions({
+      gameModes: [gameMode({ runtimeSystemId: "arena-runtime", settingsFormId: "arena-settings-form" })],
       systems: [runtimeSystem("arena-runtime", "Arena Runtime")],
       gameSettingsForms: [gameSettingsForm("arena-settings-form")],
     });
@@ -201,6 +266,7 @@ describe("game-mode discovery", () => {
 
   it("discovers the mode's default HUD layout from the runtime.hudLayouts slot", () => {
     const withHud = contributions({
+      gameModes: [gameMode({ runtimeSystemId: "br-runtime", hudLayoutId: "br-hud-layout" })],
       systems: [runtimeSystem("br-runtime", "BR")],
       hudLayouts: [hudLayoutContribution("br-hud-layout")],
     });
@@ -221,6 +287,7 @@ describe("game-mode discovery", () => {
 
   it("ignores a settings panel outside the plugins zone", () => {
     const projectScoped = contributions({
+      gameModes: [gameMode({ runtimeSystemId: "br-runtime" })],
       panels: [panel({ id: "match-rules", zone: "project", title: "Match Rules", capabilities: ["settings"] })],
       systems: [runtimeSystem("br-runtime", "BR")],
     });
@@ -245,6 +312,7 @@ describe("game-mode discovery", () => {
       {
         pluginId: arenaPluginId,
         contributions: contributions({
+          gameModes: [gameMode({ runtimeSystemId: "arena-runtime" })],
           systems: [runtimeSystem("arena-runtime", "Example Arena")],
         }),
       },

@@ -1,0 +1,45 @@
+{
+  "name": "@tileborne/game-sdk",
+  "version": "1.0.0-rc.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./authoring": {
+      "types": "./dist/authoring/index.d.ts",
+      "default": "./dist/authoring/index.js"
+    },
+    "./capabilities": {
+      "types": "./dist/generated/capabilities.d.ts",
+      "default": "./dist/generated/capabilities.js"
+    },
+    "./capabilities.json": "./capabilities.registry.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CAPABILITIES.md",
+    "capabilities.registry.json"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-capabilities.mjs",
+    "typecheck": "pnpm generate && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
+    "lint": "eslint .",
+    "test": "pnpm build && vitest run --passWithNoTests",
+    "build": "pnpm generate && tsc -b tsconfig.json --force"
+  },
+  "dependencies": {
+    "@tileborne/core": "workspace:*",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "prettier": "3.8.3",
+    "vitest": "4.1.7"
+  },
+  "license": "MIT"
+}

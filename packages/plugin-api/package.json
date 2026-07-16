@@ -13,10 +13,14 @@
     "./preload": {
       "types": "./dist/preload.d.ts",
       "default": "./dist/preload.js"
+    },
+    "./project-content": {
+      "types": "./dist/project-content.d.ts",
+      "default": "./dist/project-content.js"
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "build": "tsc -b tsconfig.json --force"

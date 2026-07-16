@@ -8,7 +8,9 @@ export * from './versioning/index.js';
 
 export * from './asset/index.js';
 export * from './asset/library.js';
+export * from './authoring/index.js';
 export * from './branding/index.js';
+export * from './behavior/index.js';
 export * from './game-mode/active-mode.js';
 export * from './hud/index.js';
 export * from './input/index.js';

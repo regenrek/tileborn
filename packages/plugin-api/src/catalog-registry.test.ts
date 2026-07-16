@@ -1,4 +1,4 @@
-import { gameObjectTypeIdForKey, makeCatalogId, type Uuid } from "@tileborne/core";
+import { gameObjectTypeIdForKey, makeCatalogId, makeItemDefinitionId, type Uuid } from "@tileborne/core";
 import { Result } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -10,6 +10,8 @@ import {
 
 const CATALOG_A = "0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f60" as Uuid;
 const CATALOG_B = "0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f61" as Uuid;
+const ITEM_A = makeItemDefinitionId("0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f62" as Uuid);
+const ITEM_B = makeItemDefinitionId("0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f63" as Uuid);
 
 const catalogJson = (catalogUuid: Uuid, key: string) => ({
   id: makeCatalogId(catalogUuid),
@@ -69,5 +71,38 @@ describe("mergeGameObjectCatalogs", () => {
       contribution(CATALOG_B, "spawn-point"),
     ]);
     expect(Result.isFailure(result)).toBe(true);
+  });
+
+  it("resolves item grants across catalogs and rejects duplicate item ownership", () => {
+    const first = decodeGameObjectCatalog("first", {
+      ...catalogJson(CATALOG_A, "item-source"),
+      items: [{ id: ITEM_A, label: "Key", data: {}, grants: { _tag: "item-grant", itemId: ITEM_B } }],
+    });
+    const second = decodeGameObjectCatalog("second", {
+      ...catalogJson(CATALOG_B, "item-target"),
+      items: [{ id: ITEM_B, label: "Door pass", data: {} }],
+    });
+    expect(Result.isSuccess(first)).toBe(true);
+    expect(Result.isSuccess(second)).toBe(true);
+    if (Result.isFailure(first) || Result.isFailure(second)) return;
+    expect(Result.isSuccess(mergeGameObjectCatalogs([
+      { contributionId: "first", catalog: first.success },
+      { contributionId: "second", catalog: second.success },
+    ]))).toBe(true);
+
+    const duplicate = decodeGameObjectCatalog("duplicate", {
+      ...catalogJson(CATALOG_B, "item-duplicate"),
+      items: [{ id: ITEM_A, label: "Duplicate", data: {} }],
+    });
+    expect(Result.isSuccess(duplicate)).toBe(true);
+    if (Result.isSuccess(duplicate)) {
+      const result = mergeGameObjectCatalogs([
+        { contributionId: "first", catalog: first.success },
+        { contributionId: "second", catalog: second.success },
+        { contributionId: "duplicate", catalog: duplicate.success },
+      ]);
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) expect(result.failure._tag).toBe("DuplicateCatalogDefinitionError");
+    }
   });
 });

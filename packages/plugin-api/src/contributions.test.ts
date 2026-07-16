@@ -47,6 +47,110 @@ const executable = (tag: string, id: string, entry: string) => ({
   entry,
 });
 
+const linkedModeContributions = (input: {
+  readonly modeCount?: number;
+  readonly serverValidatorId?: string;
+  readonly editorValidatorId?: string;
+  readonly linkedValidatorId?: string;
+}): PluginContributions => {
+  const mode = (index: number) => ({
+    _tag: "GameModeContribution",
+    id: index === 0 ? "mode" : `mode-${index + 1}`,
+    kind: "declarative",
+    display,
+    runtimeSystemId: "mode-runtime",
+    settingsPanelId: undefined,
+    settingsFormId: undefined,
+    mapValidatorId: input.linkedValidatorId,
+    hudLayoutId: undefined,
+    starter: undefined,
+    checklistFacts: undefined,
+    capabilities: undefined,
+  });
+  return Schema.decodeUnknownSync(PluginContributions)({
+    gameModes: Array.from({ length: input.modeCount ?? 1 }, (_, index) => mode(index)),
+    panels: undefined,
+    tools: undefined,
+    assetPacks: undefined,
+    tilesetPacks: undefined,
+    editor:
+      input.editorValidatorId === undefined
+        ? undefined
+        : {
+            tabs: undefined,
+            tools: undefined,
+            inspectors: undefined,
+            commands: undefined,
+            menus: undefined,
+            settings: undefined,
+            paletteCategories: undefined,
+            paletteSubFilters: undefined,
+            paletteItemActions: undefined,
+            viewportActions: undefined,
+            toolDock: undefined,
+            overlays: undefined,
+            inspectorPanels: undefined,
+            settingsPanels: undefined,
+            mapKinds: undefined,
+            presets: undefined,
+            panels: undefined,
+            validators: [
+              executable(
+                "ExecutableEditorValidatorContribution",
+                input.editorValidatorId,
+                "./editor-validator.js",
+              ),
+            ],
+            exporters: undefined,
+            generators: undefined,
+            assetMetadata: undefined,
+            playerModelPolicies: undefined,
+            gameSettingsForms: undefined,
+          },
+    runtime: {
+      systems: [
+        executable("ExecutableRuntimeSystemContribution", "mode-runtime", "./runtime.js"),
+      ],
+      components: undefined,
+      events: undefined,
+      assetLoaders: undefined,
+      clientSystems: undefined,
+      hudWidgets: undefined,
+      hudLayouts: undefined,
+      lobbyPanels: undefined,
+      menuSections: undefined,
+      inputMaps: undefined,
+      audioBuses: undefined,
+      cameras: undefined,
+      interpolators: undefined,
+      assetPacks: undefined,
+      errorMappers: undefined,
+      gameObjectCatalogs: undefined,
+      weaponCatalogs: undefined,
+    },
+    server:
+      input.serverValidatorId === undefined
+        ? undefined
+        : {
+            rules: undefined,
+            scoring: undefined,
+            lootTables: undefined,
+            matchmaking: undefined,
+            serverSystems: undefined,
+            roomRules: undefined,
+            mapValidators: [
+              executable(
+                "ExecutableServerMapValidatorContribution",
+                input.serverValidatorId,
+                "./server-validator.js",
+              ),
+            ],
+            matchPhases: undefined,
+            replayWriters: undefined,
+          },
+  });
+};
+
 describe("PluginContributions", () => {
   it("accepts the spec-defined editor, runtime, and server contribution slots", () => {
     const decoded = Schema.decodeUnknownSync(PluginContributions)({
@@ -325,6 +429,48 @@ describe("PluginContributions", () => {
     });
 
     expect(() => validatePluginContributions(pluginId, contributions)).toThrow(DuplicateContributionError);
+  });
+
+  it("accepts a mapValidatorId only when it exactly links a server contribution", () => {
+    const pluginId = Schema.decodeUnknownSync(PluginId)("@tileborne-plugins/example-arena");
+    expect(() =>
+      validatePluginContributions(
+        pluginId,
+        linkedModeContributions({
+          linkedValidatorId: "arena-validator",
+          serverValidatorId: "arena-validator",
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects editor-only and misspelled map-validator links", () => {
+    const pluginId = Schema.decodeUnknownSync(PluginId)("@tileborne-plugins/example-arena");
+    expect(() =>
+      validatePluginContributions(
+        pluginId,
+        linkedModeContributions({
+          linkedValidatorId: "arena-validator",
+          editorValidatorId: "arena-validator",
+        }),
+      ),
+    ).toThrow(/missing map validator contribution: arena-validator/);
+    expect(() =>
+      validatePluginContributions(
+        pluginId,
+        linkedModeContributions({
+          linkedValidatorId: "arena-validtor",
+          serverValidatorId: "arena-validator",
+        }),
+      ),
+    ).toThrow(/missing map validator contribution: arena-validtor/);
+  });
+
+  it("rejects multiple game-mode registrations at the manifest boundary", () => {
+    const pluginId = Schema.decodeUnknownSync(PluginId)("@tileborne-plugins/ambiguous");
+    expect(() =>
+      validatePluginContributions(pluginId, linkedModeContributions({ modeCount: 2 })),
+    ).toThrow(/exactly one gameModes registration/);
   });
 });
 

@@ -26,6 +26,15 @@ export class DuplicateCatalogObjectTypeError extends Schema.TaggedErrorClass<Dup
   },
 ) {}
 
+export class DuplicateCatalogDefinitionError extends Schema.TaggedErrorClass<DuplicateCatalogDefinitionError>()(
+  "DuplicateCatalogDefinitionError",
+  {
+    kind: Schema.Literals(["item", "loot-table"]),
+    id: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
 /** A contributed catalog failed catalog-level validation. */
 export class CatalogContributionValidationError extends Schema.TaggedErrorClass<CatalogContributionValidationError>()(
   "CatalogContributionValidationError",
@@ -38,6 +47,7 @@ export class CatalogContributionValidationError extends Schema.TaggedErrorClass<
 export type CatalogRegistryError =
   | InvalidCatalogContributionError
   | DuplicateCatalogObjectTypeError
+  | DuplicateCatalogDefinitionError
   | CatalogContributionValidationError;
 
 /** A single contributed catalog tagged with the contribution that supplied it. */
@@ -96,6 +106,7 @@ export const mergeGameObjectCatalogs = (
 ): Result.Result<MergedGameObjectCatalog, CatalogRegistryError> => {
   const allLootTableIds = new Set<string>();
   const allObjectTypeIds = new Set<string>();
+  const allItemIds = new Set<string>();
   for (const { catalog } of contributions) {
     for (const table of Option.getOrElse(catalog.lootTables, () => [])) {
       allLootTableIds.add(table.id);
@@ -103,17 +114,23 @@ export const mergeGameObjectCatalogs = (
     for (const objectType of catalog.objectTypes) {
       allObjectTypeIds.add(objectType.id);
     }
+    for (const item of Option.getOrElse(catalog.items, () => [])) {
+      allItemIds.add(item.id);
+    }
   }
 
   const byId = new Map<GameObjectTypeId, GameObjectType>();
   const objectTypes: GameObjectType[] = [];
   const lootTables: LootTable[] = [];
   const items: ItemDefinition[] = [];
+  const seenLootTables = new Set<string>();
+  const seenItems = new Set<string>();
 
   for (const { contributionId, catalog } of contributions) {
     const validated = validateCatalog(catalog, {
       resolveLootTable: (id) => allLootTableIds.has(id),
       resolveObjectType: (id) => allObjectTypeIds.has(id),
+      resolveItem: (id) => allItemIds.has(id),
       ...(deps.resolveWeapon === undefined ? {} : { resolveWeapon: deps.resolveWeapon }),
     });
     if (Result.isFailure(validated)) {
@@ -136,8 +153,28 @@ export const mergeGameObjectCatalogs = (
       byId.set(objectType.id, objectType);
       objectTypes.push(objectType);
     }
-    lootTables.push(...Option.getOrElse(catalog.lootTables, () => []));
-    items.push(...Option.getOrElse(catalog.items, () => []));
+    for (const table of Option.getOrElse(catalog.lootTables, () => [])) {
+      if (seenLootTables.has(table.id)) {
+        return Result.fail(new DuplicateCatalogDefinitionError({
+          kind: "loot-table",
+          id: table.id,
+          message: `loot table ${table.id} is registered by more than one catalog`,
+        }));
+      }
+      seenLootTables.add(table.id);
+      lootTables.push(table);
+    }
+    for (const item of Option.getOrElse(catalog.items, () => [])) {
+      if (seenItems.has(item.id)) {
+        return Result.fail(new DuplicateCatalogDefinitionError({
+          kind: "item",
+          id: item.id,
+          message: `item ${item.id} is registered by more than one catalog`,
+        }));
+      }
+      seenItems.add(item.id);
+      items.push(item);
+    }
   }
 
   return Result.succeed({ objectTypes, lootTables, items, byId });

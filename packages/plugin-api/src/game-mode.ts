@@ -1,7 +1,7 @@
 import { type GameModeId, gameModeIdFromPluginId, type HudLayout, type PluginId } from "@tileborne/core";
 import { Option, Result } from "effect";
 
-import type { PluginContributions } from "./contributions.js";
+import type { GameModeCapabilityId, PluginContributions } from "./contributions.js";
 import {
   decodeGameSettingsForm,
   materializeGameSettingsForm,
@@ -26,12 +26,6 @@ import { decodeHudLayout } from "./hud-layout-registry.js";
  * handler, which projects descriptors to the renderer over IPC.
  */
 
-/** The capability tag a panel declares to mark itself an authoring settings form. */
-const SETTINGS_CAPABILITY = "settings";
-
-/** The contribution zone a mode's per-map authoring settings panel lives in. */
-const SETTINGS_PANEL_ZONE = "plugins";
-
 /** A plugin's id paired with its decoded manifest contributions. */
 export interface GameModeManifest {
   readonly pluginId: PluginId;
@@ -50,9 +44,17 @@ export interface GameModeDescriptor {
   readonly pluginId: PluginId;
   readonly label: string;
   /** The plugin's runtime-system contribution id (the simulation owner). */
-  readonly runtimeSystemId: string | undefined;
+  readonly runtimeSystemId: string;
   /** The authoring settings-panel contribution id, when the plugin declares one. */
   readonly authoringSettingsPanelId: string | undefined;
+  /** Bundled authoring implementation selected through the typed host registry. */
+  readonly authoringCapabilityId: GameModeCapabilityId | undefined;
+  /** Bundled playtest renderer/projector selected through the typed host registry. */
+  readonly rendererCapabilityId: GameModeCapabilityId | undefined;
+  /** Bundled readiness extension selected through the typed host registry. */
+  readonly readinessCapabilityId: GameModeCapabilityId | undefined;
+  /** Bundled starter implementation selected through the typed host registry. */
+  readonly starterCapabilityId: GameModeCapabilityId | undefined;
   /** The game settings-form contribution id, when the plugin declares one. */
   readonly gameSettingsFormId: string | undefined;
   /** The decoded, renderer-ready settings form declared by `editor.gameSettingsForms`. */
@@ -61,22 +63,42 @@ export interface GameModeDescriptor {
   readonly hudLayoutContributionId: string | undefined;
   /** The decoded default in-match HUD layout declared by `runtime.hudLayouts`. */
   readonly hudLayout: HudLayout | undefined;
+  readonly mapValidatorId: string | undefined;
+  readonly starter: {
+    readonly templateId: string;
+    readonly label: string;
+    readonly description: string | undefined;
+  } | undefined;
+  readonly creatorChecklistFacts: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly description: string | undefined;
+    readonly sources: readonly ("game-mode" | "map" | "catalog" | "asset" | "visual-model")[];
+  }[];
   /** Whether the mode declares authoring UI the inspector mounts. */
   readonly hasAuthoringPanel: boolean;
 }
 
-const optionalArray = <A>(option: Option.Option<readonly A[]>): readonly A[] =>
-  Option.getOrElse(option, () => []);
+const optionalArray = <A>(value: Option.Option<readonly A[]> | readonly A[] | undefined): readonly A[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value === undefined) {
+    return [];
+  }
+  return Option.getOrElse(value as Option.Option<readonly A[]>, () => []);
+};
 
 const discoverGameSettingsForm = (
   contributions: PluginContributions,
+  formId: string | undefined,
 ): {
   readonly id: string | undefined;
   readonly form: MaterializedGameSettingsForm | undefined;
 } => {
   const editor = Option.getOrUndefined(contributions.editor);
   const forms = editor === undefined ? [] : optionalArray(editor.gameSettingsForms);
-  const contribution = forms[0];
+  const contribution = forms.find(({ id }) => id === formId);
   if (contribution === undefined) {
     return { id: undefined, form: undefined };
   }
@@ -89,13 +111,14 @@ const discoverGameSettingsForm = (
 
 const discoverHudLayout = (
   contributions: PluginContributions,
+  hudLayoutId: string | undefined,
 ): {
   readonly id: string | undefined;
   readonly layout: HudLayout | undefined;
 } => {
   const runtime = Option.getOrUndefined(contributions.runtime);
   const layouts = runtime === undefined ? [] : optionalArray(runtime.hudLayouts);
-  const contribution = layouts[0];
+  const contribution = layouts.find(({ id }) => id === hudLayoutId);
   if (contribution === undefined) {
     return { id: undefined, layout: undefined };
   }
@@ -108,42 +131,73 @@ const discoverHudLayout = (
 
 /**
  * Describe a single plugin as a game mode, or `undefined` when it does not
- * provide one. The manifest signal for "this plugin is a game mode" is a
- * declared runtime system contribution (it owns runtime simulation); authoring
- * UI is discovered from the settings-capable panel in the `plugins` zone and/or
- * the first-class `EditorGameSettingsForm` contribution; the default in-match
- * HUD arrangement is discovered from the `runtime.hudLayouts` slot.
+ * provide one. A plugin is a mode only when it explicitly declares a
+ * `contributes.gameModes` registration. Linked contribution ids are resolved
+ * from that declaration; array position and plugin-id conventions are never
+ * used as hidden registration signals.
  */
 export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor | undefined => {
   const { pluginId, contributions } = manifest;
-  const runtime = Option.getOrUndefined(contributions.runtime);
-  const systems = runtime === undefined ? [] : optionalArray(runtime.systems);
-  if (systems.length === 0) {
+  const registrations = optionalArray(contributions.gameModes);
+  if (registrations.length > 1) {
+    throw new Error(
+      `Plugin ${pluginId} declares ${registrations.length} game modes; exactly one gameModes registration is supported per plugin`,
+    );
+  }
+  const registration = registrations[0];
+  if (registration === undefined) {
     return undefined;
   }
-  const firstSystem = systems[0];
-  const panels = optionalArray(contributions.panels);
-  const settingsPanel = panels.find(
-    (panel) =>
-      panel.zone === SETTINGS_PANEL_ZONE &&
-      optionalArray(panel.capabilities).includes(SETTINGS_CAPABILITY),
+  const settingsPanelId = registration.settingsPanelId;
+  const settingsPanel = optionalArray(contributions.panels).find(({ id }) => id === settingsPanelId);
+  const gameSettingsForm = discoverGameSettingsForm(
+    contributions,
+    registration.settingsFormId,
   );
-  const gameSettingsForm = discoverGameSettingsForm(contributions);
-  const hudLayout = discoverHudLayout(contributions);
-  const systemLabel = firstSystem === undefined
-    ? undefined
-    : Option.getOrUndefined(firstSystem.display)?.label;
+  const hudLayout = discoverHudLayout(
+    contributions,
+    registration.hudLayoutId,
+  );
+  const capabilities = registration.capabilities;
+  const starter = registration.starter;
+  const facts = registration.checklistFacts ?? [];
   return {
     modeId: gameModeIdFromPluginId(pluginId),
     pluginId,
-    label: settingsPanel?.title ?? systemLabel ?? pluginId,
-    runtimeSystemId: firstSystem?.id,
+    label: registration.display.label,
+    runtimeSystemId: registration.runtimeSystemId,
     authoringSettingsPanelId: settingsPanel?.id,
+    authoringCapabilityId:
+      capabilities?.authoring,
+    rendererCapabilityId:
+      capabilities?.renderer,
+    readinessCapabilityId:
+      capabilities?.readiness,
+    starterCapabilityId:
+      capabilities?.starter,
     gameSettingsFormId: gameSettingsForm.id,
     gameSettingsForm: gameSettingsForm.form,
     hudLayoutContributionId: hudLayout.id,
     hudLayout: hudLayout.layout,
-    hasAuthoringPanel: settingsPanel !== undefined || gameSettingsForm.form !== undefined,
+    mapValidatorId: registration.mapValidatorId,
+    starter:
+      starter === undefined
+        ? undefined
+        : {
+            templateId: starter.templateId,
+            label: starter.label,
+            description: starter.description,
+          },
+    creatorChecklistFacts: facts.map((fact) => ({
+      id: fact.id,
+      label: fact.label,
+      description: fact.description,
+      sources: fact.sources,
+    })),
+    hasAuthoringPanel:
+      capabilities?.authoring !== undefined ||
+      settingsPanel !== undefined ||
+      gameSettingsForm.form !== undefined,
   };
 };
 

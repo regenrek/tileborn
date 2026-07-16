@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "@tileborne-plugins/example-gameplay",
+  "name": "@tileborne-plugins/example-gameplay",
+  "version": "0.1.0",
+  "displayName": "Example Gameplay",
+  "description": "Compile-checked plugin API runtime adapter fixture.",
+  "author": "Tileborne",
+  "license": "MIT",
+  "repository": "https://github.com/tileborne/example-gameplay",
+  "engines": { "tileborne": "^0.1.0" },
+  "entry": { "runtime": "./dist/runtime.js" },
+  "contributes": {},
+  "permissions": [],
+  "dependsOn": []
+}

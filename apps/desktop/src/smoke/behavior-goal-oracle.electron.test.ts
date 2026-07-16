@@ -1,4 +1,5 @@
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -20,6 +21,28 @@ import {
 const VISUAL_NODE = 'behavior-node:00000000-0000-4000-8000-000000000801';
 const MISSING_NODE = 'behavior-node:00000000-0000-4000-8000-000000000802';
 const MISSING_BEHAVIOR = 'behavior:00000000-0000-4000-8000-000000000899';
+const ORACLE_RUN_ID = process.env.TILEBORNE_CREATOR_ORACLE_RUN_ID ?? `local-${Date.now()}`;
+const ORACLE_ARTIFACTS = process.env.TILEBORNE_CREATOR_ORACLE_ARTIFACTS;
+
+const artifactPath = (name: string): string | undefined =>
+  ORACLE_ARTIFACTS === undefined ? undefined : path.join(ORACLE_ARTIFACTS, name);
+
+const startTrace = async (smokeContext: SmokeContext): Promise<void> => {
+  if (ORACLE_ARTIFACTS === undefined) return;
+  await smokeContext.page.context().tracing.start({ screenshots: true, snapshots: true });
+};
+
+const stopTrace = async (smokeContext: SmokeContext, name: string): Promise<void> => {
+  const target = artifactPath(name);
+  if (target === undefined) return;
+  await smokeContext.page.context().tracing.stop({ path: target });
+};
+
+const capture = async (smokeContext: SmokeContext, name: string): Promise<void> => {
+  const target = artifactPath(name);
+  if (target === undefined) return;
+  await smokeContext.page.screenshot({ path: target, fullPage: true });
+};
 
 const nativeSource = (id: string, body: string) => `
 import { defineBehavior } from '@tileborne/game-sdk';
@@ -38,7 +61,11 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
 
   beforeAll(async () => {
     resolveMainEntry();
+    if (ORACLE_ARTIFACTS !== undefined) {
+      await mkdir(ORACLE_ARTIFACTS, { recursive: true });
+    }
     context = await launchElectron(await createTileborneHome());
+    await startTrace(context);
   }, 120_000);
 
   afterAll(async () => {
@@ -66,13 +93,29 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
         { timeout: 15_000 },
       )
       .toBe(true);
-    const created = await page.evaluate(async () =>
-      window.tileborne.projects.createGame({
-        name: 'Behavior Goal Oracle',
-        gameType: 'battle-royale',
-        idempotencyKey: 'behavior-goal-oracle-electron-smoke',
-      }),
+    const projectName = `Creator Release Oracle ${ORACLE_RUN_ID}`;
+    await navigateToRoute(page, '/');
+    await page
+      .getByRole('button', { name: /New game/i })
+      .first()
+      .click();
+    await expect(page.getByRole('dialog', { name: /New game/i })).toBeVisible();
+    await expect(page.getByTestId('new-game-type-battle-royale')).toHaveAttribute(
+      'aria-checked',
+      'true',
     );
+    await page.getByLabel('Project name').fill(projectName);
+    await page.getByLabel('Project name').press('Enter');
+    await expect(page.getByRole('heading', { name: projectName })).toBeVisible({ timeout: 30_000 });
+    const created = await page.evaluate(async (name) => {
+      const { projects } = await window.tileborne.projects.list({});
+      const summary = projects.find((project) => project.name === name);
+      if (summary === undefined) throw new Error(`UI-created project missing: ${name}`);
+      const { project } = await window.tileborne.projects.get({ projectId: summary.id });
+      const map = project.maps[0];
+      if (map === undefined) throw new Error('UI-created BR starter has no map');
+      return { projectId: String(project.id), mapId: String(map.id) };
+    }, projectName);
 
     const authored = await page.evaluate(
       async ({ projectId, visualNode, missingNode, missingBehavior }) => {
@@ -256,6 +299,56 @@ export default defineBehavior({
       },
     );
 
+    await navigateToRoute(page, `/projects/${created.projectId}/game-content`);
+    await page.getByTestId('content-tab-items').click();
+    await page.getByTestId('content-name').fill('Crash Recovered Oracle Potion');
+    await expect(page.getByTestId('content-document-status')).toHaveText('dirty');
+    const recoveryDocumentId = `game-content:${created.projectId}`;
+    await expect
+      .poll(() =>
+        page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return (
+            records.find((record) => record.documentId === documentId)?.snapshot as
+              | { label?: string }
+              | undefined
+          )?.label;
+        }, recoveryDocumentId),
+      )
+      .toBe('Crash Recovered Oracle Potion');
+    await capture(context!, '01-durable-draft-before-interruption.png');
+    await stopTrace(context!, '01-authoring-and-durable-draft.zip');
+
+    const interruptedAppClosed = context!.app.waitForEvent('close');
+    context!.app.process().kill('SIGKILL');
+    await interruptedAppClosed;
+    context = await launchElectron(tileborneHome);
+    page = context.page;
+    await startTrace(context);
+    await expect
+      .poll(() =>
+        page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.some((record) => record.documentId === documentId);
+        }, recoveryDocumentId),
+      )
+      .toBe(true);
+    await navigateToRoute(page, `/projects/${created.projectId}/game-content`);
+    await page.getByTestId('content-tab-items').click();
+    await expect(page.getByTestId('content-name')).toHaveValue('Crash Recovered Oracle Potion');
+    await expect(page.getByTestId('content-document-status')).toHaveText('dirty');
+    await capture(context, '02-recovered-draft-after-interruption.png');
+    await page.getByTestId('content-discard-draft').click();
+    await expect(page.getByTestId('content-document-status')).toHaveText('clean');
+    await expect
+      .poll(() =>
+        page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.every((record) => record.documentId !== documentId);
+        }, recoveryDocumentId),
+      )
+      .toBe(true);
+
     await navigateToRoute(page, `/projects/${created.projectId}/behaviors`);
     await expect(page.getByTestId('behavior-editor-page')).toBeVisible();
     await expect(page.getByRole('option', { name: /Visual Tick Proof/ })).toBeVisible();
@@ -274,13 +367,31 @@ export default defineBehavior({
         async () =>
           page.evaluate(async (projectId) => {
             const { sessions } = await window.tileborne.playtest.list({});
-            return sessions.some(
-              (entry) => String(entry.projectId) === projectId && entry.status === 'Running',
+            const projectSessions = sessions.filter(
+              (entry) => String(entry.projectId) === projectId,
+            );
+            const running = projectSessions.find((entry) => entry.status === 'Running');
+            return JSON.stringify(
+              running === undefined
+                ? {
+                    status: 'waiting',
+                    observed: projectSessions.map((entry) => ({
+                      id: String(entry.id),
+                      status: entry.status,
+                      errorMessage: entry.errorMessage,
+                      runtimeMetrics: entry.runtimeMetrics,
+                    })),
+                    alerts: [...document.querySelectorAll('[role="alert"]')].map(
+                      (element) => element.textContent,
+                    ),
+                    bodyTail: (document.body.textContent ?? '').slice(-1_000),
+                  }
+                : { status: 'running', id: String(running.id) },
             );
           }, created.projectId),
         { timeout: 30_000, intervals: [100, 250, 500] },
       )
-      .toBe(true);
+      .toMatch(/^\{"status":"running","id":".+"\}$/);
     const session = await page.evaluate(async (projectId) => {
       const { sessions } = await window.tileborne.playtest.list({});
       const running = sessions.find(
@@ -508,9 +619,12 @@ export default defineBehavior({
     await page.evaluate(async (sessionId) => {
       await window.tileborne.playtest.stop({ sessionId });
     }, session.id);
+    await capture(context!, '03-runtime-behavior-diagnostics.png');
+    await stopTrace(context!, '02-recovery-and-behavior-runtime.zip');
     await closeSmokeApp(context!);
     context = await launchElectron(tileborneHome);
     page = context.page;
+    await startTrace(context);
     const reopened = await page.evaluate(
       async ({ projectId, ids }) => {
         const { snapshot } = await window.tileborne.behaviors.open({ projectId });
@@ -537,6 +651,141 @@ export default defineBehavior({
       'visual',
       'visual',
     ]);
+
+    await navigateToRoute(page, `/projects/${created.projectId}/maps/${created.mapId}`);
+    await expect(page.getByTestId('battle-royale-authoring-panel')).toBeVisible({
+      timeout: 30_000,
+    });
+    const fastMatchSettings = {
+      maxPlayers: '2',
+      waitSec: '1',
+      shrinkSec: '1',
+      holdSec: '1',
+      shrinkPhases: '1',
+      damagePerSecOutside: '100',
+    } as const;
+    for (const [key, value] of Object.entries(fastMatchSettings)) {
+      await page.getByTestId(`br-setting-${key}`).fill(value);
+    }
+    await page.getByTestId('br-setting-save').click();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async ({ projectId, mapId }) => {
+            const { map } = await window.tileborne.maps.get({ projectId, mapId });
+            return map.properties['@tileborne-plugins/battle-royale'];
+          }, created),
+        { timeout: 15_000 },
+      )
+      .toMatchObject({
+        maxPlayers: 2,
+        zone: {
+          damagePerSecOutside: 100,
+          schedule: { waitSec: 1, shrinkSec: 1, holdSec: 1, shrinkPhases: 1 },
+        },
+      });
+    await expect(page.getByTestId('readiness-status')).toContainText(/Ready|warnings/, {
+      timeout: 30_000,
+    });
+
+    await page.getByTestId('playtest-menu-trigger').click();
+    await page.getByTestId('playtest-menu-host').click();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            JSON.stringify({
+              dialog: document.querySelector('[data-testid="playtest-host-dialog"]') !== null,
+              alerts: [...document.querySelectorAll('[role="alert"]')].map(
+                (element) => element.textContent,
+              ),
+              notifications: [...document.querySelectorAll('[data-sonner-toast]')].map(
+                (element) => element.textContent,
+              ),
+              bodyTail: (document.body.textContent ?? '').slice(-2_000),
+            }),
+          ),
+        { timeout: 30_000, intervals: [100, 250, 500] },
+      )
+      .toMatch(/^\{"dialog":true,/);
+    await expect(page.getByTestId('playtest-host-room-url')).not.toHaveValue('', {
+      timeout: 120_000,
+    });
+    const secondaryWindow = context.app.waitForEvent('window', { timeout: 30_000 });
+    await page.getByTestId('playtest-host-open-second-client').click();
+    const secondaryPage = await secondaryWindow;
+    await secondaryPage.waitForLoadState('domcontentloaded');
+    await secondaryPage.waitForFunction(() => typeof window.tileborne === 'object', undefined, {
+      timeout: 30_000,
+    });
+    await expect(secondaryPage.getByTestId('playtest-multiplayer-viewport')).toBeVisible({
+      timeout: 120_000,
+    });
+    await page.getByRole('button', { name: 'Join as host', exact: true }).click();
+    await expect(page.getByTestId('playtest-multiplayer-viewport')).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.getByTestId('multiplayer-lobby')).toBeVisible({ timeout: 30_000 });
+    await expect(secondaryPage.getByTestId('multiplayer-lobby')).toBeVisible({ timeout: 30_000 });
+    await secondaryPage.getByTestId('multiplayer-ready-toggle').click();
+    await page.getByTestId('multiplayer-ready-toggle').click();
+    await expect(page.getByTestId('multiplayer-lobby')).toBeHidden({ timeout: 60_000 });
+    await expect(secondaryPage.getByTestId('multiplayer-lobby')).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByTestId('playtest-multiplayer-canvas')).toBeVisible();
+    await expect(secondaryPage.getByTestId('playtest-multiplayer-canvas')).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const state = window.__tileborne_e2e?.getMultiplayerSessionState?.();
+            return state === null || state === undefined
+              ? undefined
+              : {
+                  tick: state.tick,
+                  playerCount: state.players.length,
+                  localPlayerId: state.localPlayerId,
+                  zoneRadius: state.zone?.radius,
+                };
+          }),
+        { timeout: 120_000, intervals: [250, 500, 1_000] },
+      )
+      .toMatchObject({
+        tick: expect.any(Number),
+        playerCount: 2,
+        localPlayerId: expect.any(String),
+        zoneRadius: expect.any(Number),
+      });
+    await capture(context, '04-multiplayer-live-host.png');
+    const secondaryScreenshot = artifactPath('05-multiplayer-live-secondary.png');
+    if (secondaryScreenshot !== undefined) {
+      await secondaryPage.screenshot({ path: secondaryScreenshot, fullPage: true });
+    }
+    await expect
+      .poll(
+        async () =>
+          (await page
+            .getByTestId('multiplayer-results')
+            .isVisible()
+            .catch(() => false)) ||
+          (await secondaryPage
+            .getByTestId('multiplayer-results')
+            .isVisible()
+            .catch(() => false)),
+        { timeout: 120_000, intervals: [500, 1_000] },
+      )
+      .toBe(true);
+    const resultsPage = (await page.getByTestId('multiplayer-results').isVisible())
+      ? page
+      : secondaryPage;
+    const resultsText = await resultsPage.getByTestId('multiplayer-results').innerText();
+    expect(resultsText).toContain('Results');
+    expect(resultsText).toMatch(/#1|winner|victory|finished/i);
+    const resultsScreenshot = artifactPath('06-multiplayer-results.png');
+    if (resultsScreenshot !== undefined) {
+      await resultsPage.screenshot({ path: resultsScreenshot, fullPage: true });
+    }
+    await page.evaluate(async () => window.tileborne.runtime.stopLocalHost({}));
+    await secondaryPage.close().catch(() => undefined);
 
     await navigateToRoute(page, `/projects/${created.projectId}`);
     await page.getByTestId('overview-ship-game').click();
@@ -584,6 +833,65 @@ export default defineBehavior({
       return result as { readonly directory: string; readonly files: readonly string[] };
     }, created.mapId);
     expect(artifact.files.some((file) => file.includes('behavior'))).toBe(true);
+    await capture(context, '07-ship-game-verified.png');
+    await stopTrace(context, '03-multiplayer-and-ship.zip');
+
+    const receiptTarget = artifactPath('receipt.json');
+    if (receiptTarget !== undefined) {
+      const evidence = await Promise.all(
+        [
+          '01-authoring-and-durable-draft.zip',
+          '01-durable-draft-before-interruption.png',
+          '02-recovered-draft-after-interruption.png',
+          '02-recovery-and-behavior-runtime.zip',
+          '03-multiplayer-and-ship.zip',
+          '03-runtime-behavior-diagnostics.png',
+          '04-multiplayer-live-host.png',
+          '05-multiplayer-live-secondary.png',
+          '06-multiplayer-results.png',
+          '07-ship-game-verified.png',
+        ].map(async (name) => {
+          const bytes = await readFile(path.join(ORACLE_ARTIFACTS!, name));
+          return {
+            name,
+            bytes: bytes.byteLength,
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+          };
+        }),
+      );
+      await writeFile(
+        receiptTarget,
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            runId: ORACLE_RUN_ID,
+            gitHead: process.env.TILEBORNE_CREATOR_ORACLE_GIT_HEAD ?? null,
+            checkoutRoot: process.env.TILEBORNE_CREATOR_ORACLE_CHECKOUT ?? process.cwd(),
+            checkoutStatus: process.env.TILEBORNE_CREATOR_ORACLE_GIT_STATUS ?? null,
+            profileRoot: tileborneHome,
+            projectId: created.projectId,
+            mapId: created.mapId,
+            shippedArtifactDirectory: artifact.directory,
+            flows: {
+              freshProfileUiStarter: 'passed',
+              visualBehavior: authored.visualId,
+              typescriptBehavior: authored.nativeId,
+              readinessRepair: authored.missingId,
+              durableInterruptionRecovery: 'passed',
+              saveReopen: 'passed',
+              behaviorDiagnostics: 'passed',
+              multiplayerDiagnostics: 'passed',
+              multiplayerResults: resultsText,
+              shipGameUiIpc: 'passed',
+            },
+            evidence,
+          },
+          null,
+          2,
+        )}\n`,
+        'utf8',
+      );
+    }
 
     const isolatedRoot = await mkdtemp(path.join(tmpdir(), 'tileborne-behavior-goal-oracle-'));
     isolatedArtifacts.push(isolatedRoot);
@@ -618,5 +926,5 @@ export default defineBehavior({
     } finally {
       await host.stop();
     }
-  }, 360_000);
+  }, 600_000);
 });

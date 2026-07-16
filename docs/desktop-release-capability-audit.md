@@ -4,6 +4,7 @@
 - Planr owner: `pln-84d4812b` / `i-for-desktop-packaging-per-platfo-06bb`
 - Audit host: macOS 26.4.1 (`Darwin arm64`)
 - Candidate: `@tileborne/desktop@1.0.0-rc.0`
+- Release state: **unreleased and NO-GO; no tag or publication exists**
 - Audited source revision: `73bf0c20f6a4c0b0b3a198289e6671f0e3ff4bd5`
 
 This is the durable input to the 1.0 release-contract and documentation work. It audits the

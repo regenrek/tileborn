@@ -5,7 +5,10 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0-rc.0] - Unreleased
+
+`1.0.0-rc.0` is prepared but unreleased and remains **NO-GO** for desktop
+distribution. No tag, release date, or publication exists.
 
 ### Added
 
@@ -32,13 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native receipts, support bundles, traces, and project backups are treated as
   restricted evidence rather than committed artifacts.
 
-## [1.0.0-rc.0] - 2026-06-15
+### Candidate scope prepared before current hardening
 
 Production 1.0 release candidate. Focus: committed BR vertical proof, BYO
 Cloudflare deploy readiness, release/security docs, and package metadata
 prepared for maintainer go/no-go.
 
-### Added
+#### Added
 
 - Production release-readiness docs covering local gates, BYO Cloudflare deploy
   proof, required secrets, rollback, support matrix, and go/no-go criteria.
@@ -46,7 +49,7 @@ prepared for maintainer go/no-go.
   credentialed deploy blocker.
 - Top-level release handoff checklist in `RELEASE.md`.
 
-### Changed
+#### Changed
 
 - First-party MIT-licensed app and package manifests now use
   `1.0.0-rc.0` for release-candidate builds.
@@ -55,7 +58,7 @@ prepared for maintainer go/no-go.
   Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core`
   advisories.
 
-### Security
+#### Security
 
 - Production secret handling now requires Cloudflare, Alchemy, or operator
   environment secret stores instead of committed plaintext credentials.
@@ -139,5 +142,4 @@ First open-source, local-first release. Focus: editor + SDK tileset pipeline + B
 - Bundled asset loader validates manifest hashes and rejects fetch failures
 
 [0.1.0]: https://github.com/tileborne/tileborne/releases/tag/v0.1.0
-[1.0.0-rc.0]: https://github.com/tileborne/tileborne/compare/v0.1.0...v1.0.0-rc.0
-[Unreleased]: https://github.com/tileborne/tileborne/compare/v1.0.0-rc.0...HEAD
+[1.0.0-rc.0]: https://github.com/tileborne/tileborne/compare/v0.1.0...HEAD

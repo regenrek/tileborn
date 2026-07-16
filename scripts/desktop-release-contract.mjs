@@ -164,7 +164,11 @@ export function validateDesktopReleasePolicy(value) {
 
   if (!Array.isArray(policy.support)) fail('contract.invalid-array', 'policy.support');
   const support = policy.support.map((entry, index) => {
-    const record = exactKeys(entry, ['id', 'status', 'reason'], `policy.support[${index}]`);
+    const record = exactKeys(
+      entry,
+      ['id', 'status', 'documentationLabel', 'reason'],
+      `policy.support[${index}]`,
+    );
     return {
       id: string(record.id, `policy.support[${index}].id`),
       status: oneOf(
@@ -172,11 +176,20 @@ export function validateDesktopReleasePolicy(value) {
         ['candidate', 'unsupported', 'operator-blocked'],
         `policy.support[${index}].status`,
       ),
+      documentationLabel: string(
+        record.documentationLabel,
+        `policy.support[${index}].documentationLabel`,
+      ),
       reason: string(record.reason, `policy.support[${index}].reason`),
     };
   });
   if (new Set(support.map(({ id }) => id)).size !== support.length) {
     fail('contract.duplicate-value', 'policy.support ids');
+  }
+  if (
+    new Set(support.map(({ documentationLabel }) => documentationLabel)).size !== support.length
+  ) {
+    fail('contract.duplicate-value', 'policy.support documentation labels');
   }
   const expectedSupport = new Map([
     ['platform.macos-arm64', 'candidate'],

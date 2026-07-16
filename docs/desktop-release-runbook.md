@@ -10,15 +10,29 @@ policy.
 
 ## Current decision
 
-The desktop distribution is **NO-GO**. macOS arm64 is the only 1.0 candidate, not a supported
-release yet. An evidence-free checkout deterministically reports:
+The prepared `1.0.0-rc.0` desktop distribution is **unreleased and NO-GO**; no tag or publication
+exists. macOS arm64 is the only 1.0 candidate, not a supported release yet. An evidence-free
+checkout deterministically reports:
 
 ```sh
 pnpm release:desktop:policy
 pnpm release:desktop:status
+pnpm release:desktop:docs
 ```
 
 The second command must exit successfully with `decision: "no-go"` and these stable blockers:
+
+<!-- desktop-release-baseline-blockers:start -->
+
+- `artifact.manifest-missing`
+- `artifact.file-missing`
+- `rollback.retained-artifact-missing`
+- `rollback.backup-output-missing`
+- `signing.approved-team-missing`
+- `publish.approval-missing`
+- `publish.credential-missing`
+
+<!-- desktop-release-baseline-blockers:end -->
 
 | Blocker                              | Meaning and owner action                                             |
 | ------------------------------------ | -------------------------------------------------------------------- |
@@ -52,6 +66,20 @@ The DMG, Squirrel, deb, and rpm entries in `apps/desktop/electron-forge.config.c
 possibilities. They are not platform support, signing, installation, upgrade, uninstall, or
 runtime evidence. Ubuntu CI and a successful unpacked Forge `.app` smoke do not broaden this
 matrix.
+
+The exact machine-owned support projection is:
+
+<!-- desktop-release-support:start -->
+
+- `platform.macos-arm64` (`macOS arm64`): `candidate`
+- `platform.macos-x64` (`macOS x64`): `unsupported`
+- `platform.windows` (`Windows`): `unsupported`
+- `platform.linux` (`Linux`): `unsupported`
+- `capability.auto-update` (`automatic updates`): `unsupported`
+- `capability.remote-crash-reporting` (`remote crash reporting`): `unsupported`
+- `capability.publish` (`desktop publication`): `operator-blocked`
+
+<!-- desktop-release-support:end -->
 
 ## Build boundary and secrets
 

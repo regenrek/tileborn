@@ -34,6 +34,7 @@
     "release:gates:matrix": "node scripts/release-gates.mjs matrix",
     "release:desktop:policy": "node scripts/desktop-release-contract.mjs policy",
     "release:desktop:status": "node scripts/desktop-release-contract.mjs status --expect no-go",
+    "release:desktop:docs": "node scripts/release-docs-contract.mjs",
     "release:desktop:verify": "node scripts/desktop-release-contract.mjs verify",
     "test:release-gates": "vitest run --config vitest.config.ts scripts/release-gates.test.ts",
     "test:desktop-release-contract": "vitest run --config vitest.config.ts scripts/desktop-release-contract.test.ts scripts/release-docs.test.ts",

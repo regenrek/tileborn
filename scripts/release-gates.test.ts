@@ -50,6 +50,7 @@ describe('canonical release gates', () => {
       commands: [
         ['pnpm', 'release:desktop:policy'],
         ['pnpm', 'release:desktop:status'],
+        ['pnpm', 'release:desktop:docs'],
         ['pnpm', 'test:desktop-release-contract'],
       ],
     });

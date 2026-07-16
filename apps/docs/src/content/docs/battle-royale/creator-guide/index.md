@@ -8,6 +8,9 @@ sidebar:
 
 This is the supported creator path for the Battle Royale 1.0 vertical.
 
+Desktop candidate `1.0.0-rc.0` is unreleased and remains **NO-GO** for distribution; creator and
+Ship evidence below does not represent a desktop tag or publication.
+
 ## Create and author
 
 1. Choose **New Game**, select **Battle Royale**, name the project, and create it. The starter creates a playable map and stable mode defaults; no CLI authoring is required.

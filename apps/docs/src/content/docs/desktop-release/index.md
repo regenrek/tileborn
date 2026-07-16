@@ -5,8 +5,8 @@ description: Fail-closed macOS arm64 support, evidence, secrets, recovery, rollb
 
 # Desktop Release
 
-The desktop 1.0 distribution is **NO-GO**. macOS arm64 is the only candidate; it is not a supported
-release until the repository contract returns `decision: "go"` from native evidence. macOS x64,
+The prepared `1.0.0-rc.0` desktop distribution is **unreleased and NO-GO**; no tag or publication
+exists. macOS arm64 is the only candidate; it is not a supported release until the repository contract returns `decision: "go"` from native evidence. macOS x64,
 Windows, Linux, automatic updates/rollback, and remote crash reporting are unsupported.
 
 ```sh

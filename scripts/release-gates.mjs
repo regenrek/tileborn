@@ -69,6 +69,7 @@ export const releaseGates = Object.freeze([
   gate('desktop-release-contract', 'Desktop 1.0 release contract', [
     ['pnpm', 'release:desktop:policy'],
     ['pnpm', 'release:desktop:status'],
+    ['pnpm', 'release:desktop:docs'],
     ['pnpm', 'test:desktop-release-contract'],
   ]),
   gate('clean-checkout', 'Clean checkout', [['pnpm', 'test:clean-checkout']]),

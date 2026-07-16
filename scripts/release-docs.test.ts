@@ -3,88 +3,44 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { evaluateDesktopRelease, loadDesktopReleasePolicy } from './desktop-release-contract.mjs';
+import {
+  assertCanonicalReleaseDocumentation,
+  assertReleaseDocumentation,
+  loadReleaseDocumentationSurfaces,
+} from './release-docs-contract.mjs';
+
 const repoRoot = path.resolve(import.meta.dirname, '..');
-const read = (relativePath: string) => readFileSync(path.join(repoRoot, relativePath), 'utf8');
+const policy = loadDesktopReleasePolicy();
+const baselineStatus = evaluateDesktopRelease({ policy, environment: {} });
+const canonicalSurfaces = loadReleaseDocumentationSurfaces();
 
-const documentation = {
-  runbook: read('docs/desktop-release-runbook.md'),
-  audit: read('docs/desktop-release-capability-audit.md'),
-  release: read('RELEASE.md'),
-  changelog: read('CHANGELOG.md'),
-  security: read('SECURITY.md'),
-  desktop: read('apps/desktop/README.md'),
-  sdk: read('packages/game-sdk/README.md'),
-  creator: read('docs/battle-royale-creator-guide.md'),
-  creatorEvidence: read('docs/battle-royale-release-evidence.md'),
-  site: read('apps/docs/src/content/docs/desktop-release/index.md'),
-  siteSecurity: read('apps/docs/src/content/docs/security/index.md'),
-};
+const mutated = (relativePath: string, transform: (source: string) => string) => ({
+  ...canonicalSurfaces,
+  [relativePath]: transform(canonicalSurfaces[relativePath]!),
+});
 
-const policy = JSON.parse(read('scripts/desktop-release-policy.json')) as {
-  support: Array<{ id: string; status: string }>;
+const assertMutatedContractFails = (surfaces: Record<string, string>, code: string) => {
+  expect(() => assertReleaseDocumentation({ surfaces, policy, baselineStatus })).toThrow(code);
 };
 
 describe('desktop release documentation contract', () => {
-  it('renders every machine-owned support decision in the canonical runbook', () => {
-    expect(documentation.runbook).toContain('desktop distribution is **NO-GO**');
-    expect(documentation.runbook).toContain('Forge configuration as evidence');
-    for (const entry of policy.support) {
-      const vocabulary =
-        entry.status === 'candidate'
-          ? ['macOS arm64', 'Candidate']
-          : entry.id === 'platform.macos-x64'
-            ? ['macOS x64', 'Unsupported']
-            : entry.id === 'platform.windows'
-              ? ['Windows x64/arm64', 'Unsupported']
-              : entry.id === 'platform.linux'
-                ? ['Linux x64/arm64', 'Unsupported']
-                : entry.id === 'capability.auto-update'
-                  ? ['Automatic or in-app desktop update', 'Unsupported']
-                  : entry.id === 'capability.remote-crash-reporting'
-                    ? ['Remote crash reporting', 'Unsupported']
-                    : ['GitHub Release publication', 'Operator-blocked'];
-      for (const token of vocabulary) expect(documentation.runbook).toContain(token);
-    }
+  it('derives the full support and exact evidence-free blocker projections from canonical data', () => {
+    expect(assertCanonicalReleaseDocumentation()).toEqual({
+      stateSurfaces: 11,
+      auditedSurfaces: 14,
+      supportDecisions: policy.support.length,
+      baselineBlockers: baselineStatus.blockers.length,
+    });
+    expect(baselineStatus.decision).toBe('no-go');
+    expect(baselineStatus.blockers).toHaveLength(7);
   });
 
-  it('documents stable evidence-free blockers and independent native verification', () => {
-    for (const blocker of [
-      'artifact.manifest-missing',
-      'artifact.file-missing',
-      'rollback.retained-artifact-missing',
-      'rollback.backup-output-missing',
-      'signing.approved-team-missing',
-      'publish.approval-missing',
-      'publish.credential-missing',
-    ]) {
-      expect(documentation.runbook).toContain(blocker);
-    }
-    expect(documentation.runbook).toContain('no caller-provided native receipt is accepted');
-    expect(documentation.runbook).toContain('lastKnownGoodReleases');
-    expect(documentation.runbook).toContain('TILEBORNE_DESKTOP_PUBLISH_APPROVED=1');
-    expect(documentation.runbook).toContain('gh auth status --hostname github.com --active');
-  });
-
-  it('keeps creator, SDK, security, handoff, and site prose honest', () => {
-    for (const text of [
-      documentation.audit,
-      documentation.release,
-      documentation.desktop,
-      documentation.creator,
-      documentation.creatorEvidence,
-      documentation.site,
-    ]) {
-      expect(text).toContain('NO-GO');
-    }
-    expect(documentation.sdk).toContain('does not imply desktop platform support');
-    expect(documentation.security).toContain('Desktop release credentials and private evidence');
-    expect(documentation.siteSecurity).toContain('Desktop release secrets and private evidence');
-    expect(documentation.changelog).toContain('Forge maker');
-    expect(documentation.changelog).toContain('entries no longer imply Windows');
-    expect(documentation.release).toContain('automatic desktop update/rollback');
-  });
-
-  it('keeps all newly introduced local documentation targets tracked and resolvable', () => {
+  it('keeps the unreleased RC state and all newly introduced local targets resolvable', () => {
+    expect(canonicalSurfaces['CHANGELOG.md']).toMatch(/^## \[1\.0\.0-rc\.0\] - Unreleased$/m);
+    expect(canonicalSurfaces['CHANGELOG.md']).not.toMatch(
+      /^## \[1\.0\.0-rc\.0\] - \d{4}-\d{2}-\d{2}$/m,
+    );
     for (const relativePath of [
       'docs/desktop-release-runbook.md',
       'docs/desktop-release-capability-audit.md',
@@ -94,13 +50,17 @@ describe('desktop release documentation contract', () => {
     ]) {
       expect(existsSync(path.join(repoRoot, relativePath)), relativePath).toBe(true);
     }
-    expect(read('.gitignore')).toContain('!/docs/desktop-release-runbook.md');
+    expect(readFileSync(path.join(repoRoot, '.gitignore'), 'utf8')).toContain(
+      '!/docs/desktop-release-runbook.md',
+    );
   });
 
-  it('publishes replayable policy, artifact, performance, and handoff commands', () => {
+  it('retains the replayable commands, privacy boundary, and independent evidence vocabulary', () => {
+    const runbook = canonicalSurfaces['docs/desktop-release-runbook.md']!;
     for (const command of [
       'pnpm release:desktop:policy',
       'pnpm release:desktop:status',
+      'pnpm release:desktop:docs',
       'pnpm --filter @tileborne/desktop package',
       'node scripts/desktop-release-contract.mjs status',
       'node scripts/desktop-release-contract.mjs verify',
@@ -109,7 +69,74 @@ describe('desktop release documentation contract', () => {
       'pnpm release:gates',
       'pnpm docs:build',
     ]) {
-      expect(documentation.runbook).toContain(command);
+      expect(runbook).toContain(command);
     }
+    expect(runbook).toContain('no caller-provided native receipt is accepted');
+    expect(runbook).toContain('lastKnownGoodReleases');
+    expect(runbook).toContain('TILEBORNE_DESKTOP_PUBLISH_APPROVED=1');
+    expect(runbook).toContain('gh auth status --hostname github.com --active');
+  });
+
+  it.each([
+    ['Windows support', 'Windows is supported.'],
+    ['Linux support', 'Linux is supported.'],
+    ['automatic update support', 'Automatic updates are supported.'],
+    ['remote crash support', 'Remote crash reporting is supported.'],
+    ['desktop GO', 'Desktop release is GO.'],
+    ['completed publication', 'Publication is complete.'],
+    ['self-asserted evidence', 'Caller-provided native receipt is accepted.'],
+  ])('rejects a contradictory %s claim on any audited surface', (_label, claim) => {
+    assertMutatedContractFails(
+      mutated('README.md', (source) => `${source}\n${claim}\n`),
+      'release-docs.contradictory-claim',
+    );
+  });
+
+  it('rejects support marker drift instead of maintaining a second test-side matrix', () => {
+    assertMutatedContractFails(
+      mutated('docs/desktop-release-runbook.md', (source) =>
+        source.replace(
+          '- `platform.windows` (`Windows`): `unsupported`',
+          '- `platform.windows` (`Windows`): `supported`',
+        ),
+      ),
+      'release-docs.canonical-list-drift',
+    );
+  });
+
+  it('rejects a missing, extra, reordered, or renamed evidence-free blocker', () => {
+    for (const transform of [
+      (source: string) => source.replace('- `artifact.file-missing`\n', ''),
+      (source: string) =>
+        source.replace(
+          '- `artifact.file-missing`',
+          '- `artifact.file-missing`\n- `artifact.self-asserted-receipt`',
+        ),
+      (source: string) =>
+        source.replace(
+          '- `artifact.manifest-missing`\n- `artifact.file-missing`',
+          '- `artifact.file-missing`\n- `artifact.manifest-missing`',
+        ),
+      (source: string) =>
+        source.replace('- `artifact.file-missing`', '- `artifact.candidate-missing`'),
+    ]) {
+      assertMutatedContractFails(
+        mutated('docs/desktop-release-runbook.md', transform),
+        'release-docs.canonical-list-drift',
+      );
+    }
+  });
+
+  it('rejects a dated or weakened release-candidate state', () => {
+    assertMutatedContractFails(
+      mutated('CHANGELOG.md', (source) =>
+        source.replace('## [1.0.0-rc.0] - Unreleased', '## [1.0.0-rc.0] - 2026-06-15'),
+      ),
+      'release-docs.changelog-state-drift',
+    );
+    assertMutatedContractFails(
+      mutated('README.md', (source) => source.replace('unreleased', 'available')),
+      'release-docs.release-state-drift',
+    );
   });
 });

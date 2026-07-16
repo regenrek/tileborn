@@ -5,7 +5,8 @@ description: Production 1.0 release-candidate checklist, deploy proof, secrets s
 
 # Release Readiness
 
-This page is the maintainer checklist for preparing a Tileborne production 1.0 release candidate. It does not mean a release has been tagged or published.
+This page is the maintainer checklist for preparing Tileborne `1.0.0-rc.0`. It is **unreleased and
+NO-GO** for desktop distribution; no tag or publication exists.
 
 The desktop editor distribution is currently **NO-GO**. macOS arm64 is its sole 1.0 candidate; see
 [Desktop Release](/desktop-release/) for the independent signed-installer evidence and approval

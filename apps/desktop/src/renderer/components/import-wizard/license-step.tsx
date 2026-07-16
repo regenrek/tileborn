@@ -144,7 +144,9 @@ export function LicenseStep({
             id="tiled-license-attribution"
             value={license.attribution ?? ''}
             aria-invalid={attributionMissing}
-            onChange={(event) => onLicenseChange({ ...license, attribution: event.currentTarget.value })}
+            onChange={(event) =>
+              onLicenseChange({ ...license, attribution: event.currentTarget.value })
+            }
           />
         </Field>
         <Field>
@@ -157,7 +159,9 @@ export function LicenseStep({
             </span>
             <Switch
               checked={license.redistributable}
-              onCheckedChange={(checked) => onLicenseChange({ ...license, redistributable: checked })}
+              onCheckedChange={(checked) =>
+                onLicenseChange({ ...license, redistributable: checked })
+              }
             />
           </label>
         </Field>

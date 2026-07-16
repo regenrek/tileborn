@@ -15,7 +15,10 @@ const fields = [
     label: 'Team',
     kind: 'enum',
     default: 'neutral',
-    options: [{ value: 'neutral', label: 'Neutral' }, { value: 'player', label: 'Player' }],
+    options: [
+      { value: 'neutral', label: 'Neutral' },
+      { value: 'player', label: 'Player' },
+    ],
   },
   { key: 'weapon', label: 'Weapon', kind: 'reference', target: 'weapon', allowNone: false },
   {
@@ -68,7 +71,15 @@ describe('SchemaFieldControls', () => {
     render(
       <SchemaFieldControls
         fields={fields}
-        values={{ speed: 0, title: '', enabled: true, team: 'invalid', weapon: 'missing', advanced: null, spawn: { count: 1 } }}
+        values={{
+          speed: 0,
+          title: '',
+          enabled: true,
+          team: 'invalid',
+          weapon: 'missing',
+          advanced: null,
+          spawn: { count: 1 },
+        }}
         references={{ weapon: [{ id: 'weapon:abc', label: 'Pulse rifle' }] }}
         onChange={() => {}}
         testIdPrefix="schema"
@@ -88,11 +99,13 @@ describe('SchemaFieldControls', () => {
         fields={assetFields}
         values={{ portrait: 'pack-a:placeable:hero' }}
         references={{
-          asset: [{
-            id: 'pack-a:placeable:hero',
-            label: 'Hero sprite',
-            previewUrl: 'tileborne-asset://thumb/hero.png',
-          }],
+          asset: [
+            {
+              id: 'pack-a:placeable:hero',
+              label: 'Hero sprite',
+              previewUrl: 'tileborne-asset://thumb/hero.png',
+            },
+          ],
         }}
         onChange={() => {}}
         testIdPrefix="asset-schema"

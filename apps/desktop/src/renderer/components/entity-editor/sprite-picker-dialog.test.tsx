@@ -13,16 +13,13 @@ import {
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  SpritePickerDialog,
-} from './sprite-picker-dialog';
+import { SpritePickerDialog } from './sprite-picker-dialog';
 import {
   SPRITE_PICKER_DOM_LIMIT,
   SPRITE_PICKER_PAGE_SIZE_PER_KIND,
 } from '@/lib/sprite-picker-model';
 
-const uuid = (suffix: string) =>
-  `550e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
+const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
 const firstPackId = makePackId(uuid('1'));
 const secondPackId = makePackId(uuid('2'));
 
@@ -138,14 +135,14 @@ describe('SpritePickerDialog bounded data path', () => {
         ],
       ]),
     );
-    expect(
-      getPackLibrary.mock.calls.some((call) => call[0]?.packId === String(secondPackId)),
-    ).toBe(false);
+    expect(getPackLibrary.mock.calls.some((call) => call[0]?.packId === String(secondPackId))).toBe(
+      false,
+    );
 
     await waitFor(() =>
-      expect(
-        document.querySelectorAll('[data-testid^="entity-sprite-picker-item-"]'),
-      ).toHaveLength(SPRITE_PICKER_DOM_LIMIT),
+      expect(document.querySelectorAll('[data-testid^="entity-sprite-picker-item-"]')).toHaveLength(
+        SPRITE_PICKER_DOM_LIMIT,
+      ),
     );
     await waitFor(() => expect(resolvePreviews).toHaveBeenCalledTimes(2));
     expect(

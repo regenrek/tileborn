@@ -31,10 +31,9 @@ export function RuntimeTab() {
   const playtestQuery = usePlaytestSessions({
     refetchInterval: playtestActive ? 1_000 : false,
   });
-  const behaviorDebug = usePlaytestBehaviorDebug(
-    playtestActive ? playtestSessionId : null,
-    { refetchInterval: playtestActive ? 250 : false },
-  );
+  const behaviorDebug = usePlaytestBehaviorDebug(playtestActive ? playtestSessionId : null, {
+    refetchInterval: playtestActive ? 250 : false,
+  });
   const behaviorControl = useControlPlaytestBehaviorDebug();
 
   const session = playtestQuery.data?.sessions.find((entry) => entry.id === playtestSessionId);
@@ -47,16 +46,23 @@ export function RuntimeTab() {
   const instanceOptions = useMemo(() => {
     const byId = new Map<string, { readonly instanceId: string; readonly behaviorId: string }>();
     for (const trace of debug?.traces ?? []) {
-      byId.set(trace.instanceId, { instanceId: trace.instanceId, behaviorId: String(trace.behaviorId) });
+      byId.set(trace.instanceId, {
+        instanceId: trace.instanceId,
+        behaviorId: String(trace.behaviorId),
+      });
     }
     return [...byId.values()];
   }, [debug?.traces]);
-  const activeInstanceId = instanceOptions.some(({ instanceId }) => instanceId === selectedInstanceId)
+  const activeInstanceId = instanceOptions.some(
+    ({ instanceId }) => instanceId === selectedInstanceId,
+  )
     ? selectedInstanceId
     : debug?.traces.at(-1)?.instanceId;
-  const instanceHistory = (debug?.traces ?? []).filter((trace) => trace.instanceId === activeInstanceId);
-  const currentTrace = instanceHistory.find((trace) => trace.sequence === selectedSequence)
-    ?? instanceHistory.at(-1);
+  const instanceHistory = (debug?.traces ?? []).filter(
+    (trace) => trace.instanceId === activeInstanceId,
+  );
+  const currentTrace =
+    instanceHistory.find((trace) => trace.sequence === selectedSequence) ?? instanceHistory.at(-1);
   const control = (command: 'pause' | 'step' | 'continue') => {
     if (playtestSessionId === null) return;
     void behaviorControl.mutateAsync({
@@ -64,12 +70,15 @@ export function RuntimeTab() {
       command,
     });
   };
-  const openBehaviorSource = (behaviorId: string, target?: {
-    readonly nodeId?: string;
-    readonly sourcePath?: string;
-    readonly line?: number;
-    readonly column?: number;
-  }) => {
+  const openBehaviorSource = (
+    behaviorId: string,
+    target?: {
+      readonly nodeId?: string;
+      readonly sourcePath?: string;
+      readonly line?: number;
+      readonly column?: number;
+    },
+  ) => {
     if (session === undefined) return;
     requestBehaviorSourceNavigation({
       projectId: String(session.projectId),
@@ -118,21 +127,26 @@ export function RuntimeTab() {
     <div className="space-y-2 py-2">
       <Card className="gap-2 py-2">
         <CardHeader className="gap-1 px-3 py-0">
-          <CardTitle className={cn(typography.caption, 'text-foreground')}>Plugin runtime</CardTitle>
+          <CardTitle className={cn(typography.caption, 'text-foreground')}>
+            Plugin runtime
+          </CardTitle>
           <CardDescription className={typography.bodyMicro}>{pluginName}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 px-3 py-0 sm:grid-cols-4">
           <MetricTile label="Tick" value={String(metrics.tickCount)} />
           <MetricTile label="Players" value={String(metrics.playerCount)} />
           <MetricTile label="Last event" value={metrics.lastPluginEvent} />
-          <MetricTile
-            label="Last tick"
-            value={formatDrawerTimestamp(metrics.lastTickAtMs)}
-          />
+          <MetricTile label="Last tick" value={formatDrawerTimestamp(metrics.lastTickAtMs)} />
           {diagnostics ? (
             <>
-              <MetricTile label="Avg tick" value={formatMs(diagnostics.telemetry.averageTickDurationMs)} />
-              <MetricTile label="Max frame" value={formatBytes(diagnostics.bandwidth.maxFrameBytes)} />
+              <MetricTile
+                label="Avg tick"
+                value={formatMs(diagnostics.telemetry.averageTickDurationMs)}
+              />
+              <MetricTile
+                label="Max frame"
+                value={formatBytes(diagnostics.bandwidth.maxFrameBytes)}
+              />
               <MetricTile label="Replay" value={`${diagnostics.replay.snapshotFrames} frames`} />
               <MetricTile label="Hash" value={diagnostics.replay.rollingHash.slice(-8)} />
             </>
@@ -172,17 +186,36 @@ export function RuntimeTab() {
         <Card className="gap-2 py-2" data-testid="behavior-runtime-inspector">
           <CardHeader className="gap-1 px-3 py-0">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className={cn(typography.caption, 'text-foreground')}>Behavior inspector</CardTitle>
-              <Badge variant={debug.status === 'paused' ? 'warning' : 'success'}>{debug.status}</Badge>
+              <CardTitle className={cn(typography.caption, 'text-foreground')}>
+                Behavior inspector
+              </CardTitle>
+              <Badge variant={debug.status === 'paused' ? 'warning' : 'success'}>
+                {debug.status}
+              </Badge>
               <span className="text-xs text-muted-foreground">Tick {debug.tick}</span>
               <div className="ml-auto flex items-center gap-1">
-                <Button size="sm" variant="outline" disabled={debug.status === 'paused' || behaviorControl.isPending} onClick={() => control('pause')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={debug.status === 'paused' || behaviorControl.isPending}
+                  onClick={() => control('pause')}
+                >
                   <PauseIcon className="size-3.5" /> Pause
                 </Button>
-                <Button size="sm" variant="outline" disabled={debug.status !== 'paused' || behaviorControl.isPending} onClick={() => control('step')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={debug.status !== 'paused' || behaviorControl.isPending}
+                  onClick={() => control('step')}
+                >
                   <StepForwardIcon className="size-3.5" /> Step
                 </Button>
-                <Button size="sm" variant="outline" disabled={debug.status !== 'paused' || behaviorControl.isPending} onClick={() => control('continue')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={debug.status !== 'paused' || behaviorControl.isPending}
+                  onClick={() => control('continue')}
+                >
                   <PlayIcon className="size-3.5" /> Continue
                 </Button>
               </div>
@@ -194,7 +227,8 @@ export function RuntimeTab() {
           <CardContent className="space-y-2 px-3 py-0">
             {instanceOptions.length > 0 ? (
               <div className="grid gap-2 rounded-md border p-2 text-xs lg:grid-cols-[minmax(12rem,18rem)_minmax(0,1fr)]">
-                <label className="grid gap-1 font-medium">Behavior instance
+                <label className="grid gap-1 font-medium">
+                  Behavior instance
                   <select
                     aria-label="Behavior instance"
                     className="h-8 rounded-md border bg-background px-2 text-xs"
@@ -205,13 +239,20 @@ export function RuntimeTab() {
                     }}
                   >
                     {instanceOptions.map((option) => (
-                      <option key={option.instanceId} value={option.instanceId}>{option.behaviorId} · {option.instanceId}</option>
+                      <option key={option.instanceId} value={option.instanceId}>
+                        {option.behaviorId} · {option.instanceId}
+                      </option>
                     ))}
                   </select>
                 </label>
                 <div className="min-w-0">
-                  <p className="mb-1 font-medium">Retained timeline · {instanceHistory.length}/256</p>
-                  <div className="flex max-h-20 gap-1 overflow-auto" data-testid="behavior-instance-timeline">
+                  <p className="mb-1 font-medium">
+                    Retained timeline · {instanceHistory.length}/256
+                  </p>
+                  <div
+                    className="flex max-h-20 gap-1 overflow-auto"
+                    data-testid="behavior-instance-timeline"
+                  >
                     {instanceHistory.map((trace) => (
                       <Button
                         key={trace.sequence}
@@ -221,24 +262,35 @@ export function RuntimeTab() {
                         className="h-auto shrink-0 px-2 py-1 text-[11px]"
                         aria-label={`Inspect tick ${trace.tick} ${trace.eventId}`}
                         onClick={() => setSelectedSequence(trace.sequence)}
-                      >#{trace.tick} {trace.eventId}</Button>
+                      >
+                        #{trace.tick} {trace.eventId}
+                      </Button>
                     ))}
                   </div>
                 </div>
               </div>
             ) : null}
             {debug.lastReload ? (
-              <div className={cn(
-                'flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs',
-                debug.lastReload.status === 'applied'
-                  ? 'border-emerald-500/40 text-emerald-700'
-                  : 'border-amber-500/40 text-amber-700',
-              )} data-testid="behavior-hot-reload-status">
-                <span className="min-w-0 flex-1">Hot reload {debug.lastReload.status === 'applied' ? 'applied' : 'rejected — last-known-good still running'}
+              <div
+                className={cn(
+                  'flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs',
+                  debug.lastReload.status === 'applied'
+                    ? 'border-emerald-500/40 text-emerald-700'
+                    : 'border-amber-500/40 text-amber-700',
+                )}
+                data-testid="behavior-hot-reload-status"
+              >
+                <span className="min-w-0 flex-1">
+                  Hot reload{' '}
+                  {debug.lastReload.status === 'applied'
+                    ? 'applied'
+                    : 'rejected — last-known-good still running'}
                   {debug.lastReload.diagnostic ? `: ${debug.lastReload.diagnostic.message}` : ''}
                 </span>
                 {debug.lastReload.diagnostic ? (
-                  <Button type="button" size="sm" variant="ghost" onClick={openReloadSource}>Open source</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={openReloadSource}>
+                    Open source
+                  </Button>
                 ) : null}
               </div>
             ) : null}
@@ -248,8 +300,18 @@ export function RuntimeTab() {
               <div className="grid gap-2 text-xs lg:grid-cols-2">
                 <div className="space-y-1 rounded-md border p-2">
                   <p className="font-medium">{currentTrace.eventId}</p>
-                  <Button type="button" size="sm" variant="link" className="h-auto justify-start px-0 text-xs" onClick={openLatestSource} title={currentTrace.source.filePath}>
-                    <span className="truncate">{currentTrace.source.filePath}{currentTrace.source.nodeId ? ` · ${currentTrace.source.nodeId}` : ''}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="link"
+                    className="h-auto justify-start px-0 text-xs"
+                    onClick={openLatestSource}
+                    title={currentTrace.source.filePath}
+                  >
+                    <span className="truncate">
+                      {currentTrace.source.filePath}
+                      {currentTrace.source.nodeId ? ` · ${currentTrace.source.nodeId}` : ''}
+                    </span>
                   </Button>
                   <DebugJson label="Event payload" value={currentTrace.event} />
                   <DebugJson label="State before" value={currentTrace.stateBefore} />
@@ -259,23 +321,33 @@ export function RuntimeTab() {
                   <p className="font-medium">Branch & actions</p>
                   {currentTrace.steps.length === 0 ? (
                     <p className="text-muted-foreground">TypeScript handler · source-map scoped</p>
-                  ) : currentTrace.steps.map((step, index) => (
-                    <p key={`${step.nodeId}:${index}`} className="font-mono text-[11px]">
-                      {step.kind === 'branch' ? `${step.branch.toUpperCase()} · ${step.nodeId}` : `${step.actionId} · ${step.nodeId}`}
-                    </p>
-                  ))}
+                  ) : (
+                    currentTrace.steps.map((step, index) => (
+                      <p key={`${step.nodeId}:${index}`} className="font-mono text-[11px]">
+                        {step.kind === 'branch'
+                          ? `${step.branch.toUpperCase()} · ${step.nodeId}`
+                          : `${step.actionId} · ${step.nodeId}`}
+                      </p>
+                    ))
+                  )}
                   <DebugJson label="Emitted actions" value={currentTrace.commands} />
                 </div>
               </div>
             )}
             {debug.diagnostics.length > 0 ? (
               <div className="space-y-1 rounded-md border border-destructive/30 p-2">
-                <p className="flex items-center gap-1 font-medium text-destructive"><AlertTriangleIcon className="size-3.5" /> Diagnostics</p>
+                <p className="flex items-center gap-1 font-medium text-destructive">
+                  <AlertTriangleIcon className="size-3.5" /> Diagnostics
+                </p>
                 {debug.diagnostics.slice(-4).map((diagnostic, index) => (
                   <p key={`${diagnostic.code}:${index}`} className="text-xs">
                     <span className="font-mono">{diagnostic.code}</span> · {diagnostic.message}
-                    {typeof diagnostic.details?.fileName === 'string' ? ` · ${diagnostic.details.fileName}` : ''}
-                    {typeof diagnostic.details?.nodeId === 'string' ? ` · ${diagnostic.details.nodeId}` : ''}
+                    {typeof diagnostic.details?.fileName === 'string'
+                      ? ` · ${diagnostic.details.fileName}`
+                      : ''}
+                    {typeof diagnostic.details?.nodeId === 'string'
+                      ? ` · ${diagnostic.details.nodeId}`
+                      : ''}
                   </p>
                 ))}
               </div>

@@ -23,12 +23,7 @@ interface AssetPackCardProps {
   readonly onSelect: () => void;
 }
 
-export function AssetPackCard({
-  pack,
-  selected,
-  isActivePalette,
-  onSelect,
-}: AssetPackCardProps) {
+export function AssetPackCard({ pack, selected, isActivePalette, onSelect }: AssetPackCardProps) {
   return (
     <Card
       data-testid={`asset-pack-card-${pack.id}`}

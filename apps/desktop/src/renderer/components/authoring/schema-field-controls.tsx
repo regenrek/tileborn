@@ -30,7 +30,7 @@ const selectClassName =
   'h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50';
 
 const objectValue = (value: JsonValue | undefined): JsonObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? value as JsonObject : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as JsonObject) : {};
 
 function FieldControl({
   field,
@@ -72,7 +72,19 @@ function FieldControl({
           <Checkbox
             checked={enabled}
             disabled={disabled}
-            onCheckedChange={(checked) => onChange(checked === true ? field.field.kind === 'group' ? {} : field.field.kind === 'reference' ? field.field.default ?? '' : field.field.kind === 'optional' ? null : field.field.default : null)}
+            onCheckedChange={(checked) =>
+              onChange(
+                checked === true
+                  ? field.field.kind === 'group'
+                    ? {}
+                    : field.field.kind === 'reference'
+                      ? (field.field.default ?? '')
+                      : field.field.kind === 'optional'
+                        ? null
+                        : field.field.default
+                  : null,
+              )
+            }
           />
           <span className={typography.rowTitle}>{field.label}</span>
         </label>
@@ -112,30 +124,31 @@ function FieldControl({
       />
     );
   } else if (field.kind === 'text') {
-    control = field.multiline === true ? (
-      <textarea
-        id={testId}
-        data-testid={testId}
-        className={cn(selectClassName, 'min-h-20 py-1')}
-        value={typeof value === 'string' ? value : field.default}
-        minLength={field.minLength}
-        maxLength={field.maxLength}
-        disabled={disabled}
-        aria-describedby={describedBy}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-    ) : (
-      <Input
-        id={testId}
-        data-testid={testId}
-        value={typeof value === 'string' ? value : field.default}
-        minLength={field.minLength}
-        maxLength={field.maxLength}
-        disabled={disabled}
-        aria-describedby={describedBy}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-    );
+    control =
+      field.multiline === true ? (
+        <textarea
+          id={testId}
+          data-testid={testId}
+          className={cn(selectClassName, 'min-h-20 py-1')}
+          value={typeof value === 'string' ? value : field.default}
+          minLength={field.minLength}
+          maxLength={field.maxLength}
+          disabled={disabled}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+      ) : (
+        <Input
+          id={testId}
+          data-testid={testId}
+          value={typeof value === 'string' ? value : field.default}
+          minLength={field.minLength}
+          maxLength={field.maxLength}
+          disabled={disabled}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+      );
   } else if (field.kind === 'boolean') {
     control = (
       <Checkbox
@@ -148,21 +161,26 @@ function FieldControl({
       />
     );
   } else {
-    const options: readonly AuthoringReferenceOption[] = field.kind === 'enum'
-      ? field.options.map((option) => ({ id: option.value, label: option.label }))
-      : references[field.target] ?? [];
-    const selected = typeof value === 'string'
-      ? value
-      : field.kind === 'enum'
-        ? field.default
-        : field.default ?? '';
-    const selectedReference = field.kind === 'reference'
-      ? options.find((option) => option.id === selected)
-      : undefined;
+    const options: readonly AuthoringReferenceOption[] =
+      field.kind === 'enum'
+        ? field.options.map((option) => ({ id: option.value, label: option.label }))
+        : (references[field.target] ?? []);
+    const selected =
+      typeof value === 'string'
+        ? value
+        : field.kind === 'enum'
+          ? field.default
+          : (field.default ?? '');
+    const selectedReference =
+      field.kind === 'reference' ? options.find((option) => option.id === selected) : undefined;
     control = (
       <div className="flex items-center gap-2">
         {selectedReference?.previewUrl === undefined ? null : (
-          <img src={selectedReference.previewUrl} alt="" className="size-8 rounded object-contain" />
+          <img
+            src={selectedReference.previewUrl}
+            alt=""
+            className="size-8 rounded object-contain"
+          />
         )}
         <select
           id={testId}
@@ -173,7 +191,9 @@ function FieldControl({
           aria-describedby={describedBy}
           onChange={(event) => onChange(event.currentTarget.value)}
         >
-          {field.kind === 'reference' && field.allowNone === true ? <option value="">None</option> : null}
+          {field.kind === 'reference' && field.allowNone === true ? (
+            <option value="">None</option>
+          ) : null}
           {options.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
@@ -190,7 +210,9 @@ function FieldControl({
         {field.kind === 'boolean' ? label : control}
       </div>
       {field.help === undefined ? null : (
-        <p id={describedBy} className={cn('text-muted-foreground', typography.bodyMicro)}>{field.help}</p>
+        <p id={describedBy} className={cn('text-muted-foreground', typography.bodyMicro)}>
+          {field.help}
+        </p>
       )}
     </div>
   );
@@ -206,7 +228,10 @@ export function SchemaFieldControls({
   onChange,
 }: SchemaFieldControlsProps) {
   const referenceIndex = Object.fromEntries(
-    Object.entries(references).map(([target, options]) => [target, new Set(options.map((option) => option.id))]),
+    Object.entries(references).map(([target, options]) => [
+      target,
+      new Set(options.map((option) => option.id)),
+    ]),
   );
   const validation = validateAuthoringValues(fields, values, referenceIndex);
   return (
@@ -224,7 +249,9 @@ export function SchemaFieldControls({
       ))}
       {validation.issues.length === 0 ? null : (
         <ul className={cn('text-destructive', typography.bodyMicro)}>
-          {validation.issues.map((issue) => <li key={`${issue.path}:${issue.message}`}>{issue.message}</li>)}
+          {validation.issues.map((issue) => (
+            <li key={`${issue.path}:${issue.message}`}>{issue.message}</li>
+          ))}
         </ul>
       )}
     </div>

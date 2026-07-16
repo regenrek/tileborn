@@ -61,10 +61,14 @@ export const freshBehaviorNodeId = (): BehaviorNodeId =>
 const defaultLiteral = (parameter: BehaviorParameterMetadata): JsonValue => {
   if (parameter.defaultValue !== undefined) return parameter.defaultValue;
   switch (parameter.valueKind) {
-    case 'boolean': return false;
-    case 'number': return 0;
-    case 'string': return '';
-    case 'json': return null;
+    case 'boolean':
+      return false;
+    case 'number':
+      return 0;
+    case 'string':
+      return '';
+    case 'json':
+      return null;
     case 'entity-reference':
     case 'asset-reference':
     case 'catalog-reference':
@@ -77,11 +81,16 @@ const referenceTag = (
   kind: BehaviorParameterMetadata['valueKind'],
 ): BehaviorReference['_tag'] | undefined => {
   switch (kind) {
-    case 'entity-reference': return 'entity';
-    case 'asset-reference': return 'asset';
-    case 'catalog-reference': return 'catalog';
-    case 'behavior-reference': return 'behavior';
-    default: return undefined;
+    case 'entity-reference':
+      return 'entity';
+    case 'asset-reference':
+      return 'asset';
+    case 'catalog-reference':
+      return 'catalog';
+    case 'behavior-reference':
+      return 'behavior';
+    default:
+      return undefined;
   }
 };
 
@@ -110,9 +119,14 @@ export const invocationForEntry = (
         // "any eliminated player"). Available picker options must never turn it
         // into an arbitrary concrete project reference.
         if (!parameter.required && !hasOverride && parameter.defaultValue === undefined) return [];
-        return [[parameter.key, hasOverride
-          ? new LiteralBehaviorValue({ value: literalOverrides[parameter.key]! })
-          : expressionForParameter(parameter, references)] as const];
+        return [
+          [
+            parameter.key,
+            hasOverride
+              ? new LiteralBehaviorValue({ value: literalOverrides[parameter.key]! })
+              : expressionForParameter(parameter, references),
+          ] as const,
+        ];
       }),
     ),
   });
@@ -135,11 +149,12 @@ export const instantiateBehaviorTemplate = (
       invocation: invocation(item),
     }),
   );
-  const rootCondition: BehaviorCondition | undefined = conditions.length === 0
-    ? undefined
-    : conditions.length === 1
-      ? conditions[0]
-      : { _tag: 'all', nodeId: freshBehaviorNodeId(), conditions };
+  const rootCondition: BehaviorCondition | undefined =
+    conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : { _tag: 'all', nodeId: freshBehaviorNodeId(), conditions };
   return {
     label: template.label,
     state: [],
@@ -201,7 +216,9 @@ const expressionMatchesParameter = (
   references: BehaviorReferenceIndex,
 ): string | undefined => {
   if (expression._tag === 'state') {
-    return stateKeys.has(expression.key) ? undefined : `Unknown local state field “${expression.key}”`;
+    return stateKeys.has(expression.key)
+      ? undefined
+      : `Unknown local state field “${expression.key}”`;
   }
   if (expression._tag === 'event-field') {
     return expression.path.trim().length > 0 ? undefined : 'Event field path cannot be empty';
@@ -212,21 +229,32 @@ const expressionMatchesParameter = (
     if (expression.reference._tag !== expectedReference) {
       return `${parameter.label} requires a ${expectedReference} reference`;
     }
-    const id = expression.reference._tag === 'entity' ? expression.reference.objectId
-      : expression.reference._tag === 'asset' ? expression.reference.assetId
-        : expression.reference._tag === 'catalog' ? expression.reference.objectTypeId
-          : expression.reference.behaviorId;
+    const id =
+      expression.reference._tag === 'entity'
+        ? expression.reference.objectId
+        : expression.reference._tag === 'asset'
+          ? expression.reference.assetId
+          : expression.reference._tag === 'catalog'
+            ? expression.reference.objectTypeId
+            : expression.reference.behaviorId;
     return typeof id === 'string' && references[expectedReference]?.has(id) === false
       ? `${parameter.label} points to a missing ${expectedReference}`
       : undefined;
   }
   const value = expression.value;
   switch (parameter.valueKind) {
-    case 'boolean': return typeof value === 'boolean' ? undefined : `${parameter.label} must be true or false`;
-    case 'number': return typeof value === 'number' && Number.isFinite(value) ? undefined : `${parameter.label} must be a number`;
-    case 'string': return typeof value === 'string' ? undefined : `${parameter.label} must be text`;
-    case 'json': return undefined;
-    default: return `${parameter.label} requires a reference`;
+    case 'boolean':
+      return typeof value === 'boolean' ? undefined : `${parameter.label} must be true or false`;
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value)
+        ? undefined
+        : `${parameter.label} must be a number`;
+    case 'string':
+      return typeof value === 'string' ? undefined : `${parameter.label} must be text`;
+    case 'json':
+      return undefined;
+    default:
+      return `${parameter.label} requires a reference`;
   }
 };
 
@@ -239,13 +267,18 @@ export const validateBehaviorDraft = (
   const entries = new Map(registry.entries.map((entry) => [String(entry.id), entry]));
   const stateKeys = new Set<string>();
   const nodeIds = new Set<string>();
-  if (draft.label.trim().length === 0) issues.push({ path: 'label', message: 'Behavior name is required' });
+  if (draft.label.trim().length === 0)
+    issues.push({ path: 'label', message: 'Behavior name is required' });
   draft.state.forEach((field, index) => {
     const key = field.key.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key)) {
-      issues.push({ path: `state.${index}.key`, message: 'State keys use letters, numbers, _ or -' });
+      issues.push({
+        path: `state.${index}.key`,
+        message: 'State keys use letters, numbers, _ or -',
+      });
     }
-    if (stateKeys.has(key)) issues.push({ path: `state.${index}.key`, message: `Duplicate state field “${key}”` });
+    if (stateKeys.has(key))
+      issues.push({ path: `state.${index}.key`, message: `Duplicate state field “${key}”` });
     stateKeys.add(key);
   });
   const inspectInvocation = (
@@ -265,7 +298,12 @@ export const validateBehaviorDraft = (
     for (const parameter of entry.inputs) {
       const expression = invocation.arguments[parameter.key];
       if (expression === undefined) {
-        if (parameter.required) issues.push({ path: `${path}.${parameter.key}`, message: `${parameter.label} is required`, nodeId });
+        if (parameter.required)
+          issues.push({
+            path: `${path}.${parameter.key}`,
+            message: `${parameter.label} is required`,
+            nodeId,
+          });
         continue;
       }
       const message = expressionMatchesParameter(expression, parameter, stateKeys, references);
@@ -273,21 +311,29 @@ export const validateBehaviorDraft = (
     }
   };
   const rememberNode = (nodeId: BehaviorNodeId, path: string): void => {
-    if (nodeIds.has(String(nodeId))) issues.push({ path, message: 'Duplicate block identity', nodeId });
+    if (nodeIds.has(String(nodeId)))
+      issues.push({ path, message: 'Duplicate block identity', nodeId });
     nodeIds.add(String(nodeId));
   };
   const inspectCondition = (condition: BehaviorCondition, path: string): void => {
     rememberNode(condition.nodeId, path);
-    if (condition._tag === 'condition') return inspectInvocation(condition.invocation, 'condition', path, condition.nodeId);
+    if (condition._tag === 'condition')
+      return inspectInvocation(condition.invocation, 'condition', path, condition.nodeId);
     if (condition._tag === 'not') return inspectCondition(condition.condition, `${path}.not`);
-    if (condition.conditions.length === 0) issues.push({ path, message: `${condition._tag.toUpperCase()} needs at least one condition`, nodeId: condition.nodeId });
+    if (condition.conditions.length === 0)
+      issues.push({
+        path,
+        message: `${condition._tag.toUpperCase()} needs at least one condition`,
+        nodeId: condition.nodeId,
+      });
     condition.conditions.forEach((nested, index) => inspectCondition(nested, `${path}.${index}`));
   };
   const inspectActions = (actions: readonly BehaviorActionNode[], path: string): void => {
     actions.forEach((action, index) => {
       const itemPath = `${path}.${index}`;
       rememberNode(action.nodeId, itemPath);
-      if (action._tag === 'action') inspectInvocation(action.invocation, 'action', itemPath, action.nodeId);
+      if (action._tag === 'action')
+        inspectInvocation(action.invocation, 'action', itemPath, action.nodeId);
       else {
         inspectCondition(action.condition, `${itemPath}.if`);
         inspectActions(action.then, `${itemPath}.then`);
@@ -316,14 +362,15 @@ export const requiredCapabilitiesForDraft = (
     else if (value._tag === 'not') condition(value.condition);
     else value.conditions.forEach(condition);
   };
-  const actions = (values: readonly BehaviorActionNode[]): void => values.forEach((value) => {
-    if (value._tag === 'action') add(value.invocation);
-    else {
-      condition(value.condition);
-      actions(value.then);
-      actions(value.else ?? []);
-    }
-  });
+  const actions = (values: readonly BehaviorActionNode[]): void =>
+    values.forEach((value) => {
+      if (value._tag === 'action') add(value.invocation);
+      else {
+        condition(value.condition);
+        actions(value.then);
+        actions(value.else ?? []);
+      }
+    });
   add(draft.when);
   if (draft.if !== undefined) condition(draft.if);
   actions(draft.do);
@@ -338,10 +385,14 @@ export const behaviorReferencesForDraft = (
     for (const expression of Object.values(invocation.arguments)) {
       if (expression?._tag !== 'reference') continue;
       const reference = expression.reference;
-      const id = reference._tag === 'entity' ? reference.objectId
-        : reference._tag === 'asset' ? reference.assetId
-          : reference._tag === 'catalog' ? reference.objectTypeId
-            : reference.behaviorId;
+      const id =
+        reference._tag === 'entity'
+          ? reference.objectId
+          : reference._tag === 'asset'
+            ? reference.assetId
+            : reference._tag === 'catalog'
+              ? reference.objectTypeId
+              : reference.behaviorId;
       references.set(`${reference._tag}:${id}`, reference);
     }
   };
@@ -350,14 +401,15 @@ export const behaviorReferencesForDraft = (
     else if (condition._tag === 'not') addCondition(condition.condition);
     else condition.conditions.forEach(addCondition);
   };
-  const addActions = (actions: readonly BehaviorActionNode[]): void => actions.forEach((action) => {
-    if (action._tag === 'action') addInvocation(action.invocation);
-    else {
-      addCondition(action.condition);
-      addActions(action.then);
-      addActions(action.else ?? []);
-    }
-  });
+  const addActions = (actions: readonly BehaviorActionNode[]): void =>
+    actions.forEach((action) => {
+      if (action._tag === 'action') addInvocation(action.invocation);
+      else {
+        addCondition(action.condition);
+        addActions(action.then);
+        addActions(action.else ?? []);
+      }
+    });
   addInvocation(draft.when);
   if (draft.if !== undefined) addCondition(draft.if);
   addActions(draft.do);
@@ -375,6 +427,7 @@ export const convertExpression = (
   if (mode === current._tag) return current;
   if (mode === 'state') return new StateBehaviorValue({ key: '' });
   if (mode === 'event-field') return new EventFieldBehaviorValue({ path: '' });
-  if (mode === 'reference' && firstReference !== undefined) return new ReferenceBehaviorValue({ reference: firstReference });
+  if (mode === 'reference' && firstReference !== undefined)
+    return new ReferenceBehaviorValue({ reference: firstReference });
   return new LiteralBehaviorValue({ value: defaultLiteral(parameter) });
 };

@@ -1,13 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  cn,
-  typography,
-} from '@tileborne/ui';
+import { Card, CardDescription, CardHeader, CardTitle, cn, typography } from '@tileborne/ui';
 
 import { ProjectMapPreviewThumb } from '@/components/home/project-map-preview-thumb';
 import type { ProjectsListResponse } from '@/lib/bridge-types';

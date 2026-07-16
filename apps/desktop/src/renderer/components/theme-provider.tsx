@@ -29,9 +29,7 @@ function resolveTheme(theme: ThemePreference): 'light' | 'dark' {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const theme = useEditorUiStore((state) => state.theme);
   const setThemePreference = useEditorUiStore((state) => state.setTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() =>
-    resolveTheme(theme),
-  );
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => resolveTheme(theme));
 
   const applyTheme = useCallback((next: ThemePreference) => {
     const resolved = resolveTheme(next);

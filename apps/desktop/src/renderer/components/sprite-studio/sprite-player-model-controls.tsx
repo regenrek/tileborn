@@ -22,9 +22,7 @@ export const DEFAULT_PLAYER_MODEL_GEOMETRY: PlayerModelGeometryDraft = {
   handY: 0.56,
 };
 
-export const missingPlayerModelClipNames = (
-  clipNames: readonly string[],
-): readonly string[] => {
+export const missingPlayerModelClipNames = (clipNames: readonly string[]): readonly string[] => {
   const normalized = new Set(clipNames.map((name) => name.trim().toLowerCase()));
   return REQUIRED_PLAYER_MODEL_CLIP_KEYS.filter((key) => !normalized.has(key));
 };
@@ -93,7 +91,10 @@ export function SpritePlayerModelControls({
   );
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-2" data-testid="sprite-player-model-controls">
+    <div
+      className="flex flex-col gap-2 rounded-md border p-2"
+      data-testid="sprite-player-model-controls"
+    >
       <div className="flex items-center justify-between gap-2">
         <Label className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
           <TargetIcon className="size-3.5" aria-hidden />
@@ -151,12 +152,42 @@ export function SpritePlayerModelControls({
               4,
               0.05,
             )}
-            {numberField('Hitbox X', geometry.hitboxX, (hitboxX) => update({ hitboxX }), 'sprite-player-hitbox-x')}
-            {numberField('Hitbox Y', geometry.hitboxY, (hitboxY) => update({ hitboxY }), 'sprite-player-hitbox-y')}
-            {numberField('Hitbox W', geometry.hitboxW, (hitboxW) => update({ hitboxW }), 'sprite-player-hitbox-w')}
-            {numberField('Hitbox H', geometry.hitboxH, (hitboxH) => update({ hitboxH }), 'sprite-player-hitbox-h')}
-            {numberField('Hand X', geometry.handX, (handX) => update({ handX }), 'sprite-player-hand-x')}
-            {numberField('Hand Y', geometry.handY, (handY) => update({ handY }), 'sprite-player-hand-y')}
+            {numberField(
+              'Hitbox X',
+              geometry.hitboxX,
+              (hitboxX) => update({ hitboxX }),
+              'sprite-player-hitbox-x',
+            )}
+            {numberField(
+              'Hitbox Y',
+              geometry.hitboxY,
+              (hitboxY) => update({ hitboxY }),
+              'sprite-player-hitbox-y',
+            )}
+            {numberField(
+              'Hitbox W',
+              geometry.hitboxW,
+              (hitboxW) => update({ hitboxW }),
+              'sprite-player-hitbox-w',
+            )}
+            {numberField(
+              'Hitbox H',
+              geometry.hitboxH,
+              (hitboxH) => update({ hitboxH }),
+              'sprite-player-hitbox-h',
+            )}
+            {numberField(
+              'Hand X',
+              geometry.handX,
+              (handX) => update({ handX }),
+              'sprite-player-hand-x',
+            )}
+            {numberField(
+              'Hand Y',
+              geometry.handY,
+              (handY) => update({ handY }),
+              'sprite-player-hand-y',
+            )}
           </div>
         </>
       ) : null}

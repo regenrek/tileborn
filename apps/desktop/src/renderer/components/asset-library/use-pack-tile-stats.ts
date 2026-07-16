@@ -16,10 +16,7 @@ export function usePackTileStats(packId: string) {
     }
     const firstTileset = pack.tilesets[0];
     return {
-      tileCount: pack.tilesets.reduce(
-        (sum, tileset) => sum + tileset.tiles.length,
-        0,
-      ),
+      tileCount: pack.tilesets.reduce((sum, tileset) => sum + tileset.tiles.length, 0),
       tileSize:
         firstTileset === undefined
           ? null

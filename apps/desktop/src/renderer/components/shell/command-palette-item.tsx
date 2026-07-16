@@ -1,10 +1,4 @@
-import {
-  CommandItem,
-  Kbd,
-  KbdGroup,
-  cn,
-  typography,
-} from '@tileborne/ui';
+import { CommandItem, Kbd, KbdGroup, cn, typography } from '@tileborne/ui';
 import type { LucideIcon } from 'lucide-react';
 import { ClockIcon } from 'lucide-react';
 
@@ -32,11 +26,7 @@ export function PaletteCommandItem({
   onSelect,
 }: PaletteCommandItemProps) {
   return (
-    <CommandItem
-      value={value}
-      {...(disabled ? { disabled: true } : {})}
-      onSelect={onSelect}
-    >
+    <CommandItem value={value} {...(disabled ? { disabled: true } : {})} onSelect={onSelect}>
       {Icon ? <Icon aria-hidden /> : recent ? <ClockIcon aria-hidden /> : null}
       <span className={cn('min-w-0 flex-1 truncate', typography.bodyCompact)}>
         {highlightFuzzyMatch(label, query)}

@@ -48,9 +48,7 @@ describe('ProjectTreeTab tools section', () => {
     render(<ProjectTreeTab projectId="project-1" />);
 
     expect(screen.getByTestId('sidebar-tools')).toBeTruthy();
-    expect(screen.getByTestId('sidebar-tool-entity-editor').textContent).toContain(
-      'Entity Editor',
-    );
+    expect(screen.getByTestId('sidebar-tool-entity-editor').textContent).toContain('Entity Editor');
     expect(screen.getByTestId('sidebar-tool-player-model-editor').textContent).toContain(
       'Player Model Editor',
     );

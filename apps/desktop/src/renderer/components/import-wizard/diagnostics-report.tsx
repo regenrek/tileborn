@@ -35,13 +35,17 @@ export function DiagnosticsReport({
     <Card data-testid="import-center-diagnostics-report">
       <CardHeader>
         <CardTitle>Diagnostics and fix report</CardTitle>
-        <CardDescription>Review blocking issues, degraded features, and safe follow-up actions before apply.</CardDescription>
+        <CardDescription>
+          Review blocking issues, degraded features, and safe follow-up actions before apply.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {hasDiagnostics ? null : (
           <Alert>
             <AlertTitle>No blocking diagnostics</AlertTitle>
-            <AlertDescription>The source can be imported with the current profile.</AlertDescription>
+            <AlertDescription>
+              The source can be imported with the current profile.
+            </AlertDescription>
           </Alert>
         )}
         {diagnostics.map((diagnostic) => (
@@ -79,7 +83,9 @@ export function DiagnosticsReport({
           <Alert key={`${entry.tilesetName}-${entry.localTileId}-${entry.path}`}>
             <AlertTitle className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">review</Badge>
-              <span>{entry.tilesetName} tile {entry.localTileId}</span>
+              <span>
+                {entry.tilesetName} tile {entry.localTileId}
+              </span>
             </AlertTitle>
             <AlertDescription>
               <span className="grid gap-1">

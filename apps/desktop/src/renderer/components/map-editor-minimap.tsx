@@ -81,13 +81,7 @@ export function MapEditorMinimap({
       mapSize.height,
     );
     onCameraChange(
-      minimapPanForMapPoint(
-        point.x,
-        point.y,
-        viewportSize.width,
-        viewportSize.height,
-        camera.zoom,
-      ),
+      minimapPanForMapPoint(point.x, point.y, viewportSize.width, viewportSize.height, camera.zoom),
     );
   };
 

@@ -14,11 +14,7 @@ import { PuzzleIcon, SearchIcon } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 
 import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
-import {
-  useAssetPackLibrary,
-  useAssetPacks,
-  useWorkingPalettePreviews,
-} from '@/hooks/queries';
+import { useAssetPackLibrary, useAssetPacks, useWorkingPalettePreviews } from '@/hooks/queries';
 import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
 import {
   SPRITE_PICKER_DOM_LIMIT,
@@ -34,7 +30,6 @@ interface SpritePickerDialogProps {
   readonly selectedPlaceableId: string | undefined;
   readonly onSelect: (selection: SpritePickerSelection) => void;
 }
-
 
 /**
  * Bounded sprite picker. It lists pack summaries once, then queries only the
@@ -54,8 +49,7 @@ export function SpritePickerDialog({
   const deferredQuery = useDeferredValue(query);
   const [page, setPage] = useState(0);
 
-  const selectedPack =
-    packs.find((pack) => String(pack.id) === requestedPackId) ?? packs[0];
+  const selectedPack = packs.find((pack) => String(pack.id) === requestedPackId) ?? packs[0];
   const selectedPackId = selectedPack === undefined ? '' : String(selectedPack.id);
   const offset = page * SPRITE_PICKER_PAGE_SIZE_PER_KIND;
   const commonQuery = {
@@ -75,10 +69,7 @@ export function SpritePickerDialog({
   });
 
   const entries = useMemo(() => {
-    const groups = [
-      ...(spritesQuery.data?.groups ?? []),
-      ...(placeablesQuery.data?.groups ?? []),
-    ];
+    const groups = [...(spritesQuery.data?.groups ?? []), ...(placeablesQuery.data?.groups ?? [])];
     const seen = new Set<string>();
     return groups.flatMap((group) => {
       const entry = spritePickerEntryFromGroup(

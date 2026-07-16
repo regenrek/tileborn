@@ -97,7 +97,11 @@ vi.mock('@tileborne/runtime', () => ({
       const prior = previousById.get(value.id);
       return prior === undefined
         ? value
-        : { ...value, x: prior.x + (value.x - prior.x) * resolved, y: prior.y + (value.y - prior.y) * resolved };
+        : {
+            ...value,
+            x: prior.x + (value.x - prior.x) * resolved,
+            y: prior.y + (value.y - prior.y) * resolved,
+          };
     });
   },
 }));
@@ -169,7 +173,14 @@ vi.mock('@/lib/playtest-plugin-bridge', () => ({
     inputMap: { id: 'test', actions: [], schemeDefaults: {} },
     controlScheme: 'keyboard-mouse',
     inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
-    resolveInputIntent: vi.fn(() => ({ dir: undefined, shoot: false, reload: false, interact: false, drop: false, abilities: [] })),
+    resolveInputIntent: vi.fn(() => ({
+      dir: undefined,
+      shoot: false,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+    })),
   })),
 }));
 
@@ -267,7 +278,10 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     projectStateMock.current = { settings: { activeGameMode: activeModePluginId } };
     vi.mocked(resolvePlaytestPlugin).mockClear();
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 0),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
 
@@ -394,7 +408,7 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     multiplayerStateMock.current = {
       ...multiplayerStateMock.current,
       lobbyState: {
-        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
         phase: 'lobby',
         canStart: false,
         players: [{ ...players[0], ready: true }, players[1]],
@@ -407,7 +421,7 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
       ...multiplayerStateMock.current,
       sessionState: { phase: 'live', localPlayerId: 'player-1', tick: 1, players: [] },
       lobbyState: {
-        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
         phase: 'active',
         canStart: true,
         players: players.map((player) => ({ ...player, ready: true })),
@@ -419,7 +433,7 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     multiplayerStateMock.current = {
       ...multiplayerStateMock.current,
       lobbyState: {
-        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
         phase: 'finished',
       },
       roomResults: {
@@ -511,7 +525,14 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     expect((previousById as Map<string, unknown>).size).toBe(0);
     expect(projected).toHaveLength(1);
     expect(projected[0]).toEqual(
-      expect.objectContaining({ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scaleX: 4, scaleY: 4 }),
+      expect.objectContaining({
+        id: 'br:player:p1',
+        assetId: 'pet',
+        x: 0,
+        y: 0,
+        scaleX: 4,
+        scaleY: 4,
+      }),
     );
     expect(projected[0]?.scale).toBeUndefined();
   });

@@ -59,7 +59,8 @@ export function SourceStep({
           </Button>
         </div>
         <FieldDescription>
-          Choose a Tileborne pack folder, raw Tiled source folder, .tmx/.tmj map, or standalone .tsx/.tsj tileset.
+          Choose a Tileborne pack folder, raw Tiled source folder, .tmx/.tmj map, or standalone
+          .tsx/.tsj tileset.
         </FieldDescription>
       </Field>
       {detection !== undefined ? (

@@ -1,5 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@tileborne/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@tileborne/ui';
 import type { PackCapabilityDiagnostic, PackId } from '@tileborne/core';
 import type { JobId } from '@tileborne/services-foundation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -38,9 +46,7 @@ export function DuplicatePackDialog() {
   const jobQuery = useQuery({
     queryKey: [...queryKeys.jobs.all, 'import-followup', pendingImportJobId ?? 'idle'],
     queryFn: () =>
-      invokeIpc(() =>
-        window.tileborne.jobs.get({ jobId: pendingImportJobId! as JobId }),
-      ),
+      invokeIpc(() => window.tileborne.jobs.get({ jobId: pendingImportJobId! as JobId })),
     enabled: pendingImportJobId !== null && resolvedJobIdRef.current !== pendingImportJobId,
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -85,9 +91,7 @@ export function DuplicatePackDialog() {
     }
     resolvedJobIdRef.current = pendingImportJobId;
     let cancelled = false;
-    void invokeIpc(() =>
-      window.tileborne.assets.getPack({ packId: newPackId as PackId }),
-    )
+    void invokeIpc(() => window.tileborne.assets.getPack({ packId: newPackId as PackId }))
       .then((response) => {
         if (cancelled) return;
         const pack = response.pack;
@@ -128,9 +132,7 @@ export function DuplicatePackDialog() {
   };
 
   const open = duplicate !== null;
-  const integrityHint = duplicate?.integrityHashesMatch
-    ? ' (identical contents)'
-    : '';
+  const integrityHint = duplicate?.integrityHashesMatch ? ' (identical contents)' : '';
 
   return (
     <Dialog

@@ -18,11 +18,7 @@ import {
   SelectValue,
 } from '@tileborne/ui';
 
-import {
-  DialogSubmitButton,
-  FormField,
-  usePendingDialogClose,
-} from '@/components/dialog-form';
+import { DialogSubmitButton, FormField, usePendingDialogClose } from '@/components/dialog-form';
 import {
   GenerateMapPresetPreview,
   type GeneratePreset,
@@ -30,10 +26,7 @@ import {
 import { useGenerateMap } from '@/hooks/mutations';
 import { useAssetPacks } from '@/hooks/queries';
 import { getIpcError } from '@/lib/ipc';
-import {
-  hasMapDimensionErrors,
-  validateMapDimensions,
-} from '@/lib/map-form-validation';
+import { hasMapDimensionErrors, validateMapDimensions } from '@/lib/map-form-validation';
 import { usePackCapabilities } from '@/lib/pack-capability-client';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 
@@ -114,15 +107,13 @@ export function GenerateMapDialog({ open, onOpenChange, projectId }: GenerateMap
   );
 
   const allPacks = assetPacksQuery.data?.packs ?? [];
-  const { byId: capabilityById, isLoading: capabilitiesLoading } =
-    usePackCapabilities();
+  const { byId: capabilityById, isLoading: capabilitiesLoading } = usePackCapabilities();
   const paintablePacks = useMemo(
     () => allPacks.filter((pack) => capabilityById.get(pack.id)?.paintable === true),
     [allPacks, capabilityById],
   );
   const defaultPackId = paintablePacks[0]?.id ?? '';
-  const resolvedTilesetPackId =
-    form.tilesetPackId.length > 0 ? form.tilesetPackId : defaultPackId;
+  const resolvedTilesetPackId = form.tilesetPackId.length > 0 ? form.tilesetPackId : defaultPackId;
   const handleOpenChange = usePendingDialogClose(generateMap.isPending, onOpenChange);
 
   const presetValues = useMemo(
@@ -177,7 +168,9 @@ export function GenerateMapDialog({ open, onOpenChange, projectId }: GenerateMap
       });
     } catch (error) {
       const ipcError = getIpcError(error);
-      notifyError(ipcError?.message ?? (error instanceof Error ? error.message : 'Map generation failed'));
+      notifyError(
+        ipcError?.message ?? (error instanceof Error ? error.message : 'Map generation failed'),
+      );
     }
   };
 
@@ -200,10 +193,7 @@ export function GenerateMapDialog({ open, onOpenChange, projectId }: GenerateMap
                   dispatchForm({ type: 'set-tileset-pack', value: value ?? '' });
                 }}
               >
-                <SelectTrigger
-                  id="generate-tileset"
-                  aria-invalid={form.tilesetError !== undefined}
-                >
+                <SelectTrigger id="generate-tileset" aria-invalid={form.tilesetError !== undefined}>
                   <SelectValue placeholder="Select installed pack" />
                 </SelectTrigger>
                 <SelectContent>
@@ -259,9 +249,7 @@ export function GenerateMapDialog({ open, onOpenChange, projectId }: GenerateMap
               <Input
                 id="generate-seed"
                 value={form.seed}
-                onChange={(event) =>
-                  dispatchForm({ type: 'set-seed', value: event.target.value })
-                }
+                onChange={(event) => dispatchForm({ type: 'set-seed', value: event.target.value })}
                 inputMode="numeric"
                 aria-invalid={form.fieldErrors.seed !== undefined}
               />

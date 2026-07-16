@@ -27,7 +27,10 @@ describe('SpriteGeometryCanvas', () => {
         title="Model Geometry"
         handles={handles}
         rects={rects}
-        frames={[{ id: 'idle', label: 'Idle' }, { id: 'shoot', label: 'Shoot' }]}
+        frames={[
+          { id: 'idle', label: 'Idle' },
+          { id: 'shoot', label: 'Shoot' },
+        ]}
         activeFrameId="idle"
         onHandleChange={vi.fn()}
         onFrameChange={onFrameChange}

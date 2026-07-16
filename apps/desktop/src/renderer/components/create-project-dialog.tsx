@@ -11,11 +11,7 @@ import {
   Input,
 } from '@tileborne/ui';
 
-import {
-  DialogSubmitButton,
-  FormField,
-  usePendingDialogClose,
-} from '@/components/dialog-form';
+import { DialogSubmitButton, FormField, usePendingDialogClose } from '@/components/dialog-form';
 import { useCreateGame } from '@/hooks/mutations';
 import { deriveProjectSlug } from '@/lib/derive-project-slug';
 import { getIpcError } from '@/lib/ipc';

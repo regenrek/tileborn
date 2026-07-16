@@ -35,7 +35,12 @@ import { BEHAVIOR_REFERENCE_PAGE_SIZE, useBehaviorReferences } from '@/hooks/que
 
 import { BehaviorBlockIcon } from './block-icon';
 import { BehaviorBlockPicker } from './block-picker';
-import { convertExpression, expressionForParameter, invocationForEntry, type BehaviorEditorIssue } from './model';
+import {
+  convertExpression,
+  expressionForParameter,
+  invocationForEntry,
+  type BehaviorEditorIssue,
+} from './model';
 
 export interface BehaviorReferenceOption {
   readonly id: string;
@@ -49,26 +54,36 @@ export type BehaviorReferenceOptions = Partial<
   Record<BehaviorReference['_tag'], readonly BehaviorReferenceOption[]>
 >;
 
-const selectClass = 'h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
+const selectClass =
+  'h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
 
 const referenceKindFor = (
   parameter: BehaviorParameterMetadata,
 ): BehaviorReference['_tag'] | undefined => {
   switch (parameter.valueKind) {
-    case 'entity-reference': return 'entity';
-    case 'asset-reference': return 'asset';
-    case 'catalog-reference': return 'catalog';
-    case 'behavior-reference': return 'behavior';
-    default: return undefined;
+    case 'entity-reference':
+      return 'entity';
+    case 'asset-reference':
+      return 'asset';
+    case 'catalog-reference':
+      return 'catalog';
+    case 'behavior-reference':
+      return 'behavior';
+    default:
+      return undefined;
   }
 };
 
 const referenceId = (reference: BehaviorReference): string => {
   switch (reference._tag) {
-    case 'entity': return String(reference.objectId);
-    case 'asset': return String(reference.assetId);
-    case 'catalog': return String(reference.objectTypeId);
-    case 'behavior': return String(reference.behaviorId);
+    case 'entity':
+      return String(reference.objectId);
+    case 'asset':
+      return String(reference.assetId);
+    case 'catalog':
+      return String(reference.objectTypeId);
+    case 'behavior':
+      return String(reference.behaviorId);
   }
 };
 
@@ -109,9 +124,10 @@ export function BehaviorReferencePicker({
     initialRect: { width: 560, height: 320 },
   });
   const virtualRows = virtualizer.getVirtualItems();
-  const rows = virtualRows.length === 0
-    ? options.slice(0, 12).map((_, index) => ({ index, key: index, size: 52, start: index * 52 }))
-    : virtualRows;
+  const rows =
+    virtualRows.length === 0
+      ? options.slice(0, 12).map((_, index) => ({ index, key: index, size: 52, start: index * 52 }))
+      : virtualRows;
   const total = page.data?.total ?? 0;
   const hasPrevious = offset > 0;
   const hasNext = offset + options.length < total;
@@ -120,10 +136,15 @@ export function BehaviorReferencePicker({
       <DialogContent className="max-w-2xl overflow-hidden" data-testid="behavior-reference-picker">
         <DialogHeader>
           <DialogTitle>Choose {kind}</DialogTitle>
-          <DialogDescription>Search project references. Results load in bounded pages.</DialogDescription>
+          <DialogDescription>
+            Search project references. Results load in bounded pages.
+          </DialogDescription>
         </DialogHeader>
         <label className="relative block">
-          <SearchIcon className="pointer-events-none absolute left-2 top-2.5 size-4 text-muted-foreground" aria-hidden />
+          <SearchIcon
+            className="pointer-events-none absolute left-2 top-2.5 size-4 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
@@ -142,9 +163,13 @@ export function BehaviorReferencePicker({
           {page.isLoading ? (
             <div className="p-5 text-center text-sm text-muted-foreground">Loading references…</div>
           ) : page.isError ? (
-            <div role="alert" className="p-5 text-center text-sm text-destructive">Could not load references.</div>
+            <div role="alert" className="p-5 text-center text-sm text-destructive">
+              Could not load references.
+            </div>
           ) : options.length === 0 ? (
-            <div className="p-5 text-center text-sm text-muted-foreground">No matching references.</div>
+            <div className="p-5 text-center text-sm text-muted-foreground">
+              No matching references.
+            </div>
           ) : (
             <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
               {rows.map((row) => {
@@ -166,10 +191,27 @@ export function BehaviorReferencePicker({
                       onOpenChange(false);
                     }}
                   >
-                    {option.previewUrl === undefined ? null : <img src={option.previewUrl} alt="" className="size-9 shrink-0 rounded object-contain" />}
+                    {option.previewUrl === undefined ? null : (
+                      <img
+                        src={option.previewUrl}
+                        alt=""
+                        className="size-9 shrink-0 rounded object-contain"
+                      />
+                    )}
                     <span className="min-w-0 flex-1">
-                      <span className={cn('block truncate', typography.rowTitle)}>{option.label}</span>
-                      {option.detail === undefined ? null : <span className={cn('block truncate text-muted-foreground', typography.bodyMicro)}>{option.detail}</span>}
+                      <span className={cn('block truncate', typography.rowTitle)}>
+                        {option.label}
+                      </span>
+                      {option.detail === undefined ? null : (
+                        <span
+                          className={cn(
+                            'block truncate text-muted-foreground',
+                            typography.bodyMicro,
+                          )}
+                        >
+                          {option.detail}
+                        </span>
+                      )}
                     </span>
                   </button>
                 );
@@ -178,12 +220,28 @@ export function BehaviorReferencePicker({
           )}
         </div>
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>{total === 0 ? '0 results' : `${offset + 1}–${Math.min(offset + options.length, total)} of ${total}`}</span>
+          <span>
+            {total === 0
+              ? '0 results'
+              : `${offset + 1}–${Math.min(offset + options.length, total)} of ${total}`}
+          </span>
           <div className="flex gap-1">
-            <Button type="button" size="sm" variant="outline" disabled={!hasPrevious || page.isFetching} onClick={() => setOffset(Math.max(0, offset - BEHAVIOR_REFERENCE_PAGE_SIZE))}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!hasPrevious || page.isFetching}
+              onClick={() => setOffset(Math.max(0, offset - BEHAVIOR_REFERENCE_PAGE_SIZE))}
+            >
               <ChevronLeftIcon className="size-3.5" aria-hidden /> Previous
             </Button>
-            <Button type="button" size="sm" variant="outline" disabled={!hasNext || page.isFetching} onClick={() => setOffset(offset + BEHAVIOR_REFERENCE_PAGE_SIZE)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!hasNext || page.isFetching}
+              onClick={() => setOffset(offset + BEHAVIOR_REFERENCE_PAGE_SIZE)}
+            >
               Next <ChevronRightIcon className="size-3.5" aria-hidden />
             </Button>
           </div>
@@ -193,7 +251,12 @@ export function BehaviorReferencePicker({
   );
 }
 
-function JsonLiteralInput({ value, onChange, invalid, describedBy }: {
+function JsonLiteralInput({
+  value,
+  onChange,
+  invalid,
+  describedBy,
+}: {
   readonly value: JsonValue;
   readonly onChange: (value: JsonValue) => void;
   readonly invalid?: boolean;
@@ -243,12 +306,17 @@ function ArgumentEditor({
 }) {
   const referenceKind = referenceKindFor(parameter);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
-  const referenceOptions = referenceKind === undefined ? [] : references[referenceKind] ?? [];
-  const selectedReferenceOption = expression?._tag === 'reference'
-    ? referenceOptions.find((option) => option.id === referenceId(expression.reference))
-    : undefined;
-  const parameterReferences: Partial<Record<BehaviorReference['_tag'], readonly BehaviorReference[]>> =
-    referenceKind === undefined ? {} : { [referenceKind]: referenceOptions.map(({ reference }) => reference) };
+  const referenceOptions = referenceKind === undefined ? [] : (references[referenceKind] ?? []);
+  const selectedReferenceOption =
+    expression?._tag === 'reference'
+      ? referenceOptions.find((option) => option.id === referenceId(expression.reference))
+      : undefined;
+  const parameterReferences: Partial<
+    Record<BehaviorReference['_tag'], readonly BehaviorReference[]>
+  > =
+    referenceKind === undefined
+      ? {}
+      : { [referenceKind]: referenceOptions.map(({ reference }) => reference) };
   const modes = [
     ...(!parameter.required ? [{ value: 'unset', label: 'Any / unset' }] : []),
     { value: 'literal', label: 'Value' },
@@ -257,11 +325,23 @@ function ArgumentEditor({
     ...(referenceKind === undefined ? [] : [{ value: 'reference', label: 'Reference' }]),
   ] as const;
   const fieldIssues = issues.filter((issue) => issue.path === path);
-  const issueId = fieldIssues.length === 0 ? undefined : `behavior-issue-${path.replaceAll(/[^A-Za-z0-9_-]/g, '-')}`;
-  const invalidProps = { 'aria-invalid': fieldIssues.length > 0 || undefined, 'aria-describedby': issueId } as const;
+  const issueId =
+    fieldIssues.length === 0
+      ? undefined
+      : `behavior-issue-${path.replaceAll(/[^A-Za-z0-9_-]/g, '-')}`;
+  const invalidProps = {
+    'aria-invalid': fieldIssues.length > 0 || undefined,
+    'aria-describedby': issueId,
+  } as const;
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[minmax(7rem,0.8fr)_7rem_minmax(10rem,1.5fr)] sm:items-center" data-issue-path={path}>
-      <Label className={typography.bodyMicro}>{parameter.label}{parameter.required ? ' *' : ''}</Label>
+    <div
+      className="grid gap-1.5 sm:grid-cols-[minmax(7rem,0.8fr)_7rem_minmax(10rem,1.5fr)] sm:items-center"
+      data-issue-path={path}
+    >
+      <Label className={typography.bodyMicro}>
+        {parameter.label}
+        {parameter.required ? ' *' : ''}
+      </Label>
       <select
         className={selectClass}
         aria-label={`${parameter.label} source`}
@@ -281,10 +361,16 @@ function ArgumentEditor({
           onChange(convertExpression(mode, parameter, current, referenceOptions[0]?.reference));
         }}
       >
-        {modes.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+        {modes.map((mode) => (
+          <option key={mode.value} value={mode.value}>
+            {mode.label}
+          </option>
+        ))}
       </select>
       {expression === undefined ? (
-        <span className="text-xs text-muted-foreground">Matches any {parameter.label.toLowerCase()}</span>
+        <span className="text-xs text-muted-foreground">
+          Matches any {parameter.label.toLowerCase()}
+        </span>
       ) : expression._tag === 'literal' ? (
         parameter.valueKind === 'boolean' ? (
           <select
@@ -292,9 +378,12 @@ function ArgumentEditor({
             value={String(expression.value)}
             aria-label={parameter.label}
             {...invalidProps}
-            onChange={(event) => onChange(new LiteralBehaviorValue({ value: event.currentTarget.value === 'true' }))}
+            onChange={(event) =>
+              onChange(new LiteralBehaviorValue({ value: event.currentTarget.value === 'true' }))
+            }
           >
-            <option value="false">False</option><option value="true">True</option>
+            <option value="false">False</option>
+            <option value="true">True</option>
           </select>
         ) : parameter.valueKind === 'number' ? (
           <Input
@@ -302,16 +391,25 @@ function ArgumentEditor({
             value={typeof expression.value === 'number' ? expression.value : 0}
             aria-label={parameter.label}
             {...invalidProps}
-            onChange={(event) => onChange(new LiteralBehaviorValue({ value: Number(event.currentTarget.value) }))}
+            onChange={(event) =>
+              onChange(new LiteralBehaviorValue({ value: Number(event.currentTarget.value) }))
+            }
           />
         ) : parameter.valueKind === 'json' ? (
-          <JsonLiteralInput value={expression.value} invalid={fieldIssues.length > 0} describedBy={issueId} onChange={(value) => onChange(new LiteralBehaviorValue({ value }))} />
+          <JsonLiteralInput
+            value={expression.value}
+            invalid={fieldIssues.length > 0}
+            describedBy={issueId}
+            onChange={(value) => onChange(new LiteralBehaviorValue({ value }))}
+          />
         ) : (
           <Input
             value={typeof expression.value === 'string' ? expression.value : ''}
             aria-label={parameter.label}
             {...invalidProps}
-            onChange={(event) => onChange(new LiteralBehaviorValue({ value: event.currentTarget.value }))}
+            onChange={(event) =>
+              onChange(new LiteralBehaviorValue({ value: event.currentTarget.value }))
+            }
           />
         )
       ) : expression._tag === 'state' ? (
@@ -323,7 +421,11 @@ function ArgumentEditor({
           onChange={(event) => onChange(new StateBehaviorValue({ key: event.currentTarget.value }))}
         >
           <option value="">Choose state…</option>
-          {state.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}
+          {state.map((field) => (
+            <option key={field.key} value={field.key}>
+              {field.label}
+            </option>
+          ))}
         </select>
       ) : expression._tag === 'event-field' ? (
         <Input
@@ -331,7 +433,9 @@ function ArgumentEditor({
           placeholder="event.field"
           aria-label={parameter.label}
           {...invalidProps}
-          onChange={(event) => onChange(new EventFieldBehaviorValue({ path: event.currentTarget.value }))}
+          onChange={(event) =>
+            onChange(new EventFieldBehaviorValue({ path: event.currentTarget.value }))
+          }
         />
       ) : projectId !== undefined && referenceKind !== undefined ? (
         <Button
@@ -341,15 +445,27 @@ function ArgumentEditor({
           aria-label={parameter.label}
           onClick={() => setReferencePickerOpen(true)}
         >
-          {selectedReferenceOption?.previewUrl === undefined ? null : <img src={selectedReferenceOption.previewUrl} alt="" className="size-6 shrink-0 rounded object-contain" />}
-          <span className="min-w-0 flex-1 truncate text-left">{selectedReferenceOption?.label ?? referenceId(expression.reference)}</span>
+          {selectedReferenceOption?.previewUrl === undefined ? null : (
+            <img
+              src={selectedReferenceOption.previewUrl}
+              alt=""
+              className="size-6 shrink-0 rounded object-contain"
+            />
+          )}
+          <span className="min-w-0 flex-1 truncate text-left">
+            {selectedReferenceOption?.label ?? referenceId(expression.reference)}
+          </span>
           <ChevronDownIcon className="size-3.5 shrink-0" aria-hidden />
         </Button>
       ) : (
         <div className="flex items-center gap-2">
-          {referenceOptions.find((option) => option.id === referenceId(expression.reference))?.previewUrl === undefined ? null : (
+          {referenceOptions.find((option) => option.id === referenceId(expression.reference))
+            ?.previewUrl === undefined ? null : (
             <img
-              src={referenceOptions.find((option) => option.id === referenceId(expression.reference))!.previewUrl}
+              src={
+                referenceOptions.find((option) => option.id === referenceId(expression.reference))!
+                  .previewUrl
+              }
               alt=""
               className="size-8 rounded object-contain"
             />
@@ -360,12 +476,18 @@ function ArgumentEditor({
             aria-label={parameter.label}
             {...invalidProps}
             onChange={(event) => {
-              const reference = referenceOptions.find((option) => option.id === event.currentTarget.value)?.reference;
+              const reference = referenceOptions.find(
+                (option) => option.id === event.currentTarget.value,
+              )?.reference;
               if (reference !== undefined) onChange(new ReferenceBehaviorValue({ reference }));
             }}
           >
             <option value="">Choose {referenceKind}…</option>
-            {referenceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            {referenceOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
       )}
@@ -374,7 +496,9 @@ function ArgumentEditor({
           open={referencePickerOpen}
           projectId={projectId}
           kind={referenceKind}
-          selectedId={expression?._tag === 'reference' ? referenceId(expression.reference) : undefined}
+          selectedId={
+            expression?._tag === 'reference' ? referenceId(expression.reference) : undefined
+          }
           onOpenChange={setReferencePickerOpen}
           onPick={(option) => {
             onReferenceOption?.(option);
@@ -382,7 +506,11 @@ function ArgumentEditor({
           }}
         />
       )}
-      {fieldIssues.length === 0 ? null : <div id={issueId} role="alert" className="text-xs text-destructive sm:col-start-3">{fieldIssues.map(({ message }) => message).join('. ')}</div>}
+      {fieldIssues.length === 0 ? null : (
+        <div id={issueId} role="alert" className="text-xs text-destructive sm:col-start-3">
+          {fieldIssues.map(({ message }) => message).join('. ')}
+        </div>
+      )}
     </div>
   );
 }
@@ -416,13 +544,17 @@ export function BehaviorInvocationEditor({
     const argumentsValue = { ...invocation.arguments };
     if (value === undefined) delete argumentsValue[key];
     else argumentsValue[key] = value;
-    onChange(new BehaviorInvocationValue({ entryId: invocation.entryId, arguments: argumentsValue }));
+    onChange(
+      new BehaviorInvocationValue({ entryId: invocation.entryId, arguments: argumentsValue }),
+    );
   };
-  const availableReferences = (parameter: BehaviorParameterMetadata): Partial<
-    Record<BehaviorReference['_tag'], readonly BehaviorReference[]>
-  > => {
+  const availableReferences = (
+    parameter: BehaviorParameterMetadata,
+  ): Partial<Record<BehaviorReference['_tag'], readonly BehaviorReference[]>> => {
     const kind = referenceKindFor(parameter);
-    return kind === undefined ? {} : { [kind]: (references[kind] ?? []).map(({ reference }) => reference) };
+    return kind === undefined
+      ? {}
+      : { [kind]: (references[kind] ?? []).map(({ reference }) => reference) };
   };
   return (
     <div className="space-y-3">
@@ -437,8 +569,12 @@ export function BehaviorInvocationEditor({
           <BehaviorBlockIcon name={entry?.icon} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className={cn('block', typography.rowTitle)}>{entry?.label ?? String(invocation.entryId)}</span>
-          <span className={cn('block truncate text-muted-foreground', typography.bodyMicro)}>{entry?.description ?? 'Unavailable capability'}</span>
+          <span className={cn('block', typography.rowTitle)}>
+            {entry?.label ?? String(invocation.entryId)}
+          </span>
+          <span className={cn('block truncate text-muted-foreground', typography.bodyMicro)}>
+            {entry?.description ?? 'Unavailable capability'}
+          </span>
         </span>
         <ChevronDownIcon className="size-4 text-muted-foreground" aria-hidden />
       </Button>
@@ -446,9 +582,12 @@ export function BehaviorInvocationEditor({
         <ArgumentEditor
           key={parameter.key}
           parameter={parameter}
-          expression={invocation.arguments[parameter.key] ?? (parameter.required
-            ? expressionForParameter(parameter, availableReferences(parameter))
-            : undefined)}
+          expression={
+            invocation.arguments[parameter.key] ??
+            (parameter.required
+              ? expressionForParameter(parameter, availableReferences(parameter))
+              : undefined)
+          }
           state={state}
           references={references}
           projectId={projectId}
@@ -463,12 +602,20 @@ export function BehaviorInvocationEditor({
         kind={kind}
         entries={entries}
         onOpenChange={setPickerOpen}
-        onPick={(nextEntry) => onChange(invocationForEntry(nextEntry, {}, Object.fromEntries(
-          (['entity', 'asset', 'catalog', 'behavior'] as const).map((referenceKind) => [
-            referenceKind,
-            (references[referenceKind] ?? []).map(({ reference }) => reference),
-          ]),
-        )))}
+        onPick={(nextEntry) =>
+          onChange(
+            invocationForEntry(
+              nextEntry,
+              {},
+              Object.fromEntries(
+                (['entity', 'asset', 'catalog', 'behavior'] as const).map((referenceKind) => [
+                  referenceKind,
+                  (references[referenceKind] ?? []).map(({ reference }) => reference),
+                ]),
+              ),
+            ),
+          )
+        }
       />
     </div>
   );

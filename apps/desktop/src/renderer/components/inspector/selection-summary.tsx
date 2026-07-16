@@ -1,8 +1,4 @@
-import {
-  Kbd,
-  cn,
-  typography,
-} from '@tileborne/ui';
+import { Kbd, cn, typography } from '@tileborne/ui';
 import { MousePointer2Icon } from 'lucide-react';
 
 import { formatToolLabel, toolShortcut } from '@/lib/editor-tool-labels';
@@ -26,13 +22,8 @@ export function SelectionSummary({ selectionCount, activeTool }: SelectionSummar
       </h3>
 
       <div className="flex min-w-0 items-start gap-2">
-        <MousePointer2Icon
-          aria-hidden
-          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-        />
-        <p className={cn('min-w-0 flex-1 break-words', typography.bodyDense)}>
-          {selectionLabel}
-        </p>
+        <MousePointer2Icon aria-hidden className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        <p className={cn('min-w-0 flex-1 break-words', typography.bodyDense)}>{selectionLabel}</p>
       </div>
 
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -40,12 +31,8 @@ export function SelectionSummary({ selectionCount, activeTool }: SelectionSummar
           Active tool
         </span>
         <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-          <span className={cn('truncate', typography.rowTitle)}>
-            {formatToolLabel(activeTool)}
-          </span>
-          <Kbd aria-label={`Shortcut ${toolShortcut(activeTool)}`}>
-            {toolShortcut(activeTool)}
-          </Kbd>
+          <span className={cn('truncate', typography.rowTitle)}>{formatToolLabel(activeTool)}</span>
+          <Kbd aria-label={`Shortcut ${toolShortcut(activeTool)}`}>{toolShortcut(activeTool)}</Kbd>
         </div>
       </div>
     </section>

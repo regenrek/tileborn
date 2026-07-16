@@ -1,6 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, typography } from '@tileborne/ui';
+import {
+  Button,
+  Checkbox,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn,
+  typography,
+} from '@tileborne/ui';
 import { PanelTopOpenIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
 import { gameObjectTypeIdForKey } from '@tileborne/core';
 import type { JsonObject } from '@tileborne/core';
@@ -23,10 +34,7 @@ import {
   upsertBattleRoyalePlayerModel,
 } from '@tileborne/plugin-battle-royale/player-models';
 import { buildPlayerModelRefFromPlaceable } from '@/lib/promote-player-model';
-import {
-  resolveSelectedModelId,
-  writeLobbyModelSelection,
-} from '@/lib/lobby-model-selection';
+import { resolveSelectedModelId, writeLobbyModelSelection } from '@/lib/lobby-model-selection';
 import { brushIntentMatchesPaletteAction } from '@/lib/palette-actions';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 import { useDocumentLifecycle } from '@/lib/document-lifecycle';
@@ -35,26 +43,27 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 import type { ModeAuthoringPanelProps } from './mode-authoring-panels';
 import { GameSettingsForm } from './game-settings-form';
 
-export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: ModeAuthoringPanelProps) {
+export function BattleRoyaleAuthoringPanel({
+  projectId,
+  map,
+  settingsForm,
+}: ModeAuthoringPanelProps) {
   const updateMap = useUpdateMap();
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
   // BR translates the generic FLAT settings values into its durable nested
   // `BattleRoyaleConfig` override (persisted under `map.properties.<pluginId>`);
   // the form values it feeds the generic renderer are the flattened fields.
-  const settingsValues = useMemo<JsonObject>(
-    () => {
-      const settings = readBattleRoyaleAuthoringSettings(map);
-      return {
-        maxPlayers: settings.maxPlayers,
-        waitSec: settings.waitSec,
-        shrinkSec: settings.shrinkSec,
-        holdSec: settings.holdSec,
-        shrinkPhases: settings.shrinkPhases,
-        damagePerSecOutside: settings.damagePerSecOutside,
-      };
-    },
-    [map],
-  );
+  const settingsValues = useMemo<JsonObject>(() => {
+    const settings = readBattleRoyaleAuthoringSettings(map);
+    return {
+      maxPlayers: settings.maxPlayers,
+      waitSec: settings.waitSec,
+      shrinkSec: settings.shrinkSec,
+      holdSec: settings.holdSec,
+      shrinkPhases: settings.shrinkPhases,
+      damagePerSecOutside: settings.damagePerSecOutside,
+    };
+  }, [map]);
   // Live placement counts per contributed marker kind, used purely for status
   // (this panel no longer owns a parallel selection mode — markers are selected
   // from the Working Palette's "Markers & Tools" group).
@@ -68,21 +77,33 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
       })),
     [map.objects],
   );
-  const [matchMode, setMatchMode] = useState(() => readBattleRoyaleAuthoringSettings(map).matchMode);
-  const [matchEndPolicy, setMatchEndPolicy] = useState(() => readBattleRoyaleAuthoringSettings(map).matchEndPolicy);
-  const [respawnEnabled, setRespawnEnabled] = useState(() => readBattleRoyaleAuthoringSettings(map).respawnEnabled);
-  const [friendlyFire, setFriendlyFire] = useState(() => readBattleRoyaleAuthoringSettings(map).friendlyFire);
-  const [startingWeaponId, setStartingWeaponId] = useState(() => readBattleRoyaleAuthoringSettings(map).startingWeaponId ?? '');
+  const [matchMode, setMatchMode] = useState(
+    () => readBattleRoyaleAuthoringSettings(map).matchMode,
+  );
+  const [matchEndPolicy, setMatchEndPolicy] = useState(
+    () => readBattleRoyaleAuthoringSettings(map).matchEndPolicy,
+  );
+  const [respawnEnabled, setRespawnEnabled] = useState(
+    () => readBattleRoyaleAuthoringSettings(map).respawnEnabled,
+  );
+  const [friendlyFire, setFriendlyFire] = useState(
+    () => readBattleRoyaleAuthoringSettings(map).friendlyFire,
+  );
+  const [startingWeaponId, setStartingWeaponId] = useState(
+    () => readBattleRoyaleAuthoringSettings(map).startingWeaponId ?? '',
+  );
   const catalogQuery = useResolvedCatalog(projectId);
   const compatibleWeapons = useMemo(
-    () => (catalogQuery.data?.weapons ?? []).filter(({ entry, label, origin, sourcePluginId }) =>
-      isBattleRoyaleWeaponCompatible({
-        id: String(entry.weapon.id),
-        label,
-        origin,
-        ...(sourcePluginId === undefined ? {} : { sourcePluginId: String(sourcePluginId) }),
-        deliveryTag: entry.delivery._tag,
-      })),
+    () =>
+      (catalogQuery.data?.weapons ?? []).filter(({ entry, label, origin, sourcePluginId }) =>
+        isBattleRoyaleWeaponCompatible({
+          id: String(entry.weapon.id),
+          label,
+          origin,
+          ...(sourcePluginId === undefined ? {} : { sourcePluginId: String(sourcePluginId) }),
+          deliveryTag: entry.delivery._tag,
+        }),
+      ),
     [catalogQuery.data?.weapons],
   );
   const selectedWeaponCompatibility = useMemo(() => {
@@ -155,14 +176,15 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
       friendlyFire !== durableRules.friendlyFire ||
       startingWeaponId !== (durableRules.startingWeaponId ?? ''),
     recoveryVersion: `${matchMode}:${matchEndPolicy}:${respawnEnabled}:${friendlyFire}:${startingWeaponId}`,
-    save: () => saveSettings({
-      maxPlayers: durableRules.maxPlayers,
-      waitSec: durableRules.waitSec,
-      shrinkSec: durableRules.shrinkSec,
-      holdSec: durableRules.holdSec,
-      shrinkPhases: durableRules.shrinkPhases,
-      damagePerSecOutside: durableRules.damagePerSecOutside,
-    }),
+    save: () =>
+      saveSettings({
+        maxPlayers: durableRules.maxPlayers,
+        waitSec: durableRules.waitSec,
+        shrinkSec: durableRules.shrinkSec,
+        holdSec: durableRules.holdSec,
+        shrinkPhases: durableRules.shrinkPhases,
+        damagePerSecOutside: durableRules.damagePerSecOutside,
+      }),
     discard: () => {
       setMatchMode(durableRules.matchMode);
       setMatchEndPolicy(durableRules.matchEndPolicy);
@@ -244,8 +266,13 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
         <p className={cn(typography.sectionLabelMicro)}>Match rules</p>
         <Label className="space-y-1">
           <span className={typography.rowMeta}>Team mode</span>
-          <Select value={matchMode} onValueChange={(value) => setMatchMode(value as typeof matchMode)}>
-            <SelectTrigger data-testid="br-setting-matchMode"><SelectValue /></SelectTrigger>
+          <Select
+            value={matchMode}
+            onValueChange={(value) => setMatchMode(value as typeof matchMode)}
+          >
+            <SelectTrigger data-testid="br-setting-matchMode">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="solo">Solo</SelectItem>
               <SelectItem value="duo">Duo</SelectItem>
@@ -254,36 +281,68 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
           </Select>
         </Label>
         <label className="flex items-center gap-2 text-xs">
-          <Checkbox checked={respawnEnabled} onCheckedChange={(value) => {
-            const enabled = value === true;
-            setRespawnEnabled(enabled);
-            if (enabled) setMatchEndPolicy('continuous');
-          }} data-testid="br-setting-respawnEnabled" />
+          <Checkbox
+            checked={respawnEnabled}
+            onCheckedChange={(value) => {
+              const enabled = value === true;
+              setRespawnEnabled(enabled);
+              if (enabled) setMatchEndPolicy('continuous');
+            }}
+            data-testid="br-setting-respawnEnabled"
+          />
           Respawn after elimination
         </label>
         <Label className="space-y-1">
           <span className={typography.rowMeta}>Match end</span>
-          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={matchEndPolicy} onChange={(event) => setMatchEndPolicy(event.target.value as typeof matchEndPolicy)} data-testid="br-setting-matchEndPolicy">
-            <option value="last-standing" disabled={respawnEnabled}>Last standing</option>
+          <select
+            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+            value={matchEndPolicy}
+            onChange={(event) => setMatchEndPolicy(event.target.value as typeof matchEndPolicy)}
+            data-testid="br-setting-matchEndPolicy"
+          >
+            <option value="last-standing" disabled={respawnEnabled}>
+              Last standing
+            </option>
             <option value="continuous">Continuous / no victory</option>
           </select>
         </Label>
         <Label className="space-y-1">
           <span className={typography.rowMeta}>Starting weapon / loadout</span>
-          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={startingWeaponId} onChange={(event) => setStartingWeaponId(event.target.value)} data-testid="br-setting-startingWeaponId">
+          <select
+            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+            value={startingWeaponId}
+            onChange={(event) => setStartingWeaponId(event.target.value)}
+            data-testid="br-setting-startingWeaponId"
+          >
             <option value="">Automatic from placed weapon</option>
-            {compatibleWeapons.map(({ entry, label }) => <option key={String(entry.weapon.id)} value={String(entry.weapon.id)}>{label}</option>)}
+            {compatibleWeapons.map(({ entry, label }) => (
+              <option key={String(entry.weapon.id)} value={String(entry.weapon.id)}>
+                {label}
+              </option>
+            ))}
           </select>
           {selectedWeaponCompatibility?.compatible === false ? (
-            <span className="text-xs text-destructive" role="alert">{selectedWeaponCompatibility.message}</span>
+            <span className="text-xs text-destructive" role="alert">
+              {selectedWeaponCompatibility.message}
+            </span>
           ) : null}
         </Label>
         <label className="flex items-center gap-2 text-xs">
-          <Checkbox checked={friendlyFire} onCheckedChange={(value) => setFriendlyFire(value === true)} data-testid="br-setting-friendlyFire" />
+          <Checkbox
+            checked={friendlyFire}
+            onCheckedChange={(value) => setFriendlyFire(value === true)}
+            data-testid="br-setting-friendlyFire"
+          />
           Friendly fire
         </label>
         <p className={typography.bodyMicro} data-testid="br-match-end-summary">
-          Match end: {respawnEnabled || matchEndPolicy === 'continuous' ? 'continuous play' : matchMode === 'solo' ? 'last player standing' : 'last team standing'}.
+          Match end:{' '}
+          {respawnEnabled || matchEndPolicy === 'continuous'
+            ? 'continuous play'
+            : matchMode === 'solo'
+              ? 'last player standing'
+              : 'last team standing'}
+          .
         </p>
       </div>
 
@@ -309,7 +368,11 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
   // Persisted pre-match lobby selection (per project, reused across matches).
   const [selectionOverride, setSelectionOverride] = useState<string | undefined>();
   const selectedModelId =
-    selectionOverride ?? resolveSelectedModelId(projectId, roster.map((model) => model.id));
+    selectionOverride ??
+    resolveSelectedModelId(
+      projectId,
+      roster.map((model) => model.id),
+    );
 
   const selectLobbyModel = (modelId: string) => {
     writeLobbyModelSelection(projectId, modelId);
@@ -318,7 +381,11 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
 
   const activePlaceable =
     brushIntent.kind === 'placeable'
-      ? { packId: brushIntent.packId as PackId | undefined, placeableId: String(brushIntent.placeableId), clipId: brushIntent.clipId }
+      ? {
+          packId: brushIntent.packId as PackId | undefined,
+          placeableId: String(brushIntent.placeableId),
+          clipId: brushIntent.clipId,
+        }
       : undefined;
   const packQuery = useTilesetPack(activePlaceable?.packId);
 
@@ -422,7 +489,9 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
                   onClick={() => selectLobbyModel(model.id)}
                   data-testid={`br-player-model-select-${model.id}`}
                   aria-pressed={selected}
-                  title={selected ? `${model.label} (selected in lobby)` : `Use ${model.label} in lobby`}
+                  title={
+                    selected ? `${model.label} (selected in lobby)` : `Use ${model.label} in lobby`
+                  }
                 >
                   {selected ? '● ' : '○ '}
                   {model.label}
@@ -432,7 +501,10 @@ function PlayerModelsSection({ projectId }: { readonly projectId: string }) {
                   size="icon"
                   variant="ghost"
                   className="size-6 shrink-0"
-                  disabled={updateProject.isPending || (showingBundledDefaults && isDefaultBattleRoyalePlayerModelId(model.id))}
+                  disabled={
+                    updateProject.isPending ||
+                    (showingBundledDefaults && isDefaultBattleRoyalePlayerModelId(model.id))
+                  }
                   onClick={() => void removeModel(model.id)}
                   data-testid={`br-player-model-remove-${model.id}`}
                   aria-label={`Remove ${model.label}`}

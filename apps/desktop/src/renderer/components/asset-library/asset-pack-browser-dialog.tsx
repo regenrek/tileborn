@@ -1,10 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@tileborne/ui';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@tileborne/ui';
 
 import { AssetPackBrowser } from './asset-pack-browser';
 

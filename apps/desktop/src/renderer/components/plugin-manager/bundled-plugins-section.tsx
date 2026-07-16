@@ -62,7 +62,11 @@ export function BundledPluginsSection() {
               </CardHeader>
               <CardContent className="px-4 pb-4 pt-0">
                 <p
-                  className={cn('break-all font-mono', typography.bodyMicro, 'text-muted-foreground')}
+                  className={cn(
+                    'break-all font-mono',
+                    typography.bodyMicro,
+                    'text-muted-foreground',
+                  )}
                 >
                   {plugin.rootPath}
                 </p>

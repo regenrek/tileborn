@@ -196,7 +196,10 @@ const installWorkingPaletteBridge = () => {
     update: vi.fn(),
     delete: vi.fn(),
     removeItem: vi.fn(
-      async (input: { paletteId: WorkingPaletteId; itemId: WorkingPalette['items'][number]['id'] }) => {
+      async (input: {
+        paletteId: WorkingPaletteId;
+        itemId: WorkingPalette['items'][number]['id'];
+      }) => {
         const existing = palettes.find((palette) => palette.id === input.paletteId)!;
         const next: WorkingPalette = {
           ...existing,
@@ -483,9 +486,13 @@ describe('AssetPackBrowser', () => {
       }),
     );
 
-    render(<AssetPackBrowser packId={pack.id} packName="Atlas-Props-Sprites" projectId={projectId} />);
+    render(
+      <AssetPackBrowser packId={pack.id} packName="Atlas-Props-Sprites" projectId={projectId} />,
+    );
 
-    expect(await screen.findByTestId('asset-pack-browser-group-source:Atlas-Props-Sprites')).toBeTruthy();
+    expect(
+      await screen.findByTestId('asset-pack-browser-group-source:Atlas-Props-Sprites'),
+    ).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-placeable').textContent).toContain('1');
     expect(screen.getByTestId('asset-pack-browser-tab-tileset').textContent).not.toContain('1');
 
@@ -655,9 +662,7 @@ describe('AssetPackBrowser', () => {
     // jsdom reports zero layout height, so @tanstack/react-virtual only mounts
     // the first overscan window. Only a small slice of the 1,000 group cards is
     // in the DOM, while the off-screen tail (e.g. the final group) is absent.
-    const renderedCards = container.querySelectorAll(
-      '[data-testid^="asset-pack-browser-group-"]',
-    );
+    const renderedCards = container.querySelectorAll('[data-testid^="asset-pack-browser-group-"]');
     expect(renderedCards.length).toBeGreaterThan(0);
     expect(renderedCards.length).toBeLessThan(40);
     expect(screen.queryByText('Large Tileset 999')).toBeNull();
@@ -734,7 +739,9 @@ describe('AssetPackBrowser', () => {
       // canonical thumbnail `<img>` is never mounted (no protocol request),
       // even though the bounded grid of preview cells is rendered.
       expect(screen.queryAllByTestId('asset-pack-browser-item-thumb')).toHaveLength(0);
-      expect(screen.getAllByTestId('asset-pack-browser-item-tileset:thumb-0').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByTestId('asset-pack-browser-item-tileset:thumb-0').length,
+      ).toBeGreaterThan(0);
     } finally {
       window.IntersectionObserver = originalIntersectionObserver;
     }
@@ -791,7 +798,9 @@ describe('AssetPackBrowser', () => {
     render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
     fireEvent.click(screen.getByTestId('asset-pack-browser-tab-terrain'));
     fireEvent.click(
-      (await screen.findAllByTestId('asset-pack-browser-item-terrain:tiled-source:grass terrain'))[0]!,
+      (
+        await screen.findAllByTestId('asset-pack-browser-item-terrain:tiled-source:grass terrain')
+      )[0]!,
     );
     await waitFor(() => {
       const nextPalettes = useWorkingPalettesStore.getState().list({ projectId });

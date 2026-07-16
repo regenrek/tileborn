@@ -1,12 +1,7 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
 import type { ReadinessDiagnostic } from '@tileborne/ipc-contracts';
 import { Badge, cn, typography } from '@tileborne/ui';
-import {
-  AlertTriangleIcon,
-  ChevronRightIcon,
-  CircleAlertIcon,
-  InfoIcon,
-} from 'lucide-react';
+import { AlertTriangleIcon, ChevronRightIcon, CircleAlertIcon, InfoIcon } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { DrawerEmptyState } from '@/components/bottom-drawer/drawer-empty-state';
@@ -35,7 +30,9 @@ export function ProblemsTab() {
   const readinessQuery = useReadiness(projectId, mapId, 'authoring');
   const setSelection = useEditorUiStore((state) => state.setSelection);
   const selectTool = useEditorUiStore((state) => state.selectTool);
-  const setCatalogTargetObjectTypeId = useEditorUiStore((state) => state.setCatalogTargetObjectTypeId);
+  const setCatalogTargetObjectTypeId = useEditorUiStore(
+    (state) => state.setCatalogTargetObjectTypeId,
+  );
 
   const failedJobs = useMemo(
     () =>
@@ -135,11 +132,12 @@ export function ProblemsTab() {
           <ul className="space-y-1.5">
             {diagnostics.map((diagnostic) => {
               const navigable = diagnostic.navigation !== undefined;
-              const Icon = diagnostic.severity === 'error'
-                ? CircleAlertIcon
-                : diagnostic.severity === 'warning'
-                  ? AlertTriangleIcon
-                  : InfoIcon;
+              const Icon =
+                diagnostic.severity === 'error'
+                  ? CircleAlertIcon
+                  : diagnostic.severity === 'warning'
+                    ? AlertTriangleIcon
+                    : InfoIcon;
               return (
                 <li key={diagnostic.id}>
                   <button
@@ -157,13 +155,18 @@ export function ProblemsTab() {
                   >
                     <Icon
                       aria-hidden
-                      className={cn('mt-0.5 size-3.5 shrink-0', diagnosticText[diagnostic.severity])}
+                      className={cn(
+                        'mt-0.5 size-3.5 shrink-0',
+                        diagnosticText[diagnostic.severity],
+                      )}
                     />
                     <span className="min-w-0 flex-1">
                       <span className={cn(typography.caption, 'block font-medium text-foreground')}>
                         {diagnostic.title}
                       </span>
-                      <span className={cn(typography.bodyMicro, diagnosticText[diagnostic.severity])}>
+                      <span
+                        className={cn(typography.bodyMicro, diagnosticText[diagnostic.severity])}
+                      >
                         {diagnostic.message}
                       </span>
                     </span>
@@ -171,7 +174,10 @@ export function ProblemsTab() {
                       {diagnostic.source}
                     </Badge>
                     {navigable ? (
-                      <ChevronRightIcon aria-hidden className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+                      <ChevronRightIcon
+                        aria-hidden
+                        className="mt-0.5 size-3 shrink-0 text-muted-foreground"
+                      />
                     ) : null}
                   </button>
                 </li>

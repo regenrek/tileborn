@@ -188,12 +188,7 @@ export function PlaytestOverlay({
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isStopping}
-              onClick={confirmStop}
-            >
+            <Button type="button" variant="destructive" disabled={isStopping} onClick={confirmStop}>
               Stop playtest
             </Button>
           </DialogFooter>

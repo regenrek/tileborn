@@ -108,10 +108,7 @@ export function MapEditorToolbar() {
                     <ToggleGroupItem
                       value={tool.id}
                       aria-label={tool.label}
-                      className={cn(
-                        'rounded-md border-0',
-                        isActive && ACTIVE_TOOL_SURFACE,
-                      )}
+                      className={cn('rounded-md border-0', isActive && ACTIVE_TOOL_SURFACE)}
                     >
                       <Icon aria-hidden className="size-3.5" />
                     </ToggleGroupItem>

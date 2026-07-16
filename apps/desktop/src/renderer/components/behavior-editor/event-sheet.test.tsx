@@ -24,34 +24,77 @@ import { instantiateBehaviorTemplate } from './model';
 describe('BehaviorEventSheet', () => {
   beforeEach(cleanup);
   it('authors searchable typed actions and nested IF/THEN/ELSE with accessible controls', () => {
-    const initial = instantiateBehaviorTemplate(CORE_BEHAVIOR_TEMPLATES[0]!, CORE_BEHAVIOR_REGISTRY);
+    const initial = instantiateBehaviorTemplate(
+      CORE_BEHAVIOR_TEMPLATES[0]!,
+      CORE_BEHAVIOR_REGISTRY,
+    );
     let draft = initial;
-    const onChange = vi.fn((next) => { draft = next; });
+    const onChange = vi.fn((next) => {
+      draft = next;
+    });
     const { rerender } = render(
-      <BehaviorEventSheet draft={draft} entries={CORE_BEHAVIOR_REGISTRY.entries} references={{}} issues={[]} onChange={onChange} />,
+      <BehaviorEventSheet
+        draft={draft}
+        entries={CORE_BEHAVIOR_REGISTRY.entries}
+        references={{}}
+        issues={[]}
+        onChange={onChange}
+      />,
     );
 
     expect(screen.getByRole('heading', { name: 'Trigger' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Conditions' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Actions in order' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
-    rerender(<BehaviorEventSheet draft={draft} entries={CORE_BEHAVIOR_REGISTRY.entries} references={{}} issues={[]} onChange={onChange} />);
+    rerender(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={CORE_BEHAVIOR_REGISTRY.entries}
+        references={{}}
+        issues={[]}
+        onChange={onChange}
+      />,
+    );
     expect(screen.getByRole('button', { name: 'Choose condition block' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add branch' }));
-    rerender(<BehaviorEventSheet draft={draft} entries={CORE_BEHAVIOR_REGISTRY.entries} references={{}} issues={[]} onChange={onChange} />);
+    rerender(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={CORE_BEHAVIOR_REGISTRY.entries}
+        references={{}}
+        issues={[]}
+        onChange={onChange}
+      />,
+    );
     expect(screen.getByText('THEN')).toBeTruthy();
     expect(screen.getByText('ELSE')).toBeTruthy();
 
     const thenGroup = screen.getByRole('group', { name: 'Then actions' });
     fireEvent.click(within(thenGroup).getByRole('button', { name: 'Add action' }));
     const picker = screen.getByTestId('behavior-action-picker');
-    fireEvent.change(within(picker).getByRole('textbox', { name: 'Search action blocks' }), { target: { value: 'repeating' } });
+    fireEvent.change(within(picker).getByRole('textbox', { name: 'Search action blocks' }), {
+      target: { value: 'repeating' },
+    });
     fireEvent.click(within(picker).getByRole('option', { name: /Start repeating timer/ }));
-    rerender(<BehaviorEventSheet draft={draft} entries={CORE_BEHAVIOR_REGISTRY.entries} references={{}} issues={[]} onChange={onChange} />);
+    rerender(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={CORE_BEHAVIOR_REGISTRY.entries}
+        references={{}}
+        issues={[]}
+        onChange={onChange}
+      />,
+    );
     expect(screen.getByText('Start repeating timer')).toBeTruthy();
-    expect((screen.getByRole('spinbutton', { name: 'Ticks' }) as HTMLInputElement).value).toBe('60');
-    expect(screen.getAllByRole('button', { name: 'Move action up' }).every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect((screen.getByRole('spinbutton', { name: 'Ticks' }) as HTMLInputElement).value).toBe(
+      '60',
+    );
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Move action up' })
+        .every((button) => button.hasAttribute('disabled')),
+    ).toBe(true);
   });
 
   it('virtualizes large behavior lists instead of mounting every resource row', () => {
@@ -62,7 +105,14 @@ describe('BehaviorEventSheet', () => {
     })) as never;
     const onSelect = vi.fn();
     render(
-      <BehaviorResourceList resources={resources} selectedId="behavior-0" query="" onQueryChange={vi.fn()} onSelect={onSelect} onCreate={vi.fn()} />,
+      <BehaviorResourceList
+        resources={resources}
+        selectedId="behavior-0"
+        query=""
+        onQueryChange={vi.fn()}
+        onSelect={onSelect}
+        onCreate={vi.fn()}
+      />,
     );
     const list = screen.getByTestId('behavior-virtual-list');
     expect(list.getAttribute('role')).toBe('listbox');
@@ -76,24 +126,41 @@ describe('BehaviorEventSheet', () => {
 
   it('shows converted TypeScript as the sole canonical source without a reverse conversion claim', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(<QueryClientProvider client={client}><TypeScriptBehaviorDocument projectId={'project:77777777-7777-4777-8777-777777777777' as never} revision={2} onSaved={vi.fn()} resource={{
-      kind: 'typescript',
-      manifest: {
-        id: 'behavior:77777777-7777-4777-8777-777777777777',
-        label: 'Converted door',
-        source: {
-          _tag: 'typescript',
-          sourcePath: 'behaviors/sources/77777777-7777-4777-8777-777777777777.ts',
-          exportName: 'default',
-        },
-        requiredCapabilities: [],
-      },
-      source: `import { defineBehavior } from '@tileborne/game-sdk';`,
-    } as never} /></QueryClientProvider>);
+    render(
+      <QueryClientProvider client={client}>
+        <TypeScriptBehaviorDocument
+          projectId={'project:77777777-7777-4777-8777-777777777777' as never}
+          revision={2}
+          onSaved={vi.fn()}
+          resource={
+            {
+              kind: 'typescript',
+              manifest: {
+                id: 'behavior:77777777-7777-4777-8777-777777777777',
+                label: 'Converted door',
+                source: {
+                  _tag: 'typescript',
+                  sourcePath: 'behaviors/sources/77777777-7777-4777-8777-777777777777.ts',
+                  exportName: 'default',
+                },
+                requiredCapabilities: [],
+              },
+              source: `import { defineBehavior } from '@tileborne/game-sdk';`,
+            } as never
+          }
+        />
+      </QueryClientProvider>,
+    );
     expect(screen.getByText('TypeScript · canonical')).toBeTruthy();
-    expect(screen.getByText('behaviors/sources/77777777-7777-4777-8777-777777777777.ts')).toBeTruthy();
-    expect((screen.getByLabelText('TypeScript behavior source') as HTMLTextAreaElement).value).toContain('defineBehavior');
-    expect(screen.getByText(/Conversion back to visual blocks is intentionally unavailable/)).toBeTruthy();
+    expect(
+      screen.getByText('behaviors/sources/77777777-7777-4777-8777-777777777777.ts'),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText('TypeScript behavior source') as HTMLTextAreaElement).value,
+    ).toContain('defineBehavior');
+    expect(
+      screen.getByText(/Conversion back to visual blocks is intentionally unavailable/),
+    ).toBeTruthy();
     client.clear();
   });
 
@@ -106,20 +173,42 @@ describe('BehaviorEventSheet', () => {
 
   it('focuses exact visual nodes and TypeScript diagnostic carets', () => {
     const scrollIntoView = vi.fn();
-    const { unmount } = render(<button data-node-id="node-bad" ref={(node) => {
-      if (node !== null) node.scrollIntoView = scrollIntoView;
-    }}>Bad node</button>);
-    expect(focusBehaviorSourceNavigation({
-      projectId: 'project:a', behaviorId: 'behavior:a', nodeId: 'node-bad',
-    })).toBe(true);
+    const { unmount } = render(
+      <button
+        data-node-id="node-bad"
+        ref={(node) => {
+          if (node !== null) node.scrollIntoView = scrollIntoView;
+        }}
+      >
+        Bad node
+      </button>,
+    );
+    expect(
+      focusBehaviorSourceNavigation({
+        projectId: 'project:a',
+        behaviorId: 'behavior:a',
+        nodeId: 'node-bad',
+      }),
+    ).toBe(true);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Bad node' }));
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     unmount();
 
-    render(<textarea aria-label="TypeScript behavior source" defaultValue={'first\nsecond line\nthird'} />);
-    expect(focusBehaviorSourceNavigation({
-      projectId: 'project:a', behaviorId: 'behavior:a', sourcePath: 'behaviors/a.ts', line: 2, column: 4,
-    })).toBe(true);
+    render(
+      <textarea
+        aria-label="TypeScript behavior source"
+        defaultValue={'first\nsecond line\nthird'}
+      />,
+    );
+    expect(
+      focusBehaviorSourceNavigation({
+        projectId: 'project:a',
+        behaviorId: 'behavior:a',
+        sourcePath: 'behaviors/a.ts',
+        line: 2,
+        column: 4,
+      }),
+    ).toBe(true);
     const source = screen.getByLabelText('TypeScript behavior source') as HTMLTextAreaElement;
     expect(document.activeElement).toBe(source);
     expect(source.selectionStart).toBe(9);
@@ -127,7 +216,10 @@ describe('BehaviorEventSheet', () => {
   });
 
   it('associates problems with the exact field and focuses it from the summary', () => {
-    const initial = instantiateBehaviorTemplate(CORE_BEHAVIOR_TEMPLATES[0]!, CORE_BEHAVIOR_REGISTRY);
+    const initial = instantiateBehaviorTemplate(
+      CORE_BEHAVIOR_TEMPLATES[0]!,
+      CORE_BEHAVIOR_REGISTRY,
+    );
     const draft = {
       ...initial,
       label: '',
@@ -137,7 +229,15 @@ describe('BehaviorEventSheet', () => {
       { path: 'label', message: 'Behavior name is required' },
       { path: 'state.0.key', message: 'State key is invalid' },
     ];
-    render(<BehaviorEventSheet draft={draft} entries={CORE_BEHAVIOR_REGISTRY.entries} references={{}} issues={issues} onChange={vi.fn()} />);
+    render(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={CORE_BEHAVIOR_REGISTRY.entries}
+        references={{}}
+        issues={issues}
+        onChange={vi.fn()}
+      />,
+    );
     const label = document.getElementById('behavior-label')!;
     const stateKey = screen.getByRole('textbox', { name: 'State key' });
     expect(label.getAttribute('aria-invalid')).toBe('true');
@@ -147,7 +247,14 @@ describe('BehaviorEventSheet', () => {
   });
 
   it('maps platform save, undo and redo shortcuts deterministically', () => {
-    const event = (key: string, overrides: Partial<KeyboardEvent> = {}) => ({ key, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, ...overrides });
+    const event = (key: string, overrides: Partial<KeyboardEvent> = {}) => ({
+      key,
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      ...overrides,
+    });
     expect(behaviorEditorShortcut(event('s'))).toBe('save');
     expect(behaviorEditorShortcut(event('z'))).toBe('undo');
     expect(behaviorEditorShortcut(event('z', { shiftKey: true }))).toBe('redo');
@@ -171,17 +278,52 @@ describe('BehaviorEventSheet', () => {
       ...instantiateBehaviorTemplate(CORE_BEHAVIOR_TEMPLATES[0]!, CORE_BEHAVIOR_REGISTRY),
       when: new BehaviorInvocation({ entryId: optionalEvent.id, arguments: {} }),
     };
-    const references = { entity: [{ id: objectId, label: 'Arena player', reference: new EntityBehaviorReference({ objectId }) }] };
-    const onChange = vi.fn((next) => { draft = next; });
-    const view = render(<BehaviorEventSheet draft={draft} entries={[...CORE_BEHAVIOR_REGISTRY.entries, optionalEvent]} references={references} issues={[]} onChange={onChange} />);
-    expect((screen.getByRole('combobox', { name: 'Player source' }) as HTMLSelectElement).value).toBe('unset');
+    const references = {
+      entity: [
+        {
+          id: objectId,
+          label: 'Arena player',
+          reference: new EntityBehaviorReference({ objectId }),
+        },
+      ],
+    };
+    const onChange = vi.fn((next) => {
+      draft = next;
+    });
+    const view = render(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={[...CORE_BEHAVIOR_REGISTRY.entries, optionalEvent]}
+        references={references}
+        issues={[]}
+        onChange={onChange}
+      />,
+    );
+    expect(
+      (screen.getByRole('combobox', { name: 'Player source' }) as HTMLSelectElement).value,
+    ).toBe('unset');
     expect(screen.getByText('Matches any player')).toBeTruthy();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Player source' }), { target: { value: 'reference' } });
-    view.rerender(<BehaviorEventSheet draft={draft} entries={[...CORE_BEHAVIOR_REGISTRY.entries, optionalEvent]} references={references} issues={[]} onChange={onChange} />);
-    expect(draft.when.arguments.player).toMatchObject({ _tag: 'reference', reference: { objectId } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Player source' }), {
+      target: { value: 'reference' },
+    });
+    view.rerender(
+      <BehaviorEventSheet
+        draft={draft}
+        entries={[...CORE_BEHAVIOR_REGISTRY.entries, optionalEvent]}
+        references={references}
+        issues={[]}
+        onChange={onChange}
+      />,
+    );
+    expect(draft.when.arguments.player).toMatchObject({
+      _tag: 'reference',
+      reference: { objectId },
+    });
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Player source' }), { target: { value: 'unset' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Player source' }), {
+      target: { value: 'unset' },
+    });
     expect(draft.when.arguments.player).toBeUndefined();
   });
 
@@ -211,7 +353,16 @@ describe('BehaviorEventSheet', () => {
         <BehaviorEventSheet
           draft={draft}
           entries={[...CORE_BEHAVIOR_REGISTRY.entries, optionalEvent]}
-          references={{ entity: [{ id: objectId, label: 'Arena player', previewUrl: 'data:image/png;base64,AA==', reference }] }}
+          references={{
+            entity: [
+              {
+                id: objectId,
+                label: 'Arena player',
+                previewUrl: 'data:image/png;base64,AA==',
+                reference,
+              },
+            ],
+          }}
           projectId="project-1"
           issues={[]}
           onChange={vi.fn()}
@@ -220,7 +371,9 @@ describe('BehaviorEventSheet', () => {
     );
 
     expect(screen.getByText('Arena player')).toBeTruthy();
-    expect(view.container.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AA==');
+    expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
+      'data:image/png;base64,AA==',
+    );
     client.clear();
   });
 });

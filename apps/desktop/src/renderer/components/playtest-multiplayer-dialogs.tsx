@@ -46,9 +46,7 @@ export function PlaytestHostDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isStarting ? (
-          <p className={typography.bodyCompact}>Starting local game host…</p>
-        ) : null}
+        {isStarting ? <p className={typography.bodyCompact}>Starting local game host…</p> : null}
 
         {room ? (
           <div className="space-y-3">

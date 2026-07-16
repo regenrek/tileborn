@@ -36,7 +36,9 @@ describe('CatalogValidationDrawer', () => {
     useResolvedCatalogMock.mockReset();
     setReport(undefined, { isLoading: true });
     useMapMock.mockReturnValue({ data: undefined });
-    useResolvedCatalogMock.mockReturnValue({ data: { objectTypes: [], lootTables: [], items: [] } });
+    useResolvedCatalogMock.mockReturnValue({
+      data: { objectTypes: [], lootTables: [], items: [] },
+    });
     useEditorUiStore.setState({
       selection: new Set(),
       activeTool: 'select',
@@ -50,7 +52,9 @@ describe('CatalogValidationDrawer', () => {
 
   it('disables the trigger when no project is open', () => {
     render(<CatalogValidationDrawer projectId={undefined} />);
-    expect((screen.getByTestId('catalog-validation-trigger') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('catalog-validation-trigger') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   it('reflects a clean report with an OK badge', () => {
@@ -86,7 +90,9 @@ describe('CatalogValidationDrawer', () => {
   it('navigates to a placed object of the referenced type by selecting it', async () => {
     setReport({
       ok: false,
-      issues: [{ kind: 'unknown-reference', message: 'missing loot table', objectTypeId: TYPE_PLACED }],
+      issues: [
+        { kind: 'unknown-reference', message: 'missing loot table', objectTypeId: TYPE_PLACED },
+      ],
     });
     useMapMock.mockReturnValue({
       data: {
@@ -117,7 +123,9 @@ describe('CatalogValidationDrawer', () => {
     useMapMock.mockReturnValue({ data: { map: { objects: [] } } });
     useResolvedCatalogMock.mockReturnValue({
       data: {
-        objectTypes: [{ objectType: { id: TYPE_UNPLACED, label: 'Loot Crate' }, origin: 'project' }],
+        objectTypes: [
+          { objectType: { id: TYPE_UNPLACED, label: 'Loot Crate' }, origin: 'project' },
+        ],
         lootTables: [],
         items: [],
       },

@@ -59,9 +59,7 @@ function AnchorGrid({
           onClick={() => onSelect(anchor)}
           className={cn(
             'h-3.5 w-3.5 rounded-[3px] border transition-colors',
-            anchor === current
-              ? 'border-info bg-info'
-              : 'border-border bg-muted/40 hover:bg-muted',
+            anchor === current ? 'border-info bg-info' : 'border-border bg-muted/40 hover:bg-muted',
           )}
         />
       ))}

@@ -88,10 +88,7 @@ const numberFromInput = (value: string, min: number, max: number): number => {
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : min;
 };
 
-const rectPatch = (
-  rect: NormalizedRect,
-  patch: Partial<NormalizedRect>,
-): NormalizedRect => {
+const rectPatch = (rect: NormalizedRect, patch: Partial<NormalizedRect>): NormalizedRect => {
   const next = {
     ...rect,
     ...patch,
@@ -175,7 +172,10 @@ export function SpriteGeometryCanvas({
   };
 
   return (
-    <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(20rem,1fr)_18rem]" data-testid="sprite-geometry-canvas">
+    <div
+      className="grid min-h-0 gap-3 lg:grid-cols-[minmax(20rem,1fr)_18rem]"
+      data-testid="sprite-geometry-canvas"
+    >
       <div className="flex min-h-[26rem] min-w-0 flex-col overflow-hidden rounded-md border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0">
@@ -198,10 +198,22 @@ export function SpriteGeometryCanvas({
                 ))}
               </select>
             ) : null}
-            <Button type="button" variant="outline" size="icon-sm" onClick={() => updateZoom(-0.25)} aria-label="Zoom out">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              onClick={() => updateZoom(-0.25)}
+              aria-label="Zoom out"
+            >
               <ZoomOutIcon className="size-3.5" aria-hidden />
             </Button>
-            <Button type="button" variant="outline" size="icon-sm" onClick={() => updateZoom(0.25)} aria-label="Zoom in">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              onClick={() => updateZoom(0.25)}
+              aria-label="Zoom in"
+            >
               <ZoomInIcon className="size-3.5" aria-hidden />
             </Button>
             <Button
@@ -244,9 +256,24 @@ export function SpriteGeometryCanvas({
           >
             <rect x="0" y="0" width="100" height="100" fill="rgba(12, 16, 24, 0.88)" />
             {imageUrl === undefined ? null : (
-              <image href={imageUrl} x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+              <image
+                href={imageUrl}
+                x="0"
+                y="0"
+                width="100"
+                height="100"
+                preserveAspectRatio="xMidYMid meet"
+              />
             )}
-            <rect x="0" y="0" width="100" height="100" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="0.5" />
+            <rect
+              x="0"
+              y="0"
+              width="100"
+              height="100"
+              fill="none"
+              stroke="rgba(255,255,255,.35)"
+              strokeWidth="0.5"
+            />
             {rects.map((entry) => (
               <rect
                 key={entry.id}
@@ -267,59 +294,81 @@ export function SpriteGeometryCanvas({
               const directionX = originX + Math.cos(radians) * 12;
               const directionY = originY + Math.sin(radians) * 12;
               return (
-              <g key={handle.id} data-testid={`sprite-geometry-handle-${handle.id}`}>
-                <line
-                  x1={percent(handle.point.x)}
-                  y1="0"
-                  x2={percent(handle.point.x)}
-                  y2="100"
-                  stroke={HANDLE_COLORS[handle.kind]}
-                  strokeOpacity="0.35"
-                  strokeWidth="0.35"
-                />
-                <line
-                  x1="0"
-                  y1={percent(handle.point.y)}
-                  x2="100"
-                  y2={percent(handle.point.y)}
-                  stroke={HANDLE_COLORS[handle.kind]}
-                  strokeOpacity="0.35"
-                  strokeWidth="0.35"
-                />
-                <circle
-                  cx={percent(handle.point.x)}
-                  cy={percent(handle.point.y)}
-                  r="2.5"
-                  fill={HANDLE_COLORS[handle.kind]}
-                  stroke="rgba(0,0,0,.65)"
-                  strokeWidth="0.65"
-                  onPointerDown={(event) => handlePointerDown(event, handle.id)}
-                  className="cursor-grab active:cursor-grabbing"
-                />
-                {handle.rotationDeg === undefined ? null : (
-                  <g data-testid={`sprite-geometry-direction-${handle.id}`}>
-                    <line
-                      x1={originX}
-                      y1={originY}
-                      x2={directionX}
-                      y2={directionY}
-                      stroke={HANDLE_COLORS[handle.kind]}
-                      strokeWidth="1.2"
-                    />
-                    <circle cx={directionX} cy={directionY} r="1.4" fill={HANDLE_COLORS[handle.kind]} />
-                  </g>
-                )}
-              </g>
+                <g key={handle.id} data-testid={`sprite-geometry-handle-${handle.id}`}>
+                  <line
+                    x1={percent(handle.point.x)}
+                    y1="0"
+                    x2={percent(handle.point.x)}
+                    y2="100"
+                    stroke={HANDLE_COLORS[handle.kind]}
+                    strokeOpacity="0.35"
+                    strokeWidth="0.35"
+                  />
+                  <line
+                    x1="0"
+                    y1={percent(handle.point.y)}
+                    x2="100"
+                    y2={percent(handle.point.y)}
+                    stroke={HANDLE_COLORS[handle.kind]}
+                    strokeOpacity="0.35"
+                    strokeWidth="0.35"
+                  />
+                  <circle
+                    cx={percent(handle.point.x)}
+                    cy={percent(handle.point.y)}
+                    r="2.5"
+                    fill={HANDLE_COLORS[handle.kind]}
+                    stroke="rgba(0,0,0,.65)"
+                    strokeWidth="0.65"
+                    onPointerDown={(event) => handlePointerDown(event, handle.id)}
+                    className="cursor-grab active:cursor-grabbing"
+                  />
+                  {handle.rotationDeg === undefined ? null : (
+                    <g data-testid={`sprite-geometry-direction-${handle.id}`}>
+                      <line
+                        x1={originX}
+                        y1={originY}
+                        x2={directionX}
+                        y2={directionY}
+                        stroke={HANDLE_COLORS[handle.kind]}
+                        strokeWidth="1.2"
+                      />
+                      <circle
+                        cx={directionX}
+                        cy={directionY}
+                        r="1.4"
+                        fill={HANDLE_COLORS[handle.kind]}
+                      />
+                    </g>
+                  )}
+                </g>
               );
             })}
           </svg>
         </div>
       </div>
 
-      <aside className="min-w-0 space-y-3 rounded-md border border-border bg-card p-3" data-testid="sprite-geometry-fields">
+      <aside
+        className="min-w-0 space-y-3 rounded-md border border-border bg-card p-3"
+        data-testid="sprite-geometry-fields"
+      >
         <div className="grid grid-cols-2 gap-2">
-          <NumberField label="Pan X" value={viewport.panX} min={-50} max={50} step={1} onChange={(panX) => updatePan({ panX })} />
-          <NumberField label="Pan Y" value={viewport.panY} min={-50} max={50} step={1} onChange={(panY) => updatePan({ panY })} />
+          <NumberField
+            label="Pan X"
+            value={viewport.panX}
+            min={-50}
+            max={50}
+            step={1}
+            onChange={(panX) => updatePan({ panX })}
+          />
+          <NumberField
+            label="Pan Y"
+            value={viewport.panY}
+            min={-50}
+            max={50}
+            step={1}
+            onChange={(panY) => updatePan({ panY })}
+          />
         </div>
 
         <div className="space-y-2">
@@ -352,9 +401,7 @@ export function SpriteGeometryCanvas({
                       min={-360}
                       max={360}
                       step={1}
-                      onChange={(rotationDeg) =>
-                        onHandleRotationChange?.(handle.id, rotationDeg)
-                      }
+                      onChange={(rotationDeg) => onHandleRotationChange?.(handle.id, rotationDeg)}
                     />
                   </div>
                 )}
@@ -370,10 +417,40 @@ export function SpriteGeometryCanvas({
               <div key={entry.id} className="rounded-md border border-border bg-background p-2">
                 <p className={cn('truncate', typography.rowTitle)}>{entry.label}</p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <NumberField label="X" value={entry.rect.x} min={0} max={1} step={snapStep ?? 0.01} onChange={(x) => onRectChange?.(entry.id, rectPatch(entry.rect, { x }))} />
-                  <NumberField label="Y" value={entry.rect.y} min={0} max={1} step={snapStep ?? 0.01} onChange={(y) => onRectChange?.(entry.id, rectPatch(entry.rect, { y }))} />
-                  <NumberField label="W" value={entry.rect.width} min={0} max={1} step={snapStep ?? 0.01} onChange={(width) => onRectChange?.(entry.id, rectPatch(entry.rect, { width }))} />
-                  <NumberField label="H" value={entry.rect.height} min={0} max={1} step={snapStep ?? 0.01} onChange={(height) => onRectChange?.(entry.id, rectPatch(entry.rect, { height }))} />
+                  <NumberField
+                    label="X"
+                    value={entry.rect.x}
+                    min={0}
+                    max={1}
+                    step={snapStep ?? 0.01}
+                    onChange={(x) => onRectChange?.(entry.id, rectPatch(entry.rect, { x }))}
+                  />
+                  <NumberField
+                    label="Y"
+                    value={entry.rect.y}
+                    min={0}
+                    max={1}
+                    step={snapStep ?? 0.01}
+                    onChange={(y) => onRectChange?.(entry.id, rectPatch(entry.rect, { y }))}
+                  />
+                  <NumberField
+                    label="W"
+                    value={entry.rect.width}
+                    min={0}
+                    max={1}
+                    step={snapStep ?? 0.01}
+                    onChange={(width) => onRectChange?.(entry.id, rectPatch(entry.rect, { width }))}
+                  />
+                  <NumberField
+                    label="H"
+                    value={entry.rect.height}
+                    min={0}
+                    max={1}
+                    step={snapStep ?? 0.01}
+                    onChange={(height) =>
+                      onRectChange?.(entry.id, rectPatch(entry.rect, { height }))
+                    }
+                  />
                 </div>
               </div>
             ))}

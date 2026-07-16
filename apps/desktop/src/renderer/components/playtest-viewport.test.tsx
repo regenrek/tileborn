@@ -73,7 +73,11 @@ vi.mock('@tileborne/runtime', async () => {
         const prior = previousById.get(value.id);
         return prior === undefined
           ? value
-          : { ...value, x: prior.x + (value.x - prior.x) * resolved, y: prior.y + (value.y - prior.y) * resolved };
+          : {
+              ...value,
+              x: prior.x + (value.x - prior.x) * resolved,
+              y: prior.y + (value.y - prior.y) * resolved,
+            };
       });
     },
   };
@@ -277,7 +281,10 @@ describe('PlaytestViewport overlay wiring', () => {
       showCollisionOverlay: false,
     };
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 0),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     (window as unknown as { tileborne: unknown }).tileborne = {
       events: { onRuntimeSnapshot: vi.fn(() => vi.fn()) },
@@ -417,9 +424,11 @@ describe('PlaytestViewport overlay wiring', () => {
         ? [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20, animation }]
         : [],
     );
-    const runtime = (window as unknown as {
-      tileborne: { runtime: { playtestSnapshot: ReturnType<typeof vi.fn> } };
-    }).tileborne.runtime;
+    const runtime = (
+      window as unknown as {
+        tileborne: { runtime: { playtestSnapshot: ReturnType<typeof vi.fn> } };
+      }
+    ).tileborne.runtime;
     runtime.playtestSnapshot.mockResolvedValue({ players: [], frame: seedFrame });
 
     let capturedTick: FrameRequestCallback | undefined;
@@ -520,7 +529,14 @@ describe('PlaytestViewport overlay wiring', () => {
     // tracks the same interpolated position the sprite is drawn at.
     expect(projected).toHaveLength(1);
     expect(projected[0]).toEqual(
-      expect.objectContaining({ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scaleX: 4, scaleY: 4 }),
+      expect.objectContaining({
+        id: 'br:player:p1',
+        assetId: 'pet',
+        x: 0,
+        y: 0,
+        scaleX: 4,
+        scaleY: 4,
+      }),
     );
     expect(projected[0]?.scale).toBeUndefined();
   });
@@ -574,9 +590,7 @@ describe('PlaytestViewport overlay wiring', () => {
       expect(controllerCtorMock).toHaveBeenCalledTimes(1);
     });
 
-    const container = document.querySelector<HTMLDivElement>(
-      '[data-testid="playtest-viewport"]',
-    );
+    const container = document.querySelector<HTMLDivElement>('[data-testid="playtest-viewport"]');
     expect(container).not.toBeNull();
 
     // Hold mouse button 0 inside the viewport → PrimaryAction shoot.

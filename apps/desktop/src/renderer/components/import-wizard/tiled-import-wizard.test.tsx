@@ -265,8 +265,10 @@ describe('Tiled import wizard steps', () => {
             {
               feature: 'class-properties',
               path: '/properties/0',
-              message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
-              action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+              message:
+                'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+              action:
+                'Flatten class properties to primitive string, number, or boolean properties before importing.',
             },
           ],
         })}
@@ -277,7 +279,9 @@ describe('Tiled import wizard steps', () => {
 
     expect(screen.getByText('class-properties')).toBeTruthy();
     expect(
-      screen.getByText('Flatten class properties to primitive string, number, or boolean properties before importing.'),
+      screen.getByText(
+        'Flatten class properties to primitive string, number, or boolean properties before importing.',
+      ),
     ).toBeTruthy();
   });
 

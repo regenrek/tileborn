@@ -20,9 +20,7 @@ export function HomeEmptyState({
         <LayoutGridIcon className="size-8 text-primary" aria-hidden />
       </div>
       <div className="space-y-1">
-        <p className={cn(typography.caption, 'font-medium text-foreground')}>
-          No projects yet
-        </p>
+        <p className={cn(typography.caption, 'font-medium text-foreground')}>No projects yet</p>
         <p className={typography.bodyCompact}>
           Create a game to author maps, import asset packs, and install plugins.
         </p>

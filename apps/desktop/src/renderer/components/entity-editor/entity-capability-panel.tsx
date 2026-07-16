@@ -236,19 +236,27 @@ export function EntityCapabilityPanel({
       </div>
 
       {entity.instanceFields === undefined || entity.instanceFields.length === 0 ? null : (
-        <section className="rounded-md border border-border bg-card p-2" data-testid="entity-instance-fields">
+        <section
+          className="rounded-md border border-border bg-card p-2"
+          data-testid="entity-instance-fields"
+        >
           <p className={typography.rowTitle}>Instance properties</p>
           <div className="mt-2">
             <SchemaFieldControls
               fields={entity.instanceFields}
               values={entity.instanceDefaults}
-              references={{
-                asset: assetOptions,
-                entity: entityOptions,
-                weapon: weaponOptions,
-                item: items.map((item) => ({ id: String(item.id), label: item.label })),
-                'loot-table': lootTables.map((table) => ({ id: String(table.id), label: table.label })),
-              } satisfies AuthoringReferenceOptions}
+              references={
+                {
+                  asset: assetOptions,
+                  entity: entityOptions,
+                  weapon: weaponOptions,
+                  item: items.map((item) => ({ id: String(item.id), label: item.label })),
+                  'loot-table': lootTables.map((table) => ({
+                    id: String(table.id),
+                    label: table.label,
+                  })),
+                } satisfies AuthoringReferenceOptions
+              }
               disabled={readOnly}
               testIdPrefix="entity-instance"
               onChange={(instanceDefaults) =>
@@ -345,7 +353,12 @@ function CapabilityForm({
       return <CollisionFootprintForm component={component} readOnly={readOnly} onPatch={onPatch} />;
     case 'equippable':
       return (
-        <EquippableForm component={component} entity={entity} readOnly={readOnly} onPatch={onPatch} />
+        <EquippableForm
+          component={component}
+          entity={entity}
+          readOnly={readOnly}
+          onPatch={onPatch}
+        />
       );
     case 'weapon-ref':
       return (
@@ -408,10 +421,7 @@ function VisualRefForm({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         {assignedSprite !== undefined && assignedSprite.preview !== undefined ? (
-          <span
-            className="flex min-w-0 items-center gap-2"
-            data-testid="entity-visual-preview"
-          >
+          <span className="flex min-w-0 items-center gap-2" data-testid="entity-visual-preview">
             <LibraryPreviewThumb
               packId={assignedSprite.packId}
               preview={assignedSprite.preview}
@@ -542,11 +552,13 @@ function CollisionFootprintForm({
   readonly readOnly: boolean;
   readonly onPatch: (component: GameObjectComponent) => void;
 }) {
-  const patch = (next: Partial<{
-    source: CollisionFootprintComponent['source'];
-    reviewed: boolean;
-    parts: readonly CollisionFootprintPart[];
-  }>) =>
+  const patch = (
+    next: Partial<{
+      source: CollisionFootprintComponent['source'];
+      reviewed: boolean;
+      parts: readonly CollisionFootprintPart[];
+    }>,
+  ) =>
     onPatch(
       new CollisionFootprintComponentClass({
         source: next.source ?? component.source,
@@ -785,15 +797,17 @@ function WeaponRefForm({
   readonly weaponOptions: readonly EntityOption[];
   readonly onPatch: (component: GameObjectComponent) => void;
 }) {
-  const patch = (next: Partial<{
-    weaponId: WeaponRefComponent['weaponId'];
-    projectileEntityId: GameObjectTypeId | undefined;
-    muzzleFlashEntityId: GameObjectTypeId | undefined;
-    impactVfxEntityId: GameObjectTypeId | undefined;
-    pickupEntityId: GameObjectTypeId | undefined;
-    muzzleFlashDurationMs: number | undefined;
-    impactVfxDurationMs: number | undefined;
-  }>) => {
+  const patch = (
+    next: Partial<{
+      weaponId: WeaponRefComponent['weaponId'];
+      projectileEntityId: GameObjectTypeId | undefined;
+      muzzleFlashEntityId: GameObjectTypeId | undefined;
+      impactVfxEntityId: GameObjectTypeId | undefined;
+      pickupEntityId: GameObjectTypeId | undefined;
+      muzzleFlashDurationMs: number | undefined;
+      impactVfxDurationMs: number | undefined;
+    }>,
+  ) => {
     const merged = {
       weaponId: component.weaponId,
       projectileEntityId: component.projectileEntityId,
@@ -828,11 +842,7 @@ function WeaponRefForm({
   };
 
   const companion = (
-    field:
-      | 'projectileEntityId'
-      | 'muzzleFlashEntityId'
-      | 'impactVfxEntityId'
-      | 'pickupEntityId',
+    field: 'projectileEntityId' | 'muzzleFlashEntityId' | 'impactVfxEntityId' | 'pickupEntityId',
     label: string,
   ) => (
     <CompanionSelect
@@ -854,12 +864,18 @@ function WeaponRefForm({
           className={selectClassName}
           value={String(component.weaponId)}
           disabled={readOnly}
-          onChange={(event) => patch({ weaponId: event.currentTarget.value as WeaponRefComponent['weaponId'] })}
+          onChange={(event) =>
+            patch({ weaponId: event.currentTarget.value as WeaponRefComponent['weaponId'] })
+          }
         >
           {!weaponOptions.some((option) => option.id === component.weaponId) ? (
             <option value={component.weaponId}>Missing: {component.weaponId}</option>
           ) : null}
-          {weaponOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          {weaponOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -911,10 +927,12 @@ function LootSourceForm({
   readonly lootTables: readonly LootTable[];
   readonly onPatch: (component: GameObjectComponent) => void;
 }) {
-  const patch = (next: Partial<{
-    lootTableId: LootSourceComponent['lootTableId'];
-    interactionMode: LootSourceComponent['interactionMode'];
-  }>) =>
+  const patch = (
+    next: Partial<{
+      lootTableId: LootSourceComponent['lootTableId'];
+      interactionMode: LootSourceComponent['interactionMode'];
+    }>,
+  ) =>
     onPatch(
       new LootSourceComponentClass({
         lootTableId: next.lootTableId ?? component.lootTableId,

@@ -94,18 +94,44 @@ describe('ProblemsTab readiness surface', () => {
 
   it('deep-links catalog entities and map objects into the owning editor selection', () => {
     useReadinessMock.mockReturnValue({
-      data: { report: { ok: false, purpose: 'authoring', diagnostics: [
-        {
-          id: 'catalog-object', code: 'catalog.invalid', severity: 'error', source: 'catalog',
-          title: 'Catalog object', message: 'Fix entity', projectId: 'project:one',
-          navigation: { kind: 'catalog', projectId: 'project:one', objectTypeId: 'object-type:rifle' },
+      data: {
+        report: {
+          ok: false,
+          purpose: 'authoring',
+          diagnostics: [
+            {
+              id: 'catalog-object',
+              code: 'catalog.invalid',
+              severity: 'error',
+              source: 'catalog',
+              title: 'Catalog object',
+              message: 'Fix entity',
+              projectId: 'project:one',
+              navigation: {
+                kind: 'catalog',
+                projectId: 'project:one',
+                objectTypeId: 'object-type:rifle',
+              },
+            },
+            {
+              id: 'map-object',
+              code: 'map.object',
+              severity: 'error',
+              source: 'map',
+              title: 'Map object',
+              message: 'Fix object',
+              projectId: 'project:one',
+              mapId: 'map:one',
+              navigation: {
+                kind: 'map-object',
+                projectId: 'project:one',
+                mapId: 'map:one',
+                objectId: 'object:spawn',
+              },
+            },
+          ],
         },
-        {
-          id: 'map-object', code: 'map.object', severity: 'error', source: 'map',
-          title: 'Map object', message: 'Fix object', projectId: 'project:one', mapId: 'map:one',
-          navigation: { kind: 'map-object', projectId: 'project:one', mapId: 'map:one', objectId: 'object:spawn' },
-        },
-      ] } },
+      },
       isLoading: false,
     });
     render(<ProblemsTab />);
@@ -114,7 +140,8 @@ describe('ProblemsTab readiness surface', () => {
     fireEvent.click(problems[0]!);
     expect(useEditorUiStore.getState().catalogTargetObjectTypeId).toBe('object-type:rifle');
     expect(navigateMock).toHaveBeenCalledWith({
-      to: '/projects/$projectId/entities', params: { projectId: 'project:one' },
+      to: '/projects/$projectId/entities',
+      params: { projectId: 'project:one' },
     });
 
     fireEvent.click(problems[1]!);
@@ -124,28 +151,47 @@ describe('ProblemsTab readiness surface', () => {
 
   it('deep-links behavior diagnostics to the exact visual block or TypeScript source position', () => {
     useReadinessMock.mockReturnValue({
-      data: { report: { ok: false, purpose: 'authoring', diagnostics: [
-        {
-          id: 'behavior-source', code: 'behavior.compile', severity: 'error', source: 'behavior',
-          title: 'Behavior source', message: 'Fix the owning behavior', projectId: 'project:one',
-          behaviorId: 'behavior:00000000-0000-4000-8000-000000000001',
-          behaviorNodeId: 'behavior-node:00000000-0000-4000-8000-000000000002',
-          sourceKind: 'visual', path: 'behaviors/proof.behavior.json', line: 4, column: 7,
-          navigation: {
-            kind: 'behavior', projectId: 'project:one',
-            behaviorId: 'behavior:00000000-0000-4000-8000-000000000001',
-            behaviorNodeId: 'behavior-node:00000000-0000-4000-8000-000000000002',
-            sourceKind: 'visual', path: 'behaviors/proof.behavior.json', line: 4, column: 7,
-          },
+      data: {
+        report: {
+          ok: false,
+          purpose: 'authoring',
+          diagnostics: [
+            {
+              id: 'behavior-source',
+              code: 'behavior.compile',
+              severity: 'error',
+              source: 'behavior',
+              title: 'Behavior source',
+              message: 'Fix the owning behavior',
+              projectId: 'project:one',
+              behaviorId: 'behavior:00000000-0000-4000-8000-000000000001',
+              behaviorNodeId: 'behavior-node:00000000-0000-4000-8000-000000000002',
+              sourceKind: 'visual',
+              path: 'behaviors/proof.behavior.json',
+              line: 4,
+              column: 7,
+              navigation: {
+                kind: 'behavior',
+                projectId: 'project:one',
+                behaviorId: 'behavior:00000000-0000-4000-8000-000000000001',
+                behaviorNodeId: 'behavior-node:00000000-0000-4000-8000-000000000002',
+                sourceKind: 'visual',
+                path: 'behaviors/proof.behavior.json',
+                line: 4,
+                column: 7,
+              },
+            },
+          ],
         },
-      ] } },
+      },
       isLoading: false,
     });
     render(<ProblemsTab />);
 
     fireEvent.click(screen.getByTestId('readiness-problem'));
     expect(navigateMock).toHaveBeenCalledWith({
-      to: '/projects/$projectId/behaviors', params: { projectId: 'project:one' },
+      to: '/projects/$projectId/behaviors',
+      params: { projectId: 'project:one' },
     });
     expect(consumeBehaviorSourceNavigation('project:one')).toEqual({
       projectId: 'project:one',

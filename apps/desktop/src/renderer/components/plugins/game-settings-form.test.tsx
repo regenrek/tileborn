@@ -25,11 +25,20 @@ describe('GameSettingsForm (generic, manifest-driven)', () => {
   });
 
   it('renders fields generically from a manifest EditorGameSettingsForm declaration', () => {
-    render(<GameSettingsForm form={materialize()} values={{}} onSave={() => {}} testIdPrefix="mode-setting" />);
+    render(
+      <GameSettingsForm
+        form={materialize()}
+        values={{}}
+        onSave={() => {}}
+        testIdPrefix="mode-setting"
+      />,
+    );
 
     // Defaults from the declaration fill the draft for missing values.
     expect((screen.getByTestId('mode-setting-maxPlayers') as HTMLInputElement).value).toBe('32');
-    expect((screen.getByTestId('mode-setting-damagePerSecOutside') as HTMLInputElement).value).toBe('5');
+    expect((screen.getByTestId('mode-setting-damagePerSecOutside') as HTMLInputElement).value).toBe(
+      '5',
+    );
     expect(screen.getByText('Max players')).toBeTruthy();
     expect(screen.getByText('Zone DPS')).toBeTruthy();
   });
@@ -65,7 +74,14 @@ describe('GameSettingsForm (generic, manifest-driven)', () => {
 
   it('blocks the save when a value is out of the declared bounds', () => {
     const onSave = vi.fn();
-    render(<GameSettingsForm form={materialize()} values={{}} onSave={onSave} testIdPrefix="mode-setting" />);
+    render(
+      <GameSettingsForm
+        form={materialize()}
+        values={{}}
+        onSave={onSave}
+        testIdPrefix="mode-setting"
+      />,
+    );
 
     // 0 < min 1 → parse fails → save button disabled (the editor blocks saving).
     fireEvent.change(screen.getByTestId('mode-setting-maxPlayers'), { target: { value: '0' } });

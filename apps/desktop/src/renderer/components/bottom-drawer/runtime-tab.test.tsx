@@ -15,11 +15,12 @@ vi.mock('@/lib/behavior-source-navigation', () => ({
   requestBehaviorSourceNavigation: mocks.requestSource,
 }));
 vi.mock('@/stores/editor-ui-store', () => ({
-  useEditorUiStore: (selector: (state: unknown) => unknown) => selector({
-    playtestActive: true,
-    playtestSessionId: 'playtest:550e8400-e29b-41d4-a716-446655440000',
-    playtestActivePlugins: [],
-  }),
+  useEditorUiStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      playtestActive: true,
+      playtestSessionId: 'playtest:550e8400-e29b-41d4-a716-446655440000',
+      playtestActivePlugins: [],
+    }),
 }));
 vi.mock('@/hooks/mutations', () => ({
   useControlPlaytestBehaviorDebug: () => ({ mutateAsync: mocks.control, isPending: false }),
@@ -27,12 +28,21 @@ vi.mock('@/hooks/mutations', () => ({
 vi.mock('@/hooks/queries', () => ({
   usePlaytestSessions: () => ({
     isLoading: false,
-    data: { sessions: [{
-      id: 'playtest:550e8400-e29b-41d4-a716-446655440000',
-      projectId: 'project:550e8400-e29b-41d4-a716-446655440000',
-      activePlugins: [],
-      runtimeMetrics: { tickCount: 3, playerCount: 1, lastPluginEvent: 'tick', lastTickAtMs: 1 },
-    }] },
+    data: {
+      sessions: [
+        {
+          id: 'playtest:550e8400-e29b-41d4-a716-446655440000',
+          projectId: 'project:550e8400-e29b-41d4-a716-446655440000',
+          activePlugins: [],
+          runtimeMetrics: {
+            tickCount: 3,
+            playerCount: 1,
+            lastPluginEvent: 'tick',
+            lastTickAtMs: 1,
+          },
+        },
+      ],
+    },
   }),
   usePlaytestBehaviorDebug: () => ({ data: mocks.debug, isError: false }),
 }));
@@ -51,7 +61,11 @@ const trace = (sequence: number, instanceId: string, eventId: string) => ({
   commands: [{ kind: 'state.set', payload: { count: sequence } }],
   state: { count: sequence },
   steps: [{ kind: 'action', nodeId: `node-${sequence}`, actionId: 'state.set' }],
-  source: { sourceKind: 'visual', filePath: 'behaviors/counter.behavior.json', nodeId: `node-${sequence}` },
+  source: {
+    sourceKind: 'visual',
+    filePath: 'behaviors/counter.behavior.json',
+    nodeId: `node-${sequence}`,
+  },
 });
 
 const snapshot = (lastReload?: unknown) => ({
@@ -59,7 +73,11 @@ const snapshot = (lastReload?: unknown) => ({
     sessionId: 'playtest:550e8400-e29b-41d4-a716-446655440000',
     status: 'paused',
     tick: 3,
-    traces: [trace(1, 'instance-a', 'first-a'), trace(2, 'instance-b', 'only-b'), trace(3, 'instance-a', 'latest-a')],
+    traces: [
+      trace(1, 'instance-a', 'first-a'),
+      trace(2, 'instance-b', 'only-b'),
+      trace(3, 'instance-a', 'latest-a'),
+    ],
     diagnostics: [],
     states: [],
     ...(lastReload === undefined ? {} : { lastReload }),
@@ -91,18 +109,33 @@ describe('RuntimeTab behavior inspector', () => {
   });
 
   it.each([
-    ['TypeScript', { fileName: 'behaviors/counter.ts', line: 7, column: 11 }, {
-      sourcePath: 'behaviors/counter.ts', line: 7, column: 11,
-    }],
-    ['visual', { fileName: 'behaviors/counter.behavior.json', nodeId: 'node-bad' }, {
-      sourcePath: 'behaviors/counter.behavior.json', nodeId: 'node-bad',
-    }],
+    [
+      'TypeScript',
+      { fileName: 'behaviors/counter.ts', line: 7, column: 11 },
+      {
+        sourcePath: 'behaviors/counter.ts',
+        line: 7,
+        column: 11,
+      },
+    ],
+    [
+      'visual',
+      { fileName: 'behaviors/counter.behavior.json', nodeId: 'node-bad' },
+      {
+        sourcePath: 'behaviors/counter.behavior.json',
+        nodeId: 'node-bad',
+      },
+    ],
   ])('routes %s compile diagnostics to their exact source position', (_kind, details, expected) => {
     mocks.debug = snapshot({
       behaviorId: 'behavior:550e8400-e29b-41d4-a716-446655440000',
       status: 'rejected-using-last-known-good',
       diagnostic: {
-        code: 'TBBUILD2002', severity: 'error', message: 'Compile failed', suggestion: 'Fix it', details,
+        code: 'TBBUILD2002',
+        severity: 'error',
+        message: 'Compile failed',
+        suggestion: 'Fix it',
+        details,
       },
     });
     render(<RuntimeTab />);

@@ -1,5 +1,18 @@
 import type { ImportCenterApplyReport } from '@tileborne/ipc-contracts';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@tileborne/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@tileborne/ui';
 
 import { DiagnosticsReport } from './diagnostics-report';
 
@@ -44,8 +57,14 @@ export function ResultStep({
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          {isQueuedPackImport || isTiledAssetPackImport ? null : <Button type="button" onClick={onOpenMap}>Continue editing map</Button>}
-          <Button type="button" variant="outline" onClick={onClose}>Close</Button>
+          {isQueuedPackImport || isTiledAssetPackImport ? null : (
+            <Button type="button" onClick={onOpenMap}>
+              Continue editing map
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
         </EmptyContent>
       </Empty>
       {report ? (
@@ -59,8 +78,12 @@ export function ResultStep({
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">{report.sourceIdentity.kind}</Badge>
                 <Badge variant="outline">{report.outputs.kind}</Badge>
-                {report.outputs.packId ? <Badge variant="outline">Pack {report.outputs.packId}</Badge> : null}
-                {report.outputs.mapId ? <Badge variant="outline">Map {report.outputs.mapId}</Badge> : null}
+                {report.outputs.packId ? (
+                  <Badge variant="outline">Pack {report.outputs.packId}</Badge>
+                ) : null}
+                {report.outputs.mapId ? (
+                  <Badge variant="outline">Map {report.outputs.mapId}</Badge>
+                ) : null}
                 {report.outputs.layerCount !== undefined ? (
                   <Badge variant="outline">{report.outputs.layerCount} layers</Badge>
                 ) : null}

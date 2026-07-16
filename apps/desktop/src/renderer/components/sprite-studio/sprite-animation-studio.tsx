@@ -17,14 +17,7 @@ import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
 import { sliceAtlas } from '@tileborne/sdk-tileset/atlas';
 import { compileClipTimeline, resolveClipFrameIndex } from '@tileborne/sdk-tileset/animation';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import { useImportSpriteSheet } from '@/hooks/mutations';
 import {
@@ -319,10 +312,7 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     clipSelectRefs.current.get(clip.id)?.focus();
   };
 
-  const handleClipSelectionKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    index: number,
-  ) => {
+  const handleClipSelectionKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     switch (event.key) {
       case 'ArrowUp':
       case 'ArrowLeft':
@@ -391,33 +381,33 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
       throw new Error(`Player model requires clips: ${missingPlayerClips.join(', ')}`);
     }
     await importSpriteSheet.mutateAsync({
-        imageBase64: image.base64,
-        imageFileName: image.fileName,
-        mime: image.mime,
-        imageWidth: image.width,
-        imageHeight: image.height,
-        slice: {
-          cellWidth: slice.cellWidth,
-          cellHeight: slice.cellHeight,
-          margin: slice.margin,
-          spacing: slice.spacing,
-          ...(slice.columns === undefined ? {} : { columns: slice.columns }),
-        },
-        spriteName,
-        anchor,
-        packName: `${spriteName} Pack`,
-        clips: clips.map((clip) => ({
-          name: clip.name,
-          frameIndices: Array.from(
-            { length: Math.max(0, clip.toFrame - clip.fromFrame + 1) },
-            (_, offset) => clip.fromFrame + offset,
-          ),
-          loop: clip.loop,
-          defaultDurationMs: fpsToDurationMs(clip.fps),
-        })),
-        ...(playerModelEnabled
-          ? { playerModel: toPlayerModelImportMetadata(playerModelGeometry) }
-          : {}),
+      imageBase64: image.base64,
+      imageFileName: image.fileName,
+      mime: image.mime,
+      imageWidth: image.width,
+      imageHeight: image.height,
+      slice: {
+        cellWidth: slice.cellWidth,
+        cellHeight: slice.cellHeight,
+        margin: slice.margin,
+        spacing: slice.spacing,
+        ...(slice.columns === undefined ? {} : { columns: slice.columns }),
+      },
+      spriteName,
+      anchor,
+      packName: `${spriteName} Pack`,
+      clips: clips.map((clip) => ({
+        name: clip.name,
+        frameIndices: Array.from(
+          { length: Math.max(0, clip.toFrame - clip.fromFrame + 1) },
+          (_, offset) => clip.fromFrame + offset,
+        ),
+        loop: clip.loop,
+        defaultDurationMs: fpsToDurationMs(clip.fps),
+      })),
+      ...(playerModelEnabled
+        ? { playerModel: toPlayerModelImportMetadata(playerModelGeometry) }
+        : {}),
     });
   };
 
@@ -436,22 +426,25 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     }),
     save: persistSprite,
     discard: reset,
-    snapshot: () => image === undefined ? undefined : {
-      image: {
-        fileName: image.fileName,
-        mime: image.mime,
-        base64: image.base64,
-        dataUrl: image.dataUrl,
-        width: image.width,
-        height: image.height,
-      },
-      slice,
-      spriteName,
-      anchor,
-      playerModelEnabled,
-      playerModelGeometry,
-      clips,
-    },
+    snapshot: () =>
+      image === undefined
+        ? undefined
+        : {
+            image: {
+              fileName: image.fileName,
+              mime: image.mime,
+              base64: image.base64,
+              dataUrl: image.dataUrl,
+              width: image.width,
+              height: image.height,
+            },
+            slice,
+            spriteName,
+            anchor,
+            playerModelEnabled,
+            playerModelGeometry,
+            clips,
+          },
     recover: async (snapshot) => {
       const recovery = snapshot as {
         readonly image: Omit<LoadedImage, 'element'>;
@@ -489,12 +482,7 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     }
   };
 
-  const numberField = (
-    label: string,
-    value: number,
-    onChange: (next: number) => void,
-    min = 0,
-  ) => (
+  const numberField = (label: string, value: number, onChange: (next: number) => void, min = 0) => (
     <div className="flex flex-col gap-1">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       <Input
@@ -536,7 +524,10 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
         ) : (
           <div className="grid grid-cols-[1fr_320px] gap-4">
             <div className="flex flex-col gap-3">
-              <div className="overflow-auto rounded-md border bg-[#0b1220] p-2" style={{ maxHeight: 320 }}>
+              <div
+                className="overflow-auto rounded-md border bg-[#0b1220] p-2"
+                style={{ maxHeight: 320 }}
+              >
                 <canvas
                   ref={gridCanvasRef}
                   className="block"
@@ -711,8 +702,10 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
                         {numberField('To', clip.toFrame, (toFrame) =>
                           updateClip(clip.id, { toFrame: Math.max(0, toFrame) }),
                         )}
-                        {numberField('FPS', clip.fps, (fps) =>
-                          updateClip(clip.id, { fps: Math.max(1, fps) }),
+                        {numberField(
+                          'FPS',
+                          clip.fps,
+                          (fps) => updateClip(clip.id, { fps: Math.max(1, fps) }),
                           1,
                         )}
                       </div>

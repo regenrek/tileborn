@@ -53,8 +53,7 @@ export function PaletteSwitcher({
     notifySuccess(`Removed "${name}"`);
   };
 
-  const label =
-    activePalette !== undefined ? activePalette.name : 'No working palette';
+  const label = activePalette !== undefined ? activePalette.name : 'No working palette';
 
   return (
     <DropdownMenu>
@@ -71,9 +70,7 @@ export function PaletteSwitcher({
             )}
           >
             <PaletteIcon aria-hidden className="size-3.5 shrink-0" />
-            <span className={cn('min-w-0 truncate text-left', typography.bodyMicro)}>
-              {label}
-            </span>
+            <span className={cn('min-w-0 truncate text-left', typography.bodyMicro)}>{label}</span>
             <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 opacity-60" />
           </Button>
         }

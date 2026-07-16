@@ -86,83 +86,76 @@ export function RightInspector() {
       className="flex h-full min-w-0 flex-col overflow-hidden border-l border-border bg-sidebar"
       data-testid="inspector-expanded"
     >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1.5">
-          <span className={cn('min-w-0 truncate', typography.panelTitle)}>Inspector</span>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Collapse inspector"
-            onClick={() => setInspectorCollapsed(true)}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1.5">
+        <span className={cn('min-w-0 truncate', typography.panelTitle)}>Inspector</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Collapse inspector"
+          onClick={() => setInspectorCollapsed(true)}
+        >
+          <ChevronRightIcon />
+        </Button>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="min-w-0 space-y-3 p-3">
+          <SelectionSummary selectionCount={selectionCount} activeTool={activeTool} />
+
+          <Separator />
+
+          <section className="min-w-0 space-y-2" aria-labelledby="inspector-properties-title">
+            <h3 id="inspector-properties-title" className={typography.subsectionLabel}>
+              Properties
+            </h3>
+            <PropertiesPanel
+              selectionCount={selectionCount}
+              isLoading={mapQuery.isLoading && Boolean(mapId)}
+              projectId={projectId}
+              map={mapQuery.data?.map}
+              selectedObjectIds={selectedObjectIds}
+            />
+          </section>
+
+          <Separator />
+
+          <LayersSection />
+
+          <Separator />
+
+          <ViewportOverlaysSection />
+
+          <Separator />
+
+          <section
+            className="min-w-0 space-y-2"
+            data-testid="inspector-plugins-section"
+            aria-labelledby="inspector-plugins-title"
           >
-            <ChevronRightIcon />
-          </Button>
+            <h3 id="inspector-plugins-title" className={typography.subsectionLabel}>
+              Plugins
+            </h3>
+            {projectId !== undefined && mapQuery.data?.map !== undefined ? (
+              ActiveModePanel !== undefined ? (
+                <ActiveModePanel
+                  projectId={projectId}
+                  map={mapQuery.data.map}
+                  settingsForm={activeModeSettingsForm}
+                />
+              ) : activeMode !== undefined && activeModeSettingsForm !== undefined ? (
+                <GenericModeSettingsPanel
+                  projectId={projectId}
+                  map={mapQuery.data.map}
+                  pluginId={activeMode.pluginId}
+                  label={activeMode.label}
+                  form={activeModeSettingsForm}
+                />
+              ) : null
+            ) : null}
+            <PluginSlot id={PLUGIN_SLOTS.inspectorRight} projectId={projectId} mapId={mapId} />
+          </section>
         </div>
-
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="min-w-0 space-y-3 p-3">
-            <SelectionSummary selectionCount={selectionCount} activeTool={activeTool} />
-
-            <Separator />
-
-            <section
-              className="min-w-0 space-y-2"
-              aria-labelledby="inspector-properties-title"
-            >
-              <h3 id="inspector-properties-title" className={typography.subsectionLabel}>
-                Properties
-              </h3>
-              <PropertiesPanel
-                selectionCount={selectionCount}
-                isLoading={mapQuery.isLoading && Boolean(mapId)}
-                projectId={projectId}
-                map={mapQuery.data?.map}
-                selectedObjectIds={selectedObjectIds}
-              />
-            </section>
-
-            <Separator />
-
-            <LayersSection />
-
-            <Separator />
-
-            <ViewportOverlaysSection />
-
-            <Separator />
-
-            <section
-              className="min-w-0 space-y-2"
-              data-testid="inspector-plugins-section"
-              aria-labelledby="inspector-plugins-title"
-            >
-              <h3 id="inspector-plugins-title" className={typography.subsectionLabel}>
-                Plugins
-              </h3>
-              {projectId !== undefined && mapQuery.data?.map !== undefined ? (
-                ActiveModePanel !== undefined ? (
-                  <ActiveModePanel
-                    projectId={projectId}
-                    map={mapQuery.data.map}
-                    settingsForm={activeModeSettingsForm}
-                  />
-                ) : activeMode !== undefined && activeModeSettingsForm !== undefined ? (
-                  <GenericModeSettingsPanel
-                    projectId={projectId}
-                    map={mapQuery.data.map}
-                    pluginId={activeMode.pluginId}
-                    label={activeMode.label}
-                    form={activeModeSettingsForm}
-                  />
-                ) : null
-              ) : null}
-              <PluginSlot
-                id={PLUGIN_SLOTS.inspectorRight}
-                projectId={projectId}
-                mapId={mapId}
-              />
-            </section>
-          </div>
-        </ScrollArea>
+      </ScrollArea>
     </aside>
   );
 }

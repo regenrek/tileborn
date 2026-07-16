@@ -22,11 +22,13 @@ interface GameSettingsFormProps {
   readonly onSave: (values: Record<string, number>) => void | Promise<void>;
   /** Notified with {@link MaterializedGameSettingsForm.invalidMessage} on a blocked save. */
   readonly onInvalid?: (message: string) => void;
-  readonly document?: {
-    readonly id: string;
-    readonly scopeId: string;
-    readonly label: string;
-  } | undefined;
+  readonly document?:
+    | {
+        readonly id: string;
+        readonly scopeId: string;
+        readonly label: string;
+      }
+    | undefined;
 }
 
 /**
@@ -81,9 +83,13 @@ export function GameSettingsForm({
       if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) {
         throw new Error('Invalid recovered game settings');
       }
-      setDraft(Object.fromEntries(
-        Object.entries(snapshot).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-      ));
+      setDraft(
+        Object.fromEntries(
+          Object.entries(snapshot).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string',
+          ),
+        ),
+      );
     },
   });
 

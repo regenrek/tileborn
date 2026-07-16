@@ -103,10 +103,7 @@ export function BottomDrawer() {
             </TabsList>
             <div className="flex shrink-0 items-center gap-2">
               <div
-                className={cn(
-                  typography.inlineHint,
-                  'hidden items-center gap-1 lg:inline-flex',
-                )}
+                className={cn(typography.inlineHint, 'hidden items-center gap-1 lg:inline-flex')}
               >
                 <span>Switch tabs</span>
                 <KbdGroup>

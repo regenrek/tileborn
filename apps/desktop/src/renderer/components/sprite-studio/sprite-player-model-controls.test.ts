@@ -10,7 +10,19 @@ import {
 describe('sprite player-model controls helpers', () => {
   it('reports missing required production player-model clips', () => {
     expect(missingPlayerModelClipNames([])).toEqual([...REQUIRED_PLAYER_MODEL_CLIP_KEYS]);
-    expect(missingPlayerModelClipNames(['Idle', 'walk', 'run', 'shoot', 'reload', 'hit', 'death', 'dash', 'pickup'])).toEqual([]);
+    expect(
+      missingPlayerModelClipNames([
+        'Idle',
+        'walk',
+        'run',
+        'shoot',
+        'reload',
+        'hit',
+        'death',
+        'dash',
+        'pickup',
+      ]),
+    ).toEqual([]);
   });
 
   it('maps editor geometry controls to the sprite import player-model payload', () => {

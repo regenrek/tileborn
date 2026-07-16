@@ -43,10 +43,7 @@ import { useHudEditing } from '@/hooks/use-hud-editing';
 import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import {
-  resolvePlaytestPlugin,
-  type ResolvedPlaytestPlugin,
-} from '@/lib/playtest-plugin-bridge';
+import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import {
   assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
@@ -97,8 +94,9 @@ const projectEntity = (
   scaleY: (entity.scaleY ?? entity.scale ?? 1) * fixedZoom,
 });
 
-const findLocalPlayerEntity = (entities: readonly RenderableEntity[]): RenderableEntity | undefined =>
-  entities.find((entity) => entity.id.startsWith('br:player:'));
+const findLocalPlayerEntity = (
+  entities: readonly RenderableEntity[],
+): RenderableEntity | undefined => entities.find((entity) => entity.id.startsWith('br:player:'));
 
 function usePlaytestRuntimeMount({
   containerRef,
@@ -150,16 +148,18 @@ function usePlaytestRuntimeMount({
           try {
             const [playerModels, overlayVisuals, weaponVisuals] = await Promise.all([
               builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
-              builtOverlays.length > 0 ? assemblePlaytestOverlayVisualConfig(builtOverlays) : undefined,
+              builtOverlays.length > 0
+                ? assemblePlaytestOverlayVisualConfig(builtOverlays)
+                : undefined,
               builtWeapons.length > 0
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
             resolved = resolvePlaytestPlugin(pluginId, {
-                ...(playerModels === undefined ? {} : { playerModels }),
-                ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
-                ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
-              });
+              ...(playerModels === undefined ? {} : { playerModels }),
+              ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
+              ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
+            });
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
@@ -222,7 +222,16 @@ function usePlaytestRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, pluginId, projectId, runtimeRef, builtModels, builtOverlays, builtWeapons]);
+  }, [
+    containerRef,
+    map,
+    pluginId,
+    projectId,
+    runtimeRef,
+    builtModels,
+    builtOverlays,
+    builtWeapons,
+  ]);
 }
 
 function usePlaytestSnapshotRenderer({
@@ -317,11 +326,7 @@ function usePlaytestSnapshotRenderer({
       const cx = container.clientWidth / 2;
       const cy = container.clientHeight / 2;
       const { fixedZoom } = runtime;
-      runtime.controller.setCamera(
-        fixedZoom,
-        cx - camera.x * fixedZoom,
-        cy - camera.y * fixedZoom,
-      );
+      runtime.controller.setCamera(fixedZoom, cx - camera.x * fixedZoom, cy - camera.y * fixedZoom);
 
       const projectedEntities = entities.map((entity) =>
         projectEntity(entity, camera.x, camera.y, cx, cy, fixedZoom),
@@ -409,27 +414,27 @@ function usePlaytestInputBridge({
         previousIntent = intent;
         const idle =
           intent.dir === undefined &&
-	          !intent.shoot &&
-	          !intent.reload &&
-	          !intent.interact &&
-	          !intent.drop &&
-	          intent.abilities.length === 0 &&
-	          intent.swapSlot === undefined;
+          !intent.shoot &&
+          !intent.reload &&
+          !intent.interact &&
+          !intent.drop &&
+          intent.abilities.length === 0 &&
+          intent.swapSlot === undefined;
         const payload = {
           sessionId: sessionId as PlaytestSessionId,
           playerId: LOCAL_PLAYER_INPUT_ID,
           tick: tickCountRef.current ?? 0,
           seq,
           ...(intent.dir === undefined ? {} : { dir: intent.dir }),
-	          shoot: intent.shoot,
-	          reload: intent.reload,
-	          interact: intent.interact,
-	          drop: intent.drop,
-	          abilities: [...intent.abilities],
-	          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
-	          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
-	          ...(idle ? { active: false } : {}),
-	        };
+          shoot: intent.shoot,
+          reload: intent.reload,
+          interact: intent.interact,
+          drop: intent.drop,
+          abilities: [...intent.abilities],
+          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
+          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
+          ...(idle ? { active: false } : {}),
+        };
         void window.tileborne.runtime.playtestInput(payload);
       },
     });
@@ -465,9 +470,7 @@ export function PlaytestViewport({
   // installed third-party mode's HUD arrangement applies without a bundled
   // code default; the bridge falls back to its bundled default otherwise.
   const contributionsQuery = usePluginContributions();
-  const activeMode = contributionsQuery.data?.gameModes.find(
-    (mode) => mode.pluginId === pluginId,
-  );
+  const activeMode = contributionsQuery.data?.gameModes.find((mode) => mode.pluginId === pluginId);
   const rendererKey = activeMode?.rendererCapabilityId;
   const manifestHudLayout = activeMode?.hudLayout;
   // The project's designer-authored HUD overlay sits between the plugin
@@ -475,24 +478,25 @@ export function PlaytestViewport({
   const projectQuery = useProject(projectId);
   const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
-  const rendererResolution = useMemo(() => {
-    if (rendererKey === undefined) {
-      return {
-        error:
-          'Active game mode does not declare capabilities.renderer; update contributes.gameModes before playtest.',
-      } as const;
-    }
-    try {
-      return {
-        plugin: resolvePlaytestPlugin(rendererKey, {
-          ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
-          ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
-        }),
-      } as const;
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) } as const;
-    }
-  },
+  const rendererResolution = useMemo(
+    () => {
+      if (rendererKey === undefined) {
+        return {
+          error:
+            'Active game mode does not declare capabilities.renderer; update contributes.gameModes before playtest.',
+        } as const;
+      }
+      try {
+        return {
+          plugin: resolvePlaytestPlugin(rendererKey, {
+            ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
+            ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
+          }),
+        } as const;
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) } as const;
+      }
+    },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
     [rendererKey, manifestHudLayout, projectHudLayout, hudOverlayVersion],
   );

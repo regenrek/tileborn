@@ -12,11 +12,7 @@ import {
 } from '@tileborne/ui';
 import { FolderOpenIcon, PuzzleIcon } from 'lucide-react';
 
-import {
-  DialogSubmitButton,
-  FormField,
-  usePendingDialogClose,
-} from '@/components/dialog-form';
+import { DialogSubmitButton, FormField, usePendingDialogClose } from '@/components/dialog-form';
 import {
   useInstallBattleRoyalePlugin,
   useInstallPluginFromPath,
@@ -84,7 +80,8 @@ export function PluginInstallDialog({ open, onOpenChange }: PluginInstallDialogP
     } catch (error) {
       const ipcError = getIpcError(error);
       notifyError(
-        ipcError?.message ?? (error instanceof Error ? error.message : 'Battle Royale install failed'),
+        ipcError?.message ??
+          (error instanceof Error ? error.message : 'Battle Royale install failed'),
       );
     }
   };

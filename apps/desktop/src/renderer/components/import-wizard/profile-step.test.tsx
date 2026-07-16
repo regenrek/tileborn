@@ -42,9 +42,9 @@ describe('ProfileStep', () => {
       'Auto-detected recommendation: Standard + Hints',
     );
     expect(screen.getByText('Auto-detected')).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Standard + Hints' }).getAttribute('aria-checked')).toBe(
-      'true',
-    );
+    expect(
+      screen.getByRole('radio', { name: 'Standard + Hints' }).getAttribute('aria-checked'),
+    ).toBe('true');
   });
 
   it('keeps expert overrides explicit', () => {

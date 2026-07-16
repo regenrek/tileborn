@@ -143,16 +143,18 @@ function useMultiplayerRuntimeMount({
           try {
             const [playerModels, overlayVisuals, weaponVisuals] = await Promise.all([
               builtModels.length > 0 ? assemblePlaytestPlayerModelConfig(builtModels) : undefined,
-              builtOverlays.length > 0 ? assemblePlaytestOverlayVisualConfig(builtOverlays) : undefined,
+              builtOverlays.length > 0
+                ? assemblePlaytestOverlayVisualConfig(builtOverlays)
+                : undefined,
               builtWeapons.length > 0
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
             resolved = resolvePlaytestPlugin(rendererCapabilityId, {
-                ...(playerModels === undefined ? {} : { playerModels }),
-                ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
-                ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
-              });
+              ...(playerModels === undefined ? {} : { playerModels }),
+              ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
+              ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
+            });
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
@@ -214,7 +216,16 @@ function useMultiplayerRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, projectId, runtimeRef, rendererCapabilityId, builtModels, builtOverlays, builtWeapons]);
+  }, [
+    containerRef,
+    map,
+    projectId,
+    runtimeRef,
+    rendererCapabilityId,
+    builtModels,
+    builtOverlays,
+    builtWeapons,
+  ]);
 }
 
 function useMultiplayerSnapshotRenderer({
@@ -279,8 +290,7 @@ function useMultiplayerSnapshotRenderer({
       );
 
       const localPlayerId = client.getLocalPlayerId();
-      const localEntityId =
-        localPlayerId !== null ? `br:player:${localPlayerId}` : undefined;
+      const localEntityId = localPlayerId !== null ? `br:player:${localPlayerId}` : undefined;
       const localEntity =
         localEntityId !== undefined
           ? entities.find((entity) => entity.id === localEntityId)
@@ -292,11 +302,7 @@ function useMultiplayerSnapshotRenderer({
       const cx = container.clientWidth / 2;
       const cy = container.clientHeight / 2;
       const { fixedZoom } = runtime;
-      runtime.controller.setCamera(
-        fixedZoom,
-        cx - camera.x * fixedZoom,
-        cy - camera.y * fixedZoom,
-      );
+      runtime.controller.setCamera(fixedZoom, cx - camera.x * fixedZoom, cy - camera.y * fixedZoom);
 
       const projectedEntities = entities.map((entity) =>
         projectEntity(entity, camera.x, camera.y, cx, cy, fixedZoom),
@@ -388,9 +394,7 @@ function MultiplayerLobbyOverlay({
   }
 
   const terminal = lobby.phase === 'finished' || lobby.phase === 'archived';
-  const localPlayer = lobby.players.find(
-    (player) => player.playerId === participant?.playerId,
-  );
+  const localPlayer = lobby.players.find((player) => player.playerId === participant?.playerId);
   const readyPlayers = lobby.players.filter((player) => player.ready).length;
 
   if (terminal) {
@@ -508,11 +512,7 @@ function MultiplayerLobbyOverlay({
           disabled={!canToggleReady || isReadyPending}
           onClick={() => void onSetReady(!(localPlayer?.ready ?? false)).catch(() => undefined)}
         >
-          {isReadyPending
-            ? 'Updating…'
-            : localPlayer?.ready
-              ? 'Unready'
-              : 'Ready up'}
+          {isReadyPending ? 'Updating…' : localPlayer?.ready ? 'Unready' : 'Ready up'}
         </Button>
       </div>
     </section>
@@ -557,45 +557,40 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const manifestHudLayout = activeMode?.hudLayout;
   const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
-  const rendererResolution = useMemo((): {
-    readonly plugin: ResolvedPlaytestPlugin | undefined;
-    readonly error: string | undefined;
-  } => {
-    // This version is an explicit cache-buster: the resolver reads the latest
-    // persisted HUD overlay from storage after the HUD editor saves it.
-    void hudOverlayVersion;
-    if (rendererCapabilityId === undefined) {
-      return {
-        plugin: undefined,
-        error:
-          activeMode === undefined
-            ? 'Select an active game mode before starting multiplayer playtest.'
-            : `Game mode ${activeMode.modeId} does not declare a rendererCapabilityId. Fix or reinstall the plugin manifest.`,
-      };
-    }
-    try {
-      return {
-        plugin: resolvePlaytestPlugin(rendererCapabilityId, {
+  const rendererResolution = useMemo(
+    (): {
+      readonly plugin: ResolvedPlaytestPlugin | undefined;
+      readonly error: string | undefined;
+    } => {
+      // This version is an explicit cache-buster: the resolver reads the latest
+      // persisted HUD overlay from storage after the HUD editor saves it.
+      void hudOverlayVersion;
+      if (rendererCapabilityId === undefined) {
+        return {
+          plugin: undefined,
+          error:
+            activeMode === undefined
+              ? 'Select an active game mode before starting multiplayer playtest.'
+              : `Game mode ${activeMode.modeId} does not declare a rendererCapabilityId. Fix or reinstall the plugin manifest.`,
+        };
+      }
+      try {
+        return {
+          plugin: resolvePlaytestPlugin(rendererCapabilityId, {
             ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
             ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
           }),
-        error: undefined,
-      };
-    } catch (error) {
-      return {
-        plugin: undefined,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  },
+          error: undefined,
+        };
+      } catch (error) {
+        return {
+          plugin: undefined,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
-    [
-      activeMode,
-      rendererCapabilityId,
-      manifestHudLayout,
-      projectHudLayout,
-      hudOverlayVersion,
-    ],
+    [activeMode, rendererCapabilityId, manifestHudLayout, projectHudLayout, hudOverlayVersion],
   );
   const resolvedPlugin = rendererResolution.plugin;
   const usableRendererCapabilityId =
@@ -703,9 +698,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
           }
           projectId={projectId}
           mapId={map.id}
-          {...(sessionState === null
-            ? {}
-            : { localPlayerId: sessionState.localPlayerId })}
+          {...(sessionState === null ? {} : { localPlayerId: sessionState.localPlayerId })}
           onBackToEditor={exitMultiplayer}
           onPlayAgain={exitMultiplayer}
           {...(hudInsets ? { hudInsets } : {})}

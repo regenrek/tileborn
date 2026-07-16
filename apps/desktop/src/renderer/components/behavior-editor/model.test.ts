@@ -41,9 +41,18 @@ import {
 const uuid = (tail: string): Uuid => `00000000-0000-4000-8000-${tail.padStart(12, '0')}` as Uuid;
 
 describe('visual behavior editor model', () => {
-  const fixture = async (name: 'plugin-battle-royale' | 'plugin-example-arena') => JSON.parse(
-    await readFile(path.resolve(process.cwd(), `../../packages/${name}/tileborne-plugin.json`), 'utf8'),
-  ) as { readonly contributes: { readonly behaviorEntries: unknown; readonly behaviorTemplates: unknown } };
+  const fixture = async (name: 'plugin-battle-royale' | 'plugin-example-arena') =>
+    JSON.parse(
+      await readFile(
+        path.resolve(process.cwd(), `../../packages/${name}/tileborne-plugin.json`),
+        'utf8',
+      ),
+    ) as {
+      readonly contributes: {
+        readonly behaviorEntries: unknown;
+        readonly behaviorTemplates: unknown;
+      };
+    };
 
   it('instantiates declarative templates into the same canonical definition', () => {
     const draft = instantiateBehaviorTemplate(CORE_BEHAVIOR_TEMPLATES[1]!, CORE_BEHAVIOR_REGISTRY);
@@ -78,7 +87,9 @@ describe('visual behavior editor model', () => {
         },
       ],
     };
-    expect(validateBehaviorDraft(invalid, CORE_BEHAVIOR_REGISTRY).map(({ message }) => message)).toEqual(
+    expect(
+      validateBehaviorDraft(invalid, CORE_BEHAVIOR_REGISTRY).map(({ message }) => message),
+    ).toEqual(
       expect.arrayContaining([
         'Duplicate block identity',
         'ALL needs at least one condition',
@@ -104,8 +115,16 @@ describe('visual behavior editor model', () => {
       description: 'Neutral fixture',
       category: 'Arena',
       requiredCapabilities: ['example-arena.combat' as never],
-      when: new BehaviorTemplateInvocation({ entryId: 'lifecycle.started' as never, arguments: {} }),
-      do: [new BehaviorTemplateInvocation({ entryId: pluginEntry.id, arguments: { key: 'enemy', value: 1 } })],
+      when: new BehaviorTemplateInvocation({
+        entryId: 'lifecycle.started' as never,
+        arguments: {},
+      }),
+      do: [
+        new BehaviorTemplateInvocation({
+          entryId: pluginEntry.id,
+          arguments: { key: 'enemy', value: 1 },
+        }),
+      ],
     });
     const draft = instantiateBehaviorTemplate(template, registry);
     expect(requiredCapabilitiesForDraft(draft, registry)).toEqual([
@@ -115,30 +134,51 @@ describe('visual behavior editor model', () => {
   });
 
   it('authors and reopens the real Battle Royale and neutral Arena templates with typed catalog references', async () => {
-    const [battleRoyale, arena] = await Promise.all([fixture('plugin-battle-royale'), fixture('plugin-example-arena')]);
+    const [battleRoyale, arena] = await Promise.all([
+      fixture('plugin-battle-royale'),
+      fixture('plugin-example-arena'),
+    ]);
     const entries = Schema.decodeUnknownSync(Schema.Array(BehaviorRegistryEntry))([
       ...CORE_BEHAVIOR_REGISTRY.entries,
-      ...Schema.decodeUnknownSync(Schema.Array(BehaviorRegistryEntry))(battleRoyale.contributes.behaviorEntries),
-      ...Schema.decodeUnknownSync(Schema.Array(BehaviorRegistryEntry))(arena.contributes.behaviorEntries),
+      ...Schema.decodeUnknownSync(Schema.Array(BehaviorRegistryEntry))(
+        battleRoyale.contributes.behaviorEntries,
+      ),
+      ...Schema.decodeUnknownSync(Schema.Array(BehaviorRegistryEntry))(
+        arena.contributes.behaviorEntries,
+      ),
     ]);
     const templates = Schema.decodeUnknownSync(Schema.Array(BehaviorTemplate))([
-      ...Schema.decodeUnknownSync(Schema.Array(BehaviorTemplate))(battleRoyale.contributes.behaviorTemplates),
-      ...Schema.decodeUnknownSync(Schema.Array(BehaviorTemplate))(arena.contributes.behaviorTemplates),
+      ...Schema.decodeUnknownSync(Schema.Array(BehaviorTemplate))(
+        battleRoyale.contributes.behaviorTemplates,
+      ),
+      ...Schema.decodeUnknownSync(Schema.Array(BehaviorTemplate))(
+        arena.contributes.behaviorTemplates,
+      ),
     ]);
     const registry = new BehaviorRegistryManifest({ schemaVersion: 1, entries });
     const objectTypeId = makeGameObjectTypeId(uuid('99'));
     const catalog = new CatalogBehaviorReference({ objectTypeId });
     const firstEntity = new EntityBehaviorReference({ objectId: makeObjectId(uuid('97')) });
     for (const template of templates) {
-      const draft = instantiateBehaviorTemplate(template, registry, { catalog: [catalog], entity: [firstEntity] });
-      expect(validateBehaviorDraft(draft, registry, { catalog: new Set([String(objectTypeId)]) })).toEqual([]);
-      const saved = toBehaviorDefinition(makeBehaviorId(uuid(String(templates.indexOf(template) + 20))), draft);
+      const draft = instantiateBehaviorTemplate(template, registry, {
+        catalog: [catalog],
+        entity: [firstEntity],
+      });
+      expect(
+        validateBehaviorDraft(draft, registry, { catalog: new Set([String(objectTypeId)]) }),
+      ).toEqual([]);
+      const saved = toBehaviorDefinition(
+        makeBehaviorId(uuid(String(templates.indexOf(template) + 20))),
+        draft,
+      );
       const reopened = fromBehaviorDefinition(saved, draft.requiredCapabilities);
       expect(reopened).toEqual(draft);
       if (String(template.id) === 'battle-royale.final-player-reward') {
         expect(draft.when.arguments.player).toBeUndefined();
       }
-      expect(draft.do[0]).toMatchObject({ invocation: { arguments: { objectType: { _tag: 'reference' } } } });
+      expect(draft.do[0]).toMatchObject({
+        invocation: { arguments: { objectType: { _tag: 'reference' } } },
+      });
     }
   });
 
@@ -152,23 +192,37 @@ describe('visual behavior editor model', () => {
     const references = Array.from({ length: 129 }, (_, index) => {
       const id = uuid(String(401 + index));
       switch (index % 4) {
-        case 0: return new EntityBehaviorReference({ objectId: makeObjectId(id) });
-        case 1: return new AssetBehaviorReference({ assetId: makeAssetId(id) });
-        case 2: return new CatalogBehaviorReference({ objectTypeId: makeGameObjectTypeId(id) });
-        default: return new NestedBehaviorReference({ behaviorId: makeBehaviorId(id) });
+        case 0:
+          return new EntityBehaviorReference({ objectId: makeObjectId(id) });
+        case 1:
+          return new AssetBehaviorReference({ assetId: makeAssetId(id) });
+        case 2:
+          return new CatalogBehaviorReference({ objectTypeId: makeGameObjectTypeId(id) });
+        default:
+          return new NestedBehaviorReference({ behaviorId: makeBehaviorId(id) });
       }
     });
-    const kinds = ['entity-reference', 'asset-reference', 'catalog-reference', 'behavior-reference'] as const;
-    const entries = references.map((reference, index) => new BehaviorRegistryEntry({
-      id: `test.reference-${index}` as never,
-      kind: 'action',
-      label: `Reference ${index}`,
-      category: 'Test',
-      description: 'Reference hydration fixture',
-      capability: 'test.references' as never,
-      inputs: [{ key: 'target', label: 'Target', valueKind: kinds[index % 4]!, required: true }],
-      outputs: [],
-    }));
+    const kinds = [
+      'entity-reference',
+      'asset-reference',
+      'catalog-reference',
+      'behavior-reference',
+    ] as const;
+    const entries = references.map(
+      (reference, index) =>
+        new BehaviorRegistryEntry({
+          id: `test.reference-${index}` as never,
+          kind: 'action',
+          label: `Reference ${index}`,
+          category: 'Test',
+          description: 'Reference hydration fixture',
+          capability: 'test.references' as never,
+          inputs: [
+            { key: 'target', label: 'Target', valueKind: kinds[index % 4]!, required: true },
+          ],
+          outputs: [],
+        }),
+    );
     const registry = new BehaviorRegistryManifest({
       schemaVersion: 1,
       entries: [...CORE_BEHAVIOR_REGISTRY.entries, ...entries],
@@ -187,15 +241,38 @@ describe('visual behavior editor model', () => {
     };
 
     expect(behaviorReferencesForDraft(draft)).toEqual(references);
-    expect(validateBehaviorDraft(draft, registry, {
-      entity: new Set(references.flatMap((reference) => reference._tag === 'entity' ? [String(reference.objectId)] : [])),
-      asset: new Set(references.flatMap((reference) => reference._tag === 'asset' ? [String(reference.assetId)] : [])),
-      catalog: new Set(references.flatMap((reference) => reference._tag === 'catalog' ? [String(reference.objectTypeId)] : [])),
-      behavior: new Set(references.flatMap((reference) => reference._tag === 'behavior' ? [String(reference.behaviorId)] : [])),
-    })).toEqual([]);
-    expect(validateBehaviorDraft(draft, registry, {
-      entity: new Set(), asset: new Set(), catalog: new Set(), behavior: new Set(),
-    }).filter(({ message }) => message.includes('points to a missing'))).toHaveLength(129);
+    expect(
+      validateBehaviorDraft(draft, registry, {
+        entity: new Set(
+          references.flatMap((reference) =>
+            reference._tag === 'entity' ? [String(reference.objectId)] : [],
+          ),
+        ),
+        asset: new Set(
+          references.flatMap((reference) =>
+            reference._tag === 'asset' ? [String(reference.assetId)] : [],
+          ),
+        ),
+        catalog: new Set(
+          references.flatMap((reference) =>
+            reference._tag === 'catalog' ? [String(reference.objectTypeId)] : [],
+          ),
+        ),
+        behavior: new Set(
+          references.flatMap((reference) =>
+            reference._tag === 'behavior' ? [String(reference.behaviorId)] : [],
+          ),
+        ),
+      }),
+    ).toEqual([]);
+    expect(
+      validateBehaviorDraft(draft, registry, {
+        entity: new Set(),
+        asset: new Set(),
+        catalog: new Set(),
+        behavior: new Set(),
+      }).filter(({ message }) => message.includes('points to a missing')),
+    ).toHaveLength(129);
 
     const saved = toBehaviorDefinition(makeBehaviorId(uuid('405')), draft);
     const reopened = fromBehaviorDefinition(saved, draft.requiredCapabilities);

@@ -128,7 +128,8 @@ const tabCountsForPack = (
       ),
     ).size,
     autotile: tilesets.reduce((count, tileset) => count + tileset.autotileRules.length, 0),
-    placeable: new Set((pack?.placeables ?? []).map((placeable) => placeable.source.tilesetName)).size,
+    placeable: new Set((pack?.placeables ?? []).map((placeable) => placeable.source.tilesetName))
+      .size,
   };
 };
 
@@ -224,7 +225,10 @@ export function AssetPackBrowser({
 
   const handleToggleDrafts = useCallback(
     (
-      items: readonly { readonly ref: AssetLibraryReference; readonly label?: string | undefined }[],
+      items: readonly {
+        readonly ref: AssetLibraryReference;
+        readonly label?: string | undefined;
+      }[],
       label: string,
     ) => {
       if (items.length === 0) {
@@ -290,11 +294,11 @@ export function AssetPackBrowser({
       <Card className="border-dashed py-8 text-center" data-testid="asset-pack-browser-empty">
         <CardHeader>
           <CardTitle className={cn(typography.caption, 'text-foreground')}>
-          This pack does not expose a tileset manifest
+            This pack does not expose a tileset manifest
           </CardTitle>
           <CardDescription className={typography.bodyCompact}>
-            Asset-only packs can still be browsed in the pack details. Import a Tileborne pack with a{' '}
-            <code>tilesets</code> section to add tiles to a working palette.
+            Asset-only packs can still be browsed in the pack details. Import a Tileborne pack with
+            a <code>tilesets</code> section to add tiles to a working palette.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -468,9 +472,7 @@ function AssetLibraryCachePanel({
     <Card className="gap-2 py-2" data-testid="asset-library-cache-panel">
       <CardHeader className="flex-row items-start justify-between gap-3 px-3 py-0">
         <div className="min-w-0">
-          <CardTitle className={cn(typography.caption, 'text-foreground')}>
-            Library cache
-          </CardTitle>
+          <CardTitle className={cn(typography.caption, 'text-foreground')}>Library cache</CardTitle>
           <CardDescription className={typography.bodyMicro}>{message}</CardDescription>
         </div>
         <Badge variant={badgeVariant} data-testid="asset-library-cache-status">
@@ -623,7 +625,10 @@ function VirtualizedPreviewGrid({
     const measure = () => {
       const width = node.clientWidth || node.offsetWidth;
       setColumns(
-        Math.max(1, Math.floor((width + GROUP_GRID_GAP_PX) / (GROUP_GRID_CELL_PX + GROUP_GRID_GAP_PX))),
+        Math.max(
+          1,
+          Math.floor((width + GROUP_GRID_GAP_PX) / (GROUP_GRID_CELL_PX + GROUP_GRID_GAP_PX)),
+        ),
       );
     };
     measure();
@@ -838,8 +843,8 @@ function BrowserGroup({
           <DialogHeader>
             <DialogTitle>{group.label}</DialogTitle>
             <DialogDescription>
-              {group.count} {group.kind === 'source' ? 'objects' : 'items'} · click a texture to
-              add or remove it from the working palette
+              {group.count} {group.kind === 'source' ? 'objects' : 'items'} · click a texture to add
+              or remove it from the working palette
             </DialogDescription>
           </DialogHeader>
           {entries.length === 0 ? (
@@ -944,10 +949,10 @@ function EmptyTabState({ tab }: { readonly tab: TabKind }) {
     >
       <CardHeader>
         <CardDescription className={typography.bodyCompact}>
-        {tab === 'tileset' && 'This pack has no tilesets to browse.'}
-        {tab === 'terrain' && 'This pack does not declare terrain classes.'}
-        {tab === 'autotile' && 'This pack has no autotile or Wang rules.'}
-        {tab === 'placeable' && 'This pack has no placeable objects.'}
+          {tab === 'tileset' && 'This pack has no tilesets to browse.'}
+          {tab === 'terrain' && 'This pack does not declare terrain classes.'}
+          {tab === 'autotile' && 'This pack has no autotile or Wang rules.'}
+          {tab === 'placeable' && 'This pack has no placeable objects.'}
         </CardDescription>
       </CardHeader>
     </Card>

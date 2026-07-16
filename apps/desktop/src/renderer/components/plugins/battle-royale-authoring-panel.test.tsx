@@ -10,7 +10,13 @@ import { BattleRoyaleAuthoringPanel } from './battle-royale-authoring-panel';
 
 const updateMap = vi.fn();
 const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
-const weapon = (suffix: string, label: string, origin: 'plugin' | 'project', sourcePluginId: string | undefined, deliveryTag: string) => ({
+const weapon = (
+  suffix: string,
+  label: string,
+  origin: 'plugin' | 'project',
+  sourcePluginId: string | undefined,
+  deliveryTag: string,
+) => ({
   entry: { weapon: { id: `weapon:${uuid(suffix)}` }, delivery: { _tag: deliveryTag } },
   label,
   origin,
@@ -37,9 +43,13 @@ vi.mock('@/hooks/queries', () => ({
   }),
 }));
 vi.mock('@/stores/editor-ui-store', () => ({
-  useEditorUiStore: (selector: (state: unknown) => unknown) => selector({ brushIntent: { kind: 'none' } }),
+  useEditorUiStore: (selector: (state: unknown) => unknown) =>
+    selector({ brushIntent: { kind: 'none' } }),
 }));
-vi.mock('@/stores/app-notifications-store', () => ({ notifyError: vi.fn(), notifySuccess: vi.fn() }));
+vi.mock('@/stores/app-notifications-store', () => ({
+  notifyError: vi.fn(),
+  notifySuccess: vi.fn(),
+}));
 
 const map = new TileborneMap({
   id: makeMapId(uuid('9')),
@@ -58,7 +68,9 @@ describe('BattleRoyaleAuthoringPanel rules', () => {
   });
 
   it('offers only BR-compatible plugin and project projectile weapons by human label', () => {
-    render(<BattleRoyaleAuthoringPanel projectId="project:test" map={map} settingsForm={undefined} />);
+    render(
+      <BattleRoyaleAuthoringPanel projectId="project:test" map={map} settingsForm={undefined} />,
+    );
 
     const select = screen.getByTestId('br-setting-startingWeaponId');
     expect(within(select).getByText('Pulse Carbine')).toBeTruthy();
@@ -68,11 +80,15 @@ describe('BattleRoyaleAuthoringPanel rules', () => {
   });
 
   it('switches the explicit match-end policy to continuous when respawn is enabled', () => {
-    render(<BattleRoyaleAuthoringPanel projectId="project:test" map={map} settingsForm={undefined} />);
+    render(
+      <BattleRoyaleAuthoringPanel projectId="project:test" map={map} settingsForm={undefined} />,
+    );
 
     fireEvent.click(screen.getByTestId('br-setting-respawnEnabled'));
 
-    expect((screen.getByTestId('br-setting-matchEndPolicy') as HTMLSelectElement).value).toBe('continuous');
+    expect((screen.getByTestId('br-setting-matchEndPolicy') as HTMLSelectElement).value).toBe(
+      'continuous',
+    );
     expect(screen.getByTestId('br-match-end-summary').textContent).toContain('continuous play');
   });
 });

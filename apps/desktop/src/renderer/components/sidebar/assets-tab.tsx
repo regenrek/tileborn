@@ -87,9 +87,9 @@ function PackListItem({
             ? `${capability!.tilesetCount} tilesets · ${capability!.tileCount} tiles · ${capability!.placeableCount} objects`
             : hasPlaceables
               ? `${pack.assetCount} assets · ${capability!.placeableCount} objects · no tilesets`
-            : probing
-              ? `${pack.assetCount} assets`
-              : `${pack.assetCount} assets · no tilesets`}
+              : probing
+                ? `${pack.assetCount} assets`
+                : `${pack.assetCount} assets · no tilesets`}
         </span>
       </span>
       {isActive ? <CheckIcon aria-hidden className="size-3.5 shrink-0 text-primary" /> : null}

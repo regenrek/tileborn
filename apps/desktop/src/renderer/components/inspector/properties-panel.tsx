@@ -1,9 +1,5 @@
 import type { MapObject, TileborneMap } from '@tileborne/core';
-import {
-  cn,
-  typography,
-  Skeleton,
-} from '@tileborne/ui';
+import { cn, typography, Skeleton } from '@tileborne/ui';
 import { SlidersHorizontalIcon } from 'lucide-react';
 
 import { CatalogObjectPanel } from '@/components/inspector/catalog-object-panel';

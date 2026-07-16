@@ -41,9 +41,11 @@ export function PluginDetailsPane({ pluginId }: PluginDetailsPaneProps) {
           <Skeleton className="h-4 w-1/2" />
         </CardHeader>
         <CardContent className="space-y-2">
-          {Array.from({ length: 6 }, (_, rowNumber) => `plugin-detail-row-${rowNumber}`).map((rowKey) => (
-            <Skeleton key={rowKey} className="h-4 w-full" />
-          ))}
+          {Array.from({ length: 6 }, (_, rowNumber) => `plugin-detail-row-${rowNumber}`).map(
+            (rowKey) => (
+              <Skeleton key={rowKey} className="h-4 w-full" />
+            ),
+          )}
         </CardContent>
       </Card>
     );

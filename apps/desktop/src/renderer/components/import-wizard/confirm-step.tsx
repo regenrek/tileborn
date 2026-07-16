@@ -1,4 +1,12 @@
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@tileborne/ui';
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+} from '@tileborne/ui';
 
 import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
@@ -16,9 +24,7 @@ type PlaceablePlanItem = NonNullable<
   NonNullable<TiledImportPlanView['mappings']>['placeables']
 >[number];
 
-const previewFromPlaceable = (
-  placeable: PlaceablePlanItem,
-): LibraryPreviewRef | undefined =>
+const previewFromPlaceable = (placeable: PlaceablePlanItem): LibraryPreviewRef | undefined =>
   placeable.image === undefined
     ? undefined
     : {
@@ -88,14 +94,20 @@ export function ConfirmStep({
         <CardHeader>
           <CardTitle>Import summary</CardTitle>
           <CardDescription>
-            Review the {sourceKind === 'tileborne-pack' ? 'Tileborne pack' : 'materialized asset pack and starter palette inputs'}.
+            Review the{' '}
+            {sourceKind === 'tileborne-pack'
+              ? 'Tileborne pack'
+              : 'materialized asset pack and starter palette inputs'}
+            .
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{scan?.inventory?.tilesetCount ?? 0} tilesets</Badge>
             <Badge variant="secondary">{scan?.inventory?.wangSetCount ?? 0} autotile groups</Badge>
-            <Badge variant="secondary">{scan?.inventory?.terrainClassCount ?? 0} terrain classes</Badge>
+            <Badge variant="secondary">
+              {scan?.inventory?.terrainClassCount ?? 0} terrain classes
+            </Badge>
             <Badge variant="secondary">{plan?.mappings?.placeables?.length ?? 0} placeables</Badge>
             <Badge variant={license.redistributable ? 'secondary' : 'outline'}>
               Redistributable: {license.redistributable ? 'yes' : 'no'}
@@ -113,7 +125,9 @@ export function ConfirmStep({
             <Card>
               <CardHeader>
                 <CardTitle>No starter palette items</CardTitle>
-                <CardDescription>The import can continue without seeding a Working Palette.</CardDescription>
+                <CardDescription>
+                  The import can continue without seeding a Working Palette.
+                </CardDescription>
               </CardHeader>
             </Card>
           ) : (

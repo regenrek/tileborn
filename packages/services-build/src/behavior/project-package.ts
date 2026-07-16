@@ -30,7 +30,14 @@ const diagnostic = (
   fileName: string,
   suggestion: string,
   location: Pick<BehaviorCompileDiagnostic, 'behaviorId' | 'nodeId' | 'sourceKind'> = {},
-): BehaviorCompileDiagnostic => ({ code, severity: 'error', message, fileName, suggestion, ...location });
+): BehaviorCompileDiagnostic => ({
+  code,
+  severity: 'error',
+  message,
+  fileName,
+  suggestion,
+  ...location,
+});
 
 /** Compiles one saved behavior and only its reachable TypeScript dependencies for live reload. */
 export const compileProjectBehaviorModule = async (
@@ -42,43 +49,54 @@ export const compileProjectBehaviorModule = async (
   if (resource === undefined) {
     return {
       ok: false,
-      diagnostics: [diagnostic(
-        'TBBUILD2202',
-        'The saved behavior no longer exists in the canonical project snapshot.',
-        '<behavior>',
-        'Reopen the behavior editor and retry the save.',
-        { behaviorId },
-      )],
+      diagnostics: [
+        diagnostic(
+          'TBBUILD2202',
+          'The saved behavior no longer exists in the canonical project snapshot.',
+          '<behavior>',
+          'Reopen the behavior editor and retry the save.',
+          { behaviorId },
+        ),
+      ],
     };
   }
   const diagnostics = snapshot.diagnostics
-    .filter((entry) => entry.severity === 'error' && (entry.behaviorId === undefined || entry.behaviorId === behaviorId))
-    .map((entry) => diagnostic(
-      entry.code,
-      entry.message,
-      entry.path ?? '<behavior>',
-      entry.code === 'behavior.project-untrusted'
-        ? 'Trust the imported project before compiling TypeScript behaviors.'
-        : 'Open the behavior source and resolve this project diagnostic.',
-      {
-        ...(entry.behaviorId === undefined ? {} : { behaviorId: entry.behaviorId }),
-        ...(entry.nodeId === undefined ? {} : { nodeId: entry.nodeId }),
-        ...(entry.sourceKind === undefined ? {} : { sourceKind: entry.sourceKind }),
-      },
-    ));
+    .filter(
+      (entry) =>
+        entry.severity === 'error' &&
+        (entry.behaviorId === undefined || entry.behaviorId === behaviorId),
+    )
+    .map((entry) =>
+      diagnostic(
+        entry.code,
+        entry.message,
+        entry.path ?? '<behavior>',
+        entry.code === 'behavior.project-untrusted'
+          ? 'Trust the imported project before compiling TypeScript behaviors.'
+          : 'Open the behavior source and resolve this project diagnostic.',
+        {
+          ...(entry.behaviorId === undefined ? {} : { behaviorId: entry.behaviorId }),
+          ...(entry.nodeId === undefined ? {} : { nodeId: entry.nodeId }),
+          ...(entry.sourceKind === undefined ? {} : { sourceKind: entry.sourceKind }),
+        },
+      ),
+    );
   const availableCapabilities = new Set(registry.entries.map((entry) => entry.capability));
-  const sourcePath = resource.manifest.source._tag === 'visual'
-    ? resource.manifest.source.definitionPath
-    : resource.manifest.source.sourcePath;
+  const sourcePath =
+    resource.manifest.source._tag === 'visual'
+      ? resource.manifest.source.definitionPath
+      : resource.manifest.source.sourcePath;
   for (const capability of resource.manifest.requiredCapabilities) {
     if (!availableCapabilities.has(capability)) {
-      diagnostics.push(diagnostic(
-        'TBBUILD2201',
-        `Behavior requires unavailable capability ${capability}.`,
-        sourcePath,
-        'Enable the plugin that contributes this capability or remove the dependency.',
-        { behaviorId, sourceKind: resource.kind },
-      ));
+      diagnostics.push(
+        diagnostic(
+          'TBBUILD2201',
+          `Behavior requires unavailable capability ${capability}.`,
+          sourcePath,
+          'Enable the plugin that contributes this capability or remove the dependency.',
+          { behaviorId, sourceKind: resource.kind },
+        ),
+      );
     }
   }
   if (diagnostics.length > 0) return { ok: false, diagnostics };
@@ -131,19 +149,22 @@ export const compileProjectBehaviorPackage = async (
   for (const resource of snapshot.resources) {
     for (const capability of resource.manifest.requiredCapabilities) {
       if (!availableCapabilities.has(capability)) {
-        const sourcePath = resource.manifest.source._tag === 'visual'
-          ? resource.manifest.source.definitionPath
-          : resource.manifest.source.sourcePath;
-        diagnostics.push(diagnostic(
-          'TBBUILD2201',
-          `Behavior requires unavailable capability ${capability}.`,
-          sourcePath,
-          'Enable the plugin that contributes this capability or remove the dependency.',
-          {
-            behaviorId: resource.manifest.id,
-            sourceKind: resource.kind,
-          },
-        ));
+        const sourcePath =
+          resource.manifest.source._tag === 'visual'
+            ? resource.manifest.source.definitionPath
+            : resource.manifest.source.sourcePath;
+        diagnostics.push(
+          diagnostic(
+            'TBBUILD2201',
+            `Behavior requires unavailable capability ${capability}.`,
+            sourcePath,
+            'Enable the plugin that contributes this capability or remove the dependency.',
+            {
+              behaviorId: resource.manifest.id,
+              sourceKind: resource.kind,
+            },
+          ),
+        );
       }
     }
   }
@@ -157,19 +178,23 @@ export const compileProjectBehaviorPackage = async (
     }));
   const compiled: CompiledBehaviorModule[] = [];
   for (const resource of snapshot.resources) {
-    const result = resource.kind === 'visual'
-      ? compileVisualBehavior({
-          definition: resource.definition,
-          definitionPath: path.join(snapshot.projectRoot, resource.manifest.source.definitionPath),
-          registry,
-        })
-      : await compileTypeScriptBehavior({
-          behaviorId: resource.manifest.id,
-          projectRoot: snapshot.projectRoot,
-          entryFile: path.join(snapshot.projectRoot, resource.manifest.source.sourcePath),
-          exportName: resource.manifest.source.exportName,
-          files,
-        });
+    const result =
+      resource.kind === 'visual'
+        ? compileVisualBehavior({
+            definition: resource.definition,
+            definitionPath: path.join(
+              snapshot.projectRoot,
+              resource.manifest.source.definitionPath,
+            ),
+            registry,
+          })
+        : await compileTypeScriptBehavior({
+            behaviorId: resource.manifest.id,
+            projectRoot: snapshot.projectRoot,
+            entryFile: path.join(snapshot.projectRoot, resource.manifest.source.sourcePath),
+            exportName: resource.manifest.source.exportName,
+            files,
+          });
     if (result.ok) compiled.push(result.artifact);
     else diagnostics.push(...result.diagnostics);
   }
@@ -185,12 +210,15 @@ export const compileProjectBehaviorPackage = async (
       visualDefinitions: snapshot.resources.flatMap((resource) =>
         resource.kind === 'visual' ? [resource.definition] : [],
       ),
-      modules: compiled.map((artifact) => new BehaviorModuleArtifact({
-        behaviorId: artifact.behaviorId,
-        sourceKind: artifact.sourceKind,
-        modulePath: artifact.modulePath,
-        hash: artifact.hash,
-      })),
+      modules: compiled.map(
+        (artifact) =>
+          new BehaviorModuleArtifact({
+            behaviorId: artifact.behaviorId,
+            sourceKind: artifact.sourceKind,
+            modulePath: artifact.modulePath,
+            hash: artifact.hash,
+          }),
+      ),
     }),
     modules: compiled.map((artifact) => ({
       path: artifact.modulePath,

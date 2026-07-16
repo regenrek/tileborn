@@ -1,19 +1,19 @@
-import path from "node:path";
+import path from 'node:path';
 
-import { type GameModeId, MapId, ProjectId } from "@tileborne/core";
+import { type GameModeId, MapId, ProjectId } from '@tileborne/core';
 import {
   discoverGameModes,
   type GameModeDescriptor,
   type GameModeManifest,
   resolveActiveGameMode,
-} from "@tileborne/plugin-api";
-import { MapService, ProjectService } from "@tileborne/services-app";
-import { HomeService } from "@tileborne/services-foundation";
-import type { PluginInstallerServiceError } from "@tileborne/services-plugin";
-import { PluginRegistryService } from "@tileborne/services-plugin";
-import { Context, Effect, Layer, Option, PubSub, Ref, Stream } from "effect";
+} from '@tileborne/plugin-api';
+import { MapService, ProjectService } from '@tileborne/services-app';
+import { HomeService } from '@tileborne/services-foundation';
+import type { PluginInstallerServiceError } from '@tileborne/services-plugin';
+import { PluginRegistryService } from '@tileborne/services-plugin';
+import { Context, Effect, Layer, Option, PubSub, Ref, Stream } from 'effect';
 
-import type { MapServiceError } from "@tileborne/services-app";
+import type { MapServiceError } from '@tileborne/services-app';
 
 import {
   PlaytestArtifact,
@@ -28,15 +28,15 @@ import {
   Stopped,
   emptyContentHash,
   makePlaytestSessionId,
-} from "../model.js";
+} from '../model.js';
 import {
   ensureDirectory,
   metadataFileName,
   verifiedChildPath,
   writeTextFile,
   writeVerifiedJson,
-} from "../internal/persistence.js";
-import { readProjectActiveGameModeId } from "./active-game-mode-selection.js";
+} from '../internal/persistence.js';
+import { readProjectActiveGameModeId } from './active-game-mode-selection.js';
 
 /**
  * A plugin candidate for playtest mode selection: its manifest (id + decoded
@@ -86,14 +86,14 @@ const describeActiveModeSelectionIssue = (
     }
     return [
       `Selected active game mode ${selection} is not enabled or does not declare a runtime system.`,
-      `Available modes: ${modes.map(modeLabel).join(", ")}.`,
-    ].join(" ");
+      `Available modes: ${modes.map(modeLabel).join(', ')}.`,
+    ].join(' ');
   }
   if (modes.length > 1) {
     return [
-      `Multiple enabled game modes are available (${modes.map(modeLabel).join(", ")}).`,
-      "Select an active game mode before starting playtest.",
-    ].join(" ");
+      `Multiple enabled game modes are available (${modes.map(modeLabel).join(', ')}).`,
+      'Select an active game mode before starting playtest.',
+    ].join(' ');
   }
   return undefined;
 };
@@ -105,27 +105,33 @@ export interface AssemblePlaytestInput {
   readonly outputDirectory?: string;
 }
 
-export class PlaytestService extends Context.Service<PlaytestService, {
-  readonly start: (
-    projectId: ProjectId,
-    mapId: MapId,
-    options?: PlaytestOptions,
-  ) => Effect.Effect<
-    PlaytestSession,
-    MapServiceError | ServicesBuildError | PluginInstallerServiceError
-  >;
-  readonly stop: (sessionId: PlaytestSessionId) => Effect.Effect<PlaytestSession, PlaytestSessionNotFoundError>;
-  readonly list: () => Effect.Effect<readonly PlaytestSession[]>;
-  readonly subscribe: Stream.Stream<void>;
-  readonly assembleArtifact: (
-    input: AssemblePlaytestInput,
-  ) => Effect.Effect<PlaytestArtifact, MapServiceError | ServicesBuildError>;
-}>()("@tileborne/services-build/PlaytestService") {}
+export class PlaytestService extends Context.Service<
+  PlaytestService,
+  {
+    readonly start: (
+      projectId: ProjectId,
+      mapId: MapId,
+      options?: PlaytestOptions,
+    ) => Effect.Effect<
+      PlaytestSession,
+      MapServiceError | ServicesBuildError | PluginInstallerServiceError
+    >;
+    readonly stop: (
+      sessionId: PlaytestSessionId,
+    ) => Effect.Effect<PlaytestSession, PlaytestSessionNotFoundError>;
+    readonly list: () => Effect.Effect<readonly PlaytestSession[]>;
+    readonly subscribe: Stream.Stream<void>;
+    readonly assembleArtifact: (
+      input: AssemblePlaytestInput,
+    ) => Effect.Effect<PlaytestArtifact, MapServiceError | ServicesBuildError>;
+  }
+>()('@tileborne/services-build/PlaytestService') {}
 
 const replaceSession = (
   sessions: readonly PlaytestSession[],
   next: PlaytestSession,
-): readonly PlaytestSession[] => sessions.map((session) => (session.id === next.id ? next : session));
+): readonly PlaytestSession[] =>
+  sessions.map((session) => (session.id === next.id ? next : session));
 
 const playtestIndexHtml = (artifactDir: string): string => `<!doctype html>
 <html lang="en">
@@ -142,7 +148,7 @@ const playtestIndexHtml = (artifactDir: string): string => `<!doctype html>
 `;
 
 const playtestArtifactDirectory = (playtestRoot: string, sessionId: PlaytestSessionId): string =>
-  path.join(playtestRoot, sessionId.replace(":", "-"));
+  path.join(playtestRoot, sessionId.replace(':', '-'));
 
 export const PlaytestServiceLive = Layer.effect(
   PlaytestService,
@@ -152,16 +158,16 @@ export const PlaytestServiceLive = Layer.effect(
     const projects = yield* ProjectService;
     const registry = yield* PluginRegistryService;
     const paths = yield* home.init();
-    const playtestRoot = path.join(paths.cache, "playtest");
+    const playtestRoot = path.join(paths.cache, 'playtest');
     yield* ensureDirectory(playtestRoot);
     const sessions = yield* Ref.make<readonly PlaytestSession[]>([]);
     const events = yield* PubSub.unbounded<void>();
 
-    const list = Effect.fn("PlaytestService.list")(function* () {
+    const list = Effect.fn('PlaytestService.list')(function* () {
       return yield* Ref.get(sessions);
     });
 
-    const assembleArtifact = Effect.fn("PlaytestService.assembleArtifact")(function* (
+    const assembleArtifact = Effect.fn('PlaytestService.assembleArtifact')(function* (
       input: AssemblePlaytestInput,
     ) {
       // Validate the map exists and decodes before creating the artifact
@@ -172,7 +178,7 @@ export const PlaytestServiceLive = Layer.effect(
       const directory =
         input.outputDirectory ?? (yield* verifiedChildPath(playtestRoot, artifactId));
       yield* ensureDirectory(directory);
-      const indexPath = path.join(directory, "index.html");
+      const indexPath = path.join(directory, 'index.html');
       const manifestPath = path.join(directory, metadataFileName);
       yield* writeTextFile(indexPath, playtestIndexHtml(directory));
       const manifest = new PlaytestArtifactManifest({
@@ -182,7 +188,11 @@ export const PlaytestServiceLive = Layer.effect(
         createdAt: new Date().toISOString(),
         integrityHash: emptyContentHash,
       });
-      const integrityHash = yield* writeVerifiedJson(manifestPath, PlaytestArtifactManifest, manifest);
+      const integrityHash = yield* writeVerifiedJson(
+        manifestPath,
+        PlaytestArtifactManifest,
+        manifest,
+      );
       return new PlaytestArtifact({
         directory,
         manifestPath,
@@ -191,7 +201,7 @@ export const PlaytestServiceLive = Layer.effect(
       });
     });
 
-    const start = Effect.fn("PlaytestService.start")(function* (
+    const start = Effect.fn('PlaytestService.start')(function* (
       projectId: ProjectId,
       mapId: MapId,
       options = new PlaytestOptions({
@@ -209,13 +219,11 @@ export const PlaytestServiceLive = Layer.effect(
       }));
       const activeModeSelection = readProjectActiveGameModeId(project);
       const availableModes = enabledPlaytestGameModes(modeCandidates);
-      const enabledPlugins = activePlaytestPluginIds(
-        modeCandidates,
-        activeModeSelection,
-      );
-      const modeSelectionIssue = enabledPlugins.length === 0
-        ? describeActiveModeSelectionIssue(availableModes, activeModeSelection)
-        : undefined;
+      const enabledPlugins = activePlaytestPluginIds(modeCandidates, activeModeSelection);
+      const modeSelectionIssue =
+        enabledPlugins.length === 0
+          ? describeActiveModeSelectionIssue(availableModes, activeModeSelection)
+          : undefined;
       if (modeSelectionIssue !== undefined) {
         yield* new ServicesBuildError({ path: Option.none(), message: modeSelectionIssue });
       }
@@ -254,7 +262,7 @@ export const PlaytestServiceLive = Layer.effect(
       return running;
     });
 
-    const stop = Effect.fn("PlaytestService.stop")(function* (sessionId: PlaytestSessionId) {
+    const stop = Effect.fn('PlaytestService.stop')(function* (sessionId: PlaytestSessionId) {
       const current = yield* Ref.get(sessions);
       const session = current.find((entry) => entry.id === sessionId);
       if (!session) {

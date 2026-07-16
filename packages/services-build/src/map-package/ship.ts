@@ -1,21 +1,21 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import type { AssetPackManifest } from "@tileborne/asset-pipeline";
+import type { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
   PlayerModelRef,
   ProjectManifest,
   readPluginMapSettings,
   type JsonObject,
   type TileborneMap,
-} from "@tileborne/core";
-import type { RuntimeModeDataExporter } from "@tileborne/plugin-api";
-import { Effect, Schema } from "effect";
+} from '@tileborne/core';
+import type { RuntimeModeDataExporter } from '@tileborne/plugin-api';
+import { Effect, Schema } from 'effect';
 
-import { errorMessage, serviceError } from "../internal/persistence.js";
-import type { ServicesBuildError } from "../model.js";
-import type { RuntimeMapPackageAssetInput } from "./assemble.js";
+import { errorMessage, serviceError } from '../internal/persistence.js';
+import type { ServicesBuildError } from '../model.js';
+import type { RuntimeMapPackageAssetInput } from './assemble.js';
 
 /**
  * Ship-build inputs for `assembleRuntimeMapPackage` (M5 S1): the producers
@@ -36,17 +36,14 @@ export const DEFAULT_PACKAGE_PLAYER_CAPACITY = 32;
  * mode-data export reads it: the active plugin's namespaced map settings
  * (`map.properties.<pluginId>.maxPlayers`, ADR-0023 §A).
  */
-export const resolvePackagePlayerCapacity = (
-  map: TileborneMap,
-  activePluginId: string,
-): number => {
+export const resolvePackagePlayerCapacity = (map: TileborneMap, activePluginId: string): number => {
   const value = readPluginMapSettings(map, activePluginId).maxPlayers;
-  return typeof value === "number" && Number.isInteger(value) && value > 0
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
     ? value
     : DEFAULT_PACKAGE_PLAYER_CAPACITY;
 };
 
-const PACK_MANIFEST_FILENAME = "tileborne-asset-pack.json";
+const PACK_MANIFEST_FILENAME = 'tileborne-asset-pack.json';
 
 /** One installed asset pack to package: its decoded manifest + install root. */
 export interface InstalledAssetPackSource {
@@ -102,7 +99,7 @@ interface PluginNodeEntryManifest {
 
 /** Resolve the installed plugin's node entry (`entry.server`, else `entry.editor`). */
 const resolveNodeEntry = async (rootPath: string): Promise<string | undefined> => {
-  const manifestRaw = await readFile(path.join(rootPath, "tileborne-plugin.json"), "utf8");
+  const manifestRaw = await readFile(path.join(rootPath, 'tileborne-plugin.json'), 'utf8');
   const manifest = JSON.parse(manifestRaw) as PluginNodeEntryManifest;
   const nodeEntry = manifest.entry?.server ?? manifest.entry?.editor;
   return nodeEntry === undefined ? undefined : path.resolve(rootPath, nodeEntry);
@@ -137,7 +134,7 @@ export const loadPluginModeDataExporter = (
 ): Effect.Effect<RuntimeModeDataExporter | undefined, ServicesBuildError> =>
   loadNodeEntryModule(rootPath).pipe(
     Effect.map((module) =>
-      typeof module?.exportModeData === "function"
+      typeof module?.exportModeData === 'function'
         ? (module.exportModeData as RuntimeModeDataExporter)
         : undefined,
     ),
@@ -158,7 +155,7 @@ export const loadPluginPlayerModels = (
 ): Effect.Effect<readonly PlayerModelRef[], ServicesBuildError> =>
   Effect.gen(function* () {
     const module = yield* loadNodeEntryModule(rootPath);
-    if (typeof module?.resolvePlayerModels !== "function") {
+    if (typeof module?.resolvePlayerModels !== 'function') {
       return [] as readonly PlayerModelRef[];
     }
     const projectWire = JSON.parse(

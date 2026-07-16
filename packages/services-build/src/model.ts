@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
-import { AssetPackManifest } from "@tileborne/asset-pipeline";
+import { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
   BuildId,
   ContentHash,
@@ -10,35 +10,35 @@ import {
   TileborneMap,
   type Uuid,
   makeBuildId,
-} from "@tileborne/core";
-import { Option, Schema } from "effect";
+} from '@tileborne/core';
+import { Option, Schema } from 'effect';
 
 /**
  * Ship targets (M5 S2, hard cut): `cloudflare` deploys the worker artifact via
  * wrangler; `local` is the SAME canonical artifact plus a local serve
  * convention (`tileborne game serve --dir <out>` boots it in miniflare).
  */
-export const BuildTarget = Schema.Literals(["cloudflare", "local"]);
+export const BuildTarget = Schema.Literals(['cloudflare', 'local']);
 export type BuildTarget = Schema.Schema.Type<typeof BuildTarget>;
 
 export const ExportId = Schema.String.check(Schema.isPattern(/^export:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("ExportId"),
+  Schema.brand('ExportId'),
 );
 export type ExportId = Schema.Schema.Type<typeof ExportId>;
 
 export const PlaytestSessionId = Schema.String.check(
   Schema.isPattern(/^playtest:[0-9a-f-]{36}$/),
-).pipe(Schema.brand("PlaytestSessionId"));
+).pipe(Schema.brand('PlaytestSessionId'));
 export type PlaytestSessionId = Schema.Schema.Type<typeof PlaytestSessionId>;
 
-export const DeploymentId = Schema.String.check(Schema.isPattern(/^deployment:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("DeploymentId"),
-);
+export const DeploymentId = Schema.String.check(
+  Schema.isPattern(/^deployment:[0-9a-f-]{36}$/),
+).pipe(Schema.brand('DeploymentId'));
 export type DeploymentId = Schema.Schema.Type<typeof DeploymentId>;
 
-export const SupportBundleId = Schema.String.check(Schema.isPattern(/^support:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("SupportBundleId"),
-);
+export const SupportBundleId = Schema.String.check(
+  Schema.isPattern(/^support:[0-9a-f-]{36}$/),
+).pipe(Schema.brand('SupportBundleId'));
 export type SupportBundleId = Schema.Schema.Type<typeof SupportBundleId>;
 
 export const makeNewBuildId = (): BuildId => makeBuildId(randomUUID() as Uuid);
@@ -46,17 +46,18 @@ export const makeExportId = (): ExportId => `export:${randomUUID()}` as ExportId
 export const makePlaytestSessionId = (): PlaytestSessionId =>
   `playtest:${randomUUID()}` as PlaytestSessionId;
 export const makeDeploymentId = (): DeploymentId => `deployment:${randomUUID()}` as DeploymentId;
-export const makeSupportBundleId = (): SupportBundleId => `support:${randomUUID()}` as SupportBundleId;
+export const makeSupportBundleId = (): SupportBundleId =>
+  `support:${randomUUID()}` as SupportBundleId;
 
 export const emptyContentHash =
-  "sha256:0000000000000000000000000000000000000000000000000000000000000000" as ContentHash;
+  'sha256:0000000000000000000000000000000000000000000000000000000000000000' as ContentHash;
 
-export class BuildOptions extends Schema.Class<BuildOptions>("BuildOptions")({
+export class BuildOptions extends Schema.Class<BuildOptions>('BuildOptions')({
   target: Schema.OptionFromOptional(BuildTarget),
   delayMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class BuildArtifact extends Schema.Class<BuildArtifact>("BuildArtifact")({
+export class BuildArtifact extends Schema.Class<BuildArtifact>('BuildArtifact')({
   id: BuildId,
   projectId: ProjectId,
   target: BuildTarget,
@@ -69,7 +70,7 @@ export class BuildArtifact extends Schema.Class<BuildArtifact>("BuildArtifact")(
   integrityHash: ContentHash,
 }) {}
 
-export class BuildSummary extends Schema.Class<BuildSummary>("BuildSummary")({
+export class BuildSummary extends Schema.Class<BuildSummary>('BuildSummary')({
   id: BuildId,
   projectId: ProjectId,
   target: BuildTarget,
@@ -78,21 +79,27 @@ export class BuildSummary extends Schema.Class<BuildSummary>("BuildSummary")({
 }) {}
 
 export class CloudflareWorkerExportTarget extends Schema.TaggedClass<CloudflareWorkerExportTarget>()(
-  "CloudflareWorkerExportTarget",
+  'CloudflareWorkerExportTarget',
   {
-    environment: Schema.OptionFromOptional(Schema.Literals(["local", "dev", "staging", "production"])),
+    environment: Schema.OptionFromOptional(
+      Schema.Literals(['local', 'dev', 'staging', 'production']),
+    ),
   },
 ) {}
 
-export class NodeExportTarget extends Schema.TaggedClass<NodeExportTarget>()("NodeExportTarget", {
+export class NodeExportTarget extends Schema.TaggedClass<NodeExportTarget>()('NodeExportTarget', {
   entrypoint: Schema.OptionFromOptional(Schema.String),
 }) {}
 
-export class WebExportTarget extends Schema.TaggedClass<WebExportTarget>()("WebExportTarget", {
+export class WebExportTarget extends Schema.TaggedClass<WebExportTarget>()('WebExportTarget', {
   basePath: Schema.OptionFromOptional(Schema.String),
 }) {}
 
-export const ExportTarget = Schema.Union([CloudflareWorkerExportTarget, NodeExportTarget, WebExportTarget]);
+export const ExportTarget = Schema.Union([
+  CloudflareWorkerExportTarget,
+  NodeExportTarget,
+  WebExportTarget,
+]);
 export type ExportTarget = Schema.Schema.Type<typeof ExportTarget>;
 
 export interface EditorExporterContext {
@@ -102,11 +109,11 @@ export interface EditorExporterContext {
   readonly outputDirectory: string;
 }
 
-export class ExportOptions extends Schema.Class<ExportOptions>("ExportOptions")({
+export class ExportOptions extends Schema.Class<ExportOptions>('ExportOptions')({
   delayMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class ExportArtifact extends Schema.Class<ExportArtifact>("ExportArtifact")({
+export class ExportArtifact extends Schema.Class<ExportArtifact>('ExportArtifact')({
   id: ExportId,
   buildId: BuildId,
   target: ExportTarget,
@@ -117,21 +124,21 @@ export class ExportArtifact extends Schema.Class<ExportArtifact>("ExportArtifact
   integrityHash: ContentHash,
 }) {}
 
-export class PlaytestOptions extends Schema.Class<PlaytestOptions>("PlaytestOptions")({
+export class PlaytestOptions extends Schema.Class<PlaytestOptions>('PlaytestOptions')({
   slot: Schema.OptionFromOptional(Schema.String),
   runtimeUrl: Schema.OptionFromOptional(Schema.String),
   delayMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class Starting extends Schema.TaggedClass<Starting>()("Starting", {}) {}
-export class Running extends Schema.TaggedClass<Running>()("Running", {}) {}
-export class Stopped extends Schema.TaggedClass<Stopped>()("Stopped", {}) {}
-export class Failed extends Schema.TaggedClass<Failed>()("Failed", { message: Schema.String }) {}
+export class Starting extends Schema.TaggedClass<Starting>()('Starting', {}) {}
+export class Running extends Schema.TaggedClass<Running>()('Running', {}) {}
+export class Stopped extends Schema.TaggedClass<Stopped>()('Stopped', {}) {}
+export class Failed extends Schema.TaggedClass<Failed>()('Failed', { message: Schema.String }) {}
 
 export const PlaytestSessionStatus = Schema.Union([Starting, Running, Stopped, Failed]);
 export type PlaytestSessionStatus = Schema.Schema.Type<typeof PlaytestSessionStatus>;
 
-export class PlaytestSession extends Schema.Class<PlaytestSession>("PlaytestSession")({
+export class PlaytestSession extends Schema.Class<PlaytestSession>('PlaytestSession')({
   id: PlaytestSessionId,
   projectId: ProjectId,
   mapId: MapId,
@@ -144,26 +151,28 @@ export class PlaytestSession extends Schema.Class<PlaytestSession>("PlaytestSess
 }) {}
 
 export class RuntimeDeployCredentials extends Schema.Class<RuntimeDeployCredentials>(
-  "RuntimeDeployCredentials",
+  'RuntimeDeployCredentials',
 )({
   accountId: Schema.String,
   apiToken: Schema.String,
 }) {}
 
 export class RuntimeDeployTarget extends Schema.TaggedClass<RuntimeDeployTarget>()(
-  "RuntimeDeployTarget",
+  'RuntimeDeployTarget',
   {
-    stage: Schema.Literals(["local", "dev", "staging", "production"]),
+    stage: Schema.Literals(['local', 'dev', 'staging', 'production']),
     workerName: Schema.String,
     credentials: Schema.OptionFromOptional(RuntimeDeployCredentials),
   },
 ) {}
 
-export class RuntimeDeployOptions extends Schema.Class<RuntimeDeployOptions>("RuntimeDeployOptions")({
+export class RuntimeDeployOptions extends Schema.Class<RuntimeDeployOptions>(
+  'RuntimeDeployOptions',
+)({
   delayMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class RuntimeDeployment extends Schema.Class<RuntimeDeployment>("RuntimeDeployment")({
+export class RuntimeDeployment extends Schema.Class<RuntimeDeployment>('RuntimeDeployment')({
   id: DeploymentId,
   buildId: BuildId,
   target: RuntimeDeployTarget,
@@ -173,13 +182,15 @@ export class RuntimeDeployment extends Schema.Class<RuntimeDeployment>("RuntimeD
   integrityHash: ContentHash,
 }) {}
 
-export class SupportBundleOptions extends Schema.Class<SupportBundleOptions>("SupportBundleOptions")({
+export class SupportBundleOptions extends Schema.Class<SupportBundleOptions>(
+  'SupportBundleOptions',
+)({
   includeLogs: Schema.OptionFromOptional(Schema.Boolean),
   includeConfig: Schema.OptionFromOptional(Schema.Boolean),
   delayMs: Schema.OptionFromOptional(Schema.Number),
 }) {}
 
-export class SupportBundle extends Schema.Class<SupportBundle>("SupportBundle")({
+export class SupportBundle extends Schema.Class<SupportBundle>('SupportBundle')({
   id: SupportBundleId,
   createdAt: Schema.String,
   directory: Schema.String,
@@ -189,7 +200,7 @@ export class SupportBundle extends Schema.Class<SupportBundle>("SupportBundle")(
 }) {}
 
 export class ServicesBuildError extends Schema.TaggedErrorClass<ServicesBuildError>()(
-  "ServicesBuildError",
+  'ServicesBuildError',
   {
     path: Schema.OptionFromOptional(Schema.String),
     message: Schema.String,
@@ -197,7 +208,7 @@ export class ServicesBuildError extends Schema.TaggedErrorClass<ServicesBuildErr
 ) {}
 
 export class IntegrityMismatchError extends Schema.TaggedErrorClass<IntegrityMismatchError>()(
-  "IntegrityMismatchError",
+  'IntegrityMismatchError',
   {
     path: Schema.String,
     expected: ContentHash,
@@ -206,13 +217,16 @@ export class IntegrityMismatchError extends Schema.TaggedErrorClass<IntegrityMis
   },
 ) {}
 
-export class BuildNotFoundError extends Schema.TaggedErrorClass<BuildNotFoundError>()("BuildNotFoundError", {
-  buildId: BuildId,
-  message: Schema.String,
-}) {}
+export class BuildNotFoundError extends Schema.TaggedErrorClass<BuildNotFoundError>()(
+  'BuildNotFoundError',
+  {
+    buildId: BuildId,
+    message: Schema.String,
+  },
+) {}
 
 export class ExportNotFoundError extends Schema.TaggedErrorClass<ExportNotFoundError>()(
-  "ExportNotFoundError",
+  'ExportNotFoundError',
   {
     exportId: ExportId,
     message: Schema.String,
@@ -220,7 +234,7 @@ export class ExportNotFoundError extends Schema.TaggedErrorClass<ExportNotFoundE
 ) {}
 
 export class PlaytestSessionNotFoundError extends Schema.TaggedErrorClass<PlaytestSessionNotFoundError>()(
-  "PlaytestSessionNotFoundError",
+  'PlaytestSessionNotFoundError',
   {
     sessionId: PlaytestSessionId,
     message: Schema.String,
@@ -228,7 +242,7 @@ export class PlaytestSessionNotFoundError extends Schema.TaggedErrorClass<Playte
 ) {}
 
 export class DeploymentNotFoundError extends Schema.TaggedErrorClass<DeploymentNotFoundError>()(
-  "DeploymentNotFoundError",
+  'DeploymentNotFoundError',
   {
     deploymentId: DeploymentId,
     message: Schema.String,
@@ -236,7 +250,7 @@ export class DeploymentNotFoundError extends Schema.TaggedErrorClass<DeploymentN
 ) {}
 
 export class SupportBundleNotFoundError extends Schema.TaggedErrorClass<SupportBundleNotFoundError>()(
-  "SupportBundleNotFoundError",
+  'SupportBundleNotFoundError',
   {
     bundleId: SupportBundleId,
     message: Schema.String,
@@ -244,7 +258,7 @@ export class SupportBundleNotFoundError extends Schema.TaggedErrorClass<SupportB
 ) {}
 
 export class RuntimeDeployAuthError extends Schema.TaggedErrorClass<RuntimeDeployAuthError>()(
-  "RuntimeDeployAuthError",
+  'RuntimeDeployAuthError',
   {
     buildId: BuildId,
     message: Schema.String,
@@ -260,11 +274,11 @@ export const emptyExportOptions = new ExportOptions({
   delayMs: Option.none(),
 });
 
-export const PlaytestTarget = Schema.Literals(["headless", "browser"]);
+export const PlaytestTarget = Schema.Literals(['headless', 'browser']);
 export type PlaytestTarget = Schema.Schema.Type<typeof PlaytestTarget>;
 
 export class PlaytestArtifactManifest extends Schema.Class<PlaytestArtifactManifest>(
-  "PlaytestArtifactManifest",
+  'PlaytestArtifactManifest',
 )({
   mapId: MapId,
   projectId: ProjectId,
@@ -273,20 +287,22 @@ export class PlaytestArtifactManifest extends Schema.Class<PlaytestArtifactManif
   integrityHash: ContentHash,
 }) {}
 
-export class PlaytestArtifact extends Schema.Class<PlaytestArtifact>("PlaytestArtifact")({
+export class PlaytestArtifact extends Schema.Class<PlaytestArtifact>('PlaytestArtifact')({
   directory: Schema.String,
   manifestPath: Schema.String,
   indexPath: Schema.String,
   manifest: PlaytestArtifactManifest,
 }) {}
 
-export class PlaytestHeadlessResult extends Schema.Class<PlaytestHeadlessResult>("PlaytestHeadlessResult")({
+export class PlaytestHeadlessResult extends Schema.Class<PlaytestHeadlessResult>(
+  'PlaytestHeadlessResult',
+)({
   ticks: Schema.Number,
   durationSec: Schema.Number,
   hookSummary: Schema.Record(Schema.String, Schema.Number),
 }) {}
 
-export class GameBuildOptions extends Schema.Class<GameBuildOptions>("GameBuildOptions")({
+export class GameBuildOptions extends Schema.Class<GameBuildOptions>('GameBuildOptions')({
   pluginId: Schema.String,
   target: BuildTarget,
   outputDirectory: Schema.OptionFromOptional(Schema.String),
@@ -303,7 +319,7 @@ export class GameBuildOptions extends Schema.Class<GameBuildOptions>("GameBuildO
   mapIds: Schema.OptionFromOptional(Schema.Array(Schema.String)),
 }) {}
 
-export class GameBuildArtifact extends Schema.Class<GameBuildArtifact>("GameBuildArtifact")({
+export class GameBuildArtifact extends Schema.Class<GameBuildArtifact>('GameBuildArtifact')({
   pluginId: Schema.String,
   target: BuildTarget,
   directory: Schema.String,

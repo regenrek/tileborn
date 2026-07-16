@@ -27,14 +27,19 @@ const canonicalJson = (value: JsonValue): JsonValue => {
 
 const literal = (value: JsonValue): string => JSON.stringify(canonicalJson(value));
 
-const referenceKey = (reference: BehaviorReference): string => JSON.stringify(canonicalJson(reference));
+const referenceKey = (reference: BehaviorReference): string =>
+  JSON.stringify(canonicalJson(reference));
 
 const referenceFactory = (reference: BehaviorReference): string => {
   switch (reference._tag) {
-    case 'entity': return `gameRefs.entity(${JSON.stringify(reference.objectId)})`;
-    case 'asset': return `gameRefs.asset(${JSON.stringify(reference.assetId)})`;
-    case 'catalog': return `gameRefs.catalog(${JSON.stringify(reference.objectTypeId)})`;
-    case 'behavior': return `gameRefs.behavior(${JSON.stringify(reference.behaviorId)})`;
+    case 'entity':
+      return `gameRefs.entity(${JSON.stringify(reference.objectId)})`;
+    case 'asset':
+      return `gameRefs.asset(${JSON.stringify(reference.assetId)})`;
+    case 'catalog':
+      return `gameRefs.catalog(${JSON.stringify(reference.objectTypeId)})`;
+    case 'behavior':
+      return `gameRefs.behavior(${JSON.stringify(reference.behaviorId)})`;
   }
 };
 
@@ -46,8 +51,13 @@ const referenceFactory = (reference: BehaviorReference): string => {
 export const generateTypeScriptBehaviorSource = (
   input: GenerateTypeScriptBehaviorSourceInput,
 ): string => {
-  const entries = new Map(input.registry.entries.map((entry) => [String(entry.id), entry] as const));
-  const references = new Map<string, { readonly name: string; readonly value: BehaviorReference }>();
+  const entries = new Map(
+    input.registry.entries.map((entry) => [String(entry.id), entry] as const),
+  );
+  const references = new Map<
+    string,
+    { readonly name: string; readonly value: BehaviorReference }
+  >();
   let usesEventField = false;
 
   const collectExpression = (expression: BehaviorValueExpression): void => {
@@ -61,10 +71,14 @@ export const generateTypeScriptBehaviorSource = (
       });
     }
   };
-  const orderedExpressions = (invocation: BehaviorInvocation): readonly BehaviorValueExpression[] => {
+  const orderedExpressions = (
+    invocation: BehaviorInvocation,
+  ): readonly BehaviorValueExpression[] => {
     const entry = entries.get(String(invocation.entryId));
     if (entry === undefined) {
-      throw new Error(`Cannot convert unknown behavior registry entry ${JSON.stringify(invocation.entryId)}.`);
+      throw new Error(
+        `Cannot convert unknown behavior registry entry ${JSON.stringify(invocation.entryId)}.`,
+      );
     }
     return entry.inputs.map(({ key }) => {
       const expression = invocation.arguments[key];
@@ -79,14 +93,16 @@ export const generateTypeScriptBehaviorSource = (
   };
   const collectCondition = (condition: BehaviorCondition): void => {
     if (condition._tag === 'condition') {
-      for (const expression of orderedExpressions(condition.invocation)) collectExpression(expression);
+      for (const expression of orderedExpressions(condition.invocation))
+        collectExpression(expression);
     } else if (condition._tag === 'not') collectCondition(condition.condition);
     else for (const nested of condition.conditions) collectCondition(nested);
   };
   const collectActions = (actions: readonly BehaviorActionNode[]): void => {
     for (const action of actions) {
       if (action._tag === 'action') {
-        for (const expression of orderedExpressions(action.invocation)) collectExpression(expression);
+        for (const expression of orderedExpressions(action.invocation))
+          collectExpression(expression);
       } else {
         collectCondition(action.condition);
         collectActions(action.then);
@@ -98,21 +114,29 @@ export const generateTypeScriptBehaviorSource = (
   // Validate and collect in execution order before rendering any source.
   const eventEntry = entries.get(String(input.definition.when.entryId));
   if (eventEntry?.kind !== 'event') {
-    throw new Error(`Cannot convert invalid event entry ${JSON.stringify(input.definition.when.entryId)}.`);
+    throw new Error(
+      `Cannot convert invalid event entry ${JSON.stringify(input.definition.when.entryId)}.`,
+    );
   }
-  for (const [, expression] of Object.entries(input.definition.when.arguments)
-    .sort(([left], [right]) => left.localeCompare(right))) collectExpression(expression);
+  for (const [, expression] of Object.entries(input.definition.when.arguments).sort(
+    ([left], [right]) => left.localeCompare(right),
+  ))
+    collectExpression(expression);
   if (input.definition.if !== undefined) collectCondition(input.definition.if);
   collectActions(input.definition.do);
 
   const expressionSource = (expression: BehaviorValueExpression): string => {
     switch (expression._tag) {
-      case 'literal': return literal(expression.value);
-      case 'state': return `context.state.get(${JSON.stringify(expression.key)})`;
-      case 'event-field': return `readEventField(context.event, ${JSON.stringify(expression.path)})`;
+      case 'literal':
+        return literal(expression.value);
+      case 'state':
+        return `context.state.get(${JSON.stringify(expression.key)})`;
+      case 'event-field':
+        return `readEventField(context.event, ${JSON.stringify(expression.path)})`;
       case 'reference': {
         const found = references.get(referenceKey(expression.reference));
-        if (found === undefined) throw new Error('Internal conversion error: reference was not collected.');
+        if (found === undefined)
+          throw new Error('Internal conversion error: reference was not collected.');
         return `context.refs.${found.name}`;
       }
     }
@@ -134,7 +158,9 @@ export const generateTypeScriptBehaviorSource = (
     if (condition._tag === 'not') return `!(${conditionSource(condition.condition)})`;
     const entry = entries.get(String(condition.invocation.entryId));
     if (entry?.kind !== 'condition') {
-      throw new Error(`Cannot convert invalid condition entry ${JSON.stringify(condition.invocation.entryId)}.`);
+      throw new Error(
+        `Cannot convert invalid condition entry ${JSON.stringify(condition.invocation.entryId)}.`,
+      );
     }
     const arguments_ = invocationArguments(condition.invocation);
     return condition.invocation.entryId === 'state.equals'
@@ -155,7 +181,10 @@ export const generateTypeScriptBehaviorSource = (
     return `context.actions[${JSON.stringify(invocation.entryId)}](${arguments_})`;
   };
 
-  const actionLines = (actions: readonly BehaviorActionNode[], indentation: string): readonly string[] =>
+  const actionLines = (
+    actions: readonly BehaviorActionNode[],
+    indentation: string,
+  ): readonly string[] =>
     actions.flatMap((action) => {
       if (action._tag === 'action') return [`${indentation}${commandSource(action.invocation)},`];
       return [
@@ -167,16 +196,17 @@ export const generateTypeScriptBehaviorSource = (
       ];
     });
 
-  const imports = references.size === 0
-    ? `import { defineBehavior } from '@tileborne/game-sdk';`
-    : `import { defineBehavior, refs as gameRefs } from '@tileborne/game-sdk';`;
+  const imports =
+    references.size === 0
+      ? `import { defineBehavior } from '@tileborne/game-sdk';`
+      : `import { defineBehavior, refs as gameRefs } from '@tileborne/game-sdk';`;
   const helpers = [
     ...(usesEventField
       ? [
           '',
           'const readEventField = (event: unknown, path: string): unknown =>',
-          '  path.split(\'.\').reduce<unknown>(',
-          '    (current, key) => typeof current === \'object\' && current !== null',
+          "  path.split('.').reduce<unknown>(",
+          "    (current, key) => typeof current === 'object' && current !== null",
           '      ? (current as Readonly<Record<string, unknown>>)[key]',
           '      : undefined,',
           '    event,',
@@ -191,21 +221,26 @@ export const generateTypeScriptBehaviorSource = (
         ]
       : []),
   ];
-  const refsLines = references.size === 0
-    ? []
-    : [
-        '  refs: {',
-        ...[...references.values()].map(({ name, value }) => `    ${name}: ${referenceFactory(value)},`),
-        '  },',
-      ];
+  const refsLines =
+    references.size === 0
+      ? []
+      : [
+          '  refs: {',
+          ...[...references.values()].map(
+            ({ name, value }) => `    ${name}: ${referenceFactory(value)},`,
+          ),
+          '  },',
+        ];
   const eventGuards = Object.entries(input.definition.when.arguments)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, expression]) =>
-      `      if (!sameJsonValue(context.event[${JSON.stringify(key)}], ${expressionSource(expression)})) return [];`,
+    .map(
+      ([key, expression]) =>
+        `      if (!sameJsonValue(context.event[${JSON.stringify(key)}], ${expressionSource(expression)})) return [];`,
     );
-  const conditionGuard = input.definition.if === undefined
-    ? []
-    : [`      if (!(${conditionSource(input.definition.if)})) return [];`];
+  const conditionGuard =
+    input.definition.if === undefined
+      ? []
+      : [`      if (!(${conditionSource(input.definition.if)})) return [];`];
 
   return [
     imports,
@@ -214,11 +249,15 @@ export const generateTypeScriptBehaviorSource = (
     'export default defineBehavior({',
     `  id: ${JSON.stringify(input.definition.id)},`,
     '  state: {',
-    ...input.definition.state.map(({ key, initialValue }) => `    ${JSON.stringify(key)}: ${literal(initialValue)},`),
+    ...input.definition.state.map(
+      ({ key, initialValue }) => `    ${JSON.stringify(key)}: ${literal(initialValue)},`,
+    ),
     '  },',
     ...refsLines,
     '  requiredCapabilities: [',
-    ...[...new Set(input.requiredCapabilities)].sort().map((capability) => `    ${JSON.stringify(capability)},`),
+    ...[...new Set(input.requiredCapabilities)]
+      .sort()
+      .map((capability) => `    ${JSON.stringify(capability)},`),
     '  ],',
     '  on: {',
     `    ${JSON.stringify(input.definition.when.entryId)}: (context) => {`,

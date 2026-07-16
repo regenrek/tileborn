@@ -1,15 +1,19 @@
-import { existsSync } from "node:fs";
-import { readFile, readdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { existsSync } from 'node:fs';
+import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
-import { assertWithinRoot, rejectPathTraversal, rejectSymlinkEscape } from "@tileborne/asset-pipeline";
-import { ContentHash, hashJsonStable } from "@tileborne/core";
-import { writeJsonAtomic } from "@tileborne/services-foundation";
-import { Effect, Option, Schema } from "effect";
+import {
+  assertWithinRoot,
+  rejectPathTraversal,
+  rejectSymlinkEscape,
+} from '@tileborne/asset-pipeline';
+import { ContentHash, hashJsonStable } from '@tileborne/core';
+import { writeJsonAtomic } from '@tileborne/services-foundation';
+import { Effect, Option, Schema } from 'effect';
 
-import { IntegrityMismatchError, ServicesBuildError } from "../model.js";
+import { IntegrityMismatchError, ServicesBuildError } from '../model.js';
 
-export const metadataFileName = "manifest.json";
+export const metadataFileName = 'manifest.json';
 
 export const serviceError = (message: string, filePath?: string): ServicesBuildError =>
   new ServicesBuildError({
@@ -21,12 +25,12 @@ export const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT";
+  typeof cause === 'object' && cause !== null && 'code' in cause && cause.code === 'ENOENT';
 
 export const ensureDirectory = (directory: string): Effect.Effect<void, ServicesBuildError> =>
   Effect.tryPromise({
     try: async () => {
-      await import("node:fs/promises").then(({ mkdir }) => mkdir(directory, { recursive: true }));
+      await import('node:fs/promises').then(({ mkdir }) => mkdir(directory, { recursive: true }));
     },
     catch: (cause) => serviceError(errorMessage(cause), directory),
   });
@@ -46,7 +50,7 @@ export const verifiedChildPath = (
     });
 
     const parent = path.dirname(relative);
-    if (parent !== "." && parent !== relative) {
+    if (parent !== '.' && parent !== relative) {
       yield* Effect.tryPromise({
         try: async () => {
           try {
@@ -77,7 +81,7 @@ export const verifiedChildPath = (
   });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const splitIntegrity = (
   encoded: Record<string, unknown>,
@@ -113,7 +117,7 @@ export const readVerifiedJson = <A, I extends Record<string, unknown>>(
 ): Effect.Effect<A, ServicesBuildError | IntegrityMismatchError> =>
   Effect.gen(function* () {
     const raw = yield* Effect.tryPromise({
-      try: () => readFile(filePath, "utf8"),
+      try: () => readFile(filePath, 'utf8'),
       catch: (cause) => serviceError(errorMessage(cause), filePath),
     });
     const parsed = yield* Effect.try({
@@ -123,7 +127,7 @@ export const readVerifiedJson = <A, I extends Record<string, unknown>>(
     if (!isRecord(parsed)) {
       return yield* Effect.fail(
         serviceError(
-          `verified JSON must be an object, got ${parsed === null ? "null" : typeof parsed}`,
+          `verified JSON must be an object, got ${parsed === null ? 'null' : typeof parsed}`,
           filePath,
         ),
       );
@@ -187,6 +191,6 @@ export const writeTextFile = (
   content: string,
 ): Effect.Effect<void, ServicesBuildError> =>
   Effect.tryPromise({
-    try: () => writeFile(filePath, content, "utf8"),
+    try: () => writeFile(filePath, content, 'utf8'),
     catch: (cause) => serviceError(errorMessage(cause), filePath),
   });

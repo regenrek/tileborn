@@ -1,14 +1,11 @@
-import { gameModeIdFromPluginId, PluginId } from "@tileborne/core";
-import { PluginContributions } from "@tileborne/plugin-api";
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { gameModeIdFromPluginId, PluginId } from '@tileborne/core';
+import { PluginContributions } from '@tileborne/plugin-api';
+import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import {
-  activePlaytestPluginIds,
-  type PlaytestModeCandidate,
-} from "./index.js";
+import { activePlaytestPluginIds, type PlaytestModeCandidate } from './index.js';
 
-const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
+const BATTLE_ROYALE_PLUGIN_ID = '@tileborne-plugins/battle-royale';
 
 const pluginId = (value: string): PluginId => Schema.decodeUnknownSync(PluginId)(value);
 
@@ -48,30 +45,32 @@ const CONTRIBUTIONS_DEFAULTS = {
 } as const;
 
 const runtimeSystem = (id: string, label: string) => ({
-  _tag: "ExecutableRuntimeSystemContribution" as const,
+  _tag: 'ExecutableRuntimeSystemContribution' as const,
   id,
-  kind: "executable" as const,
+  kind: 'executable' as const,
   display: { label, description: undefined, icon: undefined, order: undefined },
-  entry: "./dist/runtime.js",
+  entry: './dist/runtime.js',
 });
 
 const withRuntimeSystem = (id: string, label: string): PluginContributions =>
   Schema.decodeUnknownSync(PluginContributions)({
     ...CONTRIBUTIONS_DEFAULTS,
-    gameModes: [{
-      _tag: "GameModeContribution",
-      id: "mode",
-      kind: "declarative",
-      display: { label, description: undefined, icon: undefined, order: undefined },
-      runtimeSystemId: id,
-      settingsPanelId: undefined,
-      settingsFormId: undefined,
-      mapValidatorId: undefined,
-      hudLayoutId: undefined,
-      starter: undefined,
-      checklistFacts: undefined,
-      capabilities: undefined,
-    }],
+    gameModes: [
+      {
+        _tag: 'GameModeContribution',
+        id: 'mode',
+        kind: 'declarative',
+        display: { label, description: undefined, icon: undefined, order: undefined },
+        runtimeSystemId: id,
+        settingsPanelId: undefined,
+        settingsFormId: undefined,
+        mapValidatorId: undefined,
+        hudLayoutId: undefined,
+        starter: undefined,
+        checklistFacts: undefined,
+        capabilities: undefined,
+      },
+    ],
     runtime: { ...RUNTIME_DEFAULTS, systems: [runtimeSystem(id, label)] },
   });
 
@@ -85,68 +84,108 @@ const candidate = (
   contributions: PluginContributions,
 ): PlaytestModeCandidate => ({ pluginId: pluginId(id), enabled, contributions });
 
-describe("playtest manifest-driven mode selection", () => {
-  it("activates an enabled non-battle-royale plugin that declares a runtime system", () => {
+describe('playtest manifest-driven mode selection', () => {
+  it('activates an enabled non-battle-royale plugin that declares a runtime system', () => {
     expect(
       activePlaytestPluginIds([
-        candidate("@tileborne-plugins/top-down-shooter", true, withRuntimeSystem("shooter-runtime", "Top-Down Shooter")),
+        candidate(
+          '@tileborne-plugins/top-down-shooter',
+          true,
+          withRuntimeSystem('shooter-runtime', 'Top-Down Shooter'),
+        ),
       ]),
-    ).toEqual(["@tileborne-plugins/top-down-shooter"]);
+    ).toEqual(['@tileborne-plugins/top-down-shooter']);
   });
 
-  it("still activates battle royale because it declares a runtime system", () => {
+  it('still activates battle royale because it declares a runtime system', () => {
     expect(
       activePlaytestPluginIds([
-        candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
+        candidate(
+          BATTLE_ROYALE_PLUGIN_ID,
+          true,
+          withRuntimeSystem('battle-royale-runtime', 'Battle Royale Runtime Adapter'),
+        ),
       ]),
     ).toEqual([BATTLE_ROYALE_PLUGIN_ID]);
   });
 
-  it("ignores disabled plugins and plugins without a runtime system", () => {
+  it('ignores disabled plugins and plugins without a runtime system', () => {
     expect(
       activePlaytestPluginIds([
-        candidate("@tileborne-plugins/editor-only", true, editorOnly()),
-        candidate("@tileborne-plugins/disabled-mode", false, withRuntimeSystem("disabled-runtime", "Disabled")),
-        candidate("@tileborne-plugins/top-down-shooter", true, withRuntimeSystem("shooter-runtime", "Top-Down Shooter")),
+        candidate('@tileborne-plugins/editor-only', true, editorOnly()),
+        candidate(
+          '@tileborne-plugins/disabled-mode',
+          false,
+          withRuntimeSystem('disabled-runtime', 'Disabled'),
+        ),
+        candidate(
+          '@tileborne-plugins/top-down-shooter',
+          true,
+          withRuntimeSystem('shooter-runtime', 'Top-Down Shooter'),
+        ),
       ]),
-    ).toEqual(["@tileborne-plugins/top-down-shooter"]);
+    ).toEqual(['@tileborne-plugins/top-down-shooter']);
   });
 
-  it("selects no plugin when none declares a runtime system", () => {
+  it('selects no plugin when none declares a runtime system', () => {
     expect(
-      activePlaytestPluginIds([candidate("@tileborne-plugins/editor-only", true, editorOnly())]),
+      activePlaytestPluginIds([candidate('@tileborne-plugins/editor-only', true, editorOnly())]),
     ).toEqual([]);
   });
 
-  it("honors an explicit selected mode instead of the first discovered mode", () => {
+  it('honors an explicit selected mode instead of the first discovered mode', () => {
     expect(
       activePlaytestPluginIds(
         [
-          candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
-          candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+          candidate(
+            BATTLE_ROYALE_PLUGIN_ID,
+            true,
+            withRuntimeSystem('battle-royale-runtime', 'Battle Royale Runtime Adapter'),
+          ),
+          candidate(
+            '@tileborne-plugins/example-arena',
+            true,
+            withRuntimeSystem('arena-runtime', 'Example Arena'),
+          ),
         ],
-        gameModeIdFromPluginId(pluginId("@tileborne-plugins/example-arena")),
+        gameModeIdFromPluginId(pluginId('@tileborne-plugins/example-arena')),
       ),
-    ).toEqual(["@tileborne-plugins/example-arena"]);
+    ).toEqual(['@tileborne-plugins/example-arena']);
   });
 
-  it("selects no plugin when multiple modes are available without an explicit selection", () => {
+  it('selects no plugin when multiple modes are available without an explicit selection', () => {
     expect(
       activePlaytestPluginIds([
-        candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
-        candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+        candidate(
+          BATTLE_ROYALE_PLUGIN_ID,
+          true,
+          withRuntimeSystem('battle-royale-runtime', 'Battle Royale Runtime Adapter'),
+        ),
+        candidate(
+          '@tileborne-plugins/example-arena',
+          true,
+          withRuntimeSystem('arena-runtime', 'Example Arena'),
+        ),
       ]),
     ).toEqual([]);
   });
 
-  it("selects no plugin when the selection is unavailable", () => {
+  it('selects no plugin when the selection is unavailable', () => {
     expect(
       activePlaytestPluginIds(
         [
-          candidate(BATTLE_ROYALE_PLUGIN_ID, true, withRuntimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")),
-          candidate("@tileborne-plugins/example-arena", true, withRuntimeSystem("arena-runtime", "Example Arena")),
+          candidate(
+            BATTLE_ROYALE_PLUGIN_ID,
+            true,
+            withRuntimeSystem('battle-royale-runtime', 'Battle Royale Runtime Adapter'),
+          ),
+          candidate(
+            '@tileborne-plugins/example-arena',
+            true,
+            withRuntimeSystem('arena-runtime', 'Example Arena'),
+          ),
         ],
-        gameModeIdFromPluginId(pluginId("@tileborne-plugins/missing-mode")),
+        gameModeIdFromPluginId(pluginId('@tileborne-plugins/missing-mode')),
       ),
     ).toEqual([]);
   });

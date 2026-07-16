@@ -1,6 +1,11 @@
 import path from 'node:path';
 
-import { BehaviorDefinition, BehaviorRegistryManifest, CORE_BEHAVIOR_REGISTRY, type BehaviorId } from '@tileborne/core';
+import {
+  BehaviorDefinition,
+  BehaviorRegistryManifest,
+  CORE_BEHAVIOR_REGISTRY,
+  type BehaviorId,
+} from '@tileborne/core';
 import {
   DeterministicBehaviorScheduler,
   loadBehaviorModuleNamespace,
@@ -148,7 +153,9 @@ const importArtifact = async (artifact: CompiledBehaviorModule): Promise<LoadedB
 describe('behavior compiler', () => {
   it('locates the game SDK from an Electron main bundle directory without module metadata', () => {
     const electronBundleDirectory = path.resolve(process.cwd(), '../../apps/desktop/.vite/build');
-    expect(resolveGameSdkEntryPath(electronBundleDirectory)).toMatch(/packages\/game-sdk\/(?:dist\/index\.js|src\/index\.ts)$/);
+    expect(resolveGameSdkEntryPath(electronBundleDirectory)).toMatch(
+      /packages\/game-sdk\/(?:dist\/index\.js|src\/index\.ts)$/,
+    );
   });
 
   it('executes the core local-state condition without an external query capability', async () => {
@@ -169,17 +176,19 @@ describe('behavior compiler', () => {
           },
         },
       },
-      do: [{
-        _tag: 'action',
-        nodeId: NODE_2,
-        invocation: {
-          entryId: 'state.set',
-          arguments: {
-            key: { _tag: 'literal', value: 'count' },
-            value: { _tag: 'literal', value: 2 },
+      do: [
+        {
+          _tag: 'action',
+          nodeId: NODE_2,
+          invocation: {
+            entryId: 'state.set',
+            arguments: {
+              key: { _tag: 'literal', value: 'count' },
+              value: { _tag: 'literal', value: 2 },
+            },
           },
         },
-      }],
+      ],
     });
     const compiled = compileVisualBehavior({
       definition,
@@ -290,15 +299,17 @@ describe('behavior compiler', () => {
     expect(invalid.ok).toBe(false);
     if (invalid.ok) return;
     expect(invalid.diagnostics[0]).toMatchObject({ code: 'TBBUILD2101' });
-    expect(invalid.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        code: 'TBBUILD2101',
-        behaviorId: VISUAL_ID,
-        sourceKind: 'visual',
-        nodeId: NODE_2,
-        message: expect.stringContaining('world.open-door'),
-      }),
-    ]));
+    expect(invalid.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'TBBUILD2101',
+          behaviorId: VISUAL_ID,
+          sourceKind: 'visual',
+          nodeId: NODE_2,
+          message: expect.stringContaining('world.open-door'),
+        }),
+      ]),
+    );
     expect(invalid.lastKnownGood?.hash).toBe(valid.ok ? valid.artifact.hash : undefined);
   });
 

@@ -1,5 +1,5 @@
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   type GameObjectType,
@@ -18,13 +18,13 @@ import {
   deriveWeaponVisuals,
   makeRuntimeMapPackageId,
   type Uuid,
-} from "@tileborne/core";
+} from '@tileborne/core';
 import {
   type GameModeDescriptor,
   type MergeGameObjectCatalogsDeps,
   RuntimeProjectContent,
   type RuntimeModeDataExporter,
-} from "@tileborne/plugin-api";
+} from '@tileborne/plugin-api';
 import {
   RUNTIME_MAP_PACKAGE_ENTRY_FILES,
   RUNTIME_MAP_PACKAGE_MANIFEST_FILE,
@@ -32,15 +32,11 @@ import {
   type RuntimeMapPackageEntryName,
   buildRuntimeCatalogRegistry,
   hashRuntimeMapPackageEntry,
-} from "@tileborne/runtime/map-package";
-import { Effect, Result, Schema } from "effect";
+} from '@tileborne/runtime/map-package';
+import { Effect, Result, Schema } from 'effect';
 
-import {
-  ensureDirectory,
-  serviceError,
-  verifiedChildPath,
-} from "../internal/persistence.js";
-import type { ServicesBuildError } from "../model.js";
+import { ensureDirectory, serviceError, verifiedChildPath } from '../internal/persistence.js';
+import type { ServicesBuildError } from '../model.js';
 
 /**
  * Runtime map package assembly (ADR-0030 step 1, the one producer).
@@ -75,7 +71,7 @@ export interface AssembleRuntimeMapPackageInput {
   readonly projectId: string;
   readonly map: TileborneMap;
   /** The discovered ACTIVE game mode (ADR-0023 §B) this package boots. */
-  readonly activeMode: Pick<GameModeDescriptor, "modeId" | "pluginId">;
+  readonly activeMode: Pick<GameModeDescriptor, 'modeId' | 'pluginId'>;
   /** Materialized per-plugin catalogs (`LoadedDeclarativePlugin.gameObjectCatalogs`). */
   readonly pluginCatalogs: readonly RuntimeCatalogPluginSource[];
   /**
@@ -122,7 +118,7 @@ const CatalogEntries = Schema.Array(RuntimeCatalogEntry);
 const Placements = Schema.Array(RuntimeObjectPlacement);
 
 const isJsonObject = (value: unknown): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Project role-free placements from the map's objects (ADR-0030): every placed
@@ -132,13 +128,15 @@ const isJsonObject = (value: unknown): value is JsonObject =>
  */
 const projectPlacements = (
   map: TileborneMap,
-  hasType: (id: GameObjectType["id"]) => boolean,
+  hasType: (id: GameObjectType['id']) => boolean,
 ): Result.Result<readonly RuntimeObjectPlacement[], ServicesBuildError> => {
-  const unknown = [...new Set(map.objects.filter((object) => !hasType(object.kind)).map((object) => object.kind))];
+  const unknown = [
+    ...new Set(map.objects.filter((object) => !hasType(object.kind)).map((object) => object.kind)),
+  ];
   if (unknown.length > 0) {
     return Result.fail(
       serviceError(
-        `map references object types missing from the merged catalog: ${unknown.join(", ")}`,
+        `map references object types missing from the merged catalog: ${unknown.join(', ')}`,
       ),
     );
   }
@@ -161,15 +159,12 @@ const projectPlacements = (
 /** Slice the map's namespaced authoring settings (`map.properties.<pluginId>`, ADR-0023 §A). */
 const namespacedSettings = (map: TileborneMap): Record<string, JsonObject> =>
   Object.fromEntries(
-    Object.entries(map.properties).filter(
-      (entry): entry is [string, JsonObject] => isJsonObject(entry[1]),
+    Object.entries(map.properties).filter((entry): entry is [string, JsonObject] =>
+      isJsonObject(entry[1]),
     ),
   );
 
-const writeBytes = (
-  filePath: string,
-  bytes: Uint8Array,
-): Effect.Effect<void, ServicesBuildError> =>
+const writeBytes = (filePath: string, bytes: Uint8Array): Effect.Effect<void, ServicesBuildError> =>
   Effect.tryPromise({
     try: () => writeFile(filePath, bytes),
     catch: (cause) =>
@@ -187,7 +182,7 @@ export const assembleRuntimeMapPackage = (
       Effect.try({
         try: () => input.signal?.throwIfAborted(),
         catch: (cause) =>
-          serviceError(cause instanceof Error ? cause.message : "map-package assembly cancelled"),
+          serviceError(cause instanceof Error ? cause.message : 'map-package assembly cancelled'),
       });
     yield* checkpoint();
     // 1. Merge catalogs through the canonical runtime registry (single owner).
@@ -198,7 +193,7 @@ export const assembleRuntimeMapPackage = (
     );
     if (Result.isFailure(registryResult)) {
       return yield* serviceError(
-        `catalog merge failed: ${registryResult.failure._tag}: ${registryResult.failure.message ?? ""}`,
+        `catalog merge failed: ${registryResult.failure._tag}: ${registryResult.failure.message ?? ''}`,
       );
     }
     const registry = registryResult.success;
@@ -219,7 +214,7 @@ export const assembleRuntimeMapPackage = (
     const mergedObjectTypes = registry.entries.map((entry) => entry.objectType);
     const projectTypeIds = new Set(
       registry.entries
-        .filter((entry) => entry.origin._tag === "project")
+        .filter((entry) => entry.origin._tag === 'project')
         .map((entry) => String(entry.objectType.id)),
     );
     const visuals = new RuntimeMapPackageVisuals({
@@ -251,7 +246,7 @@ export const assembleRuntimeMapPackage = (
     const behaviorPackage = input.behaviors ?? EMPTY_RUNTIME_BEHAVIOR_PACKAGE;
     const behaviorModuleInputs = input.behaviorModules ?? [];
     for (const asset of assetInputs) {
-      if (!asset.path.startsWith("assets/")) {
+      if (!asset.path.startsWith('assets/')) {
         return yield* serviceError(`asset path must live under assets/: ${asset.path}`);
       }
     }
@@ -268,11 +263,15 @@ export const assembleRuntimeMapPackage = (
     }
     for (const module of behaviorModuleInputs) {
       if (!module.path.startsWith('behaviors/modules/')) {
-        return yield* serviceError(`behavior module path must live under behaviors/modules/: ${module.path}`);
+        return yield* serviceError(
+          `behavior module path must live under behaviors/modules/: ${module.path}`,
+        );
       }
       const artifact = behaviorArtifacts.get(module.path);
       if (artifact === undefined) {
-        return yield* serviceError(`behavior module payload has no package artifact: ${module.path}`);
+        return yield* serviceError(
+          `behavior module payload has no package artifact: ${module.path}`,
+        );
       }
       const actualHash = yield* Effect.promise(() => hashRuntimeMapPackageEntry(module.bytes));
       if (actualHash !== artifact.hash) {
@@ -311,7 +310,9 @@ export const assembleRuntimeMapPackage = (
 
     const entryHashes: Record<string, string> = {};
     const sectionBytes = new Map<RuntimeMapPackageEntryName, Uint8Array>();
-    for (const entryName of Object.keys(RUNTIME_MAP_PACKAGE_ENTRY_FILES) as RuntimeMapPackageEntryName[]) {
+    for (const entryName of Object.keys(
+      RUNTIME_MAP_PACKAGE_ENTRY_FILES,
+    ) as RuntimeMapPackageEntryName[]) {
       yield* checkpoint();
       const bytes = encodeJsonBytes(sectionJson[entryName]);
       sectionBytes.set(entryName, bytes);
@@ -321,7 +322,9 @@ export const assembleRuntimeMapPackage = (
       entryHashes[entry.path] = entry.hash;
     }
     for (const module of behaviorModuleInputs) {
-      entryHashes[module.path] = yield* Effect.promise(() => hashRuntimeMapPackageEntry(module.bytes));
+      entryHashes[module.path] = yield* Effect.promise(() =>
+        hashRuntimeMapPackageEntry(module.bytes),
+      );
     }
 
     const stablePackageHash = hashJsonStable({
@@ -332,8 +335,9 @@ export const assembleRuntimeMapPackage = (
       playerCapacity: input.playerCapacity,
       engineVersion: input.engineVersion,
       entryHashes,
-    }).slice("sha256:".length);
-    const packageUuid = `${stablePackageHash.slice(0, 8)}-${stablePackageHash.slice(8, 12)}-5${stablePackageHash.slice(13, 16)}-a${stablePackageHash.slice(17, 20)}-${stablePackageHash.slice(20, 32)}` as Uuid;
+    }).slice('sha256:'.length);
+    const packageUuid =
+      `${stablePackageHash.slice(0, 8)}-${stablePackageHash.slice(8, 12)}-5${stablePackageHash.slice(13, 16)}-a${stablePackageHash.slice(17, 20)}-${stablePackageHash.slice(20, 32)}` as Uuid;
     const manifestJson = {
       packageId: makeRuntimeMapPackageId(packageUuid),
       schemaVersion: RUNTIME_MAP_PACKAGE_SCHEMA_VERSION,
@@ -342,7 +346,7 @@ export const assembleRuntimeMapPackage = (
       activeMode: input.activeMode.modeId,
       playerCapacity: input.playerCapacity,
       engineVersion: input.engineVersion,
-      createdAt: "1970-01-01T00:00:00.000Z",
+      createdAt: '1970-01-01T00:00:00.000Z',
       entryHashes,
     };
 

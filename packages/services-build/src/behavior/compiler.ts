@@ -212,14 +212,15 @@ export const compileTypeScriptBehavior = async (
     files: input.files,
     rootFiles: [entryFile],
   }).map(diagnosticFromSdk);
-  if (diagnostics.length > 0) return {
-    ok: false,
-    diagnostics: diagnostics.map((entry) => ({
-      ...entry,
-      behaviorId: input.behaviorId,
-      sourceKind: 'typescript',
-    })),
-  };
+  if (diagnostics.length > 0)
+    return {
+      ok: false,
+      diagnostics: diagnostics.map((entry) => ({
+        ...entry,
+        behaviorId: input.behaviorId,
+        sourceKind: 'typescript',
+      })),
+    };
 
   const files = new Map(
     input.files.map((file) => [path.resolve(file.fileName), file.sourceText] as const),
@@ -355,8 +356,7 @@ export const compileVisualBehavior = (input: VisualBehaviorCompileInput): Behavi
     if (!condition) return;
     if (condition._tag === 'condition') {
       inspectInvocation(condition.invocation, 'condition', condition.nodeId);
-    }
-    else if (condition._tag === 'not') inspectCondition(condition.condition);
+    } else if (condition._tag === 'not') inspectCondition(condition.condition);
     else for (const nested of condition.conditions) inspectCondition(nested);
   };
   const inspectActions = (nodes: typeof definition.do): void => {
@@ -379,15 +379,15 @@ export const compileVisualBehavior = (input: VisualBehaviorCompileInput): Behavi
         ...missing
           .sort((left, right) => left.entryId.localeCompare(right.entryId))
           .map(({ entryId, nodeId }) => ({
-          code: 'TBBUILD2101',
-          severity: 'error' as const,
-          fileName: input.definitionPath,
-          message: `Visual behavior references unknown registry entry ${JSON.stringify(entryId)}.`,
-          suggestion: 'Enable the owning capability/plugin or replace the missing block.',
-          behaviorId: definition.id,
-          sourceKind: 'visual' as const,
-          ...(nodeId === undefined ? {} : { nodeId }),
-        })),
+            code: 'TBBUILD2101',
+            severity: 'error' as const,
+            fileName: input.definitionPath,
+            message: `Visual behavior references unknown registry entry ${JSON.stringify(entryId)}.`,
+            suggestion: 'Enable the owning capability/plugin or replace the missing block.',
+            behaviorId: definition.id,
+            sourceKind: 'visual' as const,
+            ...(nodeId === undefined ? {} : { nodeId }),
+          })),
         ...wrongKind
           .sort((left, right) => left.entryId.localeCompare(right.entryId))
           .map(({ entryId, actual, expected, nodeId }) => ({

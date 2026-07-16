@@ -30,43 +30,55 @@ const snapshot = (trust: ProjectBehaviorSnapshot['trust']): ProjectBehaviorSnaps
   projectRoot: '/virtual/project',
   revision: 1,
   trust,
-  resources: [{
-    kind: 'typescript',
-    manifest: manifest as ProjectBehaviorSnapshot['resources'][number]['manifest'] & {
-      readonly source: Extract<typeof manifest.source, { readonly _tag: 'typescript' }>;
+  resources: [
+    {
+      kind: 'typescript',
+      manifest: manifest as ProjectBehaviorSnapshot['resources'][number]['manifest'] & {
+        readonly source: Extract<typeof manifest.source, { readonly _tag: 'typescript' }>;
+      },
+      source: 'export default Object.freeze({ on: {} });\n',
     },
-    source: 'export default Object.freeze({ on: {} });\n',
-  }],
+  ],
   useSites: [],
-  diagnostics: trust === 'trusted' ? [] : [{
-    id: 'untrusted',
-    code: 'behavior.project-untrusted',
-    severity: 'error',
-    title: 'Untrusted',
-    message: 'Imported scripts are disabled.',
-    behaviorId: manifest.id,
-    sourceKind: 'typescript',
-    path: manifest.source._tag === 'typescript' ? manifest.source.sourcePath : '',
-  }],
+  diagnostics:
+    trust === 'trusted'
+      ? []
+      : [
+          {
+            id: 'untrusted',
+            code: 'behavior.project-untrusted',
+            severity: 'error',
+            title: 'Untrusted',
+            message: 'Imported scripts are disabled.',
+            behaviorId: manifest.id,
+            sourceKind: 'typescript',
+            path: manifest.source._tag === 'typescript' ? manifest.source.sourcePath : '',
+          },
+        ],
 });
 
 describe('compileProjectBehaviorPackage', () => {
   it('preserves project node locations and capability source ownership', async () => {
     const nodeId = makeBehaviorNodeId('00000000-0000-4000-8000-000000000203');
-    const withReference = await compileProjectBehaviorPackage({
-      ...snapshot('trusted'),
-      diagnostics: [{
-        id: 'missing-reference',
-        code: 'behavior.reference-missing',
-        severity: 'error',
-        title: 'Missing reference',
-        message: 'Reference missing.',
-        behaviorId: manifest.id,
-        sourceKind: 'visual',
-        nodeId,
-        path: 'behaviors/sources/visual.behavior.json',
-      }],
-    }, registry);
+    const withReference = await compileProjectBehaviorPackage(
+      {
+        ...snapshot('trusted'),
+        diagnostics: [
+          {
+            id: 'missing-reference',
+            code: 'behavior.reference-missing',
+            severity: 'error',
+            title: 'Missing reference',
+            message: 'Reference missing.',
+            behaviorId: manifest.id,
+            sourceKind: 'visual',
+            nodeId,
+            path: 'behaviors/sources/visual.behavior.json',
+          },
+        ],
+      },
+      registry,
+    );
     expect(withReference.diagnostics[0]).toMatchObject({
       behaviorId: manifest.id,
       sourceKind: 'visual',
@@ -78,16 +90,25 @@ describe('compileProjectBehaviorPackage', () => {
       ...Schema.encodeSync(BehaviorManifest)(manifest),
       requiredCapabilities: ['inventory.core'],
     });
-    const withCapability = await compileProjectBehaviorPackage({
-      ...snapshot('trusted'),
-      resources: [{
-        kind: 'typescript',
-        manifest: capabilityManifest as ProjectBehaviorSnapshot['resources'][number]['manifest'] & {
-          readonly source: Extract<typeof capabilityManifest.source, { readonly _tag: 'typescript' }>;
-        },
-        source: 'export default Object.freeze({ on: {} });\n',
-      }],
-    }, registry);
+    const withCapability = await compileProjectBehaviorPackage(
+      {
+        ...snapshot('trusted'),
+        resources: [
+          {
+            kind: 'typescript',
+            manifest:
+              capabilityManifest as ProjectBehaviorSnapshot['resources'][number]['manifest'] & {
+                readonly source: Extract<
+                  typeof capabilityManifest.source,
+                  { readonly _tag: 'typescript' }
+                >;
+              },
+            source: 'export default Object.freeze({ on: {} });\n',
+          },
+        ],
+      },
+      registry,
+    );
     expect(withCapability.diagnostics[0]).toMatchObject({
       code: 'TBBUILD2201',
       behaviorId: manifest.id,
@@ -143,8 +164,9 @@ describe('compileProjectBehaviorPackage', () => {
 
     const broken = await compileProjectBehaviorModule(twoBehaviors, registry, brokenManifest.id);
     expect(broken.ok).toBe(false);
-    if (!broken.ok) expect(broken.diagnostics).toEqual([
-      expect.objectContaining({ behaviorId: brokenManifest.id, code: 'TBSDK1002' }),
-    ]);
+    if (!broken.ok)
+      expect(broken.diagnostics).toEqual([
+        expect.objectContaining({ behaviorId: brokenManifest.id, code: 'TBSDK1002' }),
+      ]);
   });
 });

@@ -94,7 +94,8 @@ const ownerPath = (projectRoot: string): string =>
 const ownerRecordPath = (ownerDirectory: string): string =>
   path.join(ownerDirectory, OWNER_RECORD_FILE);
 
-const errorMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const syncDirectory = async (directory: string): Promise<void> => {
   const handle = await open(directory, 'r');
@@ -119,9 +120,11 @@ const writeDurableJsonAtomic = async (filePath: string, value: unknown): Promise
   await syncDirectory(path.dirname(filePath));
 };
 
-const readJson = async (filePath: string): Promise<unknown> => JSON.parse(await readFile(filePath, 'utf8'));
+const readJson = async (filePath: string): Promise<unknown> =>
+  JSON.parse(await readFile(filePath, 'utf8'));
 
-const currentHash = async (filePath: string): Promise<string> => hashJsonStable(await readJson(filePath));
+const currentHash = async (filePath: string): Promise<string> =>
+  hashJsonStable(await readJson(filePath));
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -153,7 +156,12 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
   if (!phases.includes(value.phase as ProjectRevisionTransactionPhase)) {
     throw new Error('Invalid project revision journal phase');
   }
-  if (!isObject(value.targets) || !isObject(value.oldHashes) || !isObject(value.newHashes) || !isObject(value.snapshots)) {
+  if (
+    !isObject(value.targets) ||
+    !isObject(value.oldHashes) ||
+    !isObject(value.newHashes) ||
+    !isObject(value.snapshots)
+  ) {
     throw new Error('Invalid project revision journal payload');
   }
   const expectedMapTarget = path.join('maps', `${mapId}.json`);
@@ -245,8 +253,7 @@ const decodeOwner = (value: unknown): ProjectRevisionTransactionOwner => {
 const isAlreadyExists = (cause: unknown): boolean =>
   isObject(cause) && (cause.code === 'EEXIST' || cause.code === 'ENOTEMPTY');
 
-const isNotFound = (cause: unknown): boolean =>
-  isObject(cause) && cause.code === 'ENOENT';
+const isNotFound = (cause: unknown): boolean => isObject(cause) && cause.code === 'ENOENT';
 
 const pathExists = (filePath: string): Promise<boolean> =>
   stat(filePath).then(
@@ -385,10 +392,18 @@ const recoverJournalWithoutAcquiringOwner = async (projectRoot: string): Promise
   if (journal.ownerPid !== process.pid && processIsAlive(journal.ownerPid)) {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      if (!(await stat(journalFile).then(() => true, () => false))) return;
+      if (
+        !(await stat(journalFile).then(
+          () => true,
+          () => false,
+        ))
+      )
+        return;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    throw new Error(`Project revision transaction ${journal.id} is owned by live process ${journal.ownerPid}`);
+    throw new Error(
+      `Project revision transaction ${journal.id} is owned by live process ${journal.ownerPid}`,
+    );
   }
   const targets = targetPaths(projectRoot, journal);
   const hashes = {
@@ -399,7 +414,9 @@ const recoverJournalWithoutAcquiringOwner = async (projectRoot: string): Promise
   const states = (['map', 'project', 'lock'] as const).map((key) => {
     if (hashes[key] === journal.oldHashes[key]) return 'old';
     if (hashes[key] === journal.newHashes[key]) return 'new';
-    throw new Error(`Cannot recover project revision transaction ${journal.id}: ${key} target was modified externally`);
+    throw new Error(
+      `Cannot recover project revision transaction ${journal.id}: ${key} target was modified externally`,
+    );
   });
   if (states.every((state) => state === 'old')) {
     await removeJournal(projectRoot);
@@ -545,10 +562,7 @@ const acquireProjectRevisionOwner = async (
       if (isNotFound(cause)) continue;
       throw cause;
     }
-    if (
-      ownerMatches(existing, candidate) &&
-      (await listClaimPaths(projectRoot)).length === 0
-    ) {
+    if (ownerMatches(existing, candidate) && (await listClaimPaths(projectRoot)).length === 0) {
       return candidate;
     }
     if (processIsAlive(existing.ownerPid)) {
@@ -620,7 +634,11 @@ export const commitMapProjectRevision = async (
       projectId: input.projectId,
       mapId: input.mapId,
       phase: 'prepared',
-      targets: { map: path.join('maps', `${input.mapId}.json`), project: PROJECT_TARGET, lock: LOCK_TARGET },
+      targets: {
+        map: path.join('maps', `${input.mapId}.json`),
+        project: PROJECT_TARGET,
+        lock: LOCK_TARGET,
+      },
       oldHashes,
       newHashes,
       snapshots,

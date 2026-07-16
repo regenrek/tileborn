@@ -180,7 +180,10 @@ describe('Asset pack capability', () => {
         }),
       );
       const manifest = JSON.parse(
-        await readFile(path.join(packDir(home, result.packId), 'tileborne-asset-pack.json'), 'utf8'),
+        await readFile(
+          path.join(packDir(home, result.packId), 'tileborne-asset-pack.json'),
+          'utf8',
+        ),
       ) as {
         readonly assetSemanticRoles?: readonly { readonly role: string }[];
         readonly tiledSourceInventory?: { readonly summary?: Record<string, number> };
@@ -348,7 +351,9 @@ describe('Asset pack capability', () => {
         tilesetCount: 0,
         tileCount: 0,
         placeableCount: 67,
-        diagnostics: [{ _tag: 'PACK.no-tilesets', message: 'Pack does not contain paintable tilesets.' }],
+        diagnostics: [
+          { _tag: 'PACK.no-tilesets', message: 'Pack does not contain paintable tilesets.' },
+        ],
       };
       await writeFile(lockPath, `${JSON.stringify(staleLock, null, 2)}\n`, 'utf8');
 
@@ -384,7 +389,10 @@ describe('Asset pack capability', () => {
       expect(pack.capability.paintable).toBe(true);
 
       const installedRoot = packDir(home, pack.id, pack.version);
-      const manifestRaw = await readFile(path.join(installedRoot, 'tileborne-asset-pack.json'), 'utf8');
+      const manifestRaw = await readFile(
+        path.join(installedRoot, 'tileborne-asset-pack.json'),
+        'utf8',
+      );
       const oldVersionHash = hashBytes(textEncoder.encode(`pack-capability-v4\n${manifestRaw}`));
       const lockPath = path.join(installedRoot, 'lock.json');
       const staleLock = JSON.parse(await readFile(lockPath, 'utf8')) as {
@@ -401,7 +409,9 @@ describe('Asset pack capability', () => {
         source: 'asset-only',
         tilesetCount: 0,
         tileCount: 0,
-        diagnostics: [{ _tag: 'PACK.no-tilesets', message: 'Pack does not contain paintable tilesets.' }],
+        diagnostics: [
+          { _tag: 'PACK.no-tilesets', message: 'Pack does not contain paintable tilesets.' },
+        ],
       };
       await writeFile(lockPath, `${JSON.stringify(staleLock, null, 2)}\n`, 'utf8');
 
@@ -437,31 +447,37 @@ describe('Asset pack capability', () => {
         readonly tiles: readonly { readonly id: string }[];
         autotileRules: unknown[];
       };
-      manifest.autotileRules = [{
-        _tag: 'wang2corner',
-        tilesetId: manifest.tilesets[0]!.id,
-        id: 'autotile-rule:550e8400-e29b-41d4-a716-446655440209',
-        name: 'legacy-warning',
-        terrainClasses: ['floor'],
-        maskToTileIds: {
-          '1111': [manifest.tiles[0]!.id, 'tile:550e8400-e29b-41d4-a716-446655449999'],
+      manifest.autotileRules = [
+        {
+          _tag: 'wang2corner',
+          tilesetId: manifest.tilesets[0]!.id,
+          id: 'autotile-rule:550e8400-e29b-41d4-a716-446655440209',
+          name: 'legacy-warning',
+          terrainClasses: ['floor'],
+          maskToTileIds: {
+            '1111': [manifest.tiles[0]!.id, 'tile:550e8400-e29b-41d4-a716-446655449999'],
+          },
         },
-      }];
+      ];
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
       const imported = await runApp(
         Effect.gen(function* () {
           const assets = yield* AssetService;
-          const packId = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          const packId = yield* assets.importPackNow(
+            new DirectoryAssetPackSource({ path: source }),
+          );
           return yield* assets.getPack(packId);
         }),
       );
-      expect(imported.capability.diagnostics).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          severity: 'warning',
-          message: 'Autotile rule references an unknown tile',
-        }),
-      ]));
+      expect(imported.capability.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: 'warning',
+            message: 'Autotile rule references an unknown tile',
+          }),
+        ]),
+      );
 
       const installedRoot = packDir(home, imported.id, imported.version);
       const installedManifestRaw = await readFile(
@@ -504,9 +520,9 @@ describe('Asset pack capability', () => {
         };
       };
       expect(nextLock.capability.integrityHash).not.toBe(v6Hash);
-      expect(nextLock.capability.capability.diagnostics).toEqual(expect.arrayContaining([
-        expect.objectContaining({ severity: 'warning' }),
-      ]));
+      expect(nextLock.capability.capability.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ severity: 'warning' })]),
+      );
     }));
 
   it('marks an asset-only manifest as non-paintable and caches the result', () =>

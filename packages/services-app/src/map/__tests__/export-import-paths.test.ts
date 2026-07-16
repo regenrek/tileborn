@@ -1,25 +1,26 @@
-import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { deflateSync } from "node:zlib";
+import { mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { deflateSync } from 'node:zlib';
 
-import { ProjectId } from "@tileborne/core";
-import { FoundationLayer } from "@tileborne/services-foundation";
-import { Effect, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { ProjectId } from '@tileborne/core';
+import { FoundationLayer } from '@tileborne/services-foundation';
+import { Effect, Layer } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { ServicesAppLayer } from "../../index.js";
-import { MapService } from "../index.js";
-import { AssetService } from "../../asset/index.js";
-import { WorkingPaletteService } from "../../asset-library/index.js";
-import { ProjectService } from "../../project/index.js";
-import { withTempHome } from "../../test-utils.js";
+import { ServicesAppLayer } from '../../index.js';
+import { MapService } from '../index.js';
+import { AssetService } from '../../asset/index.js';
+import { WorkingPaletteService } from '../../asset-library/index.js';
+import { ProjectService } from '../../project/index.js';
+import { withTempHome } from '../../test-utils.js';
 
 const appLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
 
-const runApp = <A, E>(effect: Effect.Effect<A, E, AssetService | ProjectService | MapService | WorkingPaletteService>) =>
-  Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
+const runApp = <A, E>(
+  effect: Effect.Effect<A, E, AssetService | ProjectService | MapService | WorkingPaletteService>,
+) => Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
 
-const projectDir = (home: string, projectId: ProjectId) => path.join(home, "projects", projectId);
+const projectDir = (home: string, projectId: ProjectId) => path.join(home, 'projects', projectId);
 
 const escapingImageTmx = `<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" orientation="orthogonal" width="1" height="1" tilewidth="16" tileheight="16">
@@ -34,15 +35,15 @@ const escapingImageTmx = `<?xml version="1.0" encoding="UTF-8"?>
 </map>`;
 
 const png = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/luzJ7wAAAABJRU5ErkJggg==",
-  "base64",
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/luzJ7wAAAABJRU5ErkJggg==',
+  'base64',
 );
 
 const tileLayerBase64 = (gids: readonly number[]): string => {
   const bytes = new Uint8Array(gids.length * 4);
   const view = new DataView(bytes.buffer);
   gids.forEach((gid, index) => view.setUint32(index * 4, gid, true));
-  return Buffer.from(bytes).toString("base64");
+  return Buffer.from(bytes).toString('base64');
 };
 
 const compressedGroundTmx = (payload: string): string => `<?xml version="1.0" encoding="UTF-8"?>
@@ -69,61 +70,64 @@ const standaloneTilesetWithSiblingImageRootTsx = `<?xml version="1.0" encoding="
   </tile>
 </tileset>`;
 
-describe("MapService export/import path security", () => {
-  it("exportToFile writes under the project root", () =>
+describe('MapService export/import path security', () => {
+  it('exportToFile writes under the project root', () =>
     withTempHome(async (home) => {
       const { projectId, result } = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Export Paths" });
+          const projectId = yield* projects.create({ name: 'Export Paths' });
           const mapId = yield* maps.create(projectId, { width: 2, height: 2 });
-          const result = yield* maps.exportToFile(projectId, mapId, "json", "exports/out.json");
+          const result = yield* maps.exportToFile(projectId, mapId, 'json', 'exports/out.json');
           return { projectId, result };
         }),
       );
-      const exported = JSON.parse(await readFile(result.out, "utf8")) as { readonly id: string };
+      const exported = JSON.parse(await readFile(result.out, 'utf8')) as { readonly id: string };
       expect(exported.id).toBe(result.mapId);
-      expect(result.out).toBe(path.join(projectDir(home, projectId), "exports/out.json"));
+      expect(result.out).toBe(path.join(projectDir(home, projectId), 'exports/out.json'));
     }));
 
-  it("exportToFile rejects traversal destinations", () =>
+  it('exportToFile rejects traversal destinations', () =>
     withTempHome(async () => {
       const error = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Export Traversal" });
+          const projectId = yield* projects.create({ name: 'Export Traversal' });
           const mapId = yield* maps.create(projectId, { width: 2, height: 2 });
-          return yield* maps.exportToFile(projectId, mapId, "json", "../../etc/passwd");
+          return yield* maps.exportToFile(projectId, mapId, 'json', '../../etc/passwd');
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapSaveError",
-        message: expect.stringContaining("Path traversal is not allowed"),
+        _tag: 'MapSaveError',
+        message: expect.stringContaining('Path traversal is not allowed'),
       });
     }));
 
-  it("importFromTiledFile reads a TMX fixture from the project root", () =>
+  it('importFromTiledFile reads a TMX fixture from the project root', () =>
     withTempHome(async (home) => {
       const fixture = path.resolve(
         import.meta.dirname,
-        "../../../../test-fixtures/fixtures/maps/tiled-ground/ground.tmx",
+        '../../../../test-fixtures/fixtures/maps/tiled-ground/ground.tmx',
       );
       const mapId = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import TMX Paths" });
-          const relativeFixture = "imports/ground.tmx";
+          const projectId = yield* projects.create({ name: 'Import TMX Paths' });
+          const relativeFixture = 'imports/ground.tmx';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), await readFile(fixture, "utf8"));
-            await writeFile(path.join(projectDir(home, projectId), "imports/ground.png"), png);
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              await readFile(fixture, 'utf8'),
+            );
+            await writeFile(path.join(projectDir(home, projectId), 'imports/ground.png'), png);
           });
           const imported = yield* maps.importFromTiledFile(projectId, relativeFixture);
-          if (imported.kind !== "map") {
+          if (imported.kind !== 'map') {
             throw new Error(`expected map import, got ${imported.kind}`);
           }
           return imported.mapId;
@@ -132,51 +136,65 @@ describe("MapService export/import path security", () => {
       expect(mapId).toMatch(/^map:/);
     }));
 
-  it("importFromTiledFile imports zlib-compressed base64 tile-layer data", () =>
+  it('importFromTiledFile imports zlib-compressed base64 tile-layer data', () =>
     withTempHome(async (home) => {
-      const payload = deflateSync(Buffer.from(tileLayerBase64([1, 2, 3, 4]), "base64")).toString("base64");
+      const payload = deflateSync(Buffer.from(tileLayerBase64([1, 2, 3, 4]), 'base64')).toString(
+        'base64',
+      );
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Compressed TMX" });
-          const relativeFixture = "imports/compressed-ground.tmx";
+          const projectId = yield* projects.create({ name: 'Import Compressed TMX' });
+          const relativeFixture = 'imports/compressed-ground.tmx';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), compressedGroundTmx(payload));
-            await writeFile(path.join(projectDir(home, projectId), "imports/ground.png"), png);
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              compressedGroundTmx(payload),
+            );
+            await writeFile(path.join(projectDir(home, projectId), 'imports/ground.png'), png);
           });
           return yield* maps.importFromTiledFile(projectId, relativeFixture);
         }),
       );
 
-      expect(result).toMatchObject({ kind: "map", mapId: expect.stringMatching(/^map:/) });
+      expect(result).toMatchObject({ kind: 'map', mapId: expect.stringMatching(/^map:/) });
       expect(result.report.diagnostics).not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ _tag: "TiledUnsupportedCompression" })]),
+        expect.arrayContaining([expect.objectContaining({ _tag: 'TiledUnsupportedCompression' })]),
       );
     }));
 
-  it("importFromTiledFile reads a TMJ fixture from the project root", () =>
+  it('importFromTiledFile reads a TMJ fixture from the project root', () =>
     withTempHome(async (home) => {
       const fixture = path.resolve(
         import.meta.dirname,
-        "../../../../test-fixtures/fixtures/maps/tiled-image-collection/standard.tmj",
+        '../../../../test-fixtures/fixtures/maps/tiled-image-collection/standard.tmj',
       );
       const fixtureDir = path.dirname(fixture);
       const mapId = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Paths" });
-          const relativeFixture = "imports/tiled-ground.tmj";
+          const projectId = yield* projects.create({ name: 'Import Paths' });
+          const relativeFixture = 'imports/tiled-ground.tmj';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), await readFile(fixture, "utf8"));
-            await writeFile(path.join(projectDir(home, projectId), "imports/terrain.png"), await readFile(path.join(fixtureDir, "terrain.png")));
-            await writeFile(path.join(projectDir(home, projectId), "imports/tree.png"), await readFile(path.join(fixtureDir, "tree.png")));
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              await readFile(fixture, 'utf8'),
+            );
+            await writeFile(
+              path.join(projectDir(home, projectId), 'imports/terrain.png'),
+              await readFile(path.join(fixtureDir, 'terrain.png')),
+            );
+            await writeFile(
+              path.join(projectDir(home, projectId), 'imports/tree.png'),
+              await readFile(path.join(fixtureDir, 'tree.png')),
+            );
           });
           const imported = yield* maps.importFromTiledFile(projectId, relativeFixture);
-          if (imported.kind !== "map") {
+          if (imported.kind !== 'map') {
             throw new Error(`expected map import, got ${imported.kind}`);
           }
           return imported.mapId;
@@ -185,37 +203,52 @@ describe("MapService export/import path security", () => {
       expect(mapId).toMatch(/^map:/);
     }));
 
-  it("importFromTiledFile persists an ImportRecord with source identity and applied plan", () =>
+  it('importFromTiledFile persists an ImportRecord with source identity and applied plan', () =>
     withTempHome(async (home) => {
       const fixture = path.resolve(
         import.meta.dirname,
-        "../../../../test-fixtures/fixtures/maps/tiled-image-collection/standard.tmj",
+        '../../../../test-fixtures/fixtures/maps/tiled-image-collection/standard.tmj',
       );
       const fixtureDir = path.dirname(fixture);
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Record" });
-          const relativeFixture = "imports/tiled-ground.tmj";
+          const projectId = yield* projects.create({ name: 'Import Record' });
+          const relativeFixture = 'imports/tiled-ground.tmj';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), await readFile(fixture, "utf8"));
-            await writeFile(path.join(projectDir(home, projectId), "imports/terrain.png"), await readFile(path.join(fixtureDir, "terrain.png")));
-            await writeFile(path.join(projectDir(home, projectId), "imports/tree.png"), await readFile(path.join(fixtureDir, "tree.png")));
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              await readFile(fixture, 'utf8'),
+            );
+            await writeFile(
+              path.join(projectDir(home, projectId), 'imports/terrain.png'),
+              await readFile(path.join(fixtureDir, 'terrain.png')),
+            );
+            await writeFile(
+              path.join(projectDir(home, projectId), 'imports/tree.png'),
+              await readFile(path.join(fixtureDir, 'tree.png')),
+            );
           });
           const imported = yield* maps.importFromTiledFile(projectId, relativeFixture);
           return { projectId, imported };
         }),
       );
-      const recordsPath = path.join(projectDir(home, result.projectId), ".tileborne/import-records.json");
-      const store = JSON.parse(await readFile(recordsPath, "utf8")) as {
+      const recordsPath = path.join(
+        projectDir(home, result.projectId),
+        '.tileborne/import-records.json',
+      );
+      const store = JSON.parse(await readFile(recordsPath, 'utf8')) as {
         readonly records: readonly {
           readonly id: string;
           readonly sourceIdentity: { readonly kind: string; readonly path: string };
           readonly appliedPlan: {
             readonly selectedMapPath: string;
-            readonly importRecommendation: { readonly primaryAction: string; readonly browseTarget: string };
+            readonly importRecommendation: {
+              readonly primaryAction: string;
+              readonly browseTarget: string;
+            };
           };
           readonly report: { readonly outputs: { readonly kind: string; readonly mapId?: string } };
         }[];
@@ -224,25 +257,27 @@ describe("MapService export/import path security", () => {
       expect(store.records).toHaveLength(1);
       expect(store.records[0]).toMatchObject({
         id: result.imported.report.importRecordId,
-        sourceIdentity: { kind: "tiled-map" },
+        sourceIdentity: { kind: 'tiled-map' },
         appliedPlan: {
-          selectedMapPath: expect.stringContaining("tiled-ground.tmj"),
+          selectedMapPath: expect.stringContaining('tiled-ground.tmj'),
           importRecommendation: {
-            primaryAction: "import-mixed-assets",
-            browseTarget: "tilesets",
+            primaryAction: 'import-mixed-assets',
+            browseTarget: 'tilesets',
           },
         },
-        report: { outputs: { kind: "map" } },
+        report: { outputs: { kind: 'map' } },
       });
-      expect(store.records[0]?.sourceIdentity.path).toBe(path.join(projectDir(home, result.projectId), "imports/tiled-ground.tmj"));
+      expect(store.records[0]?.sourceIdentity.path).toBe(
+        path.join(projectDir(home, result.projectId), 'imports/tiled-ground.tmj'),
+      );
     }));
 
-  it("planTiledImport defaults to the SDK recommended profile and carries source roles", () =>
+  it('planTiledImport defaults to the SDK recommended profile and carries source roles', () =>
     withTempHome(async (home) => {
       const hintedAtlasTmj = JSON.stringify({
-        type: "map",
-        version: "1.10",
-        orientation: "orthogonal",
+        type: 'map',
+        version: '1.10',
+        orientation: 'orthogonal',
         width: 1,
         height: 1,
         tilewidth: 16,
@@ -250,26 +285,26 @@ describe("MapService export/import path security", () => {
         tilesets: [
           {
             firstgid: 1,
-            name: "props",
+            name: 'props',
             tilewidth: 16,
             tileheight: 16,
             tilecount: 1,
             columns: 1,
-            image: "props.png",
+            image: 'props.png',
             imagewidth: 16,
             imageheight: 16,
             tiles: [
               {
                 id: 0,
-                properties: [{ name: "tileborne.placeable", type: "bool", value: true }],
+                properties: [{ name: 'tileborne.placeable', type: 'bool', value: true }],
               },
             ],
           },
         ],
         layers: [
           {
-            type: "objectgroup",
-            name: "objects",
+            type: 'objectgroup',
+            name: 'objects',
             objects: [{ id: 1, gid: 1, x: 0, y: 16, width: 16, height: 16 }],
           },
         ],
@@ -278,51 +313,60 @@ describe("MapService export/import path security", () => {
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Recommended Profile" });
-          const relativeFixture = "imports/hinted.tmj";
+          const projectId = yield* projects.create({ name: 'Recommended Profile' });
+          const relativeFixture = 'imports/hinted.tmj';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), hintedAtlasTmj);
-            await writeFile(path.join(projectDir(home, projectId), "imports/props.png"), png);
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              hintedAtlasTmj,
+            );
+            await writeFile(path.join(projectDir(home, projectId), 'imports/props.png'), png);
           });
           return yield* maps.planTiledImport(projectId, relativeFixture);
         }),
       );
 
-      expect(result.plan.profile).toBe("standard-plus-hints");
+      expect(result.plan.profile).toBe('standard-plus-hints');
       expect(result.plan.importRecommendation).toBe(result.plan.scan.importRecommendation);
       expect(result.plan.importRecommendation.sourceRoles).toEqual(result.plan.scan.sourceRoles);
       expect(result.plan.importRecommendation.sourceRoles).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ kind: "placeable-object", evidence: "tileborne-placeable-hint" }),
+          expect.objectContaining({
+            kind: 'placeable-object',
+            evidence: 'tileborne-placeable-hint',
+          }),
         ]),
       );
     }));
 
-  it("importFromTiledFile uses the SDK importer for image-collection object placements", () =>
+  it('importFromTiledFile uses the SDK importer for image-collection object placements', () =>
     withTempHome(async (home) => {
       const fixtureDir = path.resolve(
         import.meta.dirname,
-        "../../../../test-fixtures/fixtures/maps/tiled-image-collection",
+        '../../../../test-fixtures/fixtures/maps/tiled-image-collection',
       );
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
           const palettes = yield* WorkingPaletteService;
-          const projectId = yield* projects.create({ name: "Import SDK Tiled" });
-          const relativeDir = "imports/tiled-image-collection";
+          const projectId = yield* projects.create({ name: 'Import SDK Tiled' });
+          const relativeDir = 'imports/tiled-image-collection';
           yield* Effect.promise(async () => {
             await mkdir(path.join(projectDir(home, projectId), relativeDir), { recursive: true });
-            for (const file of ["standard.tmj", "terrain.png", "tree.png"]) {
+            for (const file of ['standard.tmj', 'terrain.png', 'tree.png']) {
               await writeFile(
                 path.join(projectDir(home, projectId), relativeDir, file),
                 await readFile(path.join(fixtureDir, file)),
               );
             }
           });
-          const imported = yield* maps.importFromTiledFile(projectId, path.join(relativeDir, "standard.tmj"));
-          if (imported.kind !== "map") {
+          const imported = yield* maps.importFromTiledFile(
+            projectId,
+            path.join(relativeDir, 'standard.tmj'),
+          );
+          if (imported.kind !== 'map') {
             throw new Error(`expected map import, got ${imported.kind}`);
           }
           const workingPalettes = yield* palettes.list({ projectId });
@@ -331,16 +375,18 @@ describe("MapService export/import path security", () => {
       );
       expect(result.imported.objectCount).toBe(1);
       expect(result.imported.packId).toMatch(/^pack:/);
-      expect(result.imported.report.appliedPlan.importRecommendation.primaryAction).toBe("import-mixed-assets");
+      expect(result.imported.report.appliedPlan.importRecommendation.primaryAction).toBe(
+        'import-mixed-assets',
+      );
       expect(result.imported.report.appliedPlan.importRecommendation.sourceRoles).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ kind: "placeable-object", evidence: "image-collection" }),
+          expect.objectContaining({ kind: 'placeable-object', evidence: 'image-collection' }),
         ]),
       );
-      expect(result.workingPalettes.palettes[0]?.items.at(-1)?.ref.kind).toBe("placeable");
+      expect(result.workingPalettes.palettes[0]?.items.at(-1)?.ref.kind).toBe('placeable');
     }));
 
-  it("importFromTiledFile imports standalone TSX tilesets as asset packs", () =>
+  it('importFromTiledFile imports standalone TSX tilesets as asset packs', () =>
     withTempHome(async (home) => {
       const result = await runApp(
         Effect.gen(function* () {
@@ -348,116 +394,145 @@ describe("MapService export/import path security", () => {
           const maps = yield* MapService;
           const assets = yield* AssetService;
           const palettes = yield* WorkingPaletteService;
-          const projectId = yield* projects.create({ name: "Import Standalone TSX" });
-          const relativeDir = "imports/standalone";
+          const projectId = yield* projects.create({ name: 'Import Standalone TSX' });
+          const relativeDir = 'imports/standalone';
           yield* Effect.promise(async () => {
             await mkdir(path.join(projectDir(home, projectId), relativeDir), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeDir, "props.tsx"), standaloneTilesetTsx);
-            await writeFile(path.join(projectDir(home, projectId), relativeDir, "tree.png"), png);
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeDir, 'props.tsx'),
+              standaloneTilesetTsx,
+            );
+            await writeFile(path.join(projectDir(home, projectId), relativeDir, 'tree.png'), png);
           });
-          const imported = yield* maps.importFromTiledFile(projectId, path.join(relativeDir, "props.tsx"));
-          const pack = imported.kind === "asset-pack" ? yield* assets.getPack(imported.packId) : undefined;
+          const imported = yield* maps.importFromTiledFile(
+            projectId,
+            path.join(relativeDir, 'props.tsx'),
+          );
+          const pack =
+            imported.kind === 'asset-pack' ? yield* assets.getPack(imported.packId) : undefined;
           const workingPalettes = yield* palettes.list({ projectId });
           return { imported, pack, workingPalettes };
         }),
       );
 
-      expect(result.imported).toMatchObject({ kind: "asset-pack", packId: expect.stringMatching(/^pack:/) });
-      expect(result.imported.report.appliedPlan.importRecommendation.primaryAction).toBe("import-placeable-objects");
+      expect(result.imported).toMatchObject({
+        kind: 'asset-pack',
+        packId: expect.stringMatching(/^pack:/),
+      });
+      expect(result.imported.report.appliedPlan.importRecommendation.primaryAction).toBe(
+        'import-placeable-objects',
+      );
       expect(result.pack?.capability.placeableCount).toBe(1);
-      expect(result.workingPalettes.palettes[0]?.items[0]?.ref.kind).toBe("placeable");
+      expect(result.workingPalettes.palettes[0]?.items[0]?.ref.kind).toBe('placeable');
     }));
 
-  it("importFromTiledFile imports external standalone TSX tilesets with sibling image roots", () =>
+  it('importFromTiledFile imports external standalone TSX tilesets with sibling image roots', () =>
     withTempHome(async (home) => {
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
           const assets = yield* AssetService;
-          const projectId = yield* projects.create({ name: "Import External Standalone TSX" });
-          const externalRoot = path.join(home, "external-tiled-source");
-          const sourcePath = path.join(externalRoot, "TiledMap Editor", "Tilesets", "props.tsx");
+          const projectId = yield* projects.create({ name: 'Import External Standalone TSX' });
+          const externalRoot = path.join(home, 'external-tiled-source');
+          const sourcePath = path.join(externalRoot, 'TiledMap Editor', 'Tilesets', 'props.tsx');
           yield* Effect.promise(async () => {
-            await mkdir(path.join(externalRoot, "TiledMap Editor", "Tilesets"), { recursive: true });
-            await mkdir(path.join(externalRoot, "Props"), { recursive: true });
+            await mkdir(path.join(externalRoot, 'TiledMap Editor', 'Tilesets'), {
+              recursive: true,
+            });
+            await mkdir(path.join(externalRoot, 'Props'), { recursive: true });
             await writeFile(sourcePath, standaloneTilesetWithSiblingImageRootTsx);
-            await writeFile(path.join(externalRoot, "Props", "tree.png"), png);
+            await writeFile(path.join(externalRoot, 'Props', 'tree.png'), png);
           });
           const imported = yield* maps.importFromTiledFile(projectId, sourcePath);
-          const pack = imported.kind === "asset-pack" ? yield* assets.getPack(imported.packId) : undefined;
+          const pack =
+            imported.kind === 'asset-pack' ? yield* assets.getPack(imported.packId) : undefined;
           return { imported, pack };
         }),
       );
 
-      expect(result.imported).toMatchObject({ kind: "asset-pack", packId: expect.stringMatching(/^pack:/) });
-      expect(result.pack?.assets.map((asset) => asset.path)).toEqual(["Props/tree.png"]);
+      expect(result.imported).toMatchObject({
+        kind: 'asset-pack',
+        packId: expect.stringMatching(/^pack:/),
+      });
+      expect(result.pack?.assets.map((asset) => asset.path)).toEqual(['Props/tree.png']);
       expect(result.pack?.capability.placeableCount).toBe(1);
     }));
 
-  it("importFromTiledFile imports raw Tiled source folders as asset packs", () =>
+  it('importFromTiledFile imports raw Tiled source folders as asset packs', () =>
     withTempHome(async (home) => {
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
           const assets = yield* AssetService;
-          const projectId = yield* projects.create({ name: "Import Source Folder" });
-          const relativeDir = "imports/source-folder";
+          const projectId = yield* projects.create({ name: 'Import Source Folder' });
+          const relativeDir = 'imports/source-folder';
           yield* Effect.promise(async () => {
             const root = path.join(projectDir(home, projectId), relativeDir);
-            await mkdir(path.join(root, "Rules"), { recursive: true });
-            await writeFile(path.join(root, "props.tsx"), standaloneTilesetTsx);
-            await writeFile(path.join(root, "tree.png"), png);
-            await writeFile(path.join(root, "rules.txt"), "Rules/place-props.tmx\n");
+            await mkdir(path.join(root, 'Rules'), { recursive: true });
+            await writeFile(path.join(root, 'props.tsx'), standaloneTilesetTsx);
+            await writeFile(path.join(root, 'tree.png'), png);
+            await writeFile(path.join(root, 'rules.txt'), 'Rules/place-props.tmx\n');
             await writeFile(
-              path.join(root, "Rules/place-props.tmx"),
+              path.join(root, 'Rules/place-props.tmx'),
               '<?xml version="1.0" encoding="UTF-8"?><map version="1.10" orientation="orthogonal" width="1" height="1" tilewidth="16" tileheight="16"><layers/></map>',
             );
           });
           const imported = yield* maps.importFromTiledFile(projectId, relativeDir);
-          const pack = imported.kind === "asset-pack" ? yield* assets.getPack(imported.packId) : undefined;
+          const pack =
+            imported.kind === 'asset-pack' ? yield* assets.getPack(imported.packId) : undefined;
           return { imported, pack };
         }),
       );
 
-      expect(result.imported).toMatchObject({ kind: "asset-pack", packId: expect.stringMatching(/^pack:/) });
+      expect(result.imported).toMatchObject({
+        kind: 'asset-pack',
+        packId: expect.stringMatching(/^pack:/),
+      });
       expect(result.pack?.capability.placeableCount).toBe(1);
     }));
 
-  it("importFromTiledFile imports source folders whose nested tilesets reference sibling assets", () =>
+  it('importFromTiledFile imports source folders whose nested tilesets reference sibling assets', () =>
     withTempHome(async (home) => {
       const result = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
           const assets = yield* AssetService;
-          const projectId = yield* projects.create({ name: "Import External Source Folder" });
-          const externalRoot = path.join(home, "external-source-folder");
-          const sourceFolder = path.join(externalRoot, "TiledMap Editor");
+          const projectId = yield* projects.create({ name: 'Import External Source Folder' });
+          const externalRoot = path.join(home, 'external-source-folder');
+          const sourceFolder = path.join(externalRoot, 'TiledMap Editor');
           yield* Effect.promise(async () => {
-            await mkdir(path.join(sourceFolder, "Tilesets"), { recursive: true });
-            await mkdir(path.join(externalRoot, "Props"), { recursive: true });
-            await writeFile(path.join(sourceFolder, "Tilesets", "props.tsx"), standaloneTilesetWithSiblingImageRootTsx);
-            await writeFile(path.join(externalRoot, "Props", "tree.png"), png);
+            await mkdir(path.join(sourceFolder, 'Tilesets'), { recursive: true });
+            await mkdir(path.join(externalRoot, 'Props'), { recursive: true });
+            await writeFile(
+              path.join(sourceFolder, 'Tilesets', 'props.tsx'),
+              standaloneTilesetWithSiblingImageRootTsx,
+            );
+            await writeFile(path.join(externalRoot, 'Props', 'tree.png'), png);
           });
           const imported = yield* maps.importFromTiledFile(projectId, sourceFolder);
-          const pack = imported.kind === "asset-pack" ? yield* assets.getPack(imported.packId) : undefined;
+          const pack =
+            imported.kind === 'asset-pack' ? yield* assets.getPack(imported.packId) : undefined;
           return { imported, pack };
         }),
       );
 
-      expect(result.imported).toMatchObject({ kind: "asset-pack", packId: expect.stringMatching(/^pack:/) });
-      expect(result.pack?.assets.map((asset) => asset.path)).toEqual(["Props/tree.png"]);
+      expect(result.imported).toMatchObject({
+        kind: 'asset-pack',
+        packId: expect.stringMatching(/^pack:/),
+      });
+      expect(result.pack?.assets.map((asset) => asset.path)).toEqual(['Props/tree.png']);
       expect(result.pack?.capability.placeableCount).toBe(1);
     }));
 
-  it("importFromTiledFile rejects unsupported Tiled features under standard", () =>
+  it('importFromTiledFile rejects unsupported Tiled features under standard', () =>
     withTempHome(async (home) => {
       const raw = JSON.stringify({
-        type: "map",
-        version: "1.10",
-        orientation: "orthogonal",
+        type: 'map',
+        version: '1.10',
+        orientation: 'orthogonal',
         infinite: true,
         width: 1,
         height: 1,
@@ -466,29 +541,29 @@ describe("MapService export/import path security", () => {
         tilesets: [
           {
             firstgid: 1,
-            name: "terrain",
+            name: 'terrain',
             tilewidth: 16,
             tileheight: 16,
             tilecount: 1,
             columns: 1,
-            image: "terrain.png",
+            image: 'terrain.png',
             imagewidth: 16,
             imageheight: 16,
           },
         ],
         layers: [
           {
-            type: "tilelayer",
-            name: "ground",
+            type: 'tilelayer',
+            name: 'ground',
             width: 1,
             height: 1,
             data: [1],
             chunks: [{ x: 0, y: 0, width: 1, height: 1, data: [1] }],
           },
           {
-            type: "objectgroup",
-            name: "objects",
-            objects: [{ id: 1, x: 0, y: 0, template: "tree.tx", rotation: 45 }],
+            type: 'objectgroup',
+            name: 'objects',
+            objects: [{ id: 1, x: 0, y: 0, template: 'tree.tx', rotation: 45 }],
           },
         ],
       });
@@ -496,120 +571,130 @@ describe("MapService export/import path security", () => {
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Unsupported Tiled" });
-          const relativeFixture = "imports/unsupported.tmj";
+          const projectId = yield* projects.create({ name: 'Import Unsupported Tiled' });
+          const relativeFixture = 'imports/unsupported.tmj';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
             await writeFile(path.join(projectDir(home, projectId), relativeFixture), raw);
           });
-          return yield* maps.importFromTiledFile(projectId, relativeFixture, { profile: "standard" });
+          return yield* maps.importFromTiledFile(projectId, relativeFixture, {
+            profile: 'standard',
+          });
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapValidationError",
+        _tag: 'MapValidationError',
         message: expect.stringMatching(/Infinite chunk maps|templates|rotation/),
       });
     }));
 
-  it("importFromTiledFile rejects traversal sources", () =>
+  it('importFromTiledFile rejects traversal sources', () =>
     withTempHome(async () => {
       const error = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Traversal" });
-          return yield* maps.importFromTiledFile(projectId, "../../etc/passwd");
+          const projectId = yield* projects.create({ name: 'Import Traversal' });
+          return yield* maps.importFromTiledFile(projectId, '../../etc/passwd');
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapValidationError",
-        message: expect.stringContaining("Path traversal is not allowed"),
+        _tag: 'MapValidationError',
+        message: expect.stringContaining('Path traversal is not allowed'),
       });
     }));
 
-  it("importFromTiledFile rejects escaping Tiled image paths before staging", () =>
+  it('importFromTiledFile rejects escaping Tiled image paths before staging', () =>
     withTempHome(async (home) => {
       let createdProjectId: ProjectId | undefined;
       const error = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Escaping Image" });
+          const projectId = yield* projects.create({ name: 'Import Escaping Image' });
           createdProjectId = projectId;
-          const relativeFixture = "imports/escaping-image.tmx";
+          const relativeFixture = 'imports/escaping-image.tmx';
           yield* Effect.promise(async () => {
-            await mkdir(path.join(projectDir(home, projectId), "imports"), { recursive: true });
-            await writeFile(path.join(projectDir(home, projectId), relativeFixture), escapingImageTmx);
+            await mkdir(path.join(projectDir(home, projectId), 'imports'), { recursive: true });
+            await writeFile(
+              path.join(projectDir(home, projectId), relativeFixture),
+              escapingImageTmx,
+            );
           });
           return yield* maps.importFromTiledFile(projectId, relativeFixture);
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapValidationError",
-        message: expect.stringMatching(/Tiled (image source must not escape|asset source path escapes)/),
+        _tag: 'MapValidationError',
+        message: expect.stringMatching(
+          /Tiled (image source must not escape|asset source path escapes)/,
+        ),
       });
 
       expect(createdProjectId).toBeDefined();
       const stagingEntries =
         createdProjectId === undefined
-          ? ["missing-project"]
-          : await readdir(path.join(projectDir(home, createdProjectId), ".tileborne", "tiled-import-staging")).catch(
-              () => [],
-            );
+          ? ['missing-project']
+          : await readdir(
+              path.join(projectDir(home, createdProjectId), '.tileborne', 'tiled-import-staging'),
+            ).catch(() => []);
       expect(stagingEntries).toEqual([]);
     }));
 
-  it("importFromTiledFile rejects symlink sources outside the project root", () =>
+  it('importFromTiledFile rejects symlink sources outside the project root', () =>
     withTempHome(async (home) => {
-      const fixture = path.resolve(import.meta.dirname, "../../../../cli/src/__fixtures__/tiled-ground.json");
-      const outsideDir = path.join(home, "outside");
+      const fixture = path.resolve(
+        import.meta.dirname,
+        '../../../../cli/src/__fixtures__/tiled-ground.json',
+      );
+      const outsideDir = path.join(home, 'outside');
       await mkdir(outsideDir, { recursive: true });
-      await writeFile(path.join(outsideDir, "tiled-ground.json"), await readFile(fixture, "utf8"));
+      await writeFile(path.join(outsideDir, 'tiled-ground.json'), await readFile(fixture, 'utf8'));
 
       const error = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Import Symlink" });
+          const projectId = yield* projects.create({ name: 'Import Symlink' });
           yield* Effect.promise(async () => {
             await symlink(
-              path.join(outsideDir, "tiled-ground.json"),
-              path.join(projectDir(home, projectId), "escape-link.json"),
+              path.join(outsideDir, 'tiled-ground.json'),
+              path.join(projectDir(home, projectId), 'escape-link.json'),
             );
           });
-          return yield* maps.importFromTiledFile(projectId, "escape-link.json");
+          return yield* maps.importFromTiledFile(projectId, 'escape-link.json');
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapValidationError",
+        _tag: 'MapValidationError',
         message: expect.stringMatching(/Symlink escapes root|Path traversal is not allowed/),
       });
     }));
 
-  it("exportToFile rejects symlink destinations outside the project root", () =>
+  it('exportToFile rejects symlink destinations outside the project root', () =>
     withTempHome(async (home) => {
-      const outsideDir = path.join(home, "outside");
+      const outsideDir = path.join(home, 'outside');
       await mkdir(outsideDir, { recursive: true });
 
       const error = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Export Symlink" });
+          const projectId = yield* projects.create({ name: 'Export Symlink' });
           const mapId = yield* maps.create(projectId, { width: 2, height: 2 });
           yield* Effect.promise(async () => {
-            await symlink(outsideDir, path.join(projectDir(home, projectId), "escape-link"), "dir");
+            await symlink(outsideDir, path.join(projectDir(home, projectId), 'escape-link'), 'dir');
           });
-          return yield* maps.exportToFile(projectId, mapId, "json", "escape-link/out.json");
+          return yield* maps.exportToFile(projectId, mapId, 'json', 'escape-link/out.json');
         }),
       ).catch((cause) => cause);
 
       expect(error).toMatchObject({
-        _tag: "MapSaveError",
+        _tag: 'MapSaveError',
         message: expect.stringMatching(/Symlink escapes root|Path traversal is not allowed/),
       });
     }));

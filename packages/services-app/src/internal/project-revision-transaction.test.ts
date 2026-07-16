@@ -23,7 +23,8 @@ const writeJson = async (filePath: string, value: unknown): Promise<void> => {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 };
 
-const readJson = async (filePath: string): Promise<unknown> => JSON.parse(await readFile(filePath, 'utf8'));
+const readJson = async (filePath: string): Promise<unknown> =>
+  JSON.parse(await readFile(filePath, 'utf8'));
 
 const expectMissing = async (filePath: string): Promise<void> => {
   await expect(stat(filePath)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -81,10 +82,13 @@ const twoMapFixture = async () => {
   await writeJson(path.join(projectRoot, 'project.json'), project);
   await writeJson(path.join(projectRoot, 'maps', `${mapAId}.json`), oldA);
   await writeJson(path.join(projectRoot, 'maps', `${mapBId}.json`), oldB);
-  await writeJson(path.join(projectRoot, 'project.lock.json'), lockFor(project, [
-    { id: mapAId, value: oldA },
-    { id: mapBId, value: oldB },
-  ]));
+  await writeJson(
+    path.join(projectRoot, 'project.lock.json'),
+    lockFor(project, [
+      { id: mapAId, value: oldA },
+      { id: mapBId, value: oldB },
+    ]),
+  );
   return { projectRoot, projectId, mapAId, mapBId, project, oldA, oldB, nextA, nextB };
 };
 
@@ -109,7 +113,9 @@ interface ChildWorker {
 }
 
 const spawnTransactionWorker = (input: ChildInput): ChildWorker => {
-  const moduleUrl = pathToFileURL(path.resolve('dist/internal/project-revision-transaction.js')).href;
+  const moduleUrl = pathToFileURL(
+    path.resolve('dist/internal/project-revision-transaction.js'),
+  ).href;
   const script = `
     import { commitMapProjectRevision } from ${JSON.stringify(moduleUrl)};
     import { hashJsonStable } from '@tileborne/core';
@@ -162,17 +168,20 @@ const spawnTransactionWorker = (input: ChildInput): ChildWorker => {
   });
   const messages: Record<string, unknown>[] = [];
   child.on('message', (message) => {
-    if (typeof message === 'object' && message !== null) messages.push(message as Record<string, unknown>);
+    if (typeof message === 'object' && message !== null)
+      messages.push(message as Record<string, unknown>);
   });
-  const exit = new Promise<{ readonly code: number | null; readonly stderr: string }>((resolve, reject) => {
-    let stderr = '';
-    child.stderr?.setEncoding('utf8');
-    child.stderr?.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    child.once('error', reject);
-    child.once('exit', (code) => resolve({ code, stderr }));
-  });
+  const exit = new Promise<{ readonly code: number | null; readonly stderr: string }>(
+    (resolve, reject) => {
+      let stderr = '';
+      child.stderr?.setEncoding('utf8');
+      child.stderr?.on('data', (chunk) => {
+        stderr += String(chunk);
+      });
+      child.once('error', reject);
+      child.once('exit', (code) => resolve({ code, stderr }));
+    },
+  );
   const waitForMessage = async (type: string): Promise<Record<string, unknown>> => {
     const deadline = Date.now() + 3_000;
     while (Date.now() < deadline) {
@@ -224,8 +233,12 @@ describe('project revision transaction recovery', () => {
 
       const expected = faultPhase === 'prepared' ? state.old : state.next;
       expect(await readJson(state.mapTarget)).toEqual(expected.map);
-      expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(expected.project);
-      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(expected.lock);
+      expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(
+        expected.project,
+      );
+      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+        expected.lock,
+      );
       await expectMissing(projectRevisionTransactionPath(state.projectRoot));
       await expectMissing(projectRevisionOwnerPath(state.projectRoot));
     });
@@ -265,8 +278,12 @@ describe('project revision transaction recovery', () => {
 
     await recoverProjectRevisionTransaction(state.projectRoot);
     expect(await readJson(state.mapTarget)).toEqual(state.next.map);
-    expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(state.next.project);
-    expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(state.next.lock);
+    expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(
+      state.next.project,
+    );
+    expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+      state.next.lock,
+    );
     await expectMissing(projectRevisionTransactionPath(state.projectRoot));
     await expectMissing(projectRevisionOwnerPath(state.projectRoot));
   });
@@ -288,7 +305,9 @@ describe('project revision transaction recovery', () => {
     const childResult = await worker.exit;
     expect(childResult.code, childResult.stderr).toBe(0);
     expect(await readJson(state.mapTarget)).toEqual(state.next.map);
-    expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(state.next.lock);
+    expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+      state.next.lock,
+    );
     await expectMissing(projectRevisionTransactionPath(state.projectRoot));
     await expectMissing(projectRevisionOwnerPath(state.projectRoot));
   });
@@ -307,10 +326,13 @@ describe('project revision transaction recovery', () => {
     await writeJson(path.join(projectRoot, 'project.json'), project);
     await writeJson(path.join(projectRoot, 'maps', `${mapAId}.json`), oldA);
     await writeJson(path.join(projectRoot, 'maps', `${mapBId}.json`), oldB);
-    await writeJson(path.join(projectRoot, 'project.lock.json'), lockFor(project, [
-      { id: mapAId, value: oldA },
-      { id: mapBId, value: oldB },
-    ]));
+    await writeJson(
+      path.join(projectRoot, 'project.lock.json'),
+      lockFor(project, [
+        { id: mapAId, value: oldA },
+        { id: mapBId, value: oldB },
+      ]),
+    );
 
     const writerA = spawnTransactionWorker({
       projectRoot,
@@ -341,7 +363,9 @@ describe('project revision transaction recovery', () => {
     ]);
     expect(resultA.code, resultA.stderr).toBe(0);
     expect(resultB.code, resultB.stderr).toBe(0);
-    const lockSeenByB = builtB.currentLock as { readonly maps: ReadonlyArray<{ readonly id: string; readonly hash: string }> };
+    const lockSeenByB = builtB.currentLock as {
+      readonly maps: ReadonlyArray<{ readonly id: string; readonly hash: string }>;
+    };
     expect(lockSeenByB.maps.find((entry) => entry.id === mapAId)?.hash).toBe(hashJsonStable(nextA));
 
     expect(await readJson(path.join(projectRoot, 'maps', `${mapAId}.json`))).toEqual(nextA);
@@ -388,8 +412,12 @@ describe('project revision transaction recovery', () => {
       const retryResult = await retry.exit;
       expect(retryResult.code, retryResult.stderr).toBe(0);
       expect(await readJson(state.mapTarget)).toEqual(state.next.map);
-      expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(state.next.project);
-      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(state.next.lock);
+      expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(
+        state.next.project,
+      );
+      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+        state.next.lock,
+      );
       await expectMissing(projectRevisionTransactionPath(state.projectRoot));
       await expectMissing(projectRevisionOwnerPath(state.projectRoot));
     });
@@ -439,11 +467,15 @@ describe('project revision transaction recovery', () => {
     const [resultA, resultB] = await Promise.all([reclaimerA.exit, reclaimerB.exit]);
     expect(resultA.code, resultA.stderr).toBe(0);
     expect(resultB.code, resultB.stderr).toBe(0);
-    const lock = await readJson(path.join(state.projectRoot, 'project.lock.json')) as {
+    const lock = (await readJson(path.join(state.projectRoot, 'project.lock.json'))) as {
       readonly maps: ReadonlyArray<{ readonly id: string; readonly hash: string }>;
     };
-    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(hashJsonStable(state.nextA));
-    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(hashJsonStable(state.nextB));
+    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(
+      hashJsonStable(state.nextA),
+    );
+    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(
+      hashJsonStable(state.nextB),
+    );
     expect(await claimResidue(state.projectRoot)).toEqual([]);
     await expectMissing(projectRevisionOwnerPath(state.projectRoot));
     await expectMissing(projectRevisionTransactionPath(state.projectRoot));
@@ -485,7 +517,9 @@ describe('project revision transaction recovery', () => {
     let restoredOwnerPid: number | undefined;
     while (Date.now() < deadline) {
       try {
-        const owner = await readJson(path.join(projectRevisionOwnerPath(state.projectRoot), 'owner.json')) as {
+        const owner = (await readJson(
+          path.join(projectRevisionOwnerPath(state.projectRoot), 'owner.json'),
+        )) as {
           readonly ownerPid: number;
         };
         if ((await claimResidue(state.projectRoot)).length === 0) {
@@ -504,11 +538,15 @@ describe('project revision transaction recovery', () => {
     const [successorResult, cleanerResult] = await Promise.all([successor.exit, staleCleaner.exit]);
     expect(successorResult.code, successorResult.stderr).toBe(0);
     expect(cleanerResult.code, cleanerResult.stderr).toBe(0);
-    const lock = await readJson(path.join(state.projectRoot, 'project.lock.json')) as {
+    const lock = (await readJson(path.join(state.projectRoot, 'project.lock.json'))) as {
       readonly maps: ReadonlyArray<{ readonly id: string; readonly hash: string }>;
     };
-    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(hashJsonStable(state.nextA));
-    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(hashJsonStable(state.nextB));
+    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(
+      hashJsonStable(state.nextA),
+    );
+    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(
+      hashJsonStable(state.nextB),
+    );
     expect(await claimResidue(state.projectRoot)).toEqual([]);
     await expectMissing(projectRevisionOwnerPath(state.projectRoot));
   });
@@ -562,11 +600,15 @@ describe('project revision transaction recovery', () => {
     const [candidateResult, cleanerResult] = await Promise.all([candidate.exit, staleCleaner.exit]);
     expect(candidateResult.code, candidateResult.stderr).toBe(0);
     expect(cleanerResult.code, cleanerResult.stderr).toBe(0);
-    const lock = await readJson(path.join(state.projectRoot, 'project.lock.json')) as {
+    const lock = (await readJson(path.join(state.projectRoot, 'project.lock.json'))) as {
       readonly maps: ReadonlyArray<{ readonly id: string; readonly hash: string }>;
     };
-    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(hashJsonStable(state.nextA));
-    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(hashJsonStable(state.nextB));
+    expect(lock.maps.find((entry) => entry.id === state.mapAId)?.hash).toBe(
+      hashJsonStable(state.nextA),
+    );
+    expect(lock.maps.find((entry) => entry.id === state.mapBId)?.hash).toBe(
+      hashJsonStable(state.nextB),
+    );
     expect(await readdir(path.join(state.projectRoot, '.tileborne'))).toEqual([]);
   });
 
@@ -601,7 +643,9 @@ describe('project revision transaction recovery', () => {
     ).rejects.toThrow('different same-process token remained foreign');
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(150);
     expect(acquired).toBe(false);
-    expect(await readJson(path.join(projectRevisionOwnerPath(state.projectRoot), 'owner.json'))).toEqual(foreignOwner);
+    expect(
+      await readJson(path.join(projectRevisionOwnerPath(state.projectRoot), 'owner.json')),
+    ).toEqual(foreignOwner);
     expect(await claimResidue(state.projectRoot)).toEqual([]);
   });
 
@@ -642,7 +686,9 @@ describe('project revision transaction recovery', () => {
       const retryResult = await retry.exit;
       expect(retryResult.code, retryResult.stderr).toBe(0);
       expect(await readJson(state.mapTarget)).toEqual(state.next.map);
-      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(state.next.lock);
+      expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+        state.next.lock,
+      );
       expect(await claimResidue(state.projectRoot)).toEqual([]);
       await expectMissing(projectRevisionOwnerPath(state.projectRoot));
       await expectMissing(projectRevisionTransactionPath(state.projectRoot));

@@ -1,16 +1,20 @@
-import path from "node:path";
+import path from 'node:path';
 
 import {
   AssetPathSecurityError,
   assertWithinRoot,
   rejectPathTraversal,
   rejectSymlinkEscape,
-} from "@tileborne/asset-pipeline";
-import { Effect } from "effect";
+} from '@tileborne/asset-pipeline';
+import { Effect } from 'effect';
 
-import { errorMessage, isNotFound } from "./files.js";
+import { errorMessage, isNotFound } from './files.js';
 
-const mapSecurityError = (cause: unknown, root: string, candidatePath: string): AssetPathSecurityError =>
+const mapSecurityError = (
+  cause: unknown,
+  root: string,
+  candidatePath: string,
+): AssetPathSecurityError =>
   cause instanceof AssetPathSecurityError
     ? cause
     : new AssetPathSecurityError(errorMessage(cause), root, candidatePath);
@@ -22,8 +26,8 @@ export const verifiedChildPath = (
   Effect.gen(function* () {
     const resolved = yield* Effect.try({
       try: () => {
-        if (candidatePath.includes("\0")) {
-          throw new AssetPathSecurityError("NUL path segment is not allowed", root, candidatePath);
+        if (candidatePath.includes('\0')) {
+          throw new AssetPathSecurityError('NUL path segment is not allowed', root, candidatePath);
         }
         rejectPathTraversal(root, candidatePath);
         return assertWithinRoot(root, candidatePath);
@@ -32,7 +36,7 @@ export const verifiedChildPath = (
     });
 
     const parent = path.dirname(candidatePath);
-    if (parent !== "." && parent !== candidatePath) {
+    if (parent !== '.' && parent !== candidatePath) {
       yield* Effect.tryPromise({
         try: async () => {
           try {

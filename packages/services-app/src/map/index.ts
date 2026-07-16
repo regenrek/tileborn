@@ -1011,12 +1011,18 @@ export const MapServiceLive = Layer.effect(
       return mapId;
     });
 
-    const loadUnlocked = Effect.fn('MapService.loadUnlocked')(function* (projectId: ProjectId, mapId: MapId) {
+    const loadUnlocked = Effect.fn('MapService.loadUnlocked')(function* (
+      projectId: ProjectId,
+      mapId: MapId,
+    ) {
       const projectDir = yield* projectDirFor(projectId);
       return yield* readVerifiedMap(projectDir, projectId, mapId);
     });
 
-    const saveUnlocked = Effect.fn('MapService.saveUnlocked')(function* (projectId: ProjectId, map: TileborneMap) {
+    const saveUnlocked = Effect.fn('MapService.saveUnlocked')(function* (
+      projectId: ProjectId,
+      map: TileborneMap,
+    ) {
       const projectDir = yield* projectDirFor(projectId);
       yield* Effect.tryPromise({
         try: () =>
@@ -1035,10 +1041,14 @@ export const MapServiceLive = Layer.effect(
                 });
               }
               const lock = Schema.decodeUnknownSync(ProjectIntegrityLock)(current.lock);
-              const mapSnapshot = await Effect.runPromise(encodeMapJson(mapPath(projectDir, map.id), map));
+              const mapSnapshot = await Effect.runPromise(
+                encodeMapJson(mapPath(projectDir, map.id), map),
+              );
               const projectSnapshot = await Effect.runPromise(
-                encodeJson(ProjectManifestSchema, project, (message) =>
-                  new MapSaveError({ path: projectDir, message }),
+                encodeJson(
+                  ProjectManifestSchema,
+                  project,
+                  (message) => new MapSaveError({ path: projectDir, message }),
                 ),
               );
               const nextLock = new ProjectIntegrityLock({
@@ -1057,8 +1067,10 @@ export const MapServiceLive = Layer.effect(
                 map: mapSnapshot,
                 project: projectSnapshot,
                 lock: await Effect.runPromise(
-                  encodeJson(ProjectIntegrityLock, nextLock, (message) =>
-                    new MapSaveError({ path: projectLockPath(projectDir), message }),
+                  encodeJson(
+                    ProjectIntegrityLock,
+                    nextLock,
+                    (message) => new MapSaveError({ path: projectLockPath(projectDir), message }),
                   ),
                 ),
               };
@@ -1073,10 +1085,12 @@ export const MapServiceLive = Layer.effect(
     });
 
     const load = Effect.fn('MapService.load')((projectId: ProjectId, mapId: MapId) =>
-      mapIoGate.withPermit(loadUnlocked(projectId, mapId)));
+      mapIoGate.withPermit(loadUnlocked(projectId, mapId)),
+    );
 
     const save = Effect.fn('MapService.save')((projectId: ProjectId, map: TileborneMap) =>
-      mapIoGate.withPermit(saveUnlocked(projectId, map)));
+      mapIoGate.withPermit(saveUnlocked(projectId, map)),
+    );
 
     const setMapTilesetPack = Effect.fn('MapService.setMapTilesetPack')(function* (
       projectId: ProjectId,
@@ -1186,7 +1200,8 @@ export const MapServiceLive = Layer.effect(
     });
 
     const list = Effect.fn('MapService.list')((projectId: ProjectId) =>
-      mapIoGate.withPermit(listUnlocked(projectId)));
+      mapIoGate.withPermit(listUnlocked(projectId)),
+    );
 
     const deleteMap = Effect.fn('MapService.delete')(function* (
       projectId: ProjectId,

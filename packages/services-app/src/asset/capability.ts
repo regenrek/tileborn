@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
 import {
   ContentHash,
@@ -12,14 +12,14 @@ import {
   type PackSourceInventorySummary,
   type PackCapabilitySource,
   type PackId,
-} from "@tileborne/core";
-import { parseTilesetManifest } from "@tileborne/sdk-tileset/manifest";
-import { Effect, Option, Schema } from "effect";
+} from '@tileborne/core';
+import { parseTilesetManifest } from '@tileborne/sdk-tileset/manifest';
+import { Effect, Option, Schema } from 'effect';
 
-import { errorMessage } from "../internal/files.js";
+import { errorMessage } from '../internal/files.js';
 
 export class PackCapabilityProbeError extends Schema.TaggedErrorClass<PackCapabilityProbeError>()(
-  "PackCapabilityProbeError",
+  'PackCapabilityProbeError',
   {
     path: Schema.String,
     message: Schema.String,
@@ -52,7 +52,7 @@ interface ManifestLike {
 }
 
 const asManifestLike = (json: unknown): ManifestLike =>
-  typeof json === "object" && json !== null ? (json as ManifestLike) : {};
+  typeof json === 'object' && json !== null ? (json as ManifestLike) : {};
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
@@ -64,14 +64,15 @@ const rawTileCount = (manifest: ManifestLike): number => {
     return 0;
   }
   return manifest.tilesets.reduce((sum, tileset) => {
-    if (typeof tileset !== "object" || tileset === null || !("tiles" in tileset)) {
+    if (typeof tileset !== 'object' || tileset === null || !('tiles' in tileset)) {
       return sum;
     }
     return sum + arrayLength((tileset as { readonly tiles?: unknown }).tiles);
   }, 0);
 };
 
-const numberField = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? value : 0;
+const numberField = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
 const sourceInventorySummary = (manifest: ManifestLike): PackSourceInventorySummary | undefined => {
   const summary = manifest.tiledSourceInventory?.summary;
@@ -94,14 +95,16 @@ const sourceInventorySummary = (manifest: ManifestLike): PackSourceInventorySumm
 };
 
 const schemaVersionOption = (schemaVersion: unknown): Option.Option<number> =>
-  typeof schemaVersion === "number" ? Option.some(schemaVersion) : Option.none();
+  typeof schemaVersion === 'number' ? Option.some(schemaVersion) : Option.none();
 
-const unsupportedSchemaDiagnostic = (schemaVersion: unknown): PackCapabilityDiagnostic | undefined => {
+const unsupportedSchemaDiagnostic = (
+  schemaVersion: unknown,
+): PackCapabilityDiagnostic | undefined => {
   if (schemaVersion === undefined || schemaVersion === 1) {
     return undefined;
   }
   return new PackUnsupportedSchemaDiagnostic({
-    severity: "error",
+    severity: 'error',
     schemaVersion: schemaVersionOption(schemaVersion),
     message: `Unsupported tileset manifest schema version: ${String(schemaVersion)}`,
   });
@@ -109,11 +112,11 @@ const unsupportedSchemaDiagnostic = (schemaVersion: unknown): PackCapabilityDiag
 
 const parseDiagnostics = (
   packId: PackId,
-  diagnostics: ReturnType<typeof parseTilesetManifest>["diagnostics"],
+  diagnostics: ReturnType<typeof parseTilesetManifest>['diagnostics'],
 ): readonly PackCapabilityDiagnostic[] =>
   diagnostics.flatMap((diagnostic): readonly PackCapabilityDiagnostic[] => {
     switch (diagnostic._tag) {
-      case "MissingAtlas":
+      case 'MissingAtlas':
         return [
           new PackMissingAssetDiagnostic({
             severity: diagnostic.severity,
@@ -122,7 +125,7 @@ const parseDiagnostics = (
             message: diagnostic.message,
           }),
         ];
-      case "DuplicateTileId":
+      case 'DuplicateTileId':
         return [
           new PackDuplicateIdDiagnostic({
             severity: diagnostic.severity,
@@ -130,7 +133,7 @@ const parseDiagnostics = (
             message: diagnostic.message,
           }),
         ];
-      case "DuplicateAutotileRuleId":
+      case 'DuplicateAutotileRuleId':
         return [
           new PackDuplicateIdDiagnostic({
             severity: diagnostic.severity,
@@ -144,18 +147,18 @@ const parseDiagnostics = (
   });
 
 const missingImageAssetDiagnostics = (
-  pack: NonNullable<ReturnType<typeof parseTilesetManifest>["value"]>,
+  pack: NonNullable<ReturnType<typeof parseTilesetManifest>['value']>,
 ): readonly PackCapabilityDiagnostic[] => {
   const assetsById = new Map(pack.assets.map((asset) => [String(asset.id), asset] as const));
   return pack.tilesets.flatMap((tileset, index) => {
     const assetId = String(tileset.atlasAssetId);
     const asset = assetsById.get(assetId);
-    if (asset?.mime.startsWith("image/") === true) {
+    if (asset?.mime.startsWith('image/') === true) {
       return [];
     }
     return [
       new PackMissingAssetDiagnostic({
-        severity: "error",
+        severity: 'error',
         assetId,
         path: `/tilesets/${index}/atlasAssetId`,
         message: `Tileset atlas asset is missing or not an image: ${assetId}`,
@@ -165,7 +168,7 @@ const missingImageAssetDiagnostics = (
 };
 
 const objectOnlyTileIds = (
-  pack: NonNullable<ReturnType<typeof parseTilesetManifest>["value"]>,
+  pack: NonNullable<ReturnType<typeof parseTilesetManifest>['value']>,
 ): ReadonlySet<string> =>
   new Set(
     (pack.placeables ?? [])
@@ -174,7 +177,7 @@ const objectOnlyTileIds = (
   );
 
 const paintableTileCount = (
-  pack: NonNullable<ReturnType<typeof parseTilesetManifest>["value"]>,
+  pack: NonNullable<ReturnType<typeof parseTilesetManifest>['value']>,
 ): number => {
   const objectOnly = objectOnlyTileIds(pack);
   return pack.tilesets.reduce(
@@ -184,7 +187,7 @@ const paintableTileCount = (
 };
 
 const paintableTilesetCount = (
-  pack: NonNullable<ReturnType<typeof parseTilesetManifest>["value"]>,
+  pack: NonNullable<ReturnType<typeof parseTilesetManifest>['value']>,
 ): number => {
   const objectOnly = objectOnlyTileIds(pack);
   return pack.tilesets.filter((tileset) =>
@@ -206,19 +209,20 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
     const placeableCount = parsed.value.placeables?.length ?? 0;
     const diagnostics: PackCapabilityDiagnostic[] = [
       ...missingAssets,
-      ...parsed.diagnostics.map((diagnostic) =>
-        new PackUnsupportedSchemaDiagnostic({
-          severity: diagnostic.severity,
-          schemaVersion,
-          message: diagnostic.message,
-        }),
+      ...parsed.diagnostics.map(
+        (diagnostic) =>
+          new PackUnsupportedSchemaDiagnostic({
+            severity: diagnostic.severity,
+            schemaVersion,
+            message: diagnostic.message,
+          }),
       ),
     ];
     if (tilesetCount === 0 || tileCount === 0) {
       diagnostics.push(
         new PackNoTilesetsDiagnostic({
-          severity: "warning",
-          message: "Pack does not contain paintable tilesets.",
+          severity: 'warning',
+          message: 'Pack does not contain paintable tilesets.',
         }),
       );
     }
@@ -228,16 +232,23 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
 
     return new PackCapability({
       packId,
-      paintable: tilesetCount > 0 && tileCount > 0 && missingAssets.length === 0 && unsupported === undefined,
+      paintable:
+        tilesetCount > 0 &&
+        tileCount > 0 &&
+        missingAssets.length === 0 &&
+        unsupported === undefined,
       tilesetCount,
       tileCount,
       placeableCount,
-      autotileRuleCount: parsed.value.tilesets.reduce((sum, tileset) => sum + tileset.autotileRules.length, 0),
+      autotileRuleCount: parsed.value.tilesets.reduce(
+        (sum, tileset) => sum + tileset.autotileRules.length,
+        0,
+      ),
       terrainClassCount: arrayLength(manifest.terrainClasses),
       hasAnimations: arrayLength(manifest.animations) > 0,
       hasCollisionMasks: arrayLength(manifest.collisionMasks) > 0,
       schemaVersion,
-      source: "tileborne",
+      source: 'tileborne',
       diagnostics,
       ...(sourceInventory === undefined ? {} : { sourceInventory }),
     });
@@ -246,15 +257,13 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
   const tilesetCount = arrayLength(manifest.tilesets);
   const tileCount = rawTileCount(manifest);
   const placeableCount = arrayLength(manifest.placeables);
-  const source: PackCapabilitySource = "asset-only";
-  const diagnostics: PackCapabilityDiagnostic[] = [
-    ...parseDiagnostics(packId, parsed.diagnostics),
-  ];
+  const source: PackCapabilitySource = 'asset-only';
+  const diagnostics: PackCapabilityDiagnostic[] = [...parseDiagnostics(packId, parsed.diagnostics)];
   if (tilesetCount === 0 || tileCount === 0) {
     diagnostics.push(
       new PackNoTilesetsDiagnostic({
-        severity: "warning",
-        message: "Pack does not contain paintable tilesets.",
+        severity: 'warning',
+        message: 'Pack does not contain paintable tilesets.',
       }),
     );
   }
@@ -279,17 +288,18 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
   });
 };
 
-export const probePackCapabilityWithIntegrity = Effect.fn("AssetCapability.probePackCapabilityWithIntegrity")(function* ({
-  packId,
-  manifestPath,
-}: ProbeInput) {
+export const probePackCapabilityWithIntegrity = Effect.fn(
+  'AssetCapability.probePackCapabilityWithIntegrity',
+)(function* ({ packId, manifestPath }: ProbeInput) {
   const raw = yield* Effect.tryPromise({
-    try: () => readFile(manifestPath, "utf8"),
-    catch: (cause) => new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
+    try: () => readFile(manifestPath, 'utf8'),
+    catch: (cause) =>
+      new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
   });
   const json = yield* Effect.try({
     try: (): unknown => JSON.parse(raw),
-    catch: (cause) => new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
+    catch: (cause) =>
+      new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
   });
   return {
     capability: detectPackCapability(packId, json),
@@ -297,17 +307,18 @@ export const probePackCapabilityWithIntegrity = Effect.fn("AssetCapability.probe
   };
 });
 
-export const readPackCapabilityIntegrityHash = Effect.fn("AssetCapability.readPackCapabilityIntegrityHash")(function* ({
-  manifestPath,
-}: Pick<ProbeInput, "manifestPath">) {
+export const readPackCapabilityIntegrityHash = Effect.fn(
+  'AssetCapability.readPackCapabilityIntegrityHash',
+)(function* ({ manifestPath }: Pick<ProbeInput, 'manifestPath'>) {
   const raw = yield* Effect.tryPromise({
-    try: () => readFile(manifestPath, "utf8"),
-    catch: (cause) => new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
+    try: () => readFile(manifestPath, 'utf8'),
+    catch: (cause) =>
+      new PackCapabilityProbeError({ path: manifestPath, message: errorMessage(cause) }),
   });
   return capabilityIntegrityHash(raw);
 });
 
-export const probePackCapability = Effect.fn("AssetCapability.probePackCapability")(function* (
+export const probePackCapability = Effect.fn('AssetCapability.probePackCapability')(function* (
   input: ProbeInput,
 ) {
   const probe = yield* probePackCapabilityWithIntegrity(input);

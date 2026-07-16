@@ -1,21 +1,23 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
-import { ProjectId } from "@tileborne/core";
-import { writeJsonAtomic } from "@tileborne/services-foundation";
-import { Effect, Schema } from "effect";
+import { ProjectId } from '@tileborne/core';
+import { writeJsonAtomic } from '@tileborne/services-foundation';
+import { Effect, Schema } from 'effect';
 
-import { isNotFound } from "./files.js";
+import { isNotFound } from './files.js';
 
-const PROJECT_REGISTRY_FILE = "registry.json";
+const PROJECT_REGISTRY_FILE = 'registry.json';
 
-export class ProjectRegistryEntry extends Schema.Class<ProjectRegistryEntry>("ProjectRegistryEntry")({
+export class ProjectRegistryEntry extends Schema.Class<ProjectRegistryEntry>(
+  'ProjectRegistryEntry',
+)({
   id: ProjectId,
   name: Schema.String,
   path: Schema.String,
 }) {}
 
-export class ProjectRegistry extends Schema.Class<ProjectRegistry>("ProjectRegistry")({
+export class ProjectRegistry extends Schema.Class<ProjectRegistry>('ProjectRegistry')({
   schemaVersion: Schema.Literal(1),
   projects: Schema.Array(ProjectRegistryEntry),
 }) {}
@@ -41,7 +43,7 @@ export const readProjectRegistry = (projectsRoot: string): Effect.Effect<Project
   Effect.promise(async () => {
     const filePath = projectRegistryPath(projectsRoot);
     try {
-      const raw = await readFile(filePath, "utf8");
+      const raw = await readFile(filePath, 'utf8');
       return decodeRegistry(raw);
     } catch (cause) {
       if (isNotFound(cause)) {
@@ -76,7 +78,5 @@ export const findRegisteredProject = (
 ): Effect.Effect<ProjectRegistryEntry | undefined> =>
   Effect.gen(function* () {
     const registry = yield* readProjectRegistry(projectsRoot);
-    return registry.projects.find(
-      (entry) => entry.name === slugOrId || entry.id === slugOrId,
-    );
+    return registry.projects.find((entry) => entry.name === slugOrId || entry.id === slugOrId);
   });

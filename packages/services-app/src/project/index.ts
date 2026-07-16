@@ -1,10 +1,10 @@
-import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { promisify } from "node:util";
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
 
-import { rejectSymlinkEscape } from "@tileborne/asset-pipeline";
+import { rejectSymlinkEscape } from '@tileborne/asset-pipeline';
 import {
   ContentHash,
   CORE_SCHEMA_VERSIONS,
@@ -21,15 +21,28 @@ import {
   makeProjectId,
   readSchemaVersion,
   type ProjectMapRef,
-} from "@tileborne/core";
-import type { TiledAppliedImportPlan } from "@tileborne/sdk-tileset/tiled";
-import { HomeService, writeJsonAtomic, type HomeServiceError } from "@tileborne/services-foundation";
-import { Context, Effect, Layer, Option, PubSub, Result, Schema, Stream } from "effect";
+} from '@tileborne/core';
+import type { TiledAppliedImportPlan } from '@tileborne/sdk-tileset/tiled';
+import {
+  HomeService,
+  writeJsonAtomic,
+  type HomeServiceError,
+} from '@tileborne/services-foundation';
+import { Context, Effect, Layer, Option, PubSub, Result, Schema, Stream } from 'effect';
 
-export { findProjectInAncestors } from "../internal/project-location.js";
-export { findRegisteredProject } from "../internal/project-registry.js";
-import { findProjectInAncestors, homeProjectExists, homeProjectRoot } from "../internal/project-location.js";
-import { findRegisteredProject, readProjectRegistry, ProjectRegistryEntry, upsertProjectRegistryEntry } from "../internal/project-registry.js";
+export { findProjectInAncestors } from '../internal/project-location.js';
+export { findRegisteredProject } from '../internal/project-registry.js';
+import {
+  findProjectInAncestors,
+  homeProjectExists,
+  homeProjectRoot,
+} from '../internal/project-location.js';
+import {
+  findRegisteredProject,
+  readProjectRegistry,
+  ProjectRegistryEntry,
+  upsertProjectRegistryEntry,
+} from '../internal/project-registry.js';
 import {
   MapIntegrityEntry,
   ProjectIntegrityLock,
@@ -37,9 +50,15 @@ import {
   projectLockPath,
   projectManifestPath,
   projectMapsDirectory,
-} from "../internal/layout.js";
-import { encodeJson, errorMessage, hashEncodedJson, isNotFound, readJson } from "../internal/files.js";
-import { recoverProjectRevisionTransaction } from "../internal/project-revision-transaction.js";
+} from '../internal/layout.js';
+import {
+  encodeJson,
+  errorMessage,
+  hashEncodedJson,
+  isNotFound,
+  readJson,
+} from '../internal/files.js';
+import { recoverProjectRevisionTransaction } from '../internal/project-revision-transaction.js';
 
 export interface ProjectCreateSpec {
   readonly name: string;
@@ -92,31 +111,33 @@ export interface ProjectCleanResult {
 }
 
 export type ImportCenterSourceKind =
-  | "tileborne-pack"
-  | "tiled-map"
-  | "tiled-tileset"
-  | "tiled-source-folder"
-  | "raw-source-folder";
+  | 'tileborne-pack'
+  | 'tiled-map'
+  | 'tiled-tileset'
+  | 'tiled-source-folder'
+  | 'raw-source-folder';
 
 export interface ImportCenterSourceIdentity {
   readonly kind: ImportCenterSourceKind;
   readonly path: string;
   readonly detectedAt: string;
-  readonly fingerprint?: {
-    readonly realPath: string;
-    readonly size: number;
-    readonly mtimeMs: number;
-    readonly isDirectory: boolean;
-  } | undefined;
+  readonly fingerprint?:
+    | {
+        readonly realPath: string;
+        readonly size: number;
+        readonly mtimeMs: number;
+        readonly isDirectory: boolean;
+      }
+    | undefined;
 }
 
 export interface ImportCenterApplyReport {
   readonly importRecordId: string;
   readonly sourceIdentity: ImportCenterSourceIdentity;
-  readonly diagnostics: readonly TiledAppliedImportPlan["diagnostics"][number][];
+  readonly diagnostics: readonly TiledAppliedImportPlan['diagnostics'][number][];
   readonly appliedPlan: TiledAppliedImportPlan;
   readonly outputs: {
-    readonly kind: "map" | "asset-pack";
+    readonly kind: 'map' | 'asset-pack';
     readonly mapId?: MapId | undefined;
     readonly packId?: PackId | undefined;
     readonly layerCount?: number | undefined;
@@ -134,7 +155,7 @@ export interface ImportRecord {
 }
 
 export class ProjectNotFoundError extends Schema.TaggedErrorClass<ProjectNotFoundError>()(
-  "ProjectNotFoundError",
+  'ProjectNotFoundError',
   {
     projectId: ProjectId,
     message: Schema.String,
@@ -142,7 +163,7 @@ export class ProjectNotFoundError extends Schema.TaggedErrorClass<ProjectNotFoun
 ) {}
 
 export class ProjectPathNotFoundError extends Schema.TaggedErrorClass<ProjectPathNotFoundError>()(
-  "ProjectPathNotFoundError",
+  'ProjectPathNotFoundError',
   {
     path: Schema.String,
     message: Schema.String,
@@ -150,7 +171,7 @@ export class ProjectPathNotFoundError extends Schema.TaggedErrorClass<ProjectPat
 ) {}
 
 export class ProjectSlugInvalidError extends Schema.TaggedErrorClass<ProjectSlugInvalidError>()(
-  "ProjectSlugInvalidError",
+  'ProjectSlugInvalidError',
   {
     slug: Schema.String,
     message: Schema.String,
@@ -158,7 +179,7 @@ export class ProjectSlugInvalidError extends Schema.TaggedErrorClass<ProjectSlug
 ) {}
 
 export class ProjectAlreadyExistsError extends Schema.TaggedErrorClass<ProjectAlreadyExistsError>()(
-  "ProjectAlreadyExistsError",
+  'ProjectAlreadyExistsError',
   {
     path: Schema.String,
     message: Schema.String,
@@ -166,20 +187,23 @@ export class ProjectAlreadyExistsError extends Schema.TaggedErrorClass<ProjectAl
 ) {}
 
 export class ProjectValidationError extends Schema.TaggedErrorClass<ProjectValidationError>()(
-  "ProjectValidationError",
+  'ProjectValidationError',
   {
     path: Schema.String,
     message: Schema.String,
   },
 ) {}
 
-export class ProjectSaveError extends Schema.TaggedErrorClass<ProjectSaveError>()("ProjectSaveError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class ProjectSaveError extends Schema.TaggedErrorClass<ProjectSaveError>()(
+  'ProjectSaveError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export class ProjectMigrationError extends Schema.TaggedErrorClass<ProjectMigrationError>()(
-  "ProjectMigrationError",
+  'ProjectMigrationError',
   {
     path: Schema.String,
     message: Schema.String,
@@ -197,55 +221,68 @@ export type ProjectServiceError =
   | HomeServiceError;
 
 const SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;
-const PROJECT_CACHE_DIR = ".tileborne/cache";
-const PROJECT_DERIVED_DIR = ".tileborne/derived";
-const PROJECT_IMPORT_RECORDS_PATH = ".tileborne/import-records.json";
-const PROJECT_BEHAVIOR_REGISTRY_PATH = "behaviors/registry.json";
+const PROJECT_CACHE_DIR = '.tileborne/cache';
+const PROJECT_DERIVED_DIR = '.tileborne/derived';
+const PROJECT_IMPORT_RECORDS_PATH = '.tileborne/import-records.json';
+const PROJECT_BEHAVIOR_REGISTRY_PATH = 'behaviors/registry.json';
 
 const markImportedBehaviorRegistryUntrusted = async (projectRoot: string): Promise<void> => {
   const registryFile = path.join(projectRoot, PROJECT_BEHAVIOR_REGISTRY_PATH);
   let raw: string;
   try {
-    raw = await readFile(registryFile, "utf8");
+    raw = await readFile(registryFile, 'utf8');
   } catch (cause) {
     if (isNotFound(cause)) return;
     throw cause;
   }
   const parsed = JSON.parse(raw) as unknown;
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
   const registry = parsed as Record<string, unknown>;
   const updated = {
     ...registry,
-    revision: typeof registry["revision"] === "number" ? registry["revision"] + 1 : 1,
-    trust: "imported-untrusted",
+    revision: typeof registry['revision'] === 'number' ? registry['revision'] + 1 : 1,
+    trust: 'imported-untrusted',
   };
   const temporary = `${registryFile}.tmp-${randomUUID()}`;
-  await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+  await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
   await rename(temporary, registryFile);
 };
 
 const projectMigrationChain = defineMigrationChain<ProjectManifest>({
-  entity: "project",
+  entity: 'project',
   latestVersion: CORE_SCHEMA_VERSIONS.project,
   migrators: [],
 });
 
-export class ProjectService extends Context.Service<ProjectService, {
-  readonly create: (spec: ProjectCreateSpec) => Effect.Effect<ProjectId, ProjectServiceError>;
-  readonly open: (projectId: ProjectId) => Effect.Effect<ProjectManifest, ProjectServiceError>;
-  readonly save: (project: ProjectManifest) => Effect.Effect<void, ProjectServiceError>;
-  readonly list: () => Effect.Effect<readonly ProjectSummary[], ProjectServiceError>;
-  readonly subscribe: Stream.Stream<readonly ProjectSummary[], ProjectServiceError>;
-  readonly importFromDirectory: (sourcePath: string) => Effect.Effect<ProjectId, ProjectServiceError>;
-  readonly exportArchive: (
-    projectId: ProjectId,
-    destinationDirectory: string,
-  ) => Effect.Effect<{ archivePath: string }, ProjectServiceError>;
-  readonly init: (input: ProjectInitInput) => Effect.Effect<ProjectInitResult, ProjectServiceError>;
-  readonly info: (at?: string | undefined) => Effect.Effect<ProjectInfoResult, ProjectServiceError>;
-  readonly upgrade: (at?: string | undefined) => Effect.Effect<ProjectUpgradeResult, ProjectServiceError>;
-  readonly clean: (at?: string | undefined) => Effect.Effect<ProjectCleanResult, ProjectServiceError>;
-}>()("@tileborne/services-app/ProjectService") {}
+export class ProjectService extends Context.Service<
+  ProjectService,
+  {
+    readonly create: (spec: ProjectCreateSpec) => Effect.Effect<ProjectId, ProjectServiceError>;
+    readonly open: (projectId: ProjectId) => Effect.Effect<ProjectManifest, ProjectServiceError>;
+    readonly save: (project: ProjectManifest) => Effect.Effect<void, ProjectServiceError>;
+    readonly list: () => Effect.Effect<readonly ProjectSummary[], ProjectServiceError>;
+    readonly subscribe: Stream.Stream<readonly ProjectSummary[], ProjectServiceError>;
+    readonly importFromDirectory: (
+      sourcePath: string,
+    ) => Effect.Effect<ProjectId, ProjectServiceError>;
+    readonly exportArchive: (
+      projectId: ProjectId,
+      destinationDirectory: string,
+    ) => Effect.Effect<{ archivePath: string }, ProjectServiceError>;
+    readonly init: (
+      input: ProjectInitInput,
+    ) => Effect.Effect<ProjectInitResult, ProjectServiceError>;
+    readonly info: (
+      at?: string | undefined,
+    ) => Effect.Effect<ProjectInfoResult, ProjectServiceError>;
+    readonly upgrade: (
+      at?: string | undefined,
+    ) => Effect.Effect<ProjectUpgradeResult, ProjectServiceError>;
+    readonly clean: (
+      at?: string | undefined,
+    ) => Effect.Effect<ProjectCleanResult, ProjectServiceError>;
+  }
+>()('@tileborne/services-app/ProjectService') {}
 
 const execFileAsync = promisify(execFile);
 
@@ -257,13 +294,18 @@ const validateSlug = (slug: string): Effect.Effect<string, ProjectSlugInvalidErr
     : Effect.fail(
         new ProjectSlugInvalidError({
           slug,
-          message: "slug must start with a letter and contain only lowercase letters, digits, and hyphens",
+          message:
+            'slug must start with a letter and contain only lowercase letters, digits, and hyphens',
         }),
       );
 
-const projectHash = (project: ProjectManifest): Effect.Effect<ContentHash, ProjectValidationError> =>
-  hashEncodedJson(ProjectManifestSchema, project, (message) =>
-    new ProjectValidationError({ path: "project.json", message }),
+const projectHash = (
+  project: ProjectManifest,
+): Effect.Effect<ContentHash, ProjectValidationError> =>
+  hashEncodedJson(
+    ProjectManifestSchema,
+    project,
+    (message) => new ProjectValidationError({ path: 'project.json', message }),
   );
 
 export const readProjectLock = (
@@ -278,7 +320,10 @@ export const readProjectLock = (
 export const readVerifiedProject = (
   projectsRoot: string,
   projectId: ProjectId,
-): Effect.Effect<ProjectManifest, ProjectNotFoundError | ProjectValidationError | ProjectMigrationError> =>
+): Effect.Effect<
+  ProjectManifest,
+  ProjectNotFoundError | ProjectValidationError | ProjectMigrationError
+> =>
   readVerifiedProjectAtRoot(projectDirectory(projectsRoot, projectId)).pipe(
     Effect.flatMap((project) =>
       project.id === projectId
@@ -310,11 +355,11 @@ export const readVerifiedProjectAtRoot = (
     });
     const project = yield* readManifestAtRoot(projectRoot).pipe(
       Effect.mapError((error) =>
-        error._tag === "ProjectPathNotFoundError"
+        error._tag === 'ProjectPathNotFoundError'
           ? new ProjectNotFoundError({
               // Sentinel id for "no project at this root": must be a VALID
               // v4-shaped uuid or the error class itself fails to construct.
-              projectId: makeProjectId("00000000-0000-4000-8000-000000000000" as Uuid),
+              projectId: makeProjectId('00000000-0000-4000-8000-000000000000' as Uuid),
               message: error.message,
             })
           : error,
@@ -348,7 +393,9 @@ export const resolveProjectRootForId = (
     if (registered) {
       return registered.path;
     }
-    return yield* Effect.fail(new ProjectNotFoundError({ projectId, message: `project not found: ${projectId}` }));
+    return yield* Effect.fail(
+      new ProjectNotFoundError({ projectId, message: `project not found: ${projectId}` }),
+    );
   });
 
 export const writeProjectWithLock = (
@@ -357,22 +404,30 @@ export const writeProjectWithLock = (
   maps: readonly MapIntegrityEntry[],
 ): Effect.Effect<void, ProjectSaveError | ProjectValidationError> =>
   Effect.gen(function* () {
-    const encodedProject = yield* encodeJson(ProjectManifestSchema, project, (message) =>
-      new ProjectSaveError({ path: projectManifestPath(projectDir), message }),
+    const encodedProject = yield* encodeJson(
+      ProjectManifestSchema,
+      project,
+      (message) => new ProjectSaveError({ path: projectManifestPath(projectDir), message }),
     );
     yield* writeJsonAtomic(projectManifestPath(projectDir), encodedProject).pipe(
-      Effect.mapError((error) => new ProjectSaveError({ path: error.path, message: error.message })),
+      Effect.mapError(
+        (error) => new ProjectSaveError({ path: error.path, message: error.message }),
+      ),
     );
     const lock = new ProjectIntegrityLock({
       schemaVersion: 1,
       projectHash: yield* projectHash(project),
       maps: [...maps],
     });
-    const encodedLock = yield* encodeJson(ProjectIntegrityLock, lock, (message) =>
-      new ProjectSaveError({ path: projectLockPath(projectDir), message }),
+    const encodedLock = yield* encodeJson(
+      ProjectIntegrityLock,
+      lock,
+      (message) => new ProjectSaveError({ path: projectLockPath(projectDir), message }),
     );
     yield* writeJsonAtomic(projectLockPath(projectDir), encodedLock).pipe(
-      Effect.mapError((error) => new ProjectSaveError({ path: error.path, message: error.message })),
+      Effect.mapError(
+        (error) => new ProjectSaveError({ path: error.path, message: error.message }),
+      ),
     );
   });
 
@@ -383,8 +438,10 @@ export const writeProjectPreservingMapLocks = (
   Effect.gen(function* () {
     const projectDir = projectDirectory(projectsRoot, project.id);
     const lock = yield* readProjectLock(projectLockPath(projectDir)).pipe(
-      Effect.catchTag("ProjectValidationError", () =>
-        Effect.succeed(new ProjectIntegrityLock({ schemaVersion: 1, projectHash: hashJsonStable({}), maps: [] })),
+      Effect.catchTag('ProjectValidationError', () =>
+        Effect.succeed(
+          new ProjectIntegrityLock({ schemaVersion: 1, projectHash: hashJsonStable({}), maps: [] }),
+        ),
       ),
     );
     yield* writeProjectWithLock(projectDir, project, lock.maps);
@@ -417,7 +474,7 @@ export const appendProjectImportRecord = (
     const existing = yield* Effect.tryPromise({
       try: async () => {
         try {
-          return await readFile(filePath, "utf8");
+          return await readFile(filePath, 'utf8');
         } catch (cause) {
           if (isNotFound(cause)) {
             return undefined;
@@ -427,12 +484,18 @@ export const appendProjectImportRecord = (
       },
       catch: (cause) => new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
     });
-    const current = existing === undefined
-      ? { schemaVersion: 1, records: [] as ImportRecord[] }
-      : yield* Effect.try({
-          try: () => JSON.parse(existing) as { readonly schemaVersion: 1; readonly records: readonly ImportRecord[] },
-          catch: (cause) => new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
-        });
+    const current =
+      existing === undefined
+        ? { schemaVersion: 1, records: [] as ImportRecord[] }
+        : yield* Effect.try({
+            try: () =>
+              JSON.parse(existing) as {
+                readonly schemaVersion: 1;
+                readonly records: readonly ImportRecord[];
+              },
+            catch: (cause) =>
+              new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
+          });
     yield* Effect.tryPromise({
       try: () => mkdir(path.dirname(filePath), { recursive: true }),
       catch: (cause) => new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
@@ -440,7 +503,11 @@ export const appendProjectImportRecord = (
     yield* writeJsonAtomic(filePath, {
       schemaVersion: 1,
       records: [...current.records.filter((entry) => entry.id !== record.id), record],
-    }).pipe(Effect.mapError((error) => new ProjectSaveError({ path: error.path, message: error.message })));
+    }).pipe(
+      Effect.mapError(
+        (error) => new ProjectSaveError({ path: error.path, message: error.message }),
+      ),
+    );
   });
 
 const summaryFromProject = (projectDir: string, project: ProjectManifest): ProjectSummary => ({
@@ -468,12 +535,13 @@ const listVerifiedProjects = (
           throw cause;
         }
       },
-      catch: (cause) => new ProjectValidationError({ path: projectsRoot, message: errorMessage(cause) }),
+      catch: (cause) =>
+        new ProjectValidationError({ path: projectsRoot, message: errorMessage(cause) }),
     });
     const summaries: ProjectSummary[] = [];
     const seen = new Set<ProjectId>();
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) {
         continue;
       }
       const projectDir = path.join(projectsRoot, entry.name);
@@ -512,13 +580,16 @@ const resolveProjectRoot = (at: string | undefined, cwd: string): string =>
 
 const readManifestAtRoot = (
   projectRoot: string,
-): Effect.Effect<ProjectManifest, ProjectPathNotFoundError | ProjectValidationError | ProjectMigrationError> =>
+): Effect.Effect<
+  ProjectManifest,
+  ProjectPathNotFoundError | ProjectValidationError | ProjectMigrationError
+> =>
   Effect.gen(function* () {
     const manifestFile = projectManifestPath(projectRoot);
     const raw = yield* Effect.tryPromise({
       try: async () => {
         try {
-          return await readFile(manifestFile, "utf8");
+          return await readFile(manifestFile, 'utf8');
         } catch (cause) {
           if (isNotFound(cause)) {
             return undefined;
@@ -535,7 +606,7 @@ const readManifestAtRoot = (
     if (raw === undefined) {
       yield* new ProjectPathNotFoundError({
         path: projectRoot,
-        message: "project.json not found",
+        message: 'project.json not found',
       });
     }
     const parsed = yield* Effect.try({
@@ -577,7 +648,10 @@ const ensureCliProjectLayout = (projectRoot: string): Effect.Effect<void, Projec
     yield* Effect.tryPromise({
       try: () => mkdir(path.join(projectRoot, PROJECT_CACHE_DIR), { recursive: true }),
       catch: (cause) =>
-        new ProjectSaveError({ path: path.join(projectRoot, PROJECT_CACHE_DIR), message: errorMessage(cause) }),
+        new ProjectSaveError({
+          path: path.join(projectRoot, PROJECT_CACHE_DIR),
+          message: errorMessage(cause),
+        }),
     });
   });
 
@@ -589,13 +663,13 @@ export const ProjectServiceLive = Layer.effect(
     const trigger = yield* PubSub.unbounded<void>();
     const cwd = process.cwd();
 
-    const create = Effect.fn("ProjectService.create")(function* (spec: ProjectCreateSpec) {
+    const create = Effect.fn('ProjectService.create')(function* (spec: ProjectCreateSpec) {
       const projectId = newProjectId();
       const project = new ProjectManifest({
         id: projectId,
         name: spec.name,
         schemaVersion: 1,
-        engineVersion: spec.engineVersion ?? "0.1.0",
+        engineVersion: spec.engineVersion ?? '0.1.0',
         plugins: [...(spec.plugins ?? [])],
         assetPacks: [...(spec.assetPacks ?? [])],
         maps: [],
@@ -616,7 +690,7 @@ export const ProjectServiceLive = Layer.effect(
       return projectId;
     });
 
-    const open = Effect.fn("ProjectService.open")(function* (projectId: ProjectId) {
+    const open = Effect.fn('ProjectService.open')(function* (projectId: ProjectId) {
       // Resolve the actual root first (home dir, cwd ancestors, registry):
       // projects created with `project init <slug>` or `--here` do NOT live at
       // the id-named home directory `readVerifiedProject` assumes.
@@ -633,29 +707,33 @@ export const ProjectServiceLive = Layer.effect(
       return project;
     });
 
-    const save = Effect.fn("ProjectService.save")(function* (project: ProjectManifest) {
+    const save = Effect.fn('ProjectService.save')(function* (project: ProjectManifest) {
       yield* writeProjectPreservingMapLocks(paths.projects, project);
       yield* PubSub.publish(trigger, void 0);
     });
 
-    const list = Effect.fn("ProjectService.list")(function* () {
+    const list = Effect.fn('ProjectService.list')(function* () {
       return yield* listVerifiedProjects(paths.projects);
     });
 
-    const importFromDirectory = Effect.fn("ProjectService.importFromDirectory")(function* (sourcePath: string) {
+    const importFromDirectory = Effect.fn('ProjectService.importFromDirectory')(function* (
+      sourcePath: string,
+    ) {
       const resolved = path.resolve(sourcePath);
       const project = yield* readVerifiedProjectAtRoot(resolved).pipe(
         Effect.mapError((error) =>
-          error._tag === "ProjectNotFoundError"
+          error._tag === 'ProjectNotFoundError'
             ? new ProjectPathNotFoundError({
                 path: resolved,
-                message: "project.json not found in selected folder",
+                message: 'project.json not found in selected folder',
               })
             : error,
         ),
       );
       const target = projectDirectory(paths.projects, project.id);
-      const alreadyRegistered = yield* Effect.promise(() => homeProjectExists(paths.projects, project.id));
+      const alreadyRegistered = yield* Effect.promise(() =>
+        homeProjectExists(paths.projects, project.id),
+      );
       if (!alreadyRegistered) {
         yield* Effect.tryPromise({
           try: async () => {
@@ -669,28 +747,35 @@ export const ProjectServiceLive = Layer.effect(
       return project.id;
     });
 
-    const exportArchive = Effect.fn("ProjectService.exportArchive")(function* (
+    const exportArchive = Effect.fn('ProjectService.exportArchive')(function* (
       projectId: ProjectId,
       destinationDirectory: string,
     ) {
       const project = yield* readVerifiedProject(paths.projects, projectId);
       const projectDir = projectDirectory(paths.projects, projectId);
-      const safeName = project.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
-      const archivePath = path.join(path.resolve(destinationDirectory), `${safeName}-${projectId}.tar.gz`);
+      const safeName =
+        project.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
+      const archivePath = path.join(
+        path.resolve(destinationDirectory),
+        `${safeName}-${projectId}.tar.gz`,
+      );
       yield* Effect.tryPromise({
         try: () => mkdir(path.dirname(archivePath), { recursive: true }),
         catch: (cause) => new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
       });
       yield* Effect.tryPromise({
-        try: () => execFileAsync("tar", ["-czf", archivePath, "-C", projectDir, "."], { maxBuffer: 32 * 1024 * 1024 }),
+        try: () =>
+          execFileAsync('tar', ['-czf', archivePath, '-C', projectDir, '.'], {
+            maxBuffer: 32 * 1024 * 1024,
+          }),
         catch: (cause) => new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
       });
       return { archivePath };
     });
 
-    const init = Effect.fn("ProjectService.init")(function* (input: ProjectInitInput) {
+    const init = Effect.fn('ProjectService.init')(function* (input: ProjectInitInput) {
       const isExplicitPath =
-        path.isAbsolute(input.slug) || input.slug.includes("/") || input.slug.includes("\\");
+        path.isAbsolute(input.slug) || input.slug.includes('/') || input.slug.includes('\\');
       const slug = yield* validateSlug(
         isExplicitPath ? path.basename(path.resolve(cwd, input.slug)) : input.slug,
       );
@@ -705,7 +790,7 @@ export const ProjectServiceLive = Layer.effect(
       const existing = yield* Effect.tryPromise({
         try: async () => {
           try {
-            await readFile(manifestFile, "utf8");
+            await readFile(manifestFile, 'utf8');
             return true;
           } catch (cause) {
             if (isNotFound(cause)) {
@@ -714,7 +799,8 @@ export const ProjectServiceLive = Layer.effect(
             throw cause;
           }
         },
-        catch: (cause) => new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
       });
       if (existing) {
         yield* new ProjectAlreadyExistsError({
@@ -726,12 +812,14 @@ export const ProjectServiceLive = Layer.effect(
       if (!input.here) {
         yield* Effect.tryPromise({
           try: () => mkdir(projectRoot, { recursive: true }),
-          catch: (cause) => new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
+          catch: (cause) =>
+            new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
         });
         if (!isExplicitPath) {
           yield* Effect.tryPromise({
             try: () => rejectSymlinkEscape(paths.projects, slug),
-            catch: (cause) => new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
+            catch: (cause) =>
+              new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
           });
         }
       }
@@ -741,9 +829,10 @@ export const ProjectServiceLive = Layer.effect(
         id: newProjectId(),
         name: projectName,
         schemaVersion: 1,
-        engineVersion: "0.1.0",
+        engineVersion: '0.1.0',
         plugins: (input.plugins ?? []).map(
-          (pluginId) => new ProjectPluginRef({ id: pluginId as ProjectPluginRef["id"], version: "*" }),
+          (pluginId) =>
+            new ProjectPluginRef({ id: pluginId as ProjectPluginRef['id'], version: '*' }),
         ),
         assetPacks: [],
         maps: [],
@@ -764,21 +853,22 @@ export const ProjectServiceLive = Layer.effect(
       };
     });
 
-    const info = Effect.fn("ProjectService.info")(function* (at?: string | undefined) {
+    const info = Effect.fn('ProjectService.info')(function* (at?: string | undefined) {
       const projectRoot = resolveProjectRoot(at, cwd);
       const manifest = yield* readManifestAtRoot(projectRoot);
       const entries = yield* Effect.tryPromise({
         try: () => readdir(projectRoot),
-        catch: (cause) => new ProjectValidationError({ path: projectRoot, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new ProjectValidationError({ path: projectRoot, message: errorMessage(cause) }),
       });
       return { manifest, path: projectRoot, entries };
     });
 
-    const upgrade = Effect.fn("ProjectService.upgrade")(function* (at?: string | undefined) {
+    const upgrade = Effect.fn('ProjectService.upgrade')(function* (at?: string | undefined) {
       const projectRoot = resolveProjectRoot(at, cwd);
       const manifestFile = projectManifestPath(projectRoot);
       const raw = yield* Effect.tryPromise({
-        try: () => readFile(manifestFile, "utf8"),
+        try: () => readFile(manifestFile, 'utf8'),
         catch: (cause) =>
           new ProjectPathNotFoundError({
             path: projectRoot,
@@ -787,7 +877,8 @@ export const ProjectServiceLive = Layer.effect(
       });
       const parsed = yield* Effect.try({
         try: () => JSON.parse(raw),
-        catch: (cause) => new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
       });
       const fromVersion = readSchemaVersion(parsed) ?? 0;
       const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
@@ -804,8 +895,14 @@ export const ProjectServiceLive = Layer.effect(
       const changed = fromVersion !== CORE_SCHEMA_VERSIONS.project;
       if (changed) {
         const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
-          Effect.catchTag("ProjectValidationError", () =>
-            Effect.succeed(new ProjectIntegrityLock({ schemaVersion: 1, projectHash: hashJsonStable({}), maps: [] })),
+          Effect.catchTag('ProjectValidationError', () =>
+            Effect.succeed(
+              new ProjectIntegrityLock({
+                schemaVersion: 1,
+                projectHash: hashJsonStable({}),
+                maps: [],
+              }),
+            ),
           ),
         );
         yield* writeProjectWithLock(projectRoot, manifest, lock.maps);
@@ -819,10 +916,13 @@ export const ProjectServiceLive = Layer.effect(
       };
     });
 
-    const clean = Effect.fn("ProjectService.clean")(function* (at?: string | undefined) {
+    const clean = Effect.fn('ProjectService.clean')(function* (at?: string | undefined) {
       const projectRoot = resolveProjectRoot(at, cwd);
       yield* readManifestAtRoot(projectRoot);
-      const targets = [path.join(projectRoot, PROJECT_CACHE_DIR), path.join(projectRoot, PROJECT_DERIVED_DIR)];
+      const targets = [
+        path.join(projectRoot, PROJECT_CACHE_DIR),
+        path.join(projectRoot, PROJECT_DERIVED_DIR),
+      ];
       const removed: string[] = [];
       yield* Effect.forEach(
         targets,
@@ -853,7 +953,9 @@ export const ProjectServiceLive = Layer.effect(
       list,
       subscribe: Stream.concat(
         Stream.fromEffect(listVerifiedProjects(paths.projects)),
-        Stream.fromPubSub(trigger).pipe(Stream.mapEffect(() => listVerifiedProjects(paths.projects))),
+        Stream.fromPubSub(trigger).pipe(
+          Stream.mapEffect(() => listVerifiedProjects(paths.projects)),
+        ),
       ),
       importFromDirectory,
       exportArchive,

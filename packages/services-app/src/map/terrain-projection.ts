@@ -9,7 +9,10 @@ import type {
   TilesetPack,
 } from '@tileborne/sdk-tileset/schemas';
 
-export type GeneratedTerrainSemantic = Extract<AssetSemanticRoleNameType, 'floor' | 'wall' | 'path'>;
+export type GeneratedTerrainSemantic = Extract<
+  AssetSemanticRoleNameType,
+  'floor' | 'wall' | 'path'
+>;
 
 export interface TerrainProjectionDiagnostic {
   readonly severity: 'warning' | 'error';
@@ -135,7 +138,8 @@ const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
   const candidates: TileCandidate[] = [];
   let tileIndex = 1;
   for (const tileset of pack.tilesets) {
-    const atlasAssetPath = assetPathById.get(String(tileset.atlasAssetId)) ?? String(tileset.atlasAssetId);
+    const atlasAssetPath =
+      assetPathById.get(String(tileset.atlasAssetId)) ?? String(tileset.atlasAssetId);
     for (const tile of tileset.tiles) {
       candidates.push({
         tile,
@@ -150,7 +154,9 @@ const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
   return candidates;
 };
 
-const collectRequiredSemantics = (layers: readonly MapLayer[]): ReadonlySet<GeneratedTerrainSemantic> => {
+const collectRequiredSemantics = (
+  layers: readonly MapLayer[],
+): ReadonlySet<GeneratedTerrainSemantic> => {
   const required = new Set<GeneratedTerrainSemantic>();
   for (const layer of layers) {
     if (layer._tag !== 'tile' || layer.name !== 'terrain') {
@@ -236,7 +242,8 @@ export const projectGeneratedTerrainLayers = (input: {
     diagnostics.push({
       severity: 'warning',
       code: 'TERRAIN_PROJECTION.no-path-tile',
-      message: 'Could not resolve a path semantic role; generated path cells will use the floor role.',
+      message:
+        'Could not resolve a path semantic role; generated path cells will use the floor role.',
     });
   }
 

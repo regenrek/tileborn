@@ -34,7 +34,10 @@ import {
   type LibraryPreviewRef,
 } from '@tileborne/sdk-tileset/renderer';
 import type { AutotileRule, TilesetPack } from '@tileborne/sdk-tileset/schemas';
-import type { TiledAppliedImportPlan, TiledImportRecommendation } from '@tileborne/sdk-tileset/tiled';
+import type {
+  TiledAppliedImportPlan,
+  TiledImportRecommendation,
+} from '@tileborne/sdk-tileset/tiled';
 import { ConfigService, HomeService, writeJsonAtomic } from '@tileborne/services-foundation';
 import { Context, Effect, Layer, Option, Schema } from 'effect';
 
@@ -750,7 +753,9 @@ const writeEditorIndexToDisk = (
       catch: (cause) => new AssetLibraryError({ path: filePath, message: errorMessage(cause) }),
     });
     yield* writeJsonAtomic(filePath, index).pipe(
-      Effect.mapError((error) => new AssetLibraryError({ path: error.path, message: error.message })),
+      Effect.mapError(
+        (error) => new AssetLibraryError({ path: error.path, message: error.message }),
+      ),
     );
   });
 
@@ -1186,10 +1191,7 @@ const isContainedPath = (root: string, candidate: string): boolean => {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 };
 
-const resolveMaterializedAssetPath = (
-  root: string,
-  assetPath: string,
-): string => {
+const resolveMaterializedAssetPath = (root: string, assetPath: string): string => {
   if (assetPath.includes('\0')) {
     throw new AssetLibraryError({ path: assetPath, message: 'NUL path segment is not allowed' });
   }
@@ -1224,27 +1226,45 @@ export const starterPaletteDraftsFromPack = (
     .slice(0, 8);
   const placeableDrafts = byKind('placeable', 8);
   if (importRecommendation.browseTarget === 'objects') {
-    return [...placeableDrafts, ...byKind('autotile', 8), ...byKind('terrain', 8), ...tileDrafts]
-      .slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
+    return [
+      ...placeableDrafts,
+      ...byKind('autotile', 8),
+      ...byKind('terrain', 8),
+      ...tileDrafts,
+    ].slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
   }
-  return [...byKind('autotile', 8), ...byKind('terrain', 8), ...tileDrafts, ...placeableDrafts]
-    .slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
+  return [
+    ...byKind('autotile', 8),
+    ...byKind('terrain', 8),
+    ...tileDrafts,
+    ...placeableDrafts,
+  ].slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
 };
 
 export const materializeTiledImport = (
   input: MaterializeTiledImportInput,
-): Effect.Effect<MaterializeTiledImportResult, AssetLibraryServiceError, HomeService | AssetService> =>
+): Effect.Effect<
+  MaterializeTiledImportResult,
+  AssetLibraryServiceError,
+  HomeService | AssetService
+> =>
   Effect.gen(function* () {
     const home = yield* HomeService;
     const assets = yield* AssetService;
     const paths = yield* home.init();
-    const stagingPath = path.join(paths.cache, 'tiled-import-materialize', `${input.pack.id}-${randomUUID()}`);
+    const stagingPath = path.join(
+      paths.cache,
+      'tiled-import-materialize',
+      `${input.pack.id}-${randomUUID()}`,
+    );
     yield* Effect.tryPromise({
       try: () => mkdir(stagingPath, { recursive: true }),
       catch: (cause) => new AssetLibraryError({ path: stagingPath, message: errorMessage(cause) }),
     });
     const sourceRoot = path.resolve(input.sourceRoot);
-    const folderHash = hashBytes(encoder.encode(`${sourceRoot}:${input.plan.scan.inventory.mapCount}:${input.pack.id}`));
+    const folderHash = hashBytes(
+      encoder.encode(`${sourceRoot}:${input.plan.scan.inventory.mapCount}:${input.pack.id}`),
+    );
     const manifest = writeTilesetManifest(input.pack, {
       provenance: {
         sourcePath: sourceRoot,
@@ -1252,7 +1272,11 @@ export const materializeTiledImport = (
         importedAt: new Date().toISOString(),
       },
     }) as {
-      readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
+      readonly assets?: readonly {
+        readonly id: string;
+        readonly path: string;
+        readonly mime: string;
+      }[];
     } & Record<string, unknown>;
     const copiedAssets: Array<{
       readonly id: string;
@@ -1277,7 +1301,8 @@ export const materializeTiledImport = (
           await mkdir(path.dirname(destination), { recursive: true });
           await cp(source, destination, { force: true });
         },
-        catch: (cause) => new AssetLibraryError({ path: destination, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new AssetLibraryError({ path: destination, message: errorMessage(cause) }),
       });
       copiedAssets.push({
         ...asset,
@@ -1297,10 +1322,15 @@ export const materializeTiledImport = (
           'utf8',
         ),
       catch: (cause) =>
-        new AssetLibraryError({ path: path.join(stagingPath, MANIFEST_FILENAME), message: errorMessage(cause) }),
+        new AssetLibraryError({
+          path: path.join(stagingPath, MANIFEST_FILENAME),
+          message: errorMessage(cause),
+        }),
     });
     const packId = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: stagingPath }));
-    yield* Effect.promise(() => rm(stagingPath, { recursive: true, force: true }).catch(() => undefined));
+    yield* Effect.promise(() =>
+      rm(stagingPath, { recursive: true, force: true }).catch(() => undefined),
+    );
     return { packId, stagingPath };
   });
 
@@ -1320,7 +1350,10 @@ export const AssetLibraryServiceLive = Layer.effect(
     // Serialized editor index JSON keyed by `cacheKeyForPack`. Built once on the
     // main process from the parsed pack and served to the renderer so it no
     // longer Effect-Schema decodes the full manifest on the viewport hot path.
-    const editorIndexCache = new Map<string, { readonly integrityHash: ContentHash; readonly indexJson: string }>();
+    const editorIndexCache = new Map<
+      string,
+      { readonly integrityHash: ContentHash; readonly indexJson: string }
+    >();
 
     const rememberEditorIndex = (
       key: string,
@@ -1578,7 +1611,10 @@ export const AssetLibraryServiceLive = Layer.effect(
           return removed;
         });
 
-      removedEntries += yield* removeFromDir(cacheDirectory(paths.cache), cacheFilePrefix(input.packId));
+      removedEntries += yield* removeFromDir(
+        cacheDirectory(paths.cache),
+        cacheFilePrefix(input.packId),
+      );
       removedEntries += yield* removeFromDir(
         path.join(paths.cache, EDITOR_INDEX_CACHE_DIR),
         editorIndexCacheFilePrefix(input.packId),
@@ -1628,7 +1664,10 @@ export const AssetLibraryServiceLive = Layer.effect(
       );
       const diskJson = yield* readEditorIndexFromDisk(filePath, context.integrityHash);
       if (diskJson !== undefined) {
-        rememberEditorIndex(context.key, { integrityHash: context.integrityHash, indexJson: diskJson });
+        rememberEditorIndex(context.key, {
+          integrityHash: context.integrityHash,
+          indexJson: diskJson,
+        });
         return result(diskJson);
       }
 

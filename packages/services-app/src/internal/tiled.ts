@@ -1,18 +1,17 @@
-import {
-  MapObject,
-  TileborneMap,
-} from "@tileborne/core";
+import { MapObject, TileborneMap } from '@tileborne/core';
 
 const optionValue = <A>(
   value: A | { readonly _tag: string; readonly value?: A } | undefined,
 ): A | undefined => {
-  if (typeof value === "object" && value !== null && "_tag" in value) {
-    return value._tag === "Some" ? value.value : undefined;
+  if (typeof value === 'object' && value !== null && '_tag' in value) {
+    return value._tag === 'Some' ? value.value : undefined;
   }
   return value;
 };
 
-const transformToTiled = (transform: NonNullable<MapObject["placement"]>["transform"] | undefined): unknown =>
+const transformToTiled = (
+  transform: NonNullable<MapObject['placement']>['transform'] | undefined,
+): unknown =>
   transform === undefined
     ? undefined
     : {
@@ -22,7 +21,7 @@ const transformToTiled = (transform: NonNullable<MapObject["placement"]>["transf
         rotatedHexagonal120: transform.rotatedHexagonal120,
       };
 
-const objectPlacementToTiled = (placement: MapObject["placement"] | undefined): unknown => {
+const objectPlacementToTiled = (placement: MapObject['placement'] | undefined): unknown => {
   if (placement === undefined) {
     return undefined;
   }
@@ -43,13 +42,13 @@ export const exportMapToTiled = (map: TileborneMap): Record<string, unknown> => 
   infinite: false,
   layers: map.layers.reduce<Array<Record<string, unknown>>>((acc, layer) => {
     switch (layer._tag) {
-      case "tile":
-      case "collision": {
+      case 'tile':
+      case 'collision': {
         const tiles = layer.chunks.flatMap((chunk) => chunk.tiles);
         acc.push({
           id: 1,
           name: layer.name,
-          type: "tilelayer",
+          type: 'tilelayer',
           visible: layer.visible,
           opacity: layer.opacity,
           width: map.size.width,
@@ -60,11 +59,11 @@ export const exportMapToTiled = (map: TileborneMap): Record<string, unknown> => 
         });
         return acc;
       }
-      case "object":
+      case 'object':
         acc.push({
           id: 2,
           name: layer.name,
-          type: "objectgroup",
+          type: 'objectgroup',
           visible: layer.visible,
           opacity: layer.opacity,
           objects: map.objects
@@ -81,18 +80,18 @@ export const exportMapToTiled = (map: TileborneMap): Record<string, unknown> => 
             })),
         });
         return acc;
-      case "image":
+      case 'image':
         return acc;
     }
   }, []),
   nextlayerid: 3,
   nextobjectid: 1,
-  orientation: "orthogonal",
-  renderorder: "right-down",
-  tiledversion: "1.10.2",
+  orientation: 'orthogonal',
+  renderorder: 'right-down',
+  tiledversion: '1.10.2',
   tileheight: map.tileSize.height,
   tilewidth: map.tileSize.width,
-  type: "map",
-  version: "1.10",
+  type: 'map',
+  version: '1.10',
   width: map.size.width,
 });

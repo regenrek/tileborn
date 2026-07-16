@@ -1,4 +1,5 @@
 import type { ContentHash, JsonObject } from '@tileborne/core';
+import type { RuntimeBehaviorArtifactIdentity } from '@tileborne/runtime/behavior';
 
 import type { RoomPresenceProjection } from './rooms/room-lifecycle.js';
 import type {
@@ -68,6 +69,15 @@ export interface BundledMapPackage {
   readonly mapId: string;
   readonly packageId: string;
   readonly mapPackage: JsonObject;
+}
+
+/** One statically bundled compiled behavior associated with its runtime package. */
+export interface BundledBehaviorModule {
+  readonly packageId: string;
+  readonly artifact: RuntimeBehaviorArtifactIdentity;
+  readonly code: string;
+  /** Inert at service bootstrap; invokes user top-level code only for its targeted request. */
+  readonly createNamespace: () => Readonly<Record<string, unknown>>;
 }
 
 export interface BundledManifest {
@@ -270,6 +280,11 @@ export interface StaticAssetsFetcher {
   fetch(request: Request): Promise<Response>;
 }
 
+/** Dedicated workerd service that owns all untrusted behavior execution. */
+export interface BehaviorRuntimeFetcher {
+  fetch(request: Request): Promise<Response>;
+}
+
 export interface Env {
   readonly PLAYTEST_ROOM: PlaytestRoomNamespace;
   readonly HANDOFF_SIGNING_KEY?: string;
@@ -278,6 +293,7 @@ export interface Env {
   readonly ROOM_RECONNECT_WINDOW_SECONDS?: number | string;
   readonly SITE_NAME?: string;
   readonly ASSETS?: StaticAssetsFetcher;
+  readonly BEHAVIOR_RUNTIME?: BehaviorRuntimeFetcher;
 }
 
 declare const __WORKER_VERSION__: string;

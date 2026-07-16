@@ -24,6 +24,7 @@
     "test:cli-e2e": "pnpm --filter @tileborne/cli test:cli-e2e",
     "test:desktop-smoke": "pnpm --filter @tileborne/desktop test:desktop-smoke",
     "test:game-host": "pnpm --filter @tileborne/game-host test:smoke",
+    "test:services-build-hermetic": "pnpm typecheck && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test",
     "docs:build": "pnpm --filter @tileborne/docs build",
     "docs:dev": "pnpm --filter @tileborne/docs dev",
     "build": "turbo run build",

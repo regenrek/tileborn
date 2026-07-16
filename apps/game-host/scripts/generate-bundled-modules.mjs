@@ -256,8 +256,14 @@ export type RuntimeClientFrameDecodeResult =
       readonly closeReason: string;
     };
 
+export type RuntimeServerLifecycleFrameView = {
+  readonly kind: "game-over";
+  readonly winnerPlayerId: string;
+};
+
 export declare function decodeClientFrame(bytes: Uint8Array): RuntimeClientFrameDecodeResult;
 export declare function decodeClientFrameView(bytes: Uint8Array): RuntimeClientFrameView | undefined;
+export declare function decodeServerLifecycleFrame(bytes: Uint8Array): RuntimeServerLifecycleFrameView | undefined;
 export declare function encodeInvalidClientFrame(): Uint8Array;
 export declare function isWelcomeFrame(bytes: Uint8Array): boolean;
 
@@ -322,6 +328,12 @@ ${decodeBundledAssetBlobImpl}
 
 export const runtimeManifest: BundledManifest = ${JSON.stringify(runtimeManifest, null, 2)} as unknown as BundledManifest;
 `,
+    "utf8",
+  );
+
+  await writeFile(
+    path.join(generatedDir, "bundled-behaviors.ts"),
+    `import type { BundledBehaviorModule } from "../types.js";\n\nexport const bundledBehaviorModules: readonly BundledBehaviorModule[] = [];\n`,
     "utf8",
   );
 

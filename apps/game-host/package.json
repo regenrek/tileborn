@@ -17,6 +17,10 @@
     "./local": {
       "types": "./dist/local/launcher.d.ts",
       "default": "./dist/local/launcher.js"
+    },
+    "./behavior-node": {
+      "types": "./dist/behavior/node/index.d.ts",
+      "default": "./dist/behavior/node/index.js"
     }
   },
   "scripts": {
@@ -28,6 +32,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "verify:bundled-worker": "node scripts/verify-bundled-worker.mjs",
     "build": "tsc -b tsconfig.json --force && node scripts/bundle-worker.mjs"
   },
   "dependencies": {

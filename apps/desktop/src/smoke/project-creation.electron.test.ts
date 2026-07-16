@@ -306,10 +306,7 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
         return (JSON.parse(raw) as { snapshot?: { label?: string } }).snapshot?.label;
       })
       .toBe('Crash Recovered Potion');
-    // Chromium persists localStorage asynchronously. Let its durable commit finish
-    // before simulating the process crash so this test exercises recovery rather
-    // than an OS-level power-loss window inside the browser storage engine.
-    await context.page.waitForTimeout(1_000);
+    await context.page.evaluate(() => window.tileborneAppLifecycle.flushRecoveryStorage());
 
     const appClosed = context.app.waitForEvent('close');
     context.app.process().kill('SIGKILL');
@@ -327,17 +324,28 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
       'Crash Recovered Potion',
     );
     await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('dirty');
+    await smokeContext.page.getByTestId('content-discard-draft').click();
+    await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('clean');
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate((key) => localStorage.getItem(key) === null, recoveryKey),
+      )
+      .toBe(true);
+    await smokeContext.page.evaluate(() => window.tileborneAppLifecycle.flushRecoveryStorage());
 
-    let discardPrompt = 0;
-    smokeContext.page.on('dialog', async (dialog) => {
-      discardPrompt += 1;
-      if (discardPrompt === 1) await dialog.dismiss();
-      else await dialog.accept();
-    });
-    const recoveredAppClosed = smokeContext.app.waitForEvent('close');
-    await smokeContext.app.evaluate(({ app }) => app.quit());
-    await recoveredAppClosed;
+    const discardedAppClosed = smokeContext.app.waitForEvent('close');
+    smokeContext.app.process().kill('SIGKILL');
+    await discardedAppClosed;
     smokeContext = await launchElectron(context.tileborneHome);
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate((key) => localStorage.getItem(key) === null, recoveryKey),
+      )
+      .toBe(true);
+    await navigateToRoute(smokeContext.page, `/projects/${created.projectId}/game-content`);
+    await smokeContext.page.getByTestId('content-tab-items').click();
+    await expect(smokeContext.page.getByTestId('content-name')).toHaveValue('');
+    await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('clean');
   });
 
   it('completes an IPC ping round-trip after project creation', async () => {

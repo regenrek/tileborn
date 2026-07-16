@@ -387,9 +387,21 @@ export function GameContentPage() {
               IDs.
             </p>
           </div>
-          <span className="text-xs text-muted-foreground" data-testid="content-document-status">
-            {documentState?.status ?? 'clean'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground" data-testid="content-document-status">
+              {documentState?.status ?? 'clean'}
+            </span>
+            {documentState?.hasRecovery ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void documentLifecycle.discard(documentId)}
+                data-testid="content-discard-draft"
+              >
+                Discard draft
+              </Button>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {(['objects', 'weapons', 'items', 'loot'] as const).map((value) => (

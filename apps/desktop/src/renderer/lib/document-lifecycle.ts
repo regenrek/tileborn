@@ -55,12 +55,35 @@ const states = new Map<string, DocumentLifecycleState>();
 const registrations = new Map<string, DocumentRegistration>();
 const listeners = new Set<Listener>();
 let recoveryFlushTimer: ReturnType<typeof setTimeout> | undefined;
+let recoveryMutationVersion = 0;
+let recoveryDurableVersion = 0;
+let recoveryFlushDrain: Promise<void> | undefined;
+
+const flushRecoveryStorage = (): Promise<void> => {
+  if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
+  recoveryFlushTimer = undefined;
+  if (recoveryDurableVersion >= recoveryMutationVersion) {
+    return recoveryFlushDrain ?? Promise.resolve();
+  }
+  if (recoveryFlushDrain === undefined) {
+    recoveryFlushDrain = (async () => {
+      while (recoveryDurableVersion < recoveryMutationVersion) {
+        const targetVersion = recoveryMutationVersion;
+        await globalThis.window?.tileborneAppLifecycle?.flushRecoveryStorage();
+        recoveryDurableVersion = targetVersion;
+      }
+    })().finally(() => {
+      recoveryFlushDrain = undefined;
+    });
+  }
+  return recoveryFlushDrain;
+};
 
 const scheduleRecoveryStorageFlush = (): void => {
   if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
   recoveryFlushTimer = setTimeout(() => {
     recoveryFlushTimer = undefined;
-    void globalThis.window?.tileborneAppLifecycle?.flushRecoveryStorage().catch(() => {
+    void flushRecoveryStorage().catch(() => {
       // The in-memory recovery record remains usable during this process. A
       // later edit retries the durable Chromium storage flush.
     });
@@ -114,11 +137,17 @@ const writeRecovery = (state: DocumentLifecycleState): void => {
     snapshot: registration.snapshot(),
   };
   storage()?.setItem(recoveryKey(state.id), JSON.stringify(record));
+  recoveryMutationVersion += 1;
   scheduleRecoveryStorageFlush();
 };
 
 const clearRecovery = (documentId: string): void => {
-  storage()?.removeItem(recoveryKey(documentId));
+  const targetStorage = storage();
+  const key = recoveryKey(documentId);
+  if (targetStorage?.getItem(key) === null || targetStorage === undefined) return;
+  targetStorage.removeItem(key);
+  recoveryMutationVersion += 1;
+  scheduleRecoveryStorageFlush();
 };
 
 const setState = (
@@ -250,8 +279,9 @@ export const documentLifecycle = {
     setState(documentId, (state) => ({ ...state, status: 'saving', error: undefined }));
     try {
       await registration.save();
+      clearRecovery(documentId);
+      await flushRecoveryStorage();
       setState(documentId, (state) => {
-        clearRecovery(documentId);
         return {
           ...state,
           status: 'saved',
@@ -277,6 +307,7 @@ export const documentLifecycle = {
   async discard(documentId: string): Promise<void> {
     await registrations.get(documentId)?.discard?.();
     clearRecovery(documentId);
+    await flushRecoveryStorage();
     setState(documentId, (state) => ({
       ...state,
       status: 'clean',
@@ -321,9 +352,16 @@ export const documentLifecycle = {
     );
   },
 
+  flushRecoveryStorage(): Promise<void> {
+    return flushRecoveryStorage();
+  },
+
   resetForTests(): void {
     if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
     recoveryFlushTimer = undefined;
+    recoveryMutationVersion = 0;
+    recoveryDurableVersion = 0;
+    recoveryFlushDrain = undefined;
     states.clear();
     registrations.clear();
     listeners.clear();

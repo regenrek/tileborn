@@ -185,8 +185,43 @@ describe('document lifecycle', () => {
     documentLifecycle.markDirty('map:project-1:map-1');
     documentLifecycle.markDirty('map:project-1:map-1');
 
-    await vi.waitFor(() => expect(flushRecoveryStorage).toHaveBeenCalledOnce());
+    await documentLifecycle.flushRecoveryStorage();
+    expect(flushRecoveryStorage).toHaveBeenCalledOnce();
   });
+
+  it.each(['save', 'discard'] as const)(
+    'durably flushes recovery deletion before %s completes',
+    async (operation) => {
+      const entry = registration();
+      documentLifecycle.register(entry);
+      documentLifecycle.markDirty(entry.id);
+      await documentLifecycle.flushRecoveryStorage();
+      flushRecoveryStorage.mockClear();
+      let acknowledgeFlush: (() => void) | undefined;
+      flushRecoveryStorage.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            acknowledgeFlush = resolve;
+          }),
+      );
+
+      const completion =
+        operation === 'save'
+          ? documentLifecycle.save(entry.id)
+          : documentLifecycle.discard(entry.id);
+      let completed = false;
+      void completion.then(() => {
+        completed = true;
+      });
+      await vi.waitFor(() => expect(flushRecoveryStorage).toHaveBeenCalledOnce());
+      expect(completed).toBe(false);
+      acknowledgeFlush?.();
+      await completion;
+
+      expect(localStorage.getItem(`tileborne:document-recovery:v1:${entry.id}`)).toBeNull();
+      expect(flushRecoveryStorage).toHaveBeenCalledOnce();
+    },
+  );
 
   it('blocks graceful app close when a confirmed save fails', async () => {
     const save = vi.fn().mockRejectedValue(new Error('read only disk'));

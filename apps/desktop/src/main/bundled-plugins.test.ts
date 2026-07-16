@@ -26,12 +26,8 @@ describe('bundled-plugins', () => {
   });
 
   it('prefers the workspace plugin root when both manifests exist', async () => {
-    const {
-      BUNDLED_PLUGINS,
-      packagedBundledPluginRoot,
-      resolveBundledPluginPath,
-      workspaceBundledPluginRoot,
-    } = await import('./bundled-plugins.js');
+    const { BUNDLED_PLUGINS, resolveBundledPluginPath, workspaceBundledPluginRoot } =
+      await import('./bundled-plugins.js');
     const spec = BUNDLED_PLUGINS[0]!;
     vi.mocked(accessSync).mockImplementation(() => undefined);
 

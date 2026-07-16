@@ -79,8 +79,8 @@ Anything that fails these checks is **asset-only**: it can be browsed in the Ass
 
 These are the **observable** rules the editor must follow once capability lands. They replace ad-hoc fallbacks scattered across components:
 
-1. **Default palette pack** (`apps/desktop/src/renderer/components/sidebar/assets-tab.tsx`):  
-   `palettePackId = activePalettePackId if paintable, else first installed pack with paintable=true, else undefined`.  
+1. **Default palette pack** (`apps/desktop/src/renderer/components/sidebar/assets-tab.tsx`):
+   `palettePackId = activePalettePackId if paintable, else first installed pack with paintable=true, else undefined`.
    When `undefined`, the sidebar shows an empty-state CTA ("Import a Tileborne pack with tilesets to start painting").
 2. **Pack switcher in sidebar** is allowed to _select_ asset-only packs only as a no-op preview (greyed, disabled tooltip "Asset-only pack — no paintable tilesets"). It never sets `activePalettePackId` to a non-paintable pack.
 3. **Generate Map dialog** (`apps/desktop/src/renderer/components/generate-map-dialog.tsx`): the tileset `<Select>` lists **only paintable packs**. If the list is empty, the submit button is disabled with a typed message and a quick-action link to the import dialog.

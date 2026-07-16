@@ -1,6 +1,6 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
-import { BroadphaseInputError } from "../errors.js";
+import { BroadphaseInputError } from '../errors.js';
 
 export interface AabbId {
   readonly value: number;

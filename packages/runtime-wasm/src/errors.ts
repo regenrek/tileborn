@@ -1,8 +1,8 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Raised when a grid coordinate is out of bounds or blocked. */
 export class PathfindingInputError extends Schema.TaggedErrorClass<PathfindingInputError>()(
-  "PathfindingInputError",
+  'PathfindingInputError',
   {
     message: Schema.String,
   },
@@ -10,7 +10,7 @@ export class PathfindingInputError extends Schema.TaggedErrorClass<PathfindingIn
 
 /** Raised when no route exists between start and goal. */
 export class PathNotFoundError extends Schema.TaggedErrorClass<PathNotFoundError>()(
-  "PathNotFoundError",
+  'PathNotFoundError',
   {
     message: Schema.String,
   },
@@ -18,7 +18,7 @@ export class PathNotFoundError extends Schema.TaggedErrorClass<PathNotFoundError
 
 /** Raised when broadphase input is invalid. */
 export class BroadphaseInputError extends Schema.TaggedErrorClass<BroadphaseInputError>()(
-  "BroadphaseInputError",
+  'BroadphaseInputError',
   {
     message: Schema.String,
   },
@@ -26,7 +26,7 @@ export class BroadphaseInputError extends Schema.TaggedErrorClass<BroadphaseInpu
 
 /** Raised when procgen RNG receives invalid parameters. */
 export class ProcgenInputError extends Schema.TaggedErrorClass<ProcgenInputError>()(
-  "ProcgenInputError",
+  'ProcgenInputError',
   {
     message: Schema.String,
   },
@@ -34,7 +34,7 @@ export class ProcgenInputError extends Schema.TaggedErrorClass<ProcgenInputError
 
 /** Raised when simulation tick input is invalid. */
 export class SimulationInputError extends Schema.TaggedErrorClass<SimulationInputError>()(
-  "SimulationInputError",
+  'SimulationInputError',
   {
     message: Schema.String,
   },
@@ -42,7 +42,7 @@ export class SimulationInputError extends Schema.TaggedErrorClass<SimulationInpu
 
 /** Raised when TILEBORNE_RT_BACKEND=wasm but Rust/wasm bindings are not built. */
 export class WasmBackendUnavailableError extends Schema.TaggedErrorClass<WasmBackendUnavailableError>()(
-  "WasmBackendUnavailableError",
+  'WasmBackendUnavailableError',
   {
     backend: Schema.String,
     message: Schema.String,

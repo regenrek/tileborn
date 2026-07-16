@@ -1,13 +1,13 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
-import { PathfindingInputError, PathNotFoundError } from "../errors.js";
+import { PathfindingInputError, PathNotFoundError } from '../errors.js';
 
 export interface GridPoint {
   readonly x: number;
   readonly y: number;
 }
 
-export type HeuristicMode = "manhattan" | "octile";
+export type HeuristicMode = 'manhattan' | 'octile';
 
 export interface PathfindingGrid {
   readonly width: number;
@@ -56,7 +56,7 @@ const isBlocked = (grid: PathfindingGrid, point: GridPoint): boolean => {
 const heuristic = (from: GridPoint, to: GridPoint, mode: HeuristicMode): number => {
   const dx = Math.abs(from.x - to.x);
   const dy = Math.abs(from.y - to.y);
-  if (mode === "manhattan") {
+  if (mode === 'manhattan') {
     return (dx + dy) * ORTHOGONAL_COST;
   }
   const min = Math.min(dx, dy);
@@ -89,10 +89,10 @@ const compareOpen = (left: OpenNode, right: OpenNode): number => {
 };
 
 const neighborsFor = (mode: HeuristicMode): readonly GridPoint[] =>
-  mode === "manhattan" ? ORTHOGONAL : [...ORTHOGONAL, ...DIAGONAL];
+  mode === 'manhattan' ? ORTHOGONAL : [...ORTHOGONAL, ...DIAGONAL];
 
 const moveCost = (delta: GridPoint, mode: HeuristicMode): number => {
-  if (mode === "manhattan") {
+  if (mode === 'manhattan') {
     return ORTHOGONAL_COST;
   }
   return delta.x !== 0 && delta.y !== 0 ? DIAGONAL_COST : ORTHOGONAL_COST;
@@ -115,26 +115,30 @@ const reconstructPath = (
   return path;
 };
 
-export const findPathOnGrid = (request: PathfindingRequest): Effect.Effect<readonly GridPoint[], PathfindingInputError | PathNotFoundError> =>
+export const findPathOnGrid = (
+  request: PathfindingRequest,
+): Effect.Effect<readonly GridPoint[], PathfindingInputError | PathNotFoundError> =>
   Effect.gen(function* () {
-    const mode = request.heuristic ?? "manhattan";
+    const mode = request.heuristic ?? 'manhattan';
     const { grid, start, goal } = request;
 
     if (grid.width <= 0 || grid.height <= 0) {
       return yield* Effect.fail(
-        new PathfindingInputError({ message: "grid dimensions must be positive" }),
+        new PathfindingInputError({ message: 'grid dimensions must be positive' }),
       );
     }
     if (grid.blocked.length !== grid.width * grid.height) {
       return yield* Effect.fail(
-        new PathfindingInputError({ message: "blocked array length must equal width * height" }),
+        new PathfindingInputError({ message: 'blocked array length must equal width * height' }),
       );
     }
     if (!inBounds(grid, start) || !inBounds(grid, goal)) {
-      return yield* Effect.fail(new PathfindingInputError({ message: "start or goal is out of bounds" }));
+      return yield* Effect.fail(
+        new PathfindingInputError({ message: 'start or goal is out of bounds' }),
+      );
     }
     if (isBlocked(grid, start) || isBlocked(grid, goal)) {
-      return yield* Effect.fail(new PathfindingInputError({ message: "start or goal is blocked" }));
+      return yield* Effect.fail(new PathfindingInputError({ message: 'start or goal is blocked' }));
     }
     if (start.x === goal.x && start.y === goal.y) {
       return [start];
@@ -175,7 +179,8 @@ export const findPathOnGrid = (request: PathfindingRequest): Effect.Effect<reado
         }
 
         const nextKey = cellKey(next.x, next.y);
-        const tentativeG = (gScore.get(currentKey) ?? Number.POSITIVE_INFINITY) + moveCost(delta, mode);
+        const tentativeG =
+          (gScore.get(currentKey) ?? Number.POSITIVE_INFINITY) + moveCost(delta, mode);
         if (tentativeG >= (gScore.get(nextKey) ?? Number.POSITIVE_INFINITY)) {
           continue;
         }
@@ -193,7 +198,9 @@ export const findPathOnGrid = (request: PathfindingRequest): Effect.Effect<reado
       }
     }
 
-    return yield* Effect.fail(new PathNotFoundError({ message: "no path exists between start and goal" }));
+    return yield* Effect.fail(
+      new PathNotFoundError({ message: 'no path exists between start and goal' }),
+    );
   });
 
 export const makeBlockedGrid = (

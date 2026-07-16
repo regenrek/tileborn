@@ -1,20 +1,20 @@
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
 
-import { compileTiledTileset } from "./compile-tileset.js";
-import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
-import { validateTiledJsonTileset } from "./validate.js";
-import { convertTiledXmlTileset, parseTiledXmlDocument, xmlTilesetRoot } from "./xml-common.js";
-import type { TiledImportOptions } from "./types.js";
+import { compileTiledTileset } from './compile-tileset.js';
+import { normalizeTiledTilesetImageAssetPaths } from './image-paths.js';
+import { validateTiledJsonTileset } from './validate.js';
+import { convertTiledXmlTileset, parseTiledXmlDocument, xmlTilesetRoot } from './xml-common.js';
+import type { TiledImportOptions } from './types.js';
 
 export const parseTsx = (
   raw: string,
-  options: Pick<TiledImportOptions, "packIdSeed" | "profile"> & {
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'profile'> & {
     readonly tilesetSeed: string;
     readonly projectRoot?: string | undefined;
     readonly basePath?: string | undefined;
     readonly validateImagePaths?: boolean;
   },
-): ParseResult<ReturnType<typeof compileTiledTileset>["value"]> & {
+): ParseResult<ReturnType<typeof compileTiledTileset>['value']> & {
   readonly diagnostics: readonly ParseDiagnostic[];
 } => {
   const parsed = parseTiledXmlDocument(raw);
@@ -22,11 +22,11 @@ export const parseTsx = (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: parsed.error,
-          severity: "error",
-          format: "tsx",
+          severity: 'error',
+          format: 'tsx',
         },
       ],
     };
@@ -37,11 +37,11 @@ export const parseTsx = (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
-          message: "Tiled XML tileset is missing <tileset> root",
-          severity: "error",
-          format: "tsx",
+          _tag: 'TiledParseError',
+          path: '/',
+          message: 'Tiled XML tileset is missing <tileset> root',
+          severity: 'error',
+          format: 'tsx',
         },
       ],
     };

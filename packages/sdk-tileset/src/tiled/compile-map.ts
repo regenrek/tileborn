@@ -1,11 +1,16 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { Placeable } from "../schemas/placeable.js";
-import type { AssetId } from "@tileborne/core";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { Placeable } from '../schemas/placeable.js';
+import type { AssetId } from '@tileborne/core';
 
-import { deterministicAssetId } from "./deterministic-ids.js";
-import { decodeTiledGid, locateTiledGid, tileborneTileIndexForTiledGid, type TiledTilesetWindow } from "./gid.js";
-import { propertiesToMetadata } from "./compile-tileset.js";
-import { primitivePropertyValue } from "./support-policy.js";
+import { deterministicAssetId } from './deterministic-ids.js';
+import {
+  decodeTiledGid,
+  locateTiledGid,
+  tileborneTileIndexForTiledGid,
+  type TiledTilesetWindow,
+} from './gid.js';
+import { propertiesToMetadata } from './compile-tileset.js';
+import { primitivePropertyValue } from './support-policy.js';
 import type {
   TiledJsonAnyLayer,
   TiledJsonMap,
@@ -21,26 +26,28 @@ import type {
   TiledMapObjectRole,
   TiledMapTileLayer,
   TiledObjectAnchor,
-} from "./types.js";
+} from './types.js';
 
-const CANONICAL_OBJECT_ANCHOR = "top-left" as const;
+const CANONICAL_OBJECT_ANCHOR = 'top-left' as const;
 
 export const tiledImageLayerAssetId = (image: string): AssetId =>
   deterministicAssetId(`tiled-image-layer:${image}`);
 
-const placeableKey = (tilesetName: string, localTileId: number): string => `${tilesetName}:${localTileId}`;
+const placeableKey = (tilesetName: string, localTileId: number): string =>
+  `${tilesetName}:${localTileId}`;
 
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
+): string | number | boolean | undefined =>
+  primitivePropertyValue(properties?.find((property) => property.name === name));
 
 const stringProperty = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
 ): string | undefined => {
   const value = propertyValue(properties, name);
-  return typeof value === "string" ? value : undefined;
+  return typeof value === 'string' ? value : undefined;
 };
 
 const tileObjectAnchor = (args: {
@@ -50,20 +57,20 @@ const tileObjectAnchor = (args: {
   readonly diagnostics: ParseDiagnostic[];
 }): TiledObjectAnchor => {
   if (args.object.gid === undefined) return CANONICAL_OBJECT_ANCHOR;
-  if (args.profile !== "standard-plus-hints") return "bottom-left";
+  if (args.profile !== 'standard-plus-hints') return 'bottom-left';
 
-  const value = stringProperty(args.object.properties, "tileborne.anchor");
-  if (value === undefined) return "bottom-left";
-  if (value === "top-left" || value === "bottom-left" || value === "center") return value;
+  const value = stringProperty(args.object.properties, 'tileborne.anchor');
+  if (value === undefined) return 'bottom-left';
+  if (value === 'top-left' || value === 'bottom-left' || value === 'center') return value;
 
   args.diagnostics.push({
-    _tag: "TiledUnsupportedFeature",
-    path: `/layers/${args.layerName ?? "objects"}/objects/${args.object.id}/properties/tileborne.anchor`,
+    _tag: 'TiledUnsupportedFeature',
+    path: `/layers/${args.layerName ?? 'objects'}/objects/${args.object.id}/properties/tileborne.anchor`,
     message: 'tileborne.anchor must be "top-left", "bottom-left", or "center".',
-    severity: "error",
-    feature: "tileborne.anchor",
+    severity: 'error',
+    feature: 'tileborne.anchor',
   });
-  return "bottom-left";
+  return 'bottom-left';
 };
 
 const anchoredTopLeft = (input: {
@@ -74,24 +81,24 @@ const anchoredTopLeft = (input: {
   readonly anchor: TiledObjectAnchor;
 }): { readonly x: number; readonly y: number } => {
   switch (input.anchor) {
-    case "top-left":
+    case 'top-left':
       return { x: input.x, y: input.y };
-    case "bottom-left":
+    case 'bottom-left':
       return { x: input.x, y: input.y - input.height };
-    case "center":
+    case 'center':
       return { x: input.x - input.width / 2, y: input.y - input.height / 2 };
   }
 };
 
 const classifyObjectRole = (object: TiledJsonObject, layerClass?: string): TiledMapObjectRole => {
-  const cls = object.class ?? object.type ?? layerClass ?? "";
-  if (/spawn/i.test(cls)) return "spawn";
-  if (/prop/i.test(cls)) return "prop";
-  return "object";
+  const cls = object.class ?? object.type ?? layerClass ?? '';
+  if (/spawn/i.test(cls)) return 'spawn';
+  if (/prop/i.test(cls)) return 'prop';
+  return 'object';
 };
 
 const layerIdFor = (layer: TiledJsonAnyLayer, indexPath: readonly number[]): string =>
-  layer.id !== undefined ? `layer:${layer.id}` : `layer:${indexPath.join(".")}`;
+  layer.id !== undefined ? `layer:${layer.id}` : `layer:${indexPath.join('.')}`;
 
 export const compileTiledMap = (input: {
   readonly map: TiledJsonMap;
@@ -102,10 +109,13 @@ export const compileTiledMap = (input: {
   const layers: TiledMapLayer[] = [];
   const diagnostics: ParseDiagnostic[] = [];
   const placeableLookup = new Map(
-    (input.placeables ?? []).map((placeable) => [
-      placeableKey(placeable.source.tilesetName, placeable.source.localTileId),
-      placeable,
-    ] as const),
+    (input.placeables ?? []).map(
+      (placeable) =>
+        [
+          placeableKey(placeable.source.tilesetName, placeable.source.localTileId),
+          placeable,
+        ] as const,
+    ),
   );
 
   for (const [index, layer] of input.map.layers.entries()) {
@@ -148,12 +158,12 @@ const compileLayer = (args: {
   const layer = args.layer;
   const layerId = layerIdFor(layer, args.indexPath);
 
-  if (layer.type === "tilelayer") {
+  if (layer.type === 'tilelayer') {
     args.layers.push(compileTileLayer(layer, layerId, args.windows, args.diagnostics));
     return;
   }
 
-  if (layer.type === "objectgroup") {
+  if (layer.type === 'objectgroup') {
     for (const object of layer.objects) {
       args.layers.push(
         compileObjectLayer({
@@ -171,9 +181,9 @@ const compileLayer = (args: {
     return;
   }
 
-  if (layer.type === "imagelayer") {
+  if (layer.type === 'imagelayer') {
     const imageLayer: TiledMapImageLayer = {
-      kind: "image",
+      kind: 'image',
       id: layerId,
       name: layer.name,
       image: layer.image,
@@ -188,7 +198,7 @@ const compileLayer = (args: {
     return;
   }
 
-  if (layer.type === "group") {
+  if (layer.type === 'group') {
     const nested: TiledMapLayer[] = [];
     for (const [index, child] of layer.layers.entries()) {
       compileLayer({
@@ -199,7 +209,7 @@ const compileLayer = (args: {
       });
     }
     const groupLayer: TiledMapGroupLayer = {
-      kind: "group",
+      kind: 'group',
       id: layerId,
       name: layer.name,
       visible: layer.visible ?? true,
@@ -226,12 +236,12 @@ const compileTileLayer = (
       gid: decoded.gid,
       tileIndex: tileborneTileIndexForTiledGid(rawGid, windows),
       localTileIndex: located?.localId ?? -1,
-      tilesetName: located?.window.name ?? "",
+      tilesetName: located?.window.name ?? '',
       transform: decoded.transform,
     };
   });
   return {
-    kind: "tile",
+    kind: 'tile',
     id: layerId,
     name: layer.name,
     ...(layer.class === undefined ? {} : { class: layer.class }),
@@ -246,7 +256,7 @@ const compileTileLayer = (
 
 const compileObjectLayer = (args: {
   readonly object: TiledJsonObject;
-  readonly layer: Extract<TiledJsonAnyLayer, { readonly type: "objectgroup" }>;
+  readonly layer: Extract<TiledJsonAnyLayer, { readonly type: 'objectgroup' }>;
   readonly layerId: string;
   readonly map: TiledJsonMap;
   readonly windows: readonly TiledTilesetWindow[];
@@ -264,7 +274,7 @@ const compileObjectLayer = (args: {
           rawGid: object.gid,
           gid: decoded.gid,
           localTileIndex: located?.localId ?? -1,
-          tilesetName: located?.window.name ?? "",
+          tilesetName: located?.window.name ?? '',
           transform: decoded.transform,
         };
   const placeable =
@@ -273,9 +283,13 @@ const compileObjectLayer = (args: {
       : args.placeableLookup.get(placeableKey(tileRef.tilesetName, tileRef.localTileIndex));
   const frame = placeable?.frames[0];
   const resolvedWidth =
-    object.gid === undefined ? object.width : object.width ?? placeable?.size.width ?? args.map.tilewidth;
+    object.gid === undefined
+      ? object.width
+      : (object.width ?? placeable?.size.width ?? args.map.tilewidth);
   const resolvedHeight =
-    object.gid === undefined ? object.height : object.height ?? placeable?.size.height ?? args.map.tileheight;
+    object.gid === undefined
+      ? object.height
+      : (object.height ?? placeable?.size.height ?? args.map.tileheight);
   const sourceAnchor = tileObjectAnchor({
     object,
     profile: args.profile,
@@ -297,7 +311,7 @@ const compileObjectLayer = (args: {
       ? undefined
       : {
           placeableId: placeable.id,
-          source: "tiled-object" as const,
+          source: 'tiled-object' as const,
           assetId: frame.assetId,
           tileId: frame.tileId,
           gid: decoded.gid,
@@ -306,10 +320,10 @@ const compileObjectLayer = (args: {
         };
 
   return {
-    kind: "object",
+    kind: 'object',
     id: `${layerId}/object:${object.id}`,
     layerId,
-    layerName: layer.name ?? "objects",
+    layerName: layer.name ?? 'objects',
     layerVisible: layer.visible ?? true,
     layerOpacity: layer.opacity ?? 1,
     name: object.name ?? `object-${object.id}`,
@@ -325,7 +339,7 @@ const compileObjectLayer = (args: {
     ...(placement === undefined ? {} : { placement }),
     properties: {
       ...propertiesToMetadata(object.properties),
-      ...(object.gid === undefined ? {} : { "tileborne.anchor": CANONICAL_OBJECT_ANCHOR }),
+      ...(object.gid === undefined ? {} : { 'tileborne.anchor': CANONICAL_OBJECT_ANCHOR }),
       ...(object.point ? { point: true } : {}),
       ...(object.ellipse ? { ellipse: true } : {}),
     },

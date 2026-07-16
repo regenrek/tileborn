@@ -1,19 +1,19 @@
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
 
-import { compileTiledTileset } from "./compile-tileset.js";
-import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
-import { validateTiledJsonTileset } from "./validate.js";
-import type { TiledImportOptions, TiledJsonTileset } from "./types.js";
+import { compileTiledTileset } from './compile-tileset.js';
+import { normalizeTiledTilesetImageAssetPaths } from './image-paths.js';
+import { validateTiledJsonTileset } from './validate.js';
+import type { TiledImportOptions, TiledJsonTileset } from './types.js';
 
 export const parseTsj = (
   raw: string,
-  options: Pick<TiledImportOptions, "packIdSeed" | "profile"> & {
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'profile'> & {
     readonly tilesetSeed: string;
     readonly projectRoot?: string | undefined;
     readonly basePath?: string | undefined;
     readonly validateImagePaths?: boolean;
   },
-): ParseResult<ReturnType<typeof compileTiledTileset>["value"]> & {
+): ParseResult<ReturnType<typeof compileTiledTileset>['value']> & {
   readonly diagnostics: readonly ParseDiagnostic[];
 } => {
   let json: unknown;
@@ -23,11 +23,11 @@ export const parseTsj = (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: `Failed to parse TSJ JSON: ${(error as Error).message}`,
-          severity: "error",
-          format: "tsj",
+          severity: 'error',
+          format: 'tsj',
         },
       ],
     };

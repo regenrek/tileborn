@@ -1,4 +1,4 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 
 import type {
   TiledJsonAnyLayer,
@@ -8,23 +8,25 @@ import type {
   TiledJsonTileset,
   TiledScanUnsupportedFeature,
   TiledUnsupportedFeatureId,
-} from "./types.js";
+} from './types.js';
 
 type PrimitivePropertyValue = string | number | boolean;
 
 type TiledTilesetPropertySource = {
   readonly name?: string;
   readonly properties?: readonly TiledJsonProperty[];
-  readonly tiles?: TiledJsonTileset["tiles"];
+  readonly tiles?: TiledJsonTileset['tiles'];
 };
 
 const isPrimitivePropertyValue = (value: unknown): value is PrimitivePropertyValue =>
-  typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 
 const childPath = (basePath: string, child: string): string =>
-  basePath === "" || basePath === "/" ? `/${child}` : `${basePath}/${child}`;
+  basePath === '' || basePath === '/' ? `/${child}` : `${basePath}/${child}`;
 
-export const primitivePropertyValue = (property: TiledJsonProperty | undefined): PrimitivePropertyValue | undefined =>
+export const primitivePropertyValue = (
+  property: TiledJsonProperty | undefined,
+): PrimitivePropertyValue | undefined =>
   property && isPrimitivePropertyValue(property.value) ? property.value : undefined;
 
 export const propertiesToPrimitiveRecord = (
@@ -39,34 +41,42 @@ export const propertiesToPrimitiveRecord = (
   return record;
 };
 
-const unsupportedFeatureText: Record<TiledUnsupportedFeatureId, { readonly message: string; readonly action: string }> = {
+const unsupportedFeatureText: Record<
+  TiledUnsupportedFeatureId,
+  { readonly message: string; readonly action: string }
+> = {
   templates: {
-    message: "Tiled object templates are diagnosed but not imported.",
-    action: "Detach object templates in Tiled or use a plugin profile that explicitly resolves template inheritance.",
+    message: 'Tiled object templates are diagnosed but not imported.',
+    action:
+      'Detach object templates in Tiled or use a plugin profile that explicitly resolves template inheritance.',
   },
-  "infinite-chunks": {
-    message: "Infinite chunk maps require a future import mode.",
-    action: "Export the map as finite orthogonal layers before importing.",
+  'infinite-chunks': {
+    message: 'Infinite chunk maps require a future import mode.',
+    action: 'Export the map as finite orthogonal layers before importing.',
   },
   rotation: {
-    message: "Object rotation is diagnosed but not applied to map placement.",
-    action: "Bake object rotation into artwork or wait for canonical rotated placement support.",
+    message: 'Object rotation is diagnosed but not applied to map placement.',
+    action: 'Bake object rotation into artwork or wait for canonical rotated placement support.',
   },
   parallax: {
-    message: "Layer parallax is diagnosed but not applied to map layers.",
-    action: "Remove parallax factors or use an importer that implements Tileborne visual parallax semantics.",
+    message: 'Layer parallax is diagnosed but not applied to map layers.',
+    action:
+      'Remove parallax factors or use an importer that implements Tileborne visual parallax semantics.',
   },
   orientation: {
-    message: "Only orthogonal Tiled maps are supported.",
-    action: "Convert the map to orthogonal orientation before importing.",
+    message: 'Only orthogonal Tiled maps are supported.',
+    action: 'Convert the map to orthogonal orientation before importing.',
   },
-  "class-properties": {
-    message: "Tiled class-typed custom properties require Tiled project class definitions and are not imported.",
-    action: "Flatten class properties to primitive string, number, or boolean properties before importing.",
+  'class-properties': {
+    message:
+      'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+    action:
+      'Flatten class properties to primitive string, number, or boolean properties before importing.',
   },
-  "project-files": {
-    message: "Tiled project files and custom type definitions are not imported.",
-    action: "Import TMJ/TMX/TSJ/TSX sources directly and flatten project custom types to primitive properties.",
+  'project-files': {
+    message: 'Tiled project files and custom type definitions are not imported.',
+    action:
+      'Import TMJ/TMX/TSJ/TSX sources directly and flatten project custom types to primitive properties.',
   },
 };
 
@@ -82,10 +92,10 @@ export const unsupportedFeature = (
 export const unsupportedFeatureDiagnostic = (
   feature: TiledScanUnsupportedFeature,
 ): ParseDiagnostic & { readonly action: string } => ({
-  _tag: "TiledUnsupportedFeature",
+  _tag: 'TiledUnsupportedFeature',
   path: feature.path,
   message: feature.message,
-  severity: "error",
+  severity: 'error',
   feature: feature.feature,
   action: feature.action,
 });
@@ -96,8 +106,10 @@ const classPropertyFeatures = (
 ): readonly TiledScanUnsupportedFeature[] =>
   (properties ?? [])
     .map((property, index) => ({ property, index }))
-    .filter(({ property }) => property.type === "class" || property.propertytype !== undefined)
-    .map(({ index }) => unsupportedFeature("class-properties", childPath(basePath, `properties/${index}`)));
+    .filter(({ property }) => property.type === 'class' || property.propertytype !== undefined)
+    .map(({ index }) =>
+      unsupportedFeature('class-properties', childPath(basePath, `properties/${index}`)),
+    );
 
 const objectPropertyFeatures = (
   objects: readonly TiledJsonObject[],
@@ -114,15 +126,18 @@ const layerPropertyFeatures = (
   layers.flatMap((layer, layerIndex): readonly TiledScanUnsupportedFeature[] => {
     const layerPath = `${basePath}/layers/${layer.id ?? layer.name ?? layerIndex}`;
     const local = classPropertyFeatures(layer.properties, layerPath);
-    if (layer.type === "group") return [...local, ...layerPropertyFeatures(layer.layers, layerPath)];
-    if (layer.type === "objectgroup") return [...local, ...objectPropertyFeatures(layer.objects, layerPath)];
+    if (layer.type === 'group')
+      return [...local, ...layerPropertyFeatures(layer.layers, layerPath)];
+    if (layer.type === 'objectgroup')
+      return [...local, ...objectPropertyFeatures(layer.objects, layerPath)];
     return local;
   });
 
 export const unsupportedClassPropertyFeaturesForTileset = (
   tileset: TiledJsonTileset,
-  basePath = "/tilesets",
-): readonly TiledScanUnsupportedFeature[] => unsupportedClassPropertyFeaturesForTilesetSource(tileset, basePath);
+  basePath = '/tilesets',
+): readonly TiledScanUnsupportedFeature[] =>
+  unsupportedClassPropertyFeaturesForTilesetSource(tileset, basePath);
 
 const unsupportedClassPropertyFeaturesForTilesetSource = (
   tileset: TiledTilesetPropertySource,
@@ -133,7 +148,10 @@ const unsupportedClassPropertyFeaturesForTilesetSource = (
     ...classPropertyFeatures(tile.properties, `${basePath}/tiles/${tile.id}`),
     ...(tile.objectgroup === undefined
       ? []
-      : objectPropertyFeatures(tile.objectgroup.objects, `${basePath}/tiles/${tile.id}/objectgroup`)),
+      : objectPropertyFeatures(
+          tile.objectgroup.objects,
+          `${basePath}/tiles/${tile.id}/objectgroup`,
+        )),
   ]),
 ];
 
@@ -141,8 +159,8 @@ export const unsupportedClassPropertyFeaturesForMap = (
   map: TiledJsonMap,
   tilesets: readonly TiledTilesetPropertySource[],
 ): readonly TiledScanUnsupportedFeature[] => [
-  ...classPropertyFeatures(map.properties, "/"),
-  ...layerPropertyFeatures(map.layers, ""),
+  ...classPropertyFeatures(map.properties, '/'),
+  ...layerPropertyFeatures(map.layers, ''),
   ...tilesets.flatMap((tileset, index) =>
     unsupportedClassPropertyFeaturesForTilesetSource(tileset, `/tilesets/${tileset.name || index}`),
   ),

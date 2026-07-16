@@ -4,14 +4,16 @@ import type {
   TiledSourceInventory,
   TiledSourceInventoryRule,
   TilesetFrameIndex,
-} from "./types.js";
+} from './types.js';
 
 export type TiledInventoryTilesetInput = {
   readonly tileset: TiledJsonTileset;
   readonly source?: string;
 };
 
-const explicitTiles = (tileset: TiledJsonTileset): ReadonlyMap<number, NonNullable<TiledJsonTileset["tiles"]>[number]> =>
+const explicitTiles = (
+  tileset: TiledJsonTileset,
+): ReadonlyMap<number, NonNullable<TiledJsonTileset['tiles']>[number]> =>
   new Map((tileset.tiles ?? []).map((tile) => [tile.id, tile] as const));
 
 const wangSetNamesByTile = (tileset: TiledJsonTileset): ReadonlyMap<number, readonly string[]> => {
@@ -44,10 +46,10 @@ const frameIndexForTileset = (input: TiledInventoryTilesetInput): readonly Tiles
   });
 };
 
-const rulesIndexKind = (path: string): TiledSourceInventoryRule["kind"] =>
-  path.toLowerCase().endsWith("/rules.txt") || path.toLowerCase() === "rules.txt"
-    ? "rules-index"
-    : "rule-map";
+const rulesIndexKind = (path: string): TiledSourceInventoryRule['kind'] =>
+  path.toLowerCase().endsWith('/rules.txt') || path.toLowerCase() === 'rules.txt'
+    ? 'rules-index'
+    : 'rule-map';
 
 export const buildTiledSourceInventory = (input: {
   readonly tilesets: readonly TiledInventoryTilesetInput[];
@@ -62,7 +64,9 @@ export const buildTiledSourceInventory = (input: {
 }): TiledSourceInventory => {
   const tilesets = input.tilesets
     .map(({ tileset, source }) => {
-      const tileProbabilityCount = (tileset.tiles ?? []).filter((tile) => tile.probability !== undefined).length;
+      const tileProbabilityCount = (tileset.tiles ?? []).filter(
+        (tile) => tile.probability !== undefined,
+      ).length;
       const animationFrameCount = (tileset.tiles ?? []).reduce(
         (sum, tile) => sum + (tile.animation?.length ?? 0),
         0,
@@ -72,18 +76,23 @@ export const buildTiledSourceInventory = (input: {
         0,
       );
       const wangColorProbabilityCount = (tileset.wangsets ?? []).reduce(
-        (sum, wangSet) => sum + wangSet.colors.filter((color) => color.probability !== undefined).length,
+        (sum, wangSet) =>
+          sum + wangSet.colors.filter((color) => color.probability !== undefined).length,
         0,
       );
       return {
         name: tileset.name,
         ...(source === undefined ? {} : { path: source }),
-        kind: tileset.columns === 0 ? "image-collection" as const : "grid" as const,
+        kind: tileset.columns === 0 ? ('image-collection' as const) : ('grid' as const),
         tileCount: tileset.tilecount,
         frameCount: tileset.tilecount,
-        imageCollectionTileCount: tileset.columns === 0 ? (tileset.tiles ?? []).filter((tile) => tile.image !== undefined).length : 0,
+        imageCollectionTileCount:
+          tileset.columns === 0
+            ? (tileset.tiles ?? []).filter((tile) => tile.image !== undefined).length
+            : 0,
         wangSetCount: tileset.wangsets?.length ?? 0,
-        animationCount: (tileset.tiles ?? []).filter((tile) => (tile.animation?.length ?? 0) > 0).length,
+        animationCount: (tileset.tiles ?? []).filter((tile) => (tile.animation?.length ?? 0) > 0)
+          .length,
         animationFrameCount,
         tileProbabilityCount,
         wangColorProbabilityCount,
@@ -93,28 +102,44 @@ export const buildTiledSourceInventory = (input: {
     .sort((left, right) => (left.path ?? left.name).localeCompare(right.path ?? right.name));
   const frames = input.tilesets
     .flatMap(frameIndexForTileset)
-    .sort((left, right) =>
-      (left.tilesetPath ?? left.tilesetName).localeCompare(right.tilesetPath ?? right.tilesetName) ||
-      left.localTileId - right.localTileId,
+    .sort(
+      (left, right) =>
+        (left.tilesetPath ?? left.tilesetName).localeCompare(
+          right.tilesetPath ?? right.tilesetName,
+        ) || left.localTileId - right.localTileId,
     );
   const rules = (input.rules ?? [])
-    .map((rule) => typeof rule === "string" ? { path: rule, kind: rulesIndexKind(rule) } : rule)
+    .map((rule) => (typeof rule === 'string' ? { path: rule, kind: rulesIndexKind(rule) } : rule))
     .sort((left, right) => left.path.localeCompare(right.path));
-  const exampleMaps = [...(input.exampleMaps ?? [])].sort((left, right) => left.path.localeCompare(right.path));
+  const exampleMaps = [...(input.exampleMaps ?? [])].sort((left, right) =>
+    left.path.localeCompare(right.path),
+  );
   return {
     summary: {
       tilesetCount: tilesets.length,
       tileCount: tilesets.reduce((sum, tileset) => sum + tileset.tileCount, 0),
       frameCount: frames.length,
-      imageCollectionTileCount: tilesets.reduce((sum, tileset) => sum + tileset.imageCollectionTileCount, 0),
+      imageCollectionTileCount: tilesets.reduce(
+        (sum, tileset) => sum + tileset.imageCollectionTileCount,
+        0,
+      ),
       wangSetCount: tilesets.reduce((sum, tileset) => sum + tileset.wangSetCount, 0),
       animationCount: tilesets.reduce((sum, tileset) => sum + tileset.animationCount, 0),
       animationFrameCount: tilesets.reduce((sum, tileset) => sum + tileset.animationFrameCount, 0),
-      tileProbabilityCount: tilesets.reduce((sum, tileset) => sum + tileset.tileProbabilityCount, 0),
-      wangColorProbabilityCount: tilesets.reduce((sum, tileset) => sum + tileset.wangColorProbabilityCount, 0),
-      collisionObjectCount: tilesets.reduce((sum, tileset) => sum + tileset.collisionObjectCount, 0),
-      ruleMapCount: rules.filter((rule) => rule.kind === "rule-map").length,
-      rulesIndexCount: rules.filter((rule) => rule.kind === "rules-index").length,
+      tileProbabilityCount: tilesets.reduce(
+        (sum, tileset) => sum + tileset.tileProbabilityCount,
+        0,
+      ),
+      wangColorProbabilityCount: tilesets.reduce(
+        (sum, tileset) => sum + tileset.wangColorProbabilityCount,
+        0,
+      ),
+      collisionObjectCount: tilesets.reduce(
+        (sum, tileset) => sum + tileset.collisionObjectCount,
+        0,
+      ),
+      ruleMapCount: rules.filter((rule) => rule.kind === 'rule-map').length,
+      rulesIndexCount: rules.filter((rule) => rule.kind === 'rules-index').length,
       exampleMapCount: exampleMaps.length,
     },
     tilesets,

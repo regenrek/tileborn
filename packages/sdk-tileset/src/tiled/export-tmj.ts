@@ -1,7 +1,7 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 
-import { buildTilesetWindows } from "./compile-map.js";
-import { encodeTiledGid, tiledGidForTileborneTileIndex, type TiledTilesetWindow } from "./gid.js";
+import { buildTilesetWindows } from './compile-map.js';
+import { encodeTiledGid, tiledGidForTileborneTileIndex, type TiledTilesetWindow } from './gid.js';
 import type {
   TiledJsonAnyLayer,
   TiledJsonMap,
@@ -13,7 +13,7 @@ import type {
   TiledMapLayer,
   TiledMapObject,
   TiledMapTileLayer,
-} from "./types.js";
+} from './types.js';
 
 /**
  * A Tiled tileset definition paired with its `firstgid` window. This is the
@@ -42,14 +42,14 @@ export type ExportTiledMapToTmjResult = {
  * They are re-projected back onto their structural slots on export rather than
  * emitted as Tiled custom properties.
  */
-const SYNTHETIC_OBJECT_PROPERTY_KEYS = new Set(["tileborne.anchor", "point", "ellipse"]);
+const SYNTHETIC_OBJECT_PROPERTY_KEYS = new Set(['tileborne.anchor', 'point', 'ellipse']);
 
-const TILED_DEFAULT_VERSION = "1.10";
+const TILED_DEFAULT_VERSION = '1.10';
 
-const inferTiledPropertyType = (value: string | number | boolean): TiledJsonProperty["type"] => {
-  if (typeof value === "boolean") return "bool";
-  if (typeof value === "number") return Number.isInteger(value) ? "int" : "float";
-  return "string";
+const inferTiledPropertyType = (value: string | number | boolean): TiledJsonProperty['type'] => {
+  if (typeof value === 'boolean') return 'bool';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'float';
+  return 'string';
 };
 
 /**
@@ -115,7 +115,7 @@ const tileLayerJson = (
 ): TiledJsonTileLayer => {
   const properties = metadataToTiledProperties(layer.properties);
   return {
-    type: "tilelayer",
+    type: 'tilelayer',
     name: layer.name,
     ...(layer.class === undefined ? {} : { class: layer.class }),
     width: layer.width,
@@ -138,8 +138,8 @@ const objectJson = (object: TiledMapObject, fallbackId: number): TiledJsonObject
       Object.entries(object.properties).filter(([key]) => !SYNTHETIC_OBJECT_PROPERTY_KEYS.has(key)),
     ),
   );
-  const isPoint = object.properties["point"] === true;
-  const isEllipse = object.properties["ellipse"] === true;
+  const isPoint = object.properties['point'] === true;
+  const isEllipse = object.properties['ellipse'] === true;
 
   const gid =
     object.tileRef === undefined
@@ -148,8 +148,7 @@ const objectJson = (object: TiledMapObject, fallbackId: number): TiledJsonObject
 
   // Tile objects are stored top-left anchored in the neutral schema; Tiled's
   // default tile-object anchor is bottom-left, so re-project the y origin.
-  const y =
-    gid !== undefined && object.height !== undefined ? object.y + object.height : object.y;
+  const y = gid !== undefined && object.height !== undefined ? object.y + object.height : object.y;
 
   return {
     id: numericObjectId(object.id, fallbackId),
@@ -159,19 +158,19 @@ const objectJson = (object: TiledMapObject, fallbackId: number): TiledJsonObject
     ...(object.width === undefined ? {} : { width: object.width }),
     ...(object.height === undefined ? {} : { height: object.height }),
     ...(object.class === undefined ? {} : { type: object.class }),
-    ...(object.name === "" ? {} : { name: object.name }),
+    ...(object.name === '' ? {} : { name: object.name }),
     ...(isPoint ? { point: true } : {}),
     ...(isEllipse ? { ellipse: true } : {}),
     ...(properties.length === 0 ? {} : { properties }),
   };
 };
 
-type TiledJsonObjectGroupLayer = Extract<TiledJsonAnyLayer, { readonly type: "objectgroup" }>;
+type TiledJsonObjectGroupLayer = Extract<TiledJsonAnyLayer, { readonly type: 'objectgroup' }>;
 
 const objectGroupJson = (objects: readonly TiledMapObject[]): TiledJsonObjectGroupLayer => {
   const first = objects[0]!;
   return {
-    type: "objectgroup",
+    type: 'objectgroup',
     name: first.layerName,
     ...(first.layerVisible ? {} : { visible: false }),
     ...(first.layerOpacity === 1 ? {} : { opacity: first.layerOpacity }),
@@ -196,7 +195,7 @@ const collectLayers = (
   };
 
   for (const layer of layers) {
-    if (layer.kind === "object") {
+    if (layer.kind === 'object') {
       if (pendingLayerId !== undefined && pendingLayerId !== layer.layerId) flushObjects();
       pendingLayerId = layer.layerId;
       pendingObjects.push(layer);
@@ -205,14 +204,14 @@ const collectLayers = (
 
     flushObjects();
 
-    if (layer.kind === "tile") {
+    if (layer.kind === 'tile') {
       out.push(tileLayerJson(layer, windows));
       continue;
     }
 
-    if (layer.kind === "image") {
+    if (layer.kind === 'image') {
       out.push({
-        type: "imagelayer",
+        type: 'imagelayer',
         name: layer.name,
         image: layer.image,
         ...(layer.x === undefined ? {} : { x: layer.x }),
@@ -229,11 +228,11 @@ const collectLayers = (
     // Group layers are flattened on export (Tileborne stays flat at v1 per
     // ADR-0020). Nested layers are emitted inline at the top level.
     diagnostics.push({
-      _tag: "TiledUnsupportedFeature",
+      _tag: 'TiledUnsupportedFeature',
       path: `/layers/${layer.name}`,
       message: `Group layer "${layer.name}" was flattened on export; Tileborne maps are flat at v1.`,
-      severity: "info",
-      feature: "group-layer-flattened",
+      severity: 'info',
+      feature: 'group-layer-flattened',
     });
     out.push(...collectLayers(layer.layers, windows, diagnostics));
   }
@@ -260,7 +259,7 @@ export const exportTiledMapToTmj = (input: ExportTiledMapToTmjInput): ExportTile
   const properties = metadataToTiledProperties(input.map.properties);
 
   const tmj: TiledJsonMap = {
-    type: "map",
+    type: 'map',
     version: input.version ?? TILED_DEFAULT_VERSION,
     ...(input.tiledversion === undefined ? {} : { tiledversion: input.tiledversion }),
     orientation: input.map.orientation,

@@ -1,23 +1,23 @@
-import { Result, Schema, SchemaIssue } from "effect";
+import { Result, Schema, SchemaIssue } from 'effect';
 
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { TiledJsonMap, TiledJsonTileset } from "./types.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { TiledJsonMap, TiledJsonTileset } from './types.js';
 
 const isNonNegativeInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 const isPositiveInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
 const TiledJsonPropertyType = Schema.Literals([
-  "string",
-  "int",
-  "float",
-  "bool",
-  "color",
-  "file",
-  "object",
-  "class",
+  'string',
+  'int',
+  'float',
+  'bool',
+  'color',
+  'file',
+  'object',
+  'class',
 ] as const);
 
 const TiledJsonPropertySchema = Schema.Struct({
@@ -52,11 +52,11 @@ const TiledJsonObjectSchema = Schema.Struct({
 });
 
 const TiledJsonObjectGroupSchema = Schema.Struct({
-  type: Schema.Literal("objectgroup"),
+  type: Schema.Literal('objectgroup'),
   id: Schema.optionalKey(Schema.Int),
   name: Schema.optionalKey(Schema.String),
   class: Schema.optionalKey(Schema.String),
-  draworder: Schema.optionalKey(Schema.Literals(["topdown", "index"] as const)),
+  draworder: Schema.optionalKey(Schema.Literals(['topdown', 'index'] as const)),
   objects: Schema.Array(TiledJsonObjectSchema),
 });
 
@@ -93,7 +93,7 @@ const TiledJsonWangTileSchema = Schema.Struct({
 
 const TiledJsonWangSetSchema = Schema.Struct({
   name: Schema.String,
-  type: Schema.optionalKey(Schema.Literals(["corner", "edge", "mixed"] as const)),
+  type: Schema.optionalKey(Schema.Literals(['corner', 'edge', 'mixed'] as const)),
   class: Schema.optionalKey(Schema.String),
   tile: Schema.optionalKey(Schema.Int),
   colors: Schema.Array(TiledJsonWangColorSchema),
@@ -101,7 +101,7 @@ const TiledJsonWangSetSchema = Schema.Struct({
 });
 
 const TiledJsonTilesetSchema = Schema.Struct({
-  type: Schema.optionalKey(Schema.Literal("tileset")),
+  type: Schema.optionalKey(Schema.Literal('tileset')),
   name: Schema.String,
   tilewidth: Schema.Int,
   tileheight: Schema.Int,
@@ -123,7 +123,7 @@ const TiledJsonTilesetSchema = Schema.Struct({
 const TiledJsonTilesetRefSchema = Schema.Struct({
   firstgid: Schema.Int,
   source: Schema.optionalKey(Schema.String),
-  type: Schema.optionalKey(Schema.Literal("tileset")),
+  type: Schema.optionalKey(Schema.Literal('tileset')),
   name: Schema.optionalKey(Schema.String),
   tilewidth: Schema.optionalKey(Schema.Int),
   tileheight: Schema.optionalKey(Schema.Int),
@@ -165,25 +165,25 @@ const TiledJsonChunkSchema = Schema.Struct({
 
 const TiledJsonTileLayerSchema = Schema.Struct({
   ...TiledJsonLayerBaseFields,
-  type: Schema.Literal("tilelayer"),
+  type: Schema.Literal('tilelayer'),
   width: Schema.Int,
   height: Schema.Int,
   data: Schema.Array(Schema.Int),
-  encoding: Schema.optionalKey(Schema.Literals(["csv", "base64"] as const)),
+  encoding: Schema.optionalKey(Schema.Literals(['csv', 'base64'] as const)),
   compression: Schema.optionalKey(Schema.String),
   chunks: Schema.optionalKey(Schema.Array(TiledJsonChunkSchema)),
 });
 
 const TiledJsonObjectGroupLayerSchema = Schema.Struct({
   ...TiledJsonLayerBaseFields,
-  type: Schema.Literal("objectgroup"),
-  draworder: Schema.optionalKey(Schema.Literals(["topdown", "index"] as const)),
+  type: Schema.Literal('objectgroup'),
+  draworder: Schema.optionalKey(Schema.Literals(['topdown', 'index'] as const)),
   objects: Schema.Array(TiledJsonObjectSchema),
 });
 
 const TiledJsonImageLayerSchema = Schema.Struct({
   ...TiledJsonLayerBaseFields,
-  type: Schema.Literal("imagelayer"),
+  type: Schema.Literal('imagelayer'),
   image: Schema.String,
   x: Schema.optionalKey(Schema.Number),
   y: Schema.optionalKey(Schema.Number),
@@ -191,19 +191,19 @@ const TiledJsonImageLayerSchema = Schema.Struct({
 
 const TiledJsonGroupLayerSchema = Schema.Struct({
   ...TiledJsonLayerBaseFields,
-  type: Schema.Literal("group"),
+  type: Schema.Literal('group'),
   layers: Schema.Array(Schema.Unknown),
 });
 
 const TiledJsonLayerTypeSchema = Schema.Struct({
-  type: Schema.Literals(["tilelayer", "objectgroup", "imagelayer", "group"] as const),
+  type: Schema.Literals(['tilelayer', 'objectgroup', 'imagelayer', 'group'] as const),
 });
 
 const TiledJsonMapSchema = Schema.Struct({
-  type: Schema.Literal("map"),
+  type: Schema.Literal('map'),
   version: Schema.String,
   tiledversion: Schema.optionalKey(Schema.String),
-  orientation: Schema.Literals(["orthogonal", "isometric", "staggered", "hexagonal"] as const),
+  orientation: Schema.Literals(['orthogonal', 'isometric', 'staggered', 'hexagonal'] as const),
   width: Schema.Int,
   height: Schema.Int,
   tilewidth: Schema.Int,
@@ -215,22 +215,22 @@ const TiledJsonMapSchema = Schema.Struct({
   class: Schema.optionalKey(Schema.String),
 });
 
-type ParseFormat = "tmj" | "tmx" | "tsj" | "tsx";
+type ParseFormat = 'tmj' | 'tmx' | 'tsj' | 'tsx';
 type PathSegment = string | number;
 
 const formatIssuePath = (segments: readonly PathSegment[]): string =>
-  segments.length === 0 ? "/" : `/${segments.map(String).join("/")}`;
+  segments.length === 0 ? '/' : `/${segments.map(String).join('/')}`;
 
 const issueMessage = (issue: SchemaIssue.Issue): string => {
   switch (issue._tag) {
-    case "MissingKey":
-      return "Missing required field";
-    case "UnexpectedKey":
-      return "Unexpected field";
-    case "InvalidType":
-      return "Invalid type";
-    case "InvalidValue":
-      return "Invalid value";
+    case 'MissingKey':
+      return 'Missing required field';
+    case 'UnexpectedKey':
+      return 'Unexpected field';
+    case 'InvalidType':
+      return 'Invalid type';
+    case 'InvalidValue':
+      return 'Invalid value';
     default:
       return SchemaIssue.makeFormatterDefault()(issue).trim();
   }
@@ -241,15 +241,15 @@ const flattenSchemaIssues = (
   path: readonly PathSegment[] = [],
 ): ReadonlyArray<{ readonly path: string; readonly message: string }> => {
   switch (issue._tag) {
-    case "Composite":
+    case 'Composite':
       return issue.issues.flatMap((child) => flattenSchemaIssues(child, path));
-    case "Pointer":
-      return flattenSchemaIssues(
-        issue.issue,
-        [...path, ...issue.path.filter((segment): segment is PathSegment => typeof segment !== "symbol")],
-      );
-    case "MissingKey":
-    case "UnexpectedKey":
+    case 'Pointer':
+      return flattenSchemaIssues(issue.issue, [
+        ...path,
+        ...issue.path.filter((segment): segment is PathSegment => typeof segment !== 'symbol'),
+      ]);
+    case 'MissingKey':
+    case 'UnexpectedKey':
       return [{ path: formatIssuePath(path), message: issueMessage(issue) }];
     default:
       return [{ path: formatIssuePath(path), message: issueMessage(issue) }];
@@ -263,9 +263,13 @@ const schemaError = (
 ): { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
   const issueSummary = flattenSchemaIssues(issue, pathPrefix)[0] ?? {
     path: formatIssuePath(pathPrefix),
-    message: "Invalid Tiled JSON shape",
+    message: 'Invalid Tiled JSON shape',
   };
-  return parseError(format, `Tiled ${format.toUpperCase()} schema error: ${issueSummary.message}`, issueSummary.path);
+  return parseError(
+    format,
+    `Tiled ${format.toUpperCase()} schema error: ${issueSummary.message}`,
+    issueSummary.path,
+  );
 };
 
 const decodeSchema = <A, I>(
@@ -273,7 +277,9 @@ const decodeSchema = <A, I>(
   value: unknown,
   format: ParseFormat,
   pathPrefix: readonly PathSegment[] = [],
-): { readonly ok: true; readonly value: A } | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
+):
+  | { readonly ok: true; readonly value: A }
+  | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
   const decoded = Schema.decodeUnknownResult(schema)(value);
   if (Result.isFailure(decoded)) {
     return schemaError(format, decoded.failure, pathPrefix);
@@ -283,47 +289,60 @@ const decodeSchema = <A, I>(
 
 const decodeLayer = (
   value: unknown,
-  format: "tmj" | "tmx",
+  format: 'tmj' | 'tmx',
   pathPrefix: readonly PathSegment[],
-): { readonly ok: true; readonly layer: TiledJsonMap["layers"][number] } | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
+):
+  | { readonly ok: true; readonly layer: TiledJsonMap['layers'][number] }
+  | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
   const layerType = decodeSchema(TiledJsonLayerTypeSchema, value, format, pathPrefix);
   if (!layerType.ok) return layerType;
 
   switch (layerType.value.type) {
-    case "tilelayer": {
+    case 'tilelayer': {
       const decoded = decodeSchema(TiledJsonTileLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
+      return decoded.ok
+        ? { ok: true, layer: decoded.value as unknown as TiledJsonMap['layers'][number] }
+        : decoded;
     }
-    case "objectgroup": {
+    case 'objectgroup': {
       const decoded = decodeSchema(TiledJsonObjectGroupLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
+      return decoded.ok
+        ? { ok: true, layer: decoded.value as unknown as TiledJsonMap['layers'][number] }
+        : decoded;
     }
-    case "imagelayer": {
+    case 'imagelayer': {
       const decoded = decodeSchema(TiledJsonImageLayerSchema, value, format, pathPrefix);
-      return decoded.ok ? { ok: true, layer: decoded.value as unknown as TiledJsonMap["layers"][number] } : decoded;
+      return decoded.ok
+        ? { ok: true, layer: decoded.value as unknown as TiledJsonMap['layers'][number] }
+        : decoded;
     }
-    case "group": {
+    case 'group': {
       const decoded = decodeSchema(TiledJsonGroupLayerSchema, value, format, pathPrefix);
       if (!decoded.ok) return decoded;
 
-      const layers: TiledJsonMap["layers"][number][] = [];
+      const layers: TiledJsonMap['layers'][number][] = [];
       for (const [index, child] of decoded.value.layers.entries()) {
-        const childLayer = decodeLayer(child, format, [...pathPrefix, "layers", index]);
+        const childLayer = decodeLayer(child, format, [...pathPrefix, 'layers', index]);
         if (!childLayer.ok) return childLayer;
         layers.push(childLayer.layer);
       }
-      return { ok: true, layer: { ...decoded.value, layers } as unknown as TiledJsonMap["layers"][number] };
+      return {
+        ok: true,
+        layer: { ...decoded.value, layers } as unknown as TiledJsonMap['layers'][number],
+      };
     }
   }
 };
 
 const decodeLayers = (
   layers: readonly unknown[],
-  format: "tmj" | "tmx",
-): { readonly ok: true; readonly layers: TiledJsonMap["layers"] } | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
-  const decoded: TiledJsonMap["layers"][number][] = [];
+  format: 'tmj' | 'tmx',
+):
+  | { readonly ok: true; readonly layers: TiledJsonMap['layers'] }
+  | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
+  const decoded: TiledJsonMap['layers'][number][] = [];
   for (const [index, layer] of layers.entries()) {
-    const result = decodeLayer(layer, format, ["layers", index]);
+    const result = decodeLayer(layer, format, ['layers', index]);
     if (!result.ok) return result;
     decoded.push(result.layer);
   }
@@ -332,38 +351,50 @@ const decodeLayers = (
 
 export const validateTiledJsonTileset = (
   value: unknown,
-): { readonly ok: true; readonly tileset: TiledJsonTileset } | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
-  const decoded = decodeSchema(TiledJsonTilesetSchema, value, "tsj");
+):
+  | { readonly ok: true; readonly tileset: TiledJsonTileset }
+  | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
+  const decoded = decodeSchema(TiledJsonTilesetSchema, value, 'tsj');
   if (!decoded.ok) return decoded;
 
-  if (!isNonNegativeInteger(decoded.value.tilecount)) return parseError("tsj", "Tiled tileset is missing tilecount");
-  if (!isNonNegativeInteger(decoded.value.columns)) return parseError("tsj", "Tiled tileset is missing columns");
+  if (!isNonNegativeInteger(decoded.value.tilecount))
+    return parseError('tsj', 'Tiled tileset is missing tilecount');
+  if (!isNonNegativeInteger(decoded.value.columns))
+    return parseError('tsj', 'Tiled tileset is missing columns');
   const isImageCollection = decoded.value.columns === 0;
   const dimensionGuard = isImageCollection ? isNonNegativeInteger : isPositiveInteger;
-  if (!dimensionGuard(decoded.value.tilewidth)) return parseError("tsj", "Tiled tileset is missing tilewidth");
-  if (!dimensionGuard(decoded.value.tileheight)) return parseError("tsj", "Tiled tileset is missing tileheight");
+  if (!dimensionGuard(decoded.value.tilewidth))
+    return parseError('tsj', 'Tiled tileset is missing tilewidth');
+  if (!dimensionGuard(decoded.value.tileheight))
+    return parseError('tsj', 'Tiled tileset is missing tileheight');
   return { ok: true, tileset: decoded.value as unknown as TiledJsonTileset };
 };
 
 export const validateTiledJsonMap = (
   value: unknown,
-): { readonly ok: true; readonly map: TiledJsonMap } | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
-  const decoded = decodeSchema(TiledJsonMapSchema, value, "tmj");
+):
+  | { readonly ok: true; readonly map: TiledJsonMap }
+  | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
+  const decoded = decodeSchema(TiledJsonMapSchema, value, 'tmj');
   if (!decoded.ok) return decoded;
 
   if (!isPositiveInteger(decoded.value.width) || !isPositiveInteger(decoded.value.height)) {
-    return parseError("tmj", "Tiled map is missing width/height");
+    return parseError('tmj', 'Tiled map is missing width/height');
   }
   if (!isPositiveInteger(decoded.value.tilewidth) || !isPositiveInteger(decoded.value.tileheight)) {
-    return parseError("tmj", "Tiled map is missing tile dimensions");
+    return parseError('tmj', 'Tiled map is missing tile dimensions');
   }
   for (const [index, tileset] of decoded.value.tilesets.entries()) {
     if (!isPositiveInteger(tileset.firstgid)) {
-      return parseError("tmj", "Tiled map tileset is missing firstgid", `/tilesets/${index}/firstgid`);
+      return parseError(
+        'tmj',
+        'Tiled map tileset is missing firstgid',
+        `/tilesets/${index}/firstgid`,
+      );
     }
   }
 
-  const layers = decodeLayers(decoded.value.layers, "tmj");
+  const layers = decodeLayers(decoded.value.layers, 'tmj');
   if (!layers.ok) return layers;
 
   return { ok: true, map: { ...decoded.value, layers: layers.layers } as unknown as TiledJsonMap };
@@ -374,14 +405,14 @@ export const normalizeJsonTileLayers = (map: TiledJsonMap): TiledJsonMap => map;
 const parseError = (
   format: ParseFormat,
   message: string,
-  path = "/",
+  path = '/',
 ): { readonly ok: false; readonly diagnostic: ParseDiagnostic } => ({
   ok: false,
   diagnostic: {
-    _tag: "TiledParseError",
+    _tag: 'TiledParseError',
     path,
     message,
-    severity: "error",
+    severity: 'error',
     format,
   },
 });

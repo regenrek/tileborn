@@ -4,8 +4,8 @@ import {
   TILED_FLIPPED_VERTICALLY_FLAG,
   TILED_GID_MASK,
   TILED_ROTATED_HEXAGONAL_120_FLAG,
-} from "./types.js";
-import type { TiledGidTransform } from "./types.js";
+} from './types.js';
+import type { TiledGidTransform } from './types.js';
 
 export type DecodedTiledGid = {
   readonly gid: number;

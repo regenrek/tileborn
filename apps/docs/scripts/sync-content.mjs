@@ -50,6 +50,16 @@ const syncFollowUps = () => {
   );
 };
 
+const syncBattleRoyaleCreatorGuide = () => {
+  copySpecDoc({
+    sourceRelative: "docs/battle-royale-creator-guide.md",
+    targetRelative: "battle-royale/creator-guide/index.md",
+    title: "Battle Royale Creator Guide",
+    description: "Create, author, playtest, recover, and ship the Battle Royale vertical.",
+    sidebar: { label: "Battle Royale Creator Guide" },
+  });
+};
+
 const syncEditorUxGuide = () => {
   const body = `# Editor UX
 
@@ -108,6 +118,7 @@ See [Plugins](/plugins/) and [ADR-0001](/adrs/0001-plugin-ui-model-declarative-f
 export const syncContent = () => {
   syncRuntimeGuide();
   syncFollowUps();
+  syncBattleRoyaleCreatorGuide();
   syncEditorUxGuide();
 };
 

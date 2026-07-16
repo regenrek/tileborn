@@ -59,7 +59,9 @@ running any publishing or deploy command.
    npm run build
    ```
 
-   The build writes `dist/game/worker.js`, `dist/game/manifest.json`, bundled `maps/`, `plugin/runtime.js`, and `dist/game/wrangler.toml`.
+   The build writes separate `worker.js` and `behavior-worker.js` bundles,
+   `manifest.json`, bundled `maps/`, `plugin/runtime.js`, `wrangler.toml`, and
+   `wrangler.behavior.toml`.
 
 4. Set the handoff secret once, out of band:
 
@@ -70,6 +72,7 @@ running any publishing or deploy command.
 5. Deploy only after maintainer approval for the target account and stage:
 
    ```bash
+   wrangler deploy --config dist/game/wrangler.behavior.toml
    npm run deploy
    ```
 

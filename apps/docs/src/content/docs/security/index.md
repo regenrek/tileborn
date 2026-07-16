@@ -84,6 +84,37 @@ Electron main window defaults (`apps/desktop/src/main/window.ts`):
 
 All channels are defined in `@tileborne/ipc-contracts` with Effect Schema decode/encode at the preload boundary. Undeclared IPC is rejected.
 
+## Gameplay behavior security
+
+Project gameplay TypeScript is untrusted input even after a creator grants the
+project permission to compile it. Trust is an execution precondition, not a
+general capability grant.
+
+| Threat | Enforced policy | Automated owner/evidence |
+| --- | --- | --- |
+| Imported code before consent | `imported-untrusted` snapshots fail package compilation; source is preserved for inspection | `@tileborne/services-build` `project-package.test.ts` |
+| Filesystem, network, Node, Electron, DOM, environment | Only `@tileborne/game-sdk`, approved bare modules, and contained project-relative imports resolve; forbidden globals/imports produce stable `TBSDK` diagnostics | `@tileborne/game-sdk` authoring validator tests and built-artifact adversarial tests |
+| Wall clock and ambient randomness | `Date`, `performance`, `Math.random`, Web Crypto randomness, timers, and aliases/computed/destructured escapes are rejected; use injected tick clock, seeded RNG, and tick timers | `@tileborne/game-sdk` authoring validator tests |
+| Dynamic code/import escapes | `eval`, `Function`, constructor aliases, `Reflect.get`/property-descriptor retrieval, dynamic imports, string/Wasm code generation, and unresolved imports fail closed | SDK source/built-validator and services-build compiler tests plus isolated-host VM tests |
+| Runaway CPU, recursion, queues, actions, state, or heap | Scheduler budgets reject floods; worker wall-time/resource limits terminate the isolated worker and restore last-known-good modules/state | `@tileborne/runtime` scheduler tests and `apps/game-host` isolated-runtime tests |
+| Execution in a privileged/editor process | Gameplay never executes in Electron renderer, preload, or main. Local playtest uses a Node worker; authoritative/shipped execution uses a separate Workerd service | `@tileborne/boundary-tests` behavior boundary plus game-host isolation smoke |
+| Debug-data disclosure or unbounded retention | Debug values are JSON-only and size/depth/count bounded; secret-like keys plus POSIX, drive, UNC, and traversal paths are redacted; scheduler retains only the newest bounded trace/diagnostic windows | desktop playtest-runtime-host tests and runtime scheduler tests |
+
+Default in-process scheduler limits are 8 ms per handler, 64 KiB state per
+instance, 2 MiB scheduler-accounted memory, queue depth 512, recursion depth 16,
+128 actions per dispatch, 2,048 actions per tick, and 256 retained traces and
+diagnostics. The local isolated host additionally defaults to a 250 ms hard wall
+deadline and Node worker heap/stack resource limits. Host profiles may tighten
+these values; raising them is an owned runtime/security decision, not a project
+script option.
+
+Behavior source, diagnostics, traces, and artifacts remain project-local unless
+the user invokes an explicit existing export or publish operation. Runtime
+inspection is ephemeral and bounded; Tileborne does not silently upload gameplay
+source or debug traces. A new SDK capability requires a typed declaration,
+source/build validation, authoritative runtime handler, documentation,
+adversarial tests, and security review.
+
 ## Handoff tokens (game-host)
 
 Playtest and room WebSocket upgrades require short-lived HMAC tokens minted by the Worker and validated inside the Durable Object:

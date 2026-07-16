@@ -21,6 +21,8 @@ export default defineConfig({
             { label: "Editor UX", slug: "editor-ux" },
             { label: "Runtime & Game Host", slug: "runtime" },
             { label: "Runtime SDK", slug: "runtime/sdk" },
+            { label: "Gameplay Behaviors", slug: "gameplay-behaviors" },
+            { label: "Battle Royale Creator Guide", slug: "battle-royale/creator-guide" },
             { label: "Plugins", slug: "plugins" },
             { label: "Plugin SDK", slug: "plugins/sdk" },
             { label: "Asset Pipeline", slug: "asset-pipeline" },

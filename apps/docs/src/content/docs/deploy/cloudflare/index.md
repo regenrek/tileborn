@@ -21,8 +21,11 @@ Default output layout:
 dist/game-host-cloudflare/
   worker.js
   worker.js.map
+  behavior-worker.js     # isolated untrusted gameplay execution service
+  behavior-worker.js.map
   manifest.json          # BundledManifest (content-addressed buildId, hashed maps entries)
-  wrangler.toml          # generated hints
+  wrangler.toml          # room worker + BEHAVIOR_RUNTIME service binding
+  wrangler.behavior.toml # behavior service + hard CPU limit
   plugin/
   assets/
   maps/                  # RuntimeMapPackage per shipped map (--project)
@@ -94,7 +97,10 @@ For a release-candidate gate, record both the local-compatible artifact proof an
    pnpm --filter @tileborne/game-host test:smoke
    ```
 
-   This proves the thin product-repo scaffold, bundled map package, generated `worker.js`, generated `wrangler.toml`, local Miniflare host, `/discover`, room creation, lobby readiness, reconnect, and results endpoints without mutating a Cloudflare account.
+   This proves the thin product-repo scaffold, bundled map package, separate
+   room and behavior workers, generated service binding, local two-workerd
+   Miniflare host, `/discover`, room creation, lobby readiness, reconnect, and
+   results endpoints without mutating a Cloudflare account.
 
 2. For a real bring-your-own account deploy, the operator must explicitly approve the target account/stage and provide credentials out of band. Do not commit `.env` files, API tokens, `HANDOFF_SIGNING_KEY`, `ALCHEMY_PASSWORD`, or generated account-specific Wrangler/Alchemy state.
 

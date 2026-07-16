@@ -16,6 +16,8 @@ const CANONICAL_PAGES = [
   "architecture",
   "editor-ux",
   "runtime",
+  "gameplay-behaviors",
+  "battle-royale/creator-guide",
   "plugins",
   "cli",
   "adrs",

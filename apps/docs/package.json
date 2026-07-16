@@ -10,7 +10,7 @@
     "preview": "astro preview",
     "typecheck": "astro sync && tsc --noEmit -p tsconfig.json",
     "lint": "eslint src scripts vitest.config.ts astro.config.mjs",
-    "test": "node scripts/prebuild.mjs && vitest run --config vitest.config.ts"
+    "test": "node scripts/prebuild.mjs && astro build && vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@astrojs/starlight": "0.39.2",

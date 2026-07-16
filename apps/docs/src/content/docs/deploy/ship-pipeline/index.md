@@ -90,10 +90,17 @@ Operational policy for shipped rooms:
 ## 3b. Deploy: `wrangler deploy`
 
 ```bash
+wrangler deploy --config dist/game/wrangler.behavior.toml
 wrangler deploy --config dist/game/wrangler.toml
 ```
 
-The generated `wrangler.toml` wires the worker and Durable Object room class. It deliberately ships **no** `HANDOFF_SIGNING_KEY` value — the key is a secret, and the worker rejects missing, short, and known-placeholder keys. Set it once before the first deploy:
+The behavior worker is deployed first so the main worker's `BEHAVIOR_RUNTIME`
+service binding always resolves. It owns untrusted gameplay execution in a
+separate isolate with a hard CPU limit; the room Durable Object never imports
+behavior modules. The generated `wrangler.toml` wires that service and the room
+class. It deliberately ships **no** `HANDOFF_SIGNING_KEY` value — the key is a
+secret, and the worker rejects missing, short, and known-placeholder keys. Set
+it once before the first deploy:
 
 ```bash
 wrangler secret put HANDOFF_SIGNING_KEY --config dist/game/wrangler.toml

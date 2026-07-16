@@ -1,109 +1,122 @@
 ---
 title: Plugin SDK
-description: Manifest schema, contributions, executable adapter contract, and distribution.
+description: Exact manifest, contribution, executable entry, packaging, and installation contracts.
 ---
 
 # Plugin SDK
 
-This guide extends [Plugins](/plugins/) with author-facing SDK details. Import types from `@tileborne/plugin-api` in plugin repos; never import Node or Electron from renderer-facing plugin UI.
+Import public contracts from `@tileborne/plugin-api`. Use `PluginManifest` (also exported as `PluginManifestSchema`) to decode manifests; the implementation is `packages/plugin-api/src/manifest.ts`.
 
-## Manifest schema
-
-Each plugin ships `tileborne-plugin.json` at its root:
+## Minimal valid manifest
 
 ```json
 {
   "schemaVersion": 1,
-  "id": "example.gameplay",
-  "name": "example.gameplay",
+  "id": "@tileborne-plugins/example-gameplay",
+  "name": "@tileborne-plugins/example-gameplay",
   "version": "0.1.0",
   "displayName": "Example Gameplay",
+  "description": "Example Tileborne plugin.",
+  "author": "Example Studio",
+  "license": "MIT",
   "engines": { "tileborne": "^0.1.0" },
+  "entry": { "runtime": "./dist/runtime.js", "server": "./dist/server.js" },
   "contributes": {},
   "permissions": [],
   "dependsOn": []
 }
 ```
 
-Validation runs through Effect Schema (`manifest.schema.ts`). Engine range mismatch fails install.
+The schema requires npm-style scoped plugin ids, a strict semantic version, and a Tileborne semver range. `repository`, `homepage`, `entry`, and `migrations` are optional. Manifests do not carry integrity metadata. Installation hashes the verified directory into `lock.json`; tarball installation can independently require an expected content hash.
 
-Optional `integrity` block (`algorithm: sha256`, `hash`) is verified on install.
+## Declarative authoring
 
-Full field reference: [plugin-api API docs](/reference/plugin-api/).
+Prefer schema-driven contributions. Behavior blocks, templates, game settings forms, catalogs, HUD/input/audio declarations, and game-mode links remain serialized data and need no executable renderer UI. The renderer receives decoded IPC data and maps stable capability/icon ids through its own registries.
 
-## Contribution model
+```json
+{
+  "contributes": {
+    "behaviorEntries": [{
+      "id": "example.enemy-defeated",
+      "kind": "event",
+      "label": "Enemy defeated",
+      "category": "Example",
+      "description": "Runs after an enemy is defeated.",
+      "capability": "example.combat",
+      "inputs": [],
+      "outputs": []
+    }],
+    "behaviorTemplates": [{
+      "id": "example.next-wave",
+      "label": "Next wave",
+      "description": "Start a new wave.",
+      "category": "Example",
+      "requiredCapabilities": ["example.combat"],
+      "when": { "entryId": "example.enemy-defeated", "arguments": {} },
+      "do": []
+    }]
+  }
+}
+```
 
-### Declarative (renderer-safe)
+## Executable entries
 
-Serialized JSON/metadata consumed by `@tileborne/ui` and the editor shell:
+`PluginLoaderService.loadExecutable` verifies the installed directory and lock, contains the selected entry path, then imports it only in an allowed process. Its generic selection order is `entry.server`, then `entry.runtime`, then `entry.editor`; declare separate files when their contracts differ.
 
-- Palette categories, inspector panels, overlays
-- Validator configs, exporter metadata, generator dialogs
-- Asset metadata, commands, presets
-
-These never execute arbitrary code in the renderer during Phase A.
-
-### Executable (main / CLI / game-host only)
-
-Functions exported from the plugin `dist/` entry:
-
-| Hook | Purpose |
-| --- | --- |
-| `validateProject` / `validateMap` | Lint before export or playtest |
-| `exportModeData` | Mode-data section of the runtime map package |
-| `generateMap` | Procedural generation |
-| `importAsset` / `postProcessAssetPack` | Custom import transforms |
-| `createRuntimeAdapter` | Register runtime systems |
-
-Executable modules are loaded on demand in trusted contexts only.
-
-## Runtime adapter contract
-
-Game plugins bundled into `@tileborne/runtime` / game-host expose a runtime module default export:
+The shipped game-host bundle statically consumes the runtime entry's **named** `createRuntimeAdapter` export. The public worker-safe structural types live in `@tileborne/plugin-api`:
 
 ```ts
-export default {
-  id: "@tileborne-plugins/battle-royale",
-  onInit(ctx) { /* register ECS systems, load assets */ },
-  onTick(ctx, dt) { /* optional per-frame hook */ },
-  onMessage(ctx, msg) { /* net/event bus */ },
-  onShutdown(ctx) { /* cleanup */ },
-};
+import type { CreateRuntimeAdapter, RuntimeAdapterHost } from '@tileborne/plugin-api';
+
+interface ExampleHost extends RuntimeAdapterHost {
+  readonly emit: (event: { readonly kind: string; readonly tick: number }) => void;
+}
+
+export const createRuntimeAdapter: CreateRuntimeAdapter<ExampleHost> = (host) => ({
+  id: '@tileborne-plugins/example-gameplay',
+  onInit(context, world) {
+    world.registerComponent<{ readonly started: boolean }>('example.started');
+    host.emit({ kind: `${context.pluginId}.started`, tick: 0 });
+  },
+  onTick(world, deltaSeconds, tick) {
+    host.emit({ kind: 'example.tick', tick });
+  },
+});
 ```
 
-The game-host `PluginHost` calls lifecycle hooks during room boot, alarm ticks, and teardown. Client-side systems register through the same plugin bundle at build time — there is no dynamic `require` on Workers.
+Do not publish a default runtime object and expect the game host to discover it. Server validators/exporters use the named exports referenced by their owned contribution contracts. Cloudflare Ship bundles selected plugin modules at build time; Workers do not perform dynamic package discovery.
 
-## Distribution model
+The repository's [runtime adapter example](https://github.com/tileborne/tileborne/blob/main/packages/plugin-api/examples/runtime-adapter.ts) is compiled by `@tileborne/plugin-api` typecheck. Its [manifest fixture](https://github.com/tileborne/tileborne/blob/main/packages/plugin-api/examples/tileborne-plugin.json) is decoded with the production `PluginManifest` and the adapter is executed by the package test suite.
 
-| Channel | Use case |
-| --- | --- |
-| npm package | `tileborne plugin add <spec>` |
-| Local path | `tileborne plugin install --local ./my-plugin` |
-| Git URL / tarball | CI and private registries |
-| Dev symlink | Monorepo plugin development |
+Executable plugins are trusted code. Phase A blocks them in the renderer, validates paths/symlinks/integrity, and checks declared contribution contracts, but does not sandbox arbitrary main/CLI Node APIs. Keep renderer UX declarative and install only trusted executable plugins.
 
-Installed plugins land in `~/.tileborne/plugins/<id>/` with lock metadata. Cloudflare deploy bundles the selected plugin at **`tileborne game build --target cloudflare --plugin <id>`** — see [Cloudflare deploy](/deploy/cloudflare/).
-
-## Reference plugin
-
-The OSS [`tileborne-plugins`](https://github.com/tileborne/tileborne-plugins) repository publishes **battle-royale**:
-
-- Declarative editor contributions (palette, validators)
-- Executable export and runtime systems
-- Cloudflare bundle consumed by game-host smoke tests
+## Package and verify
 
 ```bash
-tileborne plugin add battle-royale
-tileborne plugin validate
+pnpm --filter @tileborne/plugin-example-arena test
+pnpm --filter @tileborne/plugin-example-arena build
+tileborne plugin pack ./packages/plugin-example-arena --out dist/example-arena.tbpack
+tileborne plugin install --tarball ./dist/example-arena.tbpack --integrity sha256:<64-hex-digest>
+tileborne plugin verify @tileborne-plugins/example-arena
 ```
 
-## Permissions
+Local iteration can use `tileborne plugin install --dev-symlink <directory>` or the equivalent `tileborne plugin link <directory>`. Installed roots use `$TILEBORNE_HOME/plugins/<encodeURIComponent(id)>-<version>/` and contain `tileborne-plugin.json` plus computed `lock.json`.
 
-Plugins declare `permissions` for filesystem roots, network, and IPC channels. Undeclared access is rejected at load time. All writes go through Tileborne services — plugins cannot silently escape allowed directories.
+## Release checklist
+
+- Decode the exact manifest and every referenced contribution.
+- Keep paths relative, traversal-free, and symlink-contained.
+- Test missing, disabled, malformed, incompatible, and integrity-drift states.
+- Export `createRuntimeAdapter` by name from the runtime entry.
+- Keep neutral orchestration free of plugin-id branching.
+- Run plugin unit tests, CLI install/verify, build/Ship, and copied-artifact execution.
+- Document creator workflow, known limits, and version/migration policy.
 
 ## Related reading
 
-- [ADR-0001: Plugin UI model, declarative first](/adrs/0001-plugin-ui-model-declarative-first/)
-- [ADR-0004: Cloudflare build-time plugin bundling](/adrs/0004-cloudflare-build-time-plugin-bundling/)
+- [Plugins](/plugins/)
+- [Gameplay Behaviors](/gameplay-behaviors/)
+- [API: @tileborne/plugin-api](/reference/plugin-api/)
+- [API: @tileborne/game-sdk](/reference/game-sdk/)
 - [Security model](/security/)
-- [Runtime SDK](/runtime/sdk/)
+- [Battle Royale runtime adapter source](https://github.com/tileborne/tileborne/blob/main/packages/plugin-battle-royale/src/runtime-adapter.ts)

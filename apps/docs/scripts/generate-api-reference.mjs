@@ -25,6 +25,12 @@ const PUBLIC_PACKAGES = [
     description: "Renderer-agnostic game runtime SDK with Pixi adapter defaults.",
   },
   {
+    id: "game-sdk",
+    title: "@tileborne/game-sdk",
+    entry: "../../packages/game-sdk/src/index.ts",
+    description: "Native TypeScript gameplay behavior API, deterministic context, references, and test harness.",
+  },
+  {
     id: "plugin-api",
     title: "@tileborne/plugin-api",
     entry: "../../packages/plugin-api/src/index.ts",

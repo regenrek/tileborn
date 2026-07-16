@@ -1,6 +1,16 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  cp,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -62,7 +72,11 @@ import {
   isNotFound,
   readJson,
 } from '../internal/files.js';
-import { recoverProjectRevisionTransaction } from '../internal/project-revision-transaction.js';
+import {
+  commitProjectManifestRevision,
+  recoverProjectRevisionTransaction,
+  type ProjectManifestRevisionTransactionFaultPhase,
+} from '../internal/project-revision-transaction.js';
 
 export interface ProjectCreateSpec {
   readonly name: string;
@@ -321,11 +335,27 @@ export const projectMigrationChain = defineMigrationChain<ProjectManifest>({
   ],
 });
 
+const syncDirectory = async (directory: string): Promise<void> => {
+  const handle = await open(directory, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+};
+
 const atomicWriteText = async (filePath: string, contents: string): Promise<void> => {
   const temporary = `${filePath}.tmp-${randomUUID()}`;
+  const handle = await open(temporary, 'wx');
   try {
-    await writeFile(temporary, contents, { encoding: 'utf8', flag: 'wx' });
+    await handle.writeFile(contents, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  try {
     await rename(temporary, filePath);
+    await syncDirectory(path.dirname(filePath));
   } finally {
     await rm(temporary, { force: true });
   }
@@ -379,10 +409,14 @@ const verifiedProjectManifestBackup = async (
   projectRoot: string,
   raw: string,
   fromVersion: number,
+  faultAfterPhase?:
+    | ((phase: ProjectManifestRevisionTransactionFaultPhase) => void | Promise<void>)
+    | undefined,
 ): Promise<string> => {
   const backupDirectory = path.join(projectRoot, PROJECT_MANIFEST_BACKUP_DIRECTORY);
   await mkdir(backupDirectory, { recursive: true });
   await rejectSymlinkEscape(projectRoot, backupDirectory);
+  await faultAfterPhase?.('backup-directory-ready');
 
   const digest = createHash('sha256').update(raw).digest('hex');
   const relativeBackupPath = path.join(
@@ -402,6 +436,7 @@ const verifiedProjectManifestBackup = async (
   } else if (existing !== raw) {
     throw new Error(`project migration backup collision at ${relativeBackupPath}`);
   }
+  await faultAfterPhase?.('backup-installed');
 
   const verifiedPath = await rejectSymlinkEscape(projectRoot, backupPath);
   const verifiedRaw = await readFile(verifiedPath, 'utf8');
@@ -414,18 +449,23 @@ const verifiedProjectManifestBackup = async (
   }
   verifyProjectManifestBackupIdentity(relativeBackupPath, verifiedRaw);
   decodeRestorableProjectManifest(verifiedRaw);
+  await faultAfterPhase?.('backup-verified');
   return relativeBackupPath;
 };
 
 /**
  * Restore an exact-byte project-manifest migration backup after validating that
  * it is contained by the project, unmodified, and still migrates to the current
- * schema. The manifest and a matching integrity lock are replaced together;
- * both previous files are restored if installation or verified reopen fails.
+ * schema. The manifest and a matching integrity lock are replaced through the
+ * canonical durable project-revision journal, so restart rolls a mixed pair
+ * forward without losing the exact backup bytes.
  */
 export const restoreProjectManifestBackupAtRoot = (
   projectRoot: string,
   relativeBackupPath: string,
+  faultAfterPhase?:
+    | ((phase: ProjectManifestRevisionTransactionFaultPhase) => void | Promise<void>)
+    | undefined,
 ): Effect.Effect<void, ProjectMigrationError> =>
   Effect.tryPromise({
     try: async () => {
@@ -441,7 +481,6 @@ export const restoreProjectManifestBackupAtRoot = (
       verifyProjectManifestBackupIdentity(backupPath, raw);
       const manifest = decodeRestorableProjectManifest(raw);
 
-      const previousManifestRaw = await readFile(manifestFile, 'utf8');
       const previousLockRaw = await readFile(lockFile, 'utf8');
       const currentLock = Schema.decodeUnknownSync(ProjectIntegrityLock)(
         JSON.parse(previousLockRaw) as unknown,
@@ -454,43 +493,36 @@ export const restoreProjectManifestBackupAtRoot = (
         maps: [...currentLock.maps],
       });
       const encodedLock = Schema.encodeSync(ProjectIntegrityLock)(nextLock);
-      const nextLockRaw = `${JSON.stringify(encodedLock, null, 2)}\n`;
+      await commitProjectManifestRevision({
+        projectRoot,
+        projectId: manifest.id,
+        rawProject: raw,
+        projectIntegrityHash: restoredHash,
+        buildSnapshots: () => ({
+          project: JSON.parse(raw) as unknown,
+          lock: encodedLock,
+        }),
+        faultAfterPhase,
+      });
 
-      try {
-        await atomicWriteText(manifestFile, raw);
-        await atomicWriteText(lockFile, nextLockRaw);
-
-        const restoredRaw = await readFile(manifestFile, 'utf8');
-        const installedLockRaw = await readFile(lockFile, 'utf8');
-        if (restoredRaw !== raw) {
-          throw new Error('restored project manifest does not match its verified backup');
-        }
-        const verifiedManifest = decodeRestorableProjectManifest(restoredRaw);
-        const verifiedLock = Schema.decodeUnknownSync(ProjectIntegrityLock)(
-          JSON.parse(installedLockRaw) as unknown,
-        );
-        const verifiedHash = hashJsonStable(
-          Schema.encodeSync(ProjectManifestSchema)(verifiedManifest),
-        );
-        if (verifiedLock.projectHash !== verifiedHash) {
-          throw new Error('restored project integrity lock does not match the restored manifest');
-        }
-        const reopened = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
-        if (reopened.id !== manifest.id || reopened.schemaVersion !== manifest.schemaVersion) {
-          throw new Error('restored project verification returned a different manifest identity');
-        }
-      } catch (cause) {
-        try {
-          await atomicWriteText(manifestFile, previousManifestRaw);
-          await atomicWriteText(lockFile, previousLockRaw);
-        } catch (rollbackCause) {
-          throw new AggregateError(
-            [cause],
-            `restore failed (${errorMessage(cause)}) and rollback failed (${errorMessage(rollbackCause)})`,
-            { cause: rollbackCause },
-          );
-        }
-        throw cause;
+      const restoredRaw = await readFile(manifestFile, 'utf8');
+      const installedLockRaw = await readFile(lockFile, 'utf8');
+      if (restoredRaw !== raw) {
+        throw new Error('restored project manifest does not match its verified backup');
+      }
+      const verifiedManifest = decodeRestorableProjectManifest(restoredRaw);
+      const verifiedLock = Schema.decodeUnknownSync(ProjectIntegrityLock)(
+        JSON.parse(installedLockRaw) as unknown,
+      );
+      const verifiedHash = hashJsonStable(
+        Schema.encodeSync(ProjectManifestSchema)(verifiedManifest),
+      );
+      if (verifiedLock.projectHash !== verifiedHash) {
+        throw new Error('restored project integrity lock does not match the restored manifest');
+      }
+      const reopened = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
+      if (reopened.id !== manifest.id || reopened.schemaVersion !== manifest.schemaVersion) {
+        throw new Error('restored project verification returned a different manifest identity');
       }
     },
     catch: (cause) =>
@@ -655,11 +687,6 @@ export const writeProjectWithLock = (
       project,
       (message) => new ProjectSaveError({ path: projectManifestPath(projectDir), message }),
     );
-    yield* writeJsonAtomic(projectManifestPath(projectDir), encodedProject).pipe(
-      Effect.mapError(
-        (error) => new ProjectSaveError({ path: error.path, message: error.message }),
-      ),
-    );
     const lock = new ProjectIntegrityLock({
       schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
       projectHash: yield* projectHash(project),
@@ -670,11 +697,48 @@ export const writeProjectWithLock = (
       lock,
       (message) => new ProjectSaveError({ path: projectLockPath(projectDir), message }),
     );
-    yield* writeJsonAtomic(projectLockPath(projectDir), encodedLock).pipe(
-      Effect.mapError(
-        (error) => new ProjectSaveError({ path: error.path, message: error.message }),
-      ),
-    );
+    const manifestFile = projectManifestPath(projectDir);
+    const lockFile = projectLockPath(projectDir);
+    const [manifestExists, lockExists] = yield* Effect.tryPromise({
+      try: () =>
+        Promise.all(
+          [manifestFile, lockFile].map((filePath) =>
+            access(filePath).then(
+              () => true,
+              (cause) => (isNotFound(cause) ? false : Promise.reject(cause)),
+            ),
+          ),
+        ),
+      catch: (cause) => new ProjectSaveError({ path: projectDir, message: errorMessage(cause) }),
+    });
+    if (manifestExists !== lockExists) {
+      return yield* new ProjectSaveError({
+        path: projectDir,
+        message: 'refusing to replace a partial project manifest/integrity-lock pair',
+      });
+    }
+    if (manifestExists) {
+      yield* Effect.tryPromise({
+        try: () =>
+          commitProjectManifestRevision({
+            projectRoot: projectDir,
+            projectId: project.id,
+            buildSnapshots: () => ({ project: encodedProject, lock: encodedLock }),
+          }),
+        catch: (cause) => new ProjectSaveError({ path: projectDir, message: errorMessage(cause) }),
+      });
+    } else {
+      yield* writeJsonAtomic(manifestFile, encodedProject).pipe(
+        Effect.mapError(
+          (error) => new ProjectSaveError({ path: error.path, message: error.message }),
+        ),
+      );
+      yield* writeJsonAtomic(lockFile, encodedLock).pipe(
+        Effect.mapError(
+          (error) => new ProjectSaveError({ path: error.path, message: error.message }),
+        ),
+      );
+    }
   });
 
 export const writeProjectPreservingMapLocks = (
@@ -695,6 +759,102 @@ export const writeProjectPreservingMapLocks = (
       ),
     );
     yield* writeProjectWithLock(projectDir, project, lock.maps);
+  });
+
+/** Canonical, fault-injectable owner for backup-first project migration. */
+export const upgradeProjectManifestAtRoot = (
+  projectRoot: string,
+  faultAfterPhase?:
+    | ((phase: ProjectManifestRevisionTransactionFaultPhase) => void | Promise<void>)
+    | undefined,
+): Effect.Effect<
+  ProjectUpgradeResult,
+  ProjectPathNotFoundError | ProjectValidationError | ProjectMigrationError | ProjectSaveError
+> =>
+  Effect.gen(function* () {
+    const manifestFile = projectManifestPath(projectRoot);
+    const raw = yield* Effect.tryPromise({
+      try: () => readFile(manifestFile, 'utf8'),
+      catch: (cause) =>
+        new ProjectPathNotFoundError({ path: projectRoot, message: errorMessage(cause) }),
+    });
+    const parsed = yield* Effect.try({
+      try: () => JSON.parse(raw),
+      catch: (cause) =>
+        new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
+    });
+    const fromVersion = yield* Effect.try({
+      try: () => projectManifestSchemaVersion(parsed),
+      catch: (cause) =>
+        new ProjectMigrationError({ path: manifestFile, message: errorMessage(cause) }),
+    });
+    const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
+    const manifest = yield* Result.match(migrated, {
+      onFailure: (message) =>
+        Effect.fail(new ProjectMigrationError({ path: manifestFile, message })),
+      onSuccess: (value) =>
+        Effect.try({
+          try: () => Schema.decodeUnknownSync(ProjectManifestSchema)(value),
+          catch: (cause) =>
+            new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
+        }),
+    });
+    const changed = fromVersion !== PERSISTED_SCHEMA_VERSIONS.projectManifest;
+    let backupPath: string | undefined;
+    if (changed) {
+      backupPath = yield* Effect.tryPromise({
+        try: () => verifiedProjectManifestBackup(projectRoot, raw, fromVersion, faultAfterPhase),
+        catch: (cause) =>
+          new ProjectMigrationError({
+            path: manifestFile,
+            message: `failed to create verified pre-migration backup: ${errorMessage(cause)}`,
+          }),
+      });
+      const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
+        Effect.catchTag('ProjectValidationError', () =>
+          Effect.succeed(
+            new ProjectIntegrityLock({
+              schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+              projectHash: hashJsonStable({}),
+              maps: [],
+            }),
+          ),
+        ),
+      );
+      const encodedProject = yield* encodeJson(
+        ProjectManifestSchema,
+        manifest,
+        (message) => new ProjectSaveError({ path: manifestFile, message }),
+      );
+      const nextLock = new ProjectIntegrityLock({
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+        projectHash: yield* projectHash(manifest),
+        maps: [...lock.maps],
+      });
+      const encodedLock = yield* encodeJson(
+        ProjectIntegrityLock,
+        nextLock,
+        (message) => new ProjectSaveError({ path: projectLockPath(projectRoot), message }),
+      );
+      yield* Effect.tryPromise({
+        try: () =>
+          commitProjectManifestRevision({
+            projectRoot,
+            projectId: manifest.id,
+            buildSnapshots: () => ({ project: encodedProject, lock: encodedLock }),
+            faultAfterPhase,
+          }),
+        catch: (cause) => new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
+      });
+    }
+    return {
+      manifest,
+      path: projectRoot,
+      fromVersion,
+      toVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+      changed,
+      ...(backupPath === undefined ? {} : { backupPath }),
+    };
   });
 
 export const updateProjectMaps = (
@@ -1137,68 +1297,7 @@ export const ProjectServiceLive = Layer.effect(
 
     const upgrade = Effect.fn('ProjectService.upgrade')(function* (at?: string | undefined) {
       const projectRoot = resolveProjectRoot(at, cwd);
-      const manifestFile = projectManifestPath(projectRoot);
-      const raw = yield* Effect.tryPromise({
-        try: () => readFile(manifestFile, 'utf8'),
-        catch: (cause) =>
-          new ProjectPathNotFoundError({
-            path: projectRoot,
-            message: errorMessage(cause),
-          }),
-      });
-      const parsed = yield* Effect.try({
-        try: () => JSON.parse(raw),
-        catch: (cause) =>
-          new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
-      });
-      const fromVersion = yield* Effect.try({
-        try: () => projectManifestSchemaVersion(parsed),
-        catch: (cause) =>
-          new ProjectMigrationError({ path: manifestFile, message: errorMessage(cause) }),
-      });
-      const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
-      const manifest = yield* Result.match(migrated, {
-        onFailure: (message) =>
-          Effect.fail(new ProjectMigrationError({ path: manifestFile, message })),
-        onSuccess: (value) =>
-          Effect.try({
-            try: () => Schema.decodeUnknownSync(ProjectManifestSchema)(value),
-            catch: (cause) =>
-              new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
-          }),
-      });
-      const changed = fromVersion !== PERSISTED_SCHEMA_VERSIONS.projectManifest;
-      let backupPath: string | undefined;
-      if (changed) {
-        backupPath = yield* Effect.tryPromise({
-          try: () => verifiedProjectManifestBackup(projectRoot, raw, fromVersion),
-          catch: (cause) =>
-            new ProjectMigrationError({
-              path: manifestFile,
-              message: `failed to create verified pre-migration backup: ${errorMessage(cause)}`,
-            }),
-        });
-        const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
-          Effect.catchTag('ProjectValidationError', () =>
-            Effect.succeed(
-              new ProjectIntegrityLock({
-                schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
-                projectHash: hashJsonStable({}),
-                maps: [],
-              }),
-            ),
-          ),
-        );
-        yield* writeProjectWithLock(projectRoot, manifest, lock.maps);
-      }
-      return {
-        manifest,
-        path: projectRoot,
-        fromVersion,
-        toVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
-        changed,
-        ...(backupPath === undefined ? {} : { backupPath }),
-      };
+      return yield* upgradeProjectManifestAtRoot(projectRoot);
     });
 
     const clean = Effect.fn('ProjectService.clean')(function* (at?: string | undefined) {

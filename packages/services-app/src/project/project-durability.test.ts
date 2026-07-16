@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -12,8 +12,14 @@ import {
   readProjectLock,
   readVerifiedProjectAtRoot,
   restoreProjectManifestBackupAtRoot,
+  upgradeProjectManifestAtRoot,
   writeProjectWithLock,
 } from './index.js';
+import {
+  projectRevisionOwnerPath,
+  projectRevisionTransactionPath,
+  type ProjectManifestRevisionTransactionFaultPhase,
+} from '../internal/project-revision-transaction.js';
 
 const compatibilityFixtures = path.resolve(
   import.meta.dirname,
@@ -197,4 +203,117 @@ describe.sequential('project manifest durability fixtures', () => {
       schemaVersion: 1,
     });
   });
+
+  const migrationFaultPhases = [
+    'backup-directory-ready',
+    'backup-installed',
+    'backup-verified',
+    'owner-acquired',
+    'prepared',
+    'project-installed',
+    'lock-installed',
+  ] as const satisfies readonly ProjectManifestRevisionTransactionFaultPhase[];
+
+  it.each(migrationFaultPhases)(
+    'restart converges a backup-first migration after a crash at %s',
+    async (faultPhase) => {
+      const { projectRoot, raw } = await stageFixture('legacy-v0');
+      const outside = path.join(path.dirname(projectRoot), 'outside-sentinel.txt');
+      await writeFile(outside, 'outside-sentinel', 'utf8');
+
+      await expect(
+        Effect.runPromise(
+          upgradeProjectManifestAtRoot(projectRoot, (phase) => {
+            if (phase === faultPhase) throw new Error(`simulated crash after ${phase}`);
+          }),
+        ),
+      ).rejects.toMatchObject({
+        message: expect.stringContaining(`simulated crash after ${faultPhase}`),
+      });
+
+      if (
+        faultPhase === 'backup-directory-ready' ||
+        faultPhase === 'backup-installed' ||
+        faultPhase === 'backup-verified' ||
+        faultPhase === 'owner-acquired' ||
+        faultPhase === 'prepared'
+      ) {
+        await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(raw);
+        await Effect.runPromise(upgradeProjectManifestAtRoot(projectRoot));
+      }
+
+      const reopened = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
+      expect(reopened).toMatchObject({ name: 'Legacy Project', schemaVersion: 1 });
+      const backupDirectory = path.join(projectRoot, '.tileborne/backups/project-manifest');
+      const backups = await readdir(backupDirectory);
+      expect(backups).toHaveLength(1);
+      await expect(readFile(path.join(backupDirectory, backups[0]!), 'utf8')).resolves.toBe(raw);
+      await expect(readFile(outside, 'utf8')).resolves.toBe('outside-sentinel');
+      await expect(access(projectRevisionTransactionPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(access(projectRevisionOwnerPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    },
+  );
+
+  const restoreFaultPhases = [
+    'owner-acquired',
+    'prepared',
+    'project-installed',
+    'lock-installed',
+  ] as const satisfies readonly ProjectManifestRevisionTransactionFaultPhase[];
+
+  it.each(restoreFaultPhases)(
+    'restart converges an exact-byte backup restore after a crash at %s',
+    async (faultPhase) => {
+      const { projectRoot, raw } = await stageFixture('legacy-v0');
+      const upgradeResult = await Effect.runPromise(upgradeProjectManifestAtRoot(projectRoot));
+      const upgraded = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
+      const currentLock = await Effect.runPromise(
+        readProjectLock(path.join(projectRoot, 'project.lock.json')),
+      );
+      await Effect.runPromise(
+        writeProjectWithLock(
+          projectRoot,
+          new ProjectManifest({ ...upgraded, name: 'Edited Before Faulted Restore' }),
+          currentLock.maps,
+        ),
+      );
+
+      await expect(
+        Effect.runPromise(
+          restoreProjectManifestBackupAtRoot(projectRoot, upgradeResult.backupPath!, (phase) => {
+            if (phase === faultPhase) throw new Error(`simulated crash after ${phase}`);
+          }),
+        ),
+      ).rejects.toMatchObject({
+        message: expect.stringContaining(`simulated crash after ${faultPhase}`),
+      });
+
+      if (faultPhase === 'owner-acquired' || faultPhase === 'prepared') {
+        await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toContain(
+          'Edited Before Faulted Restore',
+        );
+        await Effect.runPromise(
+          restoreProjectManifestBackupAtRoot(projectRoot, upgradeResult.backupPath!),
+        );
+      }
+
+      await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(raw);
+      await expect(
+        Effect.runPromise(readVerifiedProjectAtRoot(projectRoot)),
+      ).resolves.toMatchObject({
+        name: 'Legacy Project',
+        schemaVersion: 1,
+      });
+      await expect(access(projectRevisionTransactionPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(access(projectRevisionOwnerPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    },
+  );
 });

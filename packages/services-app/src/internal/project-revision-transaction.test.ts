@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   commitMapProjectRevision,
+  commitProjectManifestRevision,
   projectRevisionOwnerClaimPrefix,
   projectRevisionOwnerPath,
   projectRevisionTransactionPath,
@@ -260,6 +261,71 @@ describe('project revision transaction recovery', () => {
     ).rejects.toThrow(/lock projectHash/);
     expect(await readJson(state.mapTarget)).toEqual(state.old.map);
     await expectMissing(projectRevisionOwnerPath(state.projectRoot));
+  });
+
+  it('refuses a manifest-journal path escape without touching source or outside bytes', async () => {
+    const state = await fixture();
+    await expect(
+      commitProjectManifestRevision({
+        projectRoot: state.projectRoot,
+        projectId: state.projectId,
+        buildSnapshots: () => ({ project: state.next.project, lock: state.next.lock }),
+        faultAfterPhase: (phase) => {
+          if (phase === 'prepared') throw new Error('leave prepared manifest journal');
+        },
+      }),
+    ).rejects.toThrow('leave prepared manifest journal');
+    const outside = path.join(path.dirname(state.projectRoot), 'outside-journal-target.json');
+    roots.push(outside);
+    await writeFile(outside, 'outside-sentinel', 'utf8');
+    const journal = (await readJson(projectRevisionTransactionPath(state.projectRoot))) as Record<
+      string,
+      unknown
+    >;
+    await writeJson(projectRevisionTransactionPath(state.projectRoot), {
+      ...journal,
+      targets: { project: '../outside-journal-target.json', lock: 'project.lock.json' },
+    });
+
+    await expect(recoverProjectRevisionTransaction(state.projectRoot)).rejects.toThrow(
+      /journal targets/,
+    );
+    expect(await readJson(state.mapTarget)).toEqual(state.old.map);
+    expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(state.old.project);
+    await expect(readFile(outside, 'utf8')).resolves.toBe('outside-sentinel');
+  });
+
+  it('refuses tampered exact project bytes in a manifest journal without source loss', async () => {
+    const state = await fixture();
+    const rawProject = `${JSON.stringify(state.next.project, null, 2)}\n`;
+    await expect(
+      commitProjectManifestRevision({
+        projectRoot: state.projectRoot,
+        projectId: state.projectId,
+        rawProject,
+        projectIntegrityHash: hashJsonStable(state.next.project),
+        buildSnapshots: () => ({ project: state.next.project, lock: state.next.lock }),
+        faultAfterPhase: (phase) => {
+          if (phase === 'prepared') throw new Error('leave raw manifest journal');
+        },
+      }),
+    ).rejects.toThrow('leave raw manifest journal');
+    const journal = (await readJson(projectRevisionTransactionPath(state.projectRoot))) as Record<
+      string,
+      unknown
+    >;
+    await writeJson(projectRevisionTransactionPath(state.projectRoot), {
+      ...journal,
+      rawProject: rawProject.replace('"new"', '"tampered"'),
+    });
+
+    await expect(recoverProjectRevisionTransaction(state.projectRoot)).rejects.toThrow(
+      /raw project snapshot/,
+    );
+    expect(await readJson(path.join(state.projectRoot, 'project.json'))).toEqual(state.old.project);
+    expect(await readJson(path.join(state.projectRoot, 'project.lock.json'))).toEqual(
+      state.old.lock,
+    );
   });
 
   it('recovers a partial commit left by a crashed foreign process', async () => {

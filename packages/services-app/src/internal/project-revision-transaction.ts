@@ -12,6 +12,7 @@ const OWNER_CLAIM_PREFIX = 'project-revision-owner.claim-';
 const OWNER_PREPARE_PREFIX = 'project-revision-owner.prepare-';
 const PROJECT_TARGET = 'project.json';
 const LOCK_TARGET = 'project.lock.json';
+const MISSING_TARGET_HASH = 'missing';
 
 export type ProjectRevisionTransactionPhase =
   | 'prepared'
@@ -29,6 +30,12 @@ export type ProjectRevisionTransactionFaultPhase =
   | 'takeover-recovered'
   | ProjectRevisionTransactionPhase;
 
+export type ProjectManifestRevisionTransactionFaultPhase =
+  | 'backup-directory-ready'
+  | 'backup-installed'
+  | 'backup-verified'
+  | ProjectRevisionTransactionFaultPhase;
+
 interface ProjectRevisionTransactionOwner {
   readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectRevisionOwner;
   readonly id: string;
@@ -38,31 +45,35 @@ interface ProjectRevisionTransactionOwner {
 interface ProjectRevisionTransactionJournal {
   readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal;
   readonly id: string;
-  readonly kind: 'map-project-revision';
+  readonly kind: 'map-project-revision' | 'project-manifest-revision';
   readonly ownerPid: number;
   readonly projectId: string;
-  readonly mapId: string;
+  readonly mapId?: string | undefined;
   readonly phase: ProjectRevisionTransactionPhase;
   readonly targets: {
-    readonly map: string;
+    readonly map?: string | undefined;
     readonly project: typeof PROJECT_TARGET;
     readonly lock: typeof LOCK_TARGET;
   };
   readonly oldHashes: {
-    readonly map: string;
+    readonly map?: string | undefined;
     readonly project: string;
     readonly lock: string;
   };
   readonly newHashes: {
-    readonly map: string;
+    readonly map?: string | undefined;
     readonly project: string;
     readonly lock: string;
   };
   readonly snapshots: {
-    readonly map: unknown;
+    readonly map?: unknown;
     readonly project: unknown;
     readonly lock: unknown;
   };
+  /** Exact project bytes used by backup restore; hashes still cover parsed JSON. */
+  readonly rawProject?: string | undefined;
+  /** Hash used by the lock after in-memory migration of an exact legacy source. */
+  readonly projectIntegrityHash?: string | undefined;
 }
 
 export interface CommitMapProjectRevisionInput {
@@ -80,6 +91,23 @@ export interface CommitMapProjectRevisionInput {
   ) =>
     | ProjectRevisionTransactionJournal['snapshots']
     | Promise<ProjectRevisionTransactionJournal['snapshots']>;
+  readonly faultAfterPhase?:
+    | ((phase: ProjectRevisionTransactionFaultPhase) => void | Promise<void>)
+    | undefined;
+}
+
+export interface CommitProjectManifestRevisionInput {
+  readonly projectRoot: string;
+  readonly projectId: string;
+  readonly buildSnapshots: (
+    current: Pick<ProjectRevisionTransactionJournal['snapshots'], 'project' | 'lock'>,
+  ) =>
+    | Pick<ProjectRevisionTransactionJournal['snapshots'], 'project' | 'lock'>
+    | Promise<Pick<ProjectRevisionTransactionJournal['snapshots'], 'project' | 'lock'>>;
+  /** Preserve these already-verified bytes instead of reserializing `project`. */
+  readonly rawProject?: string | undefined;
+  /** Defaults to the target project's stable JSON hash. */
+  readonly projectIntegrityHash?: string | undefined;
   readonly faultAfterPhase?:
     | ((phase: ProjectRevisionTransactionFaultPhase) => void | Promise<void>)
     | undefined;
@@ -106,12 +134,12 @@ const syncDirectory = async (directory: string): Promise<void> => {
   }
 };
 
-const writeDurableJsonAtomic = async (filePath: string, value: unknown): Promise<void> => {
+const writeDurableTextAtomic = async (filePath: string, contents: string): Promise<void> => {
   await mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.txn-${randomUUID()}`;
   const handle = await open(tempPath, 'wx');
   try {
-    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    await handle.writeFile(contents, 'utf8');
     await handle.sync();
   } finally {
     await handle.close();
@@ -120,11 +148,26 @@ const writeDurableJsonAtomic = async (filePath: string, value: unknown): Promise
   await syncDirectory(path.dirname(filePath));
 };
 
+const writeDurableJsonAtomic = (filePath: string, value: unknown): Promise<void> =>
+  writeDurableTextAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
+
 const readJson = async (filePath: string): Promise<unknown> =>
   JSON.parse(await readFile(filePath, 'utf8'));
 
 const currentHash = async (filePath: string): Promise<string> =>
   hashJsonStable(await readJson(filePath));
+
+const currentHashOrMissing = async (filePath: string): Promise<string> =>
+  currentHash(filePath).catch((cause) => {
+    if (isNotFound(cause)) return MISSING_TARGET_HASH;
+    throw cause;
+  });
+
+const readJsonOrMissing = async (filePath: string): Promise<unknown> =>
+  readJson(filePath).catch((cause) => {
+    if (isNotFound(cause)) return undefined;
+    throw cause;
+  });
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -141,7 +184,7 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
   if (
     !isObject(value) ||
     value.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal ||
-    value.kind !== 'map-project-revision'
+    (value.kind !== 'map-project-revision' && value.kind !== 'project-manifest-revision')
   ) {
     throw new Error('Invalid project revision journal header');
   }
@@ -149,14 +192,13 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
     throw new Error('Invalid project revision journal ownerPid');
   }
   const projectId = requireString(value, 'projectId');
-  const mapId = requireString(value, 'mapId');
+  const kind = value.kind;
+  const mapId = kind === 'map-project-revision' ? requireString(value, 'mapId') : undefined;
   const id = requireString(value, 'id');
-  const phases: readonly ProjectRevisionTransactionPhase[] = [
-    'prepared',
-    'map-installed',
-    'project-installed',
-    'lock-installed',
-  ];
+  const phases: readonly ProjectRevisionTransactionPhase[] =
+    kind === 'map-project-revision'
+      ? ['prepared', 'map-installed', 'project-installed', 'lock-installed']
+      : ['prepared', 'project-installed', 'lock-installed'];
   if (!phases.includes(value.phase as ProjectRevisionTransactionPhase)) {
     throw new Error('Invalid project revision journal phase');
   }
@@ -168,9 +210,11 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
   ) {
     throw new Error('Invalid project revision journal payload');
   }
-  const expectedMapTarget = path.join('maps', `${mapId}.json`);
+  const expectedMapTarget = mapId === undefined ? undefined : path.join('maps', `${mapId}.json`);
   if (
-    value.targets.map !== expectedMapTarget ||
+    (kind === 'map-project-revision'
+      ? value.targets.map !== expectedMapTarget
+      : Object.hasOwn(value.targets, 'map')) ||
     value.targets.project !== PROJECT_TARGET ||
     value.targets.lock !== LOCK_TARGET
   ) {
@@ -182,52 +226,78 @@ const decodeJournal = (projectRoot: string, value: unknown): ProjectRevisionTran
       throw new Error('Project revision journal target escapes project root');
     }
   }
-  const snapshots = {
-    map: value.snapshots.map,
+  const snapshots: ProjectRevisionTransactionJournal['snapshots'] = {
+    ...(kind === 'map-project-revision' ? { map: value.snapshots.map } : {}),
     project: value.snapshots.project,
     lock: value.snapshots.lock,
   };
-  const newHashes = {
-    map: requireString(value.newHashes, 'map'),
+  const newHashes: ProjectRevisionTransactionJournal['newHashes'] = {
+    ...(kind === 'map-project-revision' ? { map: requireString(value.newHashes, 'map') } : {}),
     project: requireString(value.newHashes, 'project'),
     lock: requireString(value.newHashes, 'lock'),
   };
-  const oldHashes = {
-    map: requireString(value.oldHashes, 'map'),
+  const oldHashes: ProjectRevisionTransactionJournal['oldHashes'] = {
+    ...(kind === 'map-project-revision' ? { map: requireString(value.oldHashes, 'map') } : {}),
     project: requireString(value.oldHashes, 'project'),
     lock: requireString(value.oldHashes, 'lock'),
   };
-  for (const key of ['map', 'project', 'lock'] as const) {
+  const keys =
+    kind === 'map-project-revision'
+      ? (['map', 'project', 'lock'] as const)
+      : (['project', 'lock'] as const);
+  for (const key of keys) {
     if (hashJsonStable(snapshots[key]) !== newHashes[key]) {
       throw new Error(`Invalid project revision journal ${key} snapshot hash`);
     }
   }
-  if (!isObject(snapshots.map) || snapshots.map.id !== mapId) {
+  if (kind === 'map-project-revision' && (!isObject(snapshots.map) || snapshots.map.id !== mapId)) {
     throw new Error('Invalid project revision journal map snapshot id');
   }
   if (!isObject(snapshots.project) || snapshots.project.id !== projectId) {
     throw new Error('Invalid project revision journal project snapshot id');
   }
-  if (!isObject(snapshots.lock) || snapshots.lock.projectHash !== newHashes.project) {
+  const projectIntegrityHash =
+    kind === 'map-project-revision'
+      ? newHashes.project
+      : requireString(value, 'projectIntegrityHash');
+  if (!isObject(snapshots.lock) || snapshots.lock.projectHash !== projectIntegrityHash) {
     throw new Error('Invalid project revision journal lock projectHash');
   }
-  const mapLocks = Array.isArray(snapshots.lock.maps) ? snapshots.lock.maps : [];
-  const mapLock = mapLocks.find((entry) => isObject(entry) && entry.id === mapId);
-  if (!isObject(mapLock) || mapLock.hash !== newHashes.map) {
-    throw new Error('Invalid project revision journal lock map hash');
+  if (kind === 'map-project-revision') {
+    const mapLocks = Array.isArray(snapshots.lock.maps) ? snapshots.lock.maps : [];
+    const mapLock = mapLocks.find((entry) => isObject(entry) && entry.id === mapId);
+    if (!isObject(mapLock) || mapLock.hash !== newHashes.map) {
+      throw new Error('Invalid project revision journal lock map hash');
+    }
+  }
+  const rawProject = value.rawProject;
+  if (rawProject !== undefined) {
+    if (
+      kind !== 'project-manifest-revision' ||
+      typeof rawProject !== 'string' ||
+      hashJsonStable(JSON.parse(rawProject) as unknown) !== newHashes.project
+    ) {
+      throw new Error('Invalid project revision journal raw project snapshot');
+    }
   }
   return {
     schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
     id,
-    kind: 'map-project-revision',
+    kind,
     ownerPid: Number(value.ownerPid),
     projectId,
-    mapId,
+    ...(mapId === undefined ? {} : { mapId }),
     phase: value.phase as ProjectRevisionTransactionPhase,
-    targets: { map: expectedMapTarget, project: PROJECT_TARGET, lock: LOCK_TARGET },
+    targets: {
+      ...(expectedMapTarget === undefined ? {} : { map: expectedMapTarget }),
+      project: PROJECT_TARGET,
+      lock: LOCK_TARGET,
+    },
     oldHashes,
     newHashes,
     snapshots,
+    ...(rawProject === undefined ? {} : { rawProject }),
+    ...(kind === 'project-manifest-revision' ? { projectIntegrityHash } : {}),
   };
 };
 
@@ -356,7 +426,9 @@ const installPreparedOwner = async (
 };
 
 const targetPaths = (projectRoot: string, journal: ProjectRevisionTransactionJournal) => ({
-  map: path.join(projectRoot, journal.targets.map),
+  ...(journal.targets.map === undefined
+    ? {}
+    : { map: path.join(projectRoot, journal.targets.map) }),
   project: path.join(projectRoot, journal.targets.project),
   lock: path.join(projectRoot, journal.targets.lock),
 });
@@ -372,14 +444,26 @@ const installNewRevision = async (
   faultAfterPhase?: CommitMapProjectRevisionInput['faultAfterPhase'],
 ): Promise<void> => {
   const targets = targetPaths(projectRoot, journal);
-  const steps = [
-    ['map', 'map-installed'],
-    ['project', 'project-installed'],
-    ['lock', 'lock-installed'],
-  ] as const;
+  const steps =
+    journal.kind === 'map-project-revision'
+      ? ([
+          ['map', 'map-installed'],
+          ['project', 'project-installed'],
+          ['lock', 'lock-installed'],
+        ] as const)
+      : ([
+          ['project', 'project-installed'],
+          ['lock', 'lock-installed'],
+        ] as const);
   let current = journal;
   for (const [key, phase] of steps) {
-    await writeDurableJsonAtomic(targets[key], current.snapshots[key]);
+    const target = targets[key];
+    if (target === undefined) {
+      throw new Error(`Missing ${key} target in project revision journal`);
+    }
+    await (key === 'project' && current.rawProject !== undefined
+      ? writeDurableTextAtomic(target, current.rawProject)
+      : writeDurableJsonAtomic(target, current.snapshots[key]));
     current = { ...current, phase };
     await writeDurableJsonAtomic(transactionPath(projectRoot), current);
     await faultAfterPhase?.(phase);
@@ -411,11 +495,15 @@ const recoverJournalWithoutAcquiringOwner = async (projectRoot: string): Promise
   }
   const targets = targetPaths(projectRoot, journal);
   const hashes = {
-    map: await currentHash(targets.map),
-    project: await currentHash(targets.project),
-    lock: await currentHash(targets.lock),
+    ...(targets.map === undefined ? {} : { map: await currentHash(targets.map) }),
+    project: await currentHashOrMissing(targets.project),
+    lock: await currentHashOrMissing(targets.lock),
   };
-  const states = (['map', 'project', 'lock'] as const).map((key) => {
+  const keys =
+    journal.kind === 'map-project-revision'
+      ? (['map', 'project', 'lock'] as const)
+      : (['project', 'lock'] as const);
+  const states = keys.map((key) => {
     if (hashes[key] === journal.oldHashes[key]) return 'old';
     if (hashes[key] === journal.newHashes[key]) return 'new';
     throw new Error(
@@ -646,6 +734,70 @@ export const commitMapProjectRevision = async (
       oldHashes,
       newHashes,
       snapshots,
+    });
+    const journalFile = transactionPath(input.projectRoot);
+    const handle = await open(journalFile, 'wx');
+    try {
+      await handle.writeFile(`${JSON.stringify(journal, null, 2)}\n`, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await syncDirectory(path.dirname(journalFile));
+    await input.faultAfterPhase?.('prepared');
+    await installNewRevision(input.projectRoot, journal, input.faultAfterPhase);
+  } finally {
+    await releaseProjectRevisionOwner(input.projectRoot, owner);
+  }
+};
+
+/**
+ * Atomically installs the project manifest and its integrity lock under the
+ * same durable owner/journal used by map revisions. Existing callers can
+ * therefore recover a process death between the two target replacements.
+ */
+export const commitProjectManifestRevision = async (
+  input: CommitProjectManifestRevisionInput,
+): Promise<void> => {
+  const owner = await acquireProjectRevisionOwner(input.projectRoot, input.faultAfterPhase);
+  try {
+    await input.faultAfterPhase?.('owner-acquired');
+    await recoverJournalWithoutAcquiringOwner(input.projectRoot);
+    const targets = {
+      project: path.join(input.projectRoot, PROJECT_TARGET),
+      lock: path.join(input.projectRoot, LOCK_TARGET),
+    };
+    const current = {
+      project: await readJsonOrMissing(targets.project),
+      lock: await readJsonOrMissing(targets.lock),
+    };
+    const oldHashes = {
+      project:
+        current.project === undefined ? MISSING_TARGET_HASH : hashJsonStable(current.project),
+      lock: current.lock === undefined ? MISSING_TARGET_HASH : hashJsonStable(current.lock),
+    };
+    const snapshots = await input.buildSnapshots(current);
+    const targetProject =
+      input.rawProject === undefined
+        ? snapshots.project
+        : (JSON.parse(input.rawProject) as unknown);
+    const newHashes = {
+      project: hashJsonStable(targetProject),
+      lock: hashJsonStable(snapshots.lock),
+    };
+    const journal: ProjectRevisionTransactionJournal = decodeJournal(input.projectRoot, {
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
+      id: randomUUID(),
+      kind: 'project-manifest-revision',
+      ownerPid: process.pid,
+      projectId: input.projectId,
+      phase: 'prepared',
+      targets: { project: PROJECT_TARGET, lock: LOCK_TARGET },
+      oldHashes,
+      newHashes,
+      snapshots,
+      ...(input.rawProject === undefined ? {} : { rawProject: input.rawProject }),
+      projectIntegrityHash: input.projectIntegrityHash ?? newHashes.project,
     });
     const journalFile = transactionPath(input.projectRoot);
     const handle = await open(journalFile, 'wx');

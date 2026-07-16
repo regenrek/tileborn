@@ -18,18 +18,22 @@ const requireValue = (env, name) => {
   return value;
 };
 
-const createDesktopReleaseProvenance = ({ sourceCommit, version }) => {
+const createDesktopReleaseProvenance = ({ sourceCommit, version, teamIdentifier }) => {
   if (!/^[a-f0-9]{40}$/.test(sourceCommit)) {
     throw new Error('desktop-release.invalid-source-commit: git rev-parse HEAD');
   }
   if (typeof version !== 'string' || version.length === 0) {
     throw new Error('desktop-release.invalid-version: package version required');
   }
+  if (!/^[A-Z0-9]{10}$/.test(teamIdentifier)) {
+    throw new Error('desktop-release.invalid-team-id: expected 10 uppercase letters/digits');
+  }
   return Object.freeze({
     schemaVersion: 1,
     policyId: 'tileborne-desktop-1.0',
     sourceCommit,
     version,
+    teamIdentifier,
     buildCommand: 'pnpm --filter @tileborne/desktop package',
   });
 };
@@ -81,6 +85,7 @@ const createDesktopReleaseForgeSettings = ({
   });
   return Object.freeze({
     enabled: true,
+    teamIdentifier,
     packagerConfig: Object.freeze({
       osxSign: Object.freeze({
         identity,
@@ -102,9 +107,45 @@ const createDesktopReleaseForgeSettings = ({
   });
 };
 
+const validateDesktopReleaseMakeResults = ({
+  makeResults,
+  provenanceInjected,
+  existsSync = fs.existsSync,
+}) => {
+  if (provenanceInjected !== true) {
+    throw new Error(
+      'desktop-release.provenance-not-injected: signed app provenance must be embedded before make',
+    );
+  }
+  if (!Array.isArray(makeResults) || makeResults.length !== 1) {
+    throw new Error('desktop-release.unexpected-output-count: expected exactly one make result');
+  }
+  const [result] = makeResults;
+  if (result === null || typeof result !== 'object') {
+    throw new Error('desktop-release.invalid-output: make result must be an object');
+  }
+  if (result.platform !== 'darwin' || result.arch !== 'arm64') {
+    throw new Error(
+      `desktop-release.unexpected-output: ${String(result.platform)}/${String(result.arch)}`,
+    );
+  }
+  if (!Array.isArray(result.artifacts) || result.artifacts.length !== 1) {
+    throw new Error('desktop-release.unexpected-artifact-count: expected exactly one artifact');
+  }
+  const [artifact] = result.artifacts;
+  if (typeof artifact !== 'string' || !artifact.toLowerCase().endsWith('.dmg')) {
+    throw new Error(`desktop-release.unexpected-artifact: ${String(artifact)}`);
+  }
+  if (!existsSync(artifact)) {
+    throw new Error(`desktop-release.dmg-missing: ${artifact}`);
+  }
+  return artifact;
+};
+
 module.exports = {
   RELEASE_FLAG,
   REQUIRED_ENVIRONMENT,
   createDesktopReleaseProvenance,
   createDesktopReleaseForgeSettings,
+  validateDesktopReleaseMakeResults,
 };

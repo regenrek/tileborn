@@ -59,6 +59,10 @@
     "credentialEnvironment": "GH_TOKEN",
     "approvedValue": "1"
   },
+  "signing": {
+    "approvedTeamIdentifierEnvironment": "TILEBORNE_APPLE_TEAM_ID"
+  },
+  "lastKnownGoodReleases": [],
   "rollback": {
     "mode": "manual-retained-installer",
     "retention": "current-and-last-known-good",

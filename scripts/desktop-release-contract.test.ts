@@ -20,26 +20,36 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const nativeVerifierPath = path.join(repoRoot, 'scripts/macos-desktop-release-verifier.mjs');
 const require = createRequire(import.meta.url);
-const { createDesktopReleaseForgeSettings, createDesktopReleaseProvenance } =
-  require('../apps/desktop/scripts/desktop-release-forge.cjs') as {
-    readonly createDesktopReleaseForgeSettings: (input?: {
-      readonly env?: Readonly<Record<string, string | undefined>>;
-      readonly platform?: string;
-      readonly architecture?: string;
-      readonly existsSync?: (candidate: string) => boolean;
-    }) => {
-      readonly enabled: boolean;
-      readonly packagerConfig?: {
-        readonly osxSign: Readonly<Record<string, unknown>>;
-        readonly osxNotarize: Readonly<Record<string, unknown>>;
-      };
-      readonly dmgConfig?: Readonly<Record<string, unknown>>;
+const {
+  createDesktopReleaseForgeSettings,
+  createDesktopReleaseProvenance,
+  validateDesktopReleaseMakeResults,
+} = require('../apps/desktop/scripts/desktop-release-forge.cjs') as {
+  readonly createDesktopReleaseForgeSettings: (input?: {
+    readonly env?: Readonly<Record<string, string | undefined>>;
+    readonly platform?: string;
+    readonly architecture?: string;
+    readonly existsSync?: (candidate: string) => boolean;
+  }) => {
+    readonly enabled: boolean;
+    readonly teamIdentifier?: string;
+    readonly packagerConfig?: {
+      readonly osxSign: Readonly<Record<string, unknown>>;
+      readonly osxNotarize: Readonly<Record<string, unknown>>;
     };
-    readonly createDesktopReleaseProvenance: (input: {
-      readonly sourceCommit: string;
-      readonly version: string;
-    }) => Readonly<Record<string, unknown>>;
+    readonly dmgConfig?: Readonly<Record<string, unknown>>;
   };
+  readonly createDesktopReleaseProvenance: (input: {
+    readonly sourceCommit: string;
+    readonly version: string;
+    readonly teamIdentifier: string;
+  }) => Readonly<Record<string, unknown>>;
+  readonly validateDesktopReleaseMakeResults: (input: {
+    readonly makeResults: unknown;
+    readonly provenanceInjected: boolean;
+    readonly existsSync?: (candidate: string) => boolean;
+  }) => string;
+};
 
 type CommandInput = {
   readonly file: string;
@@ -51,6 +61,17 @@ type CommandResult = {
   readonly stdout?: string;
   readonly stderr?: string;
   readonly error?: Error;
+};
+
+type MutableNativeOutput = {
+  candidate: {
+    candidateEmbeddedTeamIdentifier: string;
+    retainedEmbeddedSourceCommit: string;
+    retainedEmbeddedVersion: string;
+    retainedEmbeddedTeamIdentifier: string;
+    candidateTeamIdentifier: string;
+    retainedTeamIdentifier: string;
+  };
 };
 
 const temporaryDirectories: string[] = [];
@@ -142,6 +163,10 @@ const nativeRunnerFor = (evidence: ReturnType<typeof createEvidence>) =>
           bundleId: 'dev.tileborne.app',
           embeddedSourceCommit: 'a'.repeat(40),
           embeddedVersion: '1.0.0',
+          candidateEmbeddedTeamIdentifier: 'ABCDEFGHIJ',
+          retainedEmbeddedSourceCommit: 'b'.repeat(40),
+          retainedEmbeddedVersion: '0.9.0',
+          retainedEmbeddedTeamIdentifier: 'ABCDEFGHIJ',
           candidateAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
           retainedAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
           candidateTeamIdentifier: 'ABCDEFGHIJ',
@@ -168,10 +193,35 @@ const nativeRunnerFor = (evidence: ReturnType<typeof createEvidence>) =>
     };
   });
 
+const nativeRunnerWithMutation = (
+  evidence: ReturnType<typeof createEvidence>,
+  mutate: (output: MutableNativeOutput) => void,
+) => {
+  const validRunner = nativeRunnerFor(evidence);
+  return vi.fn((input: CommandInput): CommandResult => {
+    const result = validRunner(input);
+    const output = JSON.parse(result.stdout ?? '{}') as MutableNativeOutput;
+    mutate(output);
+    return { ...result, stdout: JSON.stringify(output) };
+  });
+};
+
 const publicationRunner = vi.fn((input: CommandInput): CommandResult => {
   expect(input.file).toBe('gh');
   expect(input.args).toEqual(['auth', 'status', '--hostname', 'github.com', '--active']);
   return { status: 0, stdout: 'active account' };
+});
+
+const policyWithApprovedLkg = (evidence: ReturnType<typeof createEvidence>) => ({
+  ...loadDesktopReleasePolicy(),
+  lastKnownGoodReleases: [
+    {
+      version: '0.9.0',
+      sourceCommit: 'b'.repeat(40),
+      sha256: evidence.retainedSha256,
+      teamIdentifier: 'ABCDEFGHIJ',
+    },
+  ],
 });
 
 const evaluateReady = (
@@ -179,6 +229,7 @@ const evaluateReady = (
   options: {
     readonly requirePublication?: boolean;
     readonly nativeRunner?: ReturnType<typeof vi.fn>;
+    readonly policy?: ReturnType<typeof loadDesktopReleasePolicy>;
   } = {},
 ) =>
   evaluateDesktopRelease({
@@ -189,6 +240,7 @@ const evaluateReady = (
     environment: {
       TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
       GH_TOKEN: 'external-token-never-recorded',
+      TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
     },
     expectedSourceCommit: 'a'.repeat(40),
     requirePublication: options.requirePublication ?? true,
@@ -196,6 +248,7 @@ const evaluateReady = (
     publicationCommandRunner: publicationRunner,
     hostPlatform: 'darwin',
     hostArchitecture: 'arm64',
+    policy: options.policy ?? policyWithApprovedLkg(evidence),
   });
 
 describe('desktop 1.0 release contract', () => {
@@ -240,6 +293,19 @@ describe('desktop 1.0 release contract', () => {
         notarization: { verified: true, stapled: true },
       }),
     ).toThrow(/contract\.unknown-field/);
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        lastKnownGoodReleases: [
+          {
+            version: '01.0.0',
+            sourceCommit: 'b'.repeat(40),
+            sha256: 'f'.repeat(64),
+            teamIdentifier: 'ABCDEFGHIJ',
+          },
+        ],
+      }),
+    ).toThrow(/contract\.invalid-semver/);
   });
 
   it('reports the evidence-free checkout truthfully as NO-GO', () => {
@@ -254,6 +320,7 @@ describe('desktop 1.0 release contract', () => {
       'artifact.file-missing',
       'rollback.retained-artifact-missing',
       'rollback.backup-output-missing',
+      'signing.approved-team-missing',
       'publish.approval-missing',
       'publish.credential-missing',
     ]);
@@ -298,7 +365,11 @@ describe('desktop 1.0 release contract', () => {
       manifest,
       installReceipt: { verified: true, mountedDmg: true, firstLaunch: true },
       rollbackReceipt: { verified: true, backup: true, projectReopen: true },
-      environment: { TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1', GH_TOKEN: 'placeholder' },
+      environment: {
+        TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
+        GH_TOKEN: 'placeholder',
+        TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
+      },
       expectedSourceCommit: 'a'.repeat(40),
       nativeCommandRunner: nativeRunner,
       publicationCommandRunner: publicationRunner,
@@ -319,6 +390,7 @@ describe('desktop 1.0 release contract', () => {
       retainedArtifactPath: evidence.retainedArtifactPath,
       backupArtifactPath: evidence.backupArtifactPath,
       manifest: evidence.manifest,
+      environment: { TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ' },
       expectedSourceCommit: 'a'.repeat(40),
       requirePublication: false,
     });
@@ -377,6 +449,75 @@ describe('desktop 1.0 release contract', () => {
     );
   });
 
+  it('rejects a validly structured native result from the wrong Apple team', () => {
+    const evidence = createEvidence();
+    const wrongTeamRunner = nativeRunnerWithMutation(evidence, (output) => {
+      output.candidate.candidateEmbeddedTeamIdentifier = 'ZZZZZZZZZZ';
+      output.candidate.retainedEmbeddedTeamIdentifier = 'ZZZZZZZZZZ';
+      output.candidate.candidateTeamIdentifier = 'ZZZZZZZZZZ';
+      output.candidate.retainedTeamIdentifier = 'ZZZZZZZZZZ';
+    });
+    const status = evaluateReady(evidence, { nativeRunner: wrongTeamRunner });
+    expect(status.decision).toBe('no-go');
+    expect(status.blockers.map(({ code }) => code)).toContain('contract.invalid-literal');
+  });
+
+  it.each(['1.0.0', '1.1.0'])(
+    'rejects retained release version %s because it is not strictly earlier',
+    (retainedVersion) => {
+      const evidence = createEvidence();
+      const policy = {
+        ...policyWithApprovedLkg(evidence),
+        lastKnownGoodReleases: [
+          {
+            version: retainedVersion,
+            sourceCommit: 'b'.repeat(40),
+            sha256: evidence.retainedSha256,
+            teamIdentifier: 'ABCDEFGHIJ',
+          },
+        ],
+      };
+      const status = evaluateReady(evidence, {
+        policy,
+        nativeRunner: nativeRunnerWithMutation(evidence, (output) => {
+          output.candidate.retainedEmbeddedVersion = retainedVersion;
+        }),
+      });
+      expect(status.decision).toBe('no-go');
+      expect(status.blockers.map(({ code }) => code)).toContain('rollback.lkg-version-not-earlier');
+    },
+  );
+
+  it('rejects an unapproved retained digest or forked source identity', () => {
+    const unapprovedDigestEvidence = createEvidence();
+    const unapprovedDigest = evaluateReady(unapprovedDigestEvidence, {
+      policy: {
+        ...policyWithApprovedLkg(unapprovedDigestEvidence),
+        lastKnownGoodReleases: [
+          {
+            version: '0.9.0',
+            sourceCommit: 'b'.repeat(40),
+            sha256: 'f'.repeat(64),
+            teamIdentifier: 'ABCDEFGHIJ',
+          },
+        ],
+      },
+    });
+    expect(unapprovedDigest.decision).toBe('no-go');
+    expect(unapprovedDigest.blockers.map(({ code }) => code)).toContain(
+      'rollback.lkg-not-approved',
+    );
+
+    const forkedSourceEvidence = createEvidence();
+    const forkedSource = evaluateReady(forkedSourceEvidence, {
+      nativeRunner: nativeRunnerWithMutation(forkedSourceEvidence, (output) => {
+        output.candidate.retainedEmbeddedSourceCommit = 'c'.repeat(40);
+      }),
+    });
+    expect(forkedSource.decision).toBe('no-go');
+    expect(forkedSource.blockers.map(({ code }) => code)).toContain('rollback.lkg-not-approved');
+  });
+
   it('makes skip-publication artifact-ready but never overall GO', () => {
     const evidence = createEvidence();
     const status = evaluateReady(evidence, { requirePublication: false });
@@ -400,7 +541,11 @@ describe('desktop 1.0 release contract', () => {
       retainedArtifactPath: evidence.retainedArtifactPath,
       backupArtifactPath: evidence.backupArtifactPath,
       manifest: evidence.manifest,
-      environment: { TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1', GH_TOKEN: 'placeholder' },
+      environment: {
+        TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
+        GH_TOKEN: 'placeholder',
+        TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
+      },
       expectedSourceCommit: 'a'.repeat(40),
       nativeCommandRunner: nativeRunnerFor(evidence),
       publicationCommandRunner: () => ({ status: 1, stderr: 'unauthorized' }),
@@ -439,20 +584,82 @@ describe('desktop 1.0 release contract', () => {
       strictVerify: true,
       continueOnError: false,
     });
+    expect(settings.teamIdentifier).toBe('ABCDEFGHIJ');
     expect(settings.packagerConfig?.osxNotarize).toEqual({
       appleApiKey: '/external/AuthKey.p8',
       appleApiKeyId: 'KLMNOPQRST',
       appleApiIssuer: '12345678-1234-1234-1234-123456789abc',
     });
     expect(
-      createDesktopReleaseProvenance({ sourceCommit: 'a'.repeat(40), version: '1.0.0' }),
+      createDesktopReleaseProvenance({
+        sourceCommit: 'a'.repeat(40),
+        version: '1.0.0',
+        teamIdentifier: 'ABCDEFGHIJ',
+      }),
     ).toEqual({
       schemaVersion: 1,
       policyId: 'tileborne-desktop-1.0',
       sourceCommit: 'a'.repeat(40),
       version: '1.0.0',
+      teamIdentifier: 'ABCDEFGHIJ',
       buildCommand: 'pnpm --filter @tileborne/desktop package',
     });
+  });
+
+  it('binds Forge release mode to exactly one existing macOS-arm64 DMG', () => {
+    const valid = [{ platform: 'darwin', arch: 'arm64', artifacts: ['/release/Tileborne.dmg'] }];
+    expect(
+      validateDesktopReleaseMakeResults({
+        makeResults: valid,
+        provenanceInjected: true,
+        existsSync: (candidate) => candidate === '/release/Tileborne.dmg',
+      }),
+    ).toBe('/release/Tileborne.dmg');
+
+    const invalidInputs = [
+      { makeResults: undefined, provenanceInjected: true },
+      { makeResults: [], provenanceInjected: true },
+      { makeResults: [...valid, ...valid], provenanceInjected: true },
+      {
+        makeResults: [{ platform: 'win32', arch: 'arm64', artifacts: ['/release/Tileborne.dmg'] }],
+        provenanceInjected: true,
+      },
+      {
+        makeResults: [{ platform: 'darwin', arch: 'x64', artifacts: ['/release/Tileborne.dmg'] }],
+        provenanceInjected: true,
+      },
+      {
+        makeResults: [{ platform: 'darwin', arch: 'arm64', artifacts: [] }],
+        provenanceInjected: true,
+      },
+      {
+        makeResults: [{ platform: 'darwin', arch: 'arm64' }],
+        provenanceInjected: true,
+      },
+      {
+        makeResults: [
+          { platform: 'darwin', arch: 'arm64', artifacts: ['/release/a.dmg', '/release/b.dmg'] },
+        ],
+        provenanceInjected: true,
+      },
+      {
+        makeResults: [{ platform: 'darwin', arch: 'arm64', artifacts: ['/release/Tileborne.zip'] }],
+        provenanceInjected: true,
+      },
+      { makeResults: valid, provenanceInjected: false },
+    ];
+    for (const input of invalidInputs) {
+      expect(() => validateDesktopReleaseMakeResults({ ...input, existsSync: () => true })).toThrow(
+        /desktop-release\./,
+      );
+    }
+    expect(() =>
+      validateDesktopReleaseMakeResults({
+        makeResults: valid,
+        provenanceInjected: true,
+        existsSync: () => false,
+      }),
+    ).toThrow(/desktop-release\.dmg-missing/);
   });
 
   it('exposes a passing policy gate and rejects legacy editable receipt flags', () => {

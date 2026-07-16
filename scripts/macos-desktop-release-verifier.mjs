@@ -128,7 +128,14 @@ const appMetadata = (appPath) => {
     fail('native.embedded-provenance-missing', provenancePath);
   }
   const provenanceKeys = Object.keys(releaseProvenance).sort();
-  const expectedKeys = ['buildCommand', 'policyId', 'schemaVersion', 'sourceCommit', 'version'];
+  const expectedKeys = [
+    'buildCommand',
+    'policyId',
+    'schemaVersion',
+    'sourceCommit',
+    'teamIdentifier',
+    'version',
+  ];
   if (JSON.stringify(provenanceKeys) !== JSON.stringify(expectedKeys)) {
     fail('native.embedded-provenance-schema-invalid', provenancePath);
   }
@@ -137,6 +144,7 @@ const appMetadata = (appPath) => {
     releaseProvenance.policyId !== 'tileborne-desktop-1.0' ||
     releaseProvenance.buildCommand !== 'pnpm --filter @tileborne/desktop package' ||
     !/^[a-f0-9]{40}$/.test(releaseProvenance.sourceCommit) ||
+    !/^[A-Z0-9]{10}$/.test(releaseProvenance.teamIdentifier) ||
     typeof releaseProvenance.version !== 'string' ||
     releaseProvenance.version.length === 0
   ) {
@@ -234,6 +242,19 @@ const main = async () => {
       retainedAppSigning.teamIdentifier,
     ]);
     if (teamIdentifiers.size !== 1) fail('native.team-mismatch', [...teamIdentifiers].join(','));
+    if (
+      candidateMetadata.releaseProvenance.teamIdentifier !== candidateAppSigning.teamIdentifier ||
+      candidateMetadata.releaseProvenance.teamIdentifier !==
+        candidateInstallerSigning.teamIdentifier
+    ) {
+      fail('native.candidate-team-provenance-mismatch', 'codesign versus embedded provenance');
+    }
+    if (
+      retainedMetadata.releaseProvenance.teamIdentifier !== retainedAppSigning.teamIdentifier ||
+      retainedMetadata.releaseProvenance.teamIdentifier !== retainedInstallerSigning.teamIdentifier
+    ) {
+      fail('native.retained-team-provenance-mismatch', 'codesign versus embedded provenance');
+    }
     if (!candidateAppSigning.flags.split(',').includes('runtime')) {
       fail('native.hardened-runtime-missing', 'candidate');
     }
@@ -311,6 +332,10 @@ const main = async () => {
           bundleId: candidateMetadata.bundleId,
           embeddedSourceCommit: candidateMetadata.releaseProvenance.sourceCommit,
           embeddedVersion: candidateMetadata.releaseProvenance.version,
+          candidateEmbeddedTeamIdentifier: candidateMetadata.releaseProvenance.teamIdentifier,
+          retainedEmbeddedSourceCommit: retainedMetadata.releaseProvenance.sourceCommit,
+          retainedEmbeddedVersion: retainedMetadata.releaseProvenance.version,
+          retainedEmbeddedTeamIdentifier: retainedMetadata.releaseProvenance.teamIdentifier,
           candidateAuthority: candidateAppSigning.authority,
           retainedAuthority: retainedAppSigning.authority,
           candidateTeamIdentifier: candidateAppSigning.teamIdentifier,

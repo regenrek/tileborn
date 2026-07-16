@@ -78,6 +78,42 @@ const uniqueStrings = (value, at) => {
   return result;
 };
 
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+export function parseSemVer(value) {
+  const match = SEMVER.exec(value);
+  if (!match) fail('contract.invalid-semver', value);
+  return {
+    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4] === undefined ? [] : match[4].split('.'),
+  };
+}
+
+export function compareSemVer(left, right) {
+  const a = parseSemVer(left);
+  const b = parseSemVer(right);
+  for (let index = 0; index < 3; index += 1) {
+    if (a.core[index] !== b.core[index]) return a.core[index] < b.core[index] ? -1 : 1;
+  }
+  if (a.prerelease.length === 0 || b.prerelease.length === 0) {
+    return a.prerelease.length === b.prerelease.length ? 0 : a.prerelease.length === 0 ? 1 : -1;
+  }
+  const length = Math.max(a.prerelease.length, b.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    const aPart = a.prerelease[index];
+    const bPart = b.prerelease[index];
+    if (aPart === undefined || bPart === undefined) return aPart === undefined ? -1 : 1;
+    if (aPart === bPart) continue;
+    const aNumeric = /^\d+$/.test(aPart);
+    const bNumeric = /^\d+$/.test(bPart);
+    if (aNumeric && bNumeric) return Number(aPart) < Number(bPart) ? -1 : 1;
+    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    return aPart < bPart ? -1 : 1;
+  }
+  return 0;
+}
+
 export function loadDesktopReleasePolicy(policyPath = desktopReleasePolicyPath) {
   return validateDesktopReleasePolicy(JSON.parse(readFileSync(policyPath, 'utf8')));
 }
@@ -92,6 +128,8 @@ export function validateDesktopReleasePolicy(value) {
       'requiredEvidence',
       'support',
       'publication',
+      'signing',
+      'lastKnownGoodReleases',
       'rollback',
     ],
     'policy',
@@ -174,6 +212,45 @@ export function validateDesktopReleasePolicy(value) {
     'policy.publication.credentialEnvironment',
   );
   literal(publication.approvedValue, '1', 'policy.publication.approvedValue');
+
+  const signing = exactKeys(
+    policy.signing,
+    ['approvedTeamIdentifierEnvironment'],
+    'policy.signing',
+  );
+  literal(
+    signing.approvedTeamIdentifierEnvironment,
+    'TILEBORNE_APPLE_TEAM_ID',
+    'policy.signing.approvedTeamIdentifierEnvironment',
+  );
+
+  if (!Array.isArray(policy.lastKnownGoodReleases)) {
+    fail('contract.invalid-array', 'policy.lastKnownGoodReleases');
+  }
+  const seenLkgDigests = new Set();
+  for (const [index, entry] of policy.lastKnownGoodReleases.entries()) {
+    const record = exactKeys(
+      entry,
+      ['version', 'sourceCommit', 'sha256', 'teamIdentifier'],
+      `policy.lastKnownGoodReleases[${index}]`,
+    );
+    parseSemVer(string(record.version, `policy.lastKnownGoodReleases[${index}].version`));
+    string(
+      record.sourceCommit,
+      `policy.lastKnownGoodReleases[${index}].sourceCommit`,
+      SOURCE_COMMIT,
+    );
+    const digest = string(record.sha256, `policy.lastKnownGoodReleases[${index}].sha256`, SHA256);
+    string(
+      record.teamIdentifier,
+      `policy.lastKnownGoodReleases[${index}].teamIdentifier`,
+      /^[A-Z0-9]{10}$/,
+    );
+    if (seenLkgDigests.has(digest)) {
+      fail('contract.duplicate-value', 'policy.lastKnownGoodReleases sha256');
+    }
+    seenLkgDigests.add(digest);
+  }
 
   const rollback = exactKeys(
     policy.rollback,
@@ -305,6 +382,10 @@ function validateNativeEvidence(value, expected) {
       'bundleId',
       'embeddedSourceCommit',
       'embeddedVersion',
+      'candidateEmbeddedTeamIdentifier',
+      'retainedEmbeddedSourceCommit',
+      'retainedEmbeddedVersion',
+      'retainedEmbeddedTeamIdentifier',
       'candidateAuthority',
       'retainedAuthority',
       'candidateTeamIdentifier',
@@ -342,20 +423,28 @@ function validateNativeEvidence(value, expected) {
     'nativeEvidence.candidate.embeddedSourceCommit',
   );
   literal(candidate.embeddedVersion, expected.version, 'nativeEvidence.candidate.embeddedVersion');
+  for (const key of [
+    'candidateEmbeddedTeamIdentifier',
+    'retainedEmbeddedTeamIdentifier',
+    'candidateTeamIdentifier',
+    'retainedTeamIdentifier',
+  ]) {
+    literal(candidate[key], expected.approvedTeamIdentifier, `nativeEvidence.candidate.${key}`);
+  }
+  string(
+    candidate.retainedEmbeddedSourceCommit,
+    'nativeEvidence.candidate.retainedEmbeddedSourceCommit',
+    SOURCE_COMMIT,
+  );
+  parseSemVer(
+    string(candidate.retainedEmbeddedVersion, 'nativeEvidence.candidate.retainedEmbeddedVersion'),
+  );
   for (const key of ['candidateAuthority', 'retainedAuthority']) {
     const authority = string(candidate[key], `nativeEvidence.candidate.${key}`);
     if (!authority.startsWith('Developer ID Application:')) {
       fail('native.invalid-signing-authority', `${key} is not Developer ID Application`);
     }
   }
-  for (const key of ['candidateTeamIdentifier', 'retainedTeamIdentifier']) {
-    string(candidate[key], `nativeEvidence.candidate.${key}`, /^[A-Z0-9]{10}$/);
-  }
-  literal(
-    candidate.retainedTeamIdentifier,
-    candidate.candidateTeamIdentifier,
-    'nativeEvidence.candidate.retainedTeamIdentifier',
-  );
   for (const key of ['candidateHardenedRuntime', 'retainedHardenedRuntime']) {
     literal(candidate[key], 'runtime', `nativeEvidence.candidate.${key}`);
   }
@@ -403,6 +492,7 @@ export function verifyMacOsReleaseEvidence({
   retainedSha256,
   sourceCommit,
   version,
+  approvedTeamIdentifier,
   commandRunner = defaultCommandRunner,
   hostPlatform = process.platform,
   hostArchitecture = process.arch,
@@ -448,6 +538,7 @@ export function verifyMacOsReleaseEvidence({
     retainedSha256,
     sourceCommit,
     version,
+    approvedTeamIdentifier,
   });
 }
 
@@ -487,6 +578,7 @@ export function evaluateDesktopRelease({
   let candidateSha256;
   let retainedSha256;
   let nativeEvidence;
+  let approvedTeamIdentifier;
 
   if (manifest === undefined) {
     addBlocker(blockers, 'artifact.manifest-missing', 'Desktop release manifest is required.');
@@ -566,6 +658,23 @@ export function evaluateDesktopRelease({
     );
   }
 
+  const configuredTeamIdentifier = environment[policy.signing.approvedTeamIdentifierEnvironment];
+  if (typeof configuredTeamIdentifier !== 'string' || configuredTeamIdentifier.length === 0) {
+    addBlocker(
+      blockers,
+      'signing.approved-team-missing',
+      'Explicit approved Apple TeamIdentifier is required.',
+    );
+  } else if (!/^[A-Z0-9]{10}$/.test(configuredTeamIdentifier)) {
+    addBlocker(
+      blockers,
+      'signing.approved-team-invalid',
+      'Approved Apple TeamIdentifier must be ten uppercase letters/digits.',
+    );
+  } else {
+    approvedTeamIdentifier = configuredTeamIdentifier;
+  }
+
   const preNativeBlockers = blockers.length;
   if (
     preNativeBlockers === 0 &&
@@ -574,7 +683,8 @@ export function evaluateDesktopRelease({
     backupArtifactPath !== undefined &&
     candidateSha256 !== undefined &&
     retainedSha256 !== undefined &&
-    validManifest !== undefined
+    validManifest !== undefined &&
+    approvedTeamIdentifier !== undefined
   ) {
     try {
       nativeEvidence = verifyMacOsReleaseEvidence({
@@ -585,6 +695,7 @@ export function evaluateDesktopRelease({
         retainedSha256,
         sourceCommit: validManifest.provenance.sourceCommit,
         version: validManifest.artifact.version,
+        approvedTeamIdentifier,
         commandRunner: nativeCommandRunner,
         hostPlatform,
         hostArchitecture,
@@ -608,6 +719,32 @@ export function evaluateDesktopRelease({
             'Backup archive does not match native rollback evidence.',
           );
         }
+      }
+      if (
+        compareSemVer(
+          nativeEvidence.candidate.retainedEmbeddedVersion,
+          validManifest.artifact.version,
+        ) >= 0
+      ) {
+        addBlocker(
+          blockers,
+          'rollback.lkg-version-not-earlier',
+          'Retained installer must have a strictly earlier SemVer than the candidate.',
+        );
+      }
+      const approvedLkg = policy.lastKnownGoodReleases.some(
+        (entry) =>
+          entry.version === nativeEvidence.candidate.retainedEmbeddedVersion &&
+          entry.sourceCommit === nativeEvidence.candidate.retainedEmbeddedSourceCommit &&
+          entry.sha256 === retainedSha256 &&
+          entry.teamIdentifier === nativeEvidence.candidate.retainedEmbeddedTeamIdentifier,
+      );
+      if (!approvedLkg) {
+        addBlocker(
+          blockers,
+          'rollback.lkg-not-approved',
+          'Retained installer does not match the operator-approved LKG allowlist.',
+        );
       }
     } catch (error) {
       addBlocker(blockers, error.code ?? 'native.verification-failed', String(error.message));

@@ -8,9 +8,11 @@ const path = require('node:path');
 const {
   createDesktopReleaseForgeSettings,
   createDesktopReleaseProvenance,
+  validateDesktopReleaseMakeResults,
 } = require('./scripts/desktop-release-forge.cjs');
 
 const desktopRelease = createDesktopReleaseForgeSettings();
+let desktopReleaseProvenanceInjected = false;
 
 const packagerTmp = path.join(
   os.tmpdir(),
@@ -199,9 +201,16 @@ const writeSignedDesktopReleaseProvenance = (buildPath) => {
   );
   fs.writeFileSync(
     releaseProvenancePath,
-    `${JSON.stringify(createDesktopReleaseProvenance({ sourceCommit, version }))}\n`,
+    `${JSON.stringify(
+      createDesktopReleaseProvenance({
+        sourceCommit,
+        version,
+        teamIdentifier: desktopRelease.teamIdentifier,
+      }),
+    )}\n`,
     { encoding: 'utf8', mode: 0o444 },
   );
+  desktopReleaseProvenanceInjected = true;
 };
 
 const dmgMaker = {
@@ -269,18 +278,12 @@ module.exports = {
     },
     postMake: async (_forgeConfig, makeResults) => {
       if (!desktopRelease.enabled) return makeResults;
+      const artifact = validateDesktopReleaseMakeResults({
+        makeResults,
+        provenanceInjected: desktopReleaseProvenanceInjected,
+      });
       const { notarize } = require('@electron/notarize');
-      for (const result of makeResults) {
-        if (result.platform !== 'darwin' || result.arch !== 'arm64') {
-          throw new Error(`desktop-release.unexpected-output: ${result.platform}/${result.arch}`);
-        }
-        for (const artifact of result.artifacts) {
-          if (path.extname(artifact).toLowerCase() !== '.dmg') {
-            throw new Error(`desktop-release.unexpected-artifact: ${artifact}`);
-          }
-          await notarize({ appPath: artifact, ...desktopRelease.notarizeCredentials });
-        }
-      }
+      await notarize({ appPath: artifact, ...desktopRelease.notarizeCredentials });
       return makeResults;
     },
   },

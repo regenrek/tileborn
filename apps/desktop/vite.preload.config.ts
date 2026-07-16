@@ -1,11 +1,11 @@
-import { builtinModules } from "node:module";
+import { builtinModules } from 'node:module';
 
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
-import { cjsImportMetaUrl } from "./vite.cjs-import-meta-url.js";
+import { cjsImportMetaUrl } from './vite.cjs-import-meta-url.js';
 
 const nodeBuiltins = [
-  "electron",
+  'electron',
   ...builtinModules,
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
 ];
@@ -13,21 +13,21 @@ const nodeBuiltins = [
 export default defineConfig({
   plugins: [cjsImportMetaUrl()],
   build: {
-    outDir: ".vite/build",
+    outDir: '.vite/build',
     emptyOutDir: false,
     lib: {
-      entry: "src/preload/preload.ts",
-      formats: ["cjs"],
-      fileName: () => "preload.cjs",
+      entry: 'src/preload/preload.ts',
+      formats: ['cjs'],
+      fileName: () => 'preload.cjs',
     },
     rollupOptions: {
       external: nodeBuiltins,
       output: {
-        format: "cjs",
+        format: 'cjs',
         inlineDynamicImports: true,
-        entryFileNames: "[name].cjs",
-        chunkFileNames: "[name].cjs",
-        assetFileNames: "[name].[ext]",
+        entryFileNames: '[name].cjs',
+        chunkFileNames: '[name].cjs',
+        assetFileNames: '[name].[ext]',
       },
     },
   },

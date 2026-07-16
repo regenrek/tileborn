@@ -1,17 +1,17 @@
-import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { defineConfig } from "vite";
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { defineConfig } from 'vite';
 
 const battleRoyalePluginPath = path.resolve(
   import.meta.dirname,
-  "../../packages/plugin-battle-royale",
+  '../../packages/plugin-battle-royale',
 );
 
 const packageJson = JSON.parse(
-  readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf8"),
+  readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf8'),
 ) as { version: string };
 
 // Internal @tileborne/* packages change their export surface constantly during
@@ -35,42 +35,42 @@ const packageJson = JSON.parse(
 // package serves stale, run:
 // pnpm --filter @tileborne/desktop clean:vite-deps
 const browserSafeInternalPackages = [
-  "@tileborne/core",
-  "@tileborne/game-client",
-  "@tileborne/sdk-tileset",
-  "@tileborne/ui",
+  '@tileborne/core',
+  '@tileborne/game-client',
+  '@tileborne/sdk-tileset',
+  '@tileborne/ui',
 ] as const;
 const browserSafePluginSubpaths = [
-  "@tileborne/plugin-battle-royale/authoring",
-  "@tileborne/plugin-battle-royale/constants",
-  "@tileborne/plugin-battle-royale/player-models",
-  "@tileborne/plugin-battle-royale/renderer",
+  '@tileborne/plugin-battle-royale/authoring',
+  '@tileborne/plugin-battle-royale/constants',
+  '@tileborne/plugin-battle-royale/player-models',
+  '@tileborne/plugin-battle-royale/renderer',
 ] as const;
 
 const liveSourceAliases = {
   // The desktop renderer consumes the shared HUD shell while live-testing editor
   // changes. Pointing at source avoids Vite serving a stale transformed `dist`
   // module for this symlinked workspace package.
-  "@tileborne/game-client": path.resolve(
+  '@tileborne/game-client': path.resolve(
     import.meta.dirname,
-    "../../packages/game-client/src/index.ts",
+    '../../packages/game-client/src/index.ts',
   ),
 } as const;
 
 function resolveGitCommit(): string {
   try {
-    return execSync("git rev-parse --short HEAD", {
-      cwd: path.resolve(import.meta.dirname, "../.."),
-      encoding: "utf8",
+    return execSync('git rev-parse --short HEAD', {
+      cwd: path.resolve(import.meta.dirname, '../..'),
+      encoding: 'utf8',
     }).trim();
   } catch {
-    return "unknown";
+    return 'unknown';
   }
 }
 
 // Code-based router in src/renderer/router.tsx — @tanstack/router-plugin omitted until file-based routes land.
 export default defineConfig({
-  base: "./",
+  base: './',
   plugins: [react(), tailwindcss()],
   define: {
     __BATTLE_ROYALE_PLUGIN_PATH__: JSON.stringify(battleRoyalePluginPath),
@@ -79,10 +79,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "src/renderer"),
+      '@': path.resolve(import.meta.dirname, 'src/renderer'),
       ...liveSourceAliases,
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
     // Browser-safe internal packages served live (never pre-bundled) so their
@@ -91,14 +91,14 @@ export default defineConfig({
     // browserSafeInternalPackages above (t-vups).
     exclude: [...browserSafeInternalPackages, ...browserSafePluginSubpaths],
     include: [
-      "@base-ui/react",
-      "@base-ui/react/dialog",
-      "@base-ui/utils/store",
-      "use-sync-external-store/shim",
-      "use-sync-external-store/shim/with-selector",
+      '@base-ui/react',
+      '@base-ui/react/dialog',
+      '@base-ui/utils/store',
+      'use-sync-external-store/shim',
+      'use-sync-external-store/shim/with-selector',
     ],
   },
-  root: path.resolve(import.meta.dirname, "src/renderer"),
+  root: path.resolve(import.meta.dirname, 'src/renderer'),
   server: {
     // Vite 8's Rolldown-backed React refresh wrapper currently fails in the
     // Electron renderer dev server with esbuild@0.28.1 ("Missing field
@@ -117,7 +117,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, ".vite/renderer/main_window"),
+    outDir: path.resolve(import.meta.dirname, '.vite/renderer/main_window'),
     emptyOutDir: true,
   },
 });

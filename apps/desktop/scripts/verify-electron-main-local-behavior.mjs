@@ -27,7 +27,10 @@ const withDeadline = async (operation, durationMs, label) => {
     return await Promise.race([
       operation,
       new Promise((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} exceeded ${durationMs}ms`)), durationMs);
+        timer = setTimeout(
+          () => reject(new Error(`${label} exceeded ${durationMs}ms`)),
+          durationMs,
+        );
       }),
     ]);
   } finally {
@@ -81,11 +84,12 @@ const buildBehaviorFixture = async (root) => {
 const root = await mkdtemp(path.join(tmpdir(), 'tileborne-electron-main-behavior-'));
 let host;
 try {
-  execFileSync(
-    process.execPath,
-    [viteBin, 'build', '--config', 'vite.main.config.ts'],
-    { cwd: desktopRoot, encoding: 'utf8', stdio: 'pipe', timeout: 60_000 },
-  );
+  execFileSync(process.execPath, [viteBin, 'build', '--config', 'vite.main.config.ts'], {
+    cwd: desktopRoot,
+    encoding: 'utf8',
+    stdio: 'pipe',
+    timeout: 60_000,
+  });
   const bundleSource = await readFile(bundlePath, 'utf8');
   assert.doesNotMatch(bundleSource, /\{\}\.resolve/);
   assert.match(bundleSource, /createRequire/);

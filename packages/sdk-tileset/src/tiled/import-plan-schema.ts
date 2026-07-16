@@ -1,6 +1,9 @@
 /** Runtime schemas for the canonical Tiled import planning contract. */
 import { Schema } from 'effect';
 
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { TiledAppliedImportPlan, TiledImportScan, TiledSourceInventory } from './types.js';
+
 export const ImportRecordIdSchema = Schema.String.check(Schema.isPattern(/^import:[0-9a-f-]{36}$/));
 
 export const ImportCenterSourceKindSchema = Schema.Literals([
@@ -12,14 +15,114 @@ export const ImportCenterSourceKindSchema = Schema.Literals([
 ]);
 
 export const ImportCenterDiagnosticSeveritySchema = Schema.Literals(['error', 'warning', 'info']);
-export const ImportCenterDiagnosticSchema = Schema.Struct({
-  _tag: Schema.String,
-  severity: ImportCenterDiagnosticSeveritySchema,
-  path: Schema.String,
-  message: Schema.String,
-  feature: Schema.optional(Schema.String),
-  action: Schema.optional(Schema.String),
-});
+const diagnostic = <Tag extends string, Fields extends Schema.Struct.Fields>(
+  tag: Tag,
+  fields: Fields,
+) =>
+  Schema.Struct({
+    _tag: Schema.Literal(tag),
+    severity: ImportCenterDiagnosticSeveritySchema,
+    path: Schema.String,
+    message: Schema.String,
+    ...fields,
+  });
+
+/** Exact runtime counterpart of the canonical ParseDiagnostic tagged union. */
+export const ParseDiagnosticSchema = Schema.Union([
+  diagnostic('MissingAtlas', { atlasAssetId: Schema.String }),
+  diagnostic('InvalidCellSize', { width: Schema.Number, height: Schema.Number }),
+  diagnostic('UnknownAutotilePattern', { pattern: Schema.String }),
+  diagnostic('VariantWeightOutOfRange', {
+    filterId: Schema.String,
+    weightIndex: Schema.Number,
+    weight: Schema.Number,
+  }),
+  diagnostic('AnimationFrameOutOfBounds', {
+    animationId: Schema.String,
+    frameIndex: Schema.Number,
+  }),
+  diagnostic('DuplicateTileId', { tileId: Schema.String }),
+  diagnostic('CollisionMaskSizeMismatch', {
+    tileId: Schema.String,
+    expected: Schema.Number,
+    actual: Schema.Number,
+  }),
+  diagnostic('InvalidCollisionVertex', {
+    tileId: Schema.String,
+    axis: Schema.Literals(['x1', 'y1', 'x2', 'y2']),
+    value: Schema.Number,
+    max: Schema.Number,
+  }),
+  diagnostic('InvalidUvRect', {
+    x: Schema.Number,
+    y: Schema.Number,
+    w: Schema.Number,
+    h: Schema.Number,
+  }),
+  diagnostic('InvalidMarginSpacing', { margin: Schema.Number, spacing: Schema.Number }),
+  diagnostic('DuplicateAutotileRuleId', { ruleId: Schema.String }),
+  diagnostic('VariantWeightCountMismatch', {
+    filterId: Schema.String,
+    tileCount: Schema.Number,
+    weightCount: Schema.Number,
+  }),
+  diagnostic('InvalidAtlasGrid', {
+    imageWidth: Schema.Number,
+    imageHeight: Schema.Number,
+    cellWidth: Schema.Number,
+    cellHeight: Schema.Number,
+    margin: Schema.Number,
+    spacing: Schema.Number,
+    columns: Schema.Number,
+    rows: Schema.Number,
+  }),
+  diagnostic('InvalidPngImage', {
+    width: Schema.optionalKey(Schema.Number),
+    height: Schema.optionalKey(Schema.Number),
+  }),
+  diagnostic('EmptyVariantSelection', { filterId: Schema.String }),
+  diagnostic('TiledExternalRefBlocked', { source: Schema.String, resolvedPath: Schema.String }),
+  diagnostic('TiledUnsupportedCompression', {
+    layerName: Schema.String,
+    compression: Schema.String,
+  }),
+  diagnostic('TiledParseError', { format: Schema.Literals(['tmj', 'tmx', 'tsj', 'tsx']) }),
+  diagnostic('TiledUnsupportedFeature', { feature: Schema.String }),
+  diagnostic('TiledAmbiguousAtlasObject', {
+    tilesetName: Schema.String,
+    localTileId: Schema.Number,
+    objectId: Schema.optionalKey(Schema.Number),
+  }),
+  diagnostic('MissingTerrainClassRef', { terrainClass: Schema.String }),
+  diagnostic('MissingTransitionRule', { fromClass: Schema.String, toClass: Schema.String }),
+  diagnostic('InvalidManifestField', {}),
+  diagnostic('LdtkUnmappedAutoRule', {
+    ruleUid: Schema.Number,
+    layerUid: Schema.Number,
+    reason: Schema.String,
+  }),
+  diagnostic('LdtkExternalLevelMissing', { externalRelPath: Schema.String }),
+  diagnostic('LdtkExternalRefBlocked', {
+    externalRelPath: Schema.String,
+    resolvedPath: Schema.String,
+  }),
+  diagnostic('LdtkInvalidProject', {}),
+  diagnostic('UnknownRpgmSetKind', { set: Schema.String }),
+  diagnostic('MalformedAutotileLayout', {
+    pattern: Schema.String,
+    expectedCells: Schema.Number,
+    actualCells: Schema.Number,
+  }),
+  diagnostic('TiledSourceWallRuleUnmapped', { rulePath: Schema.String, reason: Schema.String }),
+  diagnostic('TiledSourceMissingImageRef', { imagePath: Schema.String, sourcePath: Schema.String }),
+  diagnostic('TiledSourceTsxParseError', { sourcePath: Schema.String }),
+  diagnostic('TiledSourceMetadataCompileError', {
+    sourcePath: Schema.String,
+    localTileId: Schema.Number,
+  }),
+]);
+
+export const ImportCenterDiagnosticSchema = ParseDiagnosticSchema;
 
 export const TiledScanSourceKindSchema = Schema.Literals(['map', 'tileset', 'source-folder']);
 
@@ -61,13 +164,13 @@ export const TiledImportScanTilesetPreviewSchema = Schema.Struct({
   collisionObjectCount: Schema.Number,
   categories: Schema.Array(Schema.String),
   confidence: Schema.Number,
-  source: Schema.optional(Schema.String),
+  source: Schema.optionalKey(Schema.String),
 });
 
 export const TiledImportImageAssetPreviewSchema = Schema.Struct({
   path: Schema.String,
   tilesetName: Schema.String,
-  localTileId: Schema.optional(Schema.Number),
+  localTileId: Schema.optionalKey(Schema.Number),
 });
 
 export const TiledImportObjectLayerPreviewSchema = Schema.Struct({
@@ -82,10 +185,10 @@ export const TiledImportPlaceablePreviewSchema = Schema.Struct({
   tilesetName: Schema.String,
   localTileId: Schema.Number,
   source: Schema.Literals(['image-collection', 'tileborne-hint']),
-  image: Schema.optional(Schema.String),
+  image: Schema.optionalKey(Schema.String),
   width: Schema.Number,
   height: Schema.Number,
-  category: Schema.optional(Schema.String),
+  category: Schema.optionalKey(Schema.String),
   confidence: Schema.Number,
 });
 
@@ -133,7 +236,7 @@ export const TiledImportUnsupportedFeatureSchema = Schema.Struct({
 export const TiledImportAmbiguousAtlasObjectSchema = Schema.Struct({
   tilesetName: Schema.String,
   localTileId: Schema.Number,
-  objectId: Schema.optional(Schema.Number),
+  objectId: Schema.optionalKey(Schema.Number),
   path: Schema.String,
   message: Schema.String,
 });
@@ -187,8 +290,8 @@ export const TiledImportSourceRoleSchema = Schema.Struct({
   evidence: TiledImportSourceRoleEvidenceSchema,
   confidence: Schema.Number,
   count: Schema.Number,
-  tilesetName: Schema.optional(Schema.String),
-  layerName: Schema.optional(Schema.String),
+  tilesetName: Schema.optionalKey(Schema.String),
+  layerName: Schema.optionalKey(Schema.String),
   browseTarget: TiledImportBrowseTargetSchema,
   reviewRequired: Schema.Boolean,
   rationale: Schema.String,
@@ -211,6 +314,68 @@ export const TiledImportRecommendationSchema = Schema.Struct({
   reviewRequired: Schema.Boolean,
 });
 
+export const TilesetFrameIndexSchema = Schema.Struct({
+  tilesetName: Schema.String,
+  tilesetPath: Schema.optionalKey(Schema.String),
+  localTileId: Schema.Number,
+  image: Schema.optionalKey(Schema.String),
+  probability: Schema.optionalKey(Schema.Number),
+  animationFrameCount: Schema.Number,
+  collisionObjectCount: Schema.Number,
+  wangSetNames: Schema.Array(Schema.String),
+});
+
+export const TiledSourceInventoryTilesetSchema = Schema.Struct({
+  name: Schema.String,
+  path: Schema.optionalKey(Schema.String),
+  kind: Schema.Literals(['grid', 'image-collection']),
+  tileCount: Schema.Number,
+  frameCount: Schema.Number,
+  imageCollectionTileCount: Schema.Number,
+  wangSetCount: Schema.Number,
+  animationCount: Schema.Number,
+  animationFrameCount: Schema.Number,
+  tileProbabilityCount: Schema.Number,
+  wangColorProbabilityCount: Schema.Number,
+  collisionObjectCount: Schema.Number,
+});
+
+export const TiledSourceInventoryRuleSchema = Schema.Struct({
+  path: Schema.String,
+  kind: Schema.Literals(['rules-index', 'rule-map']),
+});
+
+/** Complete runtime counterpart of TiledSourceInventory. */
+export const TiledSourceInventorySchema = Schema.Struct({
+  summary: Schema.Struct({
+    tilesetCount: Schema.Number,
+    tileCount: Schema.Number,
+    frameCount: Schema.Number,
+    imageCollectionTileCount: Schema.Number,
+    wangSetCount: Schema.Number,
+    animationCount: Schema.Number,
+    animationFrameCount: Schema.Number,
+    tileProbabilityCount: Schema.Number,
+    wangColorProbabilityCount: Schema.Number,
+    collisionObjectCount: Schema.Number,
+    ruleMapCount: Schema.Number,
+    rulesIndexCount: Schema.Number,
+    exampleMapCount: Schema.Number,
+  }),
+  tilesets: Schema.Array(TiledSourceInventoryTilesetSchema),
+  frames: Schema.Array(TilesetFrameIndexSchema),
+  rules: Schema.Array(TiledSourceInventoryRuleSchema),
+  exampleMaps: Schema.Array(
+    Schema.Struct({
+      path: Schema.String,
+      width: Schema.Number,
+      height: Schema.Number,
+      tileWidth: Schema.Number,
+      tileHeight: Schema.Number,
+    }),
+  ),
+});
+
 export const TiledImportScanSchema = Schema.Struct({
   sourceKind: TiledScanSourceKindSchema,
   sourcePath: Schema.String,
@@ -228,6 +393,7 @@ export const TiledImportScanSchema = Schema.Struct({
   recommendedProfile: TiledImportRecommendedProfileSchema,
   sourceRoles: Schema.Array(TiledImportSourceRoleSchema),
   importRecommendation: TiledImportRecommendationSchema,
+  sourceInventory: Schema.optionalKey(TiledSourceInventorySchema),
 });
 
 export const TiledImportPlanSuggestionSchema = Schema.Struct({
@@ -279,3 +445,20 @@ export const TiledAppliedImportPlanSchema = Schema.Struct({
   acceptedSuggestions: Schema.Array(TiledImportPlanSuggestionSchema),
   diagnostics: Schema.Array(ImportCenterDiagnosticSchema),
 });
+
+type Equal<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false;
+type Assert<Condition extends true> = Condition;
+
+/** Compile-time drift guards between canonical SDK types and runtime schemas. */
+export type ParseDiagnosticSchemaParity = Assert<
+  Equal<typeof ParseDiagnosticSchema.Type, ParseDiagnostic>
+>;
+export type TiledSourceInventorySchemaParity = Assert<
+  Equal<typeof TiledSourceInventorySchema.Type, TiledSourceInventory>
+>;
+export type TiledImportScanSchemaParity = Assert<
+  Equal<typeof TiledImportScanSchema.Type, TiledImportScan>
+>;
+export type TiledAppliedImportPlanSchemaParity = Assert<
+  Equal<typeof TiledAppliedImportPlanSchema.Type, TiledAppliedImportPlan>
+>;

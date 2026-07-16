@@ -282,6 +282,93 @@ describe('MapService export/import path security', () => {
       if (record === undefined) {
         throw new Error('expected persisted import record');
       }
+      const sourceInventory = {
+        summary: {
+          tilesetCount: 1,
+          tileCount: 2,
+          frameCount: 2,
+          imageCollectionTileCount: 0,
+          wangSetCount: 1,
+          animationCount: 1,
+          animationFrameCount: 2,
+          tileProbabilityCount: 1,
+          wangColorProbabilityCount: 1,
+          collisionObjectCount: 1,
+          ruleMapCount: 1,
+          rulesIndexCount: 1,
+          exampleMapCount: 1,
+        },
+        tilesets: [
+          {
+            name: 'terrain',
+            path: 'imports/terrain.tsx',
+            kind: 'grid',
+            tileCount: 2,
+            frameCount: 2,
+            imageCollectionTileCount: 0,
+            wangSetCount: 1,
+            animationCount: 1,
+            animationFrameCount: 2,
+            tileProbabilityCount: 1,
+            wangColorProbabilityCount: 1,
+            collisionObjectCount: 1,
+          },
+        ],
+        frames: [
+          {
+            tilesetName: 'terrain',
+            tilesetPath: 'imports/terrain.tsx',
+            localTileId: 0,
+            image: 'terrain.png',
+            probability: 0.75,
+            animationFrameCount: 2,
+            collisionObjectCount: 1,
+            wangSetNames: ['ground'],
+          },
+        ],
+        rules: [
+          { path: 'rules/index.json', kind: 'rules-index' },
+          { path: 'rules/ground.json', kind: 'rule-map' },
+        ],
+        exampleMaps: [
+          { path: 'examples/ground.tmj', width: 2, height: 2, tileWidth: 16, tileHeight: 16 },
+        ],
+      } as const;
+      const diagnostic = {
+        _tag: 'MissingAtlas',
+        severity: 'error',
+        path: 'imports/terrain.tsx',
+        message: 'atlas missing',
+        atlasAssetId: 'asset:terrain',
+      } as const;
+      const appliedPlan = {
+        ...record.appliedPlan,
+        scan: { ...record.appliedPlan.scan, sourceInventory },
+        diagnostics: [diagnostic],
+      };
+      const recordWithCompletePlan: ImportRecord = {
+        ...record,
+        appliedPlan,
+        report: {
+          ...record.report,
+          diagnostics: [diagnostic],
+          appliedPlan,
+        },
+      };
+      await writeFile(
+        recordsPath,
+        JSON.stringify({ schemaVersion: 1, records: [recordWithCompletePlan] }),
+      );
+      await Effect.runPromise(
+        appendProjectImportRecord(projectDir(home, result.projectId), recordWithCompletePlan),
+      );
+      const roundTripped = JSON.parse(await readFile(recordsPath, 'utf8')) as {
+        readonly records: readonly ImportRecord[];
+      };
+      expect(roundTripped.records[0]?.appliedPlan.scan.sourceInventory).toEqual(sourceInventory);
+      expect(roundTripped.records[0]?.appliedPlan.diagnostics).toEqual([diagnostic]);
+      expect(roundTripped.records[0]?.report.diagnostics).toEqual([diagnostic]);
+
       for (const raw of [
         '{"schemaVersion":0,"records":[]}',
         '{"schemaVersion":2,"records":[],"future":"preserve"}',

@@ -1,6 +1,6 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from 'electron';
 
-import type { IpcServerTransport } from "@tileborne/ipc-contracts";
+import type { IpcServerTransport } from '@tileborne/ipc-contracts';
 
 // One frame at 60fps. A synchronous IPC handler that exceeds this has blocked
 // the main thread (and therefore every window) long enough to drop frames —
@@ -8,7 +8,7 @@ import type { IpcServerTransport } from "@tileborne/ipc-contracts";
 // development so regressions surface immediately instead of as a user-visible
 // hang.
 const MAIN_THREAD_BLOCK_BUDGET_MS = 16;
-const blockWatchdogEnabled = process.env.NODE_ENV !== "production";
+const blockWatchdogEnabled = process.env.NODE_ENV !== 'production';
 
 export const createElectronIpcServerTransport = (): IpcServerTransport => ({
   handle: (channel, handler) => {

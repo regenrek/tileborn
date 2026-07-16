@@ -1,6 +1,6 @@
-import type { Session, WebContents } from "electron";
+import type { Session, WebContents } from 'electron';
 
-import { ASSET_PROTOCOL_SCHEME } from "./asset-library/asset-protocol-url.js";
+import { ASSET_PROTOCOL_SCHEME } from './asset-library/asset-protocol-url.js';
 
 /**
  * Renderer/preload/main trust-boundary hardening for the desktop shell
@@ -25,10 +25,10 @@ const ASSET_SCHEME_SOURCE = `${ASSET_PROTOCOL_SCHEME}:`;
  * port for both http and ws (never wildcard-external hosts).
  */
 const LOCAL_GAME_HOST_SOURCES = [
-  "http://127.0.0.1:*",
-  "http://localhost:*",
-  "ws://127.0.0.1:*",
-  "ws://localhost:*",
+  'http://127.0.0.1:*',
+  'http://localhost:*',
+  'ws://127.0.0.1:*',
+  'ws://localhost:*',
 ] as const;
 
 export interface SecurityContext {
@@ -85,24 +85,24 @@ export const buildContentSecurityPolicy = (context: SecurityContext): string => 
     styleSrc.push(devOrigin);
   }
 
-  const imgSrc = ["'self'", "data:", "blob:", ASSET_SCHEME_SOURCE];
+  const imgSrc = ["'self'", 'data:', 'blob:', ASSET_SCHEME_SOURCE];
   if (devOrigin) {
     imgSrc.push(devOrigin);
   }
 
-  const fontSrc = ["'self'", "data:", ASSET_SCHEME_SOURCE];
+  const fontSrc = ["'self'", 'data:', ASSET_SCHEME_SOURCE];
   if (devOrigin) {
     fontSrc.push(devOrigin);
   }
 
-  const mediaSrc = ["'self'", "blob:", "data:", ASSET_SCHEME_SOURCE];
+  const mediaSrc = ["'self'", 'blob:', 'data:', ASSET_SCHEME_SOURCE];
 
   // `data:`/`blob:` are required in connect-src (not just img-src): Pixi's asset
   // loader FETCHES bundled textures supplied as `data:image/png` / blob URLs
   // (e.g. bundled player-model + projectile textures in playtest), and a fetch
   // is governed by connect-src — without these it fails with "Failed to fetch"
   // and entities fall back to missing textures.
-  const connectSrc = ["'self'", "data:", "blob:", ASSET_SCHEME_SOURCE, ...LOCAL_GAME_HOST_SOURCES];
+  const connectSrc = ["'self'", 'data:', 'blob:', ASSET_SCHEME_SOURCE, ...LOCAL_GAME_HOST_SOURCES];
   if (devOrigin) {
     connectSrc.push(devOrigin);
   }
@@ -110,27 +110,27 @@ export const buildContentSecurityPolicy = (context: SecurityContext): string => 
     connectSrc.push(devWebSocket);
   }
 
-  const workerSrc = ["'self'", "blob:"];
+  const workerSrc = ["'self'", 'blob:'];
   if (devOrigin) {
     workerSrc.push(devOrigin);
   }
 
   const directives = [
     "default-src 'self'",
-    `script-src ${scriptSrc.join(" ")}`,
-    `style-src ${styleSrc.join(" ")}`,
-    `img-src ${imgSrc.join(" ")}`,
-    `font-src ${fontSrc.join(" ")}`,
-    `media-src ${mediaSrc.join(" ")}`,
-    `connect-src ${connectSrc.join(" ")}`,
-    `worker-src ${workerSrc.join(" ")}`,
+    `script-src ${scriptSrc.join(' ')}`,
+    `style-src ${styleSrc.join(' ')}`,
+    `img-src ${imgSrc.join(' ')}`,
+    `font-src ${fontSrc.join(' ')}`,
+    `media-src ${mediaSrc.join(' ')}`,
+    `connect-src ${connectSrc.join(' ')}`,
+    `worker-src ${workerSrc.join(' ')}`,
     "object-src 'none'",
     "frame-src 'none'",
     "base-uri 'self'",
     "form-action 'none'",
   ];
 
-  return directives.join("; ");
+  return directives.join('; ');
 };
 
 /**
@@ -149,7 +149,7 @@ export const isNavigationAllowed = (targetUrl: string, context: SecurityContext)
   }
 
   // Packaged app document is loaded via loadFile -> file:// origin.
-  if (parsed.protocol === "file:") {
+  if (parsed.protocol === 'file:') {
     return true;
   }
 
@@ -178,7 +178,7 @@ export const isExternalOpenAllowed = (targetUrl: string): boolean => {
   } catch {
     return false;
   }
-  return parsed.protocol === "https:";
+  return parsed.protocol === 'https:';
 };
 
 /**
@@ -192,13 +192,10 @@ export const isExternalOpenAllowed = (targetUrl: string): boolean => {
  * `onHeadersReceived` supports a single listener per session; calling this more
  * than once on the same session simply replaces the handler (idempotent).
  */
-export const installContentSecurityPolicy = (
-  session: Session,
-  context: SecurityContext,
-): void => {
+export const installContentSecurityPolicy = (session: Session, context: SecurityContext): void => {
   const policy = buildContentSecurityPolicy(context);
   session.webRequest.onHeadersReceived((details, callback) => {
-    if (details.resourceType !== "mainFrame" && details.resourceType !== "subFrame") {
+    if (details.resourceType !== 'mainFrame' && details.resourceType !== 'subFrame') {
       // Leave non-document responses untouched (omitting responseHeaders keeps
       // the originals), e.g. the asset protocol's own CORS/cache headers.
       callback({});
@@ -206,11 +203,11 @@ export const installContentSecurityPolicy = (
     }
     const responseHeaders: Record<string, string[]> = { ...details.responseHeaders };
     for (const key of Object.keys(responseHeaders)) {
-      if (key.toLowerCase() === "content-security-policy") {
+      if (key.toLowerCase() === 'content-security-policy') {
         delete responseHeaders[key];
       }
     }
-    responseHeaders["Content-Security-Policy"] = [policy];
+    responseHeaders['Content-Security-Policy'] = [policy];
     callback({ responseHeaders });
   });
 };
@@ -225,7 +222,7 @@ export const installNavigationGuards = (
   context: SecurityContext,
   openExternal: (url: string) => void,
 ): void => {
-  webContents.on("will-navigate", (event, url) => {
+  webContents.on('will-navigate', (event, url) => {
     if (isNavigationAllowed(url, context)) {
       return;
     }
@@ -236,6 +233,6 @@ export const installNavigationGuards = (
     if (isExternalOpenAllowed(details.url)) {
       openExternal(details.url);
     }
-    return { action: "deny" };
+    return { action: 'deny' };
   });
 };

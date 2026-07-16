@@ -18,10 +18,7 @@ import { ReadinessNavigationTarget, type ReadinessDiagnostic } from '@tileborne/
 import type { BehaviorCompileDiagnostic } from '@tileborne/services-build';
 import { PluginManifest } from '@tileborne/plugin-api';
 import { describe, expect, it } from 'vitest';
-import {
-  materializePluginManifestInput,
-  type InstalledPlugin,
-} from '@tileborne/services-plugin';
+import { materializePluginManifestInput, type InstalledPlugin } from '@tileborne/services-plugin';
 import { DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS } from '@tileborne/plugin-battle-royale/player-models';
 import { Option, Schema } from 'effect';
 
@@ -116,24 +113,43 @@ describe('canonical readiness report', () => {
     const diagnostics = behaviorReadinessDiagnostics(projectId, projectIssues, compileIssues);
     const byCode = (code: string) => diagnostics.find((entry) => entry.code === code);
     expect(byCode('behavior.reference-missing')?.navigation).toMatchObject({
-      kind: 'behavior', behaviorId, behaviorNodeId: nodeId, path: visualPath,
+      kind: 'behavior',
+      behaviorId,
+      behaviorNodeId: nodeId,
+      path: visualPath,
     });
     expect(byCode('TBBUILD2101')?.navigation).toMatchObject({
-      kind: 'behavior', behaviorId, behaviorNodeId: nodeId, sourceKind: 'visual',
-      path: visualPath, line: 12, column: 7,
+      kind: 'behavior',
+      behaviorId,
+      behaviorNodeId: nodeId,
+      sourceKind: 'visual',
+      path: visualPath,
+      line: 12,
+      column: 7,
     });
     expect(byCode('TBBUILD2101')).toMatchObject({
-      behaviorId, behaviorNodeId: nodeId, sourceKind: 'visual',
-      path: visualPath, line: 12, column: 7,
+      behaviorId,
+      behaviorNodeId: nodeId,
+      sourceKind: 'visual',
+      path: visualPath,
+      line: 12,
+      column: 7,
     });
     expect(byCode('TBBUILD2201')?.navigation).toMatchObject({
-      kind: 'behavior', behaviorId, path: visualPath,
+      kind: 'behavior',
+      behaviorId,
+      path: visualPath,
     });
     expect(byCode('behavior.version-unsupported')?.navigation).toMatchObject({
-      kind: 'behavior', behaviorId, path: tsPath,
+      kind: 'behavior',
+      behaviorId,
+      path: tsPath,
     });
     expect(byCode('TBSDK1001')?.navigation).toMatchObject({
-      kind: 'behavior', behaviorId, sourceKind: 'typescript', path: tsPath,
+      kind: 'behavior',
+      behaviorId,
+      sourceKind: 'typescript',
+      path: tsPath,
     });
   });
 
@@ -221,14 +237,14 @@ describe('canonical readiness report', () => {
       readonly version: string;
     };
     const installedPlugin = {
-        id: rawManifest.id,
-        version: rawManifest.version,
-        enabled: true,
-        rootPath,
-        manifestPath,
-        manifest,
-        integrity: hashJsonStable(manifestJson),
-      } satisfies InstalledPlugin;
+      id: rawManifest.id,
+      version: rawManifest.version,
+      enabled: true,
+      rootPath,
+      manifestPath,
+      manifest,
+      integrity: hashJsonStable(manifestJson),
+    } satisfies InstalledPlugin;
     await expect(loadPluginMapValidator(installedPlugin, undefined)).resolves.toBeUndefined();
     await expect(loadPluginMapValidator(installedPlugin, 'validate-mpa')).rejects.toThrow(
       /unknown server map validator validate-mpa/,

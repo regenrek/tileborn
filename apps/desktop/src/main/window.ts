@@ -1,20 +1,20 @@
-import path from "node:path";
-import process from "node:process";
-import { randomUUID } from "node:crypto";
+import path from 'node:path';
+import process from 'node:process';
+import { randomUUID } from 'node:crypto';
 
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 
 import {
   APP_CLOSE_REQUESTED_CHANNEL,
   APP_CLOSE_RESOLVED_CHANNEL,
   type AppCloseResolution,
-} from "../shared/app-lifecycle.js";
+} from '../shared/app-lifecycle.js';
 
 import {
   installContentSecurityPolicy,
   installNavigationGuards,
   type SecurityContext,
-} from "./security.js";
+} from './security.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -23,12 +23,12 @@ const WINDOW_WIDTH = 1440;
 const WINDOW_HEIGHT = 900;
 const WINDOW_MIN_WIDTH = 1024;
 const WINDOW_MIN_HEIGHT = 640;
-const DEFAULT_RENDERER_WINDOW_NAME = "main_window";
+const DEFAULT_RENDERER_WINDOW_NAME = 'main_window';
 
 const resolveRuntimeIconPath = (): string =>
   app.isPackaged
-    ? path.join(process.resourcesPath, "icon.png")
-    : path.resolve(__dirname, "../../assets/icon.png");
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.resolve(__dirname, '../../assets/icon.png');
 
 export interface MainWindowLifecycleHooks {
   readonly onRendererLoadStart?: () => void;
@@ -48,12 +48,12 @@ export interface CreateMainWindowOptions extends MainWindowLifecycleHooks {
 
 const resolveDevServerUrl = (): string | undefined => {
   const devServerUrl =
-    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === "undefined"
+    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
       ? undefined
       : MAIN_WINDOW_VITE_DEV_SERVER_URL;
   // Smoke runs load the packaged-style bundle (loadFile) even though the dev
   // server constant may be defined, so it is not "dev" for security purposes.
-  if (!devServerUrl || process.env.TILEBORNE_SMOKE === "true") {
+  if (!devServerUrl || process.env.TILEBORNE_SMOKE === 'true') {
     return undefined;
   }
   return devServerUrl;
@@ -79,7 +79,7 @@ const resolveSecurityContext = (): SecurityContext => {
 const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
   const devServerUrl = resolveDevServerUrl();
   const rendererName =
-    typeof MAIN_WINDOW_VITE_NAME === "undefined"
+    typeof MAIN_WINDOW_VITE_NAME === 'undefined'
       ? DEFAULT_RENDERER_WINDOW_NAME
       : MAIN_WINDOW_VITE_NAME;
 
@@ -88,16 +88,17 @@ const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
     void window.loadURL(url.toString());
     return;
   }
-  void window.loadFile(
-    path.join(__dirname, `../renderer/${rendererName}/index.html`),
-    { hash: routePath },
-  );
+  void window.loadFile(path.join(__dirname, `../renderer/${rendererName}/index.html`), {
+    hash: routePath,
+  });
 };
 
 export const createMainWindow = (options: CreateMainWindowOptions | string = {}): BrowserWindow => {
   const resolvedOptions =
-    typeof options === "string" ? ({ initialRoutePath: options } satisfies CreateMainWindowOptions) : options;
-  const initialRoutePath = resolvedOptions.initialRoutePath ?? "/";
+    typeof options === 'string'
+      ? ({ initialRoutePath: options } satisfies CreateMainWindowOptions)
+      : options;
+  const initialRoutePath = resolvedOptions.initialRoutePath ?? '/';
   const iconPath = resolveRuntimeIconPath();
   const devServerUrl = resolveDevServerUrl();
   const mainWindow = new BrowserWindow({
@@ -107,7 +108,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     minHeight: WINDOW_MIN_HEIGHT,
     show: true,
     icon: iconPath,
-    backgroundColor: "#0f172a",
+    backgroundColor: '#0f172a',
     // ADR-0012 option A: native OS frame for v1 (custom chrome deferred).
     frame: true,
     webPreferences: {
@@ -118,21 +119,15 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
       // stack, the sandboxed preload bridge does not reach that renderer, so dev
       // uses the standard isolated preload context instead.
       sandbox: devServerUrl === undefined,
-      preload: path.join(__dirname, "preload.cjs"),
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
   let rendererLoaded = false;
   let closeAllowed = false;
   let pendingCloseRequestId: string | undefined;
 
-  const resolveClose = (
-    event: Electron.IpcMainEvent,
-    resolution: AppCloseResolution,
-  ): void => {
-    if (
-      event.sender !== mainWindow.webContents ||
-      resolution.requestId !== pendingCloseRequestId
-    ) {
+  const resolveClose = (event: Electron.IpcMainEvent, resolution: AppCloseResolution): void => {
+    if (event.sender !== mainWindow.webContents || resolution.requestId !== pendingCloseRequestId) {
       return;
     }
     pendingCloseRequestId = undefined;
@@ -162,7 +157,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     resolvedOptions.onClosed?.();
   });
 
-  if (process.platform === "darwin" && !app.isPackaged) {
+  if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(iconPath);
   }
 
@@ -176,15 +171,15 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     void shell.openExternal(url);
   });
 
-  mainWindow.webContents.once("did-start-loading", () => {
+  mainWindow.webContents.once('did-start-loading', () => {
     resolvedOptions.onRendererLoadStart?.();
   });
-  mainWindow.webContents.once("did-finish-load", () => {
+  mainWindow.webContents.once('did-finish-load', () => {
     rendererLoaded = true;
     resolvedOptions.onRendererLoaded?.();
   });
   mainWindow.webContents.once(
-    "did-fail-load",
+    'did-fail-load',
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) {
         return;
@@ -192,7 +187,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
       resolvedOptions.onRendererLoadFailed?.({ errorCode, errorDescription, validatedURL });
     },
   );
-  mainWindow.once("ready-to-show", () => {
+  mainWindow.once('ready-to-show', () => {
     if (!mainWindow.isVisible()) {
       mainWindow.show();
     }
@@ -200,8 +195,8 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
 
   loadRendererRoute(mainWindow, initialRoutePath);
 
-  if (!app.isPackaged && process.env.TILEBORNE_DISABLE_DEVTOOLS !== "true") {
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+  if (!app.isPackaged && process.env.TILEBORNE_DISABLE_DEVTOOLS !== 'true') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   return mainWindow;

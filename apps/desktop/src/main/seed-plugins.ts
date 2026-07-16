@@ -1,11 +1,11 @@
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema } from 'effect';
 
-import { AssetPackManifest, hashAssetPackManifest } from "@tileborne/asset-pipeline";
-import { ContentHash, type PluginId } from "@tileborne/core";
-import { AssetService, DirectoryAssetPackSource } from "@tileborne/services-app";
+import { AssetPackManifest, hashAssetPackManifest } from '@tileborne/asset-pipeline';
+import { ContentHash, type PluginId } from '@tileborne/core';
+import { AssetService, DirectoryAssetPackSource } from '@tileborne/services-app';
 import {
   hashPluginDirectory,
   type InstalledPlugin,
@@ -15,9 +15,13 @@ import {
   PLUGIN_SEED_FINGERPRINT_FILE,
   type PluginRegistryServiceError,
   PluginRegistryService,
-} from "@tileborne/services-plugin";
+} from '@tileborne/services-plugin';
 
-import { BUNDLED_PLUGINS, type BundledPluginSpec, resolveBundledPluginPath } from "./bundled-plugins.js";
+import {
+  BUNDLED_PLUGINS,
+  type BundledPluginSpec,
+  resolveBundledPluginPath,
+} from './bundled-plugins.js';
 
 /**
  * Typed failure raised when a bundled plugin's on-disk path cannot be resolved
@@ -26,7 +30,7 @@ import { BUNDLED_PLUGINS, type BundledPluginSpec, resolveBundledPluginPath } fro
  * the boot seed continue to the next bundled plugin.
  */
 export class BundledPluginResolveError extends Schema.TaggedErrorClass<BundledPluginResolveError>()(
-  "BundledPluginResolveError",
+  'BundledPluginResolveError',
   {
     pluginId: Schema.String,
     message: Schema.String,
@@ -37,20 +41,20 @@ const toMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" &&
+  typeof cause === 'object' &&
   cause !== null &&
-  "code" in cause &&
-  (cause as { readonly code?: unknown }).code === "ENOENT";
+  'code' in cause &&
+  (cause as { readonly code?: unknown }).code === 'ENOENT';
 
 const seedFingerprintPath = (rootPath: string): string =>
   path.join(rootPath, PLUGIN_SEED_FINGERPRINT_FILE);
 
-const TILEBORNE_PACK_MANIFEST = "tileborne-asset-pack.json";
+const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
 
 const readSeedFingerprint = (rootPath: string) =>
   Effect.promise(async (): Promise<ContentHash | undefined> => {
     try {
-      const raw = await readFile(seedFingerprintPath(rootPath), "utf8");
+      const raw = await readFile(seedFingerprintPath(rootPath), 'utf8');
       return Schema.decodeUnknownSync(ContentHash)(raw.trim());
     } catch (cause) {
       if (isNotFound(cause)) {
@@ -62,8 +66,9 @@ const readSeedFingerprint = (rootPath: string) =>
 
 const writeSeedFingerprint = (rootPath: string, fingerprint: ContentHash) =>
   Effect.tryPromise({
-    try: () => writeFile(seedFingerprintPath(rootPath), `${fingerprint}\n`, "utf8"),
-    catch: (cause) => new Error(`failed to write bundled plugin seed fingerprint: ${toMessage(cause)}`),
+    try: () => writeFile(seedFingerprintPath(rootPath), `${fingerprint}\n`, 'utf8'),
+    catch: (cause) =>
+      new Error(`failed to write bundled plugin seed fingerprint: ${toMessage(cause)}`),
   });
 
 const hashBundledSource = (spec: BundledPluginSpec, sourcePath: string) =>
@@ -79,10 +84,14 @@ const hashBundledSource = (spec: BundledPluginSpec, sourcePath: string) =>
 interface BundledPluginSeedServices {
   readonly registry: {
     readonly list: () => Effect.Effect<readonly InstalledPlugin[], PluginRegistryServiceError>;
-    readonly enable: (pluginId: PluginId) => Effect.Effect<InstalledPlugin, PluginRegistryServiceError>;
+    readonly enable: (
+      pluginId: PluginId,
+    ) => Effect.Effect<InstalledPlugin, PluginRegistryServiceError>;
   };
   readonly installer: {
-    readonly install: (source: LocalPluginSource) => Effect.Effect<InstalledPlugin, PluginInstallerServiceError>;
+    readonly install: (
+      source: LocalPluginSource,
+    ) => Effect.Effect<InstalledPlugin, PluginInstallerServiceError>;
   };
 }
 
@@ -98,7 +107,8 @@ export const installBundledPluginWithServices = (
   Effect.gen(function* () {
     const sourcePath = yield* Effect.try({
       try: () => resolveBundledPluginPath(spec),
-      catch: (cause) => new BundledPluginResolveError({ pluginId: spec.id, message: toMessage(cause) }),
+      catch: (cause) =>
+        new BundledPluginResolveError({ pluginId: spec.id, message: toMessage(cause) }),
     });
     const sourceFingerprint = yield* hashBundledSource(spec, sourcePath);
     const installed = yield* registry.list();
@@ -120,7 +130,9 @@ export const installBundledPluginWithServices = (
       yield* writeSeedFingerprint(plugin.rootPath, sourceFingerprint);
       return yield* ensureEnabled(plugin);
     }
-    yield* Effect.logInfo(`[tileborne:start] ${spec.id} bundled plugin not installed -> installing`);
+    yield* Effect.logInfo(
+      `[tileborne:start] ${spec.id} bundled plugin not installed -> installing`,
+    );
     const plugin = yield* installer.install(new LocalPluginSource({ path: sourcePath }));
     yield* writeSeedFingerprint(plugin.rootPath, sourceFingerprint);
     if (!plugin.enabled) {
@@ -172,9 +184,10 @@ const readAssetPackManifest = (packRoot: string): Effect.Effect<AssetPackManifes
   Effect.tryPromise({
     try: async () =>
       Schema.decodeUnknownSync(AssetPackManifest)(
-        JSON.parse(await readFile(path.join(packRoot, TILEBORNE_PACK_MANIFEST), "utf8")) as unknown,
+        JSON.parse(await readFile(path.join(packRoot, TILEBORNE_PACK_MANIFEST), 'utf8')) as unknown,
       ),
-    catch: (cause) => new Error(`failed to read bundled asset pack ${packRoot}: ${toMessage(cause)}`),
+    catch: (cause) =>
+      new Error(`failed to read bundled asset pack ${packRoot}: ${toMessage(cause)}`),
   });
 
 interface BundledAssetPackSeedServices {
@@ -187,15 +200,18 @@ interface BundledAssetPackSeedServices {
   };
 }
 
-export const seedBundledPluginAssetPacksWithServices = (
-  { registry, assets }: BundledAssetPackSeedServices,
-) =>
+export const seedBundledPluginAssetPacksWithServices = ({
+  registry,
+  assets,
+}: BundledAssetPackSeedServices) =>
   Effect.gen(function* () {
     const bundledIds = new Set(BUNDLED_PLUGINS.map((spec) => spec.id));
     const plugins = (yield* registry.list()).filter((plugin) => bundledIds.has(plugin.id));
     const installedPacks = yield* assets.listPacks();
     const installedHashByKey = new Map<string, ContentHash>(
-      installedPacks.map((pack) => [`${pack.id}@${pack.version}`, hashAssetPackManifest(pack)] as const),
+      installedPacks.map(
+        (pack) => [`${pack.id}@${pack.version}`, hashAssetPackManifest(pack)] as const,
+      ),
     );
 
     for (const plugin of plugins) {

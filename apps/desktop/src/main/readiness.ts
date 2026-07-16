@@ -109,45 +109,39 @@ export const behaviorReadinessDiagnostics = (
   compileDiagnostics: readonly BehaviorCompileDiagnostic[],
 ): readonly ReadinessDiagnostic[] => {
   const projectCodes = new Set(projectDiagnostics.map((entry) => entry.code));
-  const fromProject = projectDiagnostics.map((issue) => readinessDiagnostic({
-    id: issue.id,
-    code: issue.code,
-    severity: issue.severity,
-    source: 'behavior',
-    title: issue.title,
-    message: issue.message,
-    projectId,
-    ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
-    ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
-    ...(issue.sourceKind === undefined ? {} : { sourceKind: issue.sourceKind }),
-    ...(issue.path === undefined ? {} : { path: issue.path }),
-    navigation: readinessNavigation({
-      kind: 'behavior',
+  const fromProject = projectDiagnostics.map((issue) =>
+    readinessDiagnostic({
+      id: issue.id,
+      code: issue.code,
+      severity: issue.severity,
+      source: 'behavior',
+      title: issue.title,
+      message: issue.message,
       projectId,
       ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
       ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
       ...(issue.sourceKind === undefined ? {} : { sourceKind: issue.sourceKind }),
       ...(issue.path === undefined ? {} : { path: issue.path }),
-    }),
-  }));
-  const fromCompiler = compileDiagnostics
-    .filter((issue) => !projectCodes.has(issue.code))
-    .map((issue, index) => readinessDiagnostic({
-      id: `project:${projectId}:behavior-compile:${issue.code}:${index}`,
-      code: issue.code,
-      severity: 'error',
-      source: 'behavior',
-      title: 'Behavior cannot compile',
-      message: `${issue.message} ${issue.suggestion}`,
-      projectId,
-      ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
-      ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
-      ...(issue.sourceKind === undefined ? {} : { sourceKind: issue.sourceKind }),
-      path: issue.fileName,
-      ...(issue.line === undefined ? {} : { line: issue.line }),
-      ...(issue.column === undefined ? {} : { column: issue.column }),
       navigation: readinessNavigation({
         kind: 'behavior',
+        projectId,
+        ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
+        ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
+        ...(issue.sourceKind === undefined ? {} : { sourceKind: issue.sourceKind }),
+        ...(issue.path === undefined ? {} : { path: issue.path }),
+      }),
+    }),
+  );
+  const fromCompiler = compileDiagnostics
+    .filter((issue) => !projectCodes.has(issue.code))
+    .map((issue, index) =>
+      readinessDiagnostic({
+        id: `project:${projectId}:behavior-compile:${issue.code}:${index}`,
+        code: issue.code,
+        severity: 'error',
+        source: 'behavior',
+        title: 'Behavior cannot compile',
+        message: `${issue.message} ${issue.suggestion}`,
         projectId,
         ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
         ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
@@ -155,8 +149,18 @@ export const behaviorReadinessDiagnostics = (
         path: issue.fileName,
         ...(issue.line === undefined ? {} : { line: issue.line }),
         ...(issue.column === undefined ? {} : { column: issue.column }),
+        navigation: readinessNavigation({
+          kind: 'behavior',
+          projectId,
+          ...(issue.behaviorId === undefined ? {} : { behaviorId: issue.behaviorId }),
+          ...(issue.nodeId === undefined ? {} : { behaviorNodeId: issue.nodeId }),
+          ...(issue.sourceKind === undefined ? {} : { sourceKind: issue.sourceKind }),
+          path: issue.fileName,
+          ...(issue.line === undefined ? {} : { line: issue.line }),
+          ...(issue.column === undefined ? {} : { column: issue.column }),
+        }),
       }),
-    }));
+    );
   return [...fromProject, ...fromCompiler];
 };
 

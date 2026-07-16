@@ -17,10 +17,14 @@ const keyFor = (projectId: string, kind: BehaviorReferenceKind): string => `${pr
 
 export const behaviorReferenceId = (reference: BehaviorReference): string => {
   switch (reference._tag) {
-    case 'entity': return String(reference.objectId);
-    case 'asset': return String(reference.assetId);
-    case 'catalog': return String(reference.objectTypeId);
-    case 'behavior': return String(reference.behaviorId);
+    case 'entity':
+      return String(reference.objectId);
+    case 'asset':
+      return String(reference.assetId);
+    case 'catalog':
+      return String(reference.objectTypeId);
+    case 'behavior':
+      return String(reference.behaviorId);
   }
 };
 
@@ -45,9 +49,11 @@ export class BehaviorReferenceIndex {
     if (active !== undefined) return active;
     const generation = this.#generations.get(key) ?? 0;
     const request = loader()
-      .then((options) => [...options].sort(
-        (left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id),
-      ))
+      .then((options) =>
+        [...options].sort(
+          (left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id),
+        ),
+      )
       .then((options) => {
         if ((this.#generations.get(key) ?? 0) === generation) this.#settled.set(key, options);
         return options;

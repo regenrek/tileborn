@@ -1,19 +1,19 @@
-import { Effect, Option } from "effect";
+import { Effect, Option } from 'effect';
 
 import {
   HomeService,
   JobService,
   LoggerService,
   type LogMethod,
-} from "@tileborne/services-foundation";
+} from '@tileborne/services-foundation';
 
-import type { StartupReporter } from "./startup-reporter.js";
-import { registerAssetProtocol } from "./asset-library/asset-protocol.js";
-import { registerMainIpc, type MainIpcRegistration } from "./ipc/handlers.js";
-import { stopDesktopLocalGameHost } from "./local-game-host-manager.js";
-import { disposeRuntime, runEffect } from "./runtime.js";
-import { seedBundledPluginAssetPacks, seedBundledPlugins } from "./seed-plugins.js";
-import type { StartupStatusStore, StartupTaskId } from "../shared/startup-status.js";
+import type { StartupReporter } from './startup-reporter.js';
+import { registerAssetProtocol } from './asset-library/asset-protocol.js';
+import { registerMainIpc, type MainIpcRegistration } from './ipc/handlers.js';
+import { stopDesktopLocalGameHost } from './local-game-host-manager.js';
+import { disposeRuntime, runEffect } from './runtime.js';
+import { seedBundledPluginAssetPacks, seedBundledPlugins } from './seed-plugins.js';
+import type { StartupStatusStore, StartupTaskId } from '../shared/startup-status.js';
 
 const OPTIONAL_STARTUP_TASK_TIMEOUT_MS = 15_000;
 
@@ -34,11 +34,12 @@ export interface DesktopStartupControllerOptions {
   readonly reporter: StartupReporter;
 }
 
-const toError = (cause: unknown): Error => (cause instanceof Error ? cause : new Error(String(cause)));
+const toError = (cause: unknown): Error =>
+  cause instanceof Error ? cause : new Error(String(cause));
 
 const logStartup = (
   logger: StartupLogger,
-  level: "info" | "warn" | "error" | "fatal",
+  level: 'info' | 'warn' | 'error' | 'fatal',
   message: string,
   fields: Record<string, unknown> = {},
 ): Promise<void> => runEffect(logger[level](message, fields)).catch(() => undefined);
@@ -61,7 +62,7 @@ const runRequiredEffect = async <A, R>(
     reporter.complete(taskId);
     return result;
   } catch (cause) {
-    reporter.fail(taskId, "failed", cause);
+    reporter.fail(taskId, 'failed', cause);
     throw cause;
   }
 };
@@ -76,10 +77,7 @@ const runOptionalEffect = async <R>(
   const bounded = effect.pipe(
     Effect.timeoutOrElse({
       duration: `${OPTIONAL_STARTUP_TASK_TIMEOUT_MS} millis`,
-      orElse: () =>
-        Effect.fail(
-          new Error(`timed out after ${OPTIONAL_STARTUP_TASK_TIMEOUT_MS}ms`),
-        ),
+      orElse: () => Effect.fail(new Error(`timed out after ${OPTIONAL_STARTUP_TASK_TIMEOUT_MS}ms`)),
     }),
     Effect.match({
       onFailure: (cause) => ({ ok: false as const, error: toError(cause) }),
@@ -90,13 +88,13 @@ const runOptionalEffect = async <R>(
   const result = await runEffect(bounded);
   if (result.ok) {
     reporter.complete(taskId);
-    await logStartup(logger, "info", `Startup task ${taskId} completed`);
+    await logStartup(logger, 'info', `Startup task ${taskId} completed`);
     return;
   }
 
-  const status = result.error.message.includes("timed out after") ? "timed-out" : "failed";
+  const status = result.error.message.includes('timed out after') ? 'timed-out' : 'failed';
   reporter.fail(taskId, status, result.error);
-  await logStartup(logger, "warn", `Optional startup task ${taskId} ${status}`, {
+  await logStartup(logger, 'warn', `Optional startup task ${taskId} ${status}`, {
     message: result.error.message,
   });
 };
@@ -108,7 +106,7 @@ export const createDesktopStartupController = ({
   let ipcRegistration: MainIpcRegistration | undefined;
 
   const start = async (): Promise<void> => {
-    reporter.begin("background-startup");
+    reporter.begin('background-startup');
     try {
       // Serve installed pack assets via the custom protocol as early as
       // possible (app is already ready here). Renderer image/atlas loads then
@@ -117,40 +115,40 @@ export const createDesktopStartupController = ({
 
       const homeService = await runRequiredEffect(
         reporter,
-        "runtime-services",
+        'runtime-services',
         Effect.gen(function* () {
           return yield* HomeService;
         }),
       );
 
-      const home = await runRequiredEffect(reporter, "home-init", homeService.init());
+      const home = await runRequiredEffect(reporter, 'home-init', homeService.init());
 
       const logger = await getLogger();
-      await logStartup(logger, "info", "Tileborne desktop domain startup beginning", {
+      await logStartup(logger, 'info', 'Tileborne desktop domain startup beginning', {
         homeRoot: home.root,
       });
 
-      ipcRegistration = await runRequiredEffect(reporter, "ipc-registration", registerMainIpc);
+      ipcRegistration = await runRequiredEffect(reporter, 'ipc-registration', registerMainIpc);
 
-      await runOptionalEffect(reporter, logger, "plugin-seed", seedBundledPlugins);
-      await runOptionalEffect(reporter, logger, "asset-pack-seed", seedBundledPluginAssetPacks);
+      await runOptionalEffect(reporter, logger, 'plugin-seed', seedBundledPlugins);
+      await runOptionalEffect(reporter, logger, 'asset-pack-seed', seedBundledPluginAssetPacks);
 
-      reporter.complete("background-startup");
+      reporter.complete('background-startup');
       const finalState = status.getSnapshot().state;
-      if (finalState === "failed") {
-        await logStartup(logger, "error", "Tileborne desktop startup reached a failed shell state");
-      } else if (finalState === "degraded") {
-        status.setState("degraded");
-        await logStartup(logger, "warn", "Tileborne desktop ready with startup warnings");
+      if (finalState === 'failed') {
+        await logStartup(logger, 'error', 'Tileborne desktop startup reached a failed shell state');
+      } else if (finalState === 'degraded') {
+        status.setState('degraded');
+        await logStartup(logger, 'warn', 'Tileborne desktop ready with startup warnings');
       } else {
-        status.setState("ready");
-        await logStartup(logger, "info", "Tileborne desktop ready");
+        status.setState('ready');
+        await logStartup(logger, 'info', 'Tileborne desktop ready');
       }
     } catch (cause) {
-      reporter.fail("background-startup", "failed", cause);
+      reporter.fail('background-startup', 'failed', cause);
       const logger = await getLogger().catch(() => undefined);
       if (logger !== undefined) {
-        await logStartup(logger, "fatal", "Unhandled startup failure", {
+        await logStartup(logger, 'fatal', 'Unhandled startup failure', {
           cause: Option.some(String(cause)),
         });
       }
@@ -169,23 +167,23 @@ export const createDesktopStartupController = ({
         const jobs = yield* JobService;
         const logger = yield* LoggerService;
         const running = (yield* jobs.list()).filter(
-          (job) => job.status._tag === "Running" || job.status._tag === "Pending",
+          (job) => job.status._tag === 'Running' || job.status._tag === 'Pending',
         );
         yield* Effect.forEach(
           running,
           (job) =>
-            jobs.cancel(job.id).pipe(
-              Effect.match({ onFailure: () => Effect.void, onSuccess: () => Effect.void }),
-            ),
+            jobs
+              .cancel(job.id)
+              .pipe(Effect.match({ onFailure: () => Effect.void, onSuccess: () => Effect.void })),
           { discard: true },
         );
         ipcRegistration?.handlers.unregister();
         ipcRegistration?.events.unregister();
         yield* Effect.tryPromise({
           try: () => stopDesktopLocalGameHost(),
-          catch: () => new Error("stop local host failed"),
+          catch: () => new Error('stop local host failed'),
         }).pipe(Effect.match({ onFailure: () => Effect.void, onSuccess: () => Effect.void }));
-        yield* logger.info("Tileborne desktop main shut down");
+        yield* logger.info('Tileborne desktop main shut down');
       }).pipe(Effect.catchCause(() => Effect.void)),
     ).catch(() => undefined);
 

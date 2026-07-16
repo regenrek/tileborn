@@ -19,13 +19,17 @@ export const paginateBehaviorReferenceOptions = <T extends PageableBehaviorRefer
   const offset = Math.max(0, Math.trunc(input.offset ?? 0));
   const limit = Math.max(
     1,
-    Math.min(BEHAVIOR_REFERENCE_MAX_PAGE_SIZE, Math.trunc(input.limit ?? BEHAVIOR_REFERENCE_DEFAULT_PAGE_SIZE)),
+    Math.min(
+      BEHAVIOR_REFERENCE_MAX_PAGE_SIZE,
+      Math.trunc(input.limit ?? BEHAVIOR_REFERENCE_DEFAULT_PAGE_SIZE),
+    ),
   );
-  const matches = options.filter(({ id, label }) =>
+  const matches = options.filter(
+    ({ id, label }) =>
       normalizedQuery.length === 0 ||
       id.toLocaleLowerCase().includes(normalizedQuery) ||
       label.toLocaleLowerCase().includes(normalizedQuery),
-    );
+  );
   return {
     query,
     offset,

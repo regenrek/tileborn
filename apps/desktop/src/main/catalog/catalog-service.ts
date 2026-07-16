@@ -159,43 +159,52 @@ export interface CatalogRuntimeSources {
  * renderer never touches `services-plugin`; it consumes only the `catalog:*`
  * IPC DTOs.
  */
-export class CatalogService extends Context.Service<CatalogService, {
-  readonly resolve: (projectId: ProjectId) => Effect.Effect<CatalogResolveResult, CatalogServiceError>;
-  readonly validate: (projectId: ProjectId) => Effect.Effect<CatalogValidateResult, CatalogServiceError>;
-  readonly importCatalog: (
-    projectId: ProjectId,
-    catalogJson: unknown,
-  ) => Effect.Effect<CatalogImportResult, CatalogServiceError>;
-  readonly exportCatalog: (projectId: ProjectId) => Effect.Effect<CatalogExportResult, CatalogServiceError>;
-  readonly upsertType: (
-    projectId: ProjectId,
-    objectTypeJson: unknown,
-  ) => Effect.Effect<CatalogUpsertTypeResult, CatalogServiceError>;
-  readonly removeType: (
-    projectId: ProjectId,
-    objectTypeId: GameObjectTypeId,
-  ) => Effect.Effect<CatalogRemoveTypeResult, CatalogServiceError>;
-  readonly upsertDefinition: (
-    projectId: ProjectId,
-    kind: ProjectDefinitionKind,
-    definitionJson: unknown,
-    label?: string,
-  ) => Effect.Effect<CatalogUpsertTypeResult, CatalogServiceError>;
-  readonly duplicateDefinition: (
-    projectId: ProjectId,
-    kind: ProjectDefinitionKind,
-    definitionId: string,
-    label?: string,
-  ) => Effect.Effect<CatalogDuplicateDefinitionResult, CatalogServiceError>;
-  readonly removeDefinition: (
-    projectId: ProjectId,
-    kind: ProjectDefinitionKind,
-    definitionId: string,
-  ) => Effect.Effect<CatalogRemoveDefinitionResult, CatalogServiceError>;
-  readonly runtimeSources: (
-    projectId: ProjectId,
-  ) => Effect.Effect<CatalogRuntimeSources, CatalogServiceError>;
-}>()('@tileborne/desktop/CatalogService') {}
+export class CatalogService extends Context.Service<
+  CatalogService,
+  {
+    readonly resolve: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CatalogResolveResult, CatalogServiceError>;
+    readonly validate: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CatalogValidateResult, CatalogServiceError>;
+    readonly importCatalog: (
+      projectId: ProjectId,
+      catalogJson: unknown,
+    ) => Effect.Effect<CatalogImportResult, CatalogServiceError>;
+    readonly exportCatalog: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CatalogExportResult, CatalogServiceError>;
+    readonly upsertType: (
+      projectId: ProjectId,
+      objectTypeJson: unknown,
+    ) => Effect.Effect<CatalogUpsertTypeResult, CatalogServiceError>;
+    readonly removeType: (
+      projectId: ProjectId,
+      objectTypeId: GameObjectTypeId,
+    ) => Effect.Effect<CatalogRemoveTypeResult, CatalogServiceError>;
+    readonly upsertDefinition: (
+      projectId: ProjectId,
+      kind: ProjectDefinitionKind,
+      definitionJson: unknown,
+      label?: string,
+    ) => Effect.Effect<CatalogUpsertTypeResult, CatalogServiceError>;
+    readonly duplicateDefinition: (
+      projectId: ProjectId,
+      kind: ProjectDefinitionKind,
+      definitionId: string,
+      label?: string,
+    ) => Effect.Effect<CatalogDuplicateDefinitionResult, CatalogServiceError>;
+    readonly removeDefinition: (
+      projectId: ProjectId,
+      kind: ProjectDefinitionKind,
+      definitionId: string,
+    ) => Effect.Effect<CatalogRemoveDefinitionResult, CatalogServiceError>;
+    readonly runtimeSources: (
+      projectId: ProjectId,
+    ) => Effect.Effect<CatalogRuntimeSources, CatalogServiceError>;
+  }
+>()('@tileborne/desktop/CatalogService') {}
 
 const projectFragmentSources = (
   fragment: Option.Option<GameObjectCatalog>,
@@ -235,7 +244,9 @@ const emptyDocument = (projectId: ProjectId): ProjectContentDocument =>
 
 const documentWith = (
   document: ProjectContentDocument,
-  patch: Partial<Pick<ProjectContentDocument, 'catalog' | 'weapons' | 'weaponLabels' | 'provenance'>>,
+  patch: Partial<
+    Pick<ProjectContentDocument, 'catalog' | 'weapons' | 'weaponLabels' | 'provenance'>
+  >,
 ): ProjectContentDocument =>
   new ProjectContentDocument({
     schemaVersion: 1,
@@ -412,7 +423,11 @@ export const CatalogServiceLive = Layer.effect(
     const validate = Effect.fn('CatalogService.validate')(function* (projectId: ProjectId) {
       const { document, pluginSources, resolved } = yield* effectiveContent(projectId);
       const sources = [...pluginSources, ...projectFragmentSources(Option.some(document.catalog))];
-      return { report: toValidationReport(buildValidationReport(sources, { weaponIds: resolved.weaponIds })) };
+      return {
+        report: toValidationReport(
+          buildValidationReport(sources, { weaponIds: resolved.weaponIds }),
+        ),
+      };
     });
 
     const importCatalog = Effect.fn('CatalogService.importCatalog')(function* (
@@ -441,7 +456,10 @@ export const CatalogServiceLive = Layer.effect(
       if (Result.isFailure(effective)) {
         return {
           imported: false,
-          report: toValidationReport({ ok: false, issues: [{ kind: 'coherence', message: weaponRegistryErrorMessage(effective.failure) }] }),
+          report: toValidationReport({
+            ok: false,
+            issues: [{ kind: 'coherence', message: weaponRegistryErrorMessage(effective.failure) }],
+          }),
         };
       }
       const sources: readonly CatalogContributionSource[] = [
@@ -461,9 +479,13 @@ export const CatalogServiceLive = Layer.effect(
       return { imported: false, report };
     });
 
-    const exportCatalog = Effect.fn('CatalogService.exportCatalog')(function* (projectId: ProjectId) {
+    const exportCatalog = Effect.fn('CatalogService.exportCatalog')(function* (
+      projectId: ProjectId,
+    ) {
       const document = yield* readDocument(projectId);
-      return { catalogJson: toJsonValue(Schema.encodeUnknownSync(ProjectContentDocument)(document)) };
+      return {
+        catalogJson: toJsonValue(Schema.encodeUnknownSync(ProjectContentDocument)(document)),
+      };
     });
 
     const fragmentWithTypes = (
@@ -491,7 +513,9 @@ export const CatalogServiceLive = Layer.effect(
         schemaVersion: catalog.schemaVersion,
         objectTypes: [...(patch.objectTypes ?? catalog.objectTypes)],
         items: Option.some([...(patch.items ?? Option.getOrElse(catalog.items, () => []))]),
-        lootTables: Option.some([...(patch.lootTables ?? Option.getOrElse(catalog.lootTables, () => []))]),
+        lootTables: Option.some([
+          ...(patch.lootTables ?? Option.getOrElse(catalog.lootTables, () => [])),
+        ]),
       });
 
     const invalidMutation = (message: string): CatalogUpsertTypeResult => ({
@@ -548,13 +572,19 @@ export const CatalogServiceLive = Layer.effect(
         objectType,
       ];
       const nextFragment = fragmentWithTypes(fragment, nextTypes);
-      yield* writeDocument(projectId, documentWith(document, {
-        catalog: nextFragment,
-        provenance: {
-          ...document.provenance,
-          [objectType.id]: document.provenance[objectType.id] ?? creationProvenance ?? new ProjectAuthoredProvenance({}),
-        },
-      }));
+      yield* writeDocument(
+        projectId,
+        documentWith(document, {
+          catalog: nextFragment,
+          provenance: {
+            ...document.provenance,
+            [objectType.id]:
+              document.provenance[objectType.id] ??
+              creationProvenance ??
+              new ProjectAuthoredProvenance({}),
+          },
+        }),
+      );
       const sources: readonly CatalogContributionSource[] = [
         ...pluginSources,
         {
@@ -563,7 +593,12 @@ export const CatalogServiceLive = Layer.effect(
           origin: 'project',
         },
       ];
-      return { saved: true, report: toValidationReport(buildValidationReport(sources, { weaponIds: resolved.weaponIds })) };
+      return {
+        saved: true,
+        report: toValidationReport(
+          buildValidationReport(sources, { weaponIds: resolved.weaponIds }),
+        ),
+      };
     });
 
     const upsertDefinition = Effect.fn('CatalogService.upsertDefinition')(function* (
@@ -573,63 +608,103 @@ export const CatalogServiceLive = Layer.effect(
       label?: string,
       creationProvenance?: ProjectContentDocument['provenance'][string],
     ) {
-      if (kind === 'object-type') return yield* upsertType(projectId, definitionJson, creationProvenance);
+      if (kind === 'object-type')
+        return yield* upsertType(projectId, definitionJson, creationProvenance);
 
-      const schema = kind === 'weapon'
-        ? WeaponCatalogEntry
-        : kind === 'item'
-          ? ItemDefinition
-          : LootTable;
+      const schema =
+        kind === 'weapon' ? WeaponCatalogEntry : kind === 'item' ? ItemDefinition : LootTable;
       const decoded = Schema.decodeUnknownResult(schema)(definitionJson);
       if (Result.isFailure(decoded)) return invalidMutation(String(decoded.failure));
 
-      const { document, pluginContent, pluginSources, resolved } = yield* effectiveContent(projectId);
+      const { document, pluginContent, pluginSources, resolved } =
+        yield* effectiveContent(projectId);
       let nextDocument: ProjectContentDocument;
       let definitionId: string;
       if (kind === 'weapon') {
         const entry = decoded.success as WeaponCatalogEntry;
         definitionId = String(entry.weapon.id);
-        if (resolved.weapons.some((candidate) =>
-          candidate.origin === 'plugin' && candidate.entry.weapon.id === entry.weapon.id,
-        )) {
-          return invalidMutation(`weapon id ${definitionId} is owned by a plugin; duplicate it first`);
+        if (
+          resolved.weapons.some(
+            (candidate) =>
+              candidate.origin === 'plugin' && candidate.entry.weapon.id === entry.weapon.id,
+          )
+        ) {
+          return invalidMutation(
+            `weapon id ${definitionId} is owned by a plugin; duplicate it first`,
+          );
         }
         nextDocument = documentWith(document, {
           weapons: new WeaponCatalog({
             schemaVersion: 1,
             weapons: [
-              ...document.weapons.weapons.filter((existing) => existing.weapon.id !== entry.weapon.id),
+              ...document.weapons.weapons.filter(
+                (existing) => existing.weapon.id !== entry.weapon.id,
+              ),
               entry,
             ],
           }),
-          weaponLabels: { ...document.weaponLabels, [definitionId]: label ?? document.weaponLabels[definitionId] ?? definitionId },
-          provenance: { ...document.provenance, [definitionId]: document.provenance[definitionId] ?? creationProvenance ?? new ProjectAuthoredProvenance({}) },
+          weaponLabels: {
+            ...document.weaponLabels,
+            [definitionId]: label ?? document.weaponLabels[definitionId] ?? definitionId,
+          },
+          provenance: {
+            ...document.provenance,
+            [definitionId]:
+              document.provenance[definitionId] ??
+              creationProvenance ??
+              new ProjectAuthoredProvenance({}),
+          },
         });
       } else if (kind === 'item') {
         const item = decoded.success as ItemDefinition;
         definitionId = String(item.id);
         const pluginOwned = pluginSources.some((source) =>
-          Option.getOrElse(source.catalog.items, () => []).some((existing) => existing.id === item.id),
+          Option.getOrElse(source.catalog.items, () => []).some(
+            (existing) => existing.id === item.id,
+          ),
         );
-        if (pluginOwned) return invalidMutation(`item id ${definitionId} is owned by a plugin; duplicate it first`);
+        if (pluginOwned)
+          return invalidMutation(
+            `item id ${definitionId} is owned by a plugin; duplicate it first`,
+          );
         nextDocument = documentWith(document, {
           catalog: catalogWith(document.catalog, {
             items: [...resolved.projectItems.filter((existing) => existing.id !== item.id), item],
           }),
-          provenance: { ...document.provenance, [definitionId]: document.provenance[definitionId] ?? creationProvenance ?? new ProjectAuthoredProvenance({}) },
+          provenance: {
+            ...document.provenance,
+            [definitionId]:
+              document.provenance[definitionId] ??
+              creationProvenance ??
+              new ProjectAuthoredProvenance({}),
+          },
         });
       } else {
         const table = decoded.success as LootTable;
         definitionId = String(table.id);
         const pluginOwned = pluginSources.some((source) =>
-          Option.getOrElse(source.catalog.lootTables, () => []).some((existing) => existing.id === table.id),
+          Option.getOrElse(source.catalog.lootTables, () => []).some(
+            (existing) => existing.id === table.id,
+          ),
         );
-        if (pluginOwned) return invalidMutation(`loot table id ${definitionId} is owned by a plugin; duplicate it first`);
+        if (pluginOwned)
+          return invalidMutation(
+            `loot table id ${definitionId} is owned by a plugin; duplicate it first`,
+          );
         nextDocument = documentWith(document, {
           catalog: catalogWith(document.catalog, {
-            lootTables: [...resolved.projectLootTables.filter((existing) => existing.id !== table.id), table],
+            lootTables: [
+              ...resolved.projectLootTables.filter((existing) => existing.id !== table.id),
+              table,
+            ],
           }),
-          provenance: { ...document.provenance, [definitionId]: document.provenance[definitionId] ?? creationProvenance ?? new ProjectAuthoredProvenance({}) },
+          provenance: {
+            ...document.provenance,
+            [definitionId]:
+              document.provenance[definitionId] ??
+              creationProvenance ??
+              new ProjectAuthoredProvenance({}),
+          },
         });
       }
 
@@ -638,10 +713,15 @@ export const CatalogServiceLive = Layer.effect(
         return invalidMutation(weaponRegistryErrorMessage(nextEffective.failure));
       }
       yield* writeDocument(projectId, nextDocument);
-      const sources = [...pluginSources, ...projectFragmentSources(Option.some(nextDocument.catalog))];
+      const sources = [
+        ...pluginSources,
+        ...projectFragmentSources(Option.some(nextDocument.catalog)),
+      ];
       return {
         saved: true,
-        report: toValidationReport(buildValidationReport(sources, { weaponIds: nextEffective.success.weaponIds })),
+        report: toValidationReport(
+          buildValidationReport(sources, { weaponIds: nextEffective.success.weaponIds }),
+        ),
       };
     });
 
@@ -655,7 +735,10 @@ export const CatalogServiceLive = Layer.effect(
       let source: unknown;
       let sourcePluginId: string | undefined;
       if (kind === 'object-type') {
-        for (const candidate of [...pluginSources, ...projectFragmentSources(Option.some(document.catalog))]) {
+        for (const candidate of [
+          ...pluginSources,
+          ...projectFragmentSources(Option.some(document.catalog)),
+        ]) {
           const found = candidate.catalog.objectTypes.find((entry) => entry.id === definitionId);
           if (found !== undefined) {
             source = Schema.encodeUnknownSync(GameObjectType)(found);
@@ -672,13 +755,19 @@ export const CatalogServiceLive = Layer.effect(
       } else {
         const candidates = [...pluginSources.map((entry) => entry.catalog), document.catalog];
         for (const candidate of candidates) {
-          const found = kind === 'item'
-            ? Option.getOrElse(candidate.items, () => []).find((entry) => entry.id === definitionId)
-            : Option.getOrElse(candidate.lootTables, () => []).find((entry) => entry.id === definitionId);
+          const found =
+            kind === 'item'
+              ? Option.getOrElse(candidate.items, () => []).find(
+                  (entry) => entry.id === definitionId,
+                )
+              : Option.getOrElse(candidate.lootTables, () => []).find(
+                  (entry) => entry.id === definitionId,
+                );
           if (found !== undefined) {
-            source = kind === 'item'
-              ? Schema.encodeUnknownSync(ItemDefinition)(found as ItemDefinition)
-              : Schema.encodeUnknownSync(LootTable)(found as LootTable);
+            source =
+              kind === 'item'
+                ? Schema.encodeUnknownSync(ItemDefinition)(found as ItemDefinition)
+                : Schema.encodeUnknownSync(LootTable)(found as LootTable);
             const owner = pluginSources.find((entry) => entry.catalog === candidate);
             sourcePluginId = owner?.sourcePluginId;
             break;
@@ -686,13 +775,20 @@ export const CatalogServiceLive = Layer.effect(
         }
       }
       if (source === undefined || typeof source !== 'object' || source === null) {
-        return { duplicated: false, report: invalidMutation(`${kind} ${definitionId} was not found`).report };
+        return {
+          duplicated: false,
+          report: invalidMutation(`${kind} ${definitionId} was not found`).report,
+        };
       }
       const uuid = randomUUID() as Uuid;
-      const nextId = kind === 'object-type' ? makeGameObjectTypeId(uuid)
-        : kind === 'weapon' ? makeWeaponDefinitionId(uuid)
-          : kind === 'item' ? makeItemDefinitionId(uuid)
-            : makeLootTableId(uuid);
+      const nextId =
+        kind === 'object-type'
+          ? makeGameObjectTypeId(uuid)
+          : kind === 'weapon'
+            ? makeWeaponDefinitionId(uuid)
+            : kind === 'item'
+              ? makeItemDefinitionId(uuid)
+              : makeLootTableId(uuid);
       const clone = structuredClone(source) as Record<string, unknown>;
       if (kind === 'weapon') {
         clone.weapon = { ...(clone.weapon as Record<string, unknown>), id: nextId };
@@ -700,12 +796,13 @@ export const CatalogServiceLive = Layer.effect(
         clone.id = nextId;
         if (label !== undefined) clone.label = label;
       }
-      const creationProvenance = sourcePluginId === undefined
-        ? new ProjectAuthoredProvenance({})
-        : new PluginTemplateProvenance({
-            pluginId: sourcePluginId as never,
-            templateId: definitionId,
-          });
+      const creationProvenance =
+        sourcePluginId === undefined
+          ? new ProjectAuthoredProvenance({})
+          : new PluginTemplateProvenance({
+              pluginId: sourcePluginId as never,
+              templateId: definitionId,
+            });
       const mutation = yield* upsertDefinition(projectId, kind, clone, label, creationProvenance);
       if (!mutation.saved) return { duplicated: false, report: mutation.report };
       return { duplicated: true, definitionId: String(nextId), report: mutation.report };
@@ -717,19 +814,26 @@ export const CatalogServiceLive = Layer.effect(
       definitionId: string,
     ) {
       const document = yield* readDocument(projectId);
-      const exists = kind === 'object-type'
-        ? document.catalog.objectTypes.some((entry) => entry.id === definitionId)
-        : kind === 'item'
-          ? Option.getOrElse(document.catalog.items, () => []).some((entry) => entry.id === definitionId)
-          : kind === 'loot-table'
-            ? Option.getOrElse(document.catalog.lootTables, () => []).some((entry) => entry.id === definitionId)
-            : document.weapons.weapons.some((entry) => entry.weapon.id === definitionId);
+      const exists =
+        kind === 'object-type'
+          ? document.catalog.objectTypes.some((entry) => entry.id === definitionId)
+          : kind === 'item'
+            ? Option.getOrElse(document.catalog.items, () => []).some(
+                (entry) => entry.id === definitionId,
+              )
+            : kind === 'loot-table'
+              ? Option.getOrElse(document.catalog.lootTables, () => []).some(
+                  (entry) => entry.id === definitionId,
+                )
+              : document.weapons.weapons.some((entry) => entry.weapon.id === definitionId);
       // The kind/id pair is the identity. A wrong kind must never delete a
       // definition merely because another family happens to contain the id.
       if (!exists) return { removed: false, blockedBy: [] };
 
       const mapSummaries = yield* maps.list(projectId);
-      const projectMaps = yield* Effect.forEach(mapSummaries, (summary) => maps.load(projectId, summary.id));
+      const projectMaps = yield* Effect.forEach(mapSummaries, (summary) =>
+        maps.load(projectId, summary.id),
+      );
       const graph = buildProjectContentReferenceGraph(document, projectMaps);
       const blockedBy = graph.inbound(kind, definitionId).map((reference) => reference.sourceId);
       if (blockedBy.length > 0) return { removed: false, blockedBy };
@@ -737,17 +841,46 @@ export const CatalogServiceLive = Layer.effect(
       const provenance = Object.fromEntries(
         Object.entries(document.provenance).filter(([id]) => id !== definitionId),
       );
-      const next = kind === 'object-type'
-        ? documentWith(document, { catalog: catalogWith(document.catalog, { objectTypes: document.catalog.objectTypes.filter((entry) => entry.id !== definitionId) }), provenance })
-        : kind === 'item'
-          ? documentWith(document, { catalog: catalogWith(document.catalog, { items: Option.getOrElse(document.catalog.items, () => []).filter((entry) => entry.id !== definitionId) }), provenance })
-          : kind === 'loot-table'
-            ? documentWith(document, { catalog: catalogWith(document.catalog, { lootTables: Option.getOrElse(document.catalog.lootTables, () => []).filter((entry) => entry.id !== definitionId) }), provenance })
-            : documentWith(document, {
-              weapons: new WeaponCatalog({ schemaVersion: 1, weapons: document.weapons.weapons.filter((entry) => entry.weapon.id !== definitionId) }),
-              weaponLabels: Object.fromEntries(Object.entries(document.weaponLabels).filter(([id]) => id !== definitionId)),
+      const next =
+        kind === 'object-type'
+          ? documentWith(document, {
+              catalog: catalogWith(document.catalog, {
+                objectTypes: document.catalog.objectTypes.filter(
+                  (entry) => entry.id !== definitionId,
+                ),
+              }),
               provenance,
-            });
+            })
+          : kind === 'item'
+            ? documentWith(document, {
+                catalog: catalogWith(document.catalog, {
+                  items: Option.getOrElse(document.catalog.items, () => []).filter(
+                    (entry) => entry.id !== definitionId,
+                  ),
+                }),
+                provenance,
+              })
+            : kind === 'loot-table'
+              ? documentWith(document, {
+                  catalog: catalogWith(document.catalog, {
+                    lootTables: Option.getOrElse(document.catalog.lootTables, () => []).filter(
+                      (entry) => entry.id !== definitionId,
+                    ),
+                  }),
+                  provenance,
+                })
+              : documentWith(document, {
+                  weapons: new WeaponCatalog({
+                    schemaVersion: 1,
+                    weapons: document.weapons.weapons.filter(
+                      (entry) => entry.weapon.id !== definitionId,
+                    ),
+                  }),
+                  weaponLabels: Object.fromEntries(
+                    Object.entries(document.weaponLabels).filter(([id]) => id !== definitionId),
+                  ),
+                  provenance,
+                });
       yield* writeDocument(projectId, next);
       return { removed: true, blockedBy: [] };
     });

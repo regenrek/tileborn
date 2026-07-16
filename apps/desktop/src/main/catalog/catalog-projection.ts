@@ -7,10 +7,7 @@ import {
   type LootTableId,
   type PluginId,
 } from '@tileborne/core';
-import {
-  type CatalogContributionInput,
-  mergeGameObjectCatalogs,
-} from '@tileborne/plugin-api';
+import { type CatalogContributionInput, mergeGameObjectCatalogs } from '@tileborne/plugin-api';
 import { Option, Result } from 'effect';
 
 /**
@@ -72,9 +69,7 @@ export interface CatalogProjectionDeps {
 }
 
 const mergeDeps = (deps: CatalogProjectionDeps | undefined) =>
-  deps?.weaponIds === undefined
-    ? {}
-    : { resolveWeapon: (id: string) => deps.weaponIds!.has(id) };
+  deps?.weaponIds === undefined ? {} : { resolveWeapon: (id: string) => deps.weaponIds!.has(id) };
 
 const lootTableUnion = (sources: readonly CatalogContributionSource[]): ReadonlySet<string> => {
   const ids = new Set<string>();
@@ -264,7 +259,9 @@ export const buildValidationReport = (
 
   const lootIds = lootTableUnion(sources);
   const itemIds = new Set(
-    sources.flatMap((source) => Option.getOrElse(source.catalog.items, () => []).map((item) => String(item.id))),
+    sources.flatMap((source) =>
+      Option.getOrElse(source.catalog.items, () => []).map((item) => String(item.id)),
+    ),
   );
   const typeIds: ReadonlySet<string> = new Set([...seenTypeIds].map(String));
   for (const source of sources) {
@@ -303,7 +300,11 @@ export const buildValidationReport = (
             message: `loot table "${table.label}" entry ${index + 1} references an unknown item`,
           });
         }
-        if (typeof entry.weight !== 'number' || !Number.isFinite(entry.weight) || entry.weight <= 0) {
+        if (
+          typeof entry.weight !== 'number' ||
+          !Number.isFinite(entry.weight) ||
+          entry.weight <= 0
+        ) {
           issues.push({
             kind: 'coherence',
             message: `loot table "${table.label}" entry ${index + 1} needs a positive drop weight`,
@@ -314,7 +315,9 @@ export const buildValidationReport = (
   }
 
   const merged = mergeGameObjectCatalogs(toContributionInputs(sources), mergeDeps(deps));
-  const ok = Result.isSuccess(merged) && issues.every((entry) => entry.kind !== 'unknown-reference' && entry.kind !== 'coherence');
+  const ok =
+    Result.isSuccess(merged) &&
+    issues.every((entry) => entry.kind !== 'unknown-reference' && entry.kind !== 'coherence');
   if (Result.isFailure(merged) && issues.length === 0) {
     const failure = merged.failure;
     const message =

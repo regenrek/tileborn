@@ -296,9 +296,7 @@ describe('CatalogService', () => {
 
   it('upsertType replaces an existing project entity by id', async () => {
     const original = objectType('41');
-    const encoded = asJson(
-      Schema.encodeUnknownSync(GameObjectCatalog)(fragment('f', [original])),
-    );
+    const encoded = asJson(Schema.encodeUnknownSync(GameObjectCatalog)(fragment('f', [original])));
     const state: FakeProjectState = {
       manifest: baseManifest({ [PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY]: encoded }),
       saved: [],
@@ -315,9 +313,7 @@ describe('CatalogService', () => {
 
     const entry = result.objectTypes.find((item) => item.objectType.id === original.id);
     expect(entry?.objectType.label).toBe('renamed');
-    expect(
-      result.objectTypes.filter((item) => item.objectType.id === original.id),
-    ).toHaveLength(1);
+    expect(result.objectTypes.filter((item) => item.objectType.id === original.id)).toHaveLength(1);
   });
 
   it('upsertType rejects a plugin-owned id and an undecodable payload', async () => {
@@ -345,9 +341,7 @@ describe('CatalogService', () => {
 
   it('removeType deletes a project entity and reports a missing one', async () => {
     const victim = objectType('42');
-    const encoded = asJson(
-      Schema.encodeUnknownSync(GameObjectCatalog)(fragment('9f', [victim])),
-    );
+    const encoded = asJson(Schema.encodeUnknownSync(GameObjectCatalog)(fragment('9f', [victim])));
     const state: FakeProjectState = {
       manifest: baseManifest({ [PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY]: encoded }),
       saved: [],
@@ -395,7 +389,12 @@ describe('CatalogService', () => {
         );
         yield* catalog.upsertType(PROJECT_ID, Schema.encodeUnknownSync(GameObjectType)(pickup));
         const blocked = yield* catalog.removeDefinition(PROJECT_ID, 'item', item.id);
-        const duplicate = yield* catalog.duplicateDefinition(PROJECT_ID, 'item', item.id, 'Health kit copy');
+        const duplicate = yield* catalog.duplicateDefinition(
+          PROJECT_ID,
+          'item',
+          item.id,
+          'Health kit copy',
+        );
         const resolved = yield* catalog.resolve(PROJECT_ID);
         return { created, blocked, duplicate, resolved };
       }).pipe(Effect.provide(makeLayer(state, [objectType('10')]))),
@@ -411,9 +410,7 @@ describe('CatalogService', () => {
 
   it('blocks deleting an object type placed on a map and never deletes on a wrong kind/id pair', async () => {
     const victim = objectType('72');
-    const encoded = asJson(
-      Schema.encodeUnknownSync(GameObjectCatalog)(fragment('72', [victim])),
-    );
+    const encoded = asJson(Schema.encodeUnknownSync(GameObjectCatalog)(fragment('72', [victim])));
     const state: FakeProjectState = {
       manifest: baseManifest({ [PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY]: encoded }),
       saved: [],

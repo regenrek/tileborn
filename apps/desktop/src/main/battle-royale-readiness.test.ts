@@ -1,4 +1,16 @@
-import { GameObjectType, MapObject, SpawnPointComponent, TileborneMap, gameObjectTypeIdForKey, makeGameObjectTypeId, makeLayerId, makeMapId, makeObjectId, type GameObjectTypeId, type Uuid } from '@tileborne/core';
+import {
+  GameObjectType,
+  MapObject,
+  SpawnPointComponent,
+  TileborneMap,
+  gameObjectTypeIdForKey,
+  makeGameObjectTypeId,
+  makeLayerId,
+  makeMapId,
+  makeObjectId,
+  type GameObjectTypeId,
+  type Uuid,
+} from '@tileborne/core';
 import type { WeaponCatalogEntryView } from '@tileborne/ipc-contracts';
 import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -11,36 +23,41 @@ const mapWithRules = (
   rules: Record<string, unknown>,
   teams: readonly (string | undefined)[] = [],
   spawnKind: GameObjectTypeId = gameObjectTypeIdForKey('spawn-point'),
-) => new TileborneMap({
-  id: makeMapId(uuid('1')),
-  schemaVersion: 1,
-  size: { width: 8, height: 8 },
-  tileSize: { width: 32, height: 32 },
-  layers: [],
-  objects: teams.map((team, index) => new MapObject({
-    id: makeObjectId(uuid(String(100 + index))),
-    kind: spawnKind,
-    x: 1 + (index % 4) * 2,
-    y: 1 + Math.floor(index / 4) * 4,
-    width: Option.none(),
-    height: Option.none(),
-    layerId: makeLayerId(uuid('99')),
-    properties: team === undefined ? {} : { team },
-  })),
-  properties: { [PLUGIN_ID]: rules },
-});
+) =>
+  new TileborneMap({
+    id: makeMapId(uuid('1')),
+    schemaVersion: 1,
+    size: { width: 8, height: 8 },
+    tileSize: { width: 32, height: 32 },
+    layers: [],
+    objects: teams.map(
+      (team, index) =>
+        new MapObject({
+          id: makeObjectId(uuid(String(100 + index))),
+          kind: spawnKind,
+          x: 1 + (index % 4) * 2,
+          y: 1 + Math.floor(index / 4) * 4,
+          width: Option.none(),
+          height: Option.none(),
+          layerId: makeLayerId(uuid('99')),
+          properties: team === undefined ? {} : { team },
+        }),
+    ),
+    properties: { [PLUGIN_ID]: rules },
+  });
 const weapon = (
   id: string,
   label: string,
   origin: 'plugin' | 'project',
   sourcePluginId: string | undefined,
   deliveryTag: string,
-) => ({
-  entry: { weapon: { id }, delivery: { _tag: deliveryTag } },
-  label,
-  origin,
-  ...(sourcePluginId === undefined ? {} : { sourcePluginId }),
-}) as unknown as WeaponCatalogEntryView;
+) =>
+  ({
+    entry: { weapon: { id }, delivery: { _tag: deliveryTag } },
+    label,
+    origin,
+    ...(sourcePluginId === undefined ? {} : { sourcePluginId }),
+  }) as unknown as WeaponCatalogEntryView;
 
 describe('Battle Royale canonical readiness policy', () => {
   it('reports incompatible plugin weapons before playtest', () => {
@@ -65,18 +82,22 @@ describe('Battle Royale canonical readiness policy', () => {
     const meleeId = `weapon:${uuid('4')}`;
     const rifleId = `weapon:${uuid('5')}`;
 
-    expect(diagnoseBattleRoyaleMapReadiness(
-      mapWithRules({ loadout: { startingWeaponId: missingId } }),
-      [],
-    )[0]?.code).toBe('game-mode.battle-royale.starting-weapon.missing');
-    expect(diagnoseBattleRoyaleMapReadiness(
-      mapWithRules({ loadout: { startingWeaponId: meleeId } }),
-      [weapon(meleeId, 'Project Hammer', 'project', undefined, 'MeleeDelivery')],
-    )[0]?.code).toBe('game-mode.battle-royale.starting-weapon.unsupported-delivery');
-    expect(diagnoseBattleRoyaleMapReadiness(
-      mapWithRules({ loadout: { startingWeaponId: rifleId } }),
-      [weapon(rifleId, 'Project Rifle', 'project', undefined, 'ProjectileDelivery')],
-    )).toEqual([]);
+    expect(
+      diagnoseBattleRoyaleMapReadiness(
+        mapWithRules({ loadout: { startingWeaponId: missingId } }),
+        [],
+      )[0]?.code,
+    ).toBe('game-mode.battle-royale.starting-weapon.missing');
+    expect(
+      diagnoseBattleRoyaleMapReadiness(mapWithRules({ loadout: { startingWeaponId: meleeId } }), [
+        weapon(meleeId, 'Project Hammer', 'project', undefined, 'MeleeDelivery'),
+      ])[0]?.code,
+    ).toBe('game-mode.battle-royale.starting-weapon.unsupported-delivery');
+    expect(
+      diagnoseBattleRoyaleMapReadiness(mapWithRules({ loadout: { startingWeaponId: rifleId } }), [
+        weapon(rifleId, 'Project Rifle', 'project', undefined, 'ProjectileDelivery'),
+      ]),
+    ).toEqual([]);
   });
 
   it('reports an explicitly contradictory respawn match-end policy', () => {
@@ -100,10 +121,16 @@ describe('Battle Royale canonical readiness policy', () => {
   });
 
   it('reports mixed and incoherent authored squad topology before playtest', () => {
-    const mixed = mapWithRules(
-      { maxPlayers: 8, roomRules: { matchMode: 'squad' } },
-      ['alpha', 'alpha', 'alpha', 'alpha', 'solo', 'solo', 'solo', 'solo'],
-    );
+    const mixed = mapWithRules({ maxPlayers: 8, roomRules: { matchMode: 'squad' } }, [
+      'alpha',
+      'alpha',
+      'alpha',
+      'alpha',
+      'solo',
+      'solo',
+      'solo',
+      'solo',
+    ]);
     expect(diagnoseBattleRoyaleMapReadiness(mixed, []).map(({ code }) => code)).toContain(
       'game-mode.battle-royale.team-topology.mixed-authored-and-legacy-teams',
     );

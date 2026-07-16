@@ -1,35 +1,40 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import { RuntimeMapPackage, type BehaviorId, type JsonObject, type ProjectId } from "@tileborne/core";
-import type { RuntimeModeDataExporter } from "@tileborne/plugin-api";
-import { makeGameRuntime, makePluginHost, type RuntimePlugin } from "@tileborne/runtime";
+import {
+  RuntimeMapPackage,
+  type BehaviorId,
+  type JsonObject,
+  type ProjectId,
+} from '@tileborne/core';
+import type { RuntimeModeDataExporter } from '@tileborne/plugin-api';
+import { makeGameRuntime, makePluginHost, type RuntimePlugin } from '@tileborne/runtime';
 import {
   loadRuntimeMapPackage,
   type RuntimeMapPackageEntryReader,
-} from "@tileborne/runtime/map-package";
-import { NodeIsolatedBehaviorRuntimeHost } from "@tileborne/game-host/behavior-node";
+} from '@tileborne/runtime/map-package';
+import { NodeIsolatedBehaviorRuntimeHost } from '@tileborne/game-host/behavior-node';
 import type {
   BehaviorExecutionTrace,
   BehaviorRuntimeDiagnostic,
   BehaviorSchedulerSnapshot,
   BehaviorWorkerResponse,
   RuntimeBehaviorArtifactIdentity,
-} from "@tileborne/runtime/behavior";
-import { Effect, Result, Schema } from "effect";
+} from '@tileborne/runtime/behavior';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   createPlaytestRuntimeHudTracker,
   type PlaytestHudWorldStateDeriver,
   type PlaytestRuntimeHudState,
-} from "./playtest-runtime-hud.js";
-import { createPlaytestPluginWorld, type PlaytestPluginWorld } from "./playtest-plugin-world.js";
+} from './playtest-runtime-hud.js';
+import { createPlaytestPluginWorld, type PlaytestPluginWorld } from './playtest-plugin-world.js';
 import {
   createPlaytestRuntimeDiagnosticsRecorder,
   type PlaytestRuntimeDiagnostics,
   type PlaytestRuntimeDiagnosticsRecorder,
-} from "./playtest-runtime-diagnostics.js";
+} from './playtest-runtime-diagnostics.js';
 
 const TICK_RATE = 20;
 const TICK_MS = 1000 / TICK_RATE;
@@ -118,10 +123,10 @@ interface ActivePlaytestRuntime {
   readonly stop: () => Promise<void>;
 }
 
-export type PlaytestBehaviorDebugStatus = "running" | "paused";
+export type PlaytestBehaviorDebugStatus = 'running' | 'paused';
 
 export interface PlaytestBehaviorSourceLocation {
-  readonly sourceKind: "visual" | "typescript";
+  readonly sourceKind: 'visual' | 'typescript';
   readonly filePath: string;
   readonly nodeId?: string;
 }
@@ -131,19 +136,19 @@ export interface PlaytestBehaviorDebugTrace {
   readonly tick: number;
   readonly behaviorId: BehaviorId;
   readonly instanceId: string;
-  readonly sourceKind: "visual" | "typescript";
+  readonly sourceKind: 'visual' | 'typescript';
   readonly eventId: string;
   readonly event: JsonObject;
   readonly stateBefore: JsonObject;
   readonly commands: ReadonlyArray<{ readonly kind: string; readonly payload: JsonObject }>;
   readonly state: JsonObject;
-  readonly steps: BehaviorExecutionTrace["steps"];
+  readonly steps: BehaviorExecutionTrace['steps'];
   readonly source: PlaytestBehaviorSourceLocation;
 }
 
 export interface PlaytestBehaviorReloadStatus {
   readonly behaviorId: BehaviorId;
-  readonly status: "applied" | "rejected-using-last-known-good";
+  readonly status: 'applied' | 'rejected-using-last-known-good';
   readonly hash?: string;
   readonly diagnostic?: BehaviorRuntimeDiagnostic;
 }
@@ -154,7 +159,7 @@ export interface PlaytestBehaviorDebugSnapshot {
   readonly tick: number;
   readonly traces: readonly PlaytestBehaviorDebugTrace[];
   readonly diagnostics: readonly BehaviorRuntimeDiagnostic[];
-  readonly states: BehaviorSchedulerSnapshot["states"];
+  readonly states: BehaviorSchedulerSnapshot['states'];
   readonly lastReload?: PlaytestBehaviorReloadStatus;
 }
 
@@ -165,7 +170,7 @@ interface PlaytestBehaviorDebugState {
   readonly diagnostics: BehaviorRuntimeDiagnostic[];
   status: PlaytestBehaviorDebugStatus;
   tick: number;
-  states: BehaviorSchedulerSnapshot["states"];
+  states: BehaviorSchedulerSnapshot['states'];
   lastReload?: PlaytestBehaviorReloadStatus;
   tail: Promise<void>;
 }
@@ -222,7 +227,7 @@ const createMetricsState = (
   const state = {
     tickCount: 0,
     playerCount,
-    lastPluginEvent: "onInit",
+    lastPluginEvent: 'onInit',
     lastTickAtMs: Date.now(),
   };
   return {
@@ -248,7 +253,7 @@ const createMetricsState = (
 
 const countPlayers = (world: PlaytestPluginWorld): number => {
   try {
-    const playerStore = world.getComponent<{ alive: number }>("Player");
+    const playerStore = world.getComponent<{ alive: number }>('Player');
     let count = 0;
     for (const [, player] of playerStore.entries()) {
       if (player.alive === 1) {
@@ -267,8 +272,8 @@ const loadRuntimeModule = async (entryPath: string): Promise<RuntimePluginModule
 };
 
 const resolveRuntimeEntry = async (rootPath: string): Promise<string> => {
-  const manifestPath = path.join(rootPath, "tileborne-plugin.json");
-  const manifestRaw = await readFile(manifestPath, "utf8");
+  const manifestPath = path.join(rootPath, 'tileborne-plugin.json');
+  const manifestRaw = await readFile(manifestPath, 'utf8');
   const manifest = JSON.parse(manifestRaw) as {
     entry?: { runtime?: string; server?: string; editor?: string };
   };
@@ -331,7 +336,7 @@ const startPlaytestBehaviorRuntime = async (
     for (const artifact of loaded.success.behaviors.modules) {
       const modulePath = path.resolve(packageDirectory, artifact.modulePath);
       const relative = path.relative(packageDirectory, modulePath);
-      if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new Error(`behavior module escapes runtime package: ${artifact.modulePath}`);
       }
       const response = await host.load({
@@ -339,7 +344,7 @@ const startPlaytestBehaviorRuntime = async (
         sourceKind: artifact.sourceKind,
         modulePath: artifact.modulePath,
         hash: artifact.hash,
-        code: await readFile(modulePath, "utf8"),
+        code: await readFile(modulePath, 'utf8'),
       });
       if (!response.ok) {
         throw new Error(response.diagnostic.message);
@@ -347,22 +352,25 @@ const startPlaytestBehaviorRuntime = async (
     }
     const sourceByBehaviorId = new Map<BehaviorId, PlaytestBehaviorSourceLocation>();
     for (const manifest of loaded.success.behaviors.manifests) {
-      sourceByBehaviorId.set(manifest.id, manifest.source._tag === "visual"
-        ? {
-            sourceKind: "visual",
-            filePath: safeDebugSourcePath(manifest.source.definitionPath),
-          }
-        : {
-            sourceKind: "typescript",
-            filePath: safeDebugSourcePath(manifest.source.sourcePath),
-          });
+      sourceByBehaviorId.set(
+        manifest.id,
+        manifest.source._tag === 'visual'
+          ? {
+              sourceKind: 'visual',
+              filePath: safeDebugSourcePath(manifest.source.definitionPath),
+            }
+          : {
+              sourceKind: 'typescript',
+              filePath: safeDebugSourcePath(manifest.source.sourcePath),
+            },
+      );
     }
     return {
       host,
       sourceByBehaviorId,
       traces: [],
       diagnostics: [],
-      status: "running",
+      status: 'running',
       tick: 0,
       states: [],
       tail: Promise.resolve(),
@@ -373,15 +381,13 @@ const startPlaytestBehaviorRuntime = async (
   }
 };
 
-const stepPlaytestBehaviorRuntime = async (
-  debug: PlaytestBehaviorDebugState,
-): Promise<void> => {
+const stepPlaytestBehaviorRuntime = async (debug: PlaytestBehaviorDebugState): Promise<void> => {
   const execute = async (): Promise<void> => {
     const tick = debug.tick + 1;
     const advanced = await debug.host.advanceTo(tick);
     if (!advanced.ok) throw new Error(advanced.diagnostic.message);
     captureBehaviorDebugResponse(debug, advanced);
-    const dispatched = await debug.host.dispatch({ eventId: "runtime.tick", event: { tick } });
+    const dispatched = await debug.host.dispatch({ eventId: 'runtime.tick', event: { tick } });
     if (!dispatched.ok) throw new Error(dispatched.diagnostic.message);
     captureBehaviorDebugResponse(debug, dispatched);
     debug.tick = tick;
@@ -392,7 +398,7 @@ const stepPlaytestBehaviorRuntime = async (
 };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const SECRET_DEBUG_KEY = /(?:authorization|cookie|password|secret|token|api[-_]?key)/iu;
 const MAX_DEBUG_COLLECTION_ITEMS = 64;
@@ -400,7 +406,8 @@ const MAX_DEBUG_STRING_LENGTH = 4_096;
 const MAX_DEBUG_OBJECT_BYTES = 16 * 1_024;
 const MAX_DEBUG_COMMAND_BYTES = 32 * 1_024;
 const EMBEDDED_FILE_URI = /\bfile:(?:\/{2,3})?(?:\/|[a-z]:[\\/]|\\\\)/iu;
-const EMBEDDED_WINDOWS_PATH = /(?:^|[\s"'([{=:])(?:[a-z]:(?:[\\/]|[^\s"'\])}]+)|\\\\[^\s\\/]+[\\/][^\s\\/]+)/iu;
+const EMBEDDED_WINDOWS_PATH =
+  /(?:^|[\s"'([{=:])(?:[a-z]:(?:[\\/]|[^\s"'\])}]+)|\\\\[^\s\\/]+[\\/][^\s\\/]+)/iu;
 const EMBEDDED_TILDE_PATH = /(?:^|[\s"'([{=:])~(?:[^\s\\/]+)?[\\/]/u;
 const EMBEDDED_POSIX_PATH = /(?:^|[^a-z0-9_/\\])\/(?!\/)[^\s"'\])}]+/iu;
 
@@ -419,32 +426,34 @@ const isSensitiveDebugPath = (value: string): boolean => {
 
 const safeDebugSourcePath = (sourcePath: string): string => {
   const normalized = sourcePath.replaceAll('\\', '/');
-  return isSensitiveDebugPath(sourcePath)
-    ? '<behavior source>'
-    : normalized;
+  return isSensitiveDebugPath(sourcePath) ? '<behavior source>' : normalized;
 };
 
 /** Keeps inspector payloads local, bounded, JSON-only, and free of obvious credentials/host paths. */
-const sanitizeDebugValue = (value: unknown, key = "", depth = 0): unknown => {
-  if (SECRET_DEBUG_KEY.test(key)) return "[redacted]";
-  if (value === null || typeof value === "boolean") return value;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    if (isSensitiveDebugPath(value)) return "[redacted path]";
+const sanitizeDebugValue = (value: unknown, key = '', depth = 0): unknown => {
+  if (SECRET_DEBUG_KEY.test(key)) return '[redacted]';
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    if (isSensitiveDebugPath(value)) return '[redacted path]';
     return value.length > MAX_DEBUG_STRING_LENGTH
       ? `${value.slice(0, MAX_DEBUG_STRING_LENGTH)}…`
       : value;
   }
-  if (depth >= 6) return "[depth limit]";
+  if (depth >= 6) return '[depth limit]';
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_DEBUG_COLLECTION_ITEMS).map((entry) =>
-      sanitizeDebugValue(entry, key, depth + 1));
+    return value
+      .slice(0, MAX_DEBUG_COLLECTION_ITEMS)
+      .map((entry) => sanitizeDebugValue(entry, key, depth + 1));
   }
   if (!isRecord(value)) return String(value);
   return Object.fromEntries(
     Object.entries(value)
       .slice(0, MAX_DEBUG_COLLECTION_ITEMS)
-      .map(([entryKey, entryValue]) => [entryKey, sanitizeDebugValue(entryValue, entryKey, depth + 1)]),
+      .map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeDebugValue(entryValue, entryKey, depth + 1),
+      ]),
   );
 };
 
@@ -461,14 +470,17 @@ const boundedDebugObject = (value: unknown): JsonObject => {
 };
 
 const boundedDebugCommands = (
-  value: ReadonlyArray<{ readonly kind: string; readonly payload: Readonly<Record<string, unknown>> }>,
+  value: ReadonlyArray<{
+    readonly kind: string;
+    readonly payload: Readonly<Record<string, unknown>>;
+  }>,
 ): ReadonlyArray<{ readonly kind: string; readonly payload: JsonObject }> => {
   const result: Array<{ readonly kind: string; readonly payload: JsonObject }> = [];
   for (const command of value) {
     const candidate = { kind: command.kind, payload: boundedDebugObject(command.payload) };
     if (debugJsonBytes([...result, candidate]) > MAX_DEBUG_COMMAND_BYTES) {
       result.push({
-        kind: "tileborne.inspector.truncated",
+        kind: 'tileborne.inspector.truncated',
         payload: { omitted: value.length - result.length },
       });
       break;
@@ -494,23 +506,26 @@ const captureBehaviorDebugResponse = (
   const value = response.value;
   if (Array.isArray(value.traces)) {
     for (const candidate of value.traces) {
-      if (!isRecord(candidate) || typeof candidate.behaviorId !== "string") continue;
+      if (!isRecord(candidate) || typeof candidate.behaviorId !== 'string') continue;
       const trace = candidate as unknown as BehaviorExecutionTrace;
       const baseSource = debug.sourceByBehaviorId.get(trace.behaviorId) ?? {
         sourceKind: trace.sourceKind,
-        filePath: "<behavior>",
+        filePath: '<behavior>',
       };
       const steps = Array.isArray(trace.steps) ? trace.steps : [];
       const currentStep = steps.at(-1);
       const sanitized = sanitizeDebugValue(trace) as PlaytestBehaviorDebugTrace;
       debug.traces.push({
         ...sanitized,
-        instanceId: typeof trace.instanceId === "string" ? trace.instanceId : String(trace.behaviorId),
+        instanceId:
+          typeof trace.instanceId === 'string' ? trace.instanceId : String(trace.behaviorId),
         event: boundedDebugObject(trace.event),
-        stateBefore: boundedDebugObject(isRecord(trace.stateBefore) ? trace.stateBefore : trace.state),
+        stateBefore: boundedDebugObject(
+          isRecord(trace.stateBefore) ? trace.stateBefore : trace.state,
+        ),
         commands: boundedDebugCommands(trace.commands),
         state: boundedDebugObject(trace.state),
-        steps: sanitizeDebugValue(steps) as BehaviorExecutionTrace["steps"],
+        steps: sanitizeDebugValue(steps) as BehaviorExecutionTrace['steps'],
         source: {
           ...baseSource,
           ...(currentStep === undefined ? {} : { nodeId: currentStep.nodeId }),
@@ -522,15 +537,20 @@ const captureBehaviorDebugResponse = (
     }
   }
   if (Array.isArray(value.diagnostics)) {
-    debug.diagnostics.push(...sanitizeDebugValue(value.diagnostics) as BehaviorRuntimeDiagnostic[]);
+    debug.diagnostics.push(
+      ...(sanitizeDebugValue(value.diagnostics) as BehaviorRuntimeDiagnostic[]),
+    );
     if (debug.diagnostics.length > MAX_BEHAVIOR_DEBUG_DIAGNOSTICS) {
       debug.diagnostics.splice(0, debug.diagnostics.length - MAX_BEHAVIOR_DEBUG_DIAGNOSTICS);
     }
   }
   if (isRecord(value.snapshot) && Array.isArray(value.snapshot.states)) {
-    debug.states = (value.snapshot.states as ReadonlyArray<{ readonly behaviorId: BehaviorId; readonly state: unknown }>).map(
-      ({ behaviorId, state }) => ({ behaviorId, state: boundedDebugObject(state) }),
-    );
+    debug.states = (
+      value.snapshot.states as ReadonlyArray<{
+        readonly behaviorId: BehaviorId;
+        readonly state: unknown;
+      }>
+    ).map(({ behaviorId, state }) => ({ behaviorId, state: boundedDebugObject(state) }));
   }
 };
 
@@ -540,7 +560,7 @@ const toPlayerModelSelections = (
 ): readonly { readonly playerId: string; readonly modelId: string }[] =>
   selectedPlayerModelId === undefined
     ? []
-    : [{ playerId: "player-1", modelId: selectedPlayerModelId }];
+    : [{ playerId: 'player-1', modelId: selectedPlayerModelId }];
 
 const loadPluginForPlaytest = async (
   pluginId: string,
@@ -558,11 +578,11 @@ const loadPluginForPlaytest = async (
   const runtimeEntry = await resolveRuntimeEntry(rootPath);
   const runtimeModule = await loadRuntimeModule(runtimeEntry);
 
-  if (typeof runtimeModule.derivePlaytestHudWorldState === "function") {
+  if (typeof runtimeModule.derivePlaytestHudWorldState === 'function') {
     hostExtras.setHudWorldStateDeriver?.(runtimeModule.derivePlaytestHudWorldState);
   }
 
-  if (typeof runtimeModule.createRuntimeAdapter === "function") {
+  if (typeof runtimeModule.createRuntimeAdapter === 'function') {
     hostExtras.recordMapPackage?.(mapPackage);
     const selections = toPlayerModelSelections(hostExtras.selectedPlayerModelId);
     return runtimeModule.createRuntimeAdapter({
@@ -640,8 +660,8 @@ export const getPlaytestRuntimeSnapshot = (
   }
 
   try {
-    const players = state.world.getComponent<{ playerId: string }>("Player");
-    const positions = state.world.getComponent<{ x: number; y: number }>("Position");
+    const players = state.world.getComponent<{ playerId: string }>('Player');
+    const positions = state.world.getComponent<{ x: number; y: number }>('Position');
     const snapshots: PlaytestRuntimePlayerSnapshot[] = [];
     for (const [entity, player] of players.entries()) {
       const position = positions.get(entity);
@@ -772,7 +792,7 @@ export const startPlaytestRuntimeHost = async (input: {
     const pluginHost = makePluginHost();
     await Effect.runPromise(
       pluginHost.register({
-        id: "tileborne-playtest-runtime-bridge",
+        id: 'tileborne-playtest-runtime-bridge',
         onTick: (_world, _dt, tick) =>
           Effect.sync(() => {
             for (const plugin of loadedPlugins) {
@@ -788,7 +808,7 @@ export const startPlaytestRuntimeHost = async (input: {
 
     for (const plugin of loadedPlugins) {
       plugin.onInit?.({ pluginId: plugin.id }, pluginWorld);
-      metricsState.recordEvent("onInit");
+      metricsState.recordEvent('onInit');
       await logRuntimeInfo(input.logger, `Plugin ${plugin.id} onInit`, {
         sessionId: input.sessionId,
         pluginId: plugin.id,
@@ -803,7 +823,7 @@ export const startPlaytestRuntimeHost = async (input: {
       const tickStartedAt = performance.now();
       void Effect.runPromise(runtime.step(1))
         .then(async () => {
-          if (behaviorRuntime?.status === "running") {
+          if (behaviorRuntime?.status === 'running') {
             await stepPlaytestBehaviorRuntime(behaviorRuntime);
           }
           diagnosticsRecorder.recordTick(performance.now() - tickStartedAt);
@@ -818,7 +838,7 @@ export const startPlaytestRuntimeHost = async (input: {
           const message = errorMessage(cause);
           diagnosticsRecorder.recordError(message);
           metricsState.recordEvent(`runtime-error:${message}`);
-          void logRuntimeError(input.logger, "Playtest plugin runtime tick failed", {
+          void logRuntimeError(input.logger, 'Playtest plugin runtime tick failed', {
             sessionId: input.sessionId,
             pluginIds,
             message,
@@ -852,7 +872,7 @@ export const startPlaytestRuntimeHost = async (input: {
     const message = errorMessage(cause);
     sessionStates.delete(input.sessionId);
     activeRuntimes.delete(input.sessionId);
-    await logRuntimeError(input.logger, "Playtest plugin runtime startup failed", {
+    await logRuntimeError(input.logger, 'Playtest plugin runtime startup failed', {
       sessionId: input.sessionId,
       pluginIds,
       message,
@@ -904,21 +924,19 @@ export const getPlaytestBehaviorDebugSnapshot = (
 
 export const controlPlaytestBehaviorDebug = async (
   sessionId: string,
-  command: "pause" | "step" | "continue",
+  command: 'pause' | 'step' | 'continue',
 ): Promise<PlaytestBehaviorDebugSnapshot> => {
   const debug = activeRuntimes.get(sessionId)?.behaviorDebug;
   if (debug === undefined) throw new Error(`behavior runtime is not active for ${sessionId}`);
-  if (command === "pause") {
-    debug.status = "paused";
+  if (command === 'pause') {
+    debug.status = 'paused';
     await debug.tail;
-  }
-  else if (command === "continue") {
+  } else if (command === 'continue') {
     await debug.tail;
-    debug.status = "running";
-  }
-  else {
-    if (debug.status !== "paused") {
-      throw new Error("pause the behavior runtime before stepping");
+    debug.status = 'running';
+  } else {
+    if (debug.status !== 'paused') {
+      throw new Error('pause the behavior runtime before stepping');
     }
     await stepPlaytestBehaviorRuntime(debug);
   }
@@ -951,12 +969,12 @@ export const hotReloadPlaytestBehavior = async (
     const result: PlaytestBehaviorReloadStatus = response.ok
       ? {
           behaviorId: artifact.behaviorId,
-          status: "applied",
+          status: 'applied',
           hash: String(artifact.hash),
         }
       : {
           behaviorId: artifact.behaviorId,
-          status: "rejected-using-last-known-good",
+          status: 'rejected-using-last-known-good',
           hash: String(artifact.hash),
           diagnostic: sanitizeDebugValue(response.diagnostic) as BehaviorRuntimeDiagnostic,
         };
@@ -978,7 +996,7 @@ export const rejectPlaytestBehaviorReload = (
     if (active.projectId !== projectId || debug === undefined) continue;
     const result: PlaytestBehaviorReloadStatus = {
       behaviorId,
-      status: "rejected-using-last-known-good",
+      status: 'rejected-using-last-known-good',
       diagnostic,
     };
     debug.lastReload = result;

@@ -1,6 +1,6 @@
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime } from 'effect';
 
-import { AppLayer } from "./app-layer.js";
+import { AppLayer } from './app-layer.js';
 
 export const appRuntime = ManagedRuntime.make(AppLayer);
 

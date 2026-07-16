@@ -56,7 +56,8 @@ const EXAMPLE_ARENA_STARTER: GameModeStarterRegistration = {
   assetPacks: [],
   readIdempotencyKey: (project) => {
     const metadata = project.settings?.newGameWizard as Record<string, unknown> | undefined;
-    return metadata?.templateId === EXAMPLE_ARENA_TEMPLATE_ID && typeof metadata.idempotencyKey === 'string'
+    return metadata?.templateId === EXAMPLE_ARENA_TEMPLATE_ID &&
+      typeof metadata.idempotencyKey === 'string'
       ? metadata.idempotencyKey
       : undefined;
   },

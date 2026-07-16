@@ -6,9 +6,9 @@ import {
   makeGameplayEntityId,
   makeGameplayItemId,
   type GameplayEvent,
-} from "@tileborne/ipc-contracts";
+} from '@tileborne/ipc-contracts';
 
-import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
+import type { PlaytestPluginWorld } from './playtest-plugin-world.js';
 
 /**
  * Host-side playtest HUD tracker (engine chassis, plugin-agnostic).
@@ -54,7 +54,7 @@ export interface PlaytestRuntimeHudWorldState {
       readonly itemKind?: string;
       readonly tier?: string;
       readonly distance?: number;
-      readonly action: "pickup-loot";
+      readonly action: 'pickup-loot';
       readonly available: boolean;
     };
     readonly pickupToast?: {
@@ -81,7 +81,7 @@ export interface PlaytestRuntimeHudWorldState {
     }[];
   };
   readonly zoneStatus?: {
-    readonly phase: "stable" | "countdown" | "shrinking";
+    readonly phase: 'stable' | 'countdown' | 'shrinking';
     readonly secondsRemaining?: number;
   };
   readonly scoreboard?: readonly {
@@ -107,7 +107,7 @@ export interface PlaytestRuntimeHudWorldState {
       readonly objectId: string;
       readonly x: number;
       readonly y: number;
-      readonly kind: "pickup" | "loot" | "hazard" | "objective";
+      readonly kind: 'pickup' | 'loot' | 'hazard' | 'objective';
       readonly tier?: string;
       readonly available?: boolean;
     }[];
@@ -160,7 +160,7 @@ export const createPlaytestRuntimeHudTracker = (
 ): PlaytestRuntimeHudTracker => {
   const gameplayEvents: GameplayEvent[] = [];
   const seenPickupToastKeys = new Set<string>();
-  let gameOver: PlaytestRuntimeHudState["gameOver"];
+  let gameOver: PlaytestRuntimeHudState['gameOver'];
 
   const pushEvent = (event: GameplayEvent): void => {
     gameplayEvents.push(event);
@@ -174,13 +174,15 @@ export const createPlaytestRuntimeHudTracker = (
       for (const frame of frames) {
         try {
           const message = decodeMessage(frame);
-          if (message._tag === "PlayerKilled") {
-            pushEvent(new GameplayEntityDefeated({
-              targetId: makeGameplayEntityId(message.victim),
-              sourceId: makeGameplayEntityId(message.killer),
-              tick: message.tick,
-            }));
-          } else if (message._tag === "GameOver") {
+          if (message._tag === 'PlayerKilled') {
+            pushEvent(
+              new GameplayEntityDefeated({
+                targetId: makeGameplayEntityId(message.victim),
+                sourceId: makeGameplayEntityId(message.killer),
+                tick: message.tick,
+              }),
+            );
+          } else if (message._tag === 'GameOver') {
             const winnerDisplayName = formatPlayerDisplayName(message.winner);
             gameOver = {
               winnerId: message.winner,
@@ -189,11 +191,13 @@ export const createPlaytestRuntimeHudTracker = (
               totalPlayers: 0,
               tickCount: 0,
             };
-            pushEvent(new GameplayMatchPhaseChanged({
-              tick: 0,
-              phase: "finished",
-              winnerId: makeGameplayEntityId(message.winner),
-            }));
+            pushEvent(
+              new GameplayMatchPhaseChanged({
+                tick: 0,
+                phase: 'finished',
+                winnerId: makeGameplayEntityId(message.winner),
+              }),
+            );
           }
         } catch {
           // Ignore malformed plugin frames.
@@ -209,12 +213,14 @@ export const createPlaytestRuntimeHudTracker = (
         const key = `${localPlayer.playerId}:${pickupToast.itemKind}:${pickupToast.tier}:${pickupToast.quantity}:${pickupToast.tick}`;
         if (!seenPickupToastKeys.has(key)) {
           seenPickupToastKeys.add(key);
-          pushEvent(new GameplayItemGranted({
-            targetId: makeGameplayEntityId(localPlayer.playerId),
-            itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
-            quantity: pickupToast.quantity,
-            tick: pickupToast.tick,
-          }));
+          pushEvent(
+            new GameplayItemGranted({
+              targetId: makeGameplayEntityId(localPlayer.playerId),
+              itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
+              quantity: pickupToast.quantity,
+              tick: pickupToast.tick,
+            }),
+          );
         }
       }
 
@@ -231,7 +237,7 @@ export const createPlaytestRuntimeHudTracker = (
         currentGameOver === undefined
           ? [...gameplayEvents]
           : gameplayEvents.map((event) =>
-              event._tag === "MatchPhaseChanged" && event.phase === "finished"
+              event._tag === 'MatchPhaseChanged' && event.phase === 'finished'
                 ? new GameplayMatchPhaseChanged({
                     ...event,
                     tick: currentGameOver.tickCount,

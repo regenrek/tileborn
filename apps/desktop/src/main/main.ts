@@ -1,23 +1,23 @@
-import process from "node:process";
+import process from 'node:process';
 
-import { app, BrowserWindow, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, protocol } from 'electron';
 
-import { ASSET_PROTOCOL_SCHEME } from "./asset-library/asset-protocol.js";
-import { createStartupReporter } from "./startup-reporter.js";
-import { createMainWindow } from "./window.js";
+import { ASSET_PROTOCOL_SCHEME } from './asset-library/asset-protocol.js';
+import { createStartupReporter } from './startup-reporter.js';
+import { createMainWindow } from './window.js';
 import {
   STARTUP_STATUS_CHANGED_CHANNEL,
   STARTUP_STATUS_GET_CHANNEL,
   createStartupStatusStore,
   type StartupStatusStore,
-} from "../shared/startup-status.js";
-import type { DesktopStartupController } from "./startup.js";
+} from '../shared/startup-status.js';
+import type { DesktopStartupController } from './startup.js';
 
 // Dev-only: expose CDP for native-devtools-mcp (and other CDP clients). Never in packaged builds.
 const cdpPort =
-  process.env.TILEBORNE_E2E === "1" ? undefined : process.env.TILEBORNE_REMOTE_DEBUGGING_PORT;
+  process.env.TILEBORNE_E2E === '1' ? undefined : process.env.TILEBORNE_REMOTE_DEBUGGING_PORT;
 if (!app.isPackaged && cdpPort !== undefined && cdpPort.length > 0) {
-  app.commandLine.appendSwitch("remote-debugging-port", cdpPort);
+  app.commandLine.appendSwitch('remote-debugging-port', cdpPort);
 }
 
 // Privileged scheme for streaming installed pack assets (atlases, manifests)
@@ -42,7 +42,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-const skipSingleInstance = process.env.TILEBORNE_SMOKE === "true";
+const skipSingleInstance = process.env.TILEBORNE_SMOKE === 'true';
 const gotSingleInstanceLock = skipSingleInstance || app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -91,10 +91,10 @@ if (!gotSingleInstanceLock) {
   const failStartup = (message: string, cause: unknown): void => {
     const errorMessage = cause instanceof Error ? cause.message : String(cause);
     console.error(`[tileborne:start] ${message}: ${errorMessage}`);
-    startupReporter.fail("background-startup", "failed", `${message}: ${errorMessage}`);
+    startupReporter.fail('background-startup', 'failed', `${message}: ${errorMessage}`);
   };
 
-  app.on("second-instance", () => {
+  app.on('second-instance', () => {
     const [existingWindow] = BrowserWindow.getAllWindows();
     if (existingWindow === undefined) {
       return;
@@ -105,47 +105,50 @@ if (!gotSingleInstanceLock) {
     existingWindow.focus();
   });
 
-  startupReporter.begin("app-ready");
-  app.whenReady().then(() => {
-    startupReporter.complete("app-ready");
-    startupReporter.begin("create-load-window");
-    createMainWindow({
-      onRendererLoaded: () => {
-        startupReporter.complete("create-load-window");
-      },
-      onRendererLoadFailed: ({ errorCode, errorDescription, validatedURL }) => {
-        startupReporter.fail(
-          "create-load-window",
-          "failed",
-          `${errorDescription} (${errorCode}) while loading ${validatedURL}`,
-        );
-      },
-      ...closeLifecycleHooks,
-    });
-
-    void import("./startup.js")
-      .then(({ createDesktopStartupController }) => {
-        startupController = createDesktopStartupController({
-          status: startupStatus,
-          reporter: startupReporter,
-        });
-        return startupController.start();
-      })
-      .catch((cause) => {
-        failStartup("Failed to start Tileborne desktop domain", cause);
+  startupReporter.begin('app-ready');
+  app
+    .whenReady()
+    .then(() => {
+      startupReporter.complete('app-ready');
+      startupReporter.begin('create-load-window');
+      createMainWindow({
+        onRendererLoaded: () => {
+          startupReporter.complete('create-load-window');
+        },
+        onRendererLoadFailed: ({ errorCode, errorDescription, validatedURL }) => {
+          startupReporter.fail(
+            'create-load-window',
+            'failed',
+            `${errorDescription} (${errorCode}) while loading ${validatedURL}`,
+          );
+        },
+        ...closeLifecycleHooks,
       });
 
-    app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow(closeLifecycleHooks);
-      }
-    });
-  }).catch((cause) => {
-    startupReporter.fail("app-ready", "failed", cause);
-  });
+      void import('./startup.js')
+        .then(({ createDesktopStartupController }) => {
+          startupController = createDesktopStartupController({
+            status: startupStatus,
+            reporter: startupReporter,
+          });
+          return startupController.start();
+        })
+        .catch((cause) => {
+          failStartup('Failed to start Tileborne desktop domain', cause);
+        });
 
-  app.on("window-all-closed", () => {
-    if (quitRequested || process.platform !== "darwin") {
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createMainWindow(closeLifecycleHooks);
+        }
+      });
+    })
+    .catch((cause) => {
+      startupReporter.fail('app-ready', 'failed', cause);
+    });
+
+  app.on('window-all-closed', () => {
+    if (quitRequested || process.platform !== 'darwin') {
       beginShutdown();
     }
   });
@@ -169,7 +172,7 @@ if (!gotSingleInstanceLock) {
 
     const forceExit = setTimeout(() => {
       console.warn(
-        "[tileborne:start] Shutdown timed out; forcing exit to release resources (port)",
+        '[tileborne:start] Shutdown timed out; forcing exit to release resources (port)',
       );
       finalizeExit(0);
     }, SHUTDOWN_TIMEOUT_MS);
@@ -184,14 +187,14 @@ if (!gotSingleInstanceLock) {
         // Shutdown is designed not to reject (see startup.ts / runtime.ts), but
         // never strand the process if it somehow does — exit cleanly so the
         // CDP port is released instead of leaving an orphan.
-        console.error("[tileborne:start] Shutdown error (exiting cleanly anyway)", cause);
+        console.error('[tileborne:start] Shutdown error (exiting cleanly anyway)', cause);
         clearTimeout(forceExit);
         finalizeExit(0);
       },
     );
   };
 
-  app.on("before-quit", (event) => {
+  app.on('before-quit', (event) => {
     if (quitting) {
       return;
     }
@@ -215,20 +218,20 @@ if (!gotSingleInstanceLock) {
     console.warn(`[tileborne:start] Received ${signal}; shutting down`);
     app.quit();
   };
-  process.once("SIGTERM", () => requestQuitOnSignal("SIGTERM"));
-  process.once("SIGINT", () => requestQuitOnSignal("SIGINT"));
+  process.once('SIGTERM', () => requestQuitOnSignal('SIGTERM'));
+  process.once('SIGINT', () => requestQuitOnSignal('SIGINT'));
 
-  process.on("uncaughtException", (error) => {
-    console.error("[tileborne:start] Uncaught main-process exception", error);
-    startupReporter.fail("background-startup", "failed", error);
+  process.on('uncaughtException', (error) => {
+    console.error('[tileborne:start] Uncaught main-process exception', error);
+    startupReporter.fail('background-startup', 'failed', error);
     if (!quitting) {
       app.exit(1);
     }
   });
 
-  process.on("unhandledRejection", (reason) => {
-    console.error("[tileborne:start] Unhandled main-process rejection", reason);
-    startupReporter.fail("background-startup", "failed", reason);
+  process.on('unhandledRejection', (reason) => {
+    console.error('[tileborne:start] Unhandled main-process rejection', reason);
+    startupReporter.fail('background-startup', 'failed', reason);
     if (!quitting) {
       app.exit(1);
     }

@@ -35,7 +35,9 @@ export const diagnoseBattleRoyaleMapReadiness = (
     const spawnPointTypeIds = new Set([
       String(SPAWN_POINT_KIND),
       ...objectTypes
-        .filter((objectType) => objectType.components.some((component) => component._tag === 'spawn-point'))
+        .filter((objectType) =>
+          objectType.components.some((component) => component._tag === 'spawn-point'),
+        )
         .map((objectType) => String(objectType.id)),
     ]);
     const spawnSlots = selectBattleRoyaleSpawnTeamSlots(
@@ -44,16 +46,12 @@ export const diagnoseBattleRoyaleMapReadiness = (
         .map((object) => ({
           x: object.x,
           y: object.y,
-          ...(typeof object.properties.team === 'string'
-            ? { team: object.properties.team }
-            : {}),
+          ...(typeof object.properties.team === 'string' ? { team: object.properties.team } : {}),
         })),
       settings.maxPlayers,
     );
-    for (const topologyIssue of resolveBattleRoyaleTeamTopology(
-      settings.matchMode,
-      spawnSlots,
-    ).issues) {
+    for (const topologyIssue of resolveBattleRoyaleTeamTopology(settings.matchMode, spawnSlots)
+      .issues) {
       issues.push({
         code: `game-mode.battle-royale.team-topology.${topologyIssue.code}`,
         title: 'Fix Battle Royale team topology',

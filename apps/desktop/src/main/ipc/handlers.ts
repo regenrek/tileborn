@@ -380,10 +380,11 @@ const wireTrigger = <E, R>(
   stream: Stream.Stream<unknown, E, R>,
   emit: (payload: typeof triggerPayload) => Effect.Effect<void>,
   beforeEmit?: () => void,
-): Effect.Effect<void, E, R> => Stream.runForEach(stream, () => {
-  beforeEmit?.();
-  return emit(triggerPayload);
-});
+): Effect.Effect<void, E, R> =>
+  Stream.runForEach(stream, () => {
+    beforeEmit?.();
+    return emit(triggerPayload);
+  });
 
 const buildHandlers = Effect.gen(function* () {
   const projects = yield* ProjectService;
@@ -412,9 +413,7 @@ const buildHandlers = Effect.gen(function* () {
       const installed = yield* registry.list();
       return resolveBehaviorAuthoringRegistry(
         installed
-          .filter(
-            ({ enabled, id }) => enabled && enabledProjectPluginIds.has(String(id)),
-          )
+          .filter(({ enabled, id }) => enabled && enabledProjectPluginIds.has(String(id)))
           .map(({ id, manifest }) => ({ pluginId: id, contributions: manifest.contributes })),
       );
     });
@@ -435,15 +434,17 @@ const buildHandlers = Effect.gen(function* () {
         const projectPackIds = new Set(project.assetPacks.map(({ id }) => String(id)));
         return installedPacks
           .filter(({ id }) => projectPackIds.has(String(id)))
-          .flatMap((pack): readonly IndexedBehaviorReferenceOption[] => pack.assets.map((asset) => ({
-            id: String(asset.id),
-            label: path.basename(asset.path),
-            reference: new AssetBehaviorReference({ assetId: asset.id }),
-            ...(asset.mime.startsWith('image/')
-              ? { previewUrl: assetPreviewUrl(String(pack.id), asset.path) }
-              : {}),
-            detail: pack.name,
-          })));
+          .flatMap((pack): readonly IndexedBehaviorReferenceOption[] =>
+            pack.assets.map((asset) => ({
+              id: String(asset.id),
+              label: path.basename(asset.path),
+              reference: new AssetBehaviorReference({ assetId: asset.id }),
+              ...(asset.mime.startsWith('image/')
+                ? { previewUrl: assetPreviewUrl(String(pack.id), asset.path) }
+                : {}),
+              detail: pack.name,
+            })),
+          );
       }
       if (kind === 'entity') {
         const project = yield* projects.open(projectId);
@@ -454,10 +455,10 @@ const buildHandlers = Effect.gen(function* () {
         );
         return projectMaps.flatMap((map): readonly IndexedBehaviorReferenceOption[] =>
           map.objects.map((object) => ({
-          id: String(object.id),
-          label: `${String(object.kind)} · ${map.id}`,
-          reference: new EntityBehaviorReference({ objectId: object.id }),
-          detail: `x ${Math.round(object.x)}, y ${Math.round(object.y)}`,
+            id: String(object.id),
+            label: `${String(object.kind)} · ${map.id}`,
+            reference: new EntityBehaviorReference({ objectId: object.id }),
+            detail: `x ${Math.round(object.x)}, y ${Math.round(object.y)}`,
           })),
         );
       }
@@ -472,11 +473,11 @@ const buildHandlers = Effect.gen(function* () {
       }
       const behaviorSnapshot = yield* projectBehaviors.open(projectId);
       return behaviorSnapshot.resources.map(({ manifest }) => ({
-          id: String(manifest.id),
-          label: manifest.label,
-          reference: new NestedBehaviorReference({ behaviorId: manifest.id }),
-          detail: manifest.source._tag === 'visual' ? 'Event sheet' : 'TypeScript',
-        }));
+        id: String(manifest.id),
+        label: manifest.label,
+        reference: new NestedBehaviorReference({ behaviorId: manifest.id }),
+        detail: manifest.source._tag === 'visual' ? 'Event sheet' : 'TypeScript',
+      }));
     });
 
   const cachedBehaviorReferenceOptions = (projectId: ProjectId, kind: BehaviorReferenceKind) =>
@@ -526,22 +527,21 @@ const buildHandlers = Effect.gen(function* () {
           ),
         );
       }
-      const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
-        Effect.mapError((error) => new Error(error.message)),
-      );
+      const behaviorSnapshot = yield* projectBehaviors
+        .open(input.projectId)
+        .pipe(Effect.mapError((error) => new Error(error.message)));
       const effectiveBehaviorRegistry = yield* behaviorAuthoringRegistry(input.projectId);
       const compiledBehaviors = yield* Effect.tryPromise(() =>
-        compileProjectBehaviorPackage(
-          behaviorSnapshot,
-          effectiveBehaviorRegistry.registry,
-        ),
+        compileProjectBehaviorPackage(behaviorSnapshot, effectiveBehaviorRegistry.registry),
       );
       if (!compiledBehaviors.ok || compiledBehaviors.behaviorPackage === undefined) {
-        return yield* Effect.fail(new Error(
-          `Behavior compilation failed: ${compiledBehaviors.diagnostics
-            .map((entry) => `${entry.code}: ${entry.message}`)
-            .join('; ')}`,
-        ));
+        return yield* Effect.fail(
+          new Error(
+            `Behavior compilation failed: ${compiledBehaviors.diagnostics
+              .map((entry) => `${entry.code}: ${entry.message}`)
+              .join('; ')}`,
+          ),
+        );
       }
       return yield* assembleRuntimeMapPackage({
         projectId: input.projectId,
@@ -585,21 +585,20 @@ const buildHandlers = Effect.gen(function* () {
       const activeMode = resolveActiveGameMode(modes, selectedModeId);
       const diagnostics = [];
 
-      const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
-        Effect.mapError((error) => new Error(error.message)),
-      );
+      const behaviorSnapshot = yield* projectBehaviors
+        .open(input.projectId)
+        .pipe(Effect.mapError((error) => new Error(error.message)));
       const effectiveBehaviorRegistry = yield* behaviorAuthoringRegistry(input.projectId);
       const compiledBehaviorCheck = yield* Effect.tryPromise(() =>
-        compileProjectBehaviorPackage(
-          behaviorSnapshot,
-          effectiveBehaviorRegistry.registry,
+        compileProjectBehaviorPackage(behaviorSnapshot, effectiveBehaviorRegistry.registry),
+      );
+      diagnostics.push(
+        ...behaviorReadinessDiagnostics(
+          input.projectId,
+          behaviorSnapshot.diagnostics,
+          compiledBehaviorCheck.diagnostics,
         ),
       );
-      diagnostics.push(...behaviorReadinessDiagnostics(
-        input.projectId,
-        behaviorSnapshot.diagnostics,
-        compiledBehaviorCheck.diagnostics,
-      ));
 
       if (activeMode === undefined) {
         diagnostics.push(
@@ -822,9 +821,7 @@ const buildHandlers = Effect.gen(function* () {
         }
       }
 
-      const hostRegistration = resolveGameModeHostRegistration(
-        activeMode?.readinessCapabilityId,
-      );
+      const hostRegistration = resolveGameModeHostRegistration(activeMode?.readinessCapabilityId);
       if (activeMode !== undefined && hostRegistration !== undefined) {
         for (const map of projectMaps) {
           for (const issue of hostRegistration.diagnoseMap(
@@ -862,8 +859,7 @@ const buildHandlers = Effect.gen(function* () {
               severity: 'error',
               source: 'visual-model',
               title: 'Fix the authored player-model roster',
-              message:
-                `The authored ${activeMode.label} player-model roster does not match the canonical player-model schema.`,
+              message: `The authored ${activeMode.label} player-model roster does not match the canonical player-model schema.`,
               projectId: input.projectId,
               path: 'playerModels',
               navigation: readinessNavigation({
@@ -970,9 +966,7 @@ const buildHandlers = Effect.gen(function* () {
         Math.max(1, Math.trunc(input.limit ?? 100)),
       );
       const activeMode = resolveProjectGameMode(project, yield* registry.list());
-      const hostRegistration = resolveGameModeHostRegistration(
-        activeMode?.readinessCapabilityId,
-      );
+      const hostRegistration = resolveGameModeHostRegistration(activeMode?.readinessCapabilityId);
       const result = buildAssetPackUseSites({
         project,
         packId: input.packId,
@@ -1020,7 +1014,9 @@ const buildHandlers = Effect.gen(function* () {
           const starter = defaultGameModeStarterRegistration();
           const spec = bundledPluginSpec(starter.pluginId);
           if (spec === undefined) {
-            return yield* Effect.fail(new Error(`Bundled game-mode plugin is unavailable: ${starter.pluginId}`));
+            return yield* Effect.fail(
+              new Error(`Bundled game-mode plugin is unavailable: ${starter.pluginId}`),
+            );
           }
           yield* installBundledPluginWithServices(spec, { registry, installer });
           yield* seedBundledPluginAssetPacksWithServices({ registry, assets });
@@ -1077,7 +1073,10 @@ const buildHandlers = Effect.gen(function* () {
                   ? packs
                   : [
                       ...packs,
-                      new ProjectAssetPackRef({ id: String(required.id), version: required.version }),
+                      new ProjectAssetPackRef({
+                        id: String(required.id),
+                        version: required.version,
+                      }),
                     ],
               opened.assetPacks,
             ),
@@ -1152,9 +1151,7 @@ const buildHandlers = Effect.gen(function* () {
     )
     .build();
 
-  const behaviorSnapshotView = (
-    snapshot: ProjectBehaviorSnapshot,
-  ) => ({
+  const behaviorSnapshotView = (snapshot: ProjectBehaviorSnapshot) => ({
     projectId: snapshot.projectId,
     revision: snapshot.revision,
     trust: snapshot.trust,
@@ -1163,130 +1160,149 @@ const buildHandlers = Effect.gen(function* () {
     diagnostics: [...snapshot.diagnostics],
   });
 
-  const hotReloadBehaviorAfterSave = (
-    snapshot: ProjectBehaviorSnapshot,
-    behaviorId: BehaviorId,
-  ) => Effect.gen(function* () {
-    const effective = yield* behaviorAuthoringRegistry(snapshot.projectId);
-    const compiled = yield* Effect.tryPromise(() =>
-      compileProjectBehaviorModule(snapshot, effective.registry, behaviorId),
+  const hotReloadBehaviorAfterSave = (snapshot: ProjectBehaviorSnapshot, behaviorId: BehaviorId) =>
+    Effect.gen(function* () {
+      const effective = yield* behaviorAuthoringRegistry(snapshot.projectId);
+      const compiled = yield* Effect.tryPromise(() =>
+        compileProjectBehaviorModule(snapshot, effective.registry, behaviorId),
+      );
+      if (!compiled.ok) {
+        const issue = compiled.diagnostics[0];
+        const relativeSourceFileName =
+          issue?.fileName !== undefined && path.isAbsolute(issue.fileName)
+            ? path.relative(snapshot.projectRoot, issue.fileName)
+            : issue?.fileName;
+        const sourceFileName = relativeSourceFileName?.startsWith('..')
+          ? '<external behavior dependency>'
+          : relativeSourceFileName;
+        rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
+          code: issue?.code ?? 'TBBUILD2199',
+          severity: 'error',
+          behaviorId,
+          message: issue?.message ?? 'Behavior compilation failed during hot reload.',
+          suggestion:
+            issue?.suggestion ??
+            'Fix the owning behavior source; last-known-good execution remains active.',
+          details: {
+            ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
+            ...(issue?.line === undefined ? {} : { line: issue.line }),
+            ...(issue?.column === undefined ? {} : { column: issue.column }),
+            ...(issue?.nodeId === undefined ? {} : { nodeId: String(issue.nodeId) }),
+          },
+        });
+        return;
+      }
+      const resource = snapshot.resources.find((entry) => entry.manifest.id === behaviorId);
+      const artifact = compiled.artifact;
+      yield* Effect.tryPromise(() =>
+        hotReloadPlaytestBehavior(snapshot.projectId, {
+          behaviorId: artifact.behaviorId,
+          sourceKind: artifact.sourceKind,
+          modulePath: artifact.modulePath,
+          hash: artifact.hash,
+          code: artifact.code,
+          ...(resource === undefined
+            ? {}
+            : {
+                sourcePath:
+                  resource.manifest.source._tag === 'visual'
+                    ? resource.manifest.source.definitionPath
+                    : resource.manifest.source.sourcePath,
+              }),
+        }),
+      );
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.sync(() => {
+          rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
+            code: 'TBBUILD2197',
+            severity: 'error',
+            behaviorId,
+            message: `Hot reload failed before apply: ${cause instanceof Error ? cause.message : String(cause)}`,
+            suggestion: 'The live playtest continues with the last-known-good behavior.',
+          });
+        }),
+      ),
     );
-    if (!compiled.ok) {
-      const issue = compiled.diagnostics[0];
-      const relativeSourceFileName = issue?.fileName !== undefined && path.isAbsolute(issue.fileName)
-        ? path.relative(snapshot.projectRoot, issue.fileName)
-        : issue?.fileName;
-      const sourceFileName = relativeSourceFileName?.startsWith('..')
-        ? '<external behavior dependency>'
-        : relativeSourceFileName;
-      rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
-        code: issue?.code ?? 'TBBUILD2199',
-        severity: 'error',
-        behaviorId,
-        message: issue?.message ?? 'Behavior compilation failed during hot reload.',
-        suggestion: issue?.suggestion ?? 'Fix the owning behavior source; last-known-good execution remains active.',
-        details: {
-          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
-          ...(issue?.line === undefined ? {} : { line: issue.line }),
-          ...(issue?.column === undefined ? {} : { column: issue.column }),
-          ...(issue?.nodeId === undefined ? {} : { nodeId: String(issue.nodeId) }),
-        },
-      });
-      return;
-    }
-    const resource = snapshot.resources.find((entry) => entry.manifest.id === behaviorId);
-    const artifact = compiled.artifact;
-    yield* Effect.tryPromise(() => hotReloadPlaytestBehavior(snapshot.projectId, {
-      behaviorId: artifact.behaviorId,
-      sourceKind: artifact.sourceKind,
-      modulePath: artifact.modulePath,
-      hash: artifact.hash,
-      code: artifact.code,
-      ...(resource === undefined ? {} : {
-        sourcePath: resource.manifest.source._tag === 'visual'
-          ? resource.manifest.source.definitionPath
-          : resource.manifest.source.sourcePath,
-      }),
-    }));
-  }).pipe(
-    Effect.catch((cause) => Effect.sync(() => {
-      rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
-        code: 'TBBUILD2197',
-        severity: 'error',
-        behaviorId,
-        message: `Hot reload failed before apply: ${cause instanceof Error ? cause.message : String(cause)}`,
-        suggestion: 'The live playtest continues with the last-known-good behavior.',
-      });
-    })),
-  );
 
   const behaviorHandlers = handlerBuilder(MainIpcRegistry)
     .add('tileborne:behaviors:open', ({ projectId }) =>
       ipcCatchAll('tileborne:behaviors:open')(
-        projectBehaviors.open(projectId).pipe(
-          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
-        ),
+        projectBehaviors
+          .open(projectId)
+          .pipe(Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) }))),
       ),
     )
-    .add('tileborne:behaviors:createVisual', ({ projectId, label, definition, requiredCapabilities }) =>
-      ipcCatchAll('tileborne:behaviors:createVisual')(
-        projectBehaviors.createVisual(projectId, {
-          label,
-          definition,
-          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
-        }).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
-          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+    .add(
+      'tileborne:behaviors:createVisual',
+      ({ projectId, label, definition, requiredCapabilities }) =>
+        ipcCatchAll('tileborne:behaviors:createVisual')(
+          projectBehaviors
+            .createVisual(projectId, {
+              label,
+              definition,
+              ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+            })
+            .pipe(
+              Effect.tap(() =>
+                Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior')),
+              ),
+              Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+            ),
         ),
-      ),
     )
-    .add('tileborne:behaviors:saveVisual', ({
-      projectId,
-      behaviorId,
-      expectedRevision,
-      label,
-      definition,
-      requiredCapabilities,
-    }) =>
-      ipcCatchAll('tileborne:behaviors:saveVisual')(
-        projectBehaviors.saveVisual({
-          projectId,
-          behaviorId,
-          expectedRevision,
-          label,
-          definition,
-          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
-        }).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
-          Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
-          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+    .add(
+      'tileborne:behaviors:saveVisual',
+      ({ projectId, behaviorId, expectedRevision, label, definition, requiredCapabilities }) =>
+        ipcCatchAll('tileborne:behaviors:saveVisual')(
+          projectBehaviors
+            .saveVisual({
+              projectId,
+              behaviorId,
+              expectedRevision,
+              label,
+              definition,
+              ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+            })
+            .pipe(
+              Effect.tap(() =>
+                Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior')),
+              ),
+              Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
+              Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+            ),
         ),
-      ),
     )
-    .add('tileborne:behaviors:saveTypeScript', ({
-      projectId,
-      behaviorId,
-      expectedRevision,
-      label,
-      source,
-      exportName,
-      requiredCapabilities,
-    }) =>
-      ipcCatchAll('tileborne:behaviors:saveTypeScript')(
-        projectBehaviors.saveTypeScript({
-          projectId,
-          behaviorId,
-          expectedRevision,
-          label,
-          source,
-          ...(exportName === undefined ? {} : { exportName }),
-          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
-        }).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
-          Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
-          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+    .add(
+      'tileborne:behaviors:saveTypeScript',
+      ({
+        projectId,
+        behaviorId,
+        expectedRevision,
+        label,
+        source,
+        exportName,
+        requiredCapabilities,
+      }) =>
+        ipcCatchAll('tileborne:behaviors:saveTypeScript')(
+          projectBehaviors
+            .saveTypeScript({
+              projectId,
+              behaviorId,
+              expectedRevision,
+              label,
+              source,
+              ...(exportName === undefined ? {} : { exportName }),
+              ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+            })
+            .pipe(
+              Effect.tap(() =>
+                Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior')),
+              ),
+              Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
+              Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+            ),
         ),
-      ),
     )
     .add('tileborne:behaviors:convertToTypeScript', ({ projectId, behaviorId, expectedRevision }) =>
       ipcCatchAll('tileborne:behaviors:convertToTypeScript')(
@@ -1298,11 +1314,12 @@ const buildHandlers = Effect.gen(function* () {
           }
           const effective = yield* behaviorAuthoringRegistry(projectId);
           const source = yield* Effect.try({
-            try: () => generateTypeScriptBehaviorSource({
-              definition: resource.definition,
-              registry: effective.registry,
-              requiredCapabilities: resource.manifest.requiredCapabilities,
-            }),
+            try: () =>
+              generateTypeScriptBehaviorSource({
+                definition: resource.definition,
+                registry: effective.registry,
+                requiredCapabilities: resource.manifest.requiredCapabilities,
+              }),
             catch: (cause) => cause,
           });
           return yield* projectBehaviors.convertVisualToTypeScript({
@@ -1312,7 +1329,9 @@ const buildHandlers = Effect.gen(function* () {
             source,
           });
         }).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.tap(() =>
+            Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior')),
+          ),
           Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
           Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
         ),
@@ -1321,7 +1340,9 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:behaviors:remove', ({ projectId, behaviorId, expectedRevision, force }) =>
       ipcCatchAll('tileborne:behaviors:remove')(
         projectBehaviors.remove(projectId, behaviorId, expectedRevision, force).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.tap(() =>
+            Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior')),
+          ),
           Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
         ),
       ),
@@ -1341,16 +1362,17 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:behaviors:references', ({ projectId, kind, query, offset, limit }) =>
       ipcCatchAll('tileborne:behaviors:references')(
         Effect.tryPromise({
-          try: () => behaviorReferenceIndex.query(
-            String(projectId),
-            kind,
-            {
-              ...(query === undefined ? {} : { query }),
-              ...(offset === undefined ? {} : { offset }),
-              ...(limit === undefined ? {} : { limit }),
-            },
-            () => Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
-          ),
+          try: () =>
+            behaviorReferenceIndex.query(
+              String(projectId),
+              kind,
+              {
+                ...(query === undefined ? {} : { query }),
+                ...(offset === undefined ? {} : { offset }),
+                ...(limit === undefined ? {} : { limit }),
+              },
+              () => Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
+            ),
           catch: (cause) => new Error('Could not build behavior reference index', { cause }),
         }).pipe(Effect.map((page) => ({ kind, ...page }))),
       ),
@@ -1359,7 +1381,9 @@ const buildHandlers = Effect.gen(function* () {
       ipcCatchAll('tileborne:behaviors:resolveReferences')(
         Effect.gen(function* () {
           if (references.length > 64) {
-            return yield* Effect.fail(new Error('At most 64 behavior references can be resolved at once'));
+            return yield* Effect.fail(
+              new Error('At most 64 behavior references can be resolved at once'),
+            );
           }
           const byKind = new Map<BehaviorReferenceKind, BehaviorReference[]>();
           for (const reference of references) {
@@ -1371,15 +1395,17 @@ const buildHandlers = Effect.gen(function* () {
             try: async () => {
               const options: IndexedBehaviorReferenceOption[] = [];
               const missing: BehaviorReference[] = [];
-              await Promise.all([...byKind].map(async ([kind, requested]) => {
-                const indexed = await cachedBehaviorReferenceOptions(projectId, kind);
-                const byId = new Map(indexed.map((option) => [option.id, option]));
-                for (const reference of requested) {
-                  const option = byId.get(behaviorReferenceId(reference));
-                  if (option === undefined) missing.push(reference);
-                  else options.push(option);
-                }
-              }));
+              await Promise.all(
+                [...byKind].map(async ([kind, requested]) => {
+                  const indexed = await cachedBehaviorReferenceOptions(projectId, kind);
+                  const byId = new Map(indexed.map((option) => [option.id, option]));
+                  for (const reference of requested) {
+                    const option = byId.get(behaviorReferenceId(reference));
+                    if (option === undefined) missing.push(reference);
+                    else options.push(option);
+                  }
+                }),
+              );
               return { options, missing };
             },
             catch: (cause) => new Error('Could not resolve behavior references', { cause }),
@@ -1845,9 +1871,13 @@ const buildHandlers = Effect.gen(function* () {
     )
     .add('tileborne:catalog:import', ({ projectId, catalogJson }) =>
       ipcCatchAll('tileborne:catalog:import')(
-        catalog.importCatalog(projectId, catalogJson).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .importCatalog(projectId, catalogJson)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .add('tileborne:catalog:export', ({ projectId }) =>
@@ -1855,37 +1885,57 @@ const buildHandlers = Effect.gen(function* () {
     )
     .add('tileborne:catalog:upsertType', ({ projectId, objectTypeJson }) =>
       ipcCatchAll('tileborne:catalog:upsertType')(
-        catalog.upsertType(projectId, objectTypeJson).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .upsertType(projectId, objectTypeJson)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .add('tileborne:catalog:removeType', ({ projectId, objectTypeId }) =>
       ipcCatchAll('tileborne:catalog:removeType')(
-        catalog.removeType(projectId, objectTypeId).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .removeType(projectId, objectTypeId)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .add('tileborne:catalog:upsertDefinition', ({ projectId, kind, definitionJson, label }) =>
       ipcCatchAll('tileborne:catalog:upsertDefinition')(
-        catalog.upsertDefinition(projectId, kind, definitionJson, label).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .upsertDefinition(projectId, kind, definitionJson, label)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .add('tileborne:catalog:duplicateDefinition', ({ projectId, kind, definitionId, label }) =>
       ipcCatchAll('tileborne:catalog:duplicateDefinition')(
-        catalog.duplicateDefinition(projectId, kind, definitionId, label).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .duplicateDefinition(projectId, kind, definitionId, label)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .add('tileborne:catalog:removeDefinition', ({ projectId, kind, definitionId }) =>
       ipcCatchAll('tileborne:catalog:removeDefinition')(
-        catalog.removeDefinition(projectId, kind, definitionId).pipe(
-          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
-        ),
+        catalog
+          .removeDefinition(projectId, kind, definitionId)
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog')),
+            ),
+          ),
       ),
     )
     .build();
@@ -2217,47 +2267,49 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:ship:launchPreview', ({ artifact }) =>
       ipcCatchAll('tileborne:ship:launchPreview')(
         Effect.gen(function* () {
-          yield* builds.verifyGameArtifact(new GameBuildArtifact({
-            pluginId: artifact.pluginId,
-            target: artifact.target,
-            directory: artifact.directory,
-            manifestPath: artifact.manifestPath,
-            bundlePath: artifact.bundlePath,
-            buildId: artifact.buildId,
-            runtimeBuildId: artifact.runtimeBuildId,
-            integrityHash: artifact.integrityHash,
-            createdAt: artifact.createdAt,
-            files: artifact.files,
-            fileHashes: artifact.fileHashes,
-          }));
+          yield* builds.verifyGameArtifact(
+            new GameBuildArtifact({
+              pluginId: artifact.pluginId,
+              target: artifact.target,
+              directory: artifact.directory,
+              manifestPath: artifact.manifestPath,
+              bundlePath: artifact.bundlePath,
+              buildId: artifact.buildId,
+              runtimeBuildId: artifact.runtimeBuildId,
+              integrityHash: artifact.integrityHash,
+              createdAt: artifact.createdAt,
+              files: artifact.files,
+              fileHashes: artifact.fileHashes,
+            }),
+          );
           return yield* Effect.tryPromise({
-          try: async () => {
-            const host = await startDesktopLocalGameHost(undefined, artifact.directory);
-            const response = await fetch(`${host.baseUrl}/rooms/create`, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ mapId: artifact.startupMapId }),
-            });
-            const payload = (await response.json()) as {
-              readonly roomId?: unknown;
-              readonly error?: unknown;
-            };
-            if (!response.ok || typeof payload.roomId !== 'string') {
-              throw new Error(
-                typeof payload.error === 'string'
-                  ? payload.error
-                  : `Packaged preview room failed with HTTP ${response.status}.`,
-              );
-            }
-            createPlaytestJoinWindow({
-              projectId: artifact.projectId,
-              mapId: artifact.startupMapId,
-              baseUrl: host.baseUrl,
-              roomId: payload.roomId,
-            });
-            return { baseUrl: host.baseUrl, roomId: payload.roomId };
-          },
-          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+            try: async () => {
+              const host = await startDesktopLocalGameHost(undefined, artifact.directory);
+              const response = await fetch(`${host.baseUrl}/rooms/create`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ mapId: artifact.startupMapId }),
+              });
+              const payload = (await response.json()) as {
+                readonly roomId?: unknown;
+                readonly error?: unknown;
+              };
+              if (!response.ok || typeof payload.roomId !== 'string') {
+                throw new Error(
+                  typeof payload.error === 'string'
+                    ? payload.error
+                    : `Packaged preview room failed with HTTP ${response.status}.`,
+                );
+              }
+              createPlaytestJoinWindow({
+                projectId: artifact.projectId,
+                mapId: artifact.startupMapId,
+                baseUrl: host.baseUrl,
+                roomId: payload.roomId,
+              });
+              return { baseUrl: host.baseUrl, roomId: payload.roomId };
+            },
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
           });
         }),
       ),
@@ -2267,14 +2319,14 @@ const buildHandlers = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* builds.verifyGameArtifact(directory);
           return yield* Effect.tryPromise({
-          try: async () => {
-            const error = await shell.openPath(directory);
-            if (error.length > 0) {
-              throw new Error(error);
-            }
-            return { opened: true };
-          },
-          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+            try: async () => {
+              const error = await shell.openPath(directory);
+              if (error.length > 0) {
+                throw new Error(error);
+              }
+              return { opened: true };
+            },
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
           });
         }),
       ),
@@ -2388,7 +2440,9 @@ const buildHandlers = Effect.gen(function* () {
                 if (playerModels.length === 0) {
                   yield* playtest.stop(session.id).pipe(Effect.catch(() => Effect.void));
                   yield* Effect.fail(
-                    new Error(`${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`),
+                    new Error(
+                      `${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`,
+                    ),
                   );
                 }
                 if (
@@ -2491,7 +2545,7 @@ const buildHandlers = Effect.gen(function* () {
       ipcCatchAll('tileborne:playtest:behaviorDebugControl')(
         Effect.tryPromise({
           try: async () => ({
-            snapshot: { ...await controlPlaytestBehaviorDebug(sessionId, command), sessionId },
+            snapshot: { ...(await controlPlaytestBehaviorDebug(sessionId, command)), sessionId },
           }),
           catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
         }),
@@ -2569,7 +2623,9 @@ const buildHandlers = Effect.gen(function* () {
             const playerModels = hostRegistration.resolvePlayerModels(project);
             if (playerModels.length === 0) {
               return yield* Effect.fail(
-                new Error(`${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`),
+                new Error(
+                  `${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`,
+                ),
               );
             }
             if (
@@ -2927,10 +2983,8 @@ export const registerMainIpc = Effect.gen(function* () {
       'tileborne:assets:capabilityRefreshed': (emit) =>
         Stream.runForEach(assets.subscribeCapability, emit),
       'tileborne:plugins:changed': (emit) =>
-        wireTrigger(
-          registry.subscribe.pipe(Stream.map(() => triggerPayload)),
-          emit,
-          () => behaviorReferenceIndex.invalidate(),
+        wireTrigger(registry.subscribe.pipe(Stream.map(() => triggerPayload)), emit, () =>
+          behaviorReferenceIndex.invalidate(),
         ),
       'tileborne:jobs:changed': (emit) =>
         Effect.forever(

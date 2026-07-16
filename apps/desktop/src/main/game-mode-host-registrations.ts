@@ -1,4 +1,10 @@
-import type { GameObjectType, JsonObject, PlayerModelRef, ProjectManifest, TileborneMap } from '@tileborne/core';
+import type {
+  GameObjectType,
+  JsonObject,
+  PlayerModelRef,
+  ProjectManifest,
+  TileborneMap,
+} from '@tileborne/core';
 import type { WeaponCatalogEntryView } from '@tileborne/ipc-contracts';
 import {
   BATTLE_ROYALE_PLAYER_MODEL_POLICY,
@@ -24,7 +30,12 @@ export interface GameModeHostRegistration {
     map: TileborneMap,
     weapons: readonly WeaponCatalogEntryView[],
     objectTypes: readonly GameObjectType[],
-  ) => readonly { readonly code: string; readonly title: string; readonly message: string; readonly path: string }[];
+  ) => readonly {
+    readonly code: string;
+    readonly title: string;
+    readonly message: string;
+    readonly path: string;
+  }[];
 }
 
 const BATTLE_ROYALE_HOST_REGISTRATION: GameModeHostRegistration = {

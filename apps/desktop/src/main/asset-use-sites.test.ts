@@ -27,8 +27,7 @@ import {
 
 import { buildAssetPackUseSites } from './asset-use-sites';
 
-const uuid = (suffix: string) =>
-  `550e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
+const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix.padStart(12, '0')}` as Uuid;
 const projectId = makeProjectId(uuid('1'));
 const packId = makePackId(uuid('2'));
 const mapId = makeMapId(uuid('3'));
@@ -131,14 +130,7 @@ describe('buildAssetPackUseSites', () => {
     });
 
     expect(new Set(result.useSites.map((site) => site.kind))).toEqual(
-      new Set([
-        'project-dependency',
-        'player-model',
-        'animation',
-        'entity',
-        'map',
-        'map-object',
-      ]),
+      new Set(['project-dependency', 'player-model', 'animation', 'entity', 'map', 'map-object']),
     );
     expect(result.useSites.find((site) => site.kind === 'entity')?.navigation).toMatchObject({
       kind: 'catalog',

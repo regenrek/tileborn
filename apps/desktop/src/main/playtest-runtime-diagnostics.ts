@@ -1,7 +1,7 @@
-import { gameObjectTypeIdForKey } from "@tileborne/core";
-import { decodeServerMessage } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import { gameObjectTypeIdForKey } from '@tileborne/core';
+import { decodeServerMessage } from '@tileborne/ipc-contracts/protocols/battle-royale';
 
-import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
+import type { PlaytestPluginWorld } from './playtest-plugin-world.js';
 
 export interface PlaytestRuntimeInputTelemetry {
   readonly tick: number;
@@ -51,8 +51,8 @@ export interface PlaytestRuntimeReplayDiagnostics {
   readonly eventFrames: number;
   readonly byteSize: number;
   readonly rollingHash: string;
-  readonly recorderStatus: "recording";
-  readonly deterministicVerifier: "battle-royale-replay-harness";
+  readonly recorderStatus: 'recording';
+  readonly deterministicVerifier: 'battle-royale-replay-harness';
 }
 
 export interface PlaytestRuntimeEntityDiagnostics {
@@ -122,7 +122,7 @@ const HASH_PRIME = 0x01000193;
 const encoder = new TextEncoder();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const updateHash = (hash: number, bytes: Uint8Array): number => {
   let next = hash;
@@ -145,7 +145,7 @@ const countComponent = (world: PlaytestPluginWorld, componentName: string): numb
 const countAlivePlayers = (world: PlaytestPluginWorld): number => {
   try {
     let count = 0;
-    for (const [, player] of world.getComponent<{ alive: number }>("Player").entries()) {
+    for (const [, player] of world.getComponent<{ alive: number }>('Player').entries()) {
       if (player.alive === 1) {
         count += 1;
       }
@@ -158,37 +158,37 @@ const countAlivePlayers = (world: PlaytestPluginWorld): number => {
 
 const summarizeEntities = (world: PlaytestPluginWorld): PlaytestRuntimeEntityDiagnostics => ({
   aliveEntities: world.aliveEntities().length,
-  players: countComponent(world, "Player"),
+  players: countComponent(world, 'Player'),
   alivePlayers: countAlivePlayers(world),
-  projectiles: countComponent(world, "Projectile"),
-  pickups: countComponent(world, "Pickup"),
-  lootSources: countComponent(world, "LootSource"),
-  collisionBodies: countComponent(world, "CollisionBody"),
-  visionBlockers: countComponent(world, "VisionBlocker"),
-  hitboxes: countComponent(world, "Hitbox"),
-  deployables: countComponent(world, "Deployable"),
-  hazards: countComponent(world, "Hazard"),
-  zones: countComponent(world, "Zone"),
+  projectiles: countComponent(world, 'Projectile'),
+  pickups: countComponent(world, 'Pickup'),
+  lootSources: countComponent(world, 'LootSource'),
+  collisionBodies: countComponent(world, 'CollisionBody'),
+  visionBlockers: countComponent(world, 'VisionBlocker'),
+  hitboxes: countComponent(world, 'Hitbox'),
+  deployables: countComponent(world, 'Deployable'),
+  hazards: countComponent(world, 'Hazard'),
+  zones: countComponent(world, 'Zone'),
 });
 
-const classifyFrame = (frame: Uint8Array): "snapshot" | "event" | "unknown" => {
+const classifyFrame = (frame: Uint8Array): 'snapshot' | 'event' | 'unknown' => {
   try {
     const message = decodeServerMessage(frame);
-    if (message._tag === "WelcomeSnapshot" || message._tag === "DeltaSnapshot") {
-      return "snapshot";
+    if (message._tag === 'WelcomeSnapshot' || message._tag === 'DeltaSnapshot') {
+      return 'snapshot';
     }
     if (
-      message._tag === "PlayerJoined" ||
-      message._tag === "PlayerLeft" ||
-      message._tag === "PlayerKilled" ||
-      message._tag === "GameOver" ||
-      message._tag === "Error"
+      message._tag === 'PlayerJoined' ||
+      message._tag === 'PlayerLeft' ||
+      message._tag === 'PlayerKilled' ||
+      message._tag === 'GameOver' ||
+      message._tag === 'Error'
     ) {
-      return "event";
+      return 'event';
     }
-    return "unknown";
+    return 'unknown';
   } catch {
-    return "unknown";
+    return 'unknown';
   }
 };
 
@@ -211,22 +211,20 @@ const summarizeMapPackage = (mapPackage: unknown) => {
           return (
             isRecord(objectType) &&
             Array.isArray(objectType.components) &&
-            objectType.components.some(
-              (component) => isRecord(component) && component._tag === tag,
-            )
+            objectType.components.some((component) => isRecord(component) && component._tag === tag)
           );
         })
-        .map((entry) => String(isRecord(entry.objectType) ? entry.objectType.id : "")),
+        .map((entry) => String(isRecord(entry.objectType) ? entry.objectType.id : '')),
     );
-  const spawnTypeIds = typeIdsWithComponent("spawn-point");
-  const lootTypeIds = typeIdsWithComponent("loot-source");
+  const spawnTypeIds = typeIdsWithComponent('spawn-point');
+  const lootTypeIds = typeIdsWithComponent('loot-source');
   const placements = Array.isArray(mapPackage.placements)
     ? mapPackage.placements.filter(isRecord)
     : [];
   const placementsOf = (typeIds: ReadonlySet<string>): number =>
     placements.filter((placement) => typeIds.has(String(placement.typeId))).length;
   const zoneAnchors = placements.filter(
-    (placement) => String(placement.typeId) === gameObjectTypeIdForKey("shrink-zone-anchor"),
+    (placement) => String(placement.typeId) === gameObjectTypeIdForKey('shrink-zone-anchor'),
   ).length;
 
   return {
@@ -274,7 +272,7 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
   return {
     recordMapPackage: (mapPackage): void => {
       packageCounts = summarizeMapPackage(mapPackage);
-      recordBytes("map-package", encodeStable(packageCounts));
+      recordBytes('map-package', encodeStable(packageCounts));
     },
     recordInput: (playerId, input, currentTick): void => {
       const latencyTicks = Math.max(0, currentTick - input.tick);
@@ -296,13 +294,13 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
       inputBytes += bytes.byteLength;
       totalInputLatencyTicks += latencyTicks;
       maxInputLatencyTicks = Math.max(maxInputLatencyTicks, latencyTicks);
-      recordBytes("input", bytes);
+      recordBytes('input', bytes);
     },
     recordPluginFrame: (frame): void => {
       const classification = classifyFrame(frame);
-      if (classification === "snapshot") {
+      if (classification === 'snapshot') {
         snapshotFrames += 1;
-      } else if (classification === "event") {
+      } else if (classification === 'event') {
         eventFrames += 1;
       } else {
         unknownFrames += 1;
@@ -324,14 +322,15 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
     recordError: (message): void => {
       errorCount += 1;
       lastError = message;
-      recordBytes("error", encoder.encode(message));
+      recordBytes('error', encoder.encode(message));
     },
     snapshot: ({ world, pendingSnapshotFrames }): PlaytestRuntimeDiagnostics => {
       const entities = summarizeEntities(world);
       const averageTickDurationMs = tickSamples === 0 ? 0 : totalTickDurationMs / tickSamples;
-      const averageFrameBytes = snapshotFrames + eventFrames + unknownFrames === 0
-        ? 0
-        : totalFrameBytes / (snapshotFrames + eventFrames + unknownFrames);
+      const averageFrameBytes =
+        snapshotFrames + eventFrames + unknownFrames === 0
+          ? 0
+          : totalFrameBytes / (snapshotFrames + eventFrames + unknownFrames);
       const inputLatencyTicks = inputEvents === 0 ? 0 : totalInputLatencyTicks / inputEvents;
       const backpressureFrameCount = pendingSnapshotFrames;
 
@@ -368,9 +367,9 @@ export const createPlaytestRuntimeDiagnosticsRecorder = (options: {
           snapshotFrames,
           eventFrames,
           byteSize: inputBytes + totalFrameBytes,
-          rollingHash: `fnv1a:${rollingHash.toString(16).padStart(8, "0")}`,
-          recorderStatus: "recording",
-          deterministicVerifier: "battle-royale-replay-harness",
+          rollingHash: `fnv1a:${rollingHash.toString(16).padStart(8, '0')}`,
+          recorderStatus: 'recording',
+          deterministicVerifier: 'battle-royale-replay-harness',
         },
         entities,
         debugOverlay: {

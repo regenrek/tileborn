@@ -39,9 +39,7 @@ const visualRefFor = (objectType: GameObjectType) =>
  * process owns the I/O; this function only identifies exact consumers and
  * emits renderer-agnostic navigation targets.
  */
-export const buildAssetPackUseSites = (
-  input: AssetPackUseSiteInput,
-): AssetPackUseSiteResult => {
+export const buildAssetPackUseSites = (input: AssetPackUseSiteInput): AssetPackUseSiteResult => {
   const placeableIds = new Set(
     (input.editorIndex.placeables ?? []).flatMap((entry) =>
       entry.id === undefined ? [] : [String(entry.id)],
@@ -70,54 +68,48 @@ export const buildAssetPackUseSites = (
 
   const dependency = input.project.assetPacks.find((entry) => String(entry.id) === input.packId);
   if (dependency !== undefined) {
-    add(
-      {
-        id: `project-dependency:${input.packId}`,
-        kind: 'project-dependency',
-        label: input.project.name,
-        detail: `Project dependency v${dependency.version}`,
-        navigation: {
-          kind: 'project-settings',
-          projectId: input.project.id,
-          path: 'assetPacks',
-        },
+    add({
+      id: `project-dependency:${input.packId}`,
+      kind: 'project-dependency',
+      label: input.project.name,
+      detail: `Project dependency v${dependency.version}`,
+      navigation: {
+        kind: 'project-settings',
+        projectId: input.project.id,
+        path: 'assetPacks',
       },
-    );
+    });
   }
 
   for (const model of input.playerModels) {
     if (String(model.ref.packId) !== input.packId) {
       continue;
     }
-    add(
-      {
-        id: `player-model:${model.id}`,
+    add({
+      id: `player-model:${model.id}`,
+      kind: 'player-model',
+      label: model.label,
+      detail: `Player model uses ${model.ref.refId}`,
+      navigation: {
         kind: 'player-model',
-        label: model.label,
-        detail: `Player model uses ${model.ref.refId}`,
+        projectId: input.project.id,
+        modelId: model.id,
+        path: `playerModels.${model.id}.ref`,
+      },
+    });
+    for (const [clipKey, clipId] of Object.entries(model.clips)) {
+      add({
+        id: `animation:player-model:${model.id}:${clipKey}`,
+        kind: 'animation',
+        label: `${model.label} · ${clipKey}`,
+        detail: `Animation binding ${String(clipId)}`,
         navigation: {
           kind: 'player-model',
           projectId: input.project.id,
           modelId: model.id,
-          path: `playerModels.${model.id}.ref`,
+          path: `playerModels.${model.id}.clips.${clipKey}`,
         },
-      },
-    );
-    for (const [clipKey, clipId] of Object.entries(model.clips)) {
-      add(
-        {
-          id: `animation:player-model:${model.id}:${clipKey}`,
-          kind: 'animation',
-          label: `${model.label} · ${clipKey}`,
-          detail: `Animation binding ${String(clipId)}`,
-          navigation: {
-            kind: 'player-model',
-            projectId: input.project.id,
-            modelId: model.id,
-            path: `playerModels.${model.id}.clips.${clipKey}`,
-          },
-        },
-      );
+      });
     }
   }
 
@@ -136,38 +128,34 @@ export const buildAssetPackUseSites = (
       continue;
     }
     targetEntityTypeIds.add(String(objectType.id));
-    add(
-      {
-        id: `entity:${objectType.id}`,
-        kind: 'entity',
-        label: objectType.label,
-        detail: `Entity visual uses ${String(placeableId ?? assetId)}`,
-        navigation: {
-          kind: 'catalog',
-          projectId: input.project.id,
-          objectTypeId: objectType.id,
-          path: 'visual-ref',
-        },
+    add({
+      id: `entity:${objectType.id}`,
+      kind: 'entity',
+      label: objectType.label,
+      detail: `Entity visual uses ${String(placeableId ?? assetId)}`,
+      navigation: {
+        kind: 'catalog',
+        projectId: input.project.id,
+        objectTypeId: objectType.id,
+        path: 'visual-ref',
       },
-    );
+    });
   }
 
   for (const map of input.maps) {
     if (String(map.properties.tilesetPackId ?? '') === input.packId) {
-      add(
-        {
-          id: `map:${map.id}:tileset`,
+      add({
+        id: `map:${map.id}:tileset`,
+        kind: 'map',
+        label: `Map ${map.id}`,
+        detail: 'Map tileset and paint palette',
+        navigation: {
           kind: 'map',
-          label: `Map ${map.id}`,
-          detail: 'Map tileset and paint palette',
-          navigation: {
-            kind: 'map',
-            projectId: input.project.id,
-            mapId: map.id,
-            path: 'properties.tilesetPackId',
-          },
+          projectId: input.project.id,
+          mapId: map.id,
+          path: 'properties.tilesetPackId',
         },
-      );
+      });
     }
 
     for (const object of map.objects) {
@@ -185,37 +173,33 @@ export const buildAssetPackUseSites = (
       if (!placementMatches && !entityMatches) {
         continue;
       }
-      add(
-        {
-          id: `map-object:${map.id}:${object.id}`,
+      add({
+        id: `map-object:${map.id}:${object.id}`,
+        kind: 'map-object',
+        label: `Map object ${object.id}`,
+        detail: `Placed on ${map.id} as ${object.kind}`,
+        navigation: {
           kind: 'map-object',
-          label: `Map object ${object.id}`,
-          detail: `Placed on ${map.id} as ${object.kind}`,
+          projectId: input.project.id,
+          mapId: map.id,
+          objectId: object.id,
+          path: `objects.${object.id}`,
+        },
+      });
+      if (placement?.clipId !== undefined) {
+        add({
+          id: `animation:map-object:${map.id}:${object.id}:${placement.clipId}`,
+          kind: 'animation',
+          label: `Map object animation ${object.id}`,
+          detail: `Clip ${placement.clipId} on ${map.id}`,
           navigation: {
             kind: 'map-object',
             projectId: input.project.id,
             mapId: map.id,
             objectId: object.id,
-            path: `objects.${object.id}`,
+            path: `objects.${object.id}.placement.clipId`,
           },
-        },
-      );
-      if (placement?.clipId !== undefined) {
-        add(
-          {
-            id: `animation:map-object:${map.id}:${object.id}:${placement.clipId}`,
-            kind: 'animation',
-            label: `Map object animation ${object.id}`,
-            detail: `Clip ${placement.clipId} on ${map.id}`,
-            navigation: {
-              kind: 'map-object',
-              projectId: input.project.id,
-              mapId: map.id,
-              objectId: object.id,
-              path: `objects.${object.id}.placement.clipId`,
-            },
-          },
-        );
+        });
       }
     }
   }

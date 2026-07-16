@@ -27,10 +27,7 @@ const UUID = (suffix: string): Uuid =>
 
 const PLUGIN_ID = '@tileborne/plugin-test' as unknown as PluginId;
 
-const objectType = (
-  uuid: string,
-  components: GameObjectType['components'] = [],
-): GameObjectType =>
+const objectType = (uuid: string, components: GameObjectType['components'] = []): GameObjectType =>
   new GameObjectType({
     id: makeGameObjectTypeId(UUID(uuid)),
     schemaVersion: 1,
@@ -58,7 +55,11 @@ const catalog = (
 
 describe('buildResolveProjection', () => {
   it('merges plugin + project catalogs and tags entry origins', () => {
-    const lootTable = new LootTable({ id: makeLootTableId(UUID('1')), label: 'common', entries: [] });
+    const lootTable = new LootTable({
+      id: makeLootTableId(UUID('1')),
+      label: 'common',
+      entries: [],
+    });
     const item = new ItemDefinition({
       id: makeItemDefinitionId(UUID('2')),
       label: 'potion',
@@ -141,9 +142,7 @@ describe('buildValidationReport', () => {
     const sources: readonly CatalogContributionSource[] = [
       {
         contributionId: 'plugin#cat',
-        catalog: catalog('a', [
-          objectType('51', [new WeaponRefComponent({ weaponId })]),
-        ]),
+        catalog: catalog('a', [objectType('51', [new WeaponRefComponent({ weaponId })])]),
         origin: 'plugin',
         sourcePluginId: PLUGIN_ID,
       },
@@ -181,9 +180,7 @@ describe('buildValidationReport', () => {
     const report = buildValidationReport(sources, { weaponIds: new Set() });
 
     expect(report.ok).toBe(false);
-    const weaponIssue = report.issues.find(
-      (issue) => issue.refKind === 'weapon-ref.weaponId',
-    );
+    const weaponIssue = report.issues.find((issue) => issue.refKind === 'weapon-ref.weaponId');
     expect(weaponIssue).toMatchObject({
       kind: 'unknown-reference',
       objectTypeId: weaponEntity.id,
@@ -198,9 +195,9 @@ describe('buildValidationReport', () => {
       missingId: String(missingCompanion),
     });
     // The resolving companion stays clean.
-    expect(
-      report.issues.some((issue) => issue.refKind === 'weapon-ref.projectileEntityId'),
-    ).toBe(false);
+    expect(report.issues.some((issue) => issue.refKind === 'weapon-ref.projectileEntityId')).toBe(
+      false,
+    );
   });
 
   it('surfaces duplicate-type and unknown-reference issues', () => {
@@ -246,13 +243,26 @@ describe('buildValidationReport', () => {
       entries: [{ itemId: missingItem, tier: 'rare', weight: 0 }],
     });
     const report = buildValidationReport([
-      { contributionId: 'project-catalog-fragment', catalog: catalog('c', [], [table]), origin: 'project' },
+      {
+        contributionId: 'project-catalog-fragment',
+        catalog: catalog('c', [], [table]),
+        origin: 'project',
+      },
     ]);
 
     expect(report.ok).toBe(false);
-    expect(report.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'unknown-reference', refKind: 'item', missingId: String(missingItem) }),
-      expect.objectContaining({ kind: 'coherence', message: expect.stringContaining('positive drop weight') }),
-    ]));
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'unknown-reference',
+          refKind: 'item',
+          missingId: String(missingItem),
+        }),
+        expect.objectContaining({
+          kind: 'coherence',
+          message: expect.stringContaining('positive drop weight'),
+        }),
+      ]),
+    );
   });
 });

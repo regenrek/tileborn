@@ -167,7 +167,12 @@ export const thumbnailCacheFileName = (
 };
 
 export interface ThumbnailResizePlan {
-  readonly crop: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly crop: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
   readonly resize?: { readonly width: number; readonly height: number } | undefined;
 }
 
@@ -182,7 +187,12 @@ const clamp = (value: number, min: number, max: number): number =>
  */
 export const computeThumbnailResize = (
   source: { readonly width: number; readonly height: number },
-  geometry: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  geometry: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
   box: number,
 ): ThumbnailResizePlan => {
   const x = clamp(Math.round(geometry.x), 0, Math.max(0, source.width - 1));

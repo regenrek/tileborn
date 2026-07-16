@@ -2,16 +2,28 @@ import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-import { app, dialog } from 'electron';
-import { Effect, Option, Schema, Stream } from 'effect';
+import { app, dialog, shell } from 'electron';
+import { Deferred, Effect, Option, Schema, Stream } from 'effect';
 
 import { AssetPackManifest } from '@tileborne/asset-pipeline';
 import {
+  AssetBehaviorReference,
   hashJsonStable,
+  CatalogBehaviorReference,
+  EntityBehaviorReference,
+  NestedBehaviorReference,
+  ProjectAssetPackRef,
+  ProjectManifest,
+  PROJECT_SHIP_TARGET_SETTINGS_KEY,
+  PROJECT_STARTUP_MAP_SETTINGS_KEY,
+  ProjectPluginRef,
   type ContentHash,
+  type BehaviorId,
+  type BehaviorReference,
   type GameModeId,
   type JsonObject,
   type MapId,
+  type PackId,
   type PlayerModelRef,
   type ProjectId,
   type TileborneMap,
@@ -26,32 +38,40 @@ import {
   registerIpcHandlers,
   type RegisteredEventHandlers,
   type RegisteredHandlers,
+  type BehaviorReferenceKind,
 } from '@tileborne/ipc-contracts';
 import {
   AssetLibraryService,
   AssetService,
   MapService,
+  ProjectBehaviorService,
   ProjectService,
   WorkingPaletteService,
   removeAssetPack,
   toMapIpcPayload,
   type AssetPackWithCapability,
+  type ProjectBehaviorSnapshot,
 } from '@tileborne/services-app';
 import {
   BuildService,
   ExportService,
   ExportTarget,
+  GameBuildArtifact,
+  GameBuildOptions,
   PlaytestService,
   RuntimeDeployService,
   RuntimeDeployTarget,
   activePlaytestPluginIds,
   assembleRuntimeMapPackage,
+  compileProjectBehaviorModule,
+  compileProjectBehaviorPackage,
+  generateTypeScriptBehaviorSource,
   loadPluginModeDataExporter,
   resolvePackagePlayerCapacity,
   SupportService,
   type PlaytestSession,
 } from '@tileborne/services-build';
-import { HomeService, JobService, type JobState } from '@tileborne/services-foundation';
+import { HomeService, JobService, type JobId, type JobState } from '@tileborne/services-foundation';
 import { LoggerService } from '@tileborne/services-foundation';
 import {
   PluginInstallerService,
@@ -62,11 +82,12 @@ import {
 import {
   PluginContributions,
   discoverGameModes,
+  resolveBehaviorAuthoringRegistry,
+  resolveActiveGameMode,
   type GameModeDescriptor,
   type PluginPanelContribution,
   type PluginToolContribution,
 } from '@tileborne/plugin-api';
-import { resolveBattleRoyalePlayerModels } from '@tileborne/plugin-battle-royale/player-models';
 import {
   compileTiledSourceRulePipeline,
   projectTiledSourceRuleApplication,
@@ -83,9 +104,13 @@ import {
 import { createElectronIpcServerTransport } from './transport.js';
 import {
   clearPlaytestRuntimeInput,
+  controlPlaytestBehaviorDebug,
+  getPlaytestBehaviorDebugSnapshot,
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
+  hotReloadPlaytestBehavior,
   loadPlaytestMapPackage,
+  rejectPlaytestBehaviorReload,
   setPlaytestRuntimeChangedNotifier,
   setPlaytestRuntimeInput,
   setPlaytestRuntimeSnapshotNotifier,
@@ -95,18 +120,44 @@ import {
 import { CatalogService } from '../catalog/index.js';
 import { startDesktopLocalGameHost, stopDesktopLocalGameHost } from '../local-game-host-manager.js';
 import { invokePluginEditorCommand } from '../plugin-editor-command.js';
-import { BATTLE_ROYALE_PLUGIN_ID, bundledPluginSpec } from '../bundled-plugins.js';
+import { bundledBattleRoyalePluginSpec, bundledPluginSpec } from '../bundled-plugins.js';
 import { installBundledPluginWithServices } from '../seed-plugins.js';
 import { seedBundledPluginAssetPacksWithServices } from '../seed-plugins.js';
 import { appRuntime } from '../runtime.js';
 import { createPlaytestJoinWindow } from '../window.js';
+import {
+  assertExecutionReadiness,
+  behaviorReadinessDiagnostics,
+  diagnosePlayerModelReference,
+  loadPluginMapValidator,
+  makeReadinessReport,
+  readinessDiagnostic,
+  readinessNavigation,
+} from '../readiness.js';
+import { diagnoseVisualModelAuthoring } from '../../shared/visual-model-diagnostics.js';
+import { buildAssetPackUseSites } from '../asset-use-sites.js';
+import { resolveGameModeHostRegistration } from '../game-mode-host-registrations.js';
+import { defaultGameModeStarterRegistration } from '../game-mode-starter-registrations.js';
+import {
+  BehaviorReferenceIndex,
+  behaviorReferenceId,
+  type IndexedBehaviorReferenceOption,
+} from '../behavior-reference-index.js';
 
 const triggerPayload = {};
 const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
 
-const TILED_MAP_SOURCE_EXTENSION_SET = new Set(TILED_MAP_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
-const TILED_TILESET_SOURCE_EXTENSION_SET = new Set(TILED_TILESET_SOURCE_EXTENSIONS.map((extension) => `.${extension}`));
-const SPRITE_SHEET_IMAGE_EXTENSION_SET = new Set(SPRITE_SHEET_IMAGE_EXTENSIONS.map((extension) => `.${extension}`));
+const TILED_MAP_SOURCE_EXTENSION_SET = new Set(
+  TILED_MAP_SOURCE_EXTENSIONS.map((extension) => `.${extension}`),
+);
+const TILED_TILESET_SOURCE_EXTENSION_SET = new Set(
+  TILED_TILESET_SOURCE_EXTENSIONS.map((extension) => `.${extension}`),
+);
+const SPRITE_SHEET_IMAGE_EXTENSION_SET = new Set(
+  SPRITE_SHEET_IMAGE_EXTENSIONS.map((extension) => `.${extension}`),
+);
+const ASSET_USE_SITE_MAP_SCAN_LIMIT = 128;
+const ASSET_USE_SITE_RESULT_LIMIT = 200;
 
 const safeStat = async (candidatePath: string) => {
   try {
@@ -157,6 +208,19 @@ const readActiveGameModeSetting = (settings: JsonObject | undefined): string | u
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 };
 
+const resolveProjectGameMode = (
+  project: ProjectManifest,
+  installed: readonly InstalledPlugin[],
+): GameModeDescriptor | undefined =>
+  resolveActiveGameMode(
+    discoverGameModes(
+      installed
+        .filter(({ enabled }) => enabled)
+        .map(({ id, manifest }) => ({ pluginId: id, contributions: manifest.contributes })),
+    ),
+    readActiveGameModeSetting(project.settings) as GameModeId | undefined,
+  );
+
 const toJobView = (job: JobState) => ({
   id: job.id,
   status: job.status._tag,
@@ -166,6 +230,7 @@ const toJobView = (job: JobState) => ({
     onNone: () => undefined,
     onSome: (error) => error.message,
   }),
+  logs: [...job.logs],
 });
 
 const parseLogEntries = (rawLines: readonly string[]) =>
@@ -196,7 +261,8 @@ const toPluginSummary = (plugin: InstalledPlugin) => ({
 const optionalField = <Key extends string, Value>(
   key: Key,
   value: Value | undefined,
-): Partial<Record<Key, Value>> => (value === undefined ? {} : { [key]: value } as Record<Key, Value>);
+): Partial<Record<Key, Value>> =>
+  value === undefined ? {} : ({ [key]: value } as Record<Key, Value>);
 
 const toPluginPanelContributionView = (
   plugin: InstalledPlugin,
@@ -236,12 +302,24 @@ const toGameModeView = (descriptor: GameModeDescriptor) => ({
   pluginId: descriptor.pluginId,
   label: descriptor.label,
   hasAuthoringPanel: descriptor.hasAuthoringPanel,
+  creatorChecklistFacts: descriptor.creatorChecklistFacts.map((fact) => ({
+    id: fact.id,
+    label: fact.label,
+    sources: [...fact.sources],
+    ...optionalField('description', fact.description),
+  })),
   ...optionalField('runtimeSystemId', descriptor.runtimeSystemId),
   ...optionalField('authoringSettingsPanelId', descriptor.authoringSettingsPanelId),
+  ...optionalField('authoringCapabilityId', descriptor.authoringCapabilityId),
+  ...optionalField('rendererCapabilityId', descriptor.rendererCapabilityId),
+  ...optionalField('readinessCapabilityId', descriptor.readinessCapabilityId),
+  ...optionalField('starterCapabilityId', descriptor.starterCapabilityId),
   ...optionalField('gameSettingsFormId', descriptor.gameSettingsFormId),
   ...optionalField('gameSettingsForm', descriptor.gameSettingsForm),
   ...optionalField('hudLayoutContributionId', descriptor.hudLayoutContributionId),
   ...optionalField('hudLayout', descriptor.hudLayout),
+  ...optionalField('mapValidatorId', descriptor.mapValidatorId),
+  ...optionalField('starter', descriptor.starter),
 });
 
 const formatPluginPermission = (permission: { readonly _tag: string }): string => permission._tag;
@@ -277,8 +355,9 @@ const TILESET_MANIFEST_PATH = 'tileborne-asset-pack.json';
 
 type IpcPlaytestRuntimeMetrics = Schema.Schema.Type<typeof PlaytestRuntimeMetricsSchema>;
 
-const includeDiagnosticsEnabled = (includeDiagnostics: Option.Option<boolean> | undefined): boolean =>
-  includeDiagnostics === undefined || Option.getOrElse(includeDiagnostics, () => true);
+const includeDiagnosticsEnabled = (
+  includeDiagnostics: Option.Option<boolean> | undefined,
+): boolean => includeDiagnostics === undefined || Option.getOrElse(includeDiagnostics, () => true);
 
 const toPlaytestSessionView = (session: PlaytestSession) => {
   const artifactDirectory = Option.getOrUndefined(session.artifactDirectory);
@@ -300,10 +379,15 @@ const toPlaytestSessionView = (session: PlaytestSession) => {
 const wireTrigger = <E, R>(
   stream: Stream.Stream<unknown, E, R>,
   emit: (payload: typeof triggerPayload) => Effect.Effect<void>,
-): Effect.Effect<void, E, R> => Stream.runForEach(stream, () => emit(triggerPayload));
+  beforeEmit?: () => void,
+): Effect.Effect<void, E, R> => Stream.runForEach(stream, () => {
+  beforeEmit?.();
+  return emit(triggerPayload);
+});
 
 const buildHandlers = Effect.gen(function* () {
   const projects = yield* ProjectService;
+  const projectBehaviors = yield* ProjectBehaviorService;
   const maps = yield* MapService;
   const assets = yield* AssetService;
   const assetLibrary = yield* AssetLibraryService;
@@ -319,6 +403,86 @@ const buildHandlers = Effect.gen(function* () {
   const support = yield* SupportService;
   const home = yield* HomeService;
   const logger = yield* LoggerService;
+  const behaviorReferenceIndex = new BehaviorReferenceIndex();
+
+  const behaviorAuthoringRegistry = (projectId: ProjectId) =>
+    Effect.gen(function* () {
+      const project = yield* projects.open(projectId);
+      const enabledProjectPluginIds = new Set(project.plugins.map(({ id }) => String(id)));
+      const installed = yield* registry.list();
+      return resolveBehaviorAuthoringRegistry(
+        installed
+          .filter(
+            ({ enabled, id }) => enabled && enabledProjectPluginIds.has(String(id)),
+          )
+          .map(({ id, manifest }) => ({ pluginId: id, contributions: manifest.contributes })),
+      );
+    });
+
+  const assetPreviewUrl = (packId: string, assetPath: string): string => {
+    const params = new URLSearchParams({ id: packId, path: assetPath });
+    return `tileborne-asset://pack?${params.toString()}`;
+  };
+
+  const behaviorReferenceOptions = (
+    projectId: ProjectId,
+    kind: BehaviorReferenceKind,
+  ): Effect.Effect<readonly IndexedBehaviorReferenceOption[], unknown, never> =>
+    Effect.gen(function* () {
+      if (kind === 'asset') {
+        const project = yield* projects.open(projectId);
+        const installedPacks = yield* assets.listPacks();
+        const projectPackIds = new Set(project.assetPacks.map(({ id }) => String(id)));
+        return installedPacks
+          .filter(({ id }) => projectPackIds.has(String(id)))
+          .flatMap((pack): readonly IndexedBehaviorReferenceOption[] => pack.assets.map((asset) => ({
+            id: String(asset.id),
+            label: path.basename(asset.path),
+            reference: new AssetBehaviorReference({ assetId: asset.id }),
+            ...(asset.mime.startsWith('image/')
+              ? { previewUrl: assetPreviewUrl(String(pack.id), asset.path) }
+              : {}),
+            detail: pack.name,
+          })));
+      }
+      if (kind === 'entity') {
+        const project = yield* projects.open(projectId);
+        const projectMaps = yield* Effect.forEach(
+          project.maps,
+          ({ id }) => maps.load(projectId, id as MapId),
+          { concurrency: 4 },
+        );
+        return projectMaps.flatMap((map): readonly IndexedBehaviorReferenceOption[] =>
+          map.objects.map((object) => ({
+          id: String(object.id),
+          label: `${String(object.kind)} · ${map.id}`,
+          reference: new EntityBehaviorReference({ objectId: object.id }),
+          detail: `x ${Math.round(object.x)}, y ${Math.round(object.y)}`,
+          })),
+        );
+      }
+      if (kind === 'catalog') {
+        const resolvedCatalog = yield* catalog.resolve(projectId);
+        return resolvedCatalog.objectTypes.map(({ objectType, origin }) => ({
+          id: String(objectType.id),
+          label: objectType.label,
+          reference: new CatalogBehaviorReference({ objectTypeId: objectType.id }),
+          detail: origin === 'project' ? 'Project content' : 'Plugin content',
+        }));
+      }
+      const behaviorSnapshot = yield* projectBehaviors.open(projectId);
+      return behaviorSnapshot.resources.map(({ manifest }) => ({
+          id: String(manifest.id),
+          label: manifest.label,
+          reference: new NestedBehaviorReference({ behaviorId: manifest.id }),
+          detail: manifest.source._tag === 'visual' ? 'Event sheet' : 'TypeScript',
+        }));
+    });
+
+  const cachedBehaviorReferenceOptions = (projectId: ProjectId, kind: BehaviorReferenceKind) =>
+    behaviorReferenceIndex.load(String(projectId), kind, () =>
+      Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
+    );
 
   /**
    * Assemble the ONE typed `RuntimeMapPackage` (ADR-0030 step 1) every playtest
@@ -362,12 +526,32 @@ const buildHandlers = Effect.gen(function* () {
           ),
         );
       }
+      const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
+        Effect.mapError((error) => new Error(error.message)),
+      );
+      const effectiveBehaviorRegistry = yield* behaviorAuthoringRegistry(input.projectId);
+      const compiledBehaviors = yield* Effect.tryPromise(() =>
+        compileProjectBehaviorPackage(
+          behaviorSnapshot,
+          effectiveBehaviorRegistry.registry,
+        ),
+      );
+      if (!compiledBehaviors.ok || compiledBehaviors.behaviorPackage === undefined) {
+        return yield* Effect.fail(new Error(
+          `Behavior compilation failed: ${compiledBehaviors.diagnostics
+            .map((entry) => `${entry.code}: ${entry.message}`)
+            .join('; ')}`,
+        ));
+      }
       return yield* assembleRuntimeMapPackage({
         projectId: input.projectId,
         map,
         activeMode,
         pluginCatalogs: sources.pluginCatalogs,
         projectObjectTypes: sources.projectObjectTypes,
+        projectContent: sources.projectContent,
+        behaviors: compiledBehaviors.behaviorPackage,
+        behaviorModules: compiledBehaviors.modules ?? [],
         playerModels: input.playerModels,
         playerCapacity: resolvePackagePlayerCapacity(map, input.activePluginId),
         mergeDeps: { resolveWeapon: (id) => sources.weaponIds.has(id) },
@@ -375,6 +559,438 @@ const buildHandlers = Effect.gen(function* () {
         engineVersion: project.engineVersion,
         outputDirectory: input.outputDirectory,
       });
+    });
+
+  /**
+   * Canonical readiness producer. The renderer consumes this report verbatim,
+   * while every main-process execution path calls the same function as a hard
+   * gate so command-palette/direct-IPC callers cannot bypass authoring checks.
+   */
+  const checkReadiness = (input: {
+    readonly projectId: ProjectId;
+    readonly mapId?: MapId | undefined;
+    readonly purpose: 'authoring' | 'playtest' | 'build';
+  }) =>
+    Effect.gen(function* () {
+      const project = yield* projects.open(input.projectId);
+      const installed = yield* registry.list();
+      const enabled = installed.filter((plugin) => plugin.enabled);
+      const modes = discoverGameModes(
+        enabled.map((plugin) => ({
+          pluginId: plugin.id,
+          contributions: plugin.manifest.contributes,
+        })),
+      );
+      const selectedModeId = readActiveGameModeSetting(project.settings) as GameModeId | undefined;
+      const activeMode = resolveActiveGameMode(modes, selectedModeId);
+      const diagnostics = [];
+
+      const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
+        Effect.mapError((error) => new Error(error.message)),
+      );
+      const effectiveBehaviorRegistry = yield* behaviorAuthoringRegistry(input.projectId);
+      const compiledBehaviorCheck = yield* Effect.tryPromise(() =>
+        compileProjectBehaviorPackage(
+          behaviorSnapshot,
+          effectiveBehaviorRegistry.registry,
+        ),
+      );
+      diagnostics.push(...behaviorReadinessDiagnostics(
+        input.projectId,
+        behaviorSnapshot.diagnostics,
+        compiledBehaviorCheck.diagnostics,
+      ));
+
+      if (activeMode === undefined) {
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:active-mode-missing`,
+            code: 'game-mode.active-missing',
+            severity: 'error',
+            source: 'game-mode',
+            title: 'Select an active game mode',
+            message: 'Select one enabled game mode before playtest or build.',
+            projectId: input.projectId,
+            path: 'settings.activeGameMode',
+            navigation: readinessNavigation({
+              kind: 'project-settings',
+              projectId: input.projectId,
+              path: 'settings.activeGameMode',
+            }),
+          }),
+        );
+      } else {
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:active-mode:${activeMode.modeId}`,
+            code: 'game-mode.active',
+            severity: 'info',
+            source: 'game-mode',
+            title: `${activeMode.label} active`,
+            message: `${activeMode.label} owns validation and runtime execution for this project.`,
+            projectId: input.projectId,
+            path: 'settings.activeGameMode',
+            navigation: readinessNavigation({
+              kind: 'project-settings',
+              projectId: input.projectId,
+              path: 'settings.activeGameMode',
+            }),
+          }),
+        );
+      }
+
+      const mapSummaries =
+        input.mapId === undefined ? yield* maps.list(input.projectId) : [{ id: input.mapId }];
+      const projectMaps = yield* Effect.forEach(
+        mapSummaries,
+        (summary) => maps.load(input.projectId, summary.id as MapId),
+        { concurrency: 4 },
+      );
+      if (projectMaps.length === 0) {
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:map-missing`,
+            code: 'map.missing',
+            severity: 'error',
+            source: 'map',
+            title: 'Create a map',
+            message: 'The project needs at least one map before playtest or build.',
+            projectId: input.projectId,
+            navigation: readinessNavigation({ kind: 'map', projectId: input.projectId }),
+          }),
+        );
+      }
+
+      const catalogResult = yield* catalog.validate(input.projectId);
+      for (const [index, issue] of catalogResult.report.issues.entries()) {
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:catalog:${issue.kind}:${issue.objectTypeId ?? issue.missingId ?? index}`,
+            code: `catalog.${issue.kind}`,
+            severity: 'error',
+            source: 'catalog',
+            title: 'Catalog reference is invalid',
+            message: issue.message,
+            projectId: input.projectId,
+            path: issue.objectTypeId === undefined ? 'catalog' : `catalog.${issue.objectTypeId}`,
+            navigation: readinessNavigation({
+              kind: 'catalog',
+              projectId: input.projectId,
+              ...(issue.objectTypeId === undefined ? {} : { objectTypeId: issue.objectTypeId }),
+              path: 'catalog',
+            }),
+          }),
+        );
+      }
+      const resolvedCatalog = yield* catalog.resolve(input.projectId);
+      const knownObjectTypeIds = new Set(
+        resolvedCatalog.objectTypes.map((entry) => String(entry.objectType.id)),
+      );
+      for (const map of projectMaps) {
+        for (const object of map.objects) {
+          if (knownObjectTypeIds.has(String(object.kind))) {
+            continue;
+          }
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:map:${map.id}:object:${object.id}:unknown-type`,
+              code: 'catalog.map-object-unknown-type',
+              severity: 'error',
+              source: 'catalog',
+              title: 'Map object type is missing',
+              message: `Map object ${object.id} references an unavailable catalog type: ${object.kind}`,
+              projectId: input.projectId,
+              mapId: map.id,
+              path: `objects.${object.id}.kind`,
+              navigation: readinessNavigation({
+                kind: 'map-object',
+                projectId: input.projectId,
+                mapId: map.id,
+                objectId: object.id,
+                path: `objects.${object.id}.kind`,
+              }),
+            }),
+          );
+        }
+      }
+
+      const installedPacks = yield* assets.listPacks();
+      const installedPackIds = new Set(installedPacks.map((pack) => String(pack.id)));
+      const referencedPackIds = new Set(project.assetPacks.map((pack) => String(pack.id)));
+      for (const map of projectMaps) {
+        const tilesetPackId = map.properties.tilesetPackId;
+        if (typeof tilesetPackId === 'string' && tilesetPackId.length > 0) {
+          referencedPackIds.add(tilesetPackId);
+        }
+      }
+      for (const packId of referencedPackIds) {
+        if (!installedPackIds.has(packId)) {
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:asset-pack-missing:${packId}`,
+              code: 'asset.pack-missing',
+              severity: 'error',
+              source: 'asset',
+              title: 'Asset pack is missing',
+              message: `Referenced asset pack is not installed: ${packId}`,
+              projectId: input.projectId,
+              path: `assetPacks.${packId}`,
+              navigation: readinessNavigation({
+                kind: 'asset-library',
+                projectId: input.projectId,
+                path: `assetPacks.${packId}`,
+              }),
+            }),
+          );
+        }
+      }
+      for (const pack of installedPacks.filter((entry) =>
+        referencedPackIds.has(String(entry.id)),
+      )) {
+        for (const [index, issue] of pack.capability.diagnostics.entries()) {
+          const severity = issue.severity;
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:asset:${pack.id}:${issue._tag}:${index}`,
+              code: `asset.${issue._tag}`,
+              severity,
+              source: 'asset',
+              title: severity === 'error' ? 'Asset pack is invalid' : 'Asset pack warning',
+              message: issue.message,
+              projectId: input.projectId,
+              path: `assetPacks.${pack.id}`,
+              navigation: readinessNavigation({
+                kind: 'asset-library',
+                projectId: input.projectId,
+                path: `assetPacks.${pack.id}`,
+              }),
+            }),
+          );
+        }
+      }
+
+      if (activeMode !== undefined) {
+        const activePlugin = enabled.find((plugin) => plugin.id === activeMode.pluginId);
+        if (activePlugin === undefined) {
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:active-plugin-missing:${activeMode.pluginId}`,
+              code: 'game-mode.plugin-missing',
+              severity: 'error',
+              source: 'game-mode',
+              title: 'Active game-mode plugin is unavailable',
+              message: `Enable or reinstall ${activeMode.pluginId}.`,
+              projectId: input.projectId,
+              navigation: readinessNavigation({
+                kind: 'project-settings',
+                projectId: input.projectId,
+                path: 'settings.activeGameMode',
+              }),
+            }),
+          );
+        } else {
+          const validator = yield* Effect.tryPromise({
+            try: () => loadPluginMapValidator(activePlugin, activeMode.mapValidatorId),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+          if (validator !== undefined) {
+            for (const map of projectMaps) {
+              const result = validator(map);
+              for (const [index, issue] of result.issues.entries()) {
+                diagnostics.push(
+                  readinessDiagnostic({
+                    id: `project:${input.projectId}:map:${map.id}:${activeMode.pluginId}:${index}:${issue.severity}`,
+                    code: 'game-mode.map-validation',
+                    severity: issue.severity,
+                    source: 'map',
+                    title: `${activeMode.label} map ${issue.severity}`,
+                    message: issue.message,
+                    projectId: input.projectId,
+                    mapId: map.id,
+                    path: issue.location ?? 'map',
+                    navigation: readinessNavigation({
+                      kind: 'map',
+                      projectId: input.projectId,
+                      mapId: map.id,
+                      path: issue.location ?? 'map',
+                    }),
+                  }),
+                );
+              }
+            }
+          }
+        }
+      }
+
+      const hostRegistration = resolveGameModeHostRegistration(
+        activeMode?.readinessCapabilityId,
+      );
+      if (activeMode !== undefined && hostRegistration !== undefined) {
+        for (const map of projectMaps) {
+          for (const issue of hostRegistration.diagnoseMap(
+            map,
+            resolvedCatalog.weapons,
+            resolvedCatalog.objectTypes.map((entry) => entry.objectType),
+          )) {
+            diagnostics.push(
+              readinessDiagnostic({
+                id: `project:${input.projectId}:map:${map.id}:${activeMode.modeId}:${issue.code}`,
+                code: issue.code,
+                severity: 'error',
+                source: 'game-mode',
+                title: issue.title,
+                message: issue.message,
+                projectId: input.projectId,
+                mapId: map.id,
+                path: issue.path,
+                navigation: readinessNavigation({
+                  kind: 'map',
+                  projectId: input.projectId,
+                  mapId: map.id,
+                  path: issue.path,
+                }),
+              }),
+            );
+          }
+        }
+        const models = hostRegistration.resolvePlayerModels(project);
+        if (hostRegistration.hasInvalidAuthoredPlayerModels(project)) {
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:player-model-invalid-roster`,
+              code: 'visual-model.player-model.invalid-ref',
+              severity: 'error',
+              source: 'visual-model',
+              title: 'Fix the authored player-model roster',
+              message:
+                `The authored ${activeMode.label} player-model roster does not match the canonical player-model schema.`,
+              projectId: input.projectId,
+              path: 'playerModels',
+              navigation: readinessNavigation({
+                kind: 'player-model',
+                projectId: input.projectId,
+                path: 'playerModels',
+              }),
+            }),
+          );
+        }
+        const packIndexes = new Map<string, unknown>();
+        yield* Effect.forEach(
+          [...new Set(models.map((model) => String(model.ref.packId)))],
+          (packId) =>
+            assetLibrary
+              .getEditorIndex({ packId: packId as (typeof models)[number]['ref']['packId'] })
+              .pipe(
+                Effect.match({
+                  onFailure: () => undefined,
+                  onSuccess: (result) => {
+                    try {
+                      packIndexes.set(packId, JSON.parse(result.indexJson) as unknown);
+                    } catch {
+                      // A malformed cache is reported as an unavailable referenced pack below.
+                    }
+                  },
+                }),
+              ),
+          { concurrency: 4 },
+        );
+        const visualDiagnostics = diagnoseVisualModelAuthoring({
+          playerModelPolicy: {
+            models,
+            requiredClipKeys: hostRegistration.playerModelPolicy?.requiredClipKeys ?? [],
+            placeholderModelIds: hostRegistration.playerModelPolicy?.placeholderModelIds ?? [],
+          },
+          diagnoseReference: (model) =>
+            diagnosePlayerModelReference(
+              model,
+              packIndexes.get(String(model.ref.packId)) as Parameters<
+                typeof diagnosePlayerModelReference
+              >[1],
+            ),
+        });
+        for (const [index, issue] of visualDiagnostics.entries()) {
+          diagnostics.push(
+            readinessDiagnostic({
+              id: `project:${input.projectId}:visual-model:${issue.modelId ?? 'policy'}:${issue.code}:${index}`,
+              code: `visual-model.${issue.code}`,
+              severity: issue.severity,
+              source: 'visual-model',
+              title:
+                issue.severity === 'error'
+                  ? 'Player model is not runtime-ready'
+                  : 'Player model warning',
+              message: issue.message,
+              projectId: input.projectId,
+              path: issue.path,
+              navigation: readinessNavigation({
+                kind: 'player-model',
+                projectId: input.projectId,
+                ...(issue.modelId === undefined ? {} : { modelId: issue.modelId }),
+                path: issue.path,
+              }),
+            }),
+          );
+        }
+      }
+
+      return { report: makeReadinessReport(input.purpose, diagnostics) };
+    });
+
+  /**
+   * Canonical, bounded asset reference projection. Project/catalog/map/model
+   * state stays in main; the renderer receives exact use sites and navigation
+   * targets without loading every map or asset manifest itself.
+   */
+  const getAssetPackUseSites = (input: {
+    readonly projectId: ProjectId;
+    readonly packId: PackId;
+    readonly limit?: number | undefined;
+  }) =>
+    Effect.gen(function* () {
+      const project = yield* projects.open(input.projectId);
+      const resolvedCatalog = yield* catalog.resolve(input.projectId);
+      const editorIndexResult = yield* assetLibrary.getEditorIndex({ packId: input.packId });
+      const editorIndex = yield* Effect.try({
+        try: () =>
+          JSON.parse(editorIndexResult.indexJson) as Parameters<
+            typeof buildAssetPackUseSites
+          >[0]['editorIndex'],
+        catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+      });
+      const mapOptions = yield* Effect.forEach(
+        project.maps.slice(0, ASSET_USE_SITE_MAP_SCAN_LIMIT),
+        (mapRef) => maps.load(input.projectId, mapRef.id as MapId).pipe(Effect.option),
+        { concurrency: 4 },
+      );
+      const projectMaps = mapOptions.flatMap((entry) =>
+        Option.match(entry, { onNone: () => [], onSome: (map) => [map] }),
+      );
+      const limit = Math.min(
+        ASSET_USE_SITE_RESULT_LIMIT,
+        Math.max(1, Math.trunc(input.limit ?? 100)),
+      );
+      const activeMode = resolveProjectGameMode(project, yield* registry.list());
+      const hostRegistration = resolveGameModeHostRegistration(
+        activeMode?.readinessCapabilityId,
+      );
+      const result = buildAssetPackUseSites({
+        project,
+        packId: input.packId,
+        maps: projectMaps,
+        catalogObjectTypes: resolvedCatalog.objectTypes.map((entry) => entry.objectType),
+        playerModels: hostRegistration?.resolvePlayerModels(project) ?? [],
+        editorIndex,
+        limit,
+        projectMapCount: project.maps.length,
+      });
+      return {
+        projectId: input.projectId,
+        packId: input.packId,
+        useSites: [...result.useSites],
+        total: result.total,
+        scannedMapCount: projectMaps.length,
+        truncated: result.truncated,
+      };
     });
 
   const projectHandlers = handlerBuilder(MainIpcRegistry)
@@ -396,6 +1012,109 @@ const buildHandlers = Effect.gen(function* () {
             ...(engineVersion !== undefined ? { engineVersion } : {}),
           })
           .pipe(Effect.map((projectId) => ({ projectId }))),
+      ),
+    )
+    .add('tileborne:projects:createGame', ({ name, idempotencyKey }) =>
+      ipcCatchAll('tileborne:projects:createGame')(
+        Effect.gen(function* () {
+          const starter = defaultGameModeStarterRegistration();
+          const spec = bundledPluginSpec(starter.pluginId);
+          if (spec === undefined) {
+            return yield* Effect.fail(new Error(`Bundled game-mode plugin is unavailable: ${starter.pluginId}`));
+          }
+          yield* installBundledPluginWithServices(spec, { registry, installer });
+          yield* seedBundledPluginAssetPacksWithServices({ registry, assets });
+
+          let existingProject: ProjectManifest | undefined;
+          for (const summary of yield* projects.list()) {
+            const candidate = yield* projects.open(summary.id);
+            if (starter.readIdempotencyKey(candidate) === idempotencyKey) {
+              existingProject = candidate;
+              break;
+            }
+          }
+
+          const resumed = existingProject !== undefined;
+          const projectId =
+            existingProject?.id ??
+            (yield* projects.create({
+              name,
+              plugins: [
+                new ProjectPluginRef({
+                  id: starter.pluginId as ProjectPluginRef['id'],
+                  version: '*',
+                }),
+              ],
+              assetPacks: starter.assetPacks.map(
+                (pack) => new ProjectAssetPackRef({ id: String(pack.id), version: pack.version }),
+              ),
+              settings: {
+                newGameWizard: {
+                  idempotencyKey,
+                  templateId: starter.templateId,
+                  version: starter.version,
+                  sourcePluginId: starter.pluginId,
+                  completed: false,
+                },
+              },
+            }));
+
+          const opened = existingProject ?? (yield* projects.open(projectId));
+          const withDependencies = new ProjectManifest({
+            ...opened,
+            plugins: opened.plugins.some((plugin) => plugin.id === starter.pluginId)
+              ? opened.plugins
+              : [
+                  ...opened.plugins,
+                  new ProjectPluginRef({
+                    id: starter.pluginId as ProjectPluginRef['id'],
+                    version: '*',
+                  }),
+                ],
+            assetPacks: starter.assetPacks.reduce<readonly ProjectAssetPackRef[]>(
+              (packs, required) =>
+                packs.some((pack) => pack.id === String(required.id))
+                  ? packs
+                  : [
+                      ...packs,
+                      new ProjectAssetPackRef({ id: String(required.id), version: required.version }),
+                    ],
+              opened.assetPacks,
+            ),
+          });
+          yield* projects.save(starter.applyProject(withDependencies, { idempotencyKey }));
+
+          let starterMapId: MapId | undefined;
+          for (const summary of yield* maps.list(projectId)) {
+            const candidate = yield* maps.load(projectId, summary.id);
+            if (
+              candidate.properties.starterTemplateId === starter.templateId &&
+              candidate.properties.starterSeed === idempotencyKey
+            ) {
+              starterMapId = summary.id;
+              break;
+            }
+          }
+          if (starterMapId === undefined) {
+            starterMapId = yield* maps.create(projectId, {
+              width: starter.mapSize.width,
+              height: starter.mapSize.height,
+              properties: {
+                starterTemplateId: starter.templateId,
+                starterSeed: idempotencyKey,
+              },
+            });
+          }
+          yield* maps.save(projectId, starter.createMap(starterMapId, idempotencyKey));
+          const finalized = yield* projects.open(projectId);
+          yield* projects.save(
+            starter.applyProject(finalized, {
+              idempotencyKey,
+              starterMapId,
+            }),
+          );
+          return { projectId, mapId: starterMapId, resumed };
+        }),
       ),
     )
     .add('tileborne:projects:update', ({ project }) =>
@@ -429,6 +1148,244 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:projects:exportArchive', ({ projectId, destinationDirectory }) =>
       ipcCatchAll('tileborne:projects:exportArchive')(
         projects.exportArchive(projectId, destinationDirectory),
+      ),
+    )
+    .build();
+
+  const behaviorSnapshotView = (
+    snapshot: ProjectBehaviorSnapshot,
+  ) => ({
+    projectId: snapshot.projectId,
+    revision: snapshot.revision,
+    trust: snapshot.trust,
+    resources: [...snapshot.resources],
+    useSites: [...snapshot.useSites],
+    diagnostics: [...snapshot.diagnostics],
+  });
+
+  const hotReloadBehaviorAfterSave = (
+    snapshot: ProjectBehaviorSnapshot,
+    behaviorId: BehaviorId,
+  ) => Effect.gen(function* () {
+    const effective = yield* behaviorAuthoringRegistry(snapshot.projectId);
+    const compiled = yield* Effect.tryPromise(() =>
+      compileProjectBehaviorModule(snapshot, effective.registry, behaviorId),
+    );
+    if (!compiled.ok) {
+      const issue = compiled.diagnostics[0];
+      const relativeSourceFileName = issue?.fileName !== undefined && path.isAbsolute(issue.fileName)
+        ? path.relative(snapshot.projectRoot, issue.fileName)
+        : issue?.fileName;
+      const sourceFileName = relativeSourceFileName?.startsWith('..')
+        ? '<external behavior dependency>'
+        : relativeSourceFileName;
+      rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
+        code: issue?.code ?? 'TBBUILD2199',
+        severity: 'error',
+        behaviorId,
+        message: issue?.message ?? 'Behavior compilation failed during hot reload.',
+        suggestion: issue?.suggestion ?? 'Fix the owning behavior source; last-known-good execution remains active.',
+        details: {
+          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
+          ...(issue?.line === undefined ? {} : { line: issue.line }),
+          ...(issue?.column === undefined ? {} : { column: issue.column }),
+          ...(issue?.nodeId === undefined ? {} : { nodeId: String(issue.nodeId) }),
+        },
+      });
+      return;
+    }
+    const resource = snapshot.resources.find((entry) => entry.manifest.id === behaviorId);
+    const artifact = compiled.artifact;
+    yield* Effect.tryPromise(() => hotReloadPlaytestBehavior(snapshot.projectId, {
+      behaviorId: artifact.behaviorId,
+      sourceKind: artifact.sourceKind,
+      modulePath: artifact.modulePath,
+      hash: artifact.hash,
+      code: artifact.code,
+      ...(resource === undefined ? {} : {
+        sourcePath: resource.manifest.source._tag === 'visual'
+          ? resource.manifest.source.definitionPath
+          : resource.manifest.source.sourcePath,
+      }),
+    }));
+  }).pipe(
+    Effect.catch((cause) => Effect.sync(() => {
+      rejectPlaytestBehaviorReload(snapshot.projectId, behaviorId, {
+        code: 'TBBUILD2197',
+        severity: 'error',
+        behaviorId,
+        message: `Hot reload failed before apply: ${cause instanceof Error ? cause.message : String(cause)}`,
+        suggestion: 'The live playtest continues with the last-known-good behavior.',
+      });
+    })),
+  );
+
+  const behaviorHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:behaviors:open', ({ projectId }) =>
+      ipcCatchAll('tileborne:behaviors:open')(
+        projectBehaviors.open(projectId).pipe(
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:createVisual', ({ projectId, label, definition, requiredCapabilities }) =>
+      ipcCatchAll('tileborne:behaviors:createVisual')(
+        projectBehaviors.createVisual(projectId, {
+          label,
+          definition,
+          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+        }).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:saveVisual', ({
+      projectId,
+      behaviorId,
+      expectedRevision,
+      label,
+      definition,
+      requiredCapabilities,
+    }) =>
+      ipcCatchAll('tileborne:behaviors:saveVisual')(
+        projectBehaviors.saveVisual({
+          projectId,
+          behaviorId,
+          expectedRevision,
+          label,
+          definition,
+          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+        }).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:saveTypeScript', ({
+      projectId,
+      behaviorId,
+      expectedRevision,
+      label,
+      source,
+      exportName,
+      requiredCapabilities,
+    }) =>
+      ipcCatchAll('tileborne:behaviors:saveTypeScript')(
+        projectBehaviors.saveTypeScript({
+          projectId,
+          behaviorId,
+          expectedRevision,
+          label,
+          source,
+          ...(exportName === undefined ? {} : { exportName }),
+          ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
+        }).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:convertToTypeScript', ({ projectId, behaviorId, expectedRevision }) =>
+      ipcCatchAll('tileborne:behaviors:convertToTypeScript')(
+        Effect.gen(function* () {
+          const snapshot = yield* projectBehaviors.open(projectId);
+          const resource = snapshot.resources.find(({ manifest }) => manifest.id === behaviorId);
+          if (resource === undefined || resource.kind !== 'visual') {
+            return yield* Effect.fail(new Error(`Visual behavior not found: ${behaviorId}`));
+          }
+          const effective = yield* behaviorAuthoringRegistry(projectId);
+          const source = yield* Effect.try({
+            try: () => generateTypeScriptBehaviorSource({
+              definition: resource.definition,
+              registry: effective.registry,
+              requiredCapabilities: resource.manifest.requiredCapabilities,
+            }),
+            catch: (cause) => cause,
+          });
+          return yield* projectBehaviors.convertVisualToTypeScript({
+            projectId,
+            behaviorId,
+            expectedRevision,
+            source,
+          });
+        }).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.tap((snapshot) => hotReloadBehaviorAfterSave(snapshot, behaviorId)),
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:remove', ({ projectId, behaviorId, expectedRevision, force }) =>
+      ipcCatchAll('tileborne:behaviors:remove')(
+        projectBehaviors.remove(projectId, behaviorId, expectedRevision, force).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'behavior'))),
+          Effect.map((snapshot) => ({ snapshot: behaviorSnapshotView(snapshot) })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:registry', ({ projectId }) =>
+      ipcCatchAll('tileborne:behaviors:registry')(
+        behaviorAuthoringRegistry(projectId).pipe(
+          Effect.map((effective) => ({
+            registry: effective.registry,
+            templates: [...effective.templates],
+            entryOwners: { ...effective.entryOwners },
+            templateOwners: { ...effective.templateOwners },
+          })),
+        ),
+      ),
+    )
+    .add('tileborne:behaviors:references', ({ projectId, kind, query, offset, limit }) =>
+      ipcCatchAll('tileborne:behaviors:references')(
+        Effect.tryPromise({
+          try: () => behaviorReferenceIndex.query(
+            String(projectId),
+            kind,
+            {
+              ...(query === undefined ? {} : { query }),
+              ...(offset === undefined ? {} : { offset }),
+              ...(limit === undefined ? {} : { limit }),
+            },
+            () => Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
+          ),
+          catch: (cause) => new Error('Could not build behavior reference index', { cause }),
+        }).pipe(Effect.map((page) => ({ kind, ...page }))),
+      ),
+    )
+    .add('tileborne:behaviors:resolveReferences', ({ projectId, references }) =>
+      ipcCatchAll('tileborne:behaviors:resolveReferences')(
+        Effect.gen(function* () {
+          if (references.length > 64) {
+            return yield* Effect.fail(new Error('At most 64 behavior references can be resolved at once'));
+          }
+          const byKind = new Map<BehaviorReferenceKind, BehaviorReference[]>();
+          for (const reference of references) {
+            const bucket = byKind.get(reference._tag);
+            if (bucket === undefined) byKind.set(reference._tag, [reference]);
+            else bucket.push(reference);
+          }
+          const resolved = yield* Effect.tryPromise({
+            try: async () => {
+              const options: IndexedBehaviorReferenceOption[] = [];
+              const missing: BehaviorReference[] = [];
+              await Promise.all([...byKind].map(async ([kind, requested]) => {
+                const indexed = await cachedBehaviorReferenceOptions(projectId, kind);
+                const byId = new Map(indexed.map((option) => [option.id, option]));
+                for (const reference of requested) {
+                  const option = byId.get(behaviorReferenceId(reference));
+                  if (option === undefined) missing.push(reference);
+                  else options.push(option);
+                }
+              }));
+              return { options, missing };
+            },
+            catch: (cause) => new Error('Could not resolve behavior references', { cause }),
+          });
+          return resolved;
+        }),
       ),
     )
     .build();
@@ -486,7 +1443,11 @@ const buildHandlers = Effect.gen(function* () {
                     objectCount: result.objectCount,
                     ...(result.packId === undefined ? {} : { packId: result.packId }),
                   })
-                : Effect.fail(new Error('Expected a Tiled map import result. Use the import wizard for asset packs.')),
+                : Effect.fail(
+                    new Error(
+                      'Expected a Tiled map import result. Use the import wizard for asset packs.',
+                    ),
+                  ),
             ),
           ),
       ),
@@ -511,9 +1472,7 @@ const buildHandlers = Effect.gen(function* () {
 
   const tiledImportHandlers = handlerBuilder(MainIpcRegistry)
     .add('tileborne:tiled-import:scan', ({ projectId, sourcePath }) =>
-      ipcCatchAll('tileborne:tiled-import:scan')(
-        maps.analyzeTiledImport(projectId, sourcePath),
-      ),
+      ipcCatchAll('tileborne:tiled-import:scan')(maps.analyzeTiledImport(projectId, sourcePath)),
     )
     .add('tileborne:tiled-import:plan', ({ projectId, sourcePath, profile, hints }) =>
       ipcCatchAll('tileborne:tiled-import:plan')(
@@ -605,7 +1564,8 @@ const buildHandlers = Effect.gen(function* () {
                     hasTileborneManifest: false,
                     tiledMapCount: 0,
                     tiledTilesetCount: 0,
-                    message: 'Detected a sprite sheet image. Open the Sprite/Animation Studio to slice it.',
+                    message:
+                      'Detected a sprite sheet image. Open the Sprite/Animation Studio to slice it.',
                     preferredKind: 'image' as const,
                   },
                 };
@@ -626,7 +1586,7 @@ const buildHandlers = Effect.gen(function* () {
                     ? 'Detected a Tiled map file.'
                     : isTiledTileset
                       ? 'Detected a standalone Tiled tileset file.'
-                    : 'Choose a Tileborne pack folder or Tiled source file.',
+                      : 'Choose a Tileborne pack folder or Tiled source file.',
                   ...(isTiledSource ? { preferredKind: 'tiled-source' as const } : {}),
                 },
               };
@@ -818,8 +1778,13 @@ const buildHandlers = Effect.gen(function* () {
     )
     .add('tileborne:asset-library:getEditorIndex', (request) =>
       ipcCatchAll('tileborne:asset-library:getEditorIndex')(
-        assetLibrary.getEditorIndex({ packId: request.packId }).pipe(Effect.map((result) => result)),
+        assetLibrary
+          .getEditorIndex({ packId: request.packId })
+          .pipe(Effect.map((result) => result)),
       ),
+    )
+    .add('tileborne:asset-library:getPackUseSites', (request) =>
+      ipcCatchAll('tileborne:asset-library:getPackUseSites')(getAssetPackUseSites(request)),
     )
     .build();
 
@@ -879,16 +1844,55 @@ const buildHandlers = Effect.gen(function* () {
       ipcCatchAll('tileborne:catalog:validate')(catalog.validate(projectId)),
     )
     .add('tileborne:catalog:import', ({ projectId, catalogJson }) =>
-      ipcCatchAll('tileborne:catalog:import')(catalog.importCatalog(projectId, catalogJson)),
+      ipcCatchAll('tileborne:catalog:import')(
+        catalog.importCatalog(projectId, catalogJson).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
     )
     .add('tileborne:catalog:export', ({ projectId }) =>
       ipcCatchAll('tileborne:catalog:export')(catalog.exportCatalog(projectId)),
     )
     .add('tileborne:catalog:upsertType', ({ projectId, objectTypeJson }) =>
-      ipcCatchAll('tileborne:catalog:upsertType')(catalog.upsertType(projectId, objectTypeJson)),
+      ipcCatchAll('tileborne:catalog:upsertType')(
+        catalog.upsertType(projectId, objectTypeJson).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
     )
     .add('tileborne:catalog:removeType', ({ projectId, objectTypeId }) =>
-      ipcCatchAll('tileborne:catalog:removeType')(catalog.removeType(projectId, objectTypeId)),
+      ipcCatchAll('tileborne:catalog:removeType')(
+        catalog.removeType(projectId, objectTypeId).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
+    )
+    .add('tileborne:catalog:upsertDefinition', ({ projectId, kind, definitionJson, label }) =>
+      ipcCatchAll('tileborne:catalog:upsertDefinition')(
+        catalog.upsertDefinition(projectId, kind, definitionJson, label).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
+    )
+    .add('tileborne:catalog:duplicateDefinition', ({ projectId, kind, definitionId, label }) =>
+      ipcCatchAll('tileborne:catalog:duplicateDefinition')(
+        catalog.duplicateDefinition(projectId, kind, definitionId, label).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
+    )
+    .add('tileborne:catalog:removeDefinition', ({ projectId, kind, definitionId }) =>
+      ipcCatchAll('tileborne:catalog:removeDefinition')(
+        catalog.removeDefinition(projectId, kind, definitionId).pipe(
+          Effect.tap(() => Effect.sync(() => behaviorReferenceIndex.invalidate(String(projectId), 'catalog'))),
+        ),
+      ),
+    )
+    .build();
+
+  const readinessHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:readiness:check', (request) =>
+      ipcCatchAll('tileborne:readiness:check')(checkReadiness(request)),
     )
     .build();
 
@@ -910,10 +1914,10 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:plugins:installBundledBattleRoyale', () =>
       ipcCatchAll('tileborne:plugins:installBundledBattleRoyale')(
         Effect.gen(function* () {
-          const spec = bundledPluginSpec(BATTLE_ROYALE_PLUGIN_ID);
+          const spec = bundledBattleRoyalePluginSpec();
           if (spec === undefined) {
             return yield* Effect.die(
-              new Error(`bundled plugin spec missing for ${BATTLE_ROYALE_PLUGIN_ID}`),
+              new Error('bundled plugin spec missing for the requested first-party mode'),
             );
           }
           const plugin = yield* installBundledPluginWithServices(spec, { registry, installer });
@@ -975,13 +1979,13 @@ const buildHandlers = Effect.gen(function* () {
             return {
               panels: enabledPlugins.flatMap((plugin) =>
                 Option.getOrElse(plugin.manifest.contributes.panels, () => []).map((contribution) =>
-                  toPluginPanelContributionView(plugin, contribution)
-                )
+                  toPluginPanelContributionView(plugin, contribution),
+                ),
               ),
               tools: enabledPlugins.flatMap((plugin) =>
                 Option.getOrElse(plugin.manifest.contributes.tools, () => []).map((contribution) =>
-                  toPluginToolContributionView(plugin, contribution)
-                )
+                  toPluginToolContributionView(plugin, contribution),
+                ),
               ),
               gameModes,
             };
@@ -1057,12 +2061,18 @@ const buildHandlers = Effect.gen(function* () {
   const buildHandlersMap = handlerBuilder(MainIpcRegistry)
     .add('tileborne:builds:build', ({ projectId, target }) =>
       ipcCatchAll('tileborne:builds:build')(
-        builds
-          .build(projectId, {
+        Effect.gen(function* () {
+          const readiness = yield* checkReadiness({ projectId, purpose: 'build' });
+          yield* Effect.try({
+            try: () => assertExecutionReadiness('builds:build', readiness.report),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+          const jobId = yield* builds.build(projectId, {
             target: target !== undefined ? Option.some(target) : Option.none(),
             delayMs: Option.none(),
-          })
-          .pipe(Effect.map((jobId) => ({ jobId }))),
+          });
+          return { jobId };
+        }),
       ),
     )
     .add('tileborne:builds:getBuild', ({ buildId }) =>
@@ -1097,6 +2107,177 @@ const buildHandlers = Effect.gen(function* () {
     )
     .add('tileborne:builds:deleteBuild', ({ buildId }) =>
       ipcCatchAll('tileborne:builds:deleteBuild')(builds.deleteBuild(buildId).pipe(Effect.as({}))),
+    )
+    .build();
+
+  /**
+   * Creator-facing ship orchestration. This is intentionally a thin owner over
+   * canonical readiness + BuildService.buildGame: the renderer never assembles
+   * artifacts and the desktop never shells out to the CLI.
+   */
+  const shipHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:ship:start', ({ projectId, startupMapId, target }) =>
+      ipcCatchAll('tileborne:ship:start')(
+        Effect.gen(function* () {
+          const project = yield* projects.open(projectId);
+          if (!project.maps.some((map) => map.id === startupMapId)) {
+            return yield* Effect.fail(
+              new Error(`Startup map is not part of this project: ${startupMapId}`),
+            );
+          }
+
+          const configuredProject = new ProjectManifest({
+            ...project,
+            settings: {
+              ...(project.settings ?? {}),
+              [PROJECT_STARTUP_MAP_SETTINGS_KEY]: startupMapId,
+              [PROJECT_SHIP_TARGET_SETTINGS_KEY]: target,
+            },
+          });
+          yield* projects.save(configuredProject);
+
+          const readiness = yield* checkReadiness({
+            projectId,
+            mapId: startupMapId,
+            purpose: 'build',
+          });
+          yield* Effect.try({
+            try: () => assertExecutionReadiness('ship:start', readiness.report),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+
+          const installed = yield* registry.list();
+          const activeMode = resolveActiveGameMode(
+            discoverGameModes(
+              installed
+                .filter((plugin) => plugin.enabled)
+                .map((plugin) => ({
+                  pluginId: plugin.id,
+                  contributions: plugin.manifest.contributes,
+                })),
+            ),
+            readActiveGameModeSetting(configuredProject.settings) as GameModeId | undefined,
+          );
+          if (activeMode === undefined) {
+            return yield* Effect.fail(new Error('No active game mode is available to ship.'));
+          }
+
+          const jobIdReady = yield* Deferred.make<JobId>();
+          const run = Effect.gen(function* () {
+            const jobId = yield* Deferred.await(jobIdReady);
+            yield* jobs.report(jobId, {
+              progress: 0.15,
+              message: `Readiness passed for startup map ${startupMapId}.`,
+            });
+            yield* jobs.report(jobId, {
+              progress: 0.3,
+              message: `Assembling canonical ${target} game artifact.`,
+            });
+            const artifact = yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: String(activeMode.pluginId),
+                target,
+                outputDirectory: Option.none(),
+                assetPackIds:
+                  configuredProject.assetPacks.length > 0
+                    ? Option.some(configuredProject.assetPacks.map((pack) => pack.id))
+                    : Option.none(),
+                siteName: Option.some(configuredProject.name),
+                projectId: Option.some(String(projectId)),
+                mapIds: Option.some([String(startupMapId)]),
+              }),
+            );
+            yield* jobs.report(jobId, {
+              progress: 0.9,
+              message: `Artifact verified: ${artifact.buildId}.`,
+            });
+            return {
+              projectId,
+              startupMapId,
+              pluginId: artifact.pluginId,
+              target: artifact.target,
+              directory: artifact.directory,
+              manifestPath: artifact.manifestPath,
+              bundlePath: artifact.bundlePath,
+              buildId: artifact.buildId,
+              runtimeBuildId: artifact.runtimeBuildId,
+              integrityHash: artifact.integrityHash,
+              createdAt: artifact.createdAt,
+              files: [...artifact.files],
+              fileHashes: { ...artifact.fileHashes },
+              previewCommand: `tileborne game serve --dir "${artifact.directory}"`,
+            };
+          });
+          const jobId = yield* jobs.create({ name: `ship ${projectId}`, run });
+          yield* Deferred.succeed(jobIdReady, jobId);
+          return { jobId };
+        }),
+      ),
+    )
+    .add('tileborne:ship:launchPreview', ({ artifact }) =>
+      ipcCatchAll('tileborne:ship:launchPreview')(
+        Effect.gen(function* () {
+          yield* builds.verifyGameArtifact(new GameBuildArtifact({
+            pluginId: artifact.pluginId,
+            target: artifact.target,
+            directory: artifact.directory,
+            manifestPath: artifact.manifestPath,
+            bundlePath: artifact.bundlePath,
+            buildId: artifact.buildId,
+            runtimeBuildId: artifact.runtimeBuildId,
+            integrityHash: artifact.integrityHash,
+            createdAt: artifact.createdAt,
+            files: artifact.files,
+            fileHashes: artifact.fileHashes,
+          }));
+          return yield* Effect.tryPromise({
+          try: async () => {
+            const host = await startDesktopLocalGameHost(undefined, artifact.directory);
+            const response = await fetch(`${host.baseUrl}/rooms/create`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ mapId: artifact.startupMapId }),
+            });
+            const payload = (await response.json()) as {
+              readonly roomId?: unknown;
+              readonly error?: unknown;
+            };
+            if (!response.ok || typeof payload.roomId !== 'string') {
+              throw new Error(
+                typeof payload.error === 'string'
+                  ? payload.error
+                  : `Packaged preview room failed with HTTP ${response.status}.`,
+              );
+            }
+            createPlaytestJoinWindow({
+              projectId: artifact.projectId,
+              mapId: artifact.startupMapId,
+              baseUrl: host.baseUrl,
+              roomId: payload.roomId,
+            });
+            return { baseUrl: host.baseUrl, roomId: payload.roomId };
+          },
+          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+        }),
+      ),
+    )
+    .add('tileborne:ship:openArtifact', ({ directory }) =>
+      ipcCatchAll('tileborne:ship:openArtifact')(
+        Effect.gen(function* () {
+          yield* builds.verifyGameArtifact(directory);
+          return yield* Effect.tryPromise({
+          try: async () => {
+            const error = await shell.openPath(directory);
+            if (error.length > 0) {
+              throw new Error(error);
+            }
+            return { opened: true };
+          },
+          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
+        }),
+      ),
     )
     .build();
 
@@ -1148,15 +2329,17 @@ const buildHandlers = Effect.gen(function* () {
     .build();
 
   const tiledSourceRulesHandlers = handlerBuilder(MainIpcRegistry)
-    .add('tileborne:tiled-source-rules:compilePreview', ({ manifestId, manifest, includeDiagnostics }) =>
-      compileTiledSourceRulePipeline(manifest).pipe(
-        Effect.map((pipeline) => ({
-          manifestId,
-          sourceDigest: pipeline.sourceDigest,
-          pipeline,
-          diagnostics: includeDiagnosticsEnabled(includeDiagnostics) ? pipeline.diagnostics : [],
-        })),
-      ),
+    .add(
+      'tileborne:tiled-source-rules:compilePreview',
+      ({ manifestId, manifest, includeDiagnostics }) =>
+        compileTiledSourceRulePipeline(manifest).pipe(
+          Effect.map((pipeline) => ({
+            manifestId,
+            sourceDigest: pipeline.sourceDigest,
+            pipeline,
+            diagnostics: includeDiagnosticsEnabled(includeDiagnostics) ? pipeline.diagnostics : [],
+          })),
+        ),
     )
     .add('tileborne:tiled-source-rules:runtimeApply', ({ manifestId, pipeline, input }) =>
       projectTiledSourceRuleApplication(pipeline, input).pipe(
@@ -1173,6 +2356,11 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:playtest:start', ({ projectId, mapId, selectedPlayerModelId }) =>
       ipcCatchAll('tileborne:playtest:start')(
         Effect.gen(function* () {
+          const readiness = yield* checkReadiness({ projectId, mapId, purpose: 'playtest' });
+          yield* Effect.try({
+            try: () => assertExecutionReadiness('playtest:start', readiness.report),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          });
           const session = yield* playtest.start(projectId, mapId);
           const artifactDirectory = Option.getOrUndefined(session.artifactDirectory);
           if (artifactDirectory && session.activePlugins.length > 0) {
@@ -1185,15 +2373,23 @@ const buildHandlers = Effect.gen(function* () {
             const activeInstall = pluginInstalls.find(
               (install) => install.pluginId === activePluginId,
             );
-            if (pluginInstalls.length > 0 && activePluginId !== undefined && activeInstall !== undefined) {
+            if (
+              pluginInstalls.length > 0 &&
+              activePluginId !== undefined &&
+              activeInstall !== undefined
+            ) {
               const project = yield* projects.open(projectId);
-              const playerModels = session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)
-                ? resolveBattleRoyalePlayerModels(project)
-                : [];
-              if (session.activePlugins.includes(BATTLE_ROYALE_PLUGIN_ID)) {
+              const activeMode = resolveProjectGameMode(project, installed);
+              const hostRegistration = resolveGameModeHostRegistration(
+                activeMode?.readinessCapabilityId,
+              );
+              const playerModels = hostRegistration?.resolvePlayerModels(project) ?? [];
+              if (hostRegistration?.requiresPlayerModel === true) {
                 if (playerModels.length === 0) {
                   yield* playtest.stop(session.id).pipe(Effect.catch(() => Effect.void));
-                  yield* Effect.fail(new Error('Battle Royale playtest requires at least one valid player model.'));
+                  yield* Effect.fail(
+                    new Error(`${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`),
+                  );
                 }
                 if (
                   selectedPlayerModelId !== undefined &&
@@ -1201,7 +2397,9 @@ const buildHandlers = Effect.gen(function* () {
                 ) {
                   yield* playtest.stop(session.id).pipe(Effect.catch(() => Effect.void));
                   yield* Effect.fail(
-                    new Error(`Selected Battle Royale player model does not exist: ${selectedPlayerModelId}`),
+                    new Error(
+                      `Selected ${activeMode?.label ?? 'game-mode'} player model does not exist: ${selectedPlayerModelId}`,
+                    ),
                   );
                 }
               }
@@ -1230,6 +2428,7 @@ const buildHandlers = Effect.gen(function* () {
                 try: () =>
                   startPlaytestRuntimeHost({
                     sessionId: session.id,
+                    projectId,
                     packageDirectory: artifactDirectory,
                     pluginInstalls,
                     ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
@@ -1274,6 +2473,30 @@ const buildHandlers = Effect.gen(function* () {
         ),
       ),
     )
+    .add('tileborne:playtest:behaviorDebugInspect', ({ sessionId }) =>
+      ipcCatchAll('tileborne:playtest:behaviorDebugInspect')(
+        Effect.try({
+          try: () => {
+            const snapshot = getPlaytestBehaviorDebugSnapshot(sessionId);
+            if (snapshot === undefined) {
+              throw new Error(`No behavior runtime is active for ${sessionId}`);
+            }
+            return { snapshot: { ...snapshot, sessionId } };
+          },
+          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+        }),
+      ),
+    )
+    .add('tileborne:playtest:behaviorDebugControl', ({ sessionId, command }) =>
+      ipcCatchAll('tileborne:playtest:behaviorDebugControl')(
+        Effect.tryPromise({
+          try: async () => ({
+            snapshot: { ...await controlPlaytestBehaviorDebug(sessionId, command), sessionId },
+          }),
+          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+        }),
+      ),
+    )
     .build();
 
   const runtimeHandlers = handlerBuilder(MainIpcRegistry)
@@ -1293,90 +2516,124 @@ const buildHandlers = Effect.gen(function* () {
         }).pipe(Effect.as({})),
       ),
     )
-    .add('tileborne:runtime:prepareLocalRoomArtifact', ({ projectId, mapId, selectedPlayerModelId }) =>
-      ipcCatchAll('tileborne:runtime:prepareLocalRoomArtifact')(
-        Effect.gen(function* () {
-          const project = yield* projects.open(projectId);
-          const installed = yield* registry.list();
-          const activePlugins = activePlaytestPluginIds(
-            installed.map((plugin) => ({
-              pluginId: plugin.id,
-              enabled: plugin.enabled,
-              contributions: plugin.manifest.contributes,
-            })),
-            readActiveGameModeSetting(project.settings) as GameModeId | undefined,
-          );
-          if (activePlugins.length !== 1) {
-            return yield* Effect.fail(
-              new Error('Select one active game mode before hosting a multiplayer playtest.'),
+    .add(
+      'tileborne:runtime:prepareLocalRoomArtifact',
+      ({ projectId, mapId, selectedPlayerModelId }) =>
+        ipcCatchAll('tileborne:runtime:prepareLocalRoomArtifact')(
+          Effect.gen(function* () {
+            const readiness = yield* checkReadiness({ projectId, mapId, purpose: 'playtest' });
+            yield* Effect.try({
+              try: () =>
+                assertExecutionReadiness('runtime:prepareLocalRoomArtifact', readiness.report),
+              catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+            });
+            const project = yield* projects.open(projectId);
+            const installed = yield* registry.list();
+            const activePlugins = activePlaytestPluginIds(
+              installed.map((plugin) => ({
+                pluginId: plugin.id,
+                enabled: plugin.enabled,
+                contributions: plugin.manifest.contributes,
+              })),
+              readActiveGameModeSetting(project.settings) as GameModeId | undefined,
             );
-          }
-          const activePluginId = activePlugins[0];
-          if (activePluginId === undefined) {
-            return yield* Effect.fail(
-              new Error('Select one active game mode before hosting a multiplayer playtest.'),
+            if (activePlugins.length !== 1) {
+              return yield* Effect.fail(
+                new Error('Select one active game mode before hosting a multiplayer playtest.'),
+              );
+            }
+            const activePluginId = activePlugins[0];
+            if (activePluginId === undefined) {
+              return yield* Effect.fail(
+                new Error('Select one active game mode before hosting a multiplayer playtest.'),
+              );
+            }
+            const activeMode = resolveProjectGameMode(project, installed);
+            const hostRegistration = resolveGameModeHostRegistration(
+              activeMode?.readinessCapabilityId,
             );
-          }
-          if (activePluginId !== BATTLE_ROYALE_PLUGIN_ID) {
-            return yield* Effect.fail(
-              new Error(`Local multiplayer host supports Battle Royale runtime only, not ${activePluginId}.`),
+            if (hostRegistration?.supportsLocalMultiplayer !== true) {
+              return yield* Effect.fail(
+                new Error(
+                  `Local multiplayer host is not registered for ${activeMode?.label ?? activePluginId}.`,
+                ),
+              );
+            }
+            const plugin = installed.find((entry) => entry.id === activePluginId);
+            if (!plugin) {
+              return yield* Effect.fail(
+                new Error(`Active game-mode plugin is not installed: ${activePluginId}`),
+              );
+            }
+            const activePlugin = plugin;
+            const playerModels = hostRegistration.resolvePlayerModels(project);
+            if (playerModels.length === 0) {
+              return yield* Effect.fail(
+                new Error(`${activeMode?.label ?? 'Active mode'} playtest requires at least one valid player model.`),
+              );
+            }
+            if (
+              selectedPlayerModelId !== undefined &&
+              !playerModels.some((model) => model.id === selectedPlayerModelId)
+            ) {
+              return yield* Effect.fail(
+                new Error(
+                  `Selected ${activeMode?.label ?? 'game-mode'} player model does not exist: ${selectedPlayerModelId}`,
+                ),
+              );
+            }
+            const artifact = yield* playtest.assembleArtifact({
+              projectId,
+              mapId,
+              plugins: activePlugins,
+            });
+            // ADR-0030: the multiplayer room boots from the SAME typed runtime
+            // map package the single-player playtest host boots from.
+            yield* assemblePlaytestMapPackage({
+              projectId,
+              mapId,
+              activePluginId,
+              pluginRootPath: activePlugin.rootPath,
+              playerModels,
+              outputDirectory: artifact.directory,
+            }).pipe(
+              Effect.catch((error) =>
+                Effect.fail(new Error(error instanceof Error ? error.message : String(error))),
+              ),
             );
-          }
-          const plugin = installed.find((entry) => entry.id === activePluginId);
-          if (!plugin) {
-            return yield* Effect.fail(new Error(`Active game-mode plugin is not installed: ${activePluginId}`));
-          }
-          const activePlugin = plugin;
-          const playerModels = resolveBattleRoyalePlayerModels(project);
-          if (playerModels.length === 0) {
-            return yield* Effect.fail(new Error('Battle Royale playtest requires at least one valid player model.'));
-          }
-          if (
-            selectedPlayerModelId !== undefined &&
-            !playerModels.some((model) => model.id === selectedPlayerModelId)
-          ) {
-            return yield* Effect.fail(
-              new Error(`Selected Battle Royale player model does not exist: ${selectedPlayerModelId}`),
-            );
-          }
-          const artifact = yield* playtest.assembleArtifact({
-            projectId,
-            mapId,
-            plugins: activePlugins,
-          });
-          // ADR-0030: the multiplayer room boots from the SAME typed runtime
-          // map package the single-player playtest host boots from.
-          yield* assemblePlaytestMapPackage({
-            projectId,
-            mapId,
-            activePluginId,
-            pluginRootPath: activePlugin.rootPath,
-            playerModels,
-            outputDirectory: artifact.directory,
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.fail(new Error(error instanceof Error ? error.message : String(error))),
-            ),
-          );
-          const mapPackage = yield* Effect.tryPromise({
-            try: () => loadPlaytestMapPackage(artifact.directory),
-            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
-          });
-          return {
-            mapId,
-            mapPackage: toJsonObject(mapPackage),
-            // The hosting player joins first and always takes the player-1 slot.
-            playerModelSelections:
-              selectedPlayerModelId === undefined
-                ? []
-                : [{ playerId: 'player-1', modelId: selectedPlayerModelId }],
-          };
-        }),
-      ),
+            const mapPackage = yield* Effect.tryPromise({
+              try: () => loadPlaytestMapPackage(artifact.directory),
+              catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+            });
+            return {
+              mapId,
+              mapPackage: toJsonObject(mapPackage),
+              // The hosting player joins first and always takes the player-1 slot.
+              playerModelSelections:
+                selectedPlayerModelId === undefined
+                  ? []
+                  : [{ playerId: 'player-1', modelId: selectedPlayerModelId }],
+            };
+          }),
+        ),
     )
     .add(
       'tileborne:runtime:playtestInput',
-      ({ sessionId, playerId, tick, seq, dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot, active }) =>
+      ({
+        sessionId,
+        playerId,
+        tick,
+        seq,
+        dir,
+        shoot,
+        reload,
+        interact,
+        drop,
+        abilities,
+        aimDeg,
+        swapSlot,
+        active,
+      }) =>
         ipcCatchAll('tileborne:runtime:playtestInput')(
           Effect.sync(() => {
             const resolvedPlayerId = playerId ?? 'player-1';
@@ -1570,16 +2827,19 @@ const buildHandlers = Effect.gen(function* () {
 
   const handlers = defineHandlers(MainIpcRegistry, {
     ...projectHandlers,
+    ...behaviorHandlers,
     ...mapHandlers,
     ...tiledImportHandlers,
     ...assetHandlers,
     ...assetLibraryHandlers,
     ...workingPaletteHandlers,
     ...catalogHandlers,
+    ...readinessHandlers,
     ...pluginHandlers,
     ...jobHandlers,
     ...logsHandlers,
     ...buildHandlersMap,
+    ...shipHandlers,
     ...exportHandlers,
     ...tiledSourceRulesHandlers,
     ...playtestHandlers,
@@ -1601,6 +2861,7 @@ const buildHandlers = Effect.gen(function* () {
     playtest,
     deploy,
     support,
+    behaviorReferenceIndex,
   };
 });
 
@@ -1622,6 +2883,7 @@ export const registerMainIpc = Effect.gen(function* () {
     playtest,
     deploy,
     support,
+    behaviorReferenceIndex,
   } = yield* buildHandlers;
   const logger = yield* LoggerService;
 
@@ -1642,7 +2904,8 @@ export const registerMainIpc = Effect.gen(function* () {
             void Effect.runPromise(emit({ sessionId, frame }));
           });
         }),
-      'tileborne:projects:changed': (emit) => wireTrigger(projects.subscribe, emit),
+      'tileborne:projects:changed': (emit) =>
+        wireTrigger(projects.subscribe, emit, () => behaviorReferenceIndex.invalidate()),
       'tileborne:maps:changed': (emit) =>
         wireTrigger(
           Stream.flatMap(projects.subscribe, (list) => {
@@ -1657,12 +2920,18 @@ export const registerMainIpc = Effect.gen(function* () {
             );
           }),
           emit,
+          () => behaviorReferenceIndex.invalidate(),
         ),
-      'tileborne:assets:changed': (emit) => wireTrigger(assets.subscribe, emit),
+      'tileborne:assets:changed': (emit) =>
+        wireTrigger(assets.subscribe, emit, () => behaviorReferenceIndex.invalidate()),
       'tileborne:assets:capabilityRefreshed': (emit) =>
         Stream.runForEach(assets.subscribeCapability, emit),
       'tileborne:plugins:changed': (emit) =>
-        wireTrigger(registry.subscribe.pipe(Stream.map(() => triggerPayload)), emit),
+        wireTrigger(
+          registry.subscribe.pipe(Stream.map(() => triggerPayload)),
+          emit,
+          () => behaviorReferenceIndex.invalidate(),
+        ),
       'tileborne:jobs:changed': (emit) =>
         Effect.forever(
           Effect.gen(function* () {

@@ -52,6 +52,7 @@ if (!gotSingleInstanceLock) {
   const startupReporter = createStartupReporter(startupStatus);
   let startupController: DesktopStartupController | undefined;
   let quitting = false;
+  let quitRequested = false;
   let exited = false;
 
   // Hard cap on shutdown. A stuck cleanup must never keep the process — and the
@@ -75,6 +76,17 @@ if (!gotSingleInstanceLock) {
   };
 
   const unregisterStartupIpc = registerStartupIpc(startupStatus);
+
+  const closeLifecycleHooks = {
+    onCloseCancelled: () => {
+      quitRequested = false;
+    },
+    onClosed: () => {
+      if (quitRequested && BrowserWindow.getAllWindows().length === 0) {
+        beginShutdown();
+      }
+    },
+  } as const;
 
   const failStartup = (message: string, cause: unknown): void => {
     const errorMessage = cause instanceof Error ? cause.message : String(cause);
@@ -108,6 +120,7 @@ if (!gotSingleInstanceLock) {
           `${errorDescription} (${errorCode}) while loading ${validatedURL}`,
         );
       },
+      ...closeLifecycleHooks,
     });
 
     void import("./startup.js")
@@ -124,7 +137,7 @@ if (!gotSingleInstanceLock) {
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow();
+        createMainWindow(closeLifecycleHooks);
       }
     });
   }).catch((cause) => {
@@ -132,8 +145,8 @@ if (!gotSingleInstanceLock) {
   });
 
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      app.quit();
+    if (quitRequested || process.platform !== "darwin") {
+      beginShutdown();
     }
   });
 
@@ -148,12 +161,11 @@ if (!gotSingleInstanceLock) {
     app.exit(code);
   };
 
-  app.on("before-quit", (event) => {
+  const beginShutdown = (): void => {
     if (quitting) {
       return;
     }
     quitting = true;
-    event.preventDefault();
 
     const forceExit = setTimeout(() => {
       console.warn(
@@ -177,6 +189,22 @@ if (!gotSingleInstanceLock) {
         finalizeExit(0);
       },
     );
+  };
+
+  app.on("before-quit", (event) => {
+    if (quitting) {
+      return;
+    }
+    event.preventDefault();
+    const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed());
+    if (windows.length === 0) {
+      beginShutdown();
+      return;
+    }
+    quitRequested = true;
+    for (const window of windows) {
+      window.close();
+    }
   });
 
   // Translate process signals (e.g. electron-forge `rs` restart sends SIGTERM,

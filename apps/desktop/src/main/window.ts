@@ -1,7 +1,14 @@
 import path from "node:path";
 import process from "node:process";
+import { randomUUID } from "node:crypto";
 
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
+
+import {
+  APP_CLOSE_REQUESTED_CHANNEL,
+  APP_CLOSE_RESOLVED_CHANNEL,
+  type AppCloseResolution,
+} from "../shared/app-lifecycle.js";
 
 import {
   installContentSecurityPolicy,
@@ -31,6 +38,8 @@ export interface MainWindowLifecycleHooks {
     readonly errorDescription: string;
     readonly validatedURL: string;
   }) => void;
+  readonly onCloseCancelled?: () => void;
+  readonly onClosed?: () => void;
 }
 
 export interface CreateMainWindowOptions extends MainWindowLifecycleHooks {
@@ -112,6 +121,46 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+  let rendererLoaded = false;
+  let closeAllowed = false;
+  let pendingCloseRequestId: string | undefined;
+
+  const resolveClose = (
+    event: Electron.IpcMainEvent,
+    resolution: AppCloseResolution,
+  ): void => {
+    if (
+      event.sender !== mainWindow.webContents ||
+      resolution.requestId !== pendingCloseRequestId
+    ) {
+      return;
+    }
+    pendingCloseRequestId = undefined;
+    if (!resolution.allow) {
+      resolvedOptions.onCloseCancelled?.();
+      return;
+    }
+    closeAllowed = true;
+    mainWindow.close();
+  };
+  ipcMain.on(APP_CLOSE_RESOLVED_CHANNEL, resolveClose);
+  mainWindow.on('close', (event) => {
+    if (closeAllowed || !rendererLoaded || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+    event.preventDefault();
+    if (pendingCloseRequestId !== undefined) {
+      return;
+    }
+    pendingCloseRequestId = randomUUID();
+    mainWindow.webContents.send(APP_CLOSE_REQUESTED_CHANNEL, {
+      requestId: pendingCloseRequestId,
+    });
+  });
+  mainWindow.once('closed', () => {
+    ipcMain.removeListener(APP_CLOSE_RESOLVED_CHANNEL, resolveClose);
+    resolvedOptions.onClosed?.();
+  });
 
   if (process.platform === "darwin" && !app.isPackaged) {
     app.dock?.setIcon(iconPath);
@@ -131,6 +180,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     resolvedOptions.onRendererLoadStart?.();
   });
   mainWindow.webContents.once("did-finish-load", () => {
+    rendererLoaded = true;
     resolvedOptions.onRendererLoaded?.();
   });
   mainWindow.webContents.once(

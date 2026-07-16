@@ -237,4 +237,22 @@ describe('buildValidationReport', () => {
     expect(unknownRef?.refKind).toBe('loot-source.lootTableId');
     expect(unknownRef?.missingId).toBe(danglingLoot);
   });
+
+  it('reports creator-actionable invalid item references and weights in loot tables', () => {
+    const missingItem = makeItemDefinitionId(UUID('91'));
+    const table = new LootTable({
+      id: makeLootTableId(UUID('92')),
+      label: 'Broken drops',
+      entries: [{ itemId: missingItem, tier: 'rare', weight: 0 }],
+    });
+    const report = buildValidationReport([
+      { contributionId: 'project-catalog-fragment', catalog: catalog('c', [], [table]), origin: 'project' },
+    ]);
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'unknown-reference', refKind: 'item', missingId: String(missingItem) }),
+      expect.objectContaining({ kind: 'coherence', message: expect.stringContaining('positive drop weight') }),
+    ]));
+  });
 });

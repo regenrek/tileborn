@@ -263,6 +263,9 @@ export const buildValidationReport = (
   }
 
   const lootIds = lootTableUnion(sources);
+  const itemIds = new Set(
+    sources.flatMap((source) => Option.getOrElse(source.catalog.items, () => []).map((item) => String(item.id))),
+  );
   const typeIds: ReadonlySet<string> = new Set([...seenTypeIds].map(String));
   for (const source of sources) {
     for (const objectType of source.catalog.objectTypes) {
@@ -290,11 +293,29 @@ export const buildValidationReport = (
       }
       issues.push(...weaponRefIssues(objectType, typeIds, deps?.weaponIds));
     }
+    for (const table of Option.getOrElse(source.catalog.lootTables, () => [])) {
+      table.entries.forEach((entry, index) => {
+        if (typeof entry.itemId === 'string' && !itemIds.has(entry.itemId)) {
+          issues.push({
+            kind: 'unknown-reference',
+            refKind: 'item',
+            missingId: entry.itemId,
+            message: `loot table "${table.label}" entry ${index + 1} references an unknown item`,
+          });
+        }
+        if (typeof entry.weight !== 'number' || !Number.isFinite(entry.weight) || entry.weight <= 0) {
+          issues.push({
+            kind: 'coherence',
+            message: `loot table "${table.label}" entry ${index + 1} needs a positive drop weight`,
+          });
+        }
+      });
+    }
   }
 
   const merged = mergeGameObjectCatalogs(toContributionInputs(sources), mergeDeps(deps));
-  const ok = Result.isSuccess(merged);
-  if (!ok && issues.length === 0) {
+  const ok = Result.isSuccess(merged) && issues.every((entry) => entry.kind !== 'unknown-reference' && entry.kind !== 'coherence');
+  if (Result.isFailure(merged) && issues.length === 0) {
     const failure = merged.failure;
     const message =
       failure._tag === 'CatalogContributionValidationError'

@@ -1,4 +1,12 @@
-import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
+import {
+  BattleRoyaleProtocol,
+  GameplayEntityDefeated,
+  GameplayItemGranted,
+  GameplayMatchPhaseChanged,
+  makeGameplayEntityId,
+  makeGameplayItemId,
+  type GameplayEvent,
+} from "@tileborne/ipc-contracts";
 
 import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
 
@@ -17,7 +25,7 @@ import type { PlaytestPluginWorld } from "./playtest-plugin-world.js";
 
 const { decodeMessage } = BattleRoyaleProtocol;
 
-const MAX_RECENT_EVENTS = 20;
+const MAX_GAMEPLAY_EVENTS = 20;
 
 /** The per-tick HUD slice derived from the plugin world — plugin-owned. */
 export interface PlaytestRuntimeHudWorldState {
@@ -108,7 +116,7 @@ export interface PlaytestRuntimeHudWorldState {
 
 /** The complete HUD state the runtime metrics expose to the renderer. */
 export interface PlaytestRuntimeHudState extends PlaytestRuntimeHudWorldState {
-  readonly recentEvents: readonly PlaytestRuntimeHudEventState[];
+  readonly gameplayEvents: readonly GameplayEvent[];
   readonly gameOver?: {
     readonly winnerId: string;
     readonly winnerDisplayName: string;
@@ -117,35 +125,6 @@ export interface PlaytestRuntimeHudState extends PlaytestRuntimeHudWorldState {
     readonly tickCount: number;
   };
 }
-
-export type PlaytestRuntimeHudEventState =
-  | {
-      readonly _tag: "PlayerKilled";
-      readonly victimId: string;
-      readonly victimDisplayName: string;
-      readonly killerId: string;
-      readonly tick: number;
-      readonly emittedAtMs: number;
-    }
-  | {
-      readonly _tag: "PickupCollected";
-      readonly playerId: string;
-      readonly playerDisplayName: string;
-      readonly itemKind: string;
-      readonly tier: string;
-      readonly quantity: number;
-      readonly tick: number;
-      readonly emittedAtMs: number;
-    }
-  | {
-      readonly _tag: "GameOver";
-      readonly winnerId: string;
-      readonly winnerDisplayName: string;
-      readonly alivePlayers: number;
-      readonly totalPlayers: number;
-      readonly tickCount: number;
-      readonly emittedAtMs: number;
-    };
 
 /**
  * The plugin runtime bundle's world→HUD derivation export. Structurally
@@ -179,14 +158,14 @@ const formatPlayerDisplayName = (playerId: string): string => {
 export const createPlaytestRuntimeHudTracker = (
   deriveWorldState?: PlaytestHudWorldStateDeriver,
 ): PlaytestRuntimeHudTracker => {
-  const recentEvents: PlaytestRuntimeHudEventState[] = [];
+  const gameplayEvents: GameplayEvent[] = [];
   const seenPickupToastKeys = new Set<string>();
   let gameOver: PlaytestRuntimeHudState["gameOver"];
 
-  const pushEvent = (event: PlaytestRuntimeHudEventState): void => {
-    recentEvents.push(event);
-    if (recentEvents.length > MAX_RECENT_EVENTS) {
-      recentEvents.shift();
+  const pushEvent = (event: GameplayEvent): void => {
+    gameplayEvents.push(event);
+    if (gameplayEvents.length > MAX_GAMEPLAY_EVENTS) {
+      gameplayEvents.shift();
     }
   };
 
@@ -196,14 +175,11 @@ export const createPlaytestRuntimeHudTracker = (
         try {
           const message = decodeMessage(frame);
           if (message._tag === "PlayerKilled") {
-            pushEvent({
-              _tag: "PlayerKilled",
-              victimId: message.victim,
-              victimDisplayName: formatPlayerDisplayName(message.victim),
-              killerId: message.killer,
+            pushEvent(new GameplayEntityDefeated({
+              targetId: makeGameplayEntityId(message.victim),
+              sourceId: makeGameplayEntityId(message.killer),
               tick: message.tick,
-              emittedAtMs: Date.now(),
-            });
+            }));
           } else if (message._tag === "GameOver") {
             const winnerDisplayName = formatPlayerDisplayName(message.winner);
             gameOver = {
@@ -213,15 +189,11 @@ export const createPlaytestRuntimeHudTracker = (
               totalPlayers: 0,
               tickCount: 0,
             };
-            pushEvent({
-              _tag: "GameOver",
-              winnerId: message.winner,
-              winnerDisplayName,
-              alivePlayers: gameOver.alivePlayers,
-              totalPlayers: gameOver.totalPlayers,
-              tickCount: gameOver.tickCount,
-              emittedAtMs: Date.now(),
-            });
+            pushEvent(new GameplayMatchPhaseChanged({
+              tick: 0,
+              phase: "finished",
+              winnerId: makeGameplayEntityId(message.winner),
+            }));
           }
         } catch {
           // Ignore malformed plugin frames.
@@ -237,16 +209,12 @@ export const createPlaytestRuntimeHudTracker = (
         const key = `${localPlayer.playerId}:${pickupToast.itemKind}:${pickupToast.tier}:${pickupToast.quantity}:${pickupToast.tick}`;
         if (!seenPickupToastKeys.has(key)) {
           seenPickupToastKeys.add(key);
-          pushEvent({
-            _tag: "PickupCollected",
-            playerId: localPlayer.playerId,
-            playerDisplayName: localPlayer.displayName,
-            itemKind: pickupToast.itemKind,
-            tier: pickupToast.tier,
+          pushEvent(new GameplayItemGranted({
+            targetId: makeGameplayEntityId(localPlayer.playerId),
+            itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
             quantity: pickupToast.quantity,
             tick: pickupToast.tick,
-            emittedAtMs: Date.now(),
-          });
+          }));
         }
       }
 
@@ -261,21 +229,19 @@ export const createPlaytestRuntimeHudTracker = (
       const currentGameOver = gameOver;
       const events =
         currentGameOver === undefined
-          ? [...recentEvents]
-          : recentEvents.map((event) =>
-              event._tag === "GameOver"
-                ? {
+          ? [...gameplayEvents]
+          : gameplayEvents.map((event) =>
+              event._tag === "MatchPhaseChanged" && event.phase === "finished"
+                ? new GameplayMatchPhaseChanged({
                     ...event,
-                    alivePlayers: currentGameOver.alivePlayers,
-                    totalPlayers: currentGameOver.totalPlayers,
-                    tickCount: currentGameOver.tickCount,
-                  }
+                    tick: currentGameOver.tickCount,
+                  })
                 : event,
             );
 
       return {
         ...worldState,
-        recentEvents: events,
+        gameplayEvents: events,
         ...(gameOver !== undefined ? { gameOver } : {}),
       };
     },

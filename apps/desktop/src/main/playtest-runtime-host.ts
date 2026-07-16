@@ -2,14 +2,21 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { RuntimeMapPackage } from "@tileborne/core";
-import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import { RuntimeMapPackage, type BehaviorId, type JsonObject, type ProjectId } from "@tileborne/core";
 import type { RuntimeModeDataExporter } from "@tileborne/plugin-api";
 import { makeGameRuntime, makePluginHost, type RuntimePlugin } from "@tileborne/runtime";
 import {
   loadRuntimeMapPackage,
   type RuntimeMapPackageEntryReader,
 } from "@tileborne/runtime/map-package";
+import { NodeIsolatedBehaviorRuntimeHost } from "@tileborne/game-host/behavior-node";
+import type {
+  BehaviorExecutionTrace,
+  BehaviorRuntimeDiagnostic,
+  BehaviorSchedulerSnapshot,
+  BehaviorWorkerResponse,
+  RuntimeBehaviorArtifactIdentity,
+} from "@tileborne/runtime/behavior";
 import { Effect, Result, Schema } from "effect";
 
 import {
@@ -45,7 +52,8 @@ export interface PlaytestRuntimePlayerInput {
   readonly reload: boolean;
   readonly interact: boolean;
   readonly drop: boolean;
-  readonly abilities: readonly BattleRoyaleAbilityId[];
+  /** Mode-owned action ids stay opaque to the neutral runtime host. */
+  readonly abilities: readonly string[];
   readonly aimDeg?: number;
   readonly swapSlot?: number;
 }
@@ -103,10 +111,67 @@ interface RuntimePluginModule {
 }
 
 interface ActivePlaytestRuntime {
+  readonly projectId?: ProjectId;
   readonly getMetrics: () => PlaytestRuntimeMetrics;
+  readonly behaviorDebug?: PlaytestBehaviorDebugState;
   readonly interval?: ReturnType<typeof setInterval>;
   readonly stop: () => Promise<void>;
 }
+
+export type PlaytestBehaviorDebugStatus = "running" | "paused";
+
+export interface PlaytestBehaviorSourceLocation {
+  readonly sourceKind: "visual" | "typescript";
+  readonly filePath: string;
+  readonly nodeId?: string;
+}
+
+export interface PlaytestBehaviorDebugTrace {
+  readonly sequence: number;
+  readonly tick: number;
+  readonly behaviorId: BehaviorId;
+  readonly instanceId: string;
+  readonly sourceKind: "visual" | "typescript";
+  readonly eventId: string;
+  readonly event: JsonObject;
+  readonly stateBefore: JsonObject;
+  readonly commands: ReadonlyArray<{ readonly kind: string; readonly payload: JsonObject }>;
+  readonly state: JsonObject;
+  readonly steps: BehaviorExecutionTrace["steps"];
+  readonly source: PlaytestBehaviorSourceLocation;
+}
+
+export interface PlaytestBehaviorReloadStatus {
+  readonly behaviorId: BehaviorId;
+  readonly status: "applied" | "rejected-using-last-known-good";
+  readonly hash?: string;
+  readonly diagnostic?: BehaviorRuntimeDiagnostic;
+}
+
+export interface PlaytestBehaviorDebugSnapshot {
+  readonly sessionId: string;
+  readonly status: PlaytestBehaviorDebugStatus;
+  readonly tick: number;
+  readonly traces: readonly PlaytestBehaviorDebugTrace[];
+  readonly diagnostics: readonly BehaviorRuntimeDiagnostic[];
+  readonly states: BehaviorSchedulerSnapshot["states"];
+  readonly lastReload?: PlaytestBehaviorReloadStatus;
+}
+
+interface PlaytestBehaviorDebugState {
+  readonly host: NodeIsolatedBehaviorRuntimeHost;
+  readonly sourceByBehaviorId: Map<BehaviorId, PlaytestBehaviorSourceLocation>;
+  readonly traces: PlaytestBehaviorDebugTrace[];
+  readonly diagnostics: BehaviorRuntimeDiagnostic[];
+  status: PlaytestBehaviorDebugStatus;
+  tick: number;
+  states: BehaviorSchedulerSnapshot["states"];
+  lastReload?: PlaytestBehaviorReloadStatus;
+  tail: Promise<void>;
+}
+
+const MAX_BEHAVIOR_DEBUG_TRACES = 256;
+const MAX_BEHAVIOR_DEBUG_DIAGNOSTICS = 256;
 
 const activeRuntimes = new Map<string, ActivePlaytestRuntime>();
 const sessionStates = new Map<string, PlaytestSessionState>();
@@ -132,9 +197,7 @@ export const setPlaytestRuntimeChangedNotifier = (notifier: (() => void) | undef
  * IPC event so the single-player playtest viewport can decode + render via the
  * plugin projector. The renderer treats the frame as opaque bytes.
  */
-let notifyPlaytestSnapshot:
-  | ((sessionId: string, frame: Uint8Array) => void)
-  | undefined;
+let notifyPlaytestSnapshot: ((sessionId: string, frame: Uint8Array) => void) | undefined;
 
 export const setPlaytestRuntimeSnapshotNotifier = (
   notifier: ((sessionId: string, frame: Uint8Array) => void) | undefined,
@@ -252,6 +315,225 @@ export const loadPlaytestMapPackage = async (packageDirectory: string): Promise<
   return encodeMapPackage(loaded.success);
 };
 
+const startPlaytestBehaviorRuntime = async (
+  packageDirectory: string,
+): Promise<PlaytestBehaviorDebugState | undefined> => {
+  const loaded = await loadRuntimeMapPackage(directoryEntryReader(packageDirectory));
+  if (Result.isFailure(loaded)) {
+    throw new Error(`cannot start behavior runtime: ${loaded.failure.message}`);
+  }
+  if (loaded.success.behaviors.modules.length === 0) return undefined;
+  const host = new NodeIsolatedBehaviorRuntimeHost({
+    ticksPerSecond: TICK_RATE,
+    maxWallTimeMs: Math.max(25, TICK_MS),
+  });
+  try {
+    for (const artifact of loaded.success.behaviors.modules) {
+      const modulePath = path.resolve(packageDirectory, artifact.modulePath);
+      const relative = path.relative(packageDirectory, modulePath);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) {
+        throw new Error(`behavior module escapes runtime package: ${artifact.modulePath}`);
+      }
+      const response = await host.load({
+        behaviorId: artifact.behaviorId,
+        sourceKind: artifact.sourceKind,
+        modulePath: artifact.modulePath,
+        hash: artifact.hash,
+        code: await readFile(modulePath, "utf8"),
+      });
+      if (!response.ok) {
+        throw new Error(response.diagnostic.message);
+      }
+    }
+    const sourceByBehaviorId = new Map<BehaviorId, PlaytestBehaviorSourceLocation>();
+    for (const manifest of loaded.success.behaviors.manifests) {
+      sourceByBehaviorId.set(manifest.id, manifest.source._tag === "visual"
+        ? {
+            sourceKind: "visual",
+            filePath: safeDebugSourcePath(manifest.source.definitionPath),
+          }
+        : {
+            sourceKind: "typescript",
+            filePath: safeDebugSourcePath(manifest.source.sourcePath),
+          });
+    }
+    return {
+      host,
+      sourceByBehaviorId,
+      traces: [],
+      diagnostics: [],
+      status: "running",
+      tick: 0,
+      states: [],
+      tail: Promise.resolve(),
+    };
+  } catch (error) {
+    await host.dispose();
+    throw error;
+  }
+};
+
+const stepPlaytestBehaviorRuntime = async (
+  debug: PlaytestBehaviorDebugState,
+): Promise<void> => {
+  const execute = async (): Promise<void> => {
+    const tick = debug.tick + 1;
+    const advanced = await debug.host.advanceTo(tick);
+    if (!advanced.ok) throw new Error(advanced.diagnostic.message);
+    captureBehaviorDebugResponse(debug, advanced);
+    const dispatched = await debug.host.dispatch({ eventId: "runtime.tick", event: { tick } });
+    if (!dispatched.ok) throw new Error(dispatched.diagnostic.message);
+    captureBehaviorDebugResponse(debug, dispatched);
+    debug.tick = tick;
+  };
+  const result = debug.tail.then(execute, execute);
+  debug.tail = result.catch(() => undefined);
+  await result;
+};
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const SECRET_DEBUG_KEY = /(?:authorization|cookie|password|secret|token|api[-_]?key)/iu;
+const MAX_DEBUG_COLLECTION_ITEMS = 64;
+const MAX_DEBUG_STRING_LENGTH = 4_096;
+const MAX_DEBUG_OBJECT_BYTES = 16 * 1_024;
+const MAX_DEBUG_COMMAND_BYTES = 32 * 1_024;
+const EMBEDDED_FILE_URI = /\bfile:(?:\/{2,3})?(?:\/|[a-z]:[\\/]|\\\\)/iu;
+const EMBEDDED_WINDOWS_PATH = /(?:^|[\s"'([{=:])(?:[a-z]:(?:[\\/]|[^\s"'\])}]+)|\\\\[^\s\\/]+[\\/][^\s\\/]+)/iu;
+const EMBEDDED_TILDE_PATH = /(?:^|[\s"'([{=:])~(?:[^\s\\/]+)?[\\/]/u;
+const EMBEDDED_POSIX_PATH = /(?:^|[^a-z0-9_/\\])\/(?!\/)[^\s"'\])}]+/iu;
+
+const isSensitiveDebugPath = (value: string): boolean => {
+  const normalized = value.replaceAll('\\', '/');
+  const segments = normalized.split('/');
+  return (
+    normalized.startsWith('/') ||
+    segments.includes('..') ||
+    EMBEDDED_FILE_URI.test(value) ||
+    EMBEDDED_WINDOWS_PATH.test(value) ||
+    EMBEDDED_TILDE_PATH.test(value) ||
+    EMBEDDED_POSIX_PATH.test(value)
+  );
+};
+
+const safeDebugSourcePath = (sourcePath: string): string => {
+  const normalized = sourcePath.replaceAll('\\', '/');
+  return isSensitiveDebugPath(sourcePath)
+    ? '<behavior source>'
+    : normalized;
+};
+
+/** Keeps inspector payloads local, bounded, JSON-only, and free of obvious credentials/host paths. */
+const sanitizeDebugValue = (value: unknown, key = "", depth = 0): unknown => {
+  if (SECRET_DEBUG_KEY.test(key)) return "[redacted]";
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    if (isSensitiveDebugPath(value)) return "[redacted path]";
+    return value.length > MAX_DEBUG_STRING_LENGTH
+      ? `${value.slice(0, MAX_DEBUG_STRING_LENGTH)}…`
+      : value;
+  }
+  if (depth >= 6) return "[depth limit]";
+  if (Array.isArray(value)) {
+    return value.slice(0, MAX_DEBUG_COLLECTION_ITEMS).map((entry) =>
+      sanitizeDebugValue(entry, key, depth + 1));
+  }
+  if (!isRecord(value)) return String(value);
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, MAX_DEBUG_COLLECTION_ITEMS)
+      .map(([entryKey, entryValue]) => [entryKey, sanitizeDebugValue(entryValue, entryKey, depth + 1)]),
+  );
+};
+
+const debugJsonBytes = (value: unknown): number =>
+  new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+const boundedDebugObject = (value: unknown): JsonObject => {
+  const sanitized = sanitizeDebugValue(value);
+  if (isRecord(sanitized) && debugJsonBytes(sanitized) <= MAX_DEBUG_OBJECT_BYTES) {
+    return sanitized as JsonObject;
+  }
+  const preview = JSON.stringify(sanitized).slice(0, MAX_DEBUG_STRING_LENGTH);
+  return { truncated: true, preview };
+};
+
+const boundedDebugCommands = (
+  value: ReadonlyArray<{ readonly kind: string; readonly payload: Readonly<Record<string, unknown>> }>,
+): ReadonlyArray<{ readonly kind: string; readonly payload: JsonObject }> => {
+  const result: Array<{ readonly kind: string; readonly payload: JsonObject }> = [];
+  for (const command of value) {
+    const candidate = { kind: command.kind, payload: boundedDebugObject(command.payload) };
+    if (debugJsonBytes([...result, candidate]) > MAX_DEBUG_COMMAND_BYTES) {
+      result.push({
+        kind: "tileborne.inspector.truncated",
+        payload: { omitted: value.length - result.length },
+      });
+      break;
+    }
+    result.push(candidate);
+  }
+  return result;
+};
+
+const captureBehaviorDebugResponse = (
+  debug: PlaytestBehaviorDebugState,
+  response: BehaviorWorkerResponse,
+): void => {
+  if (!response.ok || !isRecord(response.value)) {
+    if (!response.ok) {
+      debug.diagnostics.push(sanitizeDebugValue(response.diagnostic) as BehaviorRuntimeDiagnostic);
+      if (debug.diagnostics.length > MAX_BEHAVIOR_DEBUG_DIAGNOSTICS) {
+        debug.diagnostics.splice(0, debug.diagnostics.length - MAX_BEHAVIOR_DEBUG_DIAGNOSTICS);
+      }
+    }
+    return;
+  }
+  const value = response.value;
+  if (Array.isArray(value.traces)) {
+    for (const candidate of value.traces) {
+      if (!isRecord(candidate) || typeof candidate.behaviorId !== "string") continue;
+      const trace = candidate as unknown as BehaviorExecutionTrace;
+      const baseSource = debug.sourceByBehaviorId.get(trace.behaviorId) ?? {
+        sourceKind: trace.sourceKind,
+        filePath: "<behavior>",
+      };
+      const steps = Array.isArray(trace.steps) ? trace.steps : [];
+      const currentStep = steps.at(-1);
+      const sanitized = sanitizeDebugValue(trace) as PlaytestBehaviorDebugTrace;
+      debug.traces.push({
+        ...sanitized,
+        instanceId: typeof trace.instanceId === "string" ? trace.instanceId : String(trace.behaviorId),
+        event: boundedDebugObject(trace.event),
+        stateBefore: boundedDebugObject(isRecord(trace.stateBefore) ? trace.stateBefore : trace.state),
+        commands: boundedDebugCommands(trace.commands),
+        state: boundedDebugObject(trace.state),
+        steps: sanitizeDebugValue(steps) as BehaviorExecutionTrace["steps"],
+        source: {
+          ...baseSource,
+          ...(currentStep === undefined ? {} : { nodeId: currentStep.nodeId }),
+        },
+      });
+    }
+    if (debug.traces.length > MAX_BEHAVIOR_DEBUG_TRACES) {
+      debug.traces.splice(0, debug.traces.length - MAX_BEHAVIOR_DEBUG_TRACES);
+    }
+  }
+  if (Array.isArray(value.diagnostics)) {
+    debug.diagnostics.push(...sanitizeDebugValue(value.diagnostics) as BehaviorRuntimeDiagnostic[]);
+    if (debug.diagnostics.length > MAX_BEHAVIOR_DEBUG_DIAGNOSTICS) {
+      debug.diagnostics.splice(0, debug.diagnostics.length - MAX_BEHAVIOR_DEBUG_DIAGNOSTICS);
+    }
+  }
+  if (isRecord(value.snapshot) && Array.isArray(value.snapshot.states)) {
+    debug.states = (value.snapshot.states as ReadonlyArray<{ readonly behaviorId: BehaviorId; readonly state: unknown }>).map(
+      ({ behaviorId, state }) => ({ behaviorId, state: boundedDebugObject(state) }),
+    );
+  }
+};
+
 /** Single-player playtest session: the local player is always player-1. */
 const toPlayerModelSelections = (
   selectedPlayerModelId: string | undefined,
@@ -301,7 +583,8 @@ const loadPluginForPlaytest = async (
   throw new Error(`plugin ${pluginId} did not export a runtime adapter`);
 };
 
-const errorMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const logRuntimeInfo = async (
   logger: PlaytestRuntimeLogger | undefined,
@@ -385,6 +668,7 @@ export const getPlaytestRuntimeSnapshot = (
 
 export const startPlaytestRuntimeHost = async (input: {
   readonly sessionId: string;
+  readonly projectId?: ProjectId;
   /** Directory holding the assembled `RuntimeMapPackage` this host boots from. */
   readonly packageDirectory: string;
   readonly pluginInstalls: readonly { readonly pluginId: string; readonly rootPath: string }[];
@@ -397,6 +681,7 @@ export const startPlaytestRuntimeHost = async (input: {
   // decode + hash-verify + version-gate via the shared worker-safe loader,
   // then hand the plugin the canonical encoded package wire JSON.
   const mapPackage = await loadPlaytestMapPackage(input.packageDirectory);
+  const behaviorRuntime = await startPlaytestBehaviorRuntime(input.packageDirectory);
 
   const pluginWorld = createPlaytestPluginWorld();
   const inputByPlayerId = new Map<string, PlaytestRuntimePlayerInput>();
@@ -516,25 +801,30 @@ export const startPlaytestRuntimeHost = async (input: {
 
     const interval = setInterval(() => {
       const tickStartedAt = performance.now();
-      void Effect.runPromise(runtime.step(1)).then(() => {
-        diagnosticsRecorder.recordTick(performance.now() - tickStartedAt);
-        metricsState.state.tickCount += 1;
-        tickState.tickCount = metricsState.state.tickCount;
-        metricsState.state.playerCount = countPlayers(pluginWorld);
-        metricsState.recordEvent(`onTick:${metricsState.state.tickCount}`);
-        flushPluginFrames();
-        maybeNotifyPlaytestChanged();
-      }).catch((cause) => {
-        const message = errorMessage(cause);
-        diagnosticsRecorder.recordError(message);
-        metricsState.recordEvent(`runtime-error:${message}`);
-        void logRuntimeError(input.logger, "Playtest plugin runtime tick failed", {
-          sessionId: input.sessionId,
-          pluginIds,
-          message,
+      void Effect.runPromise(runtime.step(1))
+        .then(async () => {
+          if (behaviorRuntime?.status === "running") {
+            await stepPlaytestBehaviorRuntime(behaviorRuntime);
+          }
+          diagnosticsRecorder.recordTick(performance.now() - tickStartedAt);
+          metricsState.state.tickCount += 1;
+          tickState.tickCount = metricsState.state.tickCount;
+          metricsState.state.playerCount = countPlayers(pluginWorld);
+          metricsState.recordEvent(`onTick:${metricsState.state.tickCount}`);
+          flushPluginFrames();
+          maybeNotifyPlaytestChanged();
+        })
+        .catch((cause) => {
+          const message = errorMessage(cause);
+          diagnosticsRecorder.recordError(message);
+          metricsState.recordEvent(`runtime-error:${message}`);
+          void logRuntimeError(input.logger, "Playtest plugin runtime tick failed", {
+            sessionId: input.sessionId,
+            pluginIds,
+            message,
+          });
+          maybeNotifyPlaytestChanged();
         });
-        maybeNotifyPlaytestChanged();
-      });
     }, TICK_MS);
 
     const stop = async (): Promise<void> => {
@@ -544,10 +834,16 @@ export const startPlaytestRuntimeHost = async (input: {
         plugin.onShutdown?.();
       }
       await Effect.runPromise(runtime.stop());
+      if (behaviorRuntime) {
+        await behaviorRuntime.tail;
+        await behaviorRuntime.host.dispose();
+      }
     };
 
     activeRuntimes.set(input.sessionId, {
+      ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
       getMetrics: metricsState.getMetrics,
+      ...(behaviorRuntime === undefined ? {} : { behaviorDebug: behaviorRuntime }),
       interval,
       stop,
     });
@@ -571,6 +867,7 @@ export const startPlaytestRuntimeHost = async (input: {
     if (gameRuntime) {
       await Effect.runPromise(gameRuntime.stop()).catch(() => undefined);
     }
+    await behaviorRuntime?.host.dispose().catch(() => undefined);
     maybeNotifyPlaytestChanged();
     throw new Error(`Playtest runtime startup failed: ${message}`, { cause });
   }
@@ -587,4 +884,107 @@ export const stopPlaytestRuntimeHost = async (sessionId: string): Promise<void> 
     clearInterval(active.interval);
   }
   await active.stop();
+};
+
+export const getPlaytestBehaviorDebugSnapshot = (
+  sessionId: string,
+): PlaytestBehaviorDebugSnapshot | undefined => {
+  const debug = activeRuntimes.get(sessionId)?.behaviorDebug;
+  if (debug === undefined) return undefined;
+  return {
+    sessionId,
+    status: debug.status,
+    tick: debug.tick,
+    traces: structuredClone(debug.traces),
+    diagnostics: structuredClone(debug.diagnostics),
+    states: structuredClone(debug.states),
+    ...(debug.lastReload === undefined ? {} : { lastReload: structuredClone(debug.lastReload) }),
+  };
+};
+
+export const controlPlaytestBehaviorDebug = async (
+  sessionId: string,
+  command: "pause" | "step" | "continue",
+): Promise<PlaytestBehaviorDebugSnapshot> => {
+  const debug = activeRuntimes.get(sessionId)?.behaviorDebug;
+  if (debug === undefined) throw new Error(`behavior runtime is not active for ${sessionId}`);
+  if (command === "pause") {
+    debug.status = "paused";
+    await debug.tail;
+  }
+  else if (command === "continue") {
+    await debug.tail;
+    debug.status = "running";
+  }
+  else {
+    if (debug.status !== "paused") {
+      throw new Error("pause the behavior runtime before stepping");
+    }
+    await stepPlaytestBehaviorRuntime(debug);
+  }
+  return getPlaytestBehaviorDebugSnapshot(sessionId)!;
+};
+
+export type PlaytestHotReloadArtifact = RuntimeBehaviorArtifactIdentity & {
+  readonly code: string;
+  readonly sourcePath?: string;
+};
+
+/** Applies one verified compile to every live playtest for the project; rejected modules keep LKG. */
+export const hotReloadPlaytestBehavior = async (
+  projectId: ProjectId,
+  artifact: PlaytestHotReloadArtifact,
+): Promise<readonly PlaytestBehaviorReloadStatus[]> => {
+  const results: PlaytestBehaviorReloadStatus[] = [];
+  for (const active of activeRuntimes.values()) {
+    const debug = active.behaviorDebug;
+    if (active.projectId !== projectId || debug === undefined) continue;
+    await debug.tail;
+    const response = await debug.host.hotReload(artifact);
+    captureBehaviorDebugResponse(debug, response);
+    if (response.ok && artifact.sourcePath !== undefined) {
+      debug.sourceByBehaviorId.set(artifact.behaviorId, {
+        sourceKind: artifact.sourceKind,
+        filePath: safeDebugSourcePath(artifact.sourcePath),
+      });
+    }
+    const result: PlaytestBehaviorReloadStatus = response.ok
+      ? {
+          behaviorId: artifact.behaviorId,
+          status: "applied",
+          hash: String(artifact.hash),
+        }
+      : {
+          behaviorId: artifact.behaviorId,
+          status: "rejected-using-last-known-good",
+          hash: String(artifact.hash),
+          diagnostic: sanitizeDebugValue(response.diagnostic) as BehaviorRuntimeDiagnostic,
+        };
+    debug.lastReload = result;
+    results.push(result);
+  }
+  return results;
+};
+
+/** Records compile rejection without ever sending invalid code to the live worker. */
+export const rejectPlaytestBehaviorReload = (
+  projectId: ProjectId,
+  behaviorId: BehaviorId,
+  diagnostic: BehaviorRuntimeDiagnostic,
+): readonly PlaytestBehaviorReloadStatus[] => {
+  const results: PlaytestBehaviorReloadStatus[] = [];
+  for (const active of activeRuntimes.values()) {
+    const debug = active.behaviorDebug;
+    if (active.projectId !== projectId || debug === undefined) continue;
+    const result: PlaytestBehaviorReloadStatus = {
+      behaviorId,
+      status: "rejected-using-last-known-good",
+      diagnostic,
+    };
+    debug.lastReload = result;
+    debug.diagnostics.push(diagnostic);
+    if (debug.diagnostics.length > MAX_BEHAVIOR_DEBUG_DIAGNOSTICS) debug.diagnostics.shift();
+    results.push(result);
+  }
+  return results;
 };

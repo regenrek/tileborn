@@ -1,14 +1,20 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer } from 'electron';
 
-import { MainEventRegistry, MainIpcRegistry } from "@tileborne/ipc-contracts/bridge";
+import { MainEventRegistry, MainIpcRegistry } from '@tileborne/ipc-contracts/bridge';
 
-import type { TileborneIpcTransport } from "../shared/ipc-transport.js";
+import type { TileborneIpcTransport } from '../shared/ipc-transport.js';
+import {
+  APP_CLOSE_REQUESTED_CHANNEL,
+  APP_CLOSE_RESOLVED_CHANNEL,
+  type AppCloseRequest,
+  type TileborneAppLifecycleBridge,
+} from '../shared/app-lifecycle.js';
 import {
   STARTUP_STATUS_CHANGED_CHANNEL,
   STARTUP_STATUS_GET_CHANNEL,
   type StartupStatusSnapshot,
   type TileborneStartupBridge,
-} from "../shared/startup-status.js";
+} from '../shared/startup-status.js';
 
 const INVOKE_CHANNELS = new Set<string>(
   MainIpcRegistry.contracts.map((contract) => contract.channel),
@@ -53,5 +59,19 @@ const tileborneStartup: TileborneStartupBridge = {
   },
 };
 
-contextBridge.exposeInMainWorld("tileborneIpc", tileborneIpc);
-contextBridge.exposeInMainWorld("tileborneStartup", tileborneStartup);
+const tileborneAppLifecycle: TileborneAppLifecycleBridge = {
+  onCloseRequested: (handler) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: AppCloseRequest) => {
+      handler(request);
+    };
+    ipcRenderer.on(APP_CLOSE_REQUESTED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(APP_CLOSE_REQUESTED_CHANNEL, listener);
+  },
+  resolveClose: (resolution) => {
+    ipcRenderer.send(APP_CLOSE_RESOLVED_CHANNEL, resolution);
+  },
+};
+
+contextBridge.exposeInMainWorld('tileborneIpc', tileborneIpc);
+contextBridge.exposeInMainWorld('tileborneStartup', tileborneStartup);
+contextBridge.exposeInMainWorld('tileborneAppLifecycle', tileborneAppLifecycle);

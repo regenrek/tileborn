@@ -95,3 +95,7 @@ export const resolveBundledPluginPath = (spec: BundledPluginSpec): string => {
 /** Look up a bundled plugin spec by id (e.g. for the BR-named install IPC). */
 export const bundledPluginSpec = (id: string): BundledPluginSpec | undefined =>
   BUNDLED_PLUGINS.find((spec) => spec.id === id);
+
+/** Product-specific install adapter; neutral IPC orchestration does not own its concrete id. */
+export const bundledBattleRoyalePluginSpec = (): BundledPluginSpec | undefined =>
+  bundledPluginSpec(BATTLE_ROYALE_PLUGIN_ID);

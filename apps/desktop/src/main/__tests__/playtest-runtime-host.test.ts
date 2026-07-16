@@ -14,11 +14,15 @@ import {
   decodePersistedTileborneMapJson,
   gameModeIdFromPluginId,
   gameObjectTypeIdForKey,
+  hashBytes,
   makeClipId,
   makePackId,
   readPluginMapSettings,
+  type BehaviorId,
+  type ProjectId,
 } from "@tileborne/core";
 import { assembleRuntimeMapPackage } from "@tileborne/services-build";
+import { hashRuntimeMapPackageEntry } from "@tileborne/runtime/map-package";
 import { afterEach, describe, expect, it } from "vitest";
 import { Effect, Option, Schema } from "effect";
 import {
@@ -28,8 +32,11 @@ import {
 } from "@tileborne/plugin-battle-royale";
 
 import {
+  controlPlaytestBehaviorDebug,
+  getPlaytestBehaviorDebugSnapshot,
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
+  hotReloadPlaytestBehavior,
   setPlaytestRuntimeInput,
   setPlaytestRuntimeSnapshotNotifier,
   startPlaytestRuntimeHost,
@@ -42,6 +49,8 @@ const packId = makePackId("550e8400-e29b-41d4-a716-446655440999");
 const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544000${index}`);
 const MAP_ID = "map:5b1901ca-1abd-42d6-aeac-553b34b9bda6";
 const PROJECT_ID = "project:5b1901ca-1abd-42d6-aeac-553b34b9bda7";
+const RUNTIME_TICK_BEHAVIOR_ID = "behavior:88888888-8888-4888-8888-888888888888" as BehaviorId;
+const NEIGHBOR_BEHAVIOR_ID = "behavior:99999999-9999-4999-8999-999999999999" as BehaviorId;
 
 const battleRoyalePluginId = Schema.decodeUnknownSync(PluginId)(PLUGIN_ID);
 
@@ -140,6 +149,46 @@ const waitForTickCount = async (sessionId: string, minimumTickCount: number): Pr
   throw new Error(`Timed out waiting for ${sessionId} to reach tickCount ${minimumTickCount}`);
 };
 
+const installRuntimeTickBehavior = async (
+  artifactDirectory: string,
+  code: string,
+  additional: readonly { readonly behaviorId: BehaviorId; readonly code: string; readonly name: string }[] = [],
+): Promise<void> => {
+  const entries = [
+    { behaviorId: RUNTIME_TICK_BEHAVIOR_ID, code, name: "runtime-tick" },
+    ...additional,
+  ];
+  await mkdir(path.join(artifactDirectory, "behaviors", "modules"), { recursive: true });
+  for (const entry of entries) {
+    await writeFile(path.join(artifactDirectory, `behaviors/modules/${entry.name}.mjs`), entry.code, "utf8");
+  }
+  const behaviors = {
+    schemaVersion: 1,
+    manifests: entries.map((entry) => ({
+      schemaVersion: 1,
+      id: entry.behaviorId,
+      label: entry.name,
+      source: { _tag: "typescript", sourcePath: `behaviors/sources/${entry.name}.ts`, exportName: "default" },
+      requiredCapabilities: [],
+    })),
+    visualDefinitions: [],
+    modules: entries.map((entry) => ({
+        behaviorId: entry.behaviorId,
+        sourceKind: "typescript",
+        modulePath: `behaviors/modules/${entry.name}.mjs`,
+        hash: hashBytes(new TextEncoder().encode(entry.code)),
+      })),
+  };
+  const behaviorBytes = new TextEncoder().encode(`${JSON.stringify(behaviors, null, 2)}\n`);
+  await writeFile(path.join(artifactDirectory, "behaviors.json"), behaviorBytes);
+  const manifestPath = path.join(artifactDirectory, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entryHashes: Record<string, string>;
+  };
+  manifest.entryHashes.behaviors = await hashRuntimeMapPackageEntry(behaviorBytes);
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+};
+
 describe("playtest-runtime-host", () => {
   let tempRoot: string | undefined;
   const sessionIds: string[] = [];
@@ -205,6 +254,206 @@ describe("playtest-runtime-host", () => {
 
     await waitForTickCount(sessionId, 5);
     expect(getPlaytestRuntimeMetrics(sessionId)?.tickCount).toBeGreaterThanOrEqual(5);
+  });
+
+  it("executes packaged behaviors through the production isolated host without freezing playtest", async () => {
+    tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-behavior-"));
+    const artifactDirectory = path.join(tempRoot, "artifact");
+    const pluginRoot = path.join(tempRoot, "plugin");
+    await mkdir(path.join(pluginRoot, "dist"), { recursive: true });
+    await mkdir(artifactDirectory, { recursive: true });
+    await writeMapPackage(artifactDirectory, {
+      id: MAP_ID,
+      schemaVersion: 1,
+      size: { width: 32, height: 32 },
+      tileSize: { width: 32, height: 32 },
+      layers: [],
+      objects: [],
+      properties: {},
+    });
+    await installRuntimeTickBehavior(
+      artifactDirectory,
+      `export default {id:'test.desktop-runaway',sourceKind:'typescript',state:{},on:{'runtime.tick':()=>{while(true){}}}};`,
+    );
+    await writeFile(
+      path.join(pluginRoot, "tileborne-plugin.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: "@tileborne-plugins/test-runtime",
+        name: "test-runtime",
+        version: "0.0.0",
+        entry: { runtime: "./dist/runtime.js" },
+        contributes: {},
+        permissions: [],
+        dependsOn: [],
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(pluginRoot, "dist", "runtime.js"),
+      "export default { id: '@tileborne-plugins/test-runtime', onTick() {} };\n",
+      "utf8",
+    );
+
+    const sessionId = "runtime-host-behavior-isolation-test";
+    sessionIds.push(sessionId);
+    await startPlaytestRuntimeHost({
+      sessionId,
+      packageDirectory: artifactDirectory,
+      pluginInstalls: [{ pluginId: "@tileborne-plugins/test-runtime", rootPath: pluginRoot }],
+    });
+
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      const event = getPlaytestRuntimeMetrics(sessionId)?.lastPluginEvent;
+      if (event?.includes("Behavior worker exceeded")) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(getPlaytestRuntimeMetrics(sessionId)?.lastPluginEvent).toContain(
+      "Behavior worker exceeded",
+    );
+  });
+
+  it("inspects, pauses, single-steps, continues, and hot-reloads with last-known-good fallback", async () => {
+    tempRoot = await mkdtemp(path.join(tmpdir(), "tileborne-runtime-host-debug-"));
+    const artifactDirectory = path.join(tempRoot, "artifact");
+    const pluginRoot = path.join(tempRoot, "plugin");
+    await mkdir(path.join(pluginRoot, "dist"), { recursive: true });
+    await mkdir(artifactDirectory, { recursive: true });
+    await writeMapPackage(artifactDirectory, {
+      id: MAP_ID,
+      schemaVersion: 1,
+      size: { width: 32, height: 32 },
+      tileSize: { width: 32, height: 32 },
+      layers: [],
+      objects: [],
+      properties: {},
+    });
+    const oversizedDebugValue = 'x'.repeat(5_000);
+    const debugItems = Array.from({ length: 80 }, (_, index) => index);
+    const initialCode = `export default {id:'test.desktop-debug',sourceKind:'typescript',state:{count:0,apiToken:'super-secret',homePath:'/Users/test/private.txt',temporaryPath:'/private/tmp/session.json',rootPath:'/etc/passwd',windowsPath:'C:\\\\Users\\\\test\\\\private.txt',uncPath:'\\\\\\\\server\\\\share\\\\private.txt',traversalPath:'assets/../../private.txt',embeddedError:'Error: failed reading /tmp/private.txt at runtime',embeddedStack:'at run (/Users/test/project/behavior.ts:4:2)',fileUri:'open file:///private/tmp/session.json',tildePath:'config at ~/.tileborne/private.json',driveRelative:'failed at C:private\\\\token.txt',embeddedUnc:'network path \\\\\\\\server\\\\share\\\\private.txt failed',colonEmbedded:'Error:/Users/alice/project/behavior.ts',commaEmbedded:'open,/private/tmp/secret',safeLabel:'assets/door.png',safeUrl:'https://example.invalid/assets/door.png',oversized:${JSON.stringify(oversizedDebugValue)},items:${JSON.stringify(debugItems)}},on:{'runtime.tick':({state,event})=>[state.set('count',(state.get('count')??0)+1),{kind:'debug.tick',payload:{tick:event.tick}}]}};`;
+    const neighborCode = `export default {id:'test.neighbor',sourceKind:'typescript',state:{count:0},on:{'runtime.tick':({state})=>state.set('count',(state.get('count')??0)+1)}};`;
+    await installRuntimeTickBehavior(artifactDirectory, initialCode, [{
+      behaviorId: NEIGHBOR_BEHAVIOR_ID,
+      code: neighborCode,
+      name: 'neighbor',
+    }]);
+    await writeFile(
+      path.join(pluginRoot, "tileborne-plugin.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: "@tileborne-plugins/test-runtime",
+        name: "test-runtime",
+        version: "0.0.0",
+        entry: { runtime: "./dist/runtime.js" },
+        contributes: {},
+        permissions: [],
+        dependsOn: [],
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(pluginRoot, "dist", "runtime.js"),
+      "export default { id: '@tileborne-plugins/test-runtime', onTick() {} };\n",
+      "utf8",
+    );
+
+    const sessionId = "runtime-host-debug-test";
+    sessionIds.push(sessionId);
+    await startPlaytestRuntimeHost({
+      sessionId,
+      projectId: PROJECT_ID as ProjectId,
+      packageDirectory: artifactDirectory,
+      pluginInstalls: [{ pluginId: "@tileborne-plugins/test-runtime", rootPath: pluginRoot }],
+    });
+
+    const deadline = Date.now() + 2_000;
+    while ((getPlaytestBehaviorDebugSnapshot(sessionId)?.tick ?? 0) < 2 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(
+      getPlaytestBehaviorDebugSnapshot(sessionId)?.tick,
+      getPlaytestRuntimeMetrics(sessionId)?.lastPluginEvent,
+    ).toBeGreaterThanOrEqual(2);
+    const paused = await controlPlaytestBehaviorDebug(sessionId, "pause");
+    expect(paused.status).toBe("paused");
+    const pausedTrace = paused.traces
+      .filter(({ behaviorId }) => behaviorId === RUNTIME_TICK_BEHAVIOR_ID)
+      .at(-1);
+    expect(pausedTrace).toMatchObject({
+      behaviorId: RUNTIME_TICK_BEHAVIOR_ID,
+      instanceId: RUNTIME_TICK_BEHAVIOR_ID,
+      eventId: "runtime.tick",
+      source: {
+        sourceKind: "typescript",
+        filePath: "behaviors/sources/runtime-tick.ts",
+      },
+      commands: [{ kind: "state.set" }, { kind: "debug.tick" }],
+      state: {
+        apiToken: "[redacted]",
+        homePath: "[redacted path]",
+        temporaryPath: "[redacted path]",
+        rootPath: "[redacted path]",
+        windowsPath: "[redacted path]",
+        uncPath: "[redacted path]",
+        traversalPath: "[redacted path]",
+        embeddedError: "[redacted path]",
+        embeddedStack: "[redacted path]",
+        fileUri: "[redacted path]",
+        tildePath: "[redacted path]",
+        driveRelative: "[redacted path]",
+        embeddedUnc: "[redacted path]",
+        colonEmbedded: "[redacted path]",
+        commaEmbedded: "[redacted path]",
+        safeLabel: "assets/door.png",
+        safeUrl: "https://example.invalid/assets/door.png",
+      },
+    });
+    expect(pausedTrace?.state.oversized).toBe(`${'x'.repeat(4_096)}…`);
+    expect(pausedTrace?.state.items).toHaveLength(64);
+    const pausedTick = paused.tick;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(getPlaytestBehaviorDebugSnapshot(sessionId)?.tick).toBe(pausedTick);
+
+    const stepped = await controlPlaytestBehaviorDebug(sessionId, "step");
+    expect(stepped).toMatchObject({ status: "paused", tick: pausedTick + 1 });
+
+    const replacementCode = `export default {id:'test.desktop-debug',sourceKind:'typescript',state:{count:0},on:{'runtime.tick':({state})=>state.set('count',(state.get('count')??0)+10)}};`;
+    const replacementHash = hashBytes(new TextEncoder().encode(replacementCode));
+    expect(await hotReloadPlaytestBehavior(PROJECT_ID as ProjectId, {
+      behaviorId: RUNTIME_TICK_BEHAVIOR_ID,
+      sourceKind: "typescript",
+      modulePath: "behaviors/modules/runtime-tick.mjs",
+      hash: replacementHash,
+      code: replacementCode,
+    })).toMatchObject([{ status: "applied", hash: replacementHash }]);
+    const afterReload = await controlPlaytestBehaviorDebug(sessionId, "step");
+    const reloadedCount = afterReload.states.find(({ behaviorId }) => behaviorId === RUNTIME_TICK_BEHAVIOR_ID)?.state.count;
+
+    const rejected = await hotReloadPlaytestBehavior(PROJECT_ID as ProjectId, {
+      behaviorId: RUNTIME_TICK_BEHAVIOR_ID,
+      sourceKind: "typescript",
+      modulePath: "behaviors/modules/runtime-tick.mjs",
+      hash: replacementHash,
+      code: `${replacementCode}\n// invalid hash`,
+    });
+    expect(rejected).toMatchObject([{ status: "rejected-using-last-known-good" }]);
+    const neighborReplacement = `export default {id:'test.neighbor',sourceKind:'typescript',state:{count:0},on:{'runtime.tick':({state})=>state.set('count',(state.get('count')??0)+5)}};`;
+    const neighborHash = hashBytes(new TextEncoder().encode(neighborReplacement));
+    expect(await hotReloadPlaytestBehavior(PROJECT_ID as ProjectId, {
+      behaviorId: NEIGHBOR_BEHAVIOR_ID,
+      sourceKind: "typescript",
+      modulePath: "behaviors/modules/neighbor.mjs",
+      hash: neighborHash,
+      code: neighborReplacement,
+    })).toMatchObject([{ status: "applied", hash: neighborHash }]);
+    const afterRejected = await controlPlaytestBehaviorDebug(sessionId, "step");
+    expect(afterRejected.states.find(({ behaviorId }) => behaviorId === RUNTIME_TICK_BEHAVIOR_ID)?.state.count).toBe(Number(reloadedCount) + 10);
+    expect(afterRejected.states.find(({ behaviorId }) => behaviorId === NEIGHBOR_BEHAVIOR_ID)?.state.count).toBeGreaterThanOrEqual(5);
+    expect(afterRejected.lastReload).toMatchObject({ behaviorId: NEIGHBOR_BEHAVIOR_ID, status: "applied" });
+
+    const continued = await controlPlaytestBehaviorDebug(sessionId, "continue");
+    expect(continued.status).toBe("running");
   });
 
   it("routes a legacy-`kind` map through the package decode contract before the plugin reads it", async () => {
@@ -429,9 +678,7 @@ describe("playtest-runtime-host", () => {
     await waitForTickCount(sessionId, 2);
 
     const snapshot = getPlaytestRuntimeSnapshot(sessionId);
-    expect(snapshot?.players).toEqual([
-      { playerId: "player-1", x: 80, y: 96 },
-    ]);
+    expect(snapshot?.players).toEqual([{ playerId: "player-1", x: 80, y: 96 }]);
     expect(snapshot?.frame).toBeInstanceOf(Uint8Array);
     const frame = decodeServerFrame(snapshot!.frame!);
     expect(frame).toMatchObject({

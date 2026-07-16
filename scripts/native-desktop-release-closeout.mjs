@@ -467,8 +467,9 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     embeddedProvenanceValue.sourceCommit === head &&
     embeddedProvenanceValue.version === version &&
     embeddedProvenanceValue.buildCommand === 'pnpm --filter @tileborne/desktop package' &&
-    typeof embeddedProvenanceValue.teamIdentifier === 'string' &&
-    /^[A-Z0-9]{10}$/.test(embeddedProvenanceValue.teamIdentifier)
+    (embeddedProvenanceValue.teamIdentifier === null ||
+      (typeof embeddedProvenanceValue.teamIdentifier === 'string' &&
+        /^[A-Z0-9]{10}$/.test(embeddedProvenanceValue.teamIdentifier)))
       ? 'valid'
       : embeddedProvenanceValue !== null
         ? 'invalid'

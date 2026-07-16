@@ -18,14 +18,14 @@ const requireValue = (env, name) => {
   return value;
 };
 
-const createDesktopReleaseProvenance = ({ sourceCommit, version, teamIdentifier }) => {
+const createDesktopBuildProvenance = ({ sourceCommit, version, teamIdentifier = null }) => {
   if (!/^[a-f0-9]{40}$/.test(sourceCommit)) {
     throw new Error('desktop-release.invalid-source-commit: git rev-parse HEAD');
   }
   if (typeof version !== 'string' || version.length === 0) {
     throw new Error('desktop-release.invalid-version: package version required');
   }
-  if (!/^[A-Z0-9]{10}$/.test(teamIdentifier)) {
+  if (teamIdentifier !== null && !/^[A-Z0-9]{10}$/.test(teamIdentifier)) {
     throw new Error('desktop-release.invalid-team-id: expected 10 uppercase letters/digits');
   }
   return Object.freeze({
@@ -36,6 +36,13 @@ const createDesktopReleaseProvenance = ({ sourceCommit, version, teamIdentifier 
     teamIdentifier,
     buildCommand: 'pnpm --filter @tileborne/desktop package',
   });
+};
+
+const createDesktopReleaseProvenance = ({ sourceCommit, version, teamIdentifier }) => {
+  if (!/^[A-Z0-9]{10}$/.test(teamIdentifier)) {
+    throw new Error('desktop-release.invalid-team-id: expected 10 uppercase letters/digits');
+  }
+  return createDesktopBuildProvenance({ sourceCommit, version, teamIdentifier });
 };
 
 const createDesktopReleaseForgeSettings = ({
@@ -145,6 +152,7 @@ const validateDesktopReleaseMakeResults = ({
 module.exports = {
   RELEASE_FLAG,
   REQUIRED_ENVIRONMENT,
+  createDesktopBuildProvenance,
   createDesktopReleaseProvenance,
   createDesktopReleaseForgeSettings,
   validateDesktopReleaseMakeResults,

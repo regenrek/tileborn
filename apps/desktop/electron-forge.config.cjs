@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  createDesktopBuildProvenance,
   createDesktopReleaseForgeSettings,
   createDesktopReleaseProvenance,
   validateDesktopReleaseMakeResults,
@@ -185,8 +186,7 @@ const copyGameHostBuildAssets = (buildPath) => {
   fs.cpSync(sourceRoot, destinationRoot, { recursive: true, dereference: true });
 };
 
-const writeSignedDesktopReleaseProvenance = (buildPath) => {
-  if (!desktopRelease.enabled) return;
+const writeDesktopBuildProvenance = (buildPath) => {
   const sourceCommit = childProcess
     .execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: workspaceRoot,
@@ -202,11 +202,13 @@ const writeSignedDesktopReleaseProvenance = (buildPath) => {
   fs.writeFileSync(
     releaseProvenancePath,
     `${JSON.stringify(
-      createDesktopReleaseProvenance({
-        sourceCommit,
-        version,
-        teamIdentifier: desktopRelease.teamIdentifier,
-      }),
+      desktopRelease.enabled
+        ? createDesktopReleaseProvenance({
+            sourceCommit,
+            version,
+            teamIdentifier: desktopRelease.teamIdentifier,
+          })
+        : createDesktopBuildProvenance({ sourceCommit, version }),
     )}\n`,
     { encoding: 'utf8', mode: 0o444 },
   );
@@ -268,7 +270,7 @@ module.exports = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyBundledPlugins(buildPath);
       copyGameHostBuildAssets(buildPath);
-      writeSignedDesktopReleaseProvenance(buildPath);
+      writeDesktopBuildProvenance(buildPath);
     },
     // Packager pruning has finished here. Install a lockfile-derived, portable
     // production closure for the two binary-backed Vite externals; everything

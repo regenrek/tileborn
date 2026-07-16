@@ -21,6 +21,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const nativeVerifierPath = path.join(repoRoot, 'scripts/macos-desktop-release-verifier.mjs');
 const require = createRequire(import.meta.url);
 const {
+  createDesktopBuildProvenance,
   createDesktopReleaseForgeSettings,
   createDesktopReleaseProvenance,
   validateDesktopReleaseMakeResults,
@@ -39,6 +40,11 @@ const {
     };
     readonly dmgConfig?: Readonly<Record<string, unknown>>;
   };
+  readonly createDesktopBuildProvenance: (input: {
+    readonly sourceCommit: string;
+    readonly version: string;
+    readonly teamIdentifier?: string | null;
+  }) => Readonly<Record<string, unknown>>;
   readonly createDesktopReleaseProvenance: (input: {
     readonly sourceCommit: string;
     readonly version: string;
@@ -589,6 +595,19 @@ describe('desktop 1.0 release contract', () => {
       appleApiKey: '/external/AuthKey.p8',
       appleApiKeyId: 'KLMNOPQRST',
       appleApiIssuer: '12345678-1234-1234-1234-123456789abc',
+    });
+    expect(
+      createDesktopBuildProvenance({
+        sourceCommit: 'a'.repeat(40),
+        version: '1.0.0',
+      }),
+    ).toEqual({
+      schemaVersion: 1,
+      policyId: 'tileborne-desktop-1.0',
+      sourceCommit: 'a'.repeat(40),
+      version: '1.0.0',
+      teamIdentifier: null,
+      buildCommand: 'pnpm --filter @tileborne/desktop package',
     });
     expect(
       createDesktopReleaseProvenance({

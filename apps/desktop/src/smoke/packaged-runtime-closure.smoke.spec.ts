@@ -14,6 +14,23 @@ const desktopRoot = path.resolve(smokeDir, '../..');
 const packagedDirectory = path.join(desktopRoot, 'out', `Tileborne-darwin-${process.arch}`);
 const sourceApp =
   process.env.TILEBORNE_PACKAGED_APP_PATH ?? path.join(packagedDirectory, 'Tileborne.app');
+const evaluateStableMainContext = async <T>(operation: () => Promise<T>): Promise<T> => {
+  const deadline = Date.now() + 10_000;
+  while (true) {
+    try {
+      return await operation();
+    } catch (cause) {
+      if (
+        Date.now() >= deadline ||
+        !(cause instanceof Error) ||
+        !cause.message.includes('Execution context was destroyed')
+      ) {
+        throw cause;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+};
 const isContainedPath = (root: string, candidate: string): boolean => {
   const relative = path.relative(path.resolve(root), path.resolve(candidate));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -126,12 +143,14 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     await expect.poll(async () => page.title(), { timeout: 10_000 }).toMatch(/Tileborne/i);
     expect(await page.evaluate(() => typeof window.tileborne)).toBe('object');
 
-    const mainState = await app!.evaluate(({ app: electronApp, BrowserWindow }) => ({
-      appPath: electronApp.getAppPath(),
-      isPackaged: electronApp.isPackaged,
-      resourcesPath: process.resourcesPath,
-      visibleWindows: BrowserWindow.getAllWindows().filter((window) => window.isVisible()).length,
-    }));
+    const mainState = await evaluateStableMainContext(() =>
+      app!.evaluate(({ app: electronApp, BrowserWindow }) => ({
+        appPath: electronApp.getAppPath(),
+        isPackaged: electronApp.isPackaged,
+        resourcesPath: process.resourcesPath,
+        visibleWindows: BrowserWindow.getAllWindows().filter((window) => window.isVisible()).length,
+      })),
+    );
     expect(mainState.isPackaged).toBe(true);
     expect(mainState.visibleWindows).toBeGreaterThan(0);
     expect(isContainedPath(path.join(copiedApp, 'Contents', 'Resources'), mainState.appPath)).toBe(
@@ -139,17 +158,19 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     );
     expect(mainState.resourcesPath).toBe(path.join(copiedApp, 'Contents', 'Resources'));
 
-    const resolutions = await app!.evaluate(({ app: electronApp }) => {
-      const moduleApi = process.getBuiltinModule('node:module');
-      const pathApi = process.getBuiltinModule('node:path');
-      const appRequire = moduleApi.createRequire(
-        pathApi.join(electronApp.getAppPath(), '.vite', 'build', 'main.cjs'),
-      );
-      return ['esbuild', 'miniflare'].map((packageName) => ({
-        packageName,
-        resolved: appRequire.resolve(packageName),
-      }));
-    });
+    const resolutions = await evaluateStableMainContext(() =>
+      app!.evaluate(({ app: electronApp }) => {
+        const moduleApi = process.getBuiltinModule('node:module');
+        const pathApi = process.getBuiltinModule('node:path');
+        const appRequire = moduleApi.createRequire(
+          pathApi.join(electronApp.getAppPath(), '.vite', 'build', 'main.cjs'),
+        );
+        return ['esbuild', 'miniflare'].map((packageName) => ({
+          packageName,
+          resolved: appRequire.resolve(packageName),
+        }));
+      }),
+    );
     for (const resolution of resolutions) {
       expect(
         isContainedPath(path.join(copiedApp, 'Contents', 'Resources'), resolution.resolved),

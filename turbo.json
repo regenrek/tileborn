@@ -18,7 +18,7 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "build"]
     },
     "@tileborne/services-build#test": {
       "dependsOn": ["^build", "build"]

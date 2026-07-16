@@ -14,6 +14,6 @@ export const withTempHome = async <A>(run: (home: string) => Promise<A>): Promis
     } else {
       process.env['TILEBORNE_HOME'] = previous;
     }
-    await rm(home, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 };

@@ -103,17 +103,25 @@ export const loadRuntimeMapPackage = async (
     if (manifestBytes === undefined) {
       return fail('schema', `package has no ${RUNTIME_MAP_PACKAGE_MANIFEST_FILE}`);
     }
+    const manifestJson = parseJson(RUNTIME_MAP_PACKAGE_MANIFEST_FILE, manifestBytes);
+    if (
+      typeof manifestJson === 'object' &&
+      manifestJson !== null &&
+      'schemaVersion' in manifestJson &&
+      typeof manifestJson.schemaVersion === 'number' &&
+      Number.isSafeInteger(manifestJson.schemaVersion) &&
+      manifestJson.schemaVersion !== RUNTIME_MAP_PACKAGE_SCHEMA_VERSION
+    ) {
+      return fail(
+        'version',
+        `package schema version ${String(manifestJson.schemaVersion)} is not the supported version ${RUNTIME_MAP_PACKAGE_SCHEMA_VERSION}`,
+      );
+    }
     const manifest = decodeEntry(
       RUNTIME_MAP_PACKAGE_MANIFEST_FILE,
       RuntimeMapPackageManifest,
-      parseJson(RUNTIME_MAP_PACKAGE_MANIFEST_FILE, manifestBytes),
+      manifestJson,
     );
-    if (manifest.schemaVersion !== RUNTIME_MAP_PACKAGE_SCHEMA_VERSION) {
-      return fail(
-        'version',
-        `package schema version ${manifest.schemaVersion} is not the supported version ${RUNTIME_MAP_PACKAGE_SCHEMA_VERSION}`,
-      );
-    }
 
     const readVerified = async (entryName: RuntimeMapPackageEntryName): Promise<unknown> => {
       const fileName = RUNTIME_MAP_PACKAGE_ENTRY_FILES[entryName];

@@ -117,6 +117,15 @@ describe('loadRuntimeMapPackage (ADR-0030)', () => {
     }
   });
 
+  it('classifies a malformed schema version as schema rather than version drift', async () => {
+    const files = await buildPackageFiles({ schemaVersion: '999' });
+    const result = await loadRuntimeMapPackage(readerFor(files));
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) {
+      expect(result.failure.reason).toBe('schema');
+    }
+  });
+
   it('fails with integrity when an entry was tampered after assembly', async () => {
     const files = await buildPackageFiles();
     files.set(

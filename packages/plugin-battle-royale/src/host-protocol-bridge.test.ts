@@ -1,24 +1,24 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   decodeHostClientFrameView,
   decodeHostServerLifecycleFrame,
-} from "./host-protocol-bridge.js";
+} from './host-protocol-bridge.js';
 
-describe("host protocol bridge", () => {
-  it("projects GameOver into the plugin-neutral host lifecycle view", () => {
+describe('host protocol bridge', () => {
+  it('projects GameOver into the plugin-neutral host lifecycle view', () => {
     const bytes = BattleRoyaleProtocol.encodeServerMessage(
-      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId("player-2") }),
+      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId('player-2') }),
     );
 
     expect(decodeHostServerLifecycleFrame(bytes)).toEqual({
-      kind: "game-over",
-      winnerPlayerId: "player-2",
+      kind: 'game-over',
+      winnerPlayerId: 'player-2',
     });
   });
-  it("decodes reload and interact action flags into runtime input", () => {
+  it('decodes reload and interact action flags into runtime input', () => {
     const bytes = BattleRoyaleProtocol.encodeClientMessage(
       new BattleRoyaleProtocol.PlayerInput({
         tick: 21,
@@ -35,7 +35,7 @@ describe("host protocol bridge", () => {
     );
 
     expect(decodeHostClientFrameView(bytes)).toEqual({
-      kind: "input",
+      kind: 'input',
       input: {
         tick: 21,
         seq: 4,
@@ -50,7 +50,7 @@ describe("host protocol bridge", () => {
     });
   });
 
-  it("decodes aim and weapon slot fields into runtime input", () => {
+  it('decodes aim and weapon slot fields into runtime input', () => {
     const bytes = BattleRoyaleProtocol.encodeClientMessage(
       new BattleRoyaleProtocol.PlayerInput({
         tick: 22,
@@ -67,7 +67,7 @@ describe("host protocol bridge", () => {
     );
 
     expect(decodeHostClientFrameView(bytes)).toEqual({
-      kind: "input",
+      kind: 'input',
       input: {
         tick: 22,
         seq: 5,
@@ -83,7 +83,7 @@ describe("host protocol bridge", () => {
     });
   });
 
-  it("decodes snapshot acks into transport frames", () => {
+  it('decodes snapshot acks into transport frames', () => {
     const bytes = BattleRoyaleProtocol.encodeClientMessage(
       new BattleRoyaleProtocol.SnapshotAck({
         tick: 44,
@@ -92,7 +92,7 @@ describe("host protocol bridge", () => {
     );
 
     expect(decodeHostClientFrameView(bytes)).toEqual({
-      kind: "ack",
+      kind: 'ack',
       tick: 44,
       receivedAtMs: 1_234,
     });

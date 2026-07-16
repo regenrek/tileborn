@@ -1,6 +1,6 @@
-import type { TileborneMap } from "@tileborne/core";
+import type { TileborneMap } from '@tileborne/core';
 
-import { generateMap } from "./generate-map.js";
+import { generateMap } from './generate-map.js';
 
 export interface BattleRoyaleSampleMap {
   readonly id: string;
@@ -10,9 +10,9 @@ export interface BattleRoyaleSampleMap {
 
 export const createBattleRoyaleSampleMaps = (): readonly BattleRoyaleSampleMap[] => [
   {
-    id: "crossfire-range",
-    label: "Crossfire Range",
-    map: generateMap("br-sample-crossfire-range", {
+    id: 'crossfire-range',
+    label: 'Crossfire Range',
+    map: generateMap('br-sample-crossfire-range', {
       width: 36,
       height: 36,
       spawnCount: 8,
@@ -20,9 +20,9 @@ export const createBattleRoyaleSampleMaps = (): readonly BattleRoyaleSampleMap[]
     }),
   },
   {
-    id: "supply-grid",
-    label: "Supply Grid",
-    map: generateMap("br-sample-supply-grid", {
+    id: 'supply-grid',
+    label: 'Supply Grid',
+    map: generateMap('br-sample-supply-grid', {
       width: 48,
       height: 40,
       spawnCount: 12,
@@ -30,9 +30,9 @@ export const createBattleRoyaleSampleMaps = (): readonly BattleRoyaleSampleMap[]
     }),
   },
   {
-    id: "storm-ring",
-    label: "Storm Ring",
-    map: generateMap("br-sample-storm-ring", {
+    id: 'storm-ring',
+    label: 'Storm Ring',
+    map: generateMap('br-sample-storm-ring', {
       width: 64,
       height: 52,
       spawnCount: 16,

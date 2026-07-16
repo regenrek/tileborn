@@ -1,6 +1,6 @@
-import type { PlayerModelRef } from "@tileborne/core";
+import type { PlayerModelRef } from '@tileborne/core';
 
-import { DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS } from "../content-assets.js";
+import { DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS } from '../content-assets.js';
 
 /**
  * Canonical lightweight identity of a selectable Battle Royale player model.
@@ -13,7 +13,7 @@ import { DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS } from "../content-assets.js";
  *
  * Identity-only by construction (id + label only, no renderer/runtime policy).
  */
-export type BattleRoyaleSelectableModel = Pick<PlayerModelRef, "id" | "label">;
+export type BattleRoyaleSelectableModel = Pick<PlayerModelRef, 'id' | 'label'>;
 
 /** Project a full authored player-model ref down to its selectable identity. */
 export const toSelectableModel = (ref: PlayerModelRef): BattleRoyaleSelectableModel => ({

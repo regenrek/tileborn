@@ -1,9 +1,9 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
-import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
-import { Option } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
+import { Option } from 'effect';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { DAMAGE, MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from "../constants.js";
+import { DAMAGE, MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from '../constants.js';
 import {
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
@@ -12,14 +12,14 @@ import {
   type Player,
   type PlayerStats,
   type Position,
-} from "../ecs/components.js";
-import { getZone, resetZoneSingleton } from "../ecs/zone.js";
-import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
-import { buildTestMapPackage } from "../test-map-package.js";
-import { TEST_PLAYER_MODELS } from "../test-player-model.js";
-import { createRuntimeAdapter } from "../runtime-adapter.js";
-import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
-import { createTestPluginWorld } from "../test-plugin-world.js";
+} from '../ecs/components.js';
+import { getZone, resetZoneSingleton } from '../ecs/zone.js';
+import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
+import { buildTestMapPackage } from '../test-map-package.js';
+import { TEST_PLAYER_MODELS } from '../test-player-model.js';
+import { createRuntimeAdapter } from '../runtime-adapter.js';
+import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
+import { createTestPluginWorld } from '../test-plugin-world.js';
 import {
   buildScriptedInputLog,
   makeReplayMapPackage,
@@ -27,7 +27,7 @@ import {
   type WorldSnapshot,
   REPLAY_SEED,
   runReplayScenario,
-} from "../__replay__/replay-harness.js";
+} from '../__replay__/replay-harness.js';
 
 const TICK_DT = 1 / MOVEMENT.tickRate;
 const ACCEPTANCE_SEED = REPLAY_SEED;
@@ -43,9 +43,9 @@ const FAST_ZONE_SCHEDULE = {
 const ACCEPTANCE_TICK_COUNT = 120;
 
 const EXPECTED_SPAWN_POSITIONS = [
-  { playerId: "player-1", x: 10, y: 16 },
-  { playerId: "player-2", x: 22, y: 16 },
-  { playerId: "player-3", x: 50, y: 50 },
+  { playerId: 'player-1', x: 10, y: 16 },
+  { playerId: 'player-2', x: 22, y: 16 },
+  { playerId: 'player-3', x: 50, y: 50 },
 ] as const;
 
 const makeTestObject = (
@@ -79,7 +79,7 @@ export const makeAcceptanceFixtureMap = () =>
       makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 50, 50),
       // The wider start radius is authored on the anchor (initialRadiusTiles)
       // so the package-derived shrink schedule matches the scenario's needs.
-      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16, {
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16, {
         initialRadiusTiles: 20,
       }),
     ],
@@ -161,7 +161,7 @@ export const buildAcceptanceInputLog = (): InputLogEntry[] => {
     if (tick === 1) {
       log.push({
         tick,
-        playerId: "player-1",
+        playerId: 'player-1',
         dir: 0,
         shoot: true,
       });
@@ -172,7 +172,7 @@ export const buildAcceptanceInputLog = (): InputLogEntry[] => {
 };
 
 export const buildMissProjectileInputLog = (): InputLogEntry[] => [
-  { tick: 1, playerId: "player-1", dir: 4, shoot: true },
+  { tick: 1, playerId: 'player-1', dir: 4, shoot: true },
 ];
 
 interface AcceptanceRunResult {
@@ -180,7 +180,7 @@ interface AcceptanceRunResult {
   readonly snapshots: readonly WorldSnapshot[];
   readonly finalSnapshot: WorldSnapshot;
   readonly gameOverSnapshot: WorldSnapshot | undefined;
-  readonly messages: ReturnType<ReturnType<typeof createMsgCollector>["decodeAll"]>;
+  readonly messages: ReturnType<ReturnType<typeof createMsgCollector>['decodeAll']>;
   readonly maxProjectileCount: number;
   readonly finalProjectileCount: number;
   readonly initialZoneRadius: number;
@@ -246,7 +246,7 @@ export const runAcceptanceScenario = (
       snapshots.push(captureWorldSnapshot(world, tick));
     }
 
-    if (!gameOverSeen && collector.decodeAll().some((message) => message._tag === "GameOver")) {
+    if (!gameOverSeen && collector.decodeAll().some((message) => message._tag === 'GameOver')) {
       gameOverSeen = true;
       gameOverSnapshot = captureWorldSnapshot(world, tick);
     }
@@ -276,8 +276,8 @@ afterEach(() => {
   resetZoneSingleton();
 });
 
-describe("acceptance: full BR loop", () => {
-  it("spawns players at artifact spawn positions", () => {
+describe('acceptance: full BR loop', () => {
+  it('spawns players at artifact spawn positions', () => {
     const result = runAcceptanceScenario([], 0);
 
     for (const expected of EXPECTED_SPAWN_POSITIONS) {
@@ -290,68 +290,73 @@ describe("acceptance: full BR loop", () => {
     }
   });
 
-  it("integrates player-1 movement from directional input", () => {
+  it('integrates player-1 movement from directional input', () => {
     const inputLog: InputLogEntry[] = [
-      { tick: 1, playerId: "player-1", dir: 0, shoot: false },
-      { tick: 2, playerId: "player-1", dir: 0, shoot: false },
+      { tick: 1, playerId: 'player-1', dir: 0, shoot: false },
+      { tick: 2, playerId: 'player-1', dir: 0, shoot: false },
     ];
     const result = runAcceptanceScenario(inputLog, 2);
 
-    expect(findPlayer(result.spawnSnapshot, "player-1")).toMatchObject({ x: 10, y: 16 });
-    expect(findPlayer(result.finalSnapshot, "player-1")?.x).toBeCloseTo(10 + 2 * MOVEMENT.speed * TICK_DT);
-    expect(findPlayer(result.finalSnapshot, "player-1")?.y).toBeCloseTo(16);
+    expect(findPlayer(result.spawnSnapshot, 'player-1')).toMatchObject({ x: 10, y: 16 });
+    expect(findPlayer(result.finalSnapshot, 'player-1')?.x).toBeCloseTo(
+      10 + 2 * MOVEMENT.speed * TICK_DT,
+    );
+    expect(findPlayer(result.finalSnapshot, 'player-1')?.y).toBeCloseTo(16);
   });
 
-  it("shrinks the zone per schedule and damages out-of-zone players", () => {
+  it('shrinks the zone per schedule and damages out-of-zone players', () => {
     const result = runAcceptanceScenario();
 
     expect(result.initialZoneRadius).toBe(20);
     expect(result.zoneRadiusAtTick60).toBeLessThan(result.initialZoneRadius);
 
-    const player3 = findPlayer(result.finalSnapshot, "player-3");
+    const player3 = findPlayer(result.finalSnapshot, 'player-3');
     expect(player3?.alive).toBe(0);
     expect(
       result.messages.some(
         (message) =>
-          message._tag === "PlayerKilled" &&
-          message.killer === BattleRoyaleProtocol.makePlayerId("zone"),
+          message._tag === 'PlayerKilled' &&
+          message.killer === BattleRoyaleProtocol.makePlayerId('zone'),
       ),
     ).toBe(true);
   });
 
-  it("damages on projectile hit and despawns projectiles after lifetime", () => {
+  it('damages on projectile hit and despawns projectiles after lifetime', () => {
     const result = runAcceptanceScenario();
 
-    const player2 = findPlayer(result.finalSnapshot, "player-2");
+    const player2 = findPlayer(result.finalSnapshot, 'player-2');
     expect(player2?.alive).toBe(0);
 
     const projectileKills = result.messages.filter(
       (message) =>
-        message._tag === "PlayerKilled" &&
-        message.killer === BattleRoyaleProtocol.makePlayerId("player-1"),
+        message._tag === 'PlayerKilled' &&
+        message.killer === BattleRoyaleProtocol.makePlayerId('player-1'),
     );
     expect(projectileKills.length).toBeGreaterThan(0);
 
-    const missResult = runAcceptanceScenario(buildMissProjectileInputLog(), PROJECTILE.ttlTicks + 5);
+    const missResult = runAcceptanceScenario(
+      buildMissProjectileInputLog(),
+      PROJECTILE.ttlTicks + 5,
+    );
     expect(missResult.maxProjectileCount).toBeGreaterThan(0);
     expect(missResult.finalProjectileCount).toBe(0);
   });
 
-  it("emits GameOver with the last standing winner", () => {
+  it('emits GameOver with the last standing winner', () => {
     const result = runAcceptanceScenario();
 
-    const gameOvers = result.messages.filter((message) => message._tag === "GameOver");
+    const gameOvers = result.messages.filter((message) => message._tag === 'GameOver');
     expect(gameOvers).toHaveLength(1);
     expect(gameOvers[0]).toMatchObject({
-      winner: BattleRoyaleProtocol.makePlayerId("player-1"),
+      winner: BattleRoyaleProtocol.makePlayerId('player-1'),
     });
 
     expect(result.gameOverSnapshot).toBeDefined();
-    const winner = findPlayer(result.gameOverSnapshot!, "player-1");
+    const winner = findPlayer(result.gameOverSnapshot!, 'player-1');
     expect(winner?.alive).toBe(1);
   });
 
-  it("replays identically for the same seed and input log", () => {
+  it('replays identically for the same seed and input log', () => {
     const inputLog = buildAcceptanceInputLog();
     const first = runAcceptanceScenario(inputLog);
     const second = runAcceptanceScenario(inputLog);
@@ -360,7 +365,7 @@ describe("acceptance: full BR loop", () => {
     expect(first.snapshots).toEqual(second.snapshots);
   });
 
-  it("matches existing replay harness byte-identical snapshots", () => {
+  it('matches existing replay harness byte-identical snapshots', () => {
     const inputLog = buildScriptedInputLog(300);
     const first = runReplayScenario({
       seed: ACCEPTANCE_SEED,

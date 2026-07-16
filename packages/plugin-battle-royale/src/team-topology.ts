@@ -66,10 +66,7 @@ const derivedTeamIds = (
   }
   const minimumTeamCount = Math.ceil(participantCount / teamCapacity(matchMode));
   const teamCount = Math.min(participantCount, Math.max(2, minimumTeamCount));
-  return Array.from(
-    { length: participantCount },
-    (_, index) => `team-${(index % teamCount) + 1}`,
-  );
+  return Array.from({ length: participantCount }, (_, index) => `team-${(index % teamCount) + 1}`);
 };
 
 /**
@@ -89,10 +86,12 @@ export const resolveBattleRoyaleTeamTopology = (
     return {
       source: 'derived',
       teamIds: fallback,
-      issues: [{
-        code: 'insufficient-participants',
-        message: `${matchMode} requires at least two usable spawn points.`,
-      }],
+      issues: [
+        {
+          code: 'insufficient-participants',
+          message: `${matchMode} requires at least two usable spawn points.`,
+        },
+      ],
     };
   }
   const authored = selectedSpawns.map((spawn) => normalizedAuthoredTeam(spawn.team));
@@ -104,11 +103,13 @@ export const resolveBattleRoyaleTeamTopology = (
     return {
       source: 'derived',
       teamIds: fallback,
-      issues: [{
-        code: 'mixed-authored-and-legacy-teams',
-        message:
-          'Spawn teams mix explicit labels with legacy “solo” or empty values. Label every spawn team or clear all labels to use automatic balanced teams.',
-      }],
+      issues: [
+        {
+          code: 'mixed-authored-and-legacy-teams',
+          message:
+            'Spawn teams mix explicit labels with legacy “solo” or empty values. Label every spawn team or clear all labels to use automatic balanced teams.',
+        },
+      ],
     };
   }
 

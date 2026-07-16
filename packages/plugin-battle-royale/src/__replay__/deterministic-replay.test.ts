@@ -1,19 +1,15 @@
-import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
-import { describe, expect, it } from "vitest";
+import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
+import { describe, expect, it } from 'vitest';
 
-import {
-  buildScriptedInputLog,
-  REPLAY_SEED,
-  runReplayScenario,
-} from "./replay-harness.js";
-import { MAX_DELTA_SNAPSHOT_BYTES } from "../server/snapshot-emitter.js";
+import { buildScriptedInputLog, REPLAY_SEED, runReplayScenario } from './replay-harness.js';
+import { MAX_DELTA_SNAPSHOT_BYTES } from '../server/snapshot-emitter.js';
 
 const REPLAY_TICK_COUNT = 300;
 const SNAPSHOT_INTERVAL = 30;
 const SCRIPTED_INPUT_LOG = buildScriptedInputLog(REPLAY_TICK_COUNT);
 
-describe("deterministic replay", () => {
-  it("produces byte-identical periodic snapshots across consecutive runs", () => {
+describe('deterministic replay', () => {
+  it('produces byte-identical periodic snapshots across consecutive runs', () => {
     const first = runReplayScenario({
       seed: REPLAY_SEED,
       inputLog: SCRIPTED_INPUT_LOG,
@@ -32,7 +28,7 @@ describe("deterministic replay", () => {
     expect(first.snapshotHashes).toEqual(second.snapshotHashes);
   });
 
-  it("produces byte-identical final snapshots across consecutive runs", () => {
+  it('produces byte-identical final snapshots across consecutive runs', () => {
     const first = runReplayScenario({
       seed: REPLAY_SEED,
       inputLog: SCRIPTED_INPUT_LOG,
@@ -50,7 +46,7 @@ describe("deterministic replay", () => {
     expect(first.finalSnapshotHash).toBe(second.finalSnapshotHash);
   });
 
-  it("emits byte-identical WelcomeSnapshot and DeltaSnapshot frames across consecutive runs", () => {
+  it('emits byte-identical WelcomeSnapshot and DeltaSnapshot frames across consecutive runs', () => {
     const first = runReplayScenario({
       seed: REPLAY_SEED,
       inputLog: SCRIPTED_INPUT_LOG,
@@ -64,14 +60,18 @@ describe("deterministic replay", () => {
       snapshotInterval: SNAPSHOT_INTERVAL,
     });
 
-    const decoded = first.wireSnapshotFrames.map((frame) => BattleRoyaleProtocol.decodeServerMessage(frame));
+    const decoded = first.wireSnapshotFrames.map((frame) =>
+      BattleRoyaleProtocol.decodeServerMessage(frame),
+    );
     const deltaSizes = first.wireSnapshotFrames
       .map((frame, index) => ({ frame, message: decoded[index]! }))
-      .filter(({ message }) => message._tag === "DeltaSnapshot")
+      .filter(({ message }) => message._tag === 'DeltaSnapshot')
       .map(({ frame }) => frame.byteLength);
 
-    expect(decoded[0]?._tag).toBe("WelcomeSnapshot");
-    expect(decoded.filter((message) => message._tag === "DeltaSnapshot")).toHaveLength(REPLAY_TICK_COUNT);
+    expect(decoded[0]?._tag).toBe('WelcomeSnapshot');
+    expect(decoded.filter((message) => message._tag === 'DeltaSnapshot')).toHaveLength(
+      REPLAY_TICK_COUNT,
+    );
     expect(Math.max(...deltaSizes)).toBeLessThan(MAX_DELTA_SNAPSHOT_BYTES);
     expect(Buffer.from(first.wireSnapshotBytes)).toEqual(Buffer.from(second.wireSnapshotBytes));
     expect(first.wireSnapshotFrameSizes).toEqual(second.wireSnapshotFrameSizes);

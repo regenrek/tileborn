@@ -1,9 +1,9 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { DAMAGE, MOVEMENT, PROJECTILE, RESPAWN, ZONE } from "./constants.js";
-import { resolveRoomRules, type RoomRulesConfig } from "./ecs/damage-system.js";
-import type { ZoneScheduleConfig } from "./ecs/zone.js";
-import type { ExportedArtifact } from "./types/artifact.js";
+import { DAMAGE, MOVEMENT, PROJECTILE, RESPAWN, ZONE } from './constants.js';
+import { resolveRoomRules, type RoomRulesConfig } from './ecs/damage-system.js';
+import type { ZoneScheduleConfig } from './ecs/zone.js';
+import type { ExportedArtifact } from './types/artifact.js';
 
 const BattleRoyaleZoneScheduleOverride = Schema.Struct({
   waitSec: Schema.optional(Schema.Number),
@@ -48,8 +48,8 @@ const BattleRoyaleRespawnOverride = Schema.Struct({
 const BattleRoyaleRoomRulesOverride = Schema.Struct({
   respawnEnabled: Schema.optional(Schema.Boolean),
   friendlyFire: Schema.optional(Schema.Boolean),
-  matchMode: Schema.optional(Schema.Literals(["solo", "duo", "squad"] as const)),
-  matchEndPolicy: Schema.optional(Schema.Literals(["last-standing", "continuous"] as const)),
+  matchMode: Schema.optional(Schema.Literals(['solo', 'duo', 'squad'] as const)),
+  matchEndPolicy: Schema.optional(Schema.Literals(['last-standing', 'continuous'] as const)),
 });
 
 const BattleRoyaleLoadoutOverride = Schema.Struct({
@@ -57,7 +57,7 @@ const BattleRoyaleLoadoutOverride = Schema.Struct({
 });
 
 /** Partial per-room overrides for battle royale gameplay constants. */
-export class BattleRoyaleConfig extends Schema.Class<BattleRoyaleConfig>("BattleRoyaleConfig")({
+export class BattleRoyaleConfig extends Schema.Class<BattleRoyaleConfig>('BattleRoyaleConfig')({
   tickRate: Schema.optional(Schema.Number),
   movement: Schema.optional(BattleRoyaleMovementOverride),
   zone: Schema.optional(BattleRoyaleZoneOverride),
@@ -142,20 +142,22 @@ export const DEFAULT_BATTLE_ROYALE_CONFIG: ResolvedBattleRoyaleConfig = {
   roomRules: {
     respawnEnabled: false,
     friendlyFire: false,
-    matchMode: "solo",
-    matchEndPolicy: "last-standing",
+    matchMode: 'solo',
+    matchEndPolicy: 'last-standing',
   },
   loadout: {},
 };
 
-export const decodeBattleRoyaleConfigOverride = (input: unknown): BattleRoyaleConfigInput | undefined => {
+export const decodeBattleRoyaleConfigOverride = (
+  input: unknown,
+): BattleRoyaleConfigInput | undefined => {
   const decoded = Schema.decodeUnknownOption(BattleRoyaleConfig)(input);
   return Option.getOrUndefined(decoded);
 };
 
 const mergeZoneSchedule = (
   base: ZoneScheduleConfig,
-  override: BattleRoyaleConfigInput["zone"],
+  override: BattleRoyaleConfigInput['zone'],
   tickRate: number,
 ): ZoneScheduleConfig => ({
   waitSec: override?.schedule?.waitSec ?? base.waitSec,
@@ -192,12 +194,14 @@ export const mergeBattleRoyaleConfig = (
       speed: override.projectile?.speed ?? base.projectile.speed,
       damage: override.projectile?.damage ?? base.projectile.damage,
       ttlTicks: override.projectile?.ttlTicks ?? base.projectile.ttlTicks,
-      shootCooldownTicks: override.projectile?.shootCooldownTicks ?? base.projectile.shootCooldownTicks,
+      shootCooldownTicks:
+        override.projectile?.shootCooldownTicks ?? base.projectile.shootCooldownTicks,
       radius: override.projectile?.radius ?? base.projectile.radius,
       weaponSlotCount: override.projectile?.weaponSlotCount ?? base.projectile.weaponSlotCount,
       magazineSize: override.projectile?.magazineSize ?? base.projectile.magazineSize,
       reloadTicks: override.projectile?.reloadTicks ?? base.projectile.reloadTicks,
-      initialAmmoReserve: override.projectile?.initialAmmoReserve ?? base.projectile.initialAmmoReserve,
+      initialAmmoReserve:
+        override.projectile?.initialAmmoReserve ?? base.projectile.initialAmmoReserve,
     },
     damage: {
       playerHealth: override.damage?.playerHealth ?? base.damage.playerHealth,
@@ -210,11 +214,15 @@ export const mergeBattleRoyaleConfig = (
       ...(override.roomRules?.respawnEnabled !== undefined
         ? { respawnEnabled: override.roomRules.respawnEnabled }
         : {}),
-      ...(override.respawn?.enabled !== undefined ? { respawnEnabled: override.respawn.enabled } : {}),
+      ...(override.respawn?.enabled !== undefined
+        ? { respawnEnabled: override.respawn.enabled }
+        : {}),
       ...(override.roomRules?.friendlyFire !== undefined
         ? { friendlyFire: override.roomRules.friendlyFire }
         : {}),
-      ...(override.roomRules?.matchMode !== undefined ? { matchMode: override.roomRules.matchMode } : {}),
+      ...(override.roomRules?.matchMode !== undefined
+        ? { matchMode: override.roomRules.matchMode }
+        : {}),
       ...(override.roomRules?.matchEndPolicy !== undefined
         ? { matchEndPolicy: override.roomRules.matchEndPolicy }
         : {}),

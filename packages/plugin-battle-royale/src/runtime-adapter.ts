@@ -206,8 +206,15 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
       ensureZoneInitialized(world);
       ensureRuntimeEcsInitialized(world);
 
-      syncPlayerInputRuntimeComponents(world, (playerId) => host.getPlayerInput?.(playerId), runtimeEcsOptions);
-      const movementCollisionEnvironment = buildRuntimeCollisionEnvironment(world, tileCollisionEnvironment);
+      syncPlayerInputRuntimeComponents(
+        world,
+        (playerId) => host.getPlayerInput?.(playerId),
+        runtimeEcsOptions,
+      );
+      const movementCollisionEnvironment = buildRuntimeCollisionEnvironment(
+        world,
+        tileCollisionEnvironment,
+      );
       runAbilityStatusSystem(
         world,
         {
@@ -220,7 +227,9 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
             offsetX: 0,
             offsetY: config.movement.footprintOffsetY,
           },
-          ...(movementCollisionEnvironment === undefined ? {} : { collisionEnvironment: movementCollisionEnvironment }),
+          ...(movementCollisionEnvironment === undefined
+            ? {}
+            : { collisionEnvironment: movementCollisionEnvironment }),
         },
         abilityStatusState,
         damageState,
@@ -233,7 +242,11 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
         bodyByModelId: playerPhysicsByModelId,
         speedMultiplierByPlayerId: movementInputs.speedMultiplierByPlayerId,
       });
-      syncPlayerInputRuntimeComponents(world, (playerId) => host.getPlayerInput?.(playerId), runtimeEcsOptions);
+      syncPlayerInputRuntimeComponents(
+        world,
+        (playerId) => host.getPlayerInput?.(playerId),
+        runtimeEcsOptions,
+      );
 
       const inventoryLootContext = {
         artifact,
@@ -244,13 +257,12 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
         healthPackAmount: INVENTORY.healthPackAmount,
         playerHealth: config.damage.playerHealth,
       };
-      runInventoryLootSystem(
-        world,
-        inventoryLootContext,
-        inventoryLootState,
-      );
+      runInventoryLootSystem(world, inventoryLootContext, inventoryLootState);
 
-      const combatCollisionEnvironment = buildRuntimeCollisionEnvironment(world, tileCollisionEnvironment);
+      const combatCollisionEnvironment = buildRuntimeCollisionEnvironment(
+        world,
+        tileCollisionEnvironment,
+      );
       const combatBlockers = buildCombatBlockers(combatCollisionEnvironment);
       const worldView = createBattleRoyaleCombatWorldView(
         world,
@@ -278,7 +290,9 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
           projectileBoundsRadius: config.projectile.radius,
           bodyByModelId: playerPhysicsByModelId,
           tick,
-          ...(combatCollisionEnvironment === undefined ? {} : { collisionEnvironment: combatCollisionEnvironment }),
+          ...(combatCollisionEnvironment === undefined
+            ? {}
+            : { collisionEnvironment: combatCollisionEnvironment }),
         },
         combatState,
       );

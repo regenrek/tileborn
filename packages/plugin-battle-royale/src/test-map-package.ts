@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   GameObjectCatalog,
@@ -17,14 +17,14 @@ import {
   type GameObjectType,
   type JsonObject,
   type PlayerModelRef,
-} from "@tileborne/core";
-import { Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Result, Schema } from 'effect';
 
-import { DEFAULT_MAX_PLAYERS, PLUGIN_ID } from "./constants.js";
-import { exportBattleRoyaleModeData } from "./mode-data.js";
-import { buildBattleRoyaleRuntimeState } from "./runtime-state-from-package.js";
-import { TEST_PLAYER_MODELS } from "./test-player-model.js";
-import type { BattleRoyaleArtifact } from "./types/artifact.js";
+import { DEFAULT_MAX_PLAYERS, PLUGIN_ID } from './constants.js';
+import { exportBattleRoyaleModeData } from './mode-data.js';
+import { buildBattleRoyaleRuntimeState } from './runtime-state-from-package.js';
+import { TEST_PLAYER_MODELS } from './test-player-model.js';
+import type { BattleRoyaleArtifact } from './types/artifact.js';
 
 /**
  * Test-only `RuntimeMapPackage` fixture builder: the encoded wire JSON every
@@ -33,10 +33,10 @@ import type { BattleRoyaleArtifact } from "./types/artifact.js";
  * in the same shape `assembleRuntimeMapPackage` validates.
  */
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const shippedCatalog = Schema.decodeUnknownSync(GameObjectCatalog)(
-  JSON.parse(fs.readFileSync(path.join(packageRoot, "schemas/game-object-catalog.json"), "utf8")),
+  JSON.parse(fs.readFileSync(path.join(packageRoot, 'schemas/game-object-catalog.json'), 'utf8')),
 );
 
 export const shippedCatalogObjectTypes = (): readonly GameObjectType[] =>
@@ -48,8 +48,7 @@ export const toCatalogEntries = (
   objectTypes: readonly GameObjectType[],
 ): readonly RuntimeCatalogEntry[] =>
   objectTypes.map(
-    (objectType) =>
-      new RuntimeCatalogEntry({ origin: { _tag: "plugin", pluginId }, objectType }),
+    (objectType) => new RuntimeCatalogEntry({ origin: { _tag: 'plugin', pluginId }, objectType }),
   );
 
 /** Same role-free projection assembly performs (`map.objects` → placements). */
@@ -71,7 +70,7 @@ const namespacedSettings = (map: TileborneMap): Record<string, JsonObject> =>
   Object.fromEntries(
     Object.entries(map.properties).filter(
       (entry): entry is [string, JsonObject] =>
-        typeof entry[1] === "object" && entry[1] !== null && !Array.isArray(entry[1]),
+        typeof entry[1] === 'object' && entry[1] !== null && !Array.isArray(entry[1]),
     ),
   );
 
@@ -87,7 +86,7 @@ const sectionEntryHashes = (sections: Record<string, unknown>): Record<string, s
   Object.fromEntries(
     Object.entries(sections).map(([entryName, section]) => [
       entryName,
-      `sha256:${createHash("sha256").update(JSON.stringify(section)).digest("hex")}`,
+      `sha256:${createHash('sha256').update(JSON.stringify(section)).digest('hex')}`,
     ]),
   );
 
@@ -131,7 +130,7 @@ export const buildTestMapPackage = (input: TestMapPackageInput): unknown => {
   const authoredMaxPlayers = settings[PLUGIN_ID]?.maxPlayers;
   const playerCapacity =
     input.playerCapacity ??
-    (typeof authoredMaxPlayers === "number" &&
+    (typeof authoredMaxPlayers === 'number' &&
     Number.isInteger(authoredMaxPlayers) &&
     authoredMaxPlayers > 0
       ? authoredMaxPlayers
@@ -144,7 +143,13 @@ export const buildTestMapPackage = (input: TestMapPackageInput): unknown => {
     settings,
     content:
       input.content ??
-      ({ schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} } satisfies JsonObject),
+      ({
+        schemaVersion: 1,
+        items: [],
+        lootTables: [],
+        weapons: [],
+        provenance: {},
+      } satisfies JsonObject),
     behaviors: EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
     visuals: Schema.encodeSync(RuntimeMapPackageVisuals)(visuals),
     assets: [] as unknown[],
@@ -153,22 +158,21 @@ export const buildTestMapPackage = (input: TestMapPackageInput): unknown => {
 
   return {
     manifest: {
-      packageId: "mappkg:550e8400-e29b-41d4-a716-446655440777",
+      packageId: 'mappkg:550e8400-e29b-41d4-a716-446655440777',
       schemaVersion: RUNTIME_MAP_PACKAGE_SCHEMA_VERSION,
-      projectId: "project:550e8400-e29b-41d4-a716-446655440888",
+      projectId: 'project:550e8400-e29b-41d4-a716-446655440888',
       mapId: String(input.map.id),
       activeMode: PLUGIN_ID,
       playerCapacity,
-      engineVersion: "0.0.0-test",
-      createdAt: "2026-06-10T00:00:00.000Z",
+      engineVersion: '0.0.0-test',
+      createdAt: '2026-06-10T00:00:00.000Z',
       entryHashes: sectionEntryHashes(sections),
     },
     ...sections,
   };
 };
 
-export interface TestRuntimeArtifactOptions
-  extends Omit<TestMapPackageInput, "map"> {
+export interface TestRuntimeArtifactOptions extends Omit<TestMapPackageInput, 'map'> {
   readonly selectedPlayerModelId?: string;
 }
 
@@ -185,6 +189,6 @@ export const buildTestRuntimeArtifact = (
   return buildBattleRoyaleRuntimeState(buildTestMapPackage({ map, ...packageInput }), {
     ...(selectedPlayerModelId === undefined
       ? {}
-      : { playerModelSelections: [{ playerId: "player-1", modelId: selectedPlayerModelId }] }),
+      : { playerModelSelections: [{ playerId: 'player-1', modelId: selectedPlayerModelId }] }),
   });
 };

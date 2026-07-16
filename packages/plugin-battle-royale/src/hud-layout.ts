@@ -1,5 +1,5 @@
-import { CORE_HUD_WIDGETS, HudLayout } from "@tileborne/core";
-import { Schema } from "effect";
+import { CORE_HUD_WIDGETS, HudLayout } from '@tileborne/core';
+import { Schema } from 'effect';
 
 /**
  * Battle Royale's default in-match HUD layout as DATA (the typed
@@ -15,10 +15,10 @@ import { Schema } from "effect";
  */
 
 /** Contribution id for BR's default HUD layout registered via the typed slot. */
-export const BR_HUD_LAYOUT_CONTRIBUTION_ID = "br-hud-layout";
+export const BR_HUD_LAYOUT_CONTRIBUTION_ID = 'br-hud-layout';
 
 /** Durable id of BR's default HUD layout. */
-export const BR_HUD_LAYOUT_ID = "br-default-hud";
+export const BR_HUD_LAYOUT_ID = 'br-default-hud';
 
 interface PlacementData {
   readonly id: string;
@@ -49,17 +49,17 @@ export const buildBattleRoyaleHudLayoutData = (): {
 } => ({
   id: BR_HUD_LAYOUT_ID,
   widgets: [
-    placement("local-player", CORE_HUD_WIDGETS.LocalPlayerStatus, "top-left", 0),
-    placement("team-roster", CORE_HUD_WIDGETS.TeamRoster, "top-left", 1),
-    placement("alive-count", CORE_HUD_WIDGETS.AliveCount, "top-right", 0),
-    placement("minimap", CORE_HUD_WIDGETS.Minimap, "top-right", 1),
-    placement("scoreboard", CORE_HUD_WIDGETS.Scoreboard, "top-right", 2),
-    placement("zone-status", CORE_HUD_WIDGETS.ZoneStatus, "bottom-center", 0),
-    placement("pickup-prompt", CORE_HUD_WIDGETS.PickupPrompt, "bottom-center", 1),
-    placement("weapon-panel", CORE_HUD_WIDGETS.WeaponPanel, "bottom-center", 2),
-    placement("kill-feed", CORE_HUD_WIDGETS.KillFeed, "bottom-left", 0),
-    placement("event-toast", CORE_HUD_WIDGETS.EventToast, "center", 0),
-    placement("damage-indicator", CORE_HUD_WIDGETS.DamageIndicator, "center", 1),
+    placement('local-player', CORE_HUD_WIDGETS.LocalPlayerStatus, 'top-left', 0),
+    placement('team-roster', CORE_HUD_WIDGETS.TeamRoster, 'top-left', 1),
+    placement('alive-count', CORE_HUD_WIDGETS.AliveCount, 'top-right', 0),
+    placement('minimap', CORE_HUD_WIDGETS.Minimap, 'top-right', 1),
+    placement('scoreboard', CORE_HUD_WIDGETS.Scoreboard, 'top-right', 2),
+    placement('zone-status', CORE_HUD_WIDGETS.ZoneStatus, 'bottom-center', 0),
+    placement('pickup-prompt', CORE_HUD_WIDGETS.PickupPrompt, 'bottom-center', 1),
+    placement('weapon-panel', CORE_HUD_WIDGETS.WeaponPanel, 'bottom-center', 2),
+    placement('kill-feed', CORE_HUD_WIDGETS.KillFeed, 'bottom-left', 0),
+    placement('event-toast', CORE_HUD_WIDGETS.EventToast, 'center', 0),
+    placement('damage-indicator', CORE_HUD_WIDGETS.DamageIndicator, 'center', 1),
   ],
 });
 

@@ -11,16 +11,16 @@
  *
  * Player-model concerns live in the sibling `./player-models` entry.
  */
-export { BATTLE_ROYALE_AUTHORING_OBJECTS, BATTLE_ROYALE_PALETTE_ACTIONS } from "./palette.js";
+export { BATTLE_ROYALE_AUTHORING_OBJECTS, BATTLE_ROYALE_PALETTE_ACTIONS } from './palette.js';
 export {
   applyBattleRoyaleAuthoringSettings,
   battleRoyaleObjectCounts,
   readBattleRoyaleAuthoringSettings,
   readBattleRoyaleMapSettings,
   type BattleRoyaleAuthoringSettings,
-} from "./map-settings.js";
+} from './map-settings.js';
 export {
   assessBattleRoyaleWeaponCompatibility,
   isBattleRoyaleWeaponCompatible,
   type BattleRoyaleWeaponCompatibilityCandidate,
-} from "../weapon-compatibility.js";
+} from '../weapon-compatibility.js';

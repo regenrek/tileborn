@@ -4,14 +4,14 @@ import {
   type CollisionFootprintPart,
   type GameObjectType,
   type TileborneMap,
-} from "@tileborne/core";
-import type { TileIdType, TilesetPack } from "@tileborne/sdk-tileset/schemas";
+} from '@tileborne/core';
+import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
 
 import type {
   CollisionChunkArtifact,
   MapCollisionArtifact,
   ObjectCollisionRectArtifact,
-} from "./types/artifact.js";
+} from './types/artifact.js';
 
 /**
  * Collision extraction for the ADR-0030 `buildBattleRoyaleRuntimeState`
@@ -40,10 +40,14 @@ export const extractCollisionArtifact = (
   const chunks: CollisionChunkArtifact[] = [];
   for (const layer of map.layers) {
     const tag =
-      "_tag" in layer && typeof layer._tag === "string"
+      '_tag' in layer && typeof layer._tag === 'string'
         ? layer._tag
         : (layer as { kind?: string }).kind;
-    if ((tag !== "tile" && tag !== "collision") || !("chunks" in layer) || !Array.isArray(layer.chunks)) {
+    if (
+      (tag !== 'tile' && tag !== 'collision') ||
+      !('chunks' in layer) ||
+      !Array.isArray(layer.chunks)
+    ) {
       continue;
     }
     for (const chunk of layer.chunks) {
@@ -74,11 +78,11 @@ const findCollisionFootprint = (
 ): CollisionFootprintComponent | undefined =>
   objectType.components.find(
     (component): component is CollisionFootprintComponent =>
-      component._tag === "collision-footprint",
+      component._tag === 'collision-footprint',
   );
 
 const placeFootprintPart = (
-  object: TileborneMap["objects"][number],
+  object: TileborneMap['objects'][number],
   part: CollisionFootprintPart,
 ): ObjectCollisionRectArtifact | undefined => {
   if (part.width <= 0 || part.height <= 0) {
@@ -123,7 +127,11 @@ export const extractObjectCollisionRects = (
       }
     }
   }
-  return rects.sort((left, right) =>
-    left.objectId.localeCompare(right.objectId) || left.y - right.y || left.x - right.x || left.width - right.width,
+  return rects.sort(
+    (left, right) =>
+      left.objectId.localeCompare(right.objectId) ||
+      left.y - right.y ||
+      left.x - right.x ||
+      left.width - right.width,
   );
 };

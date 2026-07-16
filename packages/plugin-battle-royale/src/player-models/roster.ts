@@ -7,15 +7,15 @@ import {
   type JsonValue,
   type TileborneMap,
   type PlayerModelValidationIssue,
-} from "@tileborne/core";
-import { Schema } from "effect";
+} from '@tileborne/core';
+import { Schema } from 'effect';
 
 import {
   DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS,
   DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS,
   isDeprecatedBattleRoyalePlayerModelId,
-} from "../content-assets.js";
-import { PLUGIN_ID } from "../constants.js";
+} from '../content-assets.js';
+import { PLUGIN_ID } from '../constants.js';
 
 /**
  * Battle Royale's per-project player-model roster: a single set of selectable
@@ -32,9 +32,7 @@ import { PLUGIN_ID } from "../constants.js";
 const PlayerModelArray = Schema.Array(PlayerModelRef);
 
 const readObject = (value: JsonValue | undefined): JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as JsonObject)
-    : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as JsonObject) : {};
 
 export interface BattleRoyalePlayerModelRosterIssue extends PlayerModelValidationIssue {
   readonly modelId: string | undefined;
@@ -51,15 +49,13 @@ export const validateBattleRoyalePlayerModelRoster = (
     })),
   );
 
-const assertValidBattleRoyalePlayerModelRoster = (
-  models: readonly PlayerModelRef[],
-): void => {
+const assertValidBattleRoyalePlayerModelRoster = (models: readonly PlayerModelRef[]): void => {
   const issues = validateBattleRoyalePlayerModelRoster(models);
   if (issues.length > 0) {
     throw new Error(
       `Invalid Battle Royale player-model roster: ${issues
         .map((issue) => `${issue.path}: ${issue.message}`)
-        .join("; ")}`,
+        .join('; ')}`,
     );
   }
 };
@@ -112,7 +108,7 @@ export const resolveBattleRoyalePlayerModels = (
  * schema class instances across bundle copies of `@tileborne/core`.
  */
 export const resolveBattleRoyalePlayerModelsWire = (
-  project: Pick<ProjectManifest, "settings"> | undefined,
+  project: Pick<ProjectManifest, 'settings'> | undefined,
 ): readonly JsonObject[] =>
   JSON.parse(
     JSON.stringify(
@@ -187,7 +183,7 @@ interface PlayerModelPolicyContext {
  */
 export const BATTLE_ROYALE_PLAYER_MODEL_POLICY = {
   pluginId: PLUGIN_ID,
-  mode: "selectable" as const,
+  mode: 'selectable' as const,
   requiredClipKeys: REQUIRED_PLAYER_MODEL_CLIP_KEYS,
   defaultGeometry: {
     anchor: { x: 0.5, y: 0.86 },

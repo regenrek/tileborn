@@ -1,4 +1,4 @@
-import { DEFAULT_BATTLE_ROYALE_MODELS, type BattleRoyaleSelectableModel } from "./models.js";
+import { DEFAULT_BATTLE_ROYALE_MODELS, type BattleRoyaleSelectableModel } from './models.js';
 
 /**
  * Shipped-client loadout selection sink for the Battle Royale menu surfaces.
@@ -7,11 +7,11 @@ import { DEFAULT_BATTLE_ROYALE_MODELS, type BattleRoyaleSelectableModel } from "
  * first roster entry. Operates purely on the canonical
  * {@link BattleRoyaleSelectableModel} identity — no parallel model definition.
  */
-const STORAGE_KEY = "tileborne.battle-royale.loadout.model";
+const STORAGE_KEY = 'tileborne.battle-royale.loadout.model';
 
 const storage = (): Storage | undefined => {
   try {
-    return typeof localStorage === "undefined" ? undefined : localStorage;
+    return typeof localStorage === 'undefined' ? undefined : localStorage;
   } catch {
     return undefined;
   }

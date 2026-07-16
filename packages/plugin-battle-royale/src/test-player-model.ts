@@ -4,18 +4,18 @@ import {
   PlayerModelRef,
   makeClipId,
   makePackId,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-export const testPlayerModel = (id = "model:test-player"): PlayerModelRef => {
+export const testPlayerModel = (id = 'model:test-player'): PlayerModelRef => {
   const clipIdAt = (index: number) =>
-    makeClipId(`550e8400-e29b-41d4-a716-44665544${String(index).padStart(4, "0")}`);
+    makeClipId(`550e8400-e29b-41d4-a716-44665544${String(index).padStart(4, '0')}`);
   return new PlayerModelRef({
     id,
     label: id,
     ref: new AssetLibraryReference({
-      packId: makePackId("550e8400-e29b-41d4-a716-446655449999"),
-      kind: "sprite",
-      refId: "placeable:test-player",
+      packId: makePackId('550e8400-e29b-41d4-a716-446655449999'),
+      kind: 'sprite',
+      refId: 'placeable:test-player',
       clipId: clipIdAt(0),
     }),
     defaultClipId: clipIdAt(0),

@@ -1,4 +1,4 @@
-import { LOOT_PICKUP_RADIUS } from "./constants.js";
+import { LOOT_PICKUP_RADIUS } from './constants.js';
 
 export interface HealthState {
   readonly current: number;
@@ -37,8 +37,8 @@ export interface InventoryItem {
 }
 
 export type WinCondition =
-  | { readonly kind: "ongoing" }
-  | { readonly kind: "victor"; readonly victor: string };
+  | { readonly kind: 'ongoing' }
+  | { readonly kind: 'victor'; readonly victor: string };
 
 export interface WinCheckSnapshot {
   readonly players: readonly PlayerState[];
@@ -51,7 +51,11 @@ export interface PickupSnapshot {
 }
 
 export interface SimulationRules {
-  readonly applyZoneDamage: (player: PlayerState, zone: ZoneState, dtSeconds: number) => HealthState;
+  readonly applyZoneDamage: (
+    player: PlayerState,
+    zone: ZoneState,
+    dtSeconds: number,
+  ) => HealthState;
   readonly checkWinCondition: (snapshot: WinCheckSnapshot) => WinCondition;
   readonly processLootPickup: (
     player: PickupSnapshot,
@@ -65,7 +69,7 @@ export const createSimulationRules = (): SimulationRules => ({
     void _dtSeconds;
     return player.health;
   },
-  checkWinCondition: () => ({ kind: "ongoing" }),
+  checkWinCondition: () => ({ kind: 'ongoing' }),
   processLootPickup: () => [],
 });
 

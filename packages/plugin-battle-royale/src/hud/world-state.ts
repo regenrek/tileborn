@@ -1,4 +1,4 @@
-import { MOVEMENT, ZONE } from "../constants.js";
+import { MOVEMENT, ZONE } from '../constants.js';
 
 /**
  * Battle Royale's canonical world→HUD derivation (the HUD-state SSOT for the
@@ -13,7 +13,7 @@ import { MOVEMENT, ZONE } from "../constants.js";
  * drift from the simulation.
  */
 
-const PRIMARY_PLAYER_ID = "player-1";
+const PRIMARY_PLAYER_ID = 'player-1';
 const DEFAULT_PLAYER_HEALTH = 100;
 
 /** Minimal structural view of the host's plugin world (component access only). */
@@ -98,7 +98,7 @@ interface PickupPromptComponent {
   readonly itemKind?: string;
   readonly tier?: string;
   readonly distance?: number;
-  readonly action: "pickup-loot";
+  readonly action: 'pickup-loot';
   readonly available: boolean;
 }
 
@@ -182,7 +182,7 @@ export interface PlaytestHudWorldState {
       readonly itemKind?: string;
       readonly tier?: string;
       readonly distance?: number;
-      readonly action: "pickup-loot";
+      readonly action: 'pickup-loot';
       readonly available: boolean;
     };
     readonly pickupToast?: {
@@ -209,7 +209,7 @@ export interface PlaytestHudWorldState {
     }[];
   };
   readonly zoneStatus?: {
-    readonly phase: "stable" | "countdown" | "shrinking";
+    readonly phase: 'stable' | 'countdown' | 'shrinking';
     readonly secondsRemaining?: number;
   };
   readonly scoreboard: readonly {
@@ -235,17 +235,17 @@ export interface PlaytestHudWorldState {
       readonly objectId: string;
       readonly x: number;
       readonly y: number;
-      readonly kind: "pickup" | "loot" | "hazard" | "objective";
+      readonly kind: 'pickup' | 'loot' | 'hazard' | 'objective';
       readonly tier?: string;
       readonly available?: boolean;
     }[];
   };
 }
 
-type ZoneStatusState = NonNullable<PlaytestHudWorldState["zoneStatus"]>;
-type ScoreboardEntry = PlaytestHudWorldState["scoreboard"][number];
-type MinimapPlayer = PlaytestHudWorldState["minimap"]["players"][number];
-type MinimapObject = PlaytestHudWorldState["minimap"]["objects"][number];
+type ZoneStatusState = NonNullable<PlaytestHudWorldState['zoneStatus']>;
+type ScoreboardEntry = PlaytestHudWorldState['scoreboard'][number];
+type MinimapPlayer = PlaytestHudWorldState['minimap']['players'][number];
+type MinimapObject = PlaytestHudWorldState['minimap']['objects'][number];
 
 const readOptionalComponent = <T extends object>(
   world: HudWorldView,
@@ -266,15 +266,17 @@ export const formatPlayerDisplayName = (playerId: string): string => {
   return playerId;
 };
 
-const reserveAmount = (reserve: AmmoReserveComponent | undefined, weaponId: string): number | undefined =>
-  reserve?.stacks.find((stack) => stack.ammoKind === weaponId)?.amount;
+const reserveAmount = (
+  reserve: AmmoReserveComponent | undefined,
+  weaponId: string,
+): number | undefined => reserve?.stacks.find((stack) => stack.ammoKind === weaponId)?.amount;
 
 const readWeapon = (
   runtime: WeaponRuntimeStateComponent | undefined,
   equipped: EquippedWeaponComponent | undefined,
   reserve: AmmoReserveComponent | undefined,
   reload: ReloadStateComponent | undefined,
-): NonNullable<NonNullable<PlaytestHudWorldState["localPlayer"]>["weapon"]> | undefined => {
+): NonNullable<NonNullable<PlaytestHudWorldState['localPlayer']>['weapon']> | undefined => {
   if (runtime !== undefined) {
     const reserveAmmo = reserveAmount(reserve, runtime.weaponId);
     return {
@@ -306,7 +308,7 @@ const computeZoneStatus = (zone: ZoneComponent, tick: number): ZoneStatusState =
     const elapsed = Math.max(0, tick - zone.phaseStartTick);
     const remainingTicks = Math.max(0, phaseDuration - elapsed);
     return {
-      phase: "countdown",
+      phase: 'countdown',
       secondsRemaining: Math.ceil(remainingTicks / MOVEMENT.tickRate),
     };
   }
@@ -314,16 +316,16 @@ const computeZoneStatus = (zone: ZoneComponent, tick: number): ZoneStatusState =
   if (zone.shrinkStartTick >= 0) {
     const elapsed = tick - zone.shrinkStartTick;
     if (elapsed >= 0 && elapsed < zone.shrinkDurationTicks) {
-      return { phase: "shrinking" };
+      return { phase: 'shrinking' };
     }
   }
 
-  return { phase: "stable" };
+  return { phase: 'stable' };
 };
 
 const readZone = (world: HudWorldView): ZoneComponent | undefined => {
   try {
-    const zones = world.getComponent<ZoneComponent>("Zone");
+    const zones = world.getComponent<ZoneComponent>('Zone');
     for (const [, zone] of zones.entries()) {
       return zone;
     }
@@ -337,28 +339,34 @@ const readPlayers = (
   world: HudWorldView,
 ): {
   readonly totalPlayers: number;
-  readonly localPlayer?: PlaytestHudWorldState["localPlayer"];
+  readonly localPlayer?: PlaytestHudWorldState['localPlayer'];
   readonly scoreboard: readonly ScoreboardEntry[];
   readonly minimapPlayers: readonly MinimapPlayer[];
 } => {
   try {
-    const players = world.getComponent<PlayerComponent>("Player");
-    const positions = readOptionalComponent<PositionComponent>(world, "Position");
-    const armor = readOptionalComponent<ArmorComponent>(world, "Armor");
-    const equippedWeapons = readOptionalComponent<EquippedWeaponComponent>(world, "EquippedWeapon");
-    const reserves = readOptionalComponent<AmmoReserveComponent>(world, "AmmoReserve");
-    const reloadStates = readOptionalComponent<ReloadStateComponent>(world, "ReloadState");
-    const weaponRuntimeStates = readOptionalComponent<WeaponRuntimeStateComponent>(world, "WeaponRuntimeState");
-    const damageIndicators = readOptionalComponent<DamageIndicatorComponent>(world, "DamageIndicator");
-    const inventories = readOptionalComponent<InventoryComponent>(world, "Inventory");
-    const pickupPrompts = readOptionalComponent<PickupPromptComponent>(world, "PickupPrompt");
-    const pickupToasts = readOptionalComponent<PickupToastComponent>(world, "PickupToast");
-    const playerStats = readOptionalComponent<PlayerStatsComponent>(world, "PlayerStats");
-    const shields = readOptionalComponent<ShieldComponent>(world, "Shield");
-    const statuses = readOptionalComponent<StatusEffectsComponent>(world, "StatusEffects");
-    const abilityStates = readOptionalComponent<AbilityStateComponent>(world, "AbilityState");
+    const players = world.getComponent<PlayerComponent>('Player');
+    const positions = readOptionalComponent<PositionComponent>(world, 'Position');
+    const armor = readOptionalComponent<ArmorComponent>(world, 'Armor');
+    const equippedWeapons = readOptionalComponent<EquippedWeaponComponent>(world, 'EquippedWeapon');
+    const reserves = readOptionalComponent<AmmoReserveComponent>(world, 'AmmoReserve');
+    const reloadStates = readOptionalComponent<ReloadStateComponent>(world, 'ReloadState');
+    const weaponRuntimeStates = readOptionalComponent<WeaponRuntimeStateComponent>(
+      world,
+      'WeaponRuntimeState',
+    );
+    const damageIndicators = readOptionalComponent<DamageIndicatorComponent>(
+      world,
+      'DamageIndicator',
+    );
+    const inventories = readOptionalComponent<InventoryComponent>(world, 'Inventory');
+    const pickupPrompts = readOptionalComponent<PickupPromptComponent>(world, 'PickupPrompt');
+    const pickupToasts = readOptionalComponent<PickupToastComponent>(world, 'PickupToast');
+    const playerStats = readOptionalComponent<PlayerStatsComponent>(world, 'PlayerStats');
+    const shields = readOptionalComponent<ShieldComponent>(world, 'Shield');
+    const statuses = readOptionalComponent<StatusEffectsComponent>(world, 'StatusEffects');
+    const abilityStates = readOptionalComponent<AbilityStateComponent>(world, 'AbilityState');
     let totalPlayers = 0;
-    let localPlayer: PlaytestHudWorldState["localPlayer"];
+    let localPlayer: PlaytestHudWorldState['localPlayer'];
     const scoreboard: ScoreboardEntry[] = [];
     const minimapPlayers: MinimapPlayer[] = [];
 
@@ -387,15 +395,17 @@ const readPlayers = (
       }
       if (player.playerId === PRIMARY_PLAYER_ID) {
         const shield = shields?.get(entity);
-        const statusEffects = statuses?.get(entity)?.effects
-          .filter((effect) => effect.remainingTicks > 0)
+        const statusEffects = statuses
+          ?.get(entity)
+          ?.effects.filter((effect) => effect.remainingTicks > 0)
           .map((effect) => ({
             effectId: effect.effectId,
             remainingTicks: effect.remainingTicks,
             stacks: effect.stacks,
           }));
-        const abilityCooldowns = abilityStates?.get(entity)?.cooldowns
-          ?.filter((cooldown) => cooldown.remainingTicks > 0)
+        const abilityCooldowns = abilityStates
+          ?.get(entity)
+          ?.cooldowns?.filter((cooldown) => cooldown.remainingTicks > 0)
           .map((cooldown) => ({
             abilityId: cooldown.abilityId,
             remainingTicks: cooldown.remainingTicks,
@@ -437,12 +447,16 @@ const readPlayers = (
           ...(damageIndicator === undefined ? {} : { damageIndicator }),
           stats,
           ...(statusEffects !== undefined && statusEffects.length > 0 ? { statusEffects } : {}),
-          ...(abilityCooldowns !== undefined && abilityCooldowns.length > 0 ? { abilityCooldowns } : {}),
+          ...(abilityCooldowns !== undefined && abilityCooldowns.length > 0
+            ? { abilityCooldowns }
+            : {}),
         };
       }
     }
 
-    scoreboard.sort((left, right) => right.kills - left.kills || left.playerId.localeCompare(right.playerId));
+    scoreboard.sort(
+      (left, right) => right.kills - left.kills || left.playerId.localeCompare(right.playerId),
+    );
     minimapPlayers.sort((left, right) => left.playerId.localeCompare(right.playerId));
 
     return localPlayer === undefined
@@ -454,10 +468,10 @@ const readPlayers = (
 };
 
 const readMinimapObjects = (world: HudWorldView): readonly MinimapObject[] => {
-  const positions = readOptionalComponent<PositionComponent>(world, "Position");
-  const pickups = readOptionalComponent<PickupComponent>(world, "Pickup");
-  const lootSources = readOptionalComponent<LootSourceComponent>(world, "LootSource");
-  const hazards = readOptionalComponent<HazardComponent>(world, "Hazard");
+  const positions = readOptionalComponent<PositionComponent>(world, 'Position');
+  const pickups = readOptionalComponent<PickupComponent>(world, 'Pickup');
+  const lootSources = readOptionalComponent<LootSourceComponent>(world, 'LootSource');
+  const hazards = readOptionalComponent<HazardComponent>(world, 'Hazard');
   const entities = new Set<number>();
   for (const store of [pickups, lootSources, hazards]) {
     for (const [entity] of store?.entries() ?? []) {
@@ -475,27 +489,33 @@ const readMinimapObjects = (world: HudWorldView): readonly MinimapObject[] => {
       const loot = lootSources?.get(entity);
       const hazard = hazards?.get(entity);
       if (hazard?.enabled) {
-        return [{ objectId: String(entity), x: position.x, y: position.y, kind: "hazard" as const }];
+        return [
+          { objectId: String(entity), x: position.x, y: position.y, kind: 'hazard' as const },
+        ];
       }
       if (pickup !== undefined) {
-        return [{
-          objectId: String(entity),
-          x: position.x,
-          y: position.y,
-          kind: "pickup" as const,
-          tier: pickup.tier,
-          available: pickup.available,
-        }];
+        return [
+          {
+            objectId: String(entity),
+            x: position.x,
+            y: position.y,
+            kind: 'pickup' as const,
+            tier: pickup.tier,
+            available: pickup.available,
+          },
+        ];
       }
       if (loot !== undefined) {
-        return [{
-          objectId: String(entity),
-          x: position.x,
-          y: position.y,
-          kind: "loot" as const,
-          tier: loot.tier,
-          available: !loot.collected,
-        }];
+        return [
+          {
+            objectId: String(entity),
+            x: position.x,
+            y: position.y,
+            kind: 'loot' as const,
+            tier: loot.tier,
+            available: !loot.collected,
+          },
+        ];
       }
       return [];
     });

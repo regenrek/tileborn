@@ -6,23 +6,23 @@ import {
   VisualAnchorPoint,
   makeClipId,
   makePackId,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-export const BATTLE_ROYALE_CORE_PACK_ID = makePackId("b4111e00-0000-4000-8000-000000000001");
-export const BATTLE_ROYALE_CORE_PACK_VERSION = "0.1.0";
+export const BATTLE_ROYALE_CORE_PACK_ID = makePackId('b4111e00-0000-4000-8000-000000000001');
+export const BATTLE_ROYALE_CORE_PACK_VERSION = '0.1.0';
 
 const clipId = (modelIndex: number, clipIndex: number) =>
   makeClipId(
     `b4111e00-0000-4000-8000-${(0x1000 + modelIndex * 0x100 + clipIndex)
       .toString(16)
-      .padStart(12, "0")}`,
+      .padStart(12, '0')}`,
   );
 
 const playerModelPlaceableId = (modelIndex: number): string =>
-  `placeable:b4111e00-0000-4000-8000-${(0x2000 + modelIndex).toString(16).padStart(12, "0")}`;
+  `placeable:b4111e00-0000-4000-8000-${(0x2000 + modelIndex).toString(16).padStart(12, '0')}`;
 
 const objectPlaceableId = (objectIndex: number): string =>
-  `placeable:b4111e00-0000-4000-8000-${(0x5000 + objectIndex).toString(16).padStart(12, "0")}`;
+  `placeable:b4111e00-0000-4000-8000-${(0x5000 + objectIndex).toString(16).padStart(12, '0')}`;
 
 const model = (index: number, id: string, label: string): PlayerModelRef => {
   const clips = new PlayerModelClipSet({
@@ -41,7 +41,7 @@ const model = (index: number, id: string, label: string): PlayerModelRef => {
     label,
     ref: new AssetLibraryReference({
       packId: BATTLE_ROYALE_CORE_PACK_ID,
-      kind: "sprite",
+      kind: 'sprite',
       refId: playerModelPlaceableId(index),
       clipId: clips.idle,
     }),
@@ -58,8 +58,8 @@ const model = (index: number, id: string, label: string): PlayerModelRef => {
 };
 
 export const DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS: readonly PlayerModelRef[] = [
-  model(0, "maltipoo-mae", "Maltipoo Mae"),
-  model(1, "maltipoo-max", "Maltipoo Max"),
+  model(0, 'maltipoo-mae', 'Maltipoo Mae'),
+  model(1, 'maltipoo-max', 'Maltipoo Max'),
 ] as const;
 
 export const BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS = {
@@ -91,10 +91,10 @@ export const BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS = {
 
 const defaultModelIds = new Set(DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS.map((entry) => entry.id));
 export const DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS = [
-  "vanguard",
-  "ranger",
-  "medic",
-  "engineer",
+  'vanguard',
+  'ranger',
+  'medic',
+  'engineer',
 ] as const;
 const deprecatedDefaultModelIds: ReadonlySet<string> = new Set(
   DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS,

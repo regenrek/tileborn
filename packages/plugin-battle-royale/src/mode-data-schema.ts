@@ -1,12 +1,12 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { BattleRoyaleConfig } from "./battle-royale-config.js";
-import { DEFAULT_LOOT_TABLE } from "./constants.js";
+import { BattleRoyaleConfig } from './battle-royale-config.js';
+import { DEFAULT_LOOT_TABLE } from './constants.js';
 import {
   LootTableEntrySchema,
   ShrinkScheduleSchema,
   type LootTableEntry,
-} from "./types/artifact.js";
+} from './types/artifact.js';
 
 /**
  * BR's engine-opaque `modeData.<pluginId>` section (ADR-0030 slice 5).
@@ -22,7 +22,7 @@ import {
  * decodes the section, the Node-only exporter in `mode-data.ts` produces it.
  */
 export class BattleRoyaleModeData extends Schema.Class<BattleRoyaleModeData>(
-  "BattleRoyaleModeData",
+  'BattleRoyaleModeData',
 )({
   schemaVersion: Schema.Literal(1),
   maxPlayers: Schema.Number,

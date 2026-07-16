@@ -1,16 +1,16 @@
-import { gameObjectTypeIdForKey } from "@tileborne/core";
-import { BattleRoyaleAbility } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import { gameObjectTypeIdForKey } from '@tileborne/core';
+import { BattleRoyaleAbility } from '@tileborne/ipc-contracts/protocols/battle-royale';
 
 /**
  * Human-readable object-kind keys (stable across persistence / Tiled / palette
  * brushes). These are the keys the catalog derives type ids from.
  */
-export const SPAWN_POINT_KEY = "spawn-point";
-export const SHRINK_ZONE_ANCHOR_KEY = "shrink-zone-anchor";
-export const LOOT_CRATE_KEY = "loot-crate";
-export const TRAP_KEY = "trap";
-export const DECOY_KEY = "decoy";
-export const BARRIER_KEY = "barrier";
+export const SPAWN_POINT_KEY = 'spawn-point';
+export const SHRINK_ZONE_ANCHOR_KEY = 'shrink-zone-anchor';
+export const LOOT_CRATE_KEY = 'loot-crate';
+export const TRAP_KEY = 'trap';
+export const DECOY_KEY = 'decoy';
+export const BARRIER_KEY = 'barrier';
 
 /**
  * Catalog {@link GameObjectTypeId}s for BR's object types. `MapObject.kind`
@@ -32,9 +32,9 @@ export const BARRIER_KIND = gameObjectTypeIdForKey(BARRIER_KEY);
  * precedence).
  */
 export const BR_OVERLAY_SLOTS = {
-  shield: "shield",
-  shadow: "shadow",
-  hazard: "hazard",
+  shield: 'shield',
+  shadow: 'shadow',
+  hazard: 'hazard',
 } as const;
 
 export const MIN_SPAWN_POINTS = 4;
@@ -46,22 +46,22 @@ export const DEFAULT_LOOT_TABLE: readonly {
   readonly tier: string;
   readonly weight: number;
 }[] = [
-  { itemKind: "health-pack", tier: "common", weight: 40 },
-  { itemKind: "ammo-box", tier: "common", weight: 35 },
-  { itemKind: "armor-vest", tier: "rare", weight: 15 },
-  { itemKind: "weapon-crate", tier: "epic", weight: 10 },
+  { itemKind: 'health-pack', tier: 'common', weight: 40 },
+  { itemKind: 'ammo-box', tier: 'common', weight: 35 },
+  { itemKind: 'armor-vest', tier: 'rare', weight: 15 },
+  { itemKind: 'weapon-crate', tier: 'epic', weight: 10 },
 ];
 
 export const LOOT_PICKUP_RADIUS = 1.5;
 
-export const PLUGIN_ID = "@tileborne-plugins/battle-royale" as const;
+export const PLUGIN_ID = '@tileborne-plugins/battle-royale' as const;
 
 /**
  * Branded id of Battle Royale's single primary weapon (`weapon:<uuid>`).
  * Lives in renderer-safe constants (no simulation import) so the projector
  * bridge can reference the default weapon without pulling weapon balance code.
  */
-export const BR_PRIMARY_WEAPON_ID = "weapon:00000000-0000-4000-8000-000000000001";
+export const BR_PRIMARY_WEAPON_ID = 'weapon:00000000-0000-4000-8000-000000000001';
 
 /** Default player cap from declarative room-rules panel (`panels/index.json`). */
 export const DEFAULT_MAX_PLAYERS = 32;
@@ -171,20 +171,20 @@ export const ABILITY = {
 
 export const STATUS_EFFECT = {
   slow: {
-    id: "slow",
+    id: 'slow',
     movementMultiplier: 0.5,
   },
   stun: {
-    id: "stun",
+    id: 'stun',
   },
   reveal: {
-    id: "reveal",
+    id: 'reveal',
   },
   shield: {
-    id: "shield",
+    id: 'shield',
   },
   damageOverTime: {
-    id: "damage-over-time",
+    id: 'damage-over-time',
     damagePerTick: 1,
   },
 } as const;

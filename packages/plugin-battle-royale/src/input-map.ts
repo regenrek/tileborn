@@ -1,10 +1,18 @@
-import { coreActionId, CORE_ACTIONS, CONTROL_SCHEMES, InputMap, makeActionId, type ActionId, type ActionState } from "@tileborne/core";
+import {
+  coreActionId,
+  CORE_ACTIONS,
+  CONTROL_SCHEMES,
+  InputMap,
+  makeActionId,
+  type ActionId,
+  type ActionState,
+} from '@tileborne/core';
 import {
   BattleRoyaleAbility,
   type BattleRoyaleAbilityId,
   type Direction8,
-} from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { Schema } from "effect";
+} from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { Schema } from 'effect';
 
 /**
  * Battle Royale's neutral input map + action→intent adapter (ADR-0024 Slice 6).
@@ -19,10 +27,10 @@ import { Schema } from "effect";
  */
 
 /** Contribution id for BR's default input map registered via the typed slot. */
-export const BR_INPUT_MAP_CONTRIBUTION_ID = "br-input-map";
+export const BR_INPUT_MAP_CONTRIBUTION_ID = 'br-input-map';
 
 /** Durable id of BR's default binding set. */
-export const BR_INPUT_MAP_ID = "br-default-bindings";
+export const BR_INPUT_MAP_ID = 'br-default-bindings';
 
 /** Weapon slots BR exposes (Slot1..Slot5), in order. */
 const BR_SLOT_ACTIONS = [
@@ -41,13 +49,13 @@ const DASH_ACTION: ActionId = coreActionId(CORE_ACTIONS.Dash);
 const RELOAD_ACTION: ActionId = coreActionId(CORE_ACTIONS.Reload);
 const INTERACT_ACTION: ActionId = coreActionId(CORE_ACTIONS.Interact);
 const SLOT_ACTION_IDS: readonly ActionId[] = BR_SLOT_ACTIONS.map((action) => coreActionId(action));
-const SCAN_ACTION: ActionId = makeActionId("battle-royale.ScanPulse");
-const TRAP_ACTION: ActionId = makeActionId("battle-royale.PlaceTrap");
-const DECOY_ACTION: ActionId = makeActionId("battle-royale.DeployDecoy");
-const DROP_ACTION: ActionId = makeActionId("battle-royale.DropItem");
+const SCAN_ACTION: ActionId = makeActionId('battle-royale.ScanPulse');
+const TRAP_ACTION: ActionId = makeActionId('battle-royale.PlaceTrap');
+const DECOY_ACTION: ActionId = makeActionId('battle-royale.DeployDecoy');
+const DROP_ACTION: ActionId = makeActionId('battle-royale.DropItem');
 
 interface RawTriggerData {
-  readonly _tag: "key" | "mouseButton" | "axis" | "pointer" | "gamepadButton";
+  readonly _tag: 'key' | 'mouseButton' | 'axis' | 'pointer' | 'gamepadButton';
   readonly code?: string;
   readonly button?: number;
   readonly axis?: number;
@@ -55,32 +63,32 @@ interface RawTriggerData {
 }
 
 interface BindingData {
-  readonly _tag: "InputBinding";
+  readonly _tag: 'InputBinding';
   readonly action: string;
   readonly trigger: RawTriggerData;
-  readonly axisRole?: "x+" | "x-" | "y+" | "y-";
+  readonly axisRole?: 'x+' | 'x-' | 'y+' | 'y-';
 }
 
 const keyBinding = (
   action: string,
   code: string,
-  axisRole?: "x+" | "x-" | "y+" | "y-",
+  axisRole?: 'x+' | 'x-' | 'y+' | 'y-',
 ): BindingData => ({
-  _tag: "InputBinding",
+  _tag: 'InputBinding',
   action,
-  trigger: { _tag: "key", code },
+  trigger: { _tag: 'key', code },
   ...(axisRole === undefined ? {} : { axisRole }),
 });
 
 const moveBindings = (): readonly BindingData[] => [
-  keyBinding(CORE_ACTIONS.Move, "KeyW", "y-"),
-  keyBinding(CORE_ACTIONS.Move, "ArrowUp", "y-"),
-  keyBinding(CORE_ACTIONS.Move, "KeyS", "y+"),
-  keyBinding(CORE_ACTIONS.Move, "ArrowDown", "y+"),
-  keyBinding(CORE_ACTIONS.Move, "KeyA", "x-"),
-  keyBinding(CORE_ACTIONS.Move, "ArrowLeft", "x-"),
-  keyBinding(CORE_ACTIONS.Move, "KeyD", "x+"),
-  keyBinding(CORE_ACTIONS.Move, "ArrowRight", "x+"),
+  keyBinding(CORE_ACTIONS.Move, 'KeyW', 'y-'),
+  keyBinding(CORE_ACTIONS.Move, 'ArrowUp', 'y-'),
+  keyBinding(CORE_ACTIONS.Move, 'KeyS', 'y+'),
+  keyBinding(CORE_ACTIONS.Move, 'ArrowDown', 'y+'),
+  keyBinding(CORE_ACTIONS.Move, 'KeyA', 'x-'),
+  keyBinding(CORE_ACTIONS.Move, 'ArrowLeft', 'x-'),
+  keyBinding(CORE_ACTIONS.Move, 'KeyD', 'x+'),
+  keyBinding(CORE_ACTIONS.Move, 'ArrowRight', 'x+'),
 ];
 
 const slotBindings = (): readonly BindingData[] =>
@@ -90,8 +98,12 @@ const slotBindings = (): readonly BindingData[] =>
   });
 
 const primaryActionBindings = (): readonly BindingData[] => [
-  keyBinding(CORE_ACTIONS.PrimaryAction, "Space"),
-  { _tag: "InputBinding", action: CORE_ACTIONS.PrimaryAction, trigger: { _tag: "mouseButton", button: 0 } },
+  keyBinding(CORE_ACTIONS.PrimaryAction, 'Space'),
+  {
+    _tag: 'InputBinding',
+    action: CORE_ACTIONS.PrimaryAction,
+    trigger: { _tag: 'mouseButton', button: 0 },
+  },
 ];
 
 /**
@@ -108,33 +120,33 @@ export const buildBattleRoyaleInputMapData = (): {
 } => ({
   id: BR_INPUT_MAP_ID,
   actions: [
-    { action: CORE_ACTIONS.Move, valueKind: "analog2d" },
-    { action: CORE_ACTIONS.Aim, valueKind: "pointer" },
-    { action: CORE_ACTIONS.PrimaryAction, valueKind: "digital" },
-    { action: CORE_ACTIONS.SecondaryAction, valueKind: "digital" },
-    { action: CORE_ACTIONS.Dash, valueKind: "digital" },
-    { action: CORE_ACTIONS.Reload, valueKind: "digital" },
-    { action: CORE_ACTIONS.Interact, valueKind: "digital" },
-    { action: "battle-royale.ScanPulse", valueKind: "digital" },
-    { action: "battle-royale.PlaceTrap", valueKind: "digital" },
-    { action: "battle-royale.DeployDecoy", valueKind: "digital" },
-    { action: "battle-royale.DropItem", valueKind: "digital" },
-    ...BR_SLOT_ACTIONS.map((action) => ({ action, valueKind: "digital" })),
+    { action: CORE_ACTIONS.Move, valueKind: 'analog2d' },
+    { action: CORE_ACTIONS.Aim, valueKind: 'pointer' },
+    { action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' },
+    { action: CORE_ACTIONS.SecondaryAction, valueKind: 'digital' },
+    { action: CORE_ACTIONS.Dash, valueKind: 'digital' },
+    { action: CORE_ACTIONS.Reload, valueKind: 'digital' },
+    { action: CORE_ACTIONS.Interact, valueKind: 'digital' },
+    { action: 'battle-royale.ScanPulse', valueKind: 'digital' },
+    { action: 'battle-royale.PlaceTrap', valueKind: 'digital' },
+    { action: 'battle-royale.DeployDecoy', valueKind: 'digital' },
+    { action: 'battle-royale.DropItem', valueKind: 'digital' },
+    ...BR_SLOT_ACTIONS.map((action) => ({ action, valueKind: 'digital' })),
   ],
   schemeDefaults: {
     [CONTROL_SCHEMES.KeyboardMouse]: [
       ...moveBindings(),
       ...primaryActionBindings(),
-      keyBinding(CORE_ACTIONS.SecondaryAction, "ShiftLeft"),
-      keyBinding(CORE_ACTIONS.SecondaryAction, "ShiftRight"),
-      keyBinding(CORE_ACTIONS.Dash, "KeyF"),
-      keyBinding("battle-royale.ScanPulse", "KeyQ"),
-      keyBinding("battle-royale.PlaceTrap", "KeyT"),
-      keyBinding("battle-royale.DeployDecoy", "KeyC"),
-      keyBinding("battle-royale.DropItem", "KeyG"),
-      keyBinding(CORE_ACTIONS.Reload, "KeyR"),
-      keyBinding(CORE_ACTIONS.Interact, "KeyE"),
-      { _tag: "InputBinding", action: CORE_ACTIONS.Aim, trigger: { _tag: "pointer" } },
+      keyBinding(CORE_ACTIONS.SecondaryAction, 'ShiftLeft'),
+      keyBinding(CORE_ACTIONS.SecondaryAction, 'ShiftRight'),
+      keyBinding(CORE_ACTIONS.Dash, 'KeyF'),
+      keyBinding('battle-royale.ScanPulse', 'KeyQ'),
+      keyBinding('battle-royale.PlaceTrap', 'KeyT'),
+      keyBinding('battle-royale.DeployDecoy', 'KeyC'),
+      keyBinding('battle-royale.DropItem', 'KeyG'),
+      keyBinding(CORE_ACTIONS.Reload, 'KeyR'),
+      keyBinding(CORE_ACTIONS.Interact, 'KeyE'),
+      { _tag: 'InputBinding', action: CORE_ACTIONS.Aim, trigger: { _tag: 'pointer' } },
       ...slotBindings(),
     ],
   },
@@ -178,7 +190,12 @@ export interface BattleRoyaleAimContext {
  * Moved here from the renderer (ADR-0024 hard-cut): aim→angle is BR intent, not
  * engine resolution.
  */
-const computeAimDeg = (pointerX: number, pointerY: number, originX: number, originY: number): number => {
+const computeAimDeg = (
+  pointerX: number,
+  pointerY: number,
+  originX: number,
+  originY: number,
+): number => {
   const dx = pointerX - originX;
   const dy = pointerY - originY;
   if (dx === 0 && dy === 0) {
@@ -225,7 +242,9 @@ export const resolveBattleRoyaleInputIntent = (
   const drop = actions.digital.get(DROP_ACTION)?.justPressed ?? false;
   const abilities: BattleRoyaleAbilityId[] = [
     ...(actions.digital.get(DASH_ACTION)?.justPressed ? [BattleRoyaleAbility.dash] : []),
-    ...(actions.digital.get(SECONDARY_ACTION)?.justPressed ? [BattleRoyaleAbility.shieldBurst] : []),
+    ...(actions.digital.get(SECONDARY_ACTION)?.justPressed
+      ? [BattleRoyaleAbility.shieldBurst]
+      : []),
     ...(actions.digital.get(SCAN_ACTION)?.justPressed ? [BattleRoyaleAbility.scanPulse] : []),
     ...(actions.digital.get(TRAP_ACTION)?.justPressed ? [BattleRoyaleAbility.trap] : []),
     ...(actions.digital.get(DECOY_ACTION)?.justPressed ? [BattleRoyaleAbility.decoy] : []),

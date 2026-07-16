@@ -1,24 +1,23 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { GameObjectCatalog, Result } from "@tileborne/core";
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { GameObjectCatalog, Result } from '@tileborne/core';
+import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { BR_PRIMARY_WEAPON_ID } from "./constants.js";
-import { BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS } from "./content-assets.js";
-import { resolveBattleRoyaleWeaponVisuals } from "./weapon-visuals.js";
+import { BR_PRIMARY_WEAPON_ID } from './constants.js';
+import { BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS } from './content-assets.js';
+import { resolveBattleRoyaleWeaponVisuals } from './weapon-visuals.js';
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const catalogPath = path.join(packageRoot, "schemas/game-object-catalog.json");
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const catalogPath = path.join(packageRoot, 'schemas/game-object-catalog.json');
 
 const shippedObjectTypes = () =>
-  Schema.decodeUnknownSync(GameObjectCatalog)(
-    JSON.parse(fs.readFileSync(catalogPath, "utf8")),
-  ).objectTypes;
+  Schema.decodeUnknownSync(GameObjectCatalog)(JSON.parse(fs.readFileSync(catalogPath, 'utf8')))
+    .objectTypes;
 
-describe("battle royale weapon visuals (ADR-0028 entity derivation)", () => {
+describe('battle royale weapon visuals (ADR-0028 entity derivation)', () => {
   it("derives the primary weapon's visuals from the shipped weapon entity", () => {
     const result = resolveBattleRoyaleWeaponVisuals(shippedObjectTypes());
 
@@ -31,8 +30,8 @@ describe("battle royale weapon visuals (ADR-0028 entity derivation)", () => {
     expect(String(primary.equipped.placeableId)).toBe(
       BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.petwarsWeapons.pulseCarbine,
     );
-    expect(primary.equipped.anchors["grip"]).toBeDefined();
-    expect(primary.equipped.anchors["muzzle"]).toBeDefined();
+    expect(primary.equipped.anchors['grip']).toBeDefined();
+    expect(primary.equipped.anchors['muzzle']).toBeDefined();
     expect(String(primary.projectile?.placeableId)).toBe(
       BATTLE_ROYALE_CORE_VISUAL_PLACEABLE_IDS.projectileBolt,
     );
@@ -49,7 +48,7 @@ describe("battle royale weapon visuals (ADR-0028 entity derivation)", () => {
 
   it("fails when no weapon entity claims BR's primary weapon", () => {
     const withoutWeapons = shippedObjectTypes().filter(
-      (objectType) => !objectType.components.some((component) => component._tag === "weapon-ref"),
+      (objectType) => !objectType.components.some((component) => component._tag === 'weapon-ref'),
     );
 
     const result = resolveBattleRoyaleWeaponVisuals(withoutWeapons);

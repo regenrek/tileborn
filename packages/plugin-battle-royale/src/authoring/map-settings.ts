@@ -3,9 +3,16 @@ import {
   readPluginMapSettings,
   writePluginSettingsNamespace,
   type JsonObject,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-import { DEFAULT_MAX_PLAYERS, LOOT_CRATE_KIND, PLUGIN_ID, SHRINK_ZONE_ANCHOR_KIND, SPAWN_POINT_KIND, ZONE } from "../constants.js";
+import {
+  DEFAULT_MAX_PLAYERS,
+  LOOT_CRATE_KIND,
+  PLUGIN_ID,
+  SHRINK_ZONE_ANCHOR_KIND,
+  SPAWN_POINT_KIND,
+  ZONE,
+} from '../constants.js';
 
 /**
  * Per-map Battle Royale authoring settings (zone schedule + max players).
@@ -26,34 +33,32 @@ export interface BattleRoyaleAuthoringSettings {
   readonly holdSec: number;
   readonly shrinkPhases: number;
   readonly damagePerSecOutside: number;
-  readonly matchMode: "solo" | "duo" | "squad";
-  readonly matchEndPolicy: "last-standing" | "continuous";
+  readonly matchMode: 'solo' | 'duo' | 'squad';
+  readonly matchEndPolicy: 'last-standing' | 'continuous';
   readonly respawnEnabled: boolean;
   readonly friendlyFire: boolean;
   readonly startingWeaponId: string | undefined;
 }
 
 /** Legacy keys hard-cut from `map.properties` on the next save (ADR-0023). */
-const LEGACY_KEYS = ["battleRoyale", "maxPlayers"] as const;
+const LEGACY_KEYS = ['battleRoyale', 'maxPlayers'] as const;
 
 const readPositiveNumber = (value: unknown, fallback: number): number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
 
 const readObject = (value: unknown): JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as JsonObject)
-    : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as JsonObject) : {};
 
-const readMatchMode = (value: unknown): BattleRoyaleAuthoringSettings["matchMode"] =>
-  value === "duo" || value === "squad" ? value : "solo";
+const readMatchMode = (value: unknown): BattleRoyaleAuthoringSettings['matchMode'] =>
+  value === 'duo' || value === 'squad' ? value : 'solo';
 
 const readMatchEndPolicy = (
   value: unknown,
   respawnEnabled: boolean,
-): BattleRoyaleAuthoringSettings["matchEndPolicy"] =>
-  value === "continuous" || (value !== "last-standing" && respawnEnabled)
-    ? "continuous"
-    : "last-standing";
+): BattleRoyaleAuthoringSettings['matchEndPolicy'] =>
+  value === 'continuous' || (value !== 'last-standing' && respawnEnabled)
+    ? 'continuous'
+    : 'last-standing';
 
 const omitKeys = (bag: JsonObject, keys: readonly string[]): JsonObject =>
   Object.fromEntries(Object.entries(bag).filter(([key]) => !keys.includes(key)));
@@ -73,12 +78,12 @@ export const readBattleRoyaleMapSettings = (map: TileborneMap): JsonObject => {
   }
   const legacyBattleRoyale = readObject(map.properties.battleRoyale);
   const legacyMaxPlayers = map.properties.maxPlayers;
-  if (Object.keys(legacyBattleRoyale).length === 0 && typeof legacyMaxPlayers !== "number") {
+  if (Object.keys(legacyBattleRoyale).length === 0 && typeof legacyMaxPlayers !== 'number') {
     return {};
   }
   return {
     ...legacyBattleRoyale,
-    ...(typeof legacyMaxPlayers === "number" ? { maxPlayers: legacyMaxPlayers } : {}),
+    ...(typeof legacyMaxPlayers === 'number' ? { maxPlayers: legacyMaxPlayers } : {}),
   };
 };
 
@@ -92,9 +97,9 @@ export const readBattleRoyaleAuthoringSettings = (
   const respawn = readObject(settings.respawn);
   const loadout = readObject(settings.loadout);
   const respawnEnabled =
-    typeof roomRules.respawnEnabled === "boolean"
+    typeof roomRules.respawnEnabled === 'boolean'
       ? roomRules.respawnEnabled
-      : typeof respawn.enabled === "boolean"
+      : typeof respawn.enabled === 'boolean'
         ? respawn.enabled
         : false;
   return {
@@ -107,8 +112,9 @@ export const readBattleRoyaleAuthoringSettings = (
     matchMode: readMatchMode(roomRules.matchMode),
     matchEndPolicy: readMatchEndPolicy(roomRules.matchEndPolicy, respawnEnabled),
     respawnEnabled,
-    friendlyFire: typeof roomRules.friendlyFire === "boolean" ? roomRules.friendlyFire : false,
-    startingWeaponId: typeof loadout.startingWeaponId === "string" ? loadout.startingWeaponId : undefined,
+    friendlyFire: typeof roomRules.friendlyFire === 'boolean' ? roomRules.friendlyFire : false,
+    startingWeaponId:
+      typeof loadout.startingWeaponId === 'string' ? loadout.startingWeaponId : undefined,
   };
 };
 
@@ -120,8 +126,16 @@ export const battleRoyaleObjectCounts = (map: TileborneMap) => ({
 
 export const applyBattleRoyaleAuthoringSettings = (
   map: TileborneMap,
-  settings: Omit<BattleRoyaleAuthoringSettings, "matchMode" | "matchEndPolicy" | "respawnEnabled" | "friendlyFire" | "startingWeaponId"> &
-    Partial<Pick<BattleRoyaleAuthoringSettings, "matchMode" | "matchEndPolicy" | "respawnEnabled" | "friendlyFire" | "startingWeaponId">>,
+  settings: Omit<
+    BattleRoyaleAuthoringSettings,
+    'matchMode' | 'matchEndPolicy' | 'respawnEnabled' | 'friendlyFire' | 'startingWeaponId'
+  > &
+    Partial<
+      Pick<
+        BattleRoyaleAuthoringSettings,
+        'matchMode' | 'matchEndPolicy' | 'respawnEnabled' | 'friendlyFire' | 'startingWeaponId'
+      >
+    >,
 ): TileborneMap => {
   const current = readBattleRoyaleAuthoringSettings(map);
   const previous = readBattleRoyaleMapSettings(map);
@@ -146,9 +160,10 @@ export const applyBattleRoyaleAuthoringSettings = (
     roomRules: {
       ...previousRoomRules,
       matchMode: settings.matchMode ?? current.matchMode,
-      matchEndPolicy: (settings.respawnEnabled ?? current.respawnEnabled)
-        ? "continuous"
-        : settings.matchEndPolicy ?? current.matchEndPolicy,
+      matchEndPolicy:
+        (settings.respawnEnabled ?? current.respawnEnabled)
+          ? 'continuous'
+          : (settings.matchEndPolicy ?? current.matchEndPolicy),
       respawnEnabled: settings.respawnEnabled ?? current.respawnEnabled,
       friendlyFire: settings.friendlyFire ?? current.friendlyFire,
     },
@@ -156,11 +171,12 @@ export const applyBattleRoyaleAuthoringSettings = (
       ...previousRespawn,
       enabled: settings.respawnEnabled ?? current.respawnEnabled,
     },
-    loadout: settings.startingWeaponId === undefined
-      ? readObject(previous.loadout)
-      : settings.startingWeaponId.length === 0
-        ? {}
-        : { ...readObject(previous.loadout), startingWeaponId: settings.startingWeaponId },
+    loadout:
+      settings.startingWeaponId === undefined
+        ? readObject(previous.loadout)
+        : settings.startingWeaponId.length === 0
+          ? {}
+          : { ...readObject(previous.loadout), startingWeaponId: settings.startingWeaponId },
   };
   // Write under the neutral namespace and hard-cut the legacy literal keys.
   return new TileborneMap({

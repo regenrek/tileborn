@@ -1,7 +1,7 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { Option } from "effect";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { Option } from 'effect';
 
-import { MOVEMENT } from "../constants.js";
+import { MOVEMENT } from '../constants.js';
 import {
   ANIMATION_STATE_COMPONENT,
   ABILITY_STATE_COMPONENT,
@@ -49,9 +49,9 @@ import {
   type Shield,
   type StatusEffects,
   type WeaponRuntimeState,
-} from "../ecs/components.js";
-import { getZone } from "../ecs/zone.js";
-import type { ComponentStore, PluginWorld, RuntimeMessageOut } from "../types/runtime-plugin.js";
+} from '../ecs/components.js';
+import { getZone } from '../ecs/zone.js';
+import type { ComponentStore, PluginWorld, RuntimeMessageOut } from '../types/runtime-plugin.js';
 
 const {
   DeltaSnapshot,
@@ -153,7 +153,10 @@ const projectileEntries = (world: PluginWorld): Iterable<[number, Projectile]> =
   try {
     return world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries();
   } catch (cause) {
-    if (cause instanceof Error && cause.message === `component not registered: ${PROJECTILE_COMPONENT}`) {
+    if (
+      cause instanceof Error &&
+      cause.message === `component not registered: ${PROJECTILE_COMPONENT}`
+    ) {
       return [];
     }
     throw cause;
@@ -164,7 +167,10 @@ const deployableEntries = (world: PluginWorld): Iterable<[number, Deployable]> =
   try {
     return world.getComponent<Deployable>(DEPLOYABLE_COMPONENT).entries();
   } catch (cause) {
-    if (cause instanceof Error && cause.message === `component not registered: ${DEPLOYABLE_COMPONENT}`) {
+    if (
+      cause instanceof Error &&
+      cause.message === `component not registered: ${DEPLOYABLE_COMPONENT}`
+    ) {
       return [];
     }
     throw cause;
@@ -235,7 +241,9 @@ const playerWeaponSnapshot = (
     weaponId: equipped.weaponId,
     slot: equipped.slot,
     ...(reserveAmmo === undefined ? {} : { reserveAmmo }),
-    ...(reload?.remainingTicks === undefined ? {} : { reloadRemainingTicks: reload.remainingTicks }),
+    ...(reload?.remainingTicks === undefined
+      ? {}
+      : { reloadRemainingTicks: reload.remainingTicks }),
   };
 };
 
@@ -281,16 +289,18 @@ const captureObjects = (
       const interactable = interactables?.get(entity);
       const breakable = breakables?.get(entity);
       const hazard = hazards?.get(entity);
-      return [{
-        id: String(entity),
-        x: position.x,
-        y: position.y,
-        ...(pickup === undefined ? {} : { pickup }),
-        ...(lootSource === undefined ? {} : { lootSource }),
-        ...(interactable === undefined ? {} : { interactable }),
-        ...(breakable === undefined ? {} : { breakable }),
-        ...(hazard === undefined ? {} : { hazard }),
-      }];
+      return [
+        {
+          id: String(entity),
+          x: position.x,
+          y: position.y,
+          ...(pickup === undefined ? {} : { pickup }),
+          ...(lootSource === undefined ? {} : { lootSource }),
+          ...(interactable === undefined ? {} : { interactable }),
+          ...(breakable === undefined ? {} : { breakable }),
+          ...(hazard === undefined ? {} : { hazard }),
+        },
+      ];
     });
 };
 
@@ -310,7 +320,10 @@ const captureSnapshot = (world: PluginWorld, tick: number): CapturedSnapshot => 
   const reloadStates = optionalComponent<ReloadState>(world, RELOAD_STATE_COMPONENT);
   const shields = optionalComponent<Shield>(world, SHIELD_COMPONENT);
   const statuses = optionalComponent<StatusEffects>(world, STATUS_EFFECTS_COMPONENT);
-  const weaponRuntimeStates = optionalComponent<WeaponRuntimeState>(world, WEAPON_RUNTIME_STATE_COMPONENT);
+  const weaponRuntimeStates = optionalComponent<WeaponRuntimeState>(
+    world,
+    WEAPON_RUNTIME_STATE_COMPONENT,
+  );
   const zone = getZone(world);
   const capturedPlayers: CapturedPlayerSnapshot[] = [];
   const capturedProjectiles: CapturedProjectileSnapshot[] = [];
@@ -442,15 +455,18 @@ const sameStatusEffects = (
 ): boolean => {
   const leftEffects = left ?? [];
   const rightEffects = right ?? [];
-  return leftEffects.length === rightEffects.length && leftEffects.every((effect, index) => {
-    const other = rightEffects[index];
-    return (
-      other !== undefined &&
-      effect.effectId === other.effectId &&
-      effect.remainingTicks === other.remainingTicks &&
-      effect.stacks === other.stacks
-    );
-  });
+  return (
+    leftEffects.length === rightEffects.length &&
+    leftEffects.every((effect, index) => {
+      const other = rightEffects[index];
+      return (
+        other !== undefined &&
+        effect.effectId === other.effectId &&
+        effect.remainingTicks === other.remainingTicks &&
+        effect.stacks === other.stacks
+      );
+    })
+  );
 };
 
 const sameSnapshotValue = (left: unknown, right: unknown): boolean =>
@@ -493,14 +509,9 @@ const sameBreakable = (
 const sameHazard = (
   left: BattleRoyaleProtocol.ObjectHazardSnapshot | undefined,
   right: BattleRoyaleProtocol.ObjectHazardSnapshot | undefined,
-): boolean =>
-  left?.damagePerSecond === right?.damagePerSecond &&
-  left?.enabled === right?.enabled;
+): boolean => left?.damagePerSecond === right?.damagePerSecond && left?.enabled === right?.enabled;
 
-const sameObjectSnapshot = (
-  left: CapturedObjectSnapshot,
-  right: CapturedObjectSnapshot,
-): boolean =>
+const sameObjectSnapshot = (left: CapturedObjectSnapshot, right: CapturedObjectSnapshot): boolean =>
   left.x === right.x &&
   left.y === right.y &&
   samePickup(left.pickup, right.pickup) &&
@@ -554,7 +565,9 @@ const pushFrame = (msgOut: RuntimeMessageOut | undefined, frame: Uint8Array): Ui
   return frame;
 };
 
-const toWireObjectSnapshot = (object: CapturedObjectSnapshot): BattleRoyaleProtocol.ObjectSnapshot =>
+const toWireObjectSnapshot = (
+  object: CapturedObjectSnapshot,
+): BattleRoyaleProtocol.ObjectSnapshot =>
   new ObjectSnapshot({
     id: makeObjectId(object.id),
     x: object.x,
@@ -567,20 +580,13 @@ const toWireObjectSnapshot = (object: CapturedObjectSnapshot): BattleRoyaleProto
   });
 
 export interface BattleRoyaleSnapshotEmitter {
-  readonly buildWelcome: (
-    world: PluginWorld,
-    tick: number,
-  ) => Uint8Array;
+  readonly buildWelcome: (world: PluginWorld, tick: number) => Uint8Array;
   readonly emitWelcome: (
     world: PluginWorld,
     tick: number,
     msgOut?: RuntimeMessageOut,
   ) => Uint8Array;
-  readonly emitDelta: (
-    world: PluginWorld,
-    tick: number,
-    msgOut?: RuntimeMessageOut,
-  ) => Uint8Array;
+  readonly emitDelta: (world: PluginWorld, tick: number, msgOut?: RuntimeMessageOut) => Uint8Array;
 }
 
 export const createBattleRoyaleSnapshotEmitter = (
@@ -606,48 +612,54 @@ export const createBattleRoyaleSnapshotEmitter = (
           ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
           ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
           ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
-          ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
+          ...(player.damageIndicator === undefined
+            ? {}
+            : { damageIndicator: player.damageIndicator }),
           ...(player.stats === undefined ? {} : { stats: player.stats }),
-          ...(player.statusEffects === undefined ? {} : { statusEffects: [...player.statusEffects] }),
-          ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: [...player.abilityCooldowns] }),
+          ...(player.statusEffects === undefined
+            ? {}
+            : { statusEffects: [...player.statusEffects] }),
+          ...(player.abilityCooldowns === undefined
+            ? {}
+            : { abilityCooldowns: [...player.abilityCooldowns] }),
           ...(player.modelId === undefined ? {} : { modelId: player.modelId }),
           ...(player.animation === undefined ? {} : { animation: player.animation }),
         })),
-        projectiles: snapshot.projectiles.map((projectile) =>
-          new ProjectileSnapshot({
-            id: makeProjectileId(projectile.id),
-            ownerPlayerId: makePlayerId(projectile.ownerPlayerId),
-            weaponSlot: projectile.weaponSlot,
-            x: projectile.x,
-            y: projectile.y,
-            vx: projectile.vx,
-            vy: projectile.vy,
-            rotation: projectile.rotation,
-            ttlMs: projectile.ttlMs,
-          }),
+        projectiles: snapshot.projectiles.map(
+          (projectile) =>
+            new ProjectileSnapshot({
+              id: makeProjectileId(projectile.id),
+              ownerPlayerId: makePlayerId(projectile.ownerPlayerId),
+              weaponSlot: projectile.weaponSlot,
+              x: projectile.x,
+              y: projectile.y,
+              vx: projectile.vx,
+              vy: projectile.vy,
+              rotation: projectile.rotation,
+              ttlMs: projectile.ttlMs,
+            }),
         ),
-        deployables: snapshot.deployables.map((deployable) =>
-          new DeployableSnapshot({
-            id: makeDeployableId(deployable.id),
-            kind: deployable.kind,
-            ownerId: makeDeployableOwnerId(deployable.ownerId),
-            x: deployable.x,
-            y: deployable.y,
-            radius: deployable.radius,
-            remainingTicks: deployable.remainingTicks,
-            armedTicks: deployable.armedTicks,
-            triggered: deployable.triggered,
-          }),
+        deployables: snapshot.deployables.map(
+          (deployable) =>
+            new DeployableSnapshot({
+              id: makeDeployableId(deployable.id),
+              kind: deployable.kind,
+              ownerId: makeDeployableOwnerId(deployable.ownerId),
+              x: deployable.x,
+              y: deployable.y,
+              radius: deployable.radius,
+              remainingTicks: deployable.remainingTicks,
+              armedTicks: deployable.armedTicks,
+              triggered: deployable.triggered,
+            }),
         ),
         objects: snapshot.objects.map(toWireObjectSnapshot),
         zone: snapshot.zone,
       }),
     );
 
-  const buildWelcome = (
-    world: PluginWorld,
-    tick: number,
-  ): Uint8Array => encodeWelcome(captureSnapshot(world, tick), tick);
+  const buildWelcome = (world: PluginWorld, tick: number): Uint8Array =>
+    encodeWelcome(captureSnapshot(world, tick), tick);
 
   const emitWelcome = (
     world: PluginWorld,
@@ -659,11 +671,7 @@ export const createBattleRoyaleSnapshotEmitter = (
     return pushFrame(msgOut, encodeWelcome(snapshot, tick));
   };
 
-  const emitDelta = (
-    world: PluginWorld,
-    tick: number,
-    msgOut?: RuntimeMessageOut,
-  ): Uint8Array => {
+  const emitDelta = (world: PluginWorld, tick: number, msgOut?: RuntimeMessageOut): Uint8Array => {
     if (!previous) {
       return emitWelcome(world, tick, msgOut);
     }
@@ -729,9 +737,7 @@ export const createBattleRoyaleSnapshotEmitter = (
           x: !before || before.x !== player.x ? Option.some(player.x) : Option.none(),
           y: !before || before.y !== player.y ? Option.some(player.y) : Option.none(),
           health:
-            !before || before.health !== player.health
-              ? Option.some(player.health)
-              : Option.none(),
+            !before || before.health !== player.health ? Option.some(player.health) : Option.none(),
           shield:
             !before || before.shield !== player.shield
               ? player.shield === undefined
@@ -864,14 +870,20 @@ export const createBattleRoyaleSnapshotEmitter = (
       return [
         new DeployableUpdate({
           id: makeDeployableId(deployable.id),
-          kind: !before || before.kind !== deployable.kind ? Option.some(deployable.kind) : Option.none(),
+          kind:
+            !before || before.kind !== deployable.kind
+              ? Option.some(deployable.kind)
+              : Option.none(),
           ownerId:
             !before || before.ownerId !== deployable.ownerId
               ? Option.some(makeDeployableOwnerId(deployable.ownerId))
               : Option.none(),
           x: !before || before.x !== deployable.x ? Option.some(deployable.x) : Option.none(),
           y: !before || before.y !== deployable.y ? Option.some(deployable.y) : Option.none(),
-          radius: !before || before.radius !== deployable.radius ? Option.some(deployable.radius) : Option.none(),
+          radius:
+            !before || before.radius !== deployable.radius
+              ? Option.some(deployable.radius)
+              : Option.none(),
           remainingTicks:
             !before || before.remainingTicks !== deployable.remainingTicks
               ? Option.some(deployable.remainingTicks)

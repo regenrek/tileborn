@@ -1,5 +1,5 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { Option } from "effect";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { Option } from 'effect';
 
 export interface RuntimeClientInputFrame {
   readonly tick: number;
@@ -15,10 +15,10 @@ export interface RuntimeClientInputFrame {
 }
 
 export type RuntimeClientFrameView =
-  | { readonly kind: "heartbeat"; readonly tick: number }
-  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
+  | { readonly kind: 'heartbeat'; readonly tick: number }
+  | { readonly kind: 'ack'; readonly tick: number; readonly receivedAtMs: number }
   | {
-      readonly kind: "input";
+      readonly kind: 'input';
       readonly input: RuntimeClientInputFrame;
       readonly sortKey: {
         readonly tick: number;
@@ -27,28 +27,30 @@ export type RuntimeClientFrameView =
     };
 
 export type RuntimeClientFrameDecodeResult =
-  | { readonly kind: "accepted"; readonly frame: RuntimeClientFrameView }
+  | { readonly kind: 'accepted'; readonly frame: RuntimeClientFrameView }
   | {
-      readonly kind: "rejected";
+      readonly kind: 'rejected';
       readonly frame: Uint8Array;
       readonly closeCode: number;
       readonly closeReason: string;
     };
 
 export type RuntimeServerLifecycleFrameView = {
-  readonly kind: "game-over";
+  readonly kind: 'game-over';
   readonly winnerPlayerId: string;
 };
 
-export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrameView | undefined => {
+export const decodeHostClientFrameView = (
+  bytes: Uint8Array,
+): RuntimeClientFrameView | undefined => {
   const frame = BattleRoyaleProtocol.decodeClientMessage(bytes);
-  if (frame._tag === "Heartbeat") {
-    return { kind: "heartbeat", tick: frame.tick };
+  if (frame._tag === 'Heartbeat') {
+    return { kind: 'heartbeat', tick: frame.tick };
   }
-  if (frame._tag === "SnapshotAck") {
-    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
+  if (frame._tag === 'SnapshotAck') {
+    return { kind: 'ack', tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
-  if (frame._tag === "PlayerInput") {
+  if (frame._tag === 'PlayerInput') {
     const input: RuntimeClientInputFrame = {
       tick: frame.tick,
       seq: frame.seq,
@@ -62,7 +64,7 @@ export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrame
       ...(Option.isSome(frame.swapSlot) ? { swapSlot: frame.swapSlot.value } : {}),
     };
     return {
-      kind: "input",
+      kind: 'input',
       input,
       sortKey: {
         tick: frame.tick,
@@ -76,22 +78,22 @@ export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrame
 export const encodeInvalidClientFrame = (): Uint8Array =>
   BattleRoyaleProtocol.encodeServerMessage(
     new BattleRoyaleProtocol.WireError({
-      code: "invalid_protocol_frame",
-      message: "invalid protocol frame",
+      code: 'invalid_protocol_frame',
+      message: 'invalid protocol frame',
     }),
   );
 
 const rejectInvalidClientFrame = (): RuntimeClientFrameDecodeResult => ({
-  kind: "rejected",
+  kind: 'rejected',
   frame: encodeInvalidClientFrame(),
   closeCode: 1003,
-  closeReason: "invalid frame",
+  closeReason: 'invalid frame',
 });
 
 export const decodeHostClientFrame = (bytes: Uint8Array): RuntimeClientFrameDecodeResult => {
   try {
     const frame = decodeHostClientFrameView(bytes);
-    return frame === undefined ? rejectInvalidClientFrame() : { kind: "accepted", frame };
+    return frame === undefined ? rejectInvalidClientFrame() : { kind: 'accepted', frame };
   } catch {
     return rejectInvalidClientFrame();
   }
@@ -99,7 +101,7 @@ export const decodeHostClientFrame = (bytes: Uint8Array): RuntimeClientFrameDeco
 
 export const isHostWelcomeFrame = (bytes: Uint8Array): boolean => {
   try {
-    return BattleRoyaleProtocol.decodeServerMessage(bytes)._tag === "WelcomeSnapshot";
+    return BattleRoyaleProtocol.decodeServerMessage(bytes)._tag === 'WelcomeSnapshot';
   } catch {
     return false;
   }
@@ -115,8 +117,8 @@ export const decodeHostServerLifecycleFrame = (
 ): RuntimeServerLifecycleFrameView | undefined => {
   try {
     const frame = BattleRoyaleProtocol.decodeServerMessage(bytes);
-    return frame._tag === "GameOver"
-      ? { kind: "game-over", winnerPlayerId: frame.winner }
+    return frame._tag === 'GameOver'
+      ? { kind: 'game-over', winnerPlayerId: frame.winner }
       : undefined;
   } catch {
     return undefined;

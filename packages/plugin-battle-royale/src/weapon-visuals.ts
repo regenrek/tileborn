@@ -3,14 +3,14 @@ import {
   Result,
   type GameObjectType,
   type ResolvedWeaponVisuals,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-import { BR_PRIMARY_WEAPON_ID } from "./constants.js";
+import { BR_PRIMARY_WEAPON_ID } from './constants.js';
 
 export class BattleRoyaleWeaponVisualError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "BattleRoyaleWeaponVisualError";
+    this.name = 'BattleRoyaleWeaponVisualError';
   }
 }
 
@@ -41,8 +41,8 @@ export const resolveBattleRoyaleWeaponVisuals = (
       new BattleRoyaleWeaponVisualError(
         `no weapon entity claims BR's primary weapon ${BR_PRIMARY_WEAPON_ID}` +
           (issues.length > 0
-            ? ` (derivation issues: ${issues.map((issue) => issue.message).join("; ")})`
-            : ""),
+            ? ` (derivation issues: ${issues.map((issue) => issue.message).join('; ')})`
+            : ''),
       ),
     );
   }

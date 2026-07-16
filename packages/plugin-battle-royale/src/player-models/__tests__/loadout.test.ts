@@ -1,11 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DEFAULT_BATTLE_ROYALE_MODELS } from "../models.js";
-import {
-  readSelectedModelId,
-  resolveSelectedModelId,
-  writeSelectedModelId,
-} from "../loadout.js";
+import { DEFAULT_BATTLE_ROYALE_MODELS } from '../models.js';
+import { readSelectedModelId, resolveSelectedModelId, writeSelectedModelId } from '../loadout.js';
 
 class MemoryStorage {
   private store = new Map<string, string>();
@@ -29,23 +25,24 @@ class MemoryStorage {
   }
 }
 
-describe("battle royale loadout selection", () => {
+describe('battle royale loadout selection', () => {
   beforeEach(() => {
-    (globalThis as { localStorage?: Storage }).localStorage = new MemoryStorage() as unknown as Storage;
+    (globalThis as { localStorage?: Storage }).localStorage =
+      new MemoryStorage() as unknown as Storage;
   });
   afterEach(() => {
     delete (globalThis as { localStorage?: Storage }).localStorage;
   });
 
-  it("defaults to the first roster model when nothing is persisted", () => {
+  it('defaults to the first roster model when nothing is persisted', () => {
     expect(resolveSelectedModelId()).toBe(DEFAULT_BATTLE_ROYALE_MODELS[0]?.id);
     expect(readSelectedModelId()).toBeUndefined();
   });
 
-  it("persists and resolves a valid selection across reads", () => {
+  it('persists and resolves a valid selection across reads', () => {
     const selectedModelId = DEFAULT_BATTLE_ROYALE_MODELS[1]?.id;
     if (selectedModelId === undefined) {
-      throw new Error("expected a second default model for selection coverage");
+      throw new Error('expected a second default model for selection coverage');
     }
 
     writeSelectedModelId(selectedModelId);
@@ -53,8 +50,8 @@ describe("battle royale loadout selection", () => {
     expect(resolveSelectedModelId()).toBe(selectedModelId);
   });
 
-  it("falls back to the default when the persisted model is no longer in the roster", () => {
-    writeSelectedModelId("ghost");
+  it('falls back to the default when the persisted model is no longer in the roster', () => {
+    writeSelectedModelId('ghost');
     expect(resolveSelectedModelId()).toBe(DEFAULT_BATTLE_ROYALE_MODELS[0]?.id);
   });
 });

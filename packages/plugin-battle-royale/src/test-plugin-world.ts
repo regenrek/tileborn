@@ -1,4 +1,4 @@
-import type { ComponentStore, PluginWorld } from "./types/runtime-plugin.js";
+import type { ComponentStore, PluginWorld } from './types/runtime-plugin.js';
 
 export class TestPluginWorld implements PluginWorld {
   private nextEntity = 1;

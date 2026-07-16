@@ -5,16 +5,16 @@ import {
   ResolvedOverlayVisual,
   ResolvedWeaponVisuals,
   TileId,
-} from "@tileborne/core";
-import { Schema } from "effect";
+} from '@tileborne/core';
+import { Schema } from 'effect';
 
-import { BattleRoyaleConfig } from "../battle-royale-config.js";
+import { BattleRoyaleConfig } from '../battle-royale-config.js';
 import {
   createValidationIssue,
   validateDecodedBattleRoyaleArtifact,
-} from "./runtime-artifact-validation.js";
+} from './runtime-artifact-validation.js';
 
-export const IssueSeveritySchema = Schema.Literals(["error", "warning"] as const);
+export const IssueSeveritySchema = Schema.Literals(['error', 'warning'] as const);
 export type IssueSeverity = typeof IssueSeveritySchema.Type;
 
 export const ValidationIssueSchema = Schema.Struct({
@@ -63,7 +63,7 @@ export type PlayerModelSelectionArtifact = typeof PlayerModelSelectionArtifactSc
 
 export const SpawnPointObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
-  role: Schema.Literal("spawn-point"),
+  role: Schema.Literal('spawn-point'),
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
@@ -76,7 +76,7 @@ export type SpawnPointObjectPlacement = typeof SpawnPointObjectPlacementSchema.T
 
 export const ShrinkZoneAnchorObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
-  role: Schema.Literal("shrink-zone-anchor"),
+  role: Schema.Literal('shrink-zone-anchor'),
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
@@ -89,7 +89,7 @@ export type ShrinkZoneAnchorObjectPlacement = typeof ShrinkZoneAnchorObjectPlace
 
 export const LootCrateObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
-  role: Schema.Literal("loot-crate"),
+  role: Schema.Literal('loot-crate'),
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
@@ -103,7 +103,7 @@ export type LootCrateObjectPlacement = typeof LootCrateObjectPlacementSchema.Typ
 
 export const TrapObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
-  role: Schema.Literal("trap"),
+  role: Schema.Literal('trap'),
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
@@ -118,7 +118,7 @@ export type TrapObjectPlacement = typeof TrapObjectPlacementSchema.Type;
 
 export const DecoyObjectPlacementSchema = Schema.Struct({
   objectId: ObjectId,
-  role: Schema.Literal("decoy"),
+  role: Schema.Literal('decoy'),
   kind: GameObjectTypeId,
   x: Schema.Number,
   y: Schema.Number,
@@ -234,8 +234,10 @@ export const validateBattleRoyaleArtifact = (input: unknown): ValidationResult =
       ok: false,
       issues: [
         createValidationIssue(
-          error instanceof Error ? error.message : "artifact does not match BattleRoyaleArtifact schema",
-          "artifact",
+          error instanceof Error
+            ? error.message
+            : 'artifact does not match BattleRoyaleArtifact schema',
+          'artifact',
         ),
       ],
     };
@@ -249,7 +251,7 @@ export const assertBattleRoyaleArtifact = (input: unknown): BattleRoyaleArtifact
   const artifact = decodeBattleRoyaleArtifact(input);
   const issues = validateDecodedBattleRoyaleArtifact(artifact);
   if (issues.length > 0) {
-    const detail = issues.map((issue) => `${issue.location}: ${issue.message}`).join("; ");
+    const detail = issues.map((issue) => `${issue.location}: ${issue.message}`).join('; ');
     throw new Error(`Invalid Battle Royale artifact: ${detail}`);
   }
   return artifact;

@@ -1,6 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   RuntimeCatalogEntry,
@@ -9,10 +9,10 @@ import {
   makeTileborneMap,
   type JsonObject,
   type TileborneMap,
-} from "@tileborne/core";
-import { ModeDataExportError } from "@tileborne/plugin-api";
-import { Result, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+} from '@tileborne/core';
+import { ModeDataExportError } from '@tileborne/plugin-api';
+import { Result, Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_LOOT_TABLE,
@@ -21,18 +21,18 @@ import {
   PLUGIN_ID,
   SHRINK_ZONE_ANCHOR_KEY,
   ZONE,
-} from "./constants.js";
-import { TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
+} from './constants.js';
+import { TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
 import {
   BattleRoyaleModeData,
   decodeBattleRoyaleModeData,
   exportBattleRoyaleModeData,
-} from "./mode-data.js";
+} from './mode-data.js';
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const shippedCatalogJson = JSON.parse(
-  fs.readFileSync(path.join(packageRoot, "schemas/game-object-catalog.json"), "utf8"),
+  fs.readFileSync(path.join(packageRoot, 'schemas/game-object-catalog.json'), 'utf8'),
 ) as { readonly objectTypes: readonly Record<string, unknown>[] };
 
 /** The real BR catalog wrapped as merged runtime entries (plugin origin). */
@@ -41,7 +41,7 @@ const catalogEntries = (
 ): readonly RuntimeCatalogEntry[] =>
   [...shippedCatalogJson.objectTypes, ...extraObjectTypes].map((objectType) =>
     Schema.decodeUnknownSync(RuntimeCatalogEntry)({
-      origin: { _tag: "plugin", pluginId: PLUGIN_ID },
+      origin: { _tag: 'plugin', pluginId: PLUGIN_ID },
       objectType,
     }),
   );
@@ -86,8 +86,8 @@ const exportOrThrow = (input: {
     }),
   );
 
-describe("exportBattleRoyaleModeData", () => {
-  it("derives maxPlayers + config override from the namespaced settings", () => {
+describe('exportBattleRoyaleModeData', () => {
+  it('derives maxPlayers + config override from the namespaced settings', () => {
     const exported = exportOrThrow({
       settings: { maxPlayers: 8, zone: { damagePerSecOutside: 7, schedule: { waitSec: 45 } } },
     });
@@ -104,7 +104,7 @@ describe("exportBattleRoyaleModeData", () => {
     expect(decodeBattleRoyaleModeData(exported).maxPlayers).toBe(6);
   });
 
-  it("derives the shrink schedule from the shrink-zone-anchor placement", () => {
+  it('derives the shrink schedule from the shrink-zone-anchor placement', () => {
     const exported = exportOrThrow({
       placements: [
         makePlacement(TEST_OBJECT_IDS[0], SHRINK_ZONE_ANCHOR_KEY, 10, 12, {
@@ -123,7 +123,7 @@ describe("exportBattleRoyaleModeData", () => {
     });
   });
 
-  it("defaults the shrink schedule to the map center when no anchor is placed", () => {
+  it('defaults the shrink schedule to the map center when no anchor is placed', () => {
     const exported = exportOrThrow({});
     const data = decodeBattleRoyaleModeData(exported);
     expect(data.maxPlayers).toBe(DEFAULT_MAX_PLAYERS);
@@ -137,50 +137,50 @@ describe("exportBattleRoyaleModeData", () => {
     });
   });
 
-  it("derives normalized loot tables from loot-source placements", () => {
+  it('derives normalized loot tables from loot-source placements', () => {
     const exported = exportOrThrow({
       placements: [
         makePlacement(TEST_OBJECT_IDS[0], LOOT_CRATE_KEY, 4, 4, {
-          itemKind: "health-pack",
-          tier: "common",
+          itemKind: 'health-pack',
+          tier: 'common',
           weight: 3,
         }),
         makePlacement(TEST_OBJECT_IDS[1], LOOT_CRATE_KEY, 8, 8, {
-          itemKind: "weapon-crate",
-          tier: "epic",
+          itemKind: 'weapon-crate',
+          tier: 'epic',
           weight: 1,
         }),
       ],
     });
     expect(decodeBattleRoyaleModeData(exported).lootTables).toEqual([
-      { itemKind: "health-pack", tier: "common", weight: 0.75 },
-      { itemKind: "weapon-crate", tier: "epic", weight: 0.25 },
+      { itemKind: 'health-pack', tier: 'common', weight: 0.75 },
+      { itemKind: 'weapon-crate', tier: 'epic', weight: 0.25 },
     ]);
   });
 
-  it("counts any catalog type carrying a loot-source component, not only the well-known crate", () => {
+  it('counts any catalog type carrying a loot-source component, not only the well-known crate', () => {
     const customCrate = {
       ...shippedCatalogJson.objectTypes.find(
         (objectType) => objectType.id === String(gameObjectTypeIdForKey(LOOT_CRATE_KEY)),
       )!,
-      id: String(gameObjectTypeIdForKey("custom-crate")),
-      label: "Custom Crate",
+      id: String(gameObjectTypeIdForKey('custom-crate')),
+      label: 'Custom Crate',
     };
     const exported = exportOrThrow({
       catalog: catalogEntries([customCrate]),
-      placements: [makePlacement(TEST_OBJECT_IDS[0], "custom-crate", 4, 4, { weight: 2 })],
+      placements: [makePlacement(TEST_OBJECT_IDS[0], 'custom-crate', 4, 4, { weight: 2 })],
     });
     expect(decodeBattleRoyaleModeData(exported).lootTables).toEqual([
-      { itemKind: "supply-crate", tier: "common", weight: 1 },
+      { itemKind: 'supply-crate', tier: 'common', weight: 1 },
     ]);
   });
 
-  it("falls back to the default loot table when no loot is placed", () => {
+  it('falls back to the default loot table when no loot is placed', () => {
     const exported = exportOrThrow({});
     expect(decodeBattleRoyaleModeData(exported).lootTables).toEqual(DEFAULT_LOOT_TABLE);
   });
 
-  it("rejects settings that violate BR invariants with a ModeDataExportError", () => {
+  it('rejects settings that violate BR invariants with a ModeDataExportError', () => {
     const result = exportBattleRoyaleModeData({
       map: makeMap(),
       catalog: catalogEntries(),
@@ -191,11 +191,11 @@ describe("exportBattleRoyaleModeData", () => {
     if (Result.isFailure(result)) {
       expect(result.failure).toBeInstanceOf(ModeDataExportError);
       expect(result.failure.pluginId).toBe(PLUGIN_ID);
-      expect(result.failure.message).toContain("maxPlayers must be a positive integer");
+      expect(result.failure.message).toContain('maxPlayers must be a positive integer');
     }
   });
 
-  it("never leaks neutral package sections into the mode data", () => {
+  it('never leaks neutral package sections into the mode data', () => {
     const exported = exportOrThrow({
       settings: { maxPlayers: 8, zone: { damagePerSecOutside: 7 } },
       placements: [
@@ -204,15 +204,15 @@ describe("exportBattleRoyaleModeData", () => {
       ],
     });
     expect(Object.keys(exported).sort()).toEqual([
-      "battleRoyale",
-      "lootTables",
-      "maxPlayers",
-      "schemaVersion",
-      "shrinkSchedule",
+      'battleRoyale',
+      'lootTables',
+      'maxPlayers',
+      'schemaVersion',
+      'shrinkSchedule',
     ]);
   });
 
-  it("round-trips the wire shape through the schema", () => {
+  it('round-trips the wire shape through the schema', () => {
     const exported = exportOrThrow({
       settings: { maxPlayers: 12, zone: { damagePerSecOutside: 6 } },
       placements: [

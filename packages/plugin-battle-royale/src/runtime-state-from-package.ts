@@ -2,11 +2,11 @@ import {
   RuntimeMapPackage,
   type GameObjectComponent,
   type RuntimeObjectPlacement,
-} from "@tileborne/core";
-import { RuntimeProjectContent } from "@tileborne/plugin-api/project-content";
-import { Schema } from "effect";
+} from '@tileborne/core';
+import { RuntimeProjectContent } from '@tileborne/plugin-api/project-content';
+import { Schema } from 'effect';
 
-import { extractObjectCollisionRects } from "./collision-artifact.js";
+import { extractObjectCollisionRects } from './collision-artifact.js';
 import {
   ABILITY,
   DECOY_KIND,
@@ -15,16 +15,16 @@ import {
   SHRINK_ZONE_ANCHOR_KIND,
   SPAWN_POINT_KIND,
   TRAP_KIND,
-} from "./constants.js";
-import { makeIsLootSourceType, readNumber, readString } from "./instance-reads.js";
-import { decodeBattleRoyaleModeData } from "./mode-data-schema.js";
+} from './constants.js';
+import { makeIsLootSourceType, readNumber, readString } from './instance-reads.js';
+import { decodeBattleRoyaleModeData } from './mode-data-schema.js';
 import {
   assertBattleRoyaleArtifact,
   type BattleRoyaleArtifact,
   type ObjectPlacement,
   type PlayerModelSelectionArtifact,
   type SpawnPointArtifact,
-} from "./types/artifact.js";
+} from './types/artifact.js';
 
 /**
  * ADR-0030 slice 5: build BR's runtime world state from the neutral
@@ -40,31 +40,34 @@ import {
  * by the runtime adapter, server rules, and projector.
  */
 
-type PlacementRole = ObjectPlacement["role"];
+type PlacementRole = ObjectPlacement['role'];
 
 const buildRoleResolver = (mapPackage: RuntimeMapPackage) => {
   const componentsByTypeId = new Map<string, readonly GameObjectComponent[]>(
     mapPackage.catalog.map((entry) => [String(entry.objectType.id), entry.objectType.components]),
   );
-  const hasComponent = (typeId: RuntimeObjectPlacement["typeId"], tag: GameObjectComponent["_tag"]): boolean =>
+  const hasComponent = (
+    typeId: RuntimeObjectPlacement['typeId'],
+    tag: GameObjectComponent['_tag'],
+  ): boolean =>
     componentsByTypeId.get(String(typeId))?.some((component) => component._tag === tag) ?? false;
   const isLootSourceType = makeIsLootSourceType(mapPackage.catalog);
 
   return (placement: RuntimeObjectPlacement): PlacementRole | undefined => {
-    if (hasComponent(placement.typeId, "spawn-point")) {
-      return "spawn-point";
+    if (hasComponent(placement.typeId, 'spawn-point')) {
+      return 'spawn-point';
     }
     if (placement.typeId === SHRINK_ZONE_ANCHOR_KIND) {
-      return "shrink-zone-anchor";
+      return 'shrink-zone-anchor';
     }
     if (isLootSourceType(placement.typeId)) {
-      return "loot-crate";
+      return 'loot-crate';
     }
-    if (hasComponent(placement.typeId, "hazard")) {
-      return "trap";
+    if (hasComponent(placement.typeId, 'hazard')) {
+      return 'trap';
     }
     if (placement.typeId === DECOY_KIND) {
-      return "decoy";
+      return 'decoy';
     }
     return undefined;
   };
@@ -73,25 +76,25 @@ const buildRoleResolver = (mapPackage: RuntimeMapPackage) => {
 const spawnPointFromPlacement = (placement: RuntimeObjectPlacement): SpawnPointArtifact => ({
   x: placement.x,
   y: placement.y,
-  team: readString(placement.instanceProperties?.team, "solo"),
+  team: readString(placement.instanceProperties?.team, 'solo'),
   weight: readNumber(placement.instanceProperties?.weight, 1),
 });
 
-const projectLootEntries = (
-  content: RuntimeProjectContent,
-): BattleRoyaleArtifact["lootTables"] => {
+const projectLootEntries = (content: RuntimeProjectContent): BattleRoyaleArtifact['lootTables'] => {
   const itemIds = new Set(content.items.map((item) => String(item.id)));
   return content.lootTables.flatMap((table) =>
     table.entries.flatMap((entry) => {
       const referencedItem =
-        typeof entry.itemId === "string" && itemIds.has(entry.itemId) ? entry.itemId : undefined;
-      const itemKind = referencedItem ?? (typeof entry.itemKind === "string" ? entry.itemKind : undefined);
+        typeof entry.itemId === 'string' && itemIds.has(entry.itemId) ? entry.itemId : undefined;
+      const itemKind =
+        referencedItem ?? (typeof entry.itemKind === 'string' ? entry.itemKind : undefined);
       if (itemKind === undefined) return [];
       return [
         {
           itemKind,
-          tier: typeof entry.tier === "string" ? entry.tier : "project",
-          weight: typeof entry.weight === "number" && Number.isFinite(entry.weight) ? entry.weight : 1,
+          tier: typeof entry.tier === 'string' ? entry.tier : 'project',
+          weight:
+            typeof entry.weight === 'number' && Number.isFinite(entry.weight) ? entry.weight : 1,
         },
       ];
     }),
@@ -112,17 +115,17 @@ const toObjectPlacement = (
   const base = { objectId: placement.objectId, x: placement.x, y: placement.y };
   const properties = placement.instanceProperties;
   switch (role) {
-    case "spawn-point":
+    case 'spawn-point':
       return {
         ...base,
         role,
         kind: SPAWN_POINT_KIND,
         properties: {
-          team: readString(properties?.team, "solo"),
+          team: readString(properties?.team, 'solo'),
           weight: readNumber(properties?.weight, 1),
         },
       };
-    case "shrink-zone-anchor":
+    case 'shrink-zone-anchor':
       return {
         ...base,
         role,
@@ -135,18 +138,18 @@ const toObjectPlacement = (
           finalRadiusTiles: readNumber(properties?.finalRadiusTiles, 4),
         },
       };
-    case "loot-crate":
+    case 'loot-crate':
       return {
         ...base,
         role,
         kind: LOOT_CRATE_KIND,
         properties: {
-          itemKind: readString(properties?.itemKind, "supply-crate"),
-          tier: readString(properties?.tier, "common"),
+          itemKind: readString(properties?.itemKind, 'supply-crate'),
+          tier: readString(properties?.tier, 'common'),
           weight: readNumber(properties?.weight, 1),
         },
       };
-    case "trap":
+    case 'trap':
       return {
         ...base,
         role,
@@ -158,7 +161,7 @@ const toObjectPlacement = (
           damageTicks: readNumber(properties?.damageTicks, ABILITY.trap.damageTicks),
         },
       };
-    case "decoy":
+    case 'decoy':
       return {
         ...base,
         role,
@@ -194,7 +197,7 @@ export const buildBattleRoyaleRuntimeState = (
   if (modeDataWire === undefined) {
     throw new Error(
       `RuntimeMapPackage has no modeData section for "${PLUGIN_ID}"; ` +
-        "the package was not assembled for the Battle Royale mode",
+        'the package was not assembled for the Battle Royale mode',
     );
   }
   const modeData = decodeBattleRoyaleModeData(modeDataWire);
@@ -203,9 +206,9 @@ export const buildBattleRoyaleRuntimeState = (
 
   const resolveRole = buildRoleResolver(mapPackage);
   const grouped: Record<PlacementRole, ObjectPlacement[]> = {
-    "spawn-point": [],
-    "shrink-zone-anchor": [],
-    "loot-crate": [],
+    'spawn-point': [],
+    'shrink-zone-anchor': [],
+    'loot-crate': [],
     trap: [],
     decoy: [],
   };
@@ -216,16 +219,16 @@ export const buildBattleRoyaleRuntimeState = (
       continue;
     }
     grouped[role].push(toObjectPlacement(placement, role, mapPackage));
-    if (role === "spawn-point") {
+    if (role === 'spawn-point') {
       spawnPoints.push(spawnPointFromPlacement(placement));
     }
   }
   // The runtime state carries at most one anchor; extra anchor placements
   // are ignored (first wins).
   const objectPlacements: readonly ObjectPlacement[] = [
-    ...grouped["spawn-point"],
-    ...grouped["shrink-zone-anchor"].slice(0, 1),
-    ...grouped["loot-crate"],
+    ...grouped['spawn-point'],
+    ...grouped['shrink-zone-anchor'].slice(0, 1),
+    ...grouped['loot-crate'],
     ...grouped.trap,
     ...grouped.decoy,
   ];

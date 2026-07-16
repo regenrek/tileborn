@@ -1,8 +1,5 @@
-import {
-  RuntimeMapPackage,
-  type RuntimeObjectPlacement,
-} from "@tileborne/core";
-import { RuntimeProjectContent } from "@tileborne/plugin-api/project-content";
+import { RuntimeMapPackage, type RuntimeObjectPlacement } from '@tileborne/core';
+import { RuntimeProjectContent } from '@tileborne/plugin-api/project-content';
 import {
   DamageDelivery,
   ProjectileDelivery,
@@ -10,17 +7,17 @@ import {
   WeaponDefinitionId,
   makeWeaponDefinition,
   validateDamageDelivery,
-} from "@tileborne/simulation";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/simulation';
+import { Option, Result, Schema } from 'effect';
 
-import type { ResolvedBattleRoyaleConfig } from "./battle-royale-config.js";
-import { BR_PRIMARY_WEAPON_ID, PLUGIN_ID } from "./constants.js";
-import { assessBattleRoyaleWeaponCompatibility } from "./weapon-compatibility.js";
+import type { ResolvedBattleRoyaleConfig } from './battle-royale-config.js';
+import { BR_PRIMARY_WEAPON_ID, PLUGIN_ID } from './constants.js';
+import { assessBattleRoyaleWeaponCompatibility } from './weapon-compatibility.js';
 
-export { BR_PRIMARY_WEAPON_ID } from "./constants.js";
+export { BR_PRIMARY_WEAPON_ID } from './constants.js';
 
 /** Contribution id for BR's weapon-content pack registered via the typed slot. */
-export const BR_WEAPON_CATALOG_CONTRIBUTION_ID = "br-weapon-catalog";
+export const BR_WEAPON_CATALOG_CONTRIBUTION_ID = 'br-weapon-catalog';
 
 /** Schema version of the contributed weapon-content pack. */
 export const BR_WEAPON_CATALOG_SCHEMA_VERSION = 1;
@@ -63,12 +60,12 @@ export const buildBattleRoyaleWeaponCatalogData = (
         reloadTicks: config.projectile.reloadTicks,
       },
       delivery: {
-        _tag: "ProjectileDelivery",
+        _tag: 'ProjectileDelivery',
         damage: config.projectile.damage,
         speed: perTickSpeed(config),
         ttlTicks: config.projectile.ttlTicks,
         radius: config.movement.radius + config.projectile.radius,
-        falloff: { _tag: "NoFalloff" },
+        falloff: { _tag: 'NoFalloff' },
         knockback: 0,
       },
       // BR applies no on-hit status effects (the P0 status hook is unused here);
@@ -82,7 +79,7 @@ export const buildBattleRoyaleWeaponCatalogData = (
 export class BattleRoyaleWeaponCatalogError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "BattleRoyaleWeaponCatalogError";
+    this.name = 'BattleRoyaleWeaponCatalogError';
   }
 }
 
@@ -94,7 +91,9 @@ export interface BattleRoyaleWeaponEntry {
 
 const assertBattleRoyaleWeaponCompatibility = (
   id: string,
-  entry: { readonly weapon: { readonly id: unknown }; readonly delivery: { readonly _tag?: unknown } } | undefined,
+  entry:
+    | { readonly weapon: { readonly id: unknown }; readonly delivery: { readonly _tag?: unknown } }
+    | undefined,
   origin: 'plugin' | 'project',
 ): void => {
   const result = assessBattleRoyaleWeaponCompatibility(
@@ -106,7 +105,8 @@ const assertBattleRoyaleWeaponCompatibility = (
           label: id === BR_PRIMARY_WEAPON_ID ? 'Pulse Carbine' : 'Selected project weapon',
           origin,
           ...(origin === 'plugin' ? { sourcePluginId: PLUGIN_ID } : {}),
-          deliveryTag: typeof entry.delivery._tag === 'string' ? entry.delivery._tag : 'UnknownDelivery',
+          deliveryTag:
+            typeof entry.delivery._tag === 'string' ? entry.delivery._tag : 'UnknownDelivery',
         },
   );
   if (!result.compatible) {
@@ -122,7 +122,7 @@ const assertBattleRoyaleWeaponCompatibility = (
 const decodeWeapon = (raw: unknown): WeaponDefinition => {
   const decoded = Schema.decodeUnknownOption(WeaponDefinition)(raw);
   if (Option.isNone(decoded)) {
-    throw new BattleRoyaleWeaponCatalogError("weapon entry is not a valid WeaponDefinition");
+    throw new BattleRoyaleWeaponCatalogError('weapon entry is not a valid WeaponDefinition');
   }
   const validated = makeWeaponDefinition(decoded.value);
   if (Result.isFailure(validated)) {
@@ -138,7 +138,7 @@ const decodeWeapon = (raw: unknown): WeaponDefinition => {
 const decodeDelivery = (raw: unknown): DamageDelivery => {
   const decoded = Schema.decodeUnknownOption(DamageDelivery)(raw);
   if (Option.isNone(decoded)) {
-    throw new BattleRoyaleWeaponCatalogError("delivery entry is not a valid DamageDelivery");
+    throw new BattleRoyaleWeaponCatalogError('delivery entry is not a valid DamageDelivery');
   }
   const validated = validateDamageDelivery(decoded.value);
   if (Result.isFailure(validated)) {
@@ -168,7 +168,7 @@ const decodeBattleRoyaleWeaponCatalog = (data: {
     const entry = raw as { readonly weapon?: unknown; readonly delivery?: unknown };
     const weapon = decodeWeapon(entry.weapon);
     const delivery = decodeDelivery(entry.delivery);
-    if (delivery._tag !== "ProjectileDelivery") {
+    if (delivery._tag !== 'ProjectileDelivery') {
       throw new BattleRoyaleWeaponCatalogError(
         `weapon ${weapon.id} delivery must be a ProjectileDelivery (got ${delivery._tag})`,
       );
@@ -202,37 +202,52 @@ export const resolveBattleRoyaleWeaponEntry = (
       content.weapons.map((entry) => [String(entry.weapon.id), entry] as const),
     );
     const componentsByType = new Map(
-      mapPackage.catalog.map((entry) => [String(entry.objectType.id), entry.objectType.components] as const),
+      mapPackage.catalog.map(
+        (entry) => [String(entry.objectType.id), entry.objectType.components] as const,
+      ),
     );
     const configuredWeaponId = config.loadout.startingWeaponId;
-    const configuredProjectWeapon = configuredWeaponId === undefined
-      ? undefined
-      : projectWeapons.get(configuredWeaponId);
+    const configuredProjectWeapon =
+      configuredWeaponId === undefined ? undefined : projectWeapons.get(configuredWeaponId);
     if (configuredWeaponId !== undefined) {
       if (configuredWeaponId === BR_PRIMARY_WEAPON_ID) {
-        const builtIn = buildBattleRoyaleWeaponCatalogData(config).weapons[0] as {
-          readonly weapon: { readonly id: unknown };
-          readonly delivery: { readonly _tag?: unknown };
-        } | undefined;
+        const builtIn = buildBattleRoyaleWeaponCatalogData(config).weapons[0] as
+          | {
+              readonly weapon: { readonly id: unknown };
+              readonly delivery: { readonly _tag?: unknown };
+            }
+          | undefined;
         assertBattleRoyaleWeaponCompatibility(configuredWeaponId, builtIn, 'plugin');
       } else {
-        assertBattleRoyaleWeaponCompatibility(configuredWeaponId, configuredProjectWeapon, 'project');
+        assertBattleRoyaleWeaponCompatibility(
+          configuredWeaponId,
+          configuredProjectWeapon,
+          'project',
+        );
       }
     }
-    const referencedProjectWeapon = configuredWeaponId !== undefined
-      ? undefined
-      : mapPackage.placements
-      .map((placement: RuntimeObjectPlacement) =>
-        componentsByType
-          .get(String(placement.typeId))
-          ?.find((component) => component._tag === "weapon-ref"),
-      )
-      .find((component) => component?.weaponId !== undefined && projectWeapons.has(String(component.weaponId)));
+    const referencedProjectWeapon =
+      configuredWeaponId !== undefined
+        ? undefined
+        : mapPackage.placements
+            .map((placement: RuntimeObjectPlacement) =>
+              componentsByType
+                .get(String(placement.typeId))
+                ?.find((component) => component._tag === 'weapon-ref'),
+            )
+            .find(
+              (component) =>
+                component?.weaponId !== undefined && projectWeapons.has(String(component.weaponId)),
+            );
     if (configuredProjectWeapon !== undefined) {
-      assertBattleRoyaleWeaponCompatibility(configuredWeaponId!, configuredProjectWeapon, 'project');
+      assertBattleRoyaleWeaponCompatibility(
+        configuredWeaponId!,
+        configuredProjectWeapon,
+        'project',
+      );
       const weapon = decodeWeapon(configuredProjectWeapon.weapon);
       const delivery = decodeDelivery(configuredProjectWeapon.delivery);
-      if (delivery._tag !== "ProjectileDelivery") {
+      if (delivery._tag !== 'ProjectileDelivery') {
         throw new BattleRoyaleWeaponCatalogError(
           `project weapon ${weapon.id} uses unsupported ${delivery._tag}; Battle Royale requires ProjectileDelivery`,
         );
@@ -242,10 +257,14 @@ export const resolveBattleRoyaleWeaponEntry = (
     if (referencedProjectWeapon?.weaponId !== undefined) {
       const authored = projectWeapons.get(String(referencedProjectWeapon.weaponId));
       if (authored !== undefined) {
-        assertBattleRoyaleWeaponCompatibility(String(referencedProjectWeapon.weaponId), authored, 'project');
+        assertBattleRoyaleWeaponCompatibility(
+          String(referencedProjectWeapon.weaponId),
+          authored,
+          'project',
+        );
         const weapon = decodeWeapon(authored.weapon);
         const delivery = decodeDelivery(authored.delivery);
-        if (delivery._tag !== "ProjectileDelivery") {
+        if (delivery._tag !== 'ProjectileDelivery') {
           throw new BattleRoyaleWeaponCatalogError(
             `project weapon ${weapon.id} uses unsupported ${delivery._tag}; Battle Royale requires ProjectileDelivery`,
           );

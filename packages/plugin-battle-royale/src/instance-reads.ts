@@ -1,6 +1,6 @@
-import type { GameObjectTypeId, RuntimeCatalogEntry } from "@tileborne/core";
+import type { GameObjectTypeId, RuntimeCatalogEntry } from '@tileborne/core';
 
-import { LOOT_CRATE_KIND } from "./constants.js";
+import { LOOT_CRATE_KIND } from './constants.js';
 
 /**
  * Shared reads over neutral package data (instance properties, catalog
@@ -9,10 +9,10 @@ import { LOOT_CRATE_KIND } from "./constants.js";
  */
 
 export const readNumber = (value: unknown, fallback: number): number =>
-  typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
 export const readString = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.length > 0 ? value : fallback;
+  typeof value === 'string' && value.length > 0 ? value : fallback;
 
 /**
  * Build BR's loot-source predicate from the merged runtime catalog: a
@@ -25,7 +25,7 @@ export const makeIsLootSourceType = (
   const lootTypeIds = new Set(
     catalog
       .filter((entry) =>
-        entry.objectType.components.some((component) => component._tag === "loot-source"),
+        entry.objectType.components.some((component) => component._tag === 'loot-source'),
       )
       .map((entry) => String(entry.objectType.id)),
   );

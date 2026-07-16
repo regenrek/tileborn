@@ -19,12 +19,24 @@ describe('Battle Royale team topology', () => {
 
   it('derives balanced squad and duo groups from legacy solo labels', () => {
     expect(resolveBattleRoyaleTeamTopology('squad', legacySpawns(8)).teamIds).toEqual([
-      'team-1', 'team-2', 'team-1', 'team-2',
-      'team-1', 'team-2', 'team-1', 'team-2',
+      'team-1',
+      'team-2',
+      'team-1',
+      'team-2',
+      'team-1',
+      'team-2',
+      'team-1',
+      'team-2',
     ]);
     expect(resolveBattleRoyaleTeamTopology('duo', legacySpawns(8)).teamIds).toEqual([
-      'team-1', 'team-2', 'team-3', 'team-4',
-      'team-1', 'team-2', 'team-3', 'team-4',
+      'team-1',
+      'team-2',
+      'team-3',
+      'team-4',
+      'team-1',
+      'team-2',
+      'team-3',
+      'team-4',
     ]);
   });
 
@@ -59,14 +71,17 @@ describe('Battle Royale team topology', () => {
   });
 
   it('selects the same deterministic spread subset before resolving teams', () => {
-    const selected = selectBattleRoyaleSpawnTeamSlots([
-      { x: 1, y: 1, team: 'solo' },
-      { x: 2, y: 1, team: 'solo' },
-      { x: 3, y: 1, team: 'solo' },
-      { x: 40, y: 1, team: 'solo' },
-      { x: 1, y: 40, team: 'solo' },
-      { x: 40, y: 40, team: 'solo' },
-    ], 3);
+    const selected = selectBattleRoyaleSpawnTeamSlots(
+      [
+        { x: 1, y: 1, team: 'solo' },
+        { x: 2, y: 1, team: 'solo' },
+        { x: 3, y: 1, team: 'solo' },
+        { x: 40, y: 1, team: 'solo' },
+        { x: 1, y: 40, team: 'solo' },
+        { x: 40, y: 40, team: 'solo' },
+      ],
+      3,
+    );
     expect(selected.map(({ x, y }) => ({ x, y }))).toEqual([
       { x: 1, y: 1 },
       { x: 40, y: 40 },

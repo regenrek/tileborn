@@ -1,13 +1,13 @@
-import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
 import type {
   RuntimeAdapter,
   RuntimeAdapterComponentStore,
   RuntimeAdapterContext,
   RuntimeAdapterHost,
   RuntimeAdapterWorld,
-} from "@tileborne/plugin-api";
+} from '@tileborne/plugin-api';
 
-import type { BattleRoyaleConfigInput } from "../battle-royale-config.js";
+import type { BattleRoyaleConfigInput } from '../battle-royale-config.js';
 
 export type ComponentStore<T extends object> = RuntimeAdapterComponentStore<T>;
 

@@ -1,4 +1,4 @@
-import type { TileborneMap } from "@tileborne/core";
+import type { TileborneMap } from '@tileborne/core';
 
 import {
   LOOT_CRATE_KEY,
@@ -10,9 +10,9 @@ import {
   SHRINK_ZONE_ANCHOR_KIND,
   SPAWN_POINT_KEY,
   SPAWN_POINT_KIND,
-} from "./constants.js";
-import { MIN_SPAWN_CLEARANCE, findClosestSpawnPair } from "./spawn-layout.js";
-import type { ValidationIssue, ValidationResult } from "./types/artifact.js";
+} from './constants.js';
+import { MIN_SPAWN_CLEARANCE, findClosestSpawnPair } from './spawn-layout.js';
+import type { ValidationIssue, ValidationResult } from './types/artifact.js';
 
 const countByKind = (map: TileborneMap): Map<string, number> => {
   const counts = new Map<string, number>();
@@ -25,7 +25,11 @@ const countByKind = (map: TileborneMap): Map<string, number> => {
 const objectsByKind = (map: TileborneMap, kind: string) =>
   map.objects.filter((object) => object.kind === kind);
 
-const issue = (severity: ValidationIssue["severity"], message: string, location?: string): ValidationIssue => ({
+const issue = (
+  severity: ValidationIssue['severity'],
+  message: string,
+  location?: string,
+): ValidationIssue => ({
   severity,
   message,
   ...(location === undefined ? {} : { location }),
@@ -39,9 +43,9 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
   if (spawnCount < MIN_SPAWN_POINTS) {
     issues.push(
       issue(
-        "error",
+        'error',
         `Expected at least ${MIN_SPAWN_POINTS} ${SPAWN_POINT_KEY} objects, found ${spawnCount}`,
-        "objects",
+        'objects',
       ),
     );
   }
@@ -50,11 +54,11 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
   if (closestSpawnPair !== undefined && closestSpawnPair.distance < MIN_SPAWN_CLEARANCE) {
     issues.push(
       issue(
-        "warning",
+        'warning',
         `Closest spawn points are ${closestSpawnPair.distance.toFixed(
           1,
         )} world units apart; keep at least ${MIN_SPAWN_CLEARANCE} for player clearance`,
-        "objects",
+        'objects',
       ),
     );
   }
@@ -63,9 +67,9 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
   if (anchorCount !== REQUIRED_SHRINK_ANCHORS) {
     issues.push(
       issue(
-        "error",
+        'error',
         `Expected exactly ${REQUIRED_SHRINK_ANCHORS} ${SHRINK_ZONE_ANCHOR_KEY}, found ${anchorCount}`,
-        "objects",
+        'objects',
       ),
     );
   }
@@ -74,12 +78,12 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
   if (lootCount < MIN_LOOT_CRATES) {
     issues.push(
       issue(
-        "error",
+        'error',
         `Expected at least ${MIN_LOOT_CRATES} ${LOOT_CRATE_KEY} spawn region(s), found ${lootCount}`,
-        "objects",
+        'objects',
       ),
     );
   }
 
-  return { ok: issues.every((entry) => entry.severity !== "error"), issues };
+  return { ok: issues.every((entry) => entry.severity !== 'error'), issues };
 };

@@ -1,10 +1,10 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
-import { BattleRoyaleProtocol } from "@tileborne/ipc-contracts";
-import { createHash } from "node:crypto";
-import { Option } from "effect";
+import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
+import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
+import { createHash } from 'node:crypto';
+import { Option } from 'effect';
 
-import { SPAWN_POINT_KIND } from "../constants.js";
-import { DEFAULT_BATTLE_ROYALE_CONFIG } from "../battle-royale-config.js";
+import { SPAWN_POINT_KIND } from '../constants.js';
+import { DEFAULT_BATTLE_ROYALE_CONFIG } from '../battle-royale-config.js';
 import {
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
@@ -12,14 +12,14 @@ import {
   type Player,
   type PlayerStats,
   type Position,
-} from "../ecs/components.js";
-import { getZone, resetZoneSingleton } from "../ecs/zone.js";
-import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "../id-utils.js";
-import { TEST_PLAYER_MODELS } from "../test-player-model.js";
-import { buildTestMapPackage } from "../test-map-package.js";
-import { createRuntimeAdapter } from "../runtime-adapter.js";
-import type { RuntimePlayerInput } from "../types/runtime-plugin.js";
-import { createTestPluginWorld } from "../test-plugin-world.js";
+} from '../ecs/components.js';
+import { getZone, resetZoneSingleton } from '../ecs/zone.js';
+import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from '../id-utils.js';
+import { TEST_PLAYER_MODELS } from '../test-player-model.js';
+import { buildTestMapPackage } from '../test-map-package.js';
+import { createRuntimeAdapter } from '../runtime-adapter.js';
+import type { RuntimePlayerInput } from '../types/runtime-plugin.js';
+import { createTestPluginWorld } from '../test-plugin-world.js';
 
 export type Direction8 = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -89,7 +89,7 @@ export const makeReplayFixtureMap = () =>
       makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
       makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
       makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
     ],
     properties: { maxPlayers: REPLAY_MAX_PLAYERS },
   });
@@ -118,7 +118,10 @@ const buildInputLookup = (
   return byTick;
 };
 
-const captureWorldSnapshot = (world: ReturnType<typeof createTestPluginWorld>, tick: number): WorldSnapshot => {
+const captureWorldSnapshot = (
+  world: ReturnType<typeof createTestPluginWorld>,
+  tick: number,
+): WorldSnapshot => {
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const stats = world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
@@ -164,7 +167,7 @@ const encodeFrameSequence = (frames: readonly Uint8Array[]): Uint8Array => {
   return bytes;
 };
 
-const hashBytes = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+const hashBytes = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 export interface RunReplayOptions {
   readonly seed: number;
@@ -234,7 +237,7 @@ export const runReplayScenario = ({
   const finalSnapshotBytes = encodeSnapshot(finalSnapshot);
   const wireSnapshotFrames = emittedFrames.filter((frame) => {
     const message = BattleRoyaleProtocol.decodeServerMessage(frame);
-    return message._tag === "WelcomeSnapshot" || message._tag === "DeltaSnapshot";
+    return message._tag === 'WelcomeSnapshot' || message._tag === 'DeltaSnapshot';
   });
   const wireSnapshotBytes = encodeFrameSequence(wireSnapshotFrames);
 
@@ -261,7 +264,7 @@ export const buildScriptedInputLog = (tickCount = 300): InputLogEntry[] => {
     const dir = phaseDirs[Math.floor((tick - 1) / 75) % phaseDirs.length]!;
     log.push({
       tick,
-      playerId: "player-1",
+      playerId: 'player-1',
       dir,
       shoot: tick % 8 === 0,
     });
@@ -269,7 +272,7 @@ export const buildScriptedInputLog = (tickCount = 300): InputLogEntry[] => {
     if (tick % 12 === 0) {
       log.push({
         tick,
-        playerId: "player-2",
+        playerId: 'player-2',
         dir: 4,
         shoot: true,
       });
@@ -278,7 +281,7 @@ export const buildScriptedInputLog = (tickCount = 300): InputLogEntry[] => {
     if (tick % 15 === 0) {
       log.push({
         tick,
-        playerId: "player-3",
+        playerId: 'player-3',
         dir: 0,
         shoot: true,
       });

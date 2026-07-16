@@ -1,6 +1,6 @@
-import { afterEach } from "vitest";
+import { afterEach } from 'vitest';
 
-import { resetZoneSingleton } from "../ecs/zone.js";
+import { resetZoneSingleton } from '../ecs/zone.js';
 
 afterEach(() => {
   resetZoneSingleton();

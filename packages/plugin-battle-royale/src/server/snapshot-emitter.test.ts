@@ -1,6 +1,6 @@
-import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle-royale";
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   ABILITY_STATE_COMPONENT,
@@ -43,13 +43,13 @@ import {
   type Shield,
   type StatusEffects,
   type WeaponRuntimeState,
-} from "../ecs/components.js";
-import { createTestPluginWorld } from "../test-plugin-world.js";
+} from '../ecs/components.js';
+import { createTestPluginWorld } from '../test-plugin-world.js';
 
-import { createBattleRoyaleSnapshotEmitter } from "./snapshot-emitter.js";
+import { createBattleRoyaleSnapshotEmitter } from './snapshot-emitter.js';
 
-describe("createBattleRoyaleSnapshotEmitter", () => {
-  it("emits pickups, loot crates, hazards, and interactables as object snapshots", () => {
+describe('createBattleRoyaleSnapshotEmitter', () => {
+  it('emits pickups, loot crates, hazards, and interactables as object snapshots', () => {
     const world = createTestPluginWorld();
     const players = world.registerComponent<Player>(PLAYER_COMPONENT);
     const positions = world.registerComponent<Position>(POSITION_COMPONENT);
@@ -60,30 +60,35 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
     const hazards = world.registerComponent<Hazard>(HAZARD_COMPONENT);
 
     const playerEntity = world.createEntity();
-    players.set(playerEntity, { playerId: "player-1", health: 100, alive: 1, team: "solo" });
+    players.set(playerEntity, { playerId: 'player-1', health: 100, alive: 1, team: 'solo' });
     positions.set(playerEntity, { x: 4, y: 8 });
 
     const crateEntity = world.createEntity();
     positions.set(crateEntity, { x: 40, y: 48 });
-    pickups.set(crateEntity, { itemKind: "rifle", tier: "rare", quantity: 1, available: true });
-    lootSources.set(crateEntity, { tableId: "loot-crate-a", tier: "rare", weight: 2, collected: false });
-    interactables.set(crateEntity, { action: "pickup-loot", radius: 32, enabled: true });
+    pickups.set(crateEntity, { itemKind: 'rifle', tier: 'rare', quantity: 1, available: true });
+    lootSources.set(crateEntity, {
+      tableId: 'loot-crate-a',
+      tier: 'rare',
+      weight: 2,
+      collected: false,
+    });
+    interactables.set(crateEntity, { action: 'pickup-loot', radius: 32, enabled: true });
     breakables.set(crateEntity, { health: 100, maxHealth: 100, destroyed: false });
 
     const hazardEntity = world.createEntity();
     positions.set(hazardEntity, { x: 64, y: 64 });
     hazards.set(hazardEntity, { damagePerSecond: 5, enabled: true });
 
-    const emitter = createBattleRoyaleSnapshotEmitter("seed");
+    const emitter = createBattleRoyaleSnapshotEmitter('seed');
     const welcome = BattleRoyaleProtocol.decodeServerMessage(emitter.emitWelcome(world, 1));
 
     expect(welcome).toBeInstanceOf(BattleRoyaleProtocol.WelcomeSnapshot);
     expect((welcome as BattleRoyaleProtocol.WelcomeSnapshot).objects).toEqual([
       expect.objectContaining({
         id: BattleRoyaleProtocol.makeObjectId(String(crateEntity)),
-        pickup: { itemKind: "rifle", tier: "rare", quantity: 1, available: true },
-        lootSource: { tableId: "loot-crate-a", tier: "rare", weight: 2, collected: false },
-        interactable: { action: "pickup-loot", radius: 32, enabled: true },
+        pickup: { itemKind: 'rifle', tier: 'rare', quantity: 1, available: true },
+        lootSource: { tableId: 'loot-crate-a', tier: 'rare', weight: 2, collected: false },
+        interactable: { action: 'pickup-loot', radius: 32, enabled: true },
         breakable: { health: 100, maxHealth: 100, destroyed: false },
       }),
       expect.objectContaining({
@@ -92,9 +97,14 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
       }),
     ]);
 
-    pickups.set(crateEntity, { itemKind: "rifle", tier: "rare", quantity: 1, available: false });
-    lootSources.set(crateEntity, { tableId: "loot-crate-a", tier: "rare", weight: 2, collected: true });
-    interactables.set(crateEntity, { action: "pickup-loot", radius: 32, enabled: false });
+    pickups.set(crateEntity, { itemKind: 'rifle', tier: 'rare', quantity: 1, available: false });
+    lootSources.set(crateEntity, {
+      tableId: 'loot-crate-a',
+      tier: 'rare',
+      weight: 2,
+      collected: true,
+    });
+    interactables.set(crateEntity, { action: 'pickup-loot', radius: 32, enabled: false });
     breakables.set(crateEntity, { health: 0, maxHealth: 100, destroyed: true });
     world.destroyEntity(hazardEntity);
 
@@ -104,9 +114,9 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
     expect((delta as BattleRoyaleProtocol.DeltaSnapshot).objectsUpdated).toEqual([
       expect.objectContaining({
         id: BattleRoyaleProtocol.makeObjectId(String(crateEntity)),
-        pickup: { itemKind: "rifle", tier: "rare", quantity: 1, available: false },
-        lootSource: { tableId: "loot-crate-a", tier: "rare", weight: 2, collected: true },
-        interactable: { action: "pickup-loot", radius: 32, enabled: false },
+        pickup: { itemKind: 'rifle', tier: 'rare', quantity: 1, available: false },
+        lootSource: { tableId: 'loot-crate-a', tier: 'rare', weight: 2, collected: true },
+        interactable: { action: 'pickup-loot', radius: 32, enabled: false },
         breakable: { health: 0, maxHealth: 100, destroyed: true },
       }),
     ]);
@@ -115,7 +125,7 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
     ]);
   });
 
-  it("emits player HUD state from ECS components", () => {
+  it('emits player HUD state from ECS components', () => {
     const world = createTestPluginWorld();
     const players = world.registerComponent<Player>(PLAYER_COMPONENT);
     const positions = world.registerComponent<Position>(POSITION_COMPONENT);
@@ -131,35 +141,39 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
     const reloadStates = world.registerComponent<ReloadState>(RELOAD_STATE_COMPONENT);
     const shields = world.registerComponent<Shield>(SHIELD_COMPONENT);
     const statuses = world.registerComponent<StatusEffects>(STATUS_EFFECTS_COMPONENT);
-    const weaponRuntimeStates = world.registerComponent<WeaponRuntimeState>(WEAPON_RUNTIME_STATE_COMPONENT);
+    const weaponRuntimeStates = world.registerComponent<WeaponRuntimeState>(
+      WEAPON_RUNTIME_STATE_COMPONENT,
+    );
 
     const playerEntity = world.createEntity();
-    players.set(playerEntity, { playerId: "player-1", health: 100, alive: 1, team: "solo" });
+    players.set(playerEntity, { playerId: 'player-1', health: 100, alive: 1, team: 'solo' });
     positions.set(playerEntity, { x: 4, y: 8 });
     abilityStates.set(playerEntity, {
       charges: 0,
       cooldownTicks: 0,
-      cooldowns: [{ abilityId: "dash", remainingTicks: 8 }],
+      cooldowns: [{ abilityId: 'dash', remainingTicks: 8 }],
     });
     armor.set(playerEntity, { mitigation: 0.25, durability: 80 });
-    damageIndicators.set(playerEntity, { sourceId: "player-2", angleDeg: 90, amount: 12, tick: 1 });
-    equippedWeapons.set(playerEntity, { weaponId: "weapon:primary", slot: 2 });
-    inventories.set(playerEntity, { itemIds: ["health-pack"], capacity: 5 });
+    damageIndicators.set(playerEntity, { sourceId: 'player-2', angleDeg: 90, amount: 12, tick: 1 });
+    equippedWeapons.set(playerEntity, { weaponId: 'weapon:primary', slot: 2 });
+    inventories.set(playerEntity, { itemIds: ['health-pack'], capacity: 5 });
     pickupPrompts.set(playerEntity, {
-      itemKind: "ammo-box",
-      tier: "common",
+      itemKind: 'ammo-box',
+      tier: 'common',
       distance: 1.2,
-      action: "pickup-loot",
+      action: 'pickup-loot',
       available: true,
     });
-    pickupToasts.set(playerEntity, { itemKind: "ammo-box", tier: "common", quantity: 1, tick: 1 });
+    pickupToasts.set(playerEntity, { itemKind: 'ammo-box', tier: 'common', quantity: 1, tick: 1 });
     playerStats.set(playerEntity, { kills: 1, deaths: 0 });
-    reserves.set(playerEntity, { stacks: [{ ammoKind: "weapon:primary", amount: 6 }] });
-    reloadStates.set(playerEntity, { active: true, weaponId: "weapon:primary", remainingTicks: 4 });
+    reserves.set(playerEntity, { stacks: [{ ammoKind: 'weapon:primary', amount: 6 }] });
+    reloadStates.set(playerEntity, { active: true, weaponId: 'weapon:primary', remainingTicks: 4 });
     shields.set(playerEntity, { current: 20, max: 50 });
-    statuses.set(playerEntity, { effects: [{ effectId: "reveal", remainingTicks: 20, stacks: 1 }] });
+    statuses.set(playerEntity, {
+      effects: [{ effectId: 'reveal', remainingTicks: 20, stacks: 1 }],
+    });
     weaponRuntimeStates.set(playerEntity, {
-      weaponId: "weapon:primary",
+      weaponId: 'weapon:primary',
       slot: 2,
       ammoInMagazine: 1,
       magazineSize: 3,
@@ -168,7 +182,7 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
       reloadTotalTicks: 12,
     });
 
-    const emitter = createBattleRoyaleSnapshotEmitter("seed");
+    const emitter = createBattleRoyaleSnapshotEmitter('seed');
     const welcome = BattleRoyaleProtocol.decodeServerMessage(emitter.emitWelcome(world, 1));
 
     expect(welcome).toBeInstanceOf(BattleRoyaleProtocol.WelcomeSnapshot);
@@ -176,7 +190,7 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
       shield: 20,
       armor: { mitigation: 0.25, durability: 80 },
       weapon: {
-        weaponId: "weapon:primary",
+        weaponId: 'weapon:primary',
         slot: 2,
         ammoInMagazine: 1,
         magazineSize: 3,
@@ -185,27 +199,27 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
         reloadRemainingTicks: 4,
         reloadTotalTicks: 12,
       },
-      inventory: { itemIds: ["health-pack"], capacity: 5 },
+      inventory: { itemIds: ['health-pack'], capacity: 5 },
       pickupPrompt: {
-        itemKind: "ammo-box",
-        tier: "common",
+        itemKind: 'ammo-box',
+        tier: 'common',
         distance: 1.2,
-        action: "pickup-loot",
+        action: 'pickup-loot',
         available: true,
       },
-      pickupToast: { itemKind: "ammo-box", tier: "common", quantity: 1, tick: 1 },
-      damageIndicator: { sourceId: "player-2", angleDeg: 90, amount: 12, tick: 1 },
+      pickupToast: { itemKind: 'ammo-box', tier: 'common', quantity: 1, tick: 1 },
+      damageIndicator: { sourceId: 'player-2', angleDeg: 90, amount: 12, tick: 1 },
       stats: { kills: 1, deaths: 0 },
-      statusEffects: [{ effectId: "reveal", remainingTicks: 20, stacks: 1 }],
-      abilityCooldowns: [{ abilityId: "dash", remainingTicks: 8 }],
+      statusEffects: [{ effectId: 'reveal', remainingTicks: 20, stacks: 1 }],
+      abilityCooldowns: [{ abilityId: 'dash', remainingTicks: 8 }],
     });
 
     shields.set(playerEntity, { current: 0, max: 50 });
-    damageIndicators.set(playerEntity, { sourceId: "zone", angleDeg: 0, amount: 5, tick: 2 });
-    pickupToasts.set(playerEntity, { itemKind: "health-pack", tier: "rare", quantity: 1, tick: 2 });
+    damageIndicators.set(playerEntity, { sourceId: 'zone', angleDeg: 0, amount: 5, tick: 2 });
+    pickupToasts.set(playerEntity, { itemKind: 'health-pack', tier: 'rare', quantity: 1, tick: 2 });
     statuses.set(playerEntity, { effects: [] });
     weaponRuntimeStates.set(playerEntity, {
-      weaponId: "weapon:primary",
+      weaponId: 'weapon:primary',
       slot: 2,
       ammoInMagazine: 0,
       magazineSize: 3,
@@ -219,18 +233,22 @@ describe("createBattleRoyaleSnapshotEmitter", () => {
     const update = (delta as BattleRoyaleProtocol.DeltaSnapshot).updated[0];
     expect(update).toBeDefined();
     expect(Option.isSome(update!.shield) ? update!.shield.value : undefined).toBe(0);
-    expect(Option.isSome(update!.statusEffects) ? update!.statusEffects.value : undefined).toEqual([]);
+    expect(Option.isSome(update!.statusEffects) ? update!.statusEffects.value : undefined).toEqual(
+      [],
+    );
     expect(Option.isSome(update!.weapon) ? update!.weapon.value : undefined).toEqual(
       expect.objectContaining({ ammoInMagazine: 0, reserveAmmo: 6 }),
     );
     expect(Option.isSome(update!.pickupToast) ? update!.pickupToast.value : undefined).toEqual({
-      itemKind: "health-pack",
-      tier: "rare",
+      itemKind: 'health-pack',
+      tier: 'rare',
       quantity: 1,
       tick: 2,
     });
-    expect(Option.isSome(update!.damageIndicator) ? update!.damageIndicator.value : undefined).toEqual({
-      sourceId: "zone",
+    expect(
+      Option.isSome(update!.damageIndicator) ? update!.damageIndicator.value : undefined,
+    ).toEqual({
+      sourceId: 'zone',
       angleDeg: 0,
       amount: 5,
       tick: 2,

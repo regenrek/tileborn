@@ -90,7 +90,19 @@ const runDuel = (): RunResult => {
 
   // player-1 shoots east toward the stationary player-2 every tick.
   const inputForTick: ReadonlyMap<string, RuntimePlayerInput> = new Map([
-    ['player-1', { tick: 0, seq: 0, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }],
+    [
+      'player-1',
+      {
+        tick: 0,
+        seq: 0,
+        dir: 0,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      },
+    ],
   ]);
 
   const plugin = createRuntimeAdapter({

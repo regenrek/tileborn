@@ -103,7 +103,16 @@ describe('BattleRoyaleConfig overrides', () => {
 
     const plugin = createRuntimeAdapter({
       getMapPackage: () => mapPackage,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
+      getPlayerInput: () => ({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      }),
       config: {
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       },
@@ -140,7 +149,16 @@ describe('BattleRoyaleConfig overrides', () => {
 
     const plugin = createRuntimeAdapter({
       getMapPackage: () => mapPackage,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true, reload: false, interact: false, drop: false, abilities: [] }),
+      getPlayerInput: () => ({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      }),
     });
 
     plugin.onTick?.(world, DT, 1);

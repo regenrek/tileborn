@@ -6,9 +6,11 @@ export class SeededRng {
   constructor(seed: string | number) {
     this.state = new Uint32Array(4);
     const numeric =
-      typeof seed === "number"
+      typeof seed === 'number'
         ? seed >>> 0
-        : seed.split("").reduce((acc, char) => (Math.imul(31, acc) + char.charCodeAt(0)) >>> 0, 0x9e3779b9);
+        : seed
+            .split('')
+            .reduce((acc, char) => (Math.imul(31, acc) + char.charCodeAt(0)) >>> 0, 0x9e3779b9);
     this.state[0] = numeric;
     this.state[1] = Math.imul(numeric ^ 0x85ebca6b, 0xc2b2ae35) >>> 0;
     this.state[2] = Math.imul(numeric ^ 0xc2b2ae35, 0x165667b1) >>> 0;
@@ -19,7 +21,8 @@ export class SeededRng {
   }
 
   nextUint32(): number {
-    const result = (Math.imul(this.rotl(Math.imul(this.state[1]!, 5), 7), 9) + this.state[0]!) >>> 0;
+    const result =
+      (Math.imul(this.rotl(Math.imul(this.state[1]!, 5), 7), 9) + this.state[0]!) >>> 0;
     const t = (this.state[1]! << 9) >>> 0;
     this.state[2]! ^= this.state[0]!;
     this.state[3]! ^= this.state[1]!;

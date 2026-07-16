@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { MOVEMENT, ZONE } from "../constants.js";
-import { derivePlaytestHudWorldState, type HudWorldView } from "./world-state.js";
+import { MOVEMENT, ZONE } from '../constants.js';
+import { derivePlaytestHudWorldState, type HudWorldView } from './world-state.js';
 
 const makeWorld = (components: Record<string, ReadonlyMap<number, object>>): HudWorldView => ({
   getComponent: <T extends object>(name: string) => {
@@ -16,12 +16,12 @@ const makeWorld = (components: Record<string, ReadonlyMap<number, object>>): Hud
   },
 });
 
-describe("derivePlaytestHudWorldState", () => {
-  it("derives local player, scoreboard, and minimap from the plugin world", () => {
+describe('derivePlaytestHudWorldState', () => {
+  it('derives local player, scoreboard, and minimap from the plugin world', () => {
     const world = makeWorld({
       Player: new Map([
-        [1, { playerId: "player-1", health: 80, alive: 1 }],
-        [2, { playerId: "player-2", health: 0, alive: 0 }],
+        [1, { playerId: 'player-1', health: 80, alive: 1 }],
+        [2, { playerId: 'player-2', health: 0, alive: 0 }],
       ]),
       Position: new Map([
         [1, { x: 4, y: 5 }],
@@ -32,14 +32,16 @@ describe("derivePlaytestHudWorldState", () => {
     const state = derivePlaytestHudWorldState(world, 10);
     expect(state.totalPlayers).toBe(2);
     expect(state.localPlayer).toMatchObject({
-      playerId: "player-1",
-      displayName: "Player 1",
+      playerId: 'player-1',
+      displayName: 'Player 1',
       health: 80,
       position: { x: 4, y: 5 },
     });
-    expect(state.scoreboard.map((entry) => entry.playerId)).toEqual(["player-1", "player-2"]);
+    expect(state.scoreboard.map((entry) => entry.playerId)).toEqual(['player-1', 'player-2']);
     expect(state.minimap.players).toHaveLength(2);
-    expect(state.minimap.players.find((player) => player.playerId === "player-1")?.local).toBe(true);
+    expect(state.minimap.players.find((player) => player.playerId === 'player-1')?.local).toBe(
+      true,
+    );
   });
 
   it("computes the zone countdown from the plugin's own schedule constants", () => {
@@ -67,13 +69,13 @@ describe("derivePlaytestHudWorldState", () => {
     const tick = MOVEMENT.tickRate; // one second elapsed
     const state = derivePlaytestHudWorldState(world, tick);
     expect(state.zoneStatus).toEqual({
-      phase: "countdown",
+      phase: 'countdown',
       secondsRemaining: ZONE.schedule.waitSec - 1,
     });
     expect(state.minimap.zone).toEqual({ cx: 16, cy: 16, radius: 20 });
   });
 
-  it("returns an empty slice when the world has no plugin components", () => {
+  it('returns an empty slice when the world has no plugin components', () => {
     const world = makeWorld({});
     const state = derivePlaytestHudWorldState(world, 0);
     expect(state.totalPlayers).toBe(0);

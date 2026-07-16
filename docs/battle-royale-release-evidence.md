@@ -7,7 +7,7 @@ until the signed/notarized DMG, manifest, native install/relaunch, verified back
 retained-installer rollback, and publication boundary pass the canonical desktop release contract.
 macOS x64, Windows, and Linux are unsupported for desktop 1.0; Forge maker configuration does not
 change that decision.
-The prepared `1.0.0-rc.0` is unreleased; no desktop tag or publication exists.
+Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
 
 Evidence classes are intentionally separate: `current automated`, `prior live Electron`, and `fresh live Electron`. Automated artifact execution must never be reported as fresh UI evidence.
 

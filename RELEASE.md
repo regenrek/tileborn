@@ -1,8 +1,9 @@
 # Tileborne 1.0 Release Candidate
 
-This file is the maintainer handoff for preparing the unreleased
-`v1.0.0-rc.0`. Its desktop decision is **NO-GO**. No tag, GitHub release, npm
-publish, Homebrew publish, or Cloudflare deploy has happened.
+Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+
+This file is the maintainer handoff for the candidate. No npm publish, Homebrew publish, or
+Cloudflare deploy has happened.
 
 ## Current decision: desktop NO-GO
 

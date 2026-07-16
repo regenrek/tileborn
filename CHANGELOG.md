@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0-rc.0] - Unreleased
 
-`1.0.0-rc.0` is prepared but unreleased and remains **NO-GO** for desktop
-distribution. No tag, release date, or publication exists.
+Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
 
 ### Added
 

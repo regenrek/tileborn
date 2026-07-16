@@ -2,8 +2,9 @@
 
 This is the supported creator path for the Battle Royale 1.0 vertical.
 
-Desktop candidate `1.0.0-rc.0` is unreleased and remains **NO-GO** for distribution; creator and
-Ship evidence below does not represent a desktop tag or publication.
+Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+
+Creator and Ship evidence below does not broaden the desktop release state.
 
 ## Create and author
 

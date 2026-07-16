@@ -8,20 +8,29 @@ import {
   assertCanonicalReleaseDocumentation,
   assertReleaseDocumentation,
   loadReleaseDocumentationSurfaces,
+  releaseStateSentence,
+  releaseStateSurfacePaths,
 } from './release-docs-contract.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const policy = loadDesktopReleasePolicy();
 const baselineStatus = evaluateDesktopRelease({ policy, environment: {} });
+const releaseVersion = JSON.parse(
+  readFileSync(path.join(repoRoot, 'apps/desktop/package.json'), 'utf8'),
+).version as string;
 const canonicalSurfaces = loadReleaseDocumentationSurfaces();
 
-const mutated = (relativePath: string, transform: (source: string) => string) => ({
-  ...canonicalSurfaces,
-  [relativePath]: transform(canonicalSurfaces[relativePath]!),
-});
+const mutated = (relativePath: string, transform: (source: string) => string) => {
+  const original = canonicalSurfaces[relativePath]!;
+  const changed = transform(original);
+  expect(changed, `mutation must change ${relativePath}`).not.toBe(original);
+  return { ...canonicalSurfaces, [relativePath]: changed };
+};
 
 const assertMutatedContractFails = (surfaces: Record<string, string>, code: string) => {
-  expect(() => assertReleaseDocumentation({ surfaces, policy, baselineStatus })).toThrow(code);
+  expect(() =>
+    assertReleaseDocumentation({ surfaces, policy, baselineStatus, releaseVersion }),
+  ).toThrow(code);
 };
 
 describe('desktop release documentation contract', () => {
@@ -92,33 +101,102 @@ describe('desktop release documentation contract', () => {
     );
   });
 
-  it('rejects support marker drift instead of maintaining a second test-side matrix', () => {
+  it('rejects the reviewer-provided visible support-table contradiction', () => {
     assertMutatedContractFails(
       mutated('docs/desktop-release-runbook.md', (source) =>
         source.replace(
-          '- `platform.windows` (`Windows`): `unsupported`',
-          '- `platform.windows` (`Windows`): `supported`',
+          /(\|\s*`platform\.windows`\s*\|\s*Windows\s*\|\s*)`unsupported`/,
+          '$1Supported',
         ),
       ),
       'release-docs.canonical-list-drift',
     );
   });
 
-  it('rejects a missing, extra, reordered, or renamed evidence-free blocker', () => {
+  it('rejects the reviewer-provided renamed visible blocker row', () => {
+    assertMutatedContractFails(
+      mutated('docs/desktop-release-runbook.md', (source) =>
+        source.replace('`artifact.file-missing`', '`artifact.candidate-missing`'),
+      ),
+      'release-docs.canonical-list-drift',
+    );
+  });
+
+  it('rejects the reviewer-provided duplicate contradictory support marker block', () => {
+    assertMutatedContractFails(
+      mutated(
+        'docs/desktop-release-runbook.md',
+        (source) => `${source}
+<!-- desktop-release-support:start -->
+| Policy id | Surface | Status | Reason |
+| --- | --- | --- | --- |
+| \`platform.windows\` | Windows | \`supported\` | contradictory duplicate |
+<!-- desktop-release-support:end -->
+`,
+      ),
+      'release-docs.marker-cardinality',
+    );
+  });
+
+  it('rejects duplicate, nested, malformed, and extra marker tokens', () => {
     for (const transform of [
-      (source: string) => source.replace('- `artifact.file-missing`\n', ''),
       (source: string) =>
         source.replace(
-          '- `artifact.file-missing`',
-          '- `artifact.file-missing`\n- `artifact.self-asserted-receipt`',
+          '<!-- desktop-release-support:start -->',
+          '<!-- desktop-release-support:start -->\n<!-- desktop-release-support:start -->',
         ),
       (source: string) =>
         source.replace(
-          '- `artifact.manifest-missing`\n- `artifact.file-missing`',
-          '- `artifact.file-missing`\n- `artifact.manifest-missing`',
+          '<!-- desktop-release-support:end -->',
+          '<!-- desktop-release-support:end -->\n<!-- desktop-release-support:end -->',
         ),
       (source: string) =>
-        source.replace('- `artifact.file-missing`', '- `artifact.candidate-missing`'),
+        source.replace(
+          '<!-- desktop-release-support:end -->',
+          '<!-- desktop-release-support:unexpected -->\n<!-- desktop-release-support:end -->',
+        ),
+      (source: string) =>
+        `${source}\n<!-- desktop-release-baseline-blockers:start --><!-- desktop-release-baseline-blockers:end -->\n`,
+    ]) {
+      assertMutatedContractFails(
+        mutated('docs/desktop-release-runbook.md', transform),
+        'release-docs.marker-cardinality',
+      );
+    }
+  });
+
+  it('rejects contradictory or renamed fact tables outside canonical markers', () => {
+    assertMutatedContractFails(
+      mutated(
+        'docs/desktop-release-runbook.md',
+        (source) => `${source}\n| Surface | Status |\n| --- | --- |\n| Windows | Supported |\n`,
+      ),
+      'release-docs.unbound-support-table',
+    );
+    assertMutatedContractFails(
+      mutated(
+        'docs/desktop-release-runbook.md',
+        (source) =>
+          `${source}\n| Blocker | Meaning |\n| --- | --- |\n| \`artifact.candidate-missing\` | renamed |\n`,
+      ),
+      'release-docs.unbound-blocker-table',
+    );
+  });
+
+  it('rejects a missing, extra, reordered, or renamed canonical blocker row', () => {
+    for (const transform of [
+      (source: string) => source.replace(/^\|\s*`artifact\.file-missing`.*\n/m, ''),
+      (source: string) =>
+        source.replace(
+          /(^\|\s*`artifact\.file-missing`.*$)/m,
+          '$1\n| `artifact.self-asserted-receipt` | forged |',
+        ),
+      (source: string) =>
+        source.replace(
+          /(^\|\s*`artifact\.manifest-missing`.*\n)(^\|\s*`artifact\.file-missing`.*\n)/m,
+          '$2$1',
+        ),
+      (source: string) => source.replace('`artifact.file-missing`', '`artifact.candidate-missing`'),
     ]) {
       assertMutatedContractFails(
         mutated('docs/desktop-release-runbook.md', transform),
@@ -127,16 +205,35 @@ describe('desktop release documentation contract', () => {
     }
   });
 
-  it('rejects a dated or weakened release-candidate state', () => {
+  it('rejects a dated changelog heading', () => {
     assertMutatedContractFails(
       mutated('CHANGELOG.md', (source) =>
         source.replace('## [1.0.0-rc.0] - Unreleased', '## [1.0.0-rc.0] - 2026-06-15'),
       ),
       'release-docs.changelog-state-drift',
     );
-    assertMutatedContractFails(
-      mutated('README.md', (source) => source.replace('unreleased', 'available')),
-      'release-docs.release-state-drift',
-    );
+  });
+
+  it('rejects state weakening and positive tag/date/publication/completion claims on every state surface', () => {
+    const state = releaseStateSentence(releaseVersion);
+    for (const relativePath of releaseStateSurfacePaths) {
+      assertMutatedContractFails(
+        mutated(relativePath, (source) =>
+          source.replace(state, state.replace('prepared', 'ready')),
+        ),
+        'release-docs.release-state-drift',
+      );
+      for (const claim of [
+        'Release tag exists.',
+        'Release date: 2026-07-16.',
+        'Desktop publication is published.',
+        'Release is complete.',
+      ]) {
+        assertMutatedContractFails(
+          mutated(relativePath, (source) => `${source}\n${claim}\n`),
+          'release-docs.contradictory-claim',
+        );
+      }
+    }
   });
 });

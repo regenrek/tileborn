@@ -8,8 +8,9 @@ Build maps in the Electron editor, extend behavior with plugins, and run determi
 
 ## Status
 
-`main` is preparing the unreleased `1.0.0-rc.0`; no tag or desktop distribution exists. The creator/game Ship
-vertical has committed evidence, while the desktop editor remains **NO-GO** for distribution.
+Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+
+The creator/game Ship vertical has committed evidence, while the desktop editor remains unavailable for distribution.
 macOS arm64 is the sole desktop 1.0 candidate; Windows, Linux, macOS x64, automatic updates, and
 remote crash reporting are unsupported. See the [desktop release runbook](docs/desktop-release-runbook.md).
 

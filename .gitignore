@@ -6,6 +6,9 @@ build/
 # packages/services-build/src/build), not build output — re-include them.
 !**/src/build/
 !**/src/build/**
+# Planr build plans are durable planning contracts, not generated build output.
+!/.planr/plans/build/
+!/.planr/plans/build/*.plan.md
 out/
 coverage/
 *.lcov
@@ -50,6 +53,14 @@ test-results/
 .eslintcache
 .stylelintcache
 dist-smoke/
+
+# Planr durable plans, project contracts, agent profiles, and the archived
+# review baseline are tracked explicitly. The SQLite database and newly emitted
+# review projections are local orchestration state and must not dirty product
+# branches.
+/.planr/planr.sqlite
+/.planr/planr.sqlite-*
+/.planr/reviews/*.review.md
 
 # Third-party local asset imports, not for the OSS repo
 packages/test-fixtures/fixtures/asset-packs/[a]ncient/

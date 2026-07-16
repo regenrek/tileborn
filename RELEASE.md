@@ -85,6 +85,17 @@ dirty entries. The only ignore-policy addition made by this classification is
 reset, checkout, implicit staging, and broad `git add` remain prohibited for
 the integration.
 
+The clean integration baseline versions the durable Planr surface: the agent
+profiles under `.claude/` and `.codex/`, product/build plans, project contracts,
+and the 120 review receipts present at integration. Planr's `planr.sqlite`
+database remains local because every pick, heartbeat, log, and review mutates
+it. SQLite sidecars and newly emitted review projections are likewise ignored;
+the archived review baseline stays tracked because tracked files are not
+affected by ignore rules. The two `.planr/plans/build/*.plan.md` contracts are
+explicitly re-included from the repository's general `build/` output rule.
+This preserves every baseline receipt while a fresh checkout is reconstructed
+only from stable committed inputs.
+
 ## Release Notes
 
 Tileborne `1.0.0-rc.0` packages the BR vertical as a production release

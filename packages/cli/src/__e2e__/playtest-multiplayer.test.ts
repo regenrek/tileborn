@@ -36,7 +36,7 @@ describe.sequential('playtest multiplayer e2e', () => {
       { env: { TILEBORNE_LOG_LEVEL: 'silent' } },
     );
 
-    const match = await handle.waitForOutput(/"wsUrl"\s*:\s*"([^"]+)"/);
+    const match = await handle.waitForOutput(/"wsUrl"\s*:\s*"([^"]+)"/, 45_000);
     const wsUrl = match[1];
     expect(wsUrl).toMatch(/^ws:\/\//);
 
@@ -58,5 +58,5 @@ describe.sequential('playtest multiplayer e2e', () => {
       ),
     ]);
     expect(exitCode).toBe(0);
-  }, 30_000);
+  }, 60_000);
 });

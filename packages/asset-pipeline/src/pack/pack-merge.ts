@@ -1,21 +1,21 @@
-import { AssetId, PackId } from "@tileborne/core";
-import { Match, Schema } from "effect";
+import { AssetId, PackId } from '@tileborne/core';
+import { Match, Schema } from 'effect';
 
-import { PackAssetIdCollisionError } from "../errors.js";
-import { AssetPackManifestAsset, type Asset } from "./pack-manifest.js";
-import { PackIndex } from "./pack-index.js";
+import { PackAssetIdCollisionError } from '../errors.js';
+import { AssetPackManifestAsset, type Asset } from './pack-manifest.js';
+import { PackIndex } from './pack-index.js';
 
-export class AssetIdConflict extends Schema.Class<AssetIdConflict>("AssetIdConflict")({
+export class AssetIdConflict extends Schema.Class<AssetIdConflict>('AssetIdConflict')({
   id: AssetId,
   packs: Schema.Array(PackId),
 }) {}
 
-export class MergedCatalogEntry extends Schema.Class<MergedCatalogEntry>("MergedCatalogEntry")({
+export class MergedCatalogEntry extends Schema.Class<MergedCatalogEntry>('MergedCatalogEntry')({
   packId: PackId,
   asset: AssetPackManifestAsset,
 }) {}
 
-export class MergedCatalog extends Schema.Class<MergedCatalog>("MergedCatalog")({
+export class MergedCatalog extends Schema.Class<MergedCatalog>('MergedCatalog')({
   packs: Schema.Array(PackIndex),
   assets: Schema.Array(AssetPackManifestAsset),
   assetsById: Schema.ReadonlyMap(AssetId, Schema.Array(AssetPackManifestAsset)),
@@ -24,9 +24,9 @@ export class MergedCatalog extends Schema.Class<MergedCatalog>("MergedCatalog")(
   conflicts: Schema.Array(AssetIdConflict),
 }) {}
 
-export class PreferFirst extends Schema.TaggedClass<PreferFirst>()("PreferFirst", {}) {}
-export class PreferLast extends Schema.TaggedClass<PreferLast>()("PreferLast", {}) {}
-export class StrictFail extends Schema.TaggedClass<StrictFail>()("StrictFail", {}) {}
+export class PreferFirst extends Schema.TaggedClass<PreferFirst>()('PreferFirst', {}) {}
+export class PreferLast extends Schema.TaggedClass<PreferLast>()('PreferLast', {}) {}
+export class StrictFail extends Schema.TaggedClass<StrictFail>()('StrictFail', {}) {}
 
 export const ConflictResolutionStrategy = Schema.Union([PreferFirst, PreferLast, StrictFail]);
 export type ConflictResolutionStrategy = typeof ConflictResolutionStrategy.Type;
@@ -54,7 +54,9 @@ export const mergePacks = (packs: readonly PackIndex[]): MergedCatalog => {
       ([id]) =>
         new AssetIdConflict({
           id,
-          packs: [...new Set(packIdsByAssetId.get(id) ?? [])].sort((left, right) => left.localeCompare(right)),
+          packs: [...new Set(packIdsByAssetId.get(id) ?? [])].sort((left, right) =>
+            left.localeCompare(right),
+          ),
         }),
     )
     .sort((left, right) => left.id.localeCompare(right.id));
@@ -63,14 +65,19 @@ export const mergePacks = (packs: readonly PackIndex[]): MergedCatalog => {
   for (const [id, assetsForId] of assetsById.entries()) {
     const packIds = packIdsByAssetId.get(id) ?? [];
     if (assetsForId.length === 1 && packIds.length === 1) {
-      entriesByAssetId.set(id, new MergedCatalogEntry({ packId: packIds[0]!, asset: assetsForId[0]! }));
+      entriesByAssetId.set(
+        id,
+        new MergedCatalogEntry({ packId: packIds[0]!, asset: assetsForId[0]! }),
+      );
     }
   }
 
   return new MergedCatalog({
     packs: Object.freeze(sortedPacks),
     assets: Object.freeze(assets),
-    assetsById: new Map([...assetsById.entries()].map(([id, entries]) => [id, Object.freeze([...entries])])),
+    assetsById: new Map(
+      [...assetsById.entries()].map(([id, entries]) => [id, Object.freeze([...entries])]),
+    ),
     packIdsByAssetId: new Map(
       [...packIdsByAssetId.entries()].map(([id, packIds]) => [id, Object.freeze([...packIds])]),
     ),
@@ -129,7 +136,9 @@ export const resolveConflicts = (
   return new MergedCatalog({
     packs: merged.packs,
     assets: Object.freeze([...assetsById.values()].flat()),
-    assetsById: new Map([...assetsById.entries()].map(([id, assets]) => [id, Object.freeze([...assets])])),
+    assetsById: new Map(
+      [...assetsById.entries()].map(([id, assets]) => [id, Object.freeze([...assets])]),
+    ),
     packIdsByAssetId: new Map(
       [...packIdsByAssetId.entries()].map(([id, packIds]) => [id, Object.freeze([...packIds])]),
     ),

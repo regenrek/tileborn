@@ -1,18 +1,18 @@
-import { Asset, hashBytes } from "@tileborne/core";
-import { Result } from "effect";
+import { Asset, hashBytes } from '@tileborne/core';
+import { Result } from 'effect';
 
-import { UnsupportedImporterInputError } from "../errors.js";
-import { isAudioMimeType } from "../security/mime-allowlist.js";
-import { validateAssetCandidate } from "../security/security.js";
-import { deterministicAssetId } from "./deterministic-id.js";
-import type { AssetImporter, ImporterInput } from "./importer.js";
+import { UnsupportedImporterInputError } from '../errors.js';
+import { isAudioMimeType } from '../security/mime-allowlist.js';
+import { validateAssetCandidate } from '../security/security.js';
+import { deterministicAssetId } from './deterministic-id.js';
+import type { AssetImporter, ImporterInput } from './importer.js';
 
 export interface AudioImporterInput extends ImporterInput {
-  readonly mime: "audio/wav" | "audio/wave" | "audio/x-wav" | "audio/ogg" | "audio/mpeg";
+  readonly mime: 'audio/wav' | 'audio/wave' | 'audio/x-wav' | 'audio/ogg' | 'audio/mpeg';
 }
 
 export const audioImporter: AssetImporter = {
-  id: "tileborne.audio",
+  id: 'tileborne.audio',
   supports: (input): input is AudioImporterInput => isAudioMimeType(input.mime),
   import: (input) => {
     if (!audioImporter.supports(input)) {
@@ -33,7 +33,7 @@ export const audioImporter: AssetImporter = {
     const hash = hashBytes(input.bytes);
     const asset = new Asset({
       id: deterministicAssetId(`${audioImporter.id}:${input.filename}:${hash}`),
-      kind: "audio",
+      kind: 'audio',
       path: input.path ?? input.filename,
       properties: {
         hash,

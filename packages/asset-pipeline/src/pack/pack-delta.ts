@@ -1,29 +1,28 @@
-import { AssetId, PackId, canonicalJson } from "@tileborne/core";
-import { Option, Schema } from "effect";
+import { AssetId, PackId, canonicalJson } from '@tileborne/core';
+import { Option, Schema } from 'effect';
 
-import { PackDeltaApplyError } from "../errors.js";
-import { License } from "../license/license.js";
-import { indexPack } from "./pack-index.js";
-import { mergePacks, type MergedCatalog } from "./pack-merge.js";
-import {
-  AssetPackManifestAsset,
-  AssetPackManifest,
-  assetsFromManifest,
-} from "./pack-manifest.js";
+import { PackDeltaApplyError } from '../errors.js';
+import { License } from '../license/license.js';
+import { indexPack } from './pack-index.js';
+import { mergePacks, type MergedCatalog } from './pack-merge.js';
+import { AssetPackManifestAsset, AssetPackManifest, assetsFromManifest } from './pack-manifest.js';
 
-export class ModifiedAsset extends Schema.TaggedClass<ModifiedAsset>()("modified", {
+export class ModifiedAsset extends Schema.TaggedClass<ModifiedAsset>()('modified', {
   id: AssetId,
   before: AssetPackManifestAsset,
   after: AssetPackManifestAsset,
 }) {}
 
-export class LicenseChangedAsset extends Schema.TaggedClass<LicenseChangedAsset>()("licenseChanged", {
-  id: AssetId,
-  before: License,
-  after: License,
-}) {}
+export class LicenseChangedAsset extends Schema.TaggedClass<LicenseChangedAsset>()(
+  'licenseChanged',
+  {
+    id: AssetId,
+    before: License,
+    after: License,
+  },
+) {}
 
-export class PackDelta extends Schema.Class<PackDelta>("PackDelta")({
+export class PackDelta extends Schema.Class<PackDelta>('PackDelta')({
   from: AssetPackManifest,
   to: AssetPackManifest,
   added: Schema.Array(AssetPackManifestAsset),
@@ -85,7 +84,9 @@ export const diffPacks = (a: AssetPackManifest, b: AssetPackManifest): PackDelta
     const beforeLicense = licenseFor(a, before);
     const afterLicense = licenseFor(b, after);
     if (licenseKey(beforeLicense) !== licenseKey(afterLicense)) {
-      licenseChanged.push(new LicenseChangedAsset({ id, before: beforeLicense, after: afterLicense }));
+      licenseChanged.push(
+        new LicenseChangedAsset({ id, before: beforeLicense, after: afterLicense }),
+      );
     }
   }
 
@@ -116,7 +117,7 @@ export const applyPackDelta = (
   if (delta.from.id !== packId || delta.to.id !== packId) {
     throw new PackDeltaApplyError({
       packId,
-      message: "delta manifests do not match requested pack id",
+      message: 'delta manifests do not match requested pack id',
     });
   }
 
@@ -124,7 +125,7 @@ export const applyPackDelta = (
   if (!packExists) {
     throw new PackDeltaApplyError({
       packId,
-      message: "catalog does not contain the pack to update",
+      message: 'catalog does not contain the pack to update',
     });
   }
 

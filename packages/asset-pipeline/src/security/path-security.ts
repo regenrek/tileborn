@@ -1,5 +1,5 @@
-import path from "node:path";
-import { realpath } from "node:fs/promises";
+import path from 'node:path';
+import { realpath } from 'node:fs/promises';
 
 export class AssetPathSecurityError extends Error {
   readonly rootPath: string;
@@ -7,7 +7,7 @@ export class AssetPathSecurityError extends Error {
 
   constructor(message: string, rootPath: string, candidatePath: string) {
     super(message);
-    this.name = "AssetPathSecurityError";
+    this.name = 'AssetPathSecurityError';
     this.rootPath = rootPath;
     this.candidatePath = candidatePath;
   }
@@ -18,7 +18,7 @@ export const assertWithinRoot = (rootPath: string, candidatePath: string): strin
   const resolvedCandidate = path.resolve(resolvedRoot, candidatePath);
   const relative = path.relative(resolvedRoot, resolvedCandidate);
 
-  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
     return resolvedCandidate;
   }
 
@@ -33,8 +33,12 @@ export const rejectPathTraversal = (rootPath: string, candidatePath: string): st
   const normalized = candidatePath.replaceAll(path.win32.sep, path.posix.sep);
   const segments = path.posix.normalize(normalized).split(path.posix.sep);
 
-  if (path.posix.isAbsolute(normalized) || segments.includes("..")) {
-    throw new AssetPathSecurityError(`Path traversal is not allowed: ${candidatePath}`, rootPath, candidatePath);
+  if (path.posix.isAbsolute(normalized) || segments.includes('..')) {
+    throw new AssetPathSecurityError(
+      `Path traversal is not allowed: ${candidatePath}`,
+      rootPath,
+      candidatePath,
+    );
   }
 
   return assertWithinRoot(rootPath, candidatePath);
@@ -51,7 +55,7 @@ export const rejectSymlinkEscape = async (
   ]);
   const relative = path.relative(realRoot, realCandidate);
 
-  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
     return realCandidate;
   }
 

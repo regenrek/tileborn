@@ -1,4 +1,4 @@
-import { Result } from "effect";
+import { Result } from 'effect';
 
 import {
   AssetExtensionMismatchError,
@@ -6,15 +6,15 @@ import {
   AssetMimeRejectedError,
   AssetTooLargeError,
   type AssetSecurityError,
-} from "../errors.js";
-import { extensionOf, isAllowedExtensionForMime } from "./extension-allowlist.js";
+} from '../errors.js';
+import { extensionOf, isAllowedExtensionForMime } from './extension-allowlist.js';
 import {
   type AllowedMimeType,
   isAllowedMimeType,
   requiresMagicByteCheck,
-} from "./mime-allowlist.js";
-import { hasExpectedMagicBytes } from "./magic-bytes.js";
-import { MAX_ASSET_BYTES } from "./size-limits.js";
+} from './mime-allowlist.js';
+import { hasExpectedMagicBytes } from './magic-bytes.js';
+import { MAX_ASSET_BYTES } from './size-limits.js';
 
 export interface AssetCandidateInput {
   readonly mime: string;
@@ -47,7 +47,7 @@ export const validateAssetCandidate = (
         filename: input.filename,
         mime: input.mime,
         extension,
-        message: `Extension ${extension || "<none>"} is not allowed for ${input.mime}`,
+        message: `Extension ${extension || '<none>'} is not allowed for ${input.mime}`,
       }),
     );
   }
@@ -57,7 +57,7 @@ export const validateAssetCandidate = (
       new AssetTooLargeError({
         size: input.bytes.byteLength,
         maxSize: MAX_ASSET_BYTES,
-        scope: "asset",
+        scope: 'asset',
         message: `Asset exceeds ${MAX_ASSET_BYTES} bytes`,
       }),
     );

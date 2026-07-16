@@ -1,10 +1,10 @@
-import { AssetId, PackId } from "@tileborne/core";
-import { Option, Schema } from "effect";
+import { AssetId, PackId } from '@tileborne/core';
+import { Option, Schema } from 'effect';
 
-import { License } from "../license/license.js";
-import { AssetPackManifest, AssetPackManifestAsset, type Asset } from "./pack-manifest.js";
+import { License } from '../license/license.js';
+import { AssetPackManifest, AssetPackManifestAsset, type Asset } from './pack-manifest.js';
 
-export class PackIndex extends Schema.Class<PackIndex>("PackIndex")({
+export class PackIndex extends Schema.Class<PackIndex>('PackIndex')({
   manifest: AssetPackManifest,
   packId: PackId,
   assets: Schema.Array(AssetPackManifestAsset),
@@ -22,11 +22,11 @@ export interface PackSearchQuery {
 }
 
 const folderForPath = (path: string): string => {
-  const normalized = path.split("/").filter((segment) => segment.length > 0);
+  const normalized = path.split('/').filter((segment) => segment.length > 0);
   if (normalized.length <= 1) {
-    return "";
+    return '';
   }
-  return normalized.slice(0, -1).join("/");
+  return normalized.slice(0, -1).join('/');
 };
 
 const freezeAssetGroups = (groups: Map<string, Asset[]>): ReadonlyMap<string, readonly Asset[]> =>
@@ -81,7 +81,7 @@ export const countByLicense = (index: PackIndex): Map<string, number> =>
 
 export const searchPackIndex = (index: PackIndex, query: PackSearchQuery): readonly Asset[] => {
   const text = query.text?.trim().toLowerCase();
-  const folder = query.folder === "" ? undefined : query.folder;
+  const folder = query.folder === '' ? undefined : query.folder;
 
   return index.assets.filter((asset) => {
     if (text !== undefined && text.length > 0) {

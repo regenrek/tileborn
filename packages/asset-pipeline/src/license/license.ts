@@ -1,16 +1,16 @@
-import { Result, Schema } from "effect";
+import { Result, Schema } from 'effect';
 
-import { LicenseNotAllowlistedError } from "../errors.js";
+import { LicenseNotAllowlistedError } from '../errors.js';
 
 export const SPDX_ALLOWLIST = [
-  "CC0-1.0",
-  "CC-BY-4.0",
-  "CC-BY-SA-4.0",
-  "MIT",
-  "Apache-2.0",
-  "OFL-1.1",
-  "Zlib",
-  "Unlicense",
+  'CC0-1.0',
+  'CC-BY-4.0',
+  'CC-BY-SA-4.0',
+  'MIT',
+  'Apache-2.0',
+  'OFL-1.1',
+  'Zlib',
+  'Unlicense',
 ] as const;
 
 export const SpdxId = Schema.String.check(
@@ -18,7 +18,7 @@ export const SpdxId = Schema.String.check(
 );
 export type SpdxId = typeof SpdxId.Type;
 
-export class License extends Schema.Class<License>("License")({
+export class License extends Schema.Class<License>('License')({
   spdxId: SpdxId,
   attribution: Schema.OptionFromOptional(Schema.String),
   sourceUrl: Schema.OptionFromOptional(Schema.String),

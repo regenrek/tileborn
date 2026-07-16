@@ -1,7 +1,7 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { licenseForAsset, PackIndex } from "../pack/pack-index.js";
-import { MergedCatalog } from "../pack/pack-merge.js";
+import { licenseForAsset, PackIndex } from '../pack/pack-index.js';
+import { MergedCatalog } from '../pack/pack-merge.js';
 
 export interface LicenseReportEntry {
   readonly spdxId: string;
@@ -27,12 +27,17 @@ export const summarizeLicenses = (input: PackIndex | MergedCatalog): LicenseRepo
   const mergedCatalog = isMergedCatalog(input) ? input : undefined;
   const packIndex = mergedCatalog === undefined && isPackIndex(input) ? input : undefined;
   const assets = input.assets;
-  const byLicense = new Map<string, { count: number; attribution: Set<string>; sourceUrls: Set<string> }>();
+  const byLicense = new Map<
+    string,
+    { count: number; attribution: Set<string>; sourceUrls: Set<string> }
+  >();
 
   for (const asset of assets) {
     const owningPack =
       mergedCatalog !== undefined
-        ? mergedCatalog.packs.find((pack) => pack.packId === mergedCatalog.entriesByAssetId.get(asset.id)?.packId)
+        ? mergedCatalog.packs.find(
+            (pack) => pack.packId === mergedCatalog.entriesByAssetId.get(asset.id)?.packId,
+          )
         : packIndex;
     const license = owningPack === undefined ? undefined : licenseForAsset(owningPack, asset);
     if (license === undefined) {
@@ -75,35 +80,35 @@ export const formatLicenseReportPlain = (report: LicenseReport): string =>
     .map((entry) => {
       const lines = [`${entry.spdxId}: ${entry.count}`];
       if (entry.attribution.length > 0) {
-        lines.push(`  Attribution: ${entry.attribution.join("; ")}`);
+        lines.push(`  Attribution: ${entry.attribution.join('; ')}`);
       }
       if (entry.sourceUrls.length > 0) {
-        lines.push(`  Sources: ${entry.sourceUrls.join(", ")}`);
+        lines.push(`  Sources: ${entry.sourceUrls.join(', ')}`);
       }
-      return lines.join("\n");
+      return lines.join('\n');
     })
-    .join("\n\n");
+    .join('\n\n');
 
 export const formatLicenseReportMarkdown = (report: LicenseReport): string => {
-  const lines = ["# License Report", ""];
+  const lines = ['# License Report', ''];
 
   for (const entry of report.entries) {
-    lines.push(`## ${entry.spdxId}`, "", `Asset count: ${entry.count}`, "");
+    lines.push(`## ${entry.spdxId}`, '', `Asset count: ${entry.count}`, '');
     if (entry.attribution.length > 0) {
-      lines.push("Attribution:");
+      lines.push('Attribution:');
       for (const attribution of entry.attribution) {
         lines.push(`- ${attribution}`);
       }
-      lines.push("");
+      lines.push('');
     }
     if (entry.sourceUrls.length > 0) {
-      lines.push("Sources:");
+      lines.push('Sources:');
       for (const sourceUrl of entry.sourceUrls) {
         lines.push(`- [${sourceUrl}](${sourceUrl})`);
       }
-      lines.push("");
+      lines.push('');
     }
   }
 
-  return lines.join("\n").trimEnd();
+  return lines.join('\n').trimEnd();
 };

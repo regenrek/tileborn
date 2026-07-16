@@ -1,18 +1,18 @@
-import { Asset, hashBytes } from "@tileborne/core";
-import { Result } from "effect";
+import { Asset, hashBytes } from '@tileborne/core';
+import { Result } from 'effect';
 
-import { UnsupportedImporterInputError } from "../errors.js";
-import { isImageMimeType } from "../security/mime-allowlist.js";
-import { validateAssetCandidate } from "../security/security.js";
-import { deterministicAssetId } from "./deterministic-id.js";
-import type { AssetImporter, ImporterInput } from "./importer.js";
+import { UnsupportedImporterInputError } from '../errors.js';
+import { isImageMimeType } from '../security/mime-allowlist.js';
+import { validateAssetCandidate } from '../security/security.js';
+import { deterministicAssetId } from './deterministic-id.js';
+import type { AssetImporter, ImporterInput } from './importer.js';
 
 export interface ImageImporterInput extends ImporterInput {
-  readonly mime: "image/png" | "image/webp" | "image/jpeg";
+  readonly mime: 'image/png' | 'image/webp' | 'image/jpeg';
 }
 
 export const imageImporter: AssetImporter = {
-  id: "tileborne.image",
+  id: 'tileborne.image',
   supports: (input): input is ImageImporterInput => isImageMimeType(input.mime),
   import: (input) => {
     if (!imageImporter.supports(input)) {
@@ -33,7 +33,7 @@ export const imageImporter: AssetImporter = {
     const hash = hashBytes(input.bytes);
     const asset = new Asset({
       id: deterministicAssetId(`${imageImporter.id}:${input.filename}:${hash}`),
-      kind: "image",
+      kind: 'image',
       path: input.path ?? input.filename,
       properties: {
         hash,

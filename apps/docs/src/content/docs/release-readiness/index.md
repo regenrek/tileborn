@@ -87,12 +87,12 @@ running any publishing or deploy command.
 
 ## Secrets
 
-| Secret | Required for | Rule |
-| --- | --- | --- |
-| `HANDOFF_SIGNING_KEY` | Wrangler deploy and room handoff tokens | At least 32 random characters; set as a Cloudflare secret, never a plaintext var |
-| `ALCHEMY_PASSWORD` | Alchemy production/staging graphs with encrypted secrets | Required before `alchemy.secret()` is used for staging or production |
-| `CLOUDFLARE_API_TOKEN` | Non-interactive Cloudflare deploy | Provide out of band with the minimum required account scope |
-| `CLOUDFLARE_ACCOUNT_ID` | Account-targeted deploy automation | May be set in the operator environment, but do not commit it to OSS config |
+| Secret                  | Required for                                             | Rule                                                                             |
+| ----------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `HANDOFF_SIGNING_KEY`   | Wrangler deploy and room handoff tokens                  | At least 32 random characters; set as a Cloudflare secret, never a plaintext var |
+| `ALCHEMY_PASSWORD`      | Alchemy production/staging graphs with encrypted secrets | Required before `alchemy.secret()` is used for staging or production             |
+| `CLOUDFLARE_API_TOKEN`  | Non-interactive Cloudflare deploy                        | Provide out of band with the minimum required account scope                      |
+| `CLOUDFLARE_ACCOUNT_ID` | Account-targeted deploy automation                       | May be set in the operator environment, but do not commit it to OSS config       |
 
 If credentials or approval are missing, record the exact deploy substep as blocked and continue local verification, docs, security, and package-readiness work.
 
@@ -105,13 +105,13 @@ If credentials or approval are missing, record the exact deploy substep as block
 
 ## Support matrix
 
-| Surface | Production 1.0 readiness target |
-| --- | --- |
-| Desktop editor | macOS local authoring and live playtest through the Electron app |
-| CLI | Project, asset, map, plugin, game build, game serve, and scaffold workflows |
-| Game host | Cloudflare Worker and Durable Object room runtime, with local Miniflare proof and credentialed deploy operator gate |
-| Battle Royale vertical | Authored BR maps, lobby/join code flow, runtime combat/zone loop, HUD, input, and audio runtime proof |
-| Docs | Maintainer install/build/deploy/security/release handoff docs built from the repo |
+| Surface                | Production 1.0 readiness target                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Desktop editor         | macOS local authoring and live playtest through the Electron app                                                    |
+| CLI                    | Project, asset, map, plugin, game build, game serve, and scaffold workflows                                         |
+| Game host              | Cloudflare Worker and Durable Object room runtime, with local Miniflare proof and credentialed deploy operator gate |
+| Battle Royale vertical | Authored BR maps, lobby/join code flow, runtime combat/zone loop, HUD, input, and audio runtime proof               |
+| Docs                   | Maintainer install/build/deploy/security/release handoff docs built from the repo                                   |
 
 ## Known caveats
 

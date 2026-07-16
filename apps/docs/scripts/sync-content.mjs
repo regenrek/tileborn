@@ -1,24 +1,24 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { sanitizePublicDocs, starlightFrontmatter } from "./lib/sanitize.mjs";
+import { sanitizePublicDocs, starlightFrontmatter } from './lib/sanitize.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const docsAppRoot = path.resolve(__dirname, "..");
-const repoRoot = path.resolve(docsAppRoot, "../..");
-const contentRoot = path.join(docsAppRoot, "src/content/docs");
+const docsAppRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(docsAppRoot, '../..');
+const contentRoot = path.join(docsAppRoot, 'src/content/docs');
 
 const writeDoc = (relativePath, frontmatter, body) => {
   const outputPath = path.join(contentRoot, relativePath);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${frontmatter}${sanitizePublicDocs(body)}`, "utf8");
+  fs.writeFileSync(outputPath, `${frontmatter}${sanitizePublicDocs(body)}`, 'utf8');
 };
 
 const copySpecDoc = ({ sourceRelative, targetRelative, title, description, sidebar }) => {
   const sourcePath = path.join(repoRoot, sourceRelative);
-  const raw = fs.readFileSync(sourcePath, "utf8");
-  const body = raw.replace(/^#\s+[^\n]+\n+/m, "");
+  const raw = fs.readFileSync(sourcePath, 'utf8');
+  const body = raw.replace(/^#\s+[^\n]+\n+/m, '');
   writeDoc(
     targetRelative,
     starlightFrontmatter({ title, description, sidebar }),
@@ -28,23 +28,24 @@ const copySpecDoc = ({ sourceRelative, targetRelative, title, description, sideb
 
 const syncRuntimeGuide = () => {
   copySpecDoc({
-    sourceRelative: "docs/03-runtime-game-host.md",
-    targetRelative: "runtime/index.md",
-    title: "Runtime & Game Host",
-    description: "Cloudflare Workers game host, Durable Objects rooms, and runtime SDK integration.",
-    sidebar: { label: "Runtime & Game Host" },
+    sourceRelative: 'docs/03-runtime-game-host.md',
+    targetRelative: 'runtime/index.md',
+    title: 'Runtime & Game Host',
+    description:
+      'Cloudflare Workers game host, Durable Objects rooms, and runtime SDK integration.',
+    sidebar: { label: 'Runtime & Game Host' },
   });
 };
 
 const syncFollowUps = () => {
-  const sourcePath = path.join(repoRoot, "docs/follow-ups.md");
-  const raw = fs.readFileSync(sourcePath, "utf8");
-  const body = raw.replace(/^#\s+Follow-ups\n+/m, "");
+  const sourcePath = path.join(repoRoot, 'docs/follow-ups.md');
+  const raw = fs.readFileSync(sourcePath, 'utf8');
+  const body = raw.replace(/^#\s+Follow-ups\n+/m, '');
   writeDoc(
-    "follow-ups/index.md",
+    'follow-ups/index.md',
     starlightFrontmatter({
-      title: "Follow-ups",
-      description: "Deferred work tracked outside the current release scope.",
+      title: 'Follow-ups',
+      description: 'Deferred work tracked outside the current release scope.',
     }),
     `# Follow-ups\n\n${body}`,
   );
@@ -52,11 +53,11 @@ const syncFollowUps = () => {
 
 const syncBattleRoyaleCreatorGuide = () => {
   copySpecDoc({
-    sourceRelative: "docs/battle-royale-creator-guide.md",
-    targetRelative: "battle-royale/creator-guide/index.md",
-    title: "Battle Royale Creator Guide",
-    description: "Create, author, playtest, recover, and ship the Battle Royale vertical.",
-    sidebar: { label: "Battle Royale Creator Guide" },
+    sourceRelative: 'docs/battle-royale-creator-guide.md',
+    targetRelative: 'battle-royale/creator-guide/index.md',
+    title: 'Battle Royale Creator Guide',
+    description: 'Create, author, playtest, recover, and ship the Battle Royale vertical.',
+    sidebar: { label: 'Battle Royale Creator Guide' },
   });
 };
 
@@ -106,10 +107,10 @@ See [Plugins](/plugins/) and [ADR-0001](/adrs/0001-plugin-ui-model-declarative-f
 `;
 
   writeDoc(
-    "editor-ux/index.md",
+    'editor-ux/index.md',
     starlightFrontmatter({
-      title: "Editor UX",
-      description: "Desktop editor shell layout, tooling model, and plugin contribution points.",
+      title: 'Editor UX',
+      description: 'Desktop editor shell layout, tooling model, and plugin contribution points.',
     }),
     body,
   );

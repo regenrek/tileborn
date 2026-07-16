@@ -79,16 +79,16 @@ Battle Royale and the neutral Example Arena fixture prove this contract without 
 
 ## Ownership and versioning
 
-| Concern | Canonical owner |
-| --- | --- |
-| Durable ids, definitions, registry metadata, package schemas | `@tileborne/core` |
-| Public TypeScript API, validator, generated inventory, harness | `@tileborne/game-sdk` |
-| Plugin contribution decoding and deterministic projection | `@tileborne/plugin-api` |
+| Concern                                                        | Canonical owner             |
+| -------------------------------------------------------------- | --------------------------- |
+| Durable ids, definitions, registry metadata, package schemas   | `@tileborne/core`           |
+| Public TypeScript API, validator, generated inventory, harness | `@tileborne/game-sdk`       |
+| Plugin contribution decoding and deterministic projection      | `@tileborne/plugin-api`     |
 | Visual/TypeScript compilation, conversion, hashes, source maps | `@tileborne/services-build` |
-| Scheduler, budgets, state, traces, hot reload | `@tileborne/runtime` |
-| Isolated Node/Workerd execution | `apps/game-host` |
-| Project persistence and trust state | `@tileborne/services-app` |
-| Typed renderer transport | `@tileborne/ipc-contracts` |
+| Scheduler, budgets, state, traces, hot reload                  | `@tileborne/runtime`        |
+| Isolated Node/Workerd execution                                | `apps/game-host`            |
+| Project persistence and trust state                            | `@tileborne/services-app`   |
+| Typed renderer transport                                       | `@tileborne/ipc-contracts`  |
 
 `BehaviorDefinition`, behavior package, registry, outer runtime-map package, and runtime release versions evolve independently. Readers reject unknown future schema versions; migrations must be explicit, sequential, tested, and owned by the package that owns the durable schema. Capability and registry ids are public contracts: additions are backward-compatible, while removal or semantic reuse requires a major version and project migration. Shipped artifacts embed their runtime version and integrity hashes.
 

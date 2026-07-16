@@ -42,14 +42,14 @@ Copy [`apps/game-host/alchemy.example.run.ts`](https://github.com/tileborne/tile
 
 ```ts
 const gameHostWorkerScript =
-  process.env.TILEBORNE_GAME_HOST_SCRIPT ?? "dist/game-host-cloudflare/worker.js";
+  process.env.TILEBORNE_GAME_HOST_SCRIPT ?? 'dist/game-host-cloudflare/worker.js';
 
-export const gameHostWorker = await Worker("game-host", {
+export const gameHostWorker = await Worker('game-host', {
   script: gameHostWorkerScript,
   bindings: {
     PLAYTEST_ROOM: playtestRoom,
     HANDOFF_SIGNING_KEY: handoffSigningKey,
-    ROOM_IDLE_TIMEOUT_SECONDS: process.env.ROOM_IDLE_TIMEOUT_SECONDS ?? "60",
+    ROOM_IDLE_TIMEOUT_SECONDS: process.env.ROOM_IDLE_TIMEOUT_SECONDS ?? '60',
   },
 });
 ```
@@ -66,22 +66,22 @@ Embed no proprietary config in OSS docs.
 
 ## Required bindings
 
-| Binding | Type | Notes |
-| --- | --- | --- |
-| `PLAYTEST_ROOM` | Durable Object namespace | Class `PlaytestRoom`, `sqlite: true` |
-| `HANDOFF_SIGNING_KEY` | Secret | ≥ 32 characters; HMAC for WebSocket handoff |
-| `ROOM_IDLE_TIMEOUT_SECONDS` | optional | Default `60`; empty room teardown |
+| Binding                     | Type                     | Notes                                       |
+| --------------------------- | ------------------------ | ------------------------------------------- |
+| `PLAYTEST_ROOM`             | Durable Object namespace | Class `PlaytestRoom`, `sqlite: true`        |
+| `HANDOFF_SIGNING_KEY`       | Secret                   | ≥ 32 characters; HMAC for WebSocket handoff |
+| `ROOM_IDLE_TIMEOUT_SECONDS` | optional                 | Default `60`; empty room teardown           |
 
 Optional downstream bindings (uncomment in template): D1, KV, R2 asset buckets, RateLimit namespaces.
 
 ## Environment variables
 
-| Variable | Stage | Purpose |
-| --- | --- | --- |
-| `HANDOFF_SIGNING_KEY` | all | Signs playtest/room connect tokens |
-| `ROOM_IDLE_TIMEOUT_SECONDS` | all | DO idle destroy threshold |
-| `TILEBORNE_GAME_HOST_SCRIPT` | deploy | Override path to bundled `worker.js` |
-| `ALCHEMY_PASSWORD` | staging/prod | Encrypt secrets via `alchemy.secret()` |
+| Variable                     | Stage        | Purpose                                |
+| ---------------------------- | ------------ | -------------------------------------- |
+| `HANDOFF_SIGNING_KEY`        | all          | Signs playtest/room connect tokens     |
+| `ROOM_IDLE_TIMEOUT_SECONDS`  | all          | DO idle destroy threshold              |
+| `TILEBORNE_GAME_HOST_SCRIPT` | deploy       | Override path to bundled `worker.js`   |
+| `ALCHEMY_PASSWORD`           | staging/prod | Encrypt secrets via `alchemy.secret()` |
 
 Production/staging deploys should refuse to run without `ALCHEMY_PASSWORD` when secrets are required.
 

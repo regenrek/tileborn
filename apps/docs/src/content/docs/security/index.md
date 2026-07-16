@@ -9,23 +9,23 @@ Tileborne treats the editor renderer, third-party plugins, imported assets, and 
 
 ## Trust zones
 
-| Zone | Trust level | Key rule |
-| --- | --- | --- |
-| Renderer (Electron) | Untrusted for Node/fs | `contextIsolation: true`, no plugin executables |
-| Main / CLI / game-host | Trusted platform | Effect services mediate all I/O |
-| Imported assets & plugins | Untrusted input | Validated before staging commit |
-| Browser runtime client | Adversarial | Authoritative simulation on game-host only |
+| Zone                      | Trust level           | Key rule                                        |
+| ------------------------- | --------------------- | ----------------------------------------------- |
+| Renderer (Electron)       | Untrusted for Node/fs | `contextIsolation: true`, no plugin executables |
+| Main / CLI / game-host    | Trusted platform      | Effect services mediate all I/O                 |
+| Imported assets & plugins | Untrusted input       | Validated before staging commit                 |
+| Browser runtime client    | Adversarial           | Authoritative simulation on game-host only      |
 
 ## Supply-chain hardening
 
 Root `pnpm-workspace.yaml` configures pnpm trust policy:
 
-| Setting | Purpose |
-| --- | --- |
-| `minimumReleaseAge` / `minimumReleaseAgeStrict` | Block freshly published packages unless explicitly excluded |
-| `blockExoticSubdeps` | Reject git/subpath dependencies without an override |
-| `dangerouslyAllowAllBuilds: false` | Require an explicit `allowBuilds` allowlist for install scripts |
-| `trustPolicy: no-downgrade` | Prefer provenance-aware installs |
+| Setting                                         | Purpose                                                         |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `minimumReleaseAge` / `minimumReleaseAgeStrict` | Block freshly published packages unless explicitly excluded     |
+| `blockExoticSubdeps`                            | Reject git/subpath dependencies without an override             |
+| `dangerouslyAllowAllBuilds: false`              | Require an explicit `allowBuilds` allowlist for install scripts |
+| `trustPolicy: no-downgrade`                     | Prefer provenance-aware installs                                |
 
 Pinned exclusions must include a dated comment and be removed once the dependency has been stable for more than seven days. See [CONTRIBUTING.md](https://github.com/tileborne/tileborne/blob/main/CONTRIBUTING.md) on the monorepo.
 
@@ -90,15 +90,15 @@ Project gameplay TypeScript is untrusted input even after a creator grants the
 project permission to compile it. Trust is an execution precondition, not a
 general capability grant.
 
-| Threat | Enforced policy | Automated owner/evidence |
-| --- | --- | --- |
-| Imported code before consent | `imported-untrusted` snapshots fail package compilation; source is preserved for inspection | `@tileborne/services-build` `project-package.test.ts` |
-| Filesystem, network, Node, Electron, DOM, environment | Only `@tileborne/game-sdk`, approved bare modules, and contained project-relative imports resolve; forbidden globals/imports produce stable `TBSDK` diagnostics | `@tileborne/game-sdk` authoring validator tests and built-artifact adversarial tests |
-| Wall clock and ambient randomness | `Date`, `performance`, `Math.random`, Web Crypto randomness, timers, and aliases/computed/destructured escapes are rejected; use injected tick clock, seeded RNG, and tick timers | `@tileborne/game-sdk` authoring validator tests |
-| Dynamic code/import escapes | `eval`, `Function`, constructor aliases, `Reflect.get`/property-descriptor retrieval, dynamic imports, string/Wasm code generation, and unresolved imports fail closed | SDK source/built-validator and services-build compiler tests plus isolated-host VM tests |
-| Runaway CPU, recursion, queues, actions, state, or heap | Scheduler budgets reject floods; worker wall-time/resource limits terminate the isolated worker and restore last-known-good modules/state | `@tileborne/runtime` scheduler tests and `apps/game-host` isolated-runtime tests |
-| Execution in a privileged/editor process | Gameplay never executes in Electron renderer, preload, or main. Local playtest uses a Node worker; authoritative/shipped execution uses a separate Workerd service | `@tileborne/boundary-tests` behavior boundary plus game-host isolation smoke |
-| Debug-data disclosure or unbounded retention | Debug values are JSON-only and size/depth/count bounded; secret-like keys plus POSIX, drive, UNC, and traversal paths are redacted; scheduler retains only the newest bounded trace/diagnostic windows | desktop playtest-runtime-host tests and runtime scheduler tests |
+| Threat                                                  | Enforced policy                                                                                                                                                                                        | Automated owner/evidence                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Imported code before consent                            | `imported-untrusted` snapshots fail package compilation; source is preserved for inspection                                                                                                            | `@tileborne/services-build` `project-package.test.ts`                                    |
+| Filesystem, network, Node, Electron, DOM, environment   | Only `@tileborne/game-sdk`, approved bare modules, and contained project-relative imports resolve; forbidden globals/imports produce stable `TBSDK` diagnostics                                        | `@tileborne/game-sdk` authoring validator tests and built-artifact adversarial tests     |
+| Wall clock and ambient randomness                       | `Date`, `performance`, `Math.random`, Web Crypto randomness, timers, and aliases/computed/destructured escapes are rejected; use injected tick clock, seeded RNG, and tick timers                      | `@tileborne/game-sdk` authoring validator tests                                          |
+| Dynamic code/import escapes                             | `eval`, `Function`, constructor aliases, `Reflect.get`/property-descriptor retrieval, dynamic imports, string/Wasm code generation, and unresolved imports fail closed                                 | SDK source/built-validator and services-build compiler tests plus isolated-host VM tests |
+| Runaway CPU, recursion, queues, actions, state, or heap | Scheduler budgets reject floods; worker wall-time/resource limits terminate the isolated worker and restore last-known-good modules/state                                                              | `@tileborne/runtime` scheduler tests and `apps/game-host` isolated-runtime tests         |
+| Execution in a privileged/editor process                | Gameplay never executes in Electron renderer, preload, or main. Local playtest uses a Node worker; authoritative/shipped execution uses a separate Workerd service                                     | `@tileborne/boundary-tests` behavior boundary plus game-host isolation smoke             |
+| Debug-data disclosure or unbounded retention            | Debug values are JSON-only and size/depth/count bounded; secret-like keys plus POSIX, drive, UNC, and traversal paths are redacted; scheduler retains only the newest bounded trace/diagnostic windows | desktop playtest-runtime-host tests and runtime scheduler tests                          |
 
 Default in-process scheduler limits are 8 ms per handler, 64 KiB state per
 instance, 2 MiB scheduler-accounted memory, queue depth 512, recursion depth 16,
@@ -125,11 +125,11 @@ Playtest and room WebSocket upgrades require short-lived HMAC tokens minted by t
 
 Wire format: `<base64url(payload)>.<base64url(hmac-sha256)>`
 
-| Setting | Requirement |
-| --- | --- |
+| Setting               | Requirement                           |
+| --------------------- | ------------------------------------- |
 | `HANDOFF_SIGNING_KEY` | ≥ 32 characters; secret in production |
-| TTL | 300 seconds from `/playtest/start` |
-| Invalid token | WebSocket close **4001** |
+| TTL                   | 300 seconds from `/playtest/start`    |
+| Invalid token         | WebSocket close **4001**              |
 
 `/health` returns **503** when the signing key is missing or too short.
 

@@ -31,18 +31,18 @@ tileborne/
 
 ## Package map
 
-| Package | Role |
-| --- | --- |
-| `@tileborne/core` | IDs, geometry, map/project models, hashing, errors |
-| `@tileborne/runtime` | Simulation, networking helpers, Pixi renderer adapter |
-| `@tileborne/plugin-api` | Manifest schema, contribution registry, permissions |
-| `@tileborne/ipc-contracts` | Typed IPC channels shared by main/preload/renderer |
-| `@tileborne/asset-pipeline` | Atomic imports, pack index, license reporting |
-| `@tileborne/cli` | Developer-facing commands (project, asset, map, game, dev) |
-| `@tileborne/services-*` | Effect layers for filesystem, config, plugins, builds |
-| `@tileborne/ui` | Editor shell components and declarative plugin UI mapping |
-| `@tileborne/desktop` | Electron main/preload/renderer app |
-| `@tileborne/game-host` | Worker + DO room runtime bundled at deploy time |
+| Package                     | Role                                                       |
+| --------------------------- | ---------------------------------------------------------- |
+| `@tileborne/core`           | IDs, geometry, map/project models, hashing, errors         |
+| `@tileborne/runtime`        | Simulation, networking helpers, Pixi renderer adapter      |
+| `@tileborne/plugin-api`     | Manifest schema, contribution registry, permissions        |
+| `@tileborne/ipc-contracts`  | Typed IPC channels shared by main/preload/renderer         |
+| `@tileborne/asset-pipeline` | Atomic imports, pack index, license reporting              |
+| `@tileborne/cli`            | Developer-facing commands (project, asset, map, game, dev) |
+| `@tileborne/services-*`     | Effect layers for filesystem, config, plugins, builds      |
+| `@tileborne/ui`             | Editor shell components and declarative plugin UI mapping  |
+| `@tileborne/desktop`        | Electron main/preload/renderer app                         |
+| `@tileborne/game-host`      | Worker + DO room runtime bundled at deploy time            |
 
 ## Process boundaries
 

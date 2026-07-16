@@ -36,25 +36,29 @@ Prefer schema-driven contributions. Behavior blocks, templates, game settings fo
 ```json
 {
   "contributes": {
-    "behaviorEntries": [{
-      "id": "example.enemy-defeated",
-      "kind": "event",
-      "label": "Enemy defeated",
-      "category": "Example",
-      "description": "Runs after an enemy is defeated.",
-      "capability": "example.combat",
-      "inputs": [],
-      "outputs": []
-    }],
-    "behaviorTemplates": [{
-      "id": "example.next-wave",
-      "label": "Next wave",
-      "description": "Start a new wave.",
-      "category": "Example",
-      "requiredCapabilities": ["example.combat"],
-      "when": { "entryId": "example.enemy-defeated", "arguments": {} },
-      "do": []
-    }]
+    "behaviorEntries": [
+      {
+        "id": "example.enemy-defeated",
+        "kind": "event",
+        "label": "Enemy defeated",
+        "category": "Example",
+        "description": "Runs after an enemy is defeated.",
+        "capability": "example.combat",
+        "inputs": [],
+        "outputs": []
+      }
+    ],
+    "behaviorTemplates": [
+      {
+        "id": "example.next-wave",
+        "label": "Next wave",
+        "description": "Start a new wave.",
+        "category": "Example",
+        "requiredCapabilities": ["example.combat"],
+        "when": { "entryId": "example.enemy-defeated", "arguments": {} },
+        "do": []
+      }
+    ]
   }
 }
 ```

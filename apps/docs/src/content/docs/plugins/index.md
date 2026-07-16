@@ -37,14 +37,14 @@ See the generated [plugin-api reference](/reference/plugin-api/) for the complet
 
 The manifest's `contributes` object includes top-level panels/tools/assets, typed `editor`, `runtime`, and `server` buckets, game modes, behavior entries/templates, and migration declarations. Examples include:
 
-| Point | Purpose |
-| --- | --- |
-| `behaviorEntries` / `behaviorTemplates` | Typed declarative WHEN/IF/DO blocks and starters |
-| `editor.gameSettingsForms` | Schema-driven settings without renderer plugin code |
-| `runtime.systems` / `runtime.events` | Runtime registration metadata |
-| `runtime.gameObjectCatalogs` / `runtime.weaponCatalogs` | Contained, decoded catalogs |
-| `server.mapValidators` | Named server-side validation entrypoints |
-| `gameModes` | One linked game-mode registration and capability ids |
+| Point                                                   | Purpose                                              |
+| ------------------------------------------------------- | ---------------------------------------------------- |
+| `behaviorEntries` / `behaviorTemplates`                 | Typed declarative WHEN/IF/DO blocks and starters     |
+| `editor.gameSettingsForms`                              | Schema-driven settings without renderer plugin code  |
+| `runtime.systems` / `runtime.events`                    | Runtime registration metadata                        |
+| `runtime.gameObjectCatalogs` / `runtime.weaponCatalogs` | Contained, decoded catalogs                          |
+| `server.mapValidators`                                  | Named server-side validation entrypoints             |
+| `gameModes`                                             | One linked game-mode registration and capability ids |
 
 Declarative data is validated before use. Executable contributions are ordinary trusted plugin code, not an OS sandbox: permission declarations are reviewed capability intent and checked by the owning host where implemented, but they do not make arbitrary Node code safe. Install only code you trust. Gameplay project TypeScript has a separate restricted behavior runtime described in [Gameplay Behaviors](/gameplay-behaviors/).
 

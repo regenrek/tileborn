@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Input, cn, typography } from '@tileborne/ui';
 import { SaveIcon } from 'lucide-react';
 import {
@@ -7,6 +7,7 @@ import {
   type MaterializedGameSettingsForm,
 } from '@tileborne/plugin-api';
 import type { JsonObject } from '@tileborne/core';
+import { documentLifecycle, useDocumentLifecycle } from '@/lib/document-lifecycle';
 
 interface GameSettingsFormProps {
   /** The decoded + materialized settings form (manifest-discovered). */
@@ -21,6 +22,11 @@ interface GameSettingsFormProps {
   readonly onSave: (values: Record<string, number>) => void | Promise<void>;
   /** Notified with {@link MaterializedGameSettingsForm.invalidMessage} on a blocked save. */
   readonly onInvalid?: (message: string) => void;
+  readonly document?: {
+    readonly id: string;
+    readonly scopeId: string;
+    readonly label: string;
+  } | undefined;
 }
 
 /**
@@ -39,21 +45,58 @@ export function GameSettingsForm({
   testIdPrefix = 'game-setting',
   onSave,
   onInvalid,
+  document,
 }: GameSettingsFormProps) {
   const [draft, setDraft] = useState(() => gameSettingsToDraft(form, values));
+  const baseline = gameSettingsToDraft(form, values);
+  const baselineKey = JSON.stringify(baseline);
+  const baselineRef = useRef(baseline);
+  baselineRef.current = baseline;
 
   useEffect(() => {
-    setDraft(gameSettingsToDraft(form, values));
-  }, [form, values]);
+    setDraft(baselineRef.current);
+  }, [baselineKey]);
 
   const parsed = parseGameSettingsDraft(form, draft);
+
+  const persist = async () => {
+    if (parsed === undefined) {
+      throw new Error(form.invalidMessage);
+    }
+    await onSave(parsed);
+  };
+
+  useDocumentLifecycle({
+    id: document?.id ?? `${testIdPrefix}:unmanaged`,
+    scopeId: document?.scopeId,
+    label: document?.label ?? saveLabel,
+    kind: 'game-settings',
+    enabled: document !== undefined,
+    dirty: document !== undefined && JSON.stringify(draft) !== JSON.stringify(baseline),
+    recoveryVersion: JSON.stringify(draft),
+    save: persist,
+    discard: () => setDraft(baseline),
+    snapshot: () => draft,
+    recover: (snapshot) => {
+      if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) {
+        throw new Error('Invalid recovered game settings');
+      }
+      setDraft(Object.fromEntries(
+        Object.entries(snapshot).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+      ));
+    },
+  });
 
   const save = async () => {
     if (parsed === undefined) {
       onInvalid?.(form.invalidMessage);
       return;
     }
-    await onSave(parsed);
+    if (document === undefined) {
+      await persist();
+      return;
+    }
+    await documentLifecycle.save(document.id);
   };
 
   return (

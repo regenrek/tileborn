@@ -51,6 +51,18 @@ describe('GameSettingsForm (generic, manifest-driven)', () => {
     expect(onSave).toHaveBeenCalledWith({ maxPlayers: 16, damagePerSecOutside: 7 });
   });
 
+  it('keeps a dirty draft when an equivalent form object is rematerialized', () => {
+    const props = { values: { maxPlayers: 8, damagePerSecOutside: 7 }, onSave: vi.fn() };
+    const { rerender } = render(
+      <GameSettingsForm form={materialize()} {...props} testIdPrefix="mode-setting" />,
+    );
+    fireEvent.change(screen.getByTestId('mode-setting-maxPlayers'), { target: { value: '16' } });
+
+    rerender(<GameSettingsForm form={materialize()} {...props} testIdPrefix="mode-setting" />);
+
+    expect((screen.getByTestId('mode-setting-maxPlayers') as HTMLInputElement).value).toBe('16');
+  });
+
   it('blocks the save when a value is out of the declared bounds', () => {
     const onSave = vi.fn();
     render(<GameSettingsForm form={materialize()} values={{}} onSave={onSave} testIdPrefix="mode-setting" />);

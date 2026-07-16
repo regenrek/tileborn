@@ -1,10 +1,21 @@
 import { Link, useParams } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
 import { Button, ScrollArea } from '@tileborne/ui';
-import { MapIcon, PackageIcon, PuzzleIcon } from 'lucide-react';
-import { useEffect } from 'react';
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  CircleXIcon,
+  Gamepad2Icon,
+  MapIcon,
+  PackageIcon,
+  PuzzleIcon,
+} from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 
-import { useMaps, useProject } from '@/hooks/queries';
+import { useMaps, usePluginContributions, useProject, useReadiness } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
+import { buildCreatorReadinessChecklist } from '@/lib/creator-readiness-checklist';
+import { showReadinessProblems } from '@/lib/readiness-gate';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 export function ProjectOverviewPage() {
@@ -12,9 +23,12 @@ export function ProjectOverviewPage() {
   const projectId = routeProjectId as ProjectId;
   const projectQuery = useProject(projectId);
   const mapsQuery = useMaps(projectId);
+  const readinessQuery = useReadiness(projectId, undefined, 'authoring');
+  const contributionsQuery = usePluginContributions();
   const addRecentProject = useEditorUiStore((s) => s.addRecentProject);
   const setCreateMapDialogOpen = useEditorUiStore((s) => s.setCreateMapDialogOpen);
   const setGenerateMapDialogOpen = useEditorUiStore((s) => s.setGenerateMapDialogOpen);
+  const setShipGameDialogOpen = useEditorUiStore((s) => s.setShipGameDialogOpen);
 
   useEffect(() => {
     addRecentProject(projectId);
@@ -23,6 +37,20 @@ export function ProjectOverviewPage() {
 
   const project = projectQuery.data?.project;
   const maps = mapsQuery.data?.maps ?? [];
+  const activeMode = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    project,
+  );
+  const checklist = useMemo(
+    () =>
+      readinessQuery.data === undefined
+        ? []
+        : buildCreatorReadinessChecklist(
+            readinessQuery.data.report,
+            activeMode?.creatorChecklistFacts ?? [],
+          ),
+    [activeMode?.creatorChecklistFacts, readinessQuery.data],
+  );
 
   return (
     <ScrollArea className="h-full">
@@ -34,7 +62,17 @@ export function ProjectOverviewPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link
+            to="/projects/$projectId/game-content"
+            params={{ projectId }}
+            className="rounded-lg border border-border bg-card p-4 hover:bg-muted/40"
+            data-testid="open-game-content"
+          >
+            <Gamepad2Icon className="mb-2 size-5" />
+            <p className="text-sm font-medium">Gameplay content</p>
+            <p className="text-xs text-muted-foreground">Weapons, pickups, items and loot</p>
+          </Link>
           <Link
             to="/projects/$projectId/assets"
             params={{ projectId }}
@@ -59,6 +97,64 @@ export function ProjectOverviewPage() {
             <p className="text-xs text-muted-foreground">{maps.length} in project</p>
           </div>
         </div>
+
+        <section
+          className="rounded-lg border border-border bg-card p-4"
+          data-testid="creator-readiness-checklist"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Game creator checklist</h2>
+              <p className="text-xs text-muted-foreground">
+                Canonical checks for a playable, buildable game.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={showReadinessProblems}>
+              Open problems
+            </Button>
+          </div>
+          {readinessQuery.isLoading ? (
+            <p className="text-xs text-muted-foreground">Checking game readiness…</p>
+          ) : (
+            <ol className="space-y-2">
+              {checklist.map((step) => {
+                const Icon =
+                  step.status === 'complete'
+                    ? CheckCircle2Icon
+                    : step.status === 'warning'
+                      ? AlertTriangleIcon
+                      : CircleXIcon;
+                return (
+                  <li
+                    key={step.id}
+                    className="flex items-center gap-2 text-sm"
+                    data-status={step.status}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden />
+                    <span className="flex-1">{step.label}</span>
+                    {step.diagnostics.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {step.diagnostics.length} issue{step.diagnostics.length === 1 ? '' : 's'}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Ready to share your game?</h2>
+            <p className="text-xs text-muted-foreground">
+              Validate, package, inspect, and launch the authored game.
+            </p>
+          </div>
+          <Button onClick={() => setShipGameDialogOpen(true)} data-testid="overview-ship-game">
+            Ship Game
+          </Button>
+        </section>
 
         <section>
           <div className="mb-3 flex items-center justify-between">
@@ -90,7 +186,11 @@ export function ProjectOverviewPage() {
               <li className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
                 <p className="text-sm text-muted-foreground">No maps yet</p>
                 <div className="mt-3 flex justify-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setGenerateMapDialogOpen(true)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setGenerateMapDialogOpen(true)}
+                  >
                     Generate map
                   </Button>
                   <Button size="sm" onClick={() => setCreateMapDialogOpen(true)}>

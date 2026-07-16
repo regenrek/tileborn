@@ -1,5 +1,3 @@
-import { AssetLibraryReference } from '@tileborne/core';
-import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import {
   Badge,
   Button,
@@ -16,17 +14,18 @@ import { PuzzleIcon, SearchIcon } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 
 import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
-import { useAssetPacks, useTilesetPacks } from '@/hooks/queries';
-import { buildLibraryPreviewIndex } from '@/lib/asset-library-bridge';
-
-/** What the picker hands back when the user chooses a sprite. */
-export interface SpritePickerSelection {
-  readonly placeableId: string;
-  readonly name: string;
-  readonly packId: string;
-  readonly width: number;
-  readonly height: number;
-}
+import {
+  useAssetPackLibrary,
+  useAssetPacks,
+  useWorkingPalettePreviews,
+} from '@/hooks/queries';
+import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
+import {
+  SPRITE_PICKER_DOM_LIMIT,
+  SPRITE_PICKER_PAGE_SIZE_PER_KIND,
+  spritePickerEntryFromGroup,
+  type SpritePickerSelection,
+} from '@/lib/sprite-picker-model';
 
 interface SpritePickerDialogProps {
   readonly open: boolean;
@@ -36,22 +35,11 @@ interface SpritePickerDialogProps {
   readonly onSelect: (selection: SpritePickerSelection) => void;
 }
 
-interface PickerEntry extends SpritePickerSelection {
-  readonly packName: string;
-  readonly integrityHash: string | undefined;
-  readonly preview: ReturnType<ReturnType<typeof buildLibraryPreviewIndex>['previewForRef']>;
-}
-
-const RESULT_LIMIT = 96;
 
 /**
- * Inline sprite picker for the Entity Editor (ADR-0028): browses the
- * PLACEABLES of every installed pack — the same render identities the
- * asset-pack browser lists under "Objects" — and returns the chosen
- * `placeableId` (+ natural size) for the entity's `visual-ref`. Reuses the
- * asset-library preview pipeline (`buildLibraryPreviewIndex` +
- * `LibraryPreviewThumb`), so thumbnails come from the same cached
- * `tileborne-asset://thumb` protocol as the asset browser.
+ * Bounded sprite picker. It lists pack summaries once, then queries only the
+ * selected pack's cached library index in two 48-row windows (animated sprites
+ * and static placeables). No tileset manifest is loaded in the renderer.
  */
 export function SpritePickerDialog({
   open,
@@ -61,59 +49,58 @@ export function SpritePickerDialog({
 }: SpritePickerDialogProps) {
   const packsQuery = useAssetPacks();
   const packs = useMemo(() => packsQuery.data?.packs ?? [], [packsQuery.data?.packs]);
-  const packIds = useMemo(() => packs.map((pack) => String(pack.id)), [packs]);
-  const packResults = useTilesetPacks(open ? packIds : []);
-
+  const [requestedPackId, setRequestedPackId] = useState<string | undefined>();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
+  const [page, setPage] = useState(0);
 
-  const entries = useMemo((): readonly PickerEntry[] => {
-    if (!open) {
-      return [];
-    }
-    const result: PickerEntry[] = [];
-    packIds.forEach((packId, index) => {
-      const tilesetPack: TilesetPack | undefined = packResults[index]?.data;
-      if (tilesetPack === undefined || (tilesetPack.placeables ?? []).length === 0) {
-        return;
+  const selectedPack =
+    packs.find((pack) => String(pack.id) === requestedPackId) ?? packs[0];
+  const selectedPackId = selectedPack === undefined ? '' : String(selectedPack.id);
+  const offset = page * SPRITE_PICKER_PAGE_SIZE_PER_KIND;
+  const commonQuery = {
+    query: deferredQuery,
+    offset,
+    limit: SPRITE_PICKER_PAGE_SIZE_PER_KIND,
+    integrityHash: selectedPack?.integrityHash,
+    keepPreviousData: false,
+  } as const;
+  const spritesQuery = useAssetPackLibrary(open ? selectedPackId : undefined, {
+    ...commonQuery,
+    groupKind: 'sprite',
+  });
+  const placeablesQuery = useAssetPackLibrary(open ? selectedPackId : undefined, {
+    ...commonQuery,
+    groupKind: 'placeable',
+  });
+
+  const entries = useMemo(() => {
+    const groups = [
+      ...(spritesQuery.data?.groups ?? []),
+      ...(placeablesQuery.data?.groups ?? []),
+    ];
+    const seen = new Set<string>();
+    return groups.flatMap((group) => {
+      const entry = spritePickerEntryFromGroup(
+        group,
+        selectedPack?.name ?? selectedPackId,
+        selectedPack?.integrityHash,
+      );
+      if (entry === undefined || seen.has(entry.placeableId)) {
+        return [];
       }
-      const pack = packs[index];
-      const previewIndex = buildLibraryPreviewIndex(tilesetPack);
-      for (const placeable of tilesetPack.placeables ?? []) {
-        result.push({
-          placeableId: String(placeable.id),
-          name: placeable.name,
-          packId,
-          packName: pack?.name ?? packId,
-          integrityHash: pack?.integrityHash,
-          width: placeable.size.width,
-          height: placeable.size.height,
-          preview: previewIndex.previewForRef(
-            new AssetLibraryReference({
-              packId: tilesetPack.id,
-              kind: 'placeable',
-              refId: placeable.id,
-            }),
-          ),
-        });
-      }
+      seen.add(entry.placeableId);
+      return [entry];
     });
-    return result;
-  }, [open, packIds, packResults, packs]);
-
-  const normalizedQuery = deferredQuery.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (normalizedQuery.length === 0) {
-      return entries;
-    }
-    return entries.filter(
-      (entry) =>
-        entry.name.toLowerCase().includes(normalizedQuery) ||
-        entry.packName.toLowerCase().includes(normalizedQuery),
-    );
-  }, [entries, normalizedQuery]);
-  const visible = filtered.slice(0, RESULT_LIMIT);
-  const loading = packsQuery.isLoading || packResults.some((result) => result.isLoading);
+  }, [placeablesQuery.data?.groups, selectedPack, selectedPackId, spritesQuery.data?.groups]);
+  const refs = useMemo(() => entries.map((entry) => entry.ref), [entries]);
+  const previews = useWorkingPalettePreviews(open ? refs : []);
+  const total = (spritesQuery.data?.total ?? 0) + (placeablesQuery.data?.total ?? 0);
+  const hasPrevious = page > 0;
+  const hasNext =
+    offset + SPRITE_PICKER_PAGE_SIZE_PER_KIND < (spritesQuery.data?.total ?? 0) ||
+    offset + SPRITE_PICKER_PAGE_SIZE_PER_KIND < (placeablesQuery.data?.total ?? 0);
+  const loading = packsQuery.isLoading || spritesQuery.isLoading || placeablesQuery.isLoading;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,41 +111,65 @@ export function SpritePickerDialog({
         <DialogHeader>
           <DialogTitle>Choose a sprite</DialogTitle>
           <DialogDescription>
-            Pick a placeable object from your installed asset packs. Selecting one assigns it to
-            this entity's visual and adopts its natural size.
+            Search one installed pack at a time. Results and previews are loaded in bounded pages.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
-          <SearchIcon
-            aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            type="search"
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search sprites by name or pack…"
-            aria-label="Search sprites"
-            className="pl-8"
-            data-testid="entity-sprite-picker-search"
-          />
+        <div className="grid gap-2 sm:grid-cols-[minmax(12rem,0.4fr)_1fr]">
+          <label className={typography.rowMeta}>
+            <span className="sr-only">Asset pack</span>
+            <select
+              aria-label="Asset pack"
+              value={selectedPackId}
+              onChange={(event) => {
+                setRequestedPackId(event.target.value);
+                setPage(0);
+              }}
+              className="h-9 w-full rounded-md border border-input bg-background px-2"
+              data-testid="entity-sprite-picker-pack"
+            >
+              {packs.map((pack) => (
+                <option key={String(pack.id)} value={String(pack.id)}>
+                  {pack.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="relative">
+            <SearchIcon
+              aria-hidden
+              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              autoFocus
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+              placeholder="Search sprites by name, tag, or source…"
+              aria-label="Search sprites"
+              className="pl-8"
+              data-testid="entity-sprite-picker-search"
+            />
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60 bg-card/30 p-2">
-          {visible.length === 0 ? (
+          {entries.length === 0 ? (
             <p className={cn('p-4 text-center text-muted-foreground', typography.rowMeta)}>
               {loading
-                ? 'Loading installed packs…'
-                : entries.length === 0
-                  ? 'No installed pack exposes placeable objects. Import an asset pack first.'
-                  : 'No sprites match your search.'}
+                ? 'Loading a bounded sprite page…'
+                : total === 0
+                  ? 'No sprites match this pack and search.'
+                  : 'This result page is empty.'}
             </p>
           ) : (
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {visible.map((entry) => {
+              {entries.slice(0, SPRITE_PICKER_DOM_LIMIT).map((entry) => {
                 const selected = entry.placeableId === selectedPlaceableId;
+                const preview = previews.previewByKey.get(assetLibraryReferenceKey(entry.ref));
                 return (
                   <li key={entry.placeableId}>
                     <button
@@ -176,14 +187,14 @@ export function SpritePickerDialog({
                           : 'border-border bg-card',
                       )}
                     >
-                      {entry.preview === undefined ? (
+                      {preview === undefined ? (
                         <span className="flex size-12 shrink-0 items-center justify-center rounded bg-muted/40">
                           <PuzzleIcon className="size-5 text-muted-foreground" aria-hidden />
                         </span>
                       ) : (
                         <LibraryPreviewThumb
                           packId={entry.packId}
-                          preview={entry.preview}
+                          preview={preview}
                           sizePx={48}
                           integrityHash={entry.integrityHash}
                           alt={entry.name}
@@ -193,7 +204,9 @@ export function SpritePickerDialog({
                         <span className={cn('block truncate', typography.rowTitle)}>
                           {entry.name}
                         </span>
-                        <span className={cn('block truncate text-muted-foreground', typography.rowMeta)}>
+                        <span
+                          className={cn('block truncate text-muted-foreground', typography.rowMeta)}
+                        >
                           {entry.packName} · {entry.width}×{entry.height}
                         </span>
                       </span>
@@ -208,17 +221,35 @@ export function SpritePickerDialog({
               })}
             </ul>
           )}
-          {filtered.length > RESULT_LIMIT ? (
-            <p className={cn('p-2 text-center text-muted-foreground', typography.bodyMicro)}>
-              Showing {RESULT_LIMIT} of {filtered.length} — refine your search to see more.
-            </p>
-          ) : null}
         </div>
 
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
+        <div className="flex items-center justify-between gap-2">
+          <p className={cn('text-muted-foreground', typography.bodyMicro)} aria-live="polite">
+            {total === 0
+              ? 'No results'
+              : `Page ${page + 1} · showing ${entries.length} of ${total} results`}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!hasPrevious}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!hasNext}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              Next
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

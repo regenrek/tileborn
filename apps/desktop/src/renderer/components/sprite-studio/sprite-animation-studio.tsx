@@ -16,11 +16,28 @@ import {
 import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
 import { sliceAtlas } from '@tileborne/sdk-tileset/atlas';
 import { compileClipTimeline, resolveClipFrameIndex } from '@tileborne/sdk-tileset/animation';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 
 import { useImportSpriteSheet } from '@/hooks/mutations';
+import {
+  documentLifecycle,
+  requestDocumentClose,
+  useDocumentLifecycle,
+} from '@/lib/document-lifecycle';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
+import {
+  clampClipDraftsToFrameCount,
+  reorderClipDrafts,
+  type ClipDraft,
+} from './sprite-animation-drafts';
 import {
   DEFAULT_PLAYER_MODEL_GEOMETRY,
   SpritePlayerModelControls,
@@ -52,15 +69,6 @@ interface SliceConfig {
   readonly columns?: number | undefined;
 }
 
-interface ClipDraft {
-  readonly id: string;
-  readonly name: string;
-  readonly fromFrame: number;
-  readonly toFrame: number;
-  readonly fps: number;
-  readonly loop: boolean;
-}
-
 type SpriteAnchor = 'top-left' | 'center' | 'bottom-left';
 
 const ANCHOR_OPTIONS: readonly { readonly value: SpriteAnchor; readonly label: string }[] = [
@@ -70,6 +78,7 @@ const ANCHOR_OPTIONS: readonly { readonly value: SpriteAnchor; readonly label: s
 ];
 
 const DEFAULT_SLICE: SliceConfig = { cellWidth: 32, cellHeight: 32, margin: 0, spacing: 0 };
+const SPRITE_DOCUMENT_ID = 'sprite-animation:studio';
 
 const fpsToDurationMs = (fps: number): number => Math.max(1, Math.round(1000 / Math.max(1, fps)));
 
@@ -114,6 +123,7 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
 
   const gridCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const clipSelectRefs = useRef(new Map<string, HTMLButtonElement>());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = useCallback(() => {
@@ -166,6 +176,12 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
       return [defaultClip];
     });
   }, [image, frames.length]);
+
+  // A slicing change can shrink the atlas after clips were authored. Clamp
+  // every range immediately so preview/import never retain stale frame ids.
+  useEffect(() => {
+    setClips((current) => clampClipDraftsToFrameCount(current, frames.length));
+  }, [frames.length]);
 
   const activeClip = useMemo(
     () => clips.find((clip) => clip.id === activeClipId) ?? clips[0],
@@ -244,8 +260,9 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     };
   }, [image, activeClip, frames, playing]);
 
-  const handleOpenChange = (nextOpen: boolean) => {
+  const handleOpenChange = async (nextOpen: boolean) => {
     if (!nextOpen) {
+      if (!(await requestDocumentClose(SPRITE_DOCUMENT_ID))) return;
       reset();
     }
     onOpenChange(nextOpen);
@@ -289,6 +306,52 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     setClips((current) => current.filter((clip) => clip.id !== id));
   };
 
+  const reorderClip = (id: string, direction: -1 | 1) => {
+    setClips((current) => reorderClipDrafts(current, id, direction));
+  };
+
+  const selectClipAtIndex = (index: number) => {
+    const clip = clips[Math.max(0, Math.min(clips.length - 1, index))];
+    if (clip === undefined) {
+      return;
+    }
+    setActiveClipId(clip.id);
+    clipSelectRefs.current.get(clip.id)?.focus();
+  };
+
+  const handleClipSelectionKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    switch (event.key) {
+      case 'ArrowUp':
+      case 'ArrowLeft':
+        event.preventDefault();
+        selectClipAtIndex(index - 1);
+        return;
+      case 'ArrowDown':
+      case 'ArrowRight':
+        event.preventDefault();
+        selectClipAtIndex(index + 1);
+        return;
+      case 'Home':
+        event.preventDefault();
+        selectClipAtIndex(0);
+        return;
+      case 'End':
+        event.preventDefault();
+        selectClipAtIndex(clips.length - 1);
+        return;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        setActiveClipId(clips[index]?.id);
+        return;
+      default:
+        return;
+    }
+  };
+
   const seedPlayerModelClips = () => {
     if (frames.length === 0) {
       return;
@@ -317,20 +380,17 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
     setPlayerModelEnabled(true);
   };
 
-  const handleSave = async () => {
+  const persistSprite = async () => {
     if (image === undefined || frames.length === 0) {
-      notifyError('Load a sprite sheet and configure slicing first.');
-      return;
+      throw new Error('Load a sprite sheet and configure slicing first.');
     }
     const missingPlayerClips = playerModelEnabled
       ? missingPlayerModelClipNames(clips.map((clip) => clip.name))
       : [];
     if (missingPlayerClips.length > 0) {
-      notifyError(`Player model requires clips: ${missingPlayerClips.join(', ')}`);
-      return;
+      throw new Error(`Player model requires clips: ${missingPlayerClips.join(', ')}`);
     }
-    try {
-      await importSpriteSheet.mutateAsync({
+    await importSpriteSheet.mutateAsync({
         imageBase64: image.base64,
         imageFileName: image.fileName,
         mime: image.mime,
@@ -358,11 +418,74 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
         ...(playerModelEnabled
           ? { playerModel: toPlayerModelImportMetadata(playerModelGeometry) }
           : {}),
+    });
+  };
+
+  useDocumentLifecycle({
+    id: SPRITE_DOCUMENT_ID,
+    label: image?.fileName ?? 'Sprite / Animation Studio',
+    kind: 'sprite-animation',
+    dirty: image !== undefined,
+    recoveryVersion: JSON.stringify({
+      slice,
+      spriteName,
+      anchor,
+      playerModelEnabled,
+      playerModelGeometry,
+      clips,
+    }),
+    save: persistSprite,
+    discard: reset,
+    snapshot: () => image === undefined ? undefined : {
+      image: {
+        fileName: image.fileName,
+        mime: image.mime,
+        base64: image.base64,
+        dataUrl: image.dataUrl,
+        width: image.width,
+        height: image.height,
+      },
+      slice,
+      spriteName,
+      anchor,
+      playerModelEnabled,
+      playerModelGeometry,
+      clips,
+    },
+    recover: async (snapshot) => {
+      const recovery = snapshot as {
+        readonly image: Omit<LoadedImage, 'element'>;
+        readonly slice: SliceConfig;
+        readonly spriteName: string;
+        readonly anchor: SpriteAnchor;
+        readonly playerModelEnabled: boolean;
+        readonly playerModelGeometry: PlayerModelGeometryDraft;
+        readonly clips: readonly ClipDraft[];
+      };
+      const element = new Image();
+      await new Promise<void>((resolve, reject) => {
+        element.onload = () => resolve();
+        element.onerror = () => reject(new Error('Failed to decode recovered sprite image'));
+        element.src = recovery.image.dataUrl;
       });
+      setImage({ ...recovery.image, element });
+      setSlice(recovery.slice);
+      setSpriteName(recovery.spriteName);
+      setAnchor(recovery.anchor);
+      setPlayerModelEnabled(recovery.playerModelEnabled);
+      setPlayerModelGeometry(recovery.playerModelGeometry);
+      setClips(recovery.clips);
+      setActiveClipId(recovery.clips[0]?.id);
+    },
+  });
+
+  const handleSave = async () => {
+    if (await documentLifecycle.save(SPRITE_DOCUMENT_ID)) {
       notifySuccess('Sprite sheet imported as an animated pack.');
-      handleOpenChange(false);
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : 'Sprite import failed');
+      reset();
+      onOpenChange(false);
+    } else {
+      notifyError(documentLifecycle.get(SPRITE_DOCUMENT_ID)?.error ?? 'Sprite import failed');
     }
   };
 
@@ -388,7 +511,7 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => void handleOpenChange(nextOpen)}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Sprite / Animation Studio</DialogTitle>
@@ -496,17 +619,45 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
               </div>
 
               <ScrollArea className="h-48">
-                <div className="flex flex-col gap-2 pr-2">
-                  {clips.map((clip) => (
+                <div
+                  className="flex flex-col gap-2 pr-2"
+                  role="radiogroup"
+                  aria-label="Animation clip preview"
+                >
+                  {clips.map((clip, index) => (
                     <div
                       key={clip.id}
                       className={cn(
                         'flex flex-col gap-2 rounded-md border p-2',
-                        clip.id === activeClipId && 'border-sky-500',
+                        clip.id === activeClip?.id && 'border-sky-500',
                       )}
-                      onClick={() => setActiveClipId(clip.id)}
                     >
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={clip.id === activeClip?.id}
+                          aria-label={`Preview clip ${clip.name}`}
+                          data-testid={`sprite-clip-select-${clip.id}`}
+                          tabIndex={clip.id === activeClip?.id ? 0 : -1}
+                          ref={(element) => {
+                            if (element === null) {
+                              clipSelectRefs.current.delete(clip.id);
+                            } else {
+                              clipSelectRefs.current.set(clip.id, element);
+                            }
+                          }}
+                          onClick={() => setActiveClipId(clip.id)}
+                          onKeyDown={(event) => handleClipSelectionKeyDown(event, index)}
+                          className={cn(
+                            'h-7 shrink-0 rounded border px-2 text-xs font-medium',
+                            clip.id === activeClip?.id
+                              ? 'border-sky-500 bg-sky-500/15 text-sky-100'
+                              : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                          )}
+                        >
+                          Preview
+                        </button>
                         <Input
                           value={clip.name}
                           onChange={(event) => updateClip(clip.id, { name: event.target.value })}
@@ -516,7 +667,39 @@ export function SpriteAnimationStudio({ open, onOpenChange }: SpriteAnimationStu
                           size="icon"
                           variant="ghost"
                           className="size-7 shrink-0"
-                          onClick={() => removeClip(clip.id)}
+                          disabled={index === 0}
+                          aria-label={`Move ${clip.name} up`}
+                          data-testid={`sprite-clip-move-up-${clip.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            reorderClip(clip.id, -1);
+                          }}
+                        >
+                          <ArrowUpIcon className="size-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7 shrink-0"
+                          disabled={index === clips.length - 1}
+                          aria-label={`Move ${clip.name} down`}
+                          data-testid={`sprite-clip-move-down-${clip.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            reorderClip(clip.id, 1);
+                          }}
+                        >
+                          <ArrowDownIcon className="size-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7 shrink-0"
+                          aria-label={`Remove ${clip.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeClip(clip.id);
+                          }}
                         >
                           <Trash2Icon className="size-4" />
                         </Button>

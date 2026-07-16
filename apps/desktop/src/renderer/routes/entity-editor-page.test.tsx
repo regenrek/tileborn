@@ -27,6 +27,7 @@ import { Option, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BrushIntent } from '@/stores/editor-ui-store';
+import { documentLifecycle } from '@/lib/document-lifecycle';
 
 const uuid = (suffix: string) => `550e8400-e29b-41d4-a716-${suffix}`;
 const PROJECT_ID = makeProjectId(uuid('446655440030'));
@@ -134,6 +135,8 @@ vi.mock('@/hooks/queries', () => ({
   }),
   useTilesetPacks: (packIds: readonly string[]) =>
     packIds.map(() => ({ data: tilesetPackFixture(), isLoading: false })),
+  useAssetPackLibrary: () => ({ data: undefined, isLoading: false }),
+  useWorkingPalettePreviews: () => ({ previewByKey: new Map(), isLoading: false }),
 }));
 
 vi.mock('@/hooks/mutations', () => ({
@@ -156,6 +159,7 @@ import { EntityEditorPage } from './entity-editor-page';
 
 describe('EntityEditorPage', () => {
   beforeEach(() => {
+    documentLifecycle.resetForTests();
     hoisted.catalogHolder.current = {
       objectTypes: [
         {
@@ -178,6 +182,7 @@ describe('EntityEditorPage', () => {
 
   afterEach(() => {
     cleanup();
+    documentLifecycle.resetForTests();
   });
 
   it('lists merged catalog entities with origin badges', () => {
@@ -235,6 +240,27 @@ describe('EntityEditorPage', () => {
     const decoded = Schema.decodeUnknownSync(GameObjectType)(input.objectTypeJson);
     expect(decoded.label).toBe('Big Crate');
     expect(hoisted.notifySuccess).toHaveBeenCalled();
+  });
+
+  it('routes the primary save through lifecycle saving and preserves a failed draft as error', async () => {
+    let rejectSave!: (cause: Error) => void;
+    hoisted.upsertMutate.mockImplementation(() => new Promise((_resolve, reject) => {
+      rejectSave = reject;
+    }));
+    render(<EntityEditorPage />);
+    fireEvent.click(screen.getByTestId(`entity-editor-row-${PROJECT_TYPE_ID}`).querySelector('button')!);
+    fireEvent.change(screen.getByTestId('entity-editor-label'), { target: { value: 'Unsaved Crate' } });
+    fireEvent.click(screen.getByTestId('entity-editor-save'));
+
+    await vi.waitFor(() => expect(screen.getByTestId('entity-document-status').textContent).toBe('saving'));
+    rejectSave(new Error('catalog unavailable'));
+    await vi.waitFor(() => expect(screen.getByTestId('entity-document-status').textContent).toBe('error'));
+    expect((screen.getByTestId('entity-editor-label') as HTMLInputElement).value).toBe('Unsaved Crate');
+    expect((screen.getByTestId('entity-editor-save') as HTMLButtonElement).disabled).toBe(false);
+    expect(documentLifecycle.get(`entity-editor:${PROJECT_ID}`)).toMatchObject({
+      status: 'error',
+      hasRecovery: true,
+    });
   });
 
   it('creates a new project entity and adds capabilities + anchors', async () => {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, cn, typography } from '@tileborne/ui';
+import { Button, Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, typography } from '@tileborne/ui';
 import { PanelTopOpenIcon, Trash2Icon, UserPlusIcon } from 'lucide-react';
 import { gameObjectTypeIdForKey } from '@tileborne/core';
 import type { JsonObject } from '@tileborne/core';
@@ -8,8 +8,11 @@ import type { PackId, ProjectId } from '@tileborne/core';
 
 import { useUpdateMap, useUpdateProject } from '@/hooks/mutations';
 import { useProject, useTilesetPack } from '@/hooks/queries';
+import { useResolvedCatalog } from '@/hooks/queries';
 import {
   applyBattleRoyaleAuthoringSettings,
+  assessBattleRoyaleWeaponCompatibility,
+  isBattleRoyaleWeaponCompatible,
   BATTLE_ROYALE_PALETTE_ACTIONS,
   readBattleRoyaleAuthoringSettings,
 } from '@tileborne/plugin-battle-royale/authoring';
@@ -26,6 +29,7 @@ import {
 } from '@/lib/lobby-model-selection';
 import { brushIntentMatchesPaletteAction } from '@/lib/palette-actions';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
+import { useDocumentLifecycle } from '@/lib/document-lifecycle';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 import type { ModeAuthoringPanelProps } from './mode-authoring-panels';
@@ -38,7 +42,17 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
   // `BattleRoyaleConfig` override (persisted under `map.properties.<pluginId>`);
   // the form values it feeds the generic renderer are the flattened fields.
   const settingsValues = useMemo<JsonObject>(
-    () => ({ ...readBattleRoyaleAuthoringSettings(map) }),
+    () => {
+      const settings = readBattleRoyaleAuthoringSettings(map);
+      return {
+        maxPlayers: settings.maxPlayers,
+        waitSec: settings.waitSec,
+        shrinkSec: settings.shrinkSec,
+        holdSec: settings.holdSec,
+        shrinkPhases: settings.shrinkPhases,
+        damagePerSecOutside: settings.damagePerSecOutside,
+      };
+    },
     [map],
   );
   // Live placement counts per contributed marker kind, used purely for status
@@ -54,12 +68,56 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
       })),
     [map.objects],
   );
+  const [matchMode, setMatchMode] = useState(() => readBattleRoyaleAuthoringSettings(map).matchMode);
+  const [matchEndPolicy, setMatchEndPolicy] = useState(() => readBattleRoyaleAuthoringSettings(map).matchEndPolicy);
+  const [respawnEnabled, setRespawnEnabled] = useState(() => readBattleRoyaleAuthoringSettings(map).respawnEnabled);
+  const [friendlyFire, setFriendlyFire] = useState(() => readBattleRoyaleAuthoringSettings(map).friendlyFire);
+  const [startingWeaponId, setStartingWeaponId] = useState(() => readBattleRoyaleAuthoringSettings(map).startingWeaponId ?? '');
+  const catalogQuery = useResolvedCatalog(projectId);
+  const compatibleWeapons = useMemo(
+    () => (catalogQuery.data?.weapons ?? []).filter(({ entry, label, origin, sourcePluginId }) =>
+      isBattleRoyaleWeaponCompatible({
+        id: String(entry.weapon.id),
+        label,
+        origin,
+        ...(sourcePluginId === undefined ? {} : { sourcePluginId: String(sourcePluginId) }),
+        deliveryTag: entry.delivery._tag,
+      })),
+    [catalogQuery.data?.weapons],
+  );
+  const selectedWeaponCompatibility = useMemo(() => {
+    if (startingWeaponId.length === 0) return undefined;
+    const selected = (catalogQuery.data?.weapons ?? []).find(
+      ({ entry }) => String(entry.weapon.id) === startingWeaponId,
+    );
+    return assessBattleRoyaleWeaponCompatibility(
+      startingWeaponId,
+      selected === undefined
+        ? undefined
+        : {
+            id: String(selected.entry.weapon.id),
+            label: selected.label,
+            origin: selected.origin,
+            ...(selected.sourcePluginId === undefined
+              ? {}
+              : { sourcePluginId: String(selected.sourcePluginId) }),
+            deliveryTag: selected.entry.delivery._tag,
+          },
+    );
+  }, [catalogQuery.data?.weapons, startingWeaponId]);
 
   const saveSettings = async (values: Record<string, number>) => {
     // The generic form guarantees every declared field key is present + valid;
     // fall back to the current settings per field to stay type-safe under
     // `noUncheckedIndexedAccess` without changing behavior.
     const current = readBattleRoyaleAuthoringSettings(map);
+    if (selectedWeaponCompatibility?.compatible === false) {
+      notifyError(
+        selectedWeaponCompatibility.message ??
+          'Choose a Battle Royale projectile weapon before saving the loadout.',
+      );
+      return;
+    }
     try {
       await updateMap.mutateAsync({
         projectId: projectId as ProjectId,
@@ -70,13 +128,70 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
           holdSec: values.holdSec ?? current.holdSec,
           shrinkPhases: values.shrinkPhases ?? current.shrinkPhases,
           damagePerSecOutside: values.damagePerSecOutside ?? current.damagePerSecOutside,
+          matchMode,
+          matchEndPolicy,
+          respawnEnabled,
+          friendlyFire,
+          startingWeaponId,
         }),
       });
       notifySuccess('Battle Royale settings saved');
     } catch (error) {
       notifyError(error instanceof Error ? error.message : 'Battle Royale settings save failed');
+      throw error;
     }
   };
+
+  const durableRules = readBattleRoyaleAuthoringSettings(map);
+  useDocumentLifecycle({
+    id: `game-settings:${projectId}:${map.id}:battle-royale-rules`,
+    scopeId: `map:${projectId}:${map.id}`,
+    label: 'Battle Royale match rules',
+    kind: 'game-settings',
+    dirty:
+      matchMode !== durableRules.matchMode ||
+      matchEndPolicy !== durableRules.matchEndPolicy ||
+      respawnEnabled !== durableRules.respawnEnabled ||
+      friendlyFire !== durableRules.friendlyFire ||
+      startingWeaponId !== (durableRules.startingWeaponId ?? ''),
+    recoveryVersion: `${matchMode}:${matchEndPolicy}:${respawnEnabled}:${friendlyFire}:${startingWeaponId}`,
+    save: () => saveSettings({
+      maxPlayers: durableRules.maxPlayers,
+      waitSec: durableRules.waitSec,
+      shrinkSec: durableRules.shrinkSec,
+      holdSec: durableRules.holdSec,
+      shrinkPhases: durableRules.shrinkPhases,
+      damagePerSecOutside: durableRules.damagePerSecOutside,
+    }),
+    discard: () => {
+      setMatchMode(durableRules.matchMode);
+      setMatchEndPolicy(durableRules.matchEndPolicy);
+      setRespawnEnabled(durableRules.respawnEnabled);
+      setFriendlyFire(durableRules.friendlyFire);
+      setStartingWeaponId(durableRules.startingWeaponId ?? '');
+    },
+    snapshot: () => ({
+      matchMode,
+      matchEndPolicy,
+      respawnEnabled,
+      friendlyFire,
+      startingWeaponId,
+    }),
+    recover: (snapshot) => {
+      const value = snapshot as {
+        readonly matchMode: typeof matchMode;
+        readonly matchEndPolicy: typeof matchEndPolicy;
+        readonly respawnEnabled: boolean;
+        readonly friendlyFire: boolean;
+        readonly startingWeaponId: string;
+      };
+      setMatchMode(value.matchMode);
+      setMatchEndPolicy(value.matchEndPolicy);
+      setRespawnEnabled(value.respawnEnabled);
+      setFriendlyFire(value.friendlyFire);
+      setStartingWeaponId(value.startingWeaponId);
+    },
+  });
 
   return (
     <div className="space-y-3" data-testid="battle-royale-authoring-panel">
@@ -117,8 +232,60 @@ export function BattleRoyaleAuthoringPanel({ projectId, map, settingsForm }: Mod
           testIdPrefix="br-setting"
           onSave={saveSettings}
           onInvalid={notifyError}
+          document={{
+            id: `game-settings:${projectId}:${map.id}:battle-royale`,
+            scopeId: `map:${projectId}:${map.id}`,
+            label: 'Battle Royale settings',
+          }}
         />
       ) : null}
+
+      <div className="space-y-2 rounded-md border border-border p-2" data-testid="br-match-rules">
+        <p className={cn(typography.sectionLabelMicro)}>Match rules</p>
+        <Label className="space-y-1">
+          <span className={typography.rowMeta}>Team mode</span>
+          <Select value={matchMode} onValueChange={(value) => setMatchMode(value as typeof matchMode)}>
+            <SelectTrigger data-testid="br-setting-matchMode"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solo">Solo</SelectItem>
+              <SelectItem value="duo">Duo</SelectItem>
+              <SelectItem value="squad">Squad</SelectItem>
+            </SelectContent>
+          </Select>
+        </Label>
+        <label className="flex items-center gap-2 text-xs">
+          <Checkbox checked={respawnEnabled} onCheckedChange={(value) => {
+            const enabled = value === true;
+            setRespawnEnabled(enabled);
+            if (enabled) setMatchEndPolicy('continuous');
+          }} data-testid="br-setting-respawnEnabled" />
+          Respawn after elimination
+        </label>
+        <Label className="space-y-1">
+          <span className={typography.rowMeta}>Match end</span>
+          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={matchEndPolicy} onChange={(event) => setMatchEndPolicy(event.target.value as typeof matchEndPolicy)} data-testid="br-setting-matchEndPolicy">
+            <option value="last-standing" disabled={respawnEnabled}>Last standing</option>
+            <option value="continuous">Continuous / no victory</option>
+          </select>
+        </Label>
+        <Label className="space-y-1">
+          <span className={typography.rowMeta}>Starting weapon / loadout</span>
+          <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={startingWeaponId} onChange={(event) => setStartingWeaponId(event.target.value)} data-testid="br-setting-startingWeaponId">
+            <option value="">Automatic from placed weapon</option>
+            {compatibleWeapons.map(({ entry, label }) => <option key={String(entry.weapon.id)} value={String(entry.weapon.id)}>{label}</option>)}
+          </select>
+          {selectedWeaponCompatibility?.compatible === false ? (
+            <span className="text-xs text-destructive" role="alert">{selectedWeaponCompatibility.message}</span>
+          ) : null}
+        </Label>
+        <label className="flex items-center gap-2 text-xs">
+          <Checkbox checked={friendlyFire} onCheckedChange={(value) => setFriendlyFire(value === true)} data-testid="br-setting-friendlyFire" />
+          Friendly fire
+        </label>
+        <p className={typography.bodyMicro} data-testid="br-match-end-summary">
+          Match end: {respawnEnabled || matchEndPolicy === 'continuous' ? 'continuous play' : matchMode === 'solo' ? 'last player standing' : 'last team standing'}.
+        </p>
+      </div>
 
       <PlayerModelsSection projectId={projectId} />
     </div>

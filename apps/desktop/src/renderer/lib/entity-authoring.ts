@@ -86,6 +86,7 @@ export const duplicateAsProjectEntity = (source: GameObjectType): GameObjectType
     category: source.category,
     layerHint: source.layerHint,
     components: [...source.components],
+    ...(source.instanceFields === undefined ? {} : { instanceFields: [...source.instanceFields] }),
     instanceDefaults: source.instanceDefaults,
   });
 

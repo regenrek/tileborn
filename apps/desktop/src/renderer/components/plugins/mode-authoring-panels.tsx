@@ -3,9 +3,9 @@ import type { ComponentType } from 'react';
 import type { TileborneMap } from '@tileborne/core';
 import type { MaterializedGameSettingsForm } from '@tileborne/plugin-api';
 
-import { BATTLE_ROYALE_PLUGIN_ID } from '@/lib/playtest-plugin-bridge';
-
 import { BattleRoyaleAuthoringPanel } from './battle-royale-authoring-panel';
+
+export const BATTLE_ROYALE_AUTHORING_CAPABILITY_ID = 'battle-royale.authoring' as const;
 
 /**
  * Props every mode authoring panel receives from the inspector. The inspector
@@ -22,7 +22,8 @@ export interface ModeAuthoringPanelProps {
 }
 
 /**
- * Registry of built-in mode authoring panels keyed by plugin id. The editor is
+ * Registry of bundled mode authoring panels keyed by the manifest-declared
+ * authoring capability id. The editor is
  * declarative-only (ADR-0004), so a mode's authoring panel React component is
  * bundled and registered here (mirroring the playtest projector registry);
  * WHICH plugin owns the inspector is discovered from the manifest upstream
@@ -30,10 +31,11 @@ export interface ModeAuthoringPanelProps {
  * panel; a new genre registers another entry — no inspector edit required.
  */
 const MODE_AUTHORING_PANELS: ReadonlyMap<string, ComponentType<ModeAuthoringPanelProps>> = new Map([
-  [BATTLE_ROYALE_PLUGIN_ID, BattleRoyaleAuthoringPanel],
+  [BATTLE_ROYALE_AUTHORING_CAPABILITY_ID, BattleRoyaleAuthoringPanel],
 ]);
 
-/** Resolve the authoring panel component for a discovered mode's plugin id. */
+/** Resolve a bespoke panel; no capability means the generic schema form wins. */
 export const resolveModeAuthoringPanel = (
-  pluginId: string,
-): ComponentType<ModeAuthoringPanelProps> | undefined => MODE_AUTHORING_PANELS.get(pluginId);
+  capabilityId: string | undefined,
+): ComponentType<ModeAuthoringPanelProps> | undefined =>
+  capabilityId === undefined ? undefined : MODE_AUTHORING_PANELS.get(capabilityId);

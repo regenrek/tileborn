@@ -5,6 +5,7 @@ import type {
   EquippableComponent,
   GameObjectComponent,
   GameObjectType,
+  ItemDefinition,
   HazardComponent,
   InteractableComponent,
   JsonObject,
@@ -25,17 +26,21 @@ import {
   LootSourceComponent as LootSourceComponentClass,
   OverlayVisualComponent as OverlayVisualComponentClass,
   SpawnPointComponent as SpawnPointComponentClass,
-  WeaponDefinitionId,
+  GameObjectType as GameObjectTypeClass,
   WeaponRefComponent as WeaponRefComponentClass,
   type GameObjectTypeId,
   type OpenTag,
 } from '@tileborne/core';
 import { Button, Checkbox, Input, Label, cn, typography } from '@tileborne/ui';
-import { Option, Schema } from 'effect';
+import { Option } from 'effect';
 import { ImageIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 
 import { LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
+import {
+  SchemaFieldControls,
+  type AuthoringReferenceOptions,
+} from '@/components/authoring/schema-field-controls';
 import { SpritePickerDialog } from '@/components/entity-editor/sprite-picker-dialog';
 import type { ResolvedPlaceableVisual } from '@/hooks/use-placeable-visual';
 import {
@@ -51,6 +56,7 @@ import {
 export interface EntityOption {
   readonly id: string;
   readonly label: string;
+  readonly previewUrl?: string;
 }
 
 export interface EntityCapabilityPanelProps {
@@ -59,6 +65,9 @@ export interface EntityCapabilityPanelProps {
   /** All merged catalog entities, for weapon-ref companion selects. */
   readonly entityOptions: readonly EntityOption[];
   readonly lootTables: readonly LootTable[];
+  readonly weaponOptions: readonly EntityOption[];
+  readonly items: readonly ItemDefinition[];
+  readonly assetOptions: readonly EntityOption[];
   /** Label of the active palette asset, shown on the assign button. */
   readonly activeAssetLabel: string | undefined;
   /** Resolved preview of the entity's assigned `visual-ref` placeable. */
@@ -171,6 +180,9 @@ export function EntityCapabilityPanel({
   readOnly,
   entityOptions,
   lootTables,
+  weaponOptions,
+  items,
+  assetOptions,
   activeAssetLabel,
   assignedSprite,
   onAssignActiveAsset,
@@ -223,6 +235,30 @@ export function EntityCapabilityPanel({
         )}
       </div>
 
+      {entity.instanceFields === undefined || entity.instanceFields.length === 0 ? null : (
+        <section className="rounded-md border border-border bg-card p-2" data-testid="entity-instance-fields">
+          <p className={typography.rowTitle}>Instance properties</p>
+          <div className="mt-2">
+            <SchemaFieldControls
+              fields={entity.instanceFields}
+              values={entity.instanceDefaults}
+              references={{
+                asset: assetOptions,
+                entity: entityOptions,
+                weapon: weaponOptions,
+                item: items.map((item) => ({ id: String(item.id), label: item.label })),
+                'loot-table': lootTables.map((table) => ({ id: String(table.id), label: table.label })),
+              } satisfies AuthoringReferenceOptions}
+              disabled={readOnly}
+              testIdPrefix="entity-instance"
+              onChange={(instanceDefaults) =>
+                onChange(new GameObjectTypeClass({ ...entity, instanceDefaults }))
+              }
+            />
+          </div>
+        </section>
+      )}
+
       {entity.components.length === 0 ? (
         <p className={cn('px-0.5 text-muted-foreground', typography.rowMeta)}>
           No capabilities yet. Add a visual first, then gameplay capabilities.
@@ -256,6 +292,7 @@ export function EntityCapabilityPanel({
               entity={entity}
               readOnly={readOnly}
               entityOptions={entityOptions}
+              weaponOptions={weaponOptions}
               lootTables={lootTables}
               activeAssetLabel={activeAssetLabel}
               assignedSprite={assignedSprite}
@@ -274,6 +311,7 @@ function CapabilityForm({
   entity,
   readOnly,
   entityOptions,
+  weaponOptions,
   lootTables,
   activeAssetLabel,
   assignedSprite,
@@ -284,6 +322,7 @@ function CapabilityForm({
   readonly entity: GameObjectType;
   readonly readOnly: boolean;
   readonly entityOptions: readonly EntityOption[];
+  readonly weaponOptions: readonly EntityOption[];
   readonly lootTables: readonly LootTable[];
   readonly activeAssetLabel: string | undefined;
   readonly assignedSprite: ResolvedPlaceableVisual | undefined;
@@ -314,6 +353,7 @@ function CapabilityForm({
           component={component}
           readOnly={readOnly}
           entityOptions={entityOptions}
+          weaponOptions={weaponOptions}
           onPatch={onPatch}
         />
       );
@@ -736,16 +776,15 @@ function WeaponRefForm({
   component,
   readOnly,
   entityOptions,
+  weaponOptions,
   onPatch,
 }: {
   readonly component: WeaponRefComponent;
   readonly readOnly: boolean;
   readonly entityOptions: readonly EntityOption[];
+  readonly weaponOptions: readonly EntityOption[];
   readonly onPatch: (component: GameObjectComponent) => void;
 }) {
-  const [weaponIdText, setWeaponIdText] = useState(String(component.weaponId));
-  const weaponIdValid = Option.isSome(Schema.decodeUnknownOption(WeaponDefinitionId)(weaponIdText));
-
   const patch = (next: Partial<{
     weaponId: WeaponRefComponent['weaponId'];
     projectileEntityId: GameObjectTypeId | undefined;
@@ -809,26 +848,19 @@ function WeaponRefForm({
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <Label htmlFor="entity-weapon-id">Weapon id</Label>
-        <Input
+        <Label htmlFor="entity-weapon-id">Weapon</Label>
+        <select
           id="entity-weapon-id"
-          value={weaponIdText}
+          className={selectClassName}
+          value={String(component.weaponId)}
           disabled={readOnly}
-          className={weaponIdValid ? '' : 'border-destructive'}
-          onChange={(event) => {
-            const text = event.currentTarget.value;
-            setWeaponIdText(text);
-            const decoded = Schema.decodeUnknownOption(WeaponDefinitionId)(text);
-            if (Option.isSome(decoded)) {
-              patch({ weaponId: decoded.value });
-            }
-          }}
-        />
-        {weaponIdValid ? null : (
-          <p className={cn('text-destructive', typography.bodyMicro)}>
-            Expected format: weapon:&lt;uuid&gt;
-          </p>
-        )}
+          onChange={(event) => patch({ weaponId: event.currentTarget.value as WeaponRefComponent['weaponId'] })}
+        >
+          {!weaponOptions.some((option) => option.id === component.weaponId) ? (
+            <option value={component.weaponId}>Missing: {component.weaponId}</option>
+          ) : null}
+          {weaponOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </select>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {companion('projectileEntityId', 'Projectile')}

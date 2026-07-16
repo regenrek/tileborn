@@ -1,7 +1,7 @@
 import { useParams } from '@tanstack/react-router';
-import type { GameObjectType, VisualRefComponent } from '@tileborne/core';
+import { GameObjectType, type AuthoringFieldSchema, type VisualRefComponent } from '@tileborne/core';
 import { Badge, Button, Input, Label, cn, typography } from '@tileborne/ui';
-import { Option } from 'effect';
+import { Option, Schema } from 'effect';
 import { CopyIcon, PlusIcon, RotateCcwIcon, SaveIcon, ShapesIcon, Trash2Icon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -16,9 +16,18 @@ import {
   type SpriteGeometryHandle,
 } from '@/components/visual-editor/sprite-geometry-canvas';
 import { useRemoveCatalogType, useUpsertCatalogType } from '@/hooks/mutations';
-import { useResolvedCatalog, useTilesetPack, useValidateCatalog } from '@/hooks/queries';
+import {
+  useAssetPackLibrary,
+  useAssetPacks,
+  useResolvedCatalog,
+  useTilesetPack,
+  useValidateCatalog,
+  useWorkingPalettePreviews,
+} from '@/hooks/queries';
 import { usePlaceableVisual } from '@/hooks/use-placeable-visual';
 import { assetThumbnailUrl } from '@/lib/asset-url';
+import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
+import { documentLifecycle, useDocumentLifecycle } from '@/lib/document-lifecycle';
 import {
   componentOf,
   createProjectEntity,
@@ -37,6 +46,17 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 import type { PackId } from '@tileborne/core';
 
+const hasAssetReference = (fields: readonly AuthoringFieldSchema[] | undefined): boolean =>
+  fields?.some((field) =>
+    field.kind === 'reference'
+      ? field.target === 'asset'
+      : field.kind === 'group'
+        ? hasAssetReference(field.fields)
+        : field.kind === 'optional'
+          ? hasAssetReference([field.field])
+          : false,
+  ) ?? false;
+
 /**
  * Entity Editor workbench (ADR-0028): the entity-first authoring surface.
  * Left rail lists the merged catalog (plugin entities read-only, project
@@ -53,9 +73,20 @@ export function EntityEditorPage() {
   const upsertType = useUpsertCatalogType();
   const removeType = useRemoveCatalogType();
   const brushIntent = useEditorUiStore((state) => state.brushIntent);
+  const catalogTargetObjectTypeId = useEditorUiStore((state) => state.catalogTargetObjectTypeId);
+  const setCatalogTargetObjectTypeId = useEditorUiStore((state) => state.setCatalogTargetObjectTypeId);
 
   const entries = useMemo(() => catalogQuery.data?.objectTypes ?? [], [catalogQuery.data]);
   const lootTables = useMemo(() => catalogQuery.data?.lootTables ?? [], [catalogQuery.data]);
+  const items = useMemo(() => catalogQuery.data?.items ?? [], [catalogQuery.data]);
+  const weaponOptions = useMemo(
+    (): readonly EntityOption[] =>
+      (catalogQuery.data?.weapons ?? []).map((weapon) => ({
+        id: String(weapon.entry.weapon.id),
+        label: weapon.label,
+      })),
+    [catalogQuery.data],
+  );
 
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState('');
@@ -65,6 +96,17 @@ export function EntityEditorPage() {
   const [createLabel, setCreateLabel] = useState('');
   const [createFamily, setCreateFamily] = useState('object');
   const [anchorName, setAnchorName] = useState('');
+
+  useEffect(() => {
+    if (
+      catalogTargetObjectTypeId !== null &&
+      entries.some((entry) => String(entry.objectType.id) === catalogTargetObjectTypeId)
+    ) {
+      setSelectedId(catalogTargetObjectTypeId);
+      setSearch('');
+      setCatalogTargetObjectTypeId(null);
+    }
+  }, [catalogTargetObjectTypeId, entries, setCatalogTargetObjectTypeId]);
 
   const selectedEntry = useMemo(
     () => entries.find((entry) => String(entry.objectType.id) === selectedId),
@@ -139,6 +181,49 @@ export function EntityEditorPage() {
     };
   }, [brushIntent]);
   const packQuery = useTilesetPack(activePlaceable?.packId);
+  const assetPacksQuery = useAssetPacks();
+  const needsAssetOptions = hasAssetReference(draft?.instanceFields);
+  const authoringAssetPackId = needsAssetOptions
+    ? activePlaceable?.packId ?? assetPacksQuery.data?.packs[0]?.id
+    : undefined;
+  // A single bounded page keeps schema fields discoverable without pulling a
+  // whole multi-thousand-asset library into the entity editor. The backend
+  // index and preview resolver stay lazy until an asset field is visible.
+  const authoringAssetLibrary = useAssetPackLibrary(authoringAssetPackId, {
+    groupKind: 'source',
+    limit: 64,
+  });
+  const authoringAssetRefs = useMemo(
+    () =>
+      (authoringAssetLibrary.data?.groups ?? []).flatMap((group) =>
+        group.primaryRef === undefined ? [] : [group.primaryRef],
+      ),
+    [authoringAssetLibrary.data],
+  );
+  const authoringAssetPreviews = useWorkingPalettePreviews(authoringAssetRefs);
+  const assetOptions = useMemo(
+    (): readonly EntityOption[] =>
+      (authoringAssetLibrary.data?.groups ?? []).flatMap((group) => {
+        const ref = group.primaryRef;
+        if (ref === undefined) return [];
+        const key = assetLibraryReferenceKey(ref);
+        const preview = authoringAssetPreviews.previewByKey.get(key);
+        return [{
+          id: key,
+          label: group.label,
+          ...(preview === undefined || authoringAssetLibrary.data === undefined
+            ? {}
+            : {
+                previewUrl: assetThumbnailUrl(
+                  String(ref.packId),
+                  preview,
+                  authoringAssetLibrary.data.integrityHash,
+                ),
+              }),
+        }];
+      }),
+    [authoringAssetLibrary.data, authoringAssetPreviews.previewByKey],
+  );
   const activeAssetLabel = useMemo(() => {
     if (activePlaceable === undefined) {
       return undefined;
@@ -174,6 +259,7 @@ export function EntityEditorPage() {
       label: name,
       kind: name === 'hand' || name === 'grip' ? 'hand' : 'anchor',
       point: anchor.point,
+      rotationDeg: anchor.rotationDeg,
     }));
   }, [visualRef]);
 
@@ -186,6 +272,12 @@ export function EntityEditorPage() {
   const updateHandle = (id: string, point: NormalizedPoint) => {
     if (visualRef !== undefined) {
       patchVisualRef(visualRefWithAnchor(visualRef, id, { point }));
+    }
+  };
+
+  const updateHandleRotation = (id: string, rotationDeg: number) => {
+    if (visualRef !== undefined) {
+      patchVisualRef(visualRefWithAnchor(visualRef, id, { rotationDeg }));
     }
   };
 
@@ -219,30 +311,51 @@ export function EntityEditorPage() {
     setCreateLabel('');
   };
 
-  const saveDraft = async () => {
+  const persistDraft = async () => {
     if (projectId === undefined || draft === undefined) {
       return;
     }
-    try {
-      const result = await upsertType.mutateAsync({
-        projectId,
-        objectTypeJson: encodeEntity(draft),
-      });
-      if (!result.saved) {
-        notifyError(result.report.issues[0]?.message ?? 'Entity save was rejected.');
-        return;
-      }
-      setIsDirty(false);
-      setSelectedId(String(draft.id));
-      notifySuccess(
-        result.report.ok
-          ? `${draft.label} saved`
-          : `${draft.label} saved with ${result.report.issues.length} open issue${result.report.issues.length === 1 ? '' : 's'}`,
-      );
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : 'Entity save failed');
+    const result = await upsertType.mutateAsync({
+      projectId,
+      objectTypeJson: encodeEntity(draft),
+    });
+    if (!result.saved) {
+      throw new Error(result.report.issues[0]?.message ?? 'Entity save was rejected.');
     }
+    setIsDirty(false);
+    setSelectedId(String(draft.id));
+    notifySuccess(
+      result.report.ok
+        ? `${draft.label} saved`
+        : `${draft.label} saved with ${result.report.issues.length} open issue${result.report.issues.length === 1 ? '' : 's'}`,
+    );
   };
+
+  const documentId = `entity-editor:${projectId}`;
+  const saveDraft = async () => {
+    if (await documentLifecycle.save(documentId)) return;
+    notifyError(documentLifecycle.get(documentId)?.error ?? 'Entity save failed');
+  };
+
+  const documentState = useDocumentLifecycle({
+    id: documentId,
+    label: draft?.label ?? 'Entity Editor',
+    kind: 'entity',
+    dirty: isDirty,
+    recoveryVersion: draft,
+    save: persistDraft,
+    discard: () => {
+      setDraft(selectedEntry?.objectType);
+      setIsDirty(false);
+    },
+    snapshot: () => (draft === undefined ? undefined : encodeEntity(draft)),
+    recover: (snapshot) => {
+      const recovered = Schema.decodeUnknownSync(GameObjectType)(snapshot);
+      setDraft(recovered);
+      setSelectedId(String(recovered.id));
+      setIsDirty(true);
+    },
+  });
 
   const duplicateEntity = async () => {
     if (projectId === undefined || selectedEntry === undefined) {
@@ -304,6 +417,11 @@ export function EntityEditorPage() {
     <CloseableWorkspacePage
       title="Entity Editor"
       description="Define entities, assign sprites, add capabilities, and place anchors — the entity is the single source of truth."
+      actions={
+        <span className="text-xs text-muted-foreground" data-testid="entity-document-status">
+          {documentState?.status ?? 'clean'}
+        </span>
+      }
       maxWidthClassName="max-w-[110rem]"
       data-testid="entity-editor-page"
     >
@@ -529,6 +647,7 @@ export function EntityEditorPage() {
                     handles={handles}
                     snapStep={0.01}
                     onHandleChange={readOnly ? () => undefined : updateHandle}
+                    onHandleRotationChange={readOnly ? () => undefined : updateHandleRotation}
                   />
                   <section className="rounded-md border border-border bg-card p-3" data-testid="entity-editor-anchors">
                     <div className="flex items-center justify-between gap-2">
@@ -638,6 +757,9 @@ export function EntityEditorPage() {
               readOnly={readOnly}
               entityOptions={entityOptions}
               lootTables={lootTables}
+              weaponOptions={weaponOptions}
+              items={items}
+              assetOptions={assetOptions}
               activeAssetLabel={activeAssetLabel}
               assignedSprite={assignedSprite}
               onAssignActiveAsset={assignActiveAsset}

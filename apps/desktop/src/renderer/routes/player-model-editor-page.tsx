@@ -1,4 +1,4 @@
-import { useParams } from '@tanstack/react-router';
+import { useParams, useSearch } from '@tanstack/react-router';
 import {
   AssetLibraryReference,
   AttachmentAnchor,
@@ -14,18 +14,21 @@ import {
   type PlayerModelClipKey,
 } from '@tileborne/core';
 import { Button, Input, Label, cn, typography } from '@tileborne/ui';
+import { Schema } from 'effect';
 import {
   ActivityIcon,
   CrosshairIcon,
+  ImageIcon,
   RotateCcwIcon,
   SaveIcon,
   ShieldIcon,
   Trash2Icon,
   UserIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import { CloseableWorkspacePage } from '@/components/shell/closeable-workspace-page';
+import { SpritePickerDialog } from '@/components/entity-editor/sprite-picker-dialog';
 import {
   SpriteGeometryCanvas,
   type NormalizedPoint,
@@ -34,13 +37,34 @@ import {
   type SpriteGeometryRect,
 } from '@/components/visual-editor/sprite-geometry-canvas';
 import { useUpdateProject } from '@/hooks/mutations';
-import { useMap, useMaps, usePluginsList, useProject, useTilesetPack } from '@/hooks/queries';
+import {
+  useMap,
+  useMaps,
+  usePluginsList,
+  useProject,
+  useTilesetPack,
+  useWorkingPalettePreviews,
+} from '@/hooks/queries';
+import { assetThumbnailUrl } from '@/lib/asset-url';
+import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
+import { buildPlayerModelRelink } from '@/lib/player-model-relink';
+import { documentLifecycle, useDocumentLifecycle } from '@/lib/document-lifecycle';
 import { PLUGIN_PLAYER_MODEL_POLICIES } from '@/lib/plugin-player-model-policies';
 import { resolvePlayerModelPolicy } from '@/lib/player-model-policy';
 import { diagnosePlayerModelPolicy } from '@/lib/visual-model-diagnostics';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 
 const DEFAULT_WORLD_SIZE = { width: 24, height: 32 } as const;
+
+interface PlayerModelEditorSearch {
+  readonly modelId?: string | undefined;
+  readonly path?: string | undefined;
+}
+
+const playerModelClipKeyFromPath = (path: string | undefined): PlayerModelClipKey | undefined => {
+  const candidate = path?.split('.').at(-1);
+  return REQUIRED_PLAYER_MODEL_CLIP_KEYS.find((key) => key === candidate);
+};
 
 const clipKeyLabel = (key: PlayerModelClipKey): string =>
   key
@@ -57,10 +81,12 @@ const modelWithPatch = (
   model: PlayerModelRef,
   patch: {
     readonly label?: string | undefined;
+    readonly ref?: AssetLibraryReference | undefined;
     readonly defaultClipId?: ClipId | undefined;
     readonly clips?: PlayerModelClipSet | undefined;
     readonly anchor?: NormalizedPoint | undefined;
     readonly hand?: NormalizedPoint | undefined;
+    readonly handRotationDeg?: number | undefined;
     readonly hitbox?: NormalizedRect | undefined;
     readonly renderScale?: number | undefined;
     readonly worldSize?: { readonly width: number; readonly height: number } | undefined;
@@ -69,28 +95,32 @@ const modelWithPatch = (
   new PlayerModelRef({
     id: model.id,
     label: patch.label ?? model.label,
-    ref: new AssetLibraryReference({
-      ...model.ref,
-      clipId: patch.defaultClipId ?? model.ref.clipId,
-    }),
+    ref:
+      patch.ref ??
+      new AssetLibraryReference({
+        ...model.ref,
+        clipId: patch.defaultClipId ?? model.ref.clipId,
+      }),
     defaultClipId: patch.defaultClipId ?? model.defaultClipId,
     clips: patch.clips ?? model.clips,
     anchor: new PlayerModelAnchor(patch.anchor ?? model.anchor),
     hitbox: new PlayerModelHitbox(patch.hitbox ?? model.hitbox),
     anchors:
-      patch.hand === undefined
+      patch.hand === undefined && patch.handRotationDeg === undefined
         ? model.anchors
         : {
             ...model.anchors,
             hand: new AttachmentAnchor({
-              point: new VisualAnchorPoint(patch.hand),
-              rotationDeg: model.anchors.hand?.rotationDeg ?? 0,
+              point: new VisualAnchorPoint(
+                patch.hand ?? model.anchors.hand?.point ?? { x: 0.64, y: 0.56 },
+              ),
+              rotationDeg: patch.handRotationDeg ?? model.anchors.hand?.rotationDeg ?? 0,
               zOffset: model.anchors.hand?.zOffset ?? 0,
             }),
           },
-    ...(patch.renderScale ?? model.renderScale) === undefined
+    ...((patch.renderScale ?? model.renderScale) === undefined
       ? {}
-      : { renderScale: patch.renderScale ?? model.renderScale },
+      : { renderScale: patch.renderScale ?? model.renderScale }),
     worldSize:
       patch.worldSize === undefined && model.worldSize === undefined
         ? undefined
@@ -118,7 +148,13 @@ const modelHandles = (
     ? []
     : [
         { id: 'anchor', label: 'Anchor', kind: 'pivot', point: model.anchor },
-        { id: 'hand', label: 'Hand', kind: 'hand', point: model.anchors.hand?.point ?? defaultHand },
+        {
+          id: 'hand',
+          label: 'Hand',
+          kind: 'hand',
+          point: model.anchors.hand?.point ?? defaultHand,
+          rotationDeg: model.anchors.hand?.rotationDeg ?? 0,
+        },
       ];
 
 const modelRects = (model: PlayerModelRef | undefined): readonly SpriteGeometryRect[] =>
@@ -126,8 +162,122 @@ const modelRects = (model: PlayerModelRef | undefined): readonly SpriteGeometryR
     ? []
     : [{ id: 'hitbox', label: 'Hitbox', kind: 'hitbox', rect: model.hitbox }];
 
+interface PlayerModelEditorState {
+  readonly selectedModelId?: string | undefined;
+  readonly draftModel?: PlayerModelRef | undefined;
+  readonly activeClipKey: PlayerModelClipKey;
+  readonly isDirty: boolean;
+  readonly consumedNavigationTargetKey?: string | undefined;
+}
+
+type PlayerModelEditorAction =
+  | {
+      readonly type: 'synchronize';
+      readonly models: readonly PlayerModelRef[];
+      readonly navigation: {
+        readonly key: string;
+        readonly modelId?: string | undefined;
+        readonly clipKey?: PlayerModelClipKey | undefined;
+      };
+    }
+  | { readonly type: 'select-model'; readonly model: PlayerModelRef }
+  | { readonly type: 'patch-draft'; readonly patch: Parameters<typeof modelWithPatch>[1] }
+  | { readonly type: 'set-active-clip'; readonly clipKey: PlayerModelClipKey }
+  | { readonly type: 'reset-draft'; readonly model: PlayerModelRef | undefined }
+  | { readonly type: 'mark-clean' };
+
+const playerModelEditorReducer = (
+  state: PlayerModelEditorState,
+  action: PlayerModelEditorAction,
+): PlayerModelEditorState => {
+  switch (action.type) {
+    case 'synchronize': {
+      const navigationModel =
+        action.navigation.modelId === undefined
+          ? undefined
+          : action.models.find((model) => model.id === action.navigation.modelId);
+      if (
+        navigationModel !== undefined &&
+        action.navigation.key !== state.consumedNavigationTargetKey
+      ) {
+        return {
+          selectedModelId: navigationModel.id,
+          draftModel: navigationModel,
+          activeClipKey: action.navigation.clipKey ?? 'idle',
+          isDirty: false,
+          consumedNavigationTargetKey: action.navigation.key,
+        };
+      }
+
+      const selectedModel =
+        action.models.find((model) => model.id === state.selectedModelId) ?? action.models[0];
+      if (selectedModel === undefined) {
+        if (
+          state.selectedModelId === undefined &&
+          state.draftModel === undefined &&
+          !state.isDirty
+        ) {
+          return state;
+        }
+        return {
+          ...state,
+          selectedModelId: undefined,
+          draftModel: undefined,
+          activeClipKey: 'idle',
+          isDirty: false,
+        };
+      }
+      if (selectedModel.id !== state.selectedModelId || state.draftModel === undefined) {
+        return {
+          ...state,
+          selectedModelId: selectedModel.id,
+          draftModel: selectedModel,
+          activeClipKey: 'idle',
+          isDirty: false,
+        };
+      }
+      if (!state.isDirty && state.draftModel !== selectedModel) {
+        return { ...state, draftModel: selectedModel };
+      }
+      return state;
+    }
+    case 'select-model':
+      return {
+        ...state,
+        selectedModelId: action.model.id,
+        draftModel: action.model,
+        activeClipKey: 'idle',
+        isDirty: false,
+      };
+    case 'patch-draft':
+      return state.draftModel === undefined
+        ? state
+        : {
+            ...state,
+            draftModel: modelWithPatch(state.draftModel, action.patch),
+            isDirty: true,
+          };
+    case 'set-active-clip':
+      return { ...state, activeClipKey: action.clipKey };
+    case 'reset-draft':
+      return {
+        ...state,
+        selectedModelId: action.model?.id,
+        draftModel: action.model,
+        isDirty: false,
+      };
+    case 'mark-clean':
+      return state.isDirty ? { ...state, isDirty: false } : state;
+  }
+};
+
 export function PlayerModelEditorPage() {
   const { projectId } = useParams({ from: '/editor/projects/$projectId/player-models' });
+  const search = useSearch({
+    from: '/editor/projects/$projectId/player-models',
+  }) as PlayerModelEditorSearch;
+  const navigationClipKey = playerModelClipKeyFromPath(search.path);
+  const navigationTargetKey = `${search.modelId ?? ''}:${search.path ?? ''}`;
   const projectQuery = useProject(projectId);
   const project = projectQuery.data?.project;
   const mapsQuery = useMaps(projectId);
@@ -135,13 +285,15 @@ export function PlayerModelEditorPage() {
   const mapQuery = useMap(projectId, firstMapId);
   const pluginsQuery = usePluginsList();
   const updateProject = useUpdateProject();
-  const enabledPluginIds = useMemo(
-    () =>
-      (pluginsQuery.data?.plugins ?? [])
-        .filter((plugin) => plugin.enabled)
-        .map((plugin) => plugin.id),
-    [pluginsQuery.data?.plugins],
-  );
+  const enabledPluginIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const plugin of pluginsQuery.data?.plugins ?? []) {
+      if (plugin.enabled) {
+        ids.push(plugin.id);
+      }
+    }
+    return ids;
+  }, [pluginsQuery.data?.plugins]);
   const policy = useMemo(() => {
     const map = mapQuery.data?.map;
     if (map === undefined) {
@@ -152,13 +304,30 @@ export function PlayerModelEditorPage() {
       project,
     });
   }, [enabledPluginIds, mapQuery.data?.map, project]);
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
-  const [draftModel, setDraftModel] = useState<PlayerModelRef | undefined>(undefined);
-  const [activeClipKey, setActiveClipKey] = useState<PlayerModelClipKey>('idle');
-  const [isDirty, setIsDirty] = useState(false);
+  const [editorState, dispatchEditor] = useReducer(playerModelEditorReducer, {
+    selectedModelId: search.modelId,
+    draftModel: undefined,
+    activeClipKey: navigationClipKey ?? 'idle',
+    isDirty: false,
+  });
+  const { selectedModelId, draftModel, activeClipKey, isDirty } = editorState;
+  const [relinkOpen, setRelinkOpen] = useState(false);
   const selectedModel =
     policy?.models.find((model) => model.id === selectedModelId) ?? policy?.models[0];
   const packQuery = useTilesetPack(draftModel?.ref.packId);
+  const previewRefs = useMemo(
+    () => (draftModel === undefined ? [] : [draftModel.ref]),
+    [draftModel],
+  );
+  const previewQuery = useWorkingPalettePreviews(previewRefs);
+  const modelPreview =
+    draftModel === undefined
+      ? undefined
+      : previewQuery.previewByKey.get(assetLibraryReferenceKey(draftModel.ref));
+  const modelImageUrl =
+    draftModel === undefined || modelPreview === undefined
+      ? undefined
+      : assetThumbnailUrl(String(draftModel.ref.packId), modelPreview);
   const placeable = useMemo(() => {
     if (draftModel === undefined) {
       return undefined;
@@ -197,49 +366,73 @@ export function PlayerModelEditorPage() {
   const activeClip = draftModel?.clips[activeClipKey];
 
   useEffect(() => {
-    if (selectedModel === undefined) {
-      setDraftModel(undefined);
-      setSelectedModelId(undefined);
-      setIsDirty(false);
-      return;
-    }
-    setSelectedModelId((current) => current ?? selectedModel.id);
-    setDraftModel(selectedModel);
-    setIsDirty(false);
-  }, [selectedModel]);
+    dispatchEditor({
+      type: 'synchronize',
+      models: policy?.models ?? [],
+      navigation: {
+        key: navigationTargetKey,
+        modelId: search.modelId,
+        clipKey: navigationClipKey,
+      },
+    });
+  }, [navigationClipKey, navigationTargetKey, policy?.models, search.modelId]);
 
   const updateDraft = (patch: Parameters<typeof modelWithPatch>[1]) => {
-    setDraftModel((current) => {
-      if (current === undefined) {
-        return current;
-      }
-      setIsDirty(true);
-      return modelWithPatch(current, patch);
-    });
+    dispatchEditor({ type: 'patch-draft', patch });
   };
 
-  const saveDraft = async () => {
+  const relinkModel = (selection: Parameters<typeof buildPlayerModelRelink>[0]) => {
+    const relink = buildPlayerModelRelink(selection, REQUIRED_PLAYER_MODEL_CLIP_KEYS);
+    if (relink.ref === undefined || relink.clips === undefined) {
+      notifyError(
+        `Incompatible player sprite. Missing clips: ${relink.missingClipKeys.join(', ')}`,
+      );
+      return;
+    }
+    updateDraft({ ref: relink.ref, clips: relink.clips, defaultClipId: relink.clips.idle });
+    setRelinkOpen(false);
+    notifySuccess(`Relinked model to ${selection.name}; review geometry, then save.`);
+  };
+
+  const persistDraft = async () => {
     if (project === undefined || policy === undefined || draftModel === undefined) {
       return;
     }
     if (policy.applyModels === undefined) {
-      notifyError('The active player-model policy is read-only');
-      return;
+      throw new Error('The active player-model policy is read-only');
     }
     if (validationIssues.length > 0) {
-      notifyError('Fix player model validation issues before saving');
-      return;
+      throw new Error('Fix player model validation issues before saving');
     }
-    try {
-      await updateProject.mutateAsync({
-        project: policy.applyModels(project, replaceModel(policy.models, draftModel)),
-      });
-      setIsDirty(false);
-      notifySuccess(`${draftModel.label} saved`);
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : 'Failed to save player model');
-    }
+    await updateProject.mutateAsync({
+      project: policy.applyModels(project, replaceModel(policy.models, draftModel)),
+    });
+    dispatchEditor({ type: 'mark-clean' });
+    notifySuccess(`${draftModel.label} saved`);
   };
+
+  const documentId = `player-model-editor:${projectId}`;
+  const saveDraft = async () => {
+    if (await documentLifecycle.save(documentId)) return;
+    notifyError(documentLifecycle.get(documentId)?.error ?? 'Failed to save player model');
+  };
+
+  const documentState = useDocumentLifecycle({
+    id: documentId,
+    label: draftModel?.label ?? 'Player Model Editor',
+    kind: 'player-model',
+    dirty: isDirty,
+    recoveryVersion: draftModel,
+    save: persistDraft,
+    discard: () => dispatchEditor({ type: 'reset-draft', model: selectedModel }),
+    snapshot: () =>
+      draftModel === undefined ? undefined : Schema.encodeUnknownSync(PlayerModelRef)(draftModel),
+    recover: (snapshot) => {
+      const recovered = Schema.decodeUnknownSync(PlayerModelRef)(snapshot);
+      dispatchEditor({ type: 'select-model', model: recovered });
+      dispatchEditor({ type: 'patch-draft', patch: {} });
+    },
+  });
 
   const removeDraft = async () => {
     if (project === undefined || policy === undefined || draftModel === undefined) {
@@ -263,6 +456,11 @@ export function PlayerModelEditorPage() {
     <CloseableWorkspacePage
       title="Player Model Editor"
       description="Author playable model geometry, clips, and runtime metadata for the active project."
+      actions={
+        <span className="text-xs text-muted-foreground" data-testid="player-model-document-status">
+          {documentState?.status ?? 'clean'}
+        </span>
+      }
       maxWidthClassName="max-w-7xl"
       data-testid="player-model-editor-page"
     >
@@ -297,9 +495,7 @@ export function PlayerModelEditorPage() {
                         selected ? 'bg-accent/55' : 'hover:bg-accent/35',
                       )}
                       onClick={() => {
-                        setSelectedModelId(model.id);
-                        setDraftModel(model);
-                        setIsDirty(false);
+                        dispatchEditor({ type: 'select-model', model });
                       }}
                       data-testid={`player-model-editor-row-${model.id}`}
                       aria-pressed={selected}
@@ -360,10 +556,19 @@ export function PlayerModelEditorPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={draftModel === undefined}
+                  onClick={() => setRelinkOpen(true)}
+                  data-testid="player-model-editor-relink"
+                >
+                  <ImageIcon className="size-4" aria-hidden />
+                  Relink sprite…
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
                   disabled={!isDirty || selectedModel === undefined}
                   onClick={() => {
-                    setDraftModel(selectedModel);
-                    setIsDirty(false);
+                    dispatchEditor({ type: 'reset-draft', model: selectedModel });
                   }}
                   data-testid="player-model-editor-revert"
                 >
@@ -439,20 +644,29 @@ export function PlayerModelEditorPage() {
               activeClipId={activeClip === undefined ? '-' : String(activeClip)}
               renderScale={draftModel?.renderScale ?? 1}
               worldSize={worldSize}
+              imageUrl={modelImageUrl}
             />
           </section>
 
           <SpriteGeometryCanvas
             title="Model Geometry"
+            imageUrl={modelImageUrl}
             handles={handles}
             rects={rects}
             snapStep={0.01}
             frames={requiredClipKeys.map((key) => ({ id: key, label: clipKeyLabel(key) }))}
             activeFrameId={activeClipKey}
-            onFrameChange={(frameId) => setActiveClipKey(frameId as PlayerModelClipKey)}
+            onFrameChange={(frameId) =>
+              dispatchEditor({ type: 'set-active-clip', clipKey: frameId as PlayerModelClipKey })
+            }
             onHandleChange={(id, point) =>
               updateDraft(id === 'hand' ? { hand: point } : { anchor: point })
             }
+            onHandleRotationChange={(id, rotationDeg) => {
+              if (id === 'hand') {
+                updateDraft({ handRotationDeg: rotationDeg });
+              }
+            }}
             onRectChange={(_, rect) => updateDraft({ hitbox: rect })}
             onResetDefaults={() =>
               updateDraft({
@@ -474,7 +688,11 @@ export function PlayerModelEditorPage() {
             <GeometryStat
               icon={ShieldIcon}
               label="Hitbox"
-              value={draftModel === undefined ? '-' : `${draftModel.hitbox.width.toFixed(2)} x ${draftModel.hitbox.height.toFixed(2)}`}
+              value={
+                draftModel === undefined
+                  ? '-'
+                  : `${draftModel.hitbox.width.toFixed(2)} x ${draftModel.hitbox.height.toFixed(2)}`
+              }
             />
             <GeometryStat
               icon={CrosshairIcon}
@@ -488,7 +706,10 @@ export function PlayerModelEditorPage() {
           </div>
 
           {validationIssues.length === 0 ? null : (
-            <section className="rounded-md border border-destructive/50 bg-destructive/10 p-3" data-testid="player-model-editor-validation">
+            <section
+              className="rounded-md border border-destructive/50 bg-destructive/10 p-3"
+              data-testid="player-model-editor-validation"
+            >
               <p className={typography.panelTitle}>Validation</p>
               <ul className="mt-2 space-y-1">
                 {validationIssues.map((issue) => (
@@ -507,14 +728,25 @@ export function PlayerModelEditorPage() {
               <p className={typography.panelTitle}>Authoring diagnostics</p>
               <ul className="mt-2 space-y-1">
                 {authoringDiagnostics.map((diagnostic) => (
-                  <li key={`${diagnostic.code}:${diagnostic.path}:${diagnostic.message}`} className={typography.bodyMicro}>
-                    <span className="font-medium">{diagnostic.severity}</span>{' '}
-                    {diagnostic.path}: {diagnostic.message}
+                  <li
+                    key={`${diagnostic.code}:${diagnostic.path}:${diagnostic.message}`}
+                    className={typography.bodyMicro}
+                  >
+                    <span className="font-medium">{diagnostic.severity}</span> {diagnostic.path}:{' '}
+                    {diagnostic.message}
                   </li>
                 ))}
               </ul>
             </section>
           )}
+          {relinkOpen ? (
+            <SpritePickerDialog
+              open
+              onOpenChange={setRelinkOpen}
+              selectedPlaceableId={draftModel?.ref.refId}
+              onSelect={relinkModel}
+            />
+          ) : null}
         </div>
       </div>
     </CloseableWorkspacePage>
@@ -557,6 +789,7 @@ interface ModelPreviewProps {
   readonly activeClipId: string;
   readonly renderScale: number;
   readonly worldSize: { readonly width: number; readonly height: number };
+  readonly imageUrl?: string | undefined;
 }
 
 function ModelPreview({
@@ -565,9 +798,19 @@ function ModelPreview({
   activeClipId,
   renderScale,
   worldSize,
+  imageUrl,
 }: ModelPreviewProps) {
+  const safeScale = Math.max(0.05, Math.min(4, renderScale));
+  const aspect = Math.max(0.25, Math.min(4, worldSize.width / worldSize.height));
+  const previewHeight = Math.min(112, 72 * safeScale);
+  const previewWidth = Math.min(160, previewHeight * aspect);
+  const previewX = 110 - previewWidth / 2;
+  const previewY = 126 - previewHeight;
   return (
-    <div className="rounded-md border border-border bg-background p-3" data-testid="player-model-preview">
+    <div
+      className="rounded-md border border-border bg-background p-3"
+      data-testid="player-model-preview"
+    >
       <p className={cn('truncate', typography.rowTitle)}>{label}</p>
       <p className={cn('truncate', typography.rowMeta)}>
         {clipKeyLabel(activeClipKey)} · {activeClipId}
@@ -583,12 +826,30 @@ function ModelPreview({
       >
         <rect x="0" y="0" width="220" height="160" fill="rgba(12,16,24,.96)" />
         <ellipse cx="110" cy="126" rx="44" ry="12" fill="#020617" opacity="0.45" />
-        <rect x="82" y="38" width="56" height="84" rx="24" fill="#e2e8f0" />
-        <circle cx="110" cy="44" r="26" fill="#fef3c7" />
-        <circle cx="99" cy="42" r="3" fill="#0f172a" />
-        <circle cx="121" cy="42" r="3" fill="#0f172a" />
-        <line x1="146" y1="78" x2="184" y2="70" stroke="#f97316" strokeWidth="5" strokeLinecap="round" />
-        <circle cx="184" cy="70" r="5" fill="#ef4444" />
+        {imageUrl === undefined ? (
+          <>
+            <rect
+              x={previewX}
+              y={previewY}
+              width={previewWidth}
+              height={previewHeight}
+              rx="18"
+              fill="#e2e8f0"
+            />
+            <circle cx="110" cy={previewY + 18} r="12" fill="#fef3c7" />
+          </>
+        ) : (
+          <image
+            href={imageUrl}
+            x={previewX}
+            y={previewY}
+            width={previewWidth}
+            height={previewHeight}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ imageRendering: 'pixelated' }}
+            data-testid="player-model-preview-image"
+          />
+        )}
       </svg>
     </div>
   );

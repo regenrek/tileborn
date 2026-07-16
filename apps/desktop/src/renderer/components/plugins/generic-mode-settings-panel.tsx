@@ -83,6 +83,7 @@ export function GenericModeSettingsPanel({
       notifySuccess(`${label} settings saved`);
     } catch (error) {
       notifyError(error instanceof Error ? error.message : `${label} settings save failed`);
+      throw error;
     }
   };
 
@@ -94,8 +95,13 @@ export function GenericModeSettingsPanel({
         disabled={disabled}
         saveLabel={`Save ${label} settings`}
         testIdPrefix="mode-setting"
-        onSave={save}
-        onInvalid={notifyError}
+      onSave={save}
+      onInvalid={notifyError}
+      document={{
+        id: `game-settings:${projectId}:${map.id}:${pluginId}`,
+        scopeId: `map:${projectId}:${map.id}`,
+        label: `${label} settings`,
+      }}
       />
     </div>
   );

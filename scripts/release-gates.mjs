@@ -66,6 +66,11 @@ export const releaseGates = Object.freeze([
     ],
     { xvfb: true },
   ),
+  gate('desktop-release-contract', 'Desktop 1.0 release contract', [
+    ['pnpm', 'release:desktop:policy'],
+    ['pnpm', 'release:desktop:status'],
+    ['pnpm', 'test:desktop-release-contract'],
+  ]),
   gate('clean-checkout', 'Clean checkout', [['pnpm', 'test:clean-checkout']]),
   gate(
     'creator-performance-native',

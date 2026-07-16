@@ -41,6 +41,25 @@ describe('canonical release gates', () => {
     });
   });
 
+  it('requires the fail-closed desktop release contract without claiming a distributable', () => {
+    const desktopRelease = releaseGates.find(({ id }) => id === 'desktop-release-contract');
+
+    expect(desktopRelease).toMatchObject({
+      required: true,
+      xvfb: false,
+      commands: [
+        ['pnpm', 'release:desktop:policy'],
+        ['pnpm', 'release:desktop:status'],
+        ['pnpm', 'test:desktop-release-contract'],
+      ],
+    });
+    const rootPackage = JSON.parse(read('package.json')) as {
+      readonly scripts: Record<string, string>;
+    };
+    expect(rootPackage.scripts['release:desktop:status']).toContain('--expect no-go');
+    expect(rootPackage.scripts['release:desktop:verify']).not.toContain('--expect no-go');
+  });
+
   it('makes root CI delegate to the canonical runner', () => {
     const rootPackage = JSON.parse(read('package.json')) as {
       readonly scripts: Record<string, string>;

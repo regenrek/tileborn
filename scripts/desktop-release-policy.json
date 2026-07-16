@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "policyId": "tileborne-desktop-1.0",
+  "candidate": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "artifactKind": "dmg",
+    "channel": "github-release"
+  },
+  "requiredEvidence": [
+    "artifact-sha256",
+    "source-provenance",
+    "developer-id-signature",
+    "apple-notarization",
+    "stapled-ticket",
+    "gatekeeper-install-first-launch-relaunch",
+    "retained-installer-rollback",
+    "verified-project-backup"
+  ],
+  "support": [
+    {
+      "id": "platform.macos-arm64",
+      "status": "candidate",
+      "reason": "The only desktop 1.0 candidate; distribution remains fail-closed until every required receipt verifies."
+    },
+    {
+      "id": "platform.macos-x64",
+      "status": "unsupported",
+      "reason": "No native x64 signed installer or install/launch evidence exists."
+    },
+    {
+      "id": "platform.windows",
+      "status": "unsupported",
+      "reason": "Forge maker configuration is not Windows build, signing, install, launch, upgrade, or uninstall evidence."
+    },
+    {
+      "id": "platform.linux",
+      "status": "unsupported",
+      "reason": "Forge maker configuration is not native deb/rpm install, launch, or uninstall evidence."
+    },
+    {
+      "id": "capability.auto-update",
+      "status": "unsupported",
+      "reason": "Desktop 1.0 uses manual signed-installer replacement and has no update feed or updater lifecycle."
+    },
+    {
+      "id": "capability.remote-crash-reporting",
+      "status": "unsupported",
+      "reason": "Desktop 1.0 supports local fail-fast logs, recovery, and opt-in manual support bundles only."
+    },
+    {
+      "id": "capability.publish",
+      "status": "operator-blocked",
+      "reason": "Publication requires an explicit release approval and a scoped credential supplied out of band."
+    }
+  ],
+  "publication": {
+    "approvalEnvironment": "TILEBORNE_DESKTOP_PUBLISH_APPROVED",
+    "credentialEnvironment": "GH_TOKEN",
+    "approvedValue": "1"
+  },
+  "rollback": {
+    "mode": "manual-retained-installer",
+    "retention": "current-and-last-known-good",
+    "requireArtifactDigest": true,
+    "requireProjectBackupBeforeDowngrade": true,
+    "requireBackupVerification": true,
+    "requireReinstallSmoke": true,
+    "requireProjectReopenSmoke": true,
+    "automaticRollback": "unsupported"
+  }
+}

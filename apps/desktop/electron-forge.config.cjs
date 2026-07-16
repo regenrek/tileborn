@@ -5,6 +5,10 @@ const moduleApi = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 
+const { createDesktopReleaseForgeSettings } = require('./scripts/desktop-release-forge.cjs');
+
+const desktopRelease = createDesktopReleaseForgeSettings();
+
 const packagerTmp = path.join(
   os.tmpdir(),
   'tileborne-electron-packager',
@@ -176,8 +180,46 @@ const copyGameHostBuildAssets = (buildPath) => {
   fs.cpSync(sourceRoot, destinationRoot, { recursive: true, dereference: true });
 };
 
+const dmgMaker = {
+  name: '@electron-forge/maker-dmg',
+  config: desktopRelease.enabled ? desktopRelease.dmgConfig : {},
+  platforms: ['darwin'],
+};
+
+const developmentMakers = [
+  dmgMaker,
+  {
+    name: '@electron-forge/maker-squirrel',
+    config: {
+      name: 'tileborne',
+      setupIcon: path.join(iconAssetsRoot, 'icon.ico'),
+    },
+    platforms: ['win32'],
+  },
+  {
+    name: '@electron-forge/maker-deb',
+    config: {
+      options: {
+        icon: runtimeIconPath,
+        maintainer: 'Tileborne',
+        homepage: 'https://tileborne.dev',
+      },
+    },
+    platforms: ['linux'],
+  },
+  {
+    name: '@electron-forge/maker-rpm',
+    config: {
+      options: {
+        icon: runtimeIconPath,
+        homepage: 'https://tileborne.dev',
+      },
+    },
+    platforms: ['linux'],
+  },
+];
+
 /** @type {import('@electron-forge/shared-types').ForgeConfig} */
-// Code signing deferred for v0.1.0 — docs/follow-ups.md#fu-v01-codesigning
 module.exports = {
   packagerConfig: {
     name: 'Tileborne',
@@ -186,6 +228,7 @@ module.exports = {
     icon: appIconPath,
     extraResource: [runtimeIconPath],
     tmpdir: packagerTmp,
+    ...(desktopRelease.enabled ? desktopRelease.packagerConfig : {}),
   },
   rebuildConfig: {},
   hooks: {
@@ -199,39 +242,27 @@ module.exports = {
     packageAfterPrune: async (_forgeConfig, buildPath) => {
       deployPackagedRuntimeClosure(buildPath);
     },
+    postMake: async (_forgeConfig, makeResults) => {
+      if (!desktopRelease.enabled) return makeResults;
+      const { notarize } = require('@electron/notarize');
+      for (const result of makeResults) {
+        if (result.platform !== 'darwin' || result.arch !== 'arm64') {
+          throw new Error(`desktop-release.unexpected-output: ${result.platform}/${result.arch}`);
+        }
+        for (const artifact of result.artifacts) {
+          if (path.extname(artifact).toLowerCase() !== '.dmg') {
+            throw new Error(`desktop-release.unexpected-artifact: ${artifact}`);
+          }
+          await notarize({ appPath: artifact, ...desktopRelease.notarizeCredentials });
+        }
+      }
+      return makeResults;
+    },
   },
-  makers: [
-    {
-      name: '@electron-forge/maker-dmg',
-      config: {},
-    },
-    {
-      name: '@electron-forge/maker-squirrel',
-      config: {
-        name: 'tileborne',
-        setupIcon: path.join(iconAssetsRoot, 'icon.ico'),
-      },
-    },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {
-        options: {
-          icon: runtimeIconPath,
-          maintainer: 'Tileborne',
-          homepage: 'https://tileborne.dev',
-        },
-      },
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {
-        options: {
-          icon: runtimeIconPath,
-          homepage: 'https://tileborne.dev',
-        },
-      },
-    },
-  ],
+  // Release mode deliberately exposes only the approved macOS-arm64 maker.
+  // The development maker inventory is cross-platform build capability, not a
+  // support claim; support is owned by scripts/desktop-release-policy.json.
+  makers: desktopRelease.enabled ? [dmgMaker] : developmentMakers,
   plugins: [
     {
       name: '@electron-forge/plugin-vite',

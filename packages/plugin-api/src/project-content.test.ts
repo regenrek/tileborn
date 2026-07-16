@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { GameObjectCatalog, PluginId } from '@tileborne/core';
 import { Result, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +16,13 @@ import {
 
 const UUID = '0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f60';
 const WEAPON_ID = `weapon:${UUID}`;
+const compatibilityFixtureRoot = path.resolve(
+  import.meta.dirname,
+  '../../test-fixtures/fixtures/projects/schema-compatibility/project-content',
+);
+
+const compatibilityFixtureRaw = (name: string): string =>
+  readFileSync(path.join(compatibilityFixtureRoot, name), 'utf8');
 
 const catalog = (id = `catalog:${UUID}`) =>
   Schema.decodeUnknownSync(GameObjectCatalog)({
@@ -47,6 +57,29 @@ const weapons = (id = WEAPON_ID) => {
 };
 
 describe('ProjectContentDocument', () => {
+  it('enforces the committed legacy/current/future/corrupt fixture matrix', () => {
+    const legacy = decodeProjectContentDocument(
+      JSON.parse(compatibilityFixtureRaw('legacy-catalog.json')) as unknown,
+    );
+    expect(Result.isSuccess(legacy)).toBe(true);
+    const current = decodeProjectContentDocument(
+      JSON.parse(compatibilityFixtureRaw('current-v1.json')) as unknown,
+    );
+    expect(Result.isSuccess(current)).toBe(true);
+
+    const futureRaw = compatibilityFixtureRaw('future-v2.json');
+    expect(Result.isFailure(decodeProjectContentDocument(JSON.parse(futureRaw) as unknown))).toBe(
+      true,
+    );
+    expect(compatibilityFixtureRaw('future-v2.json')).toBe(futureRaw);
+
+    const corruptRaw = compatibilityFixtureRaw('corrupt.json');
+    expect(Result.isFailure(decodeProjectContentDocument(JSON.parse(corruptRaw) as unknown))).toBe(
+      true,
+    );
+    expect(compatibilityFixtureRaw('corrupt.json')).toBe(corruptRaw);
+  });
+
   it('migrates a legacy GameObjectCatalog without creating a second catalog owner', () => {
     const result = decodeProjectContentDocument(
       Schema.encodeUnknownSync(GameObjectCatalog)(catalog()),

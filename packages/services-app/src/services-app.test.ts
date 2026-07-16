@@ -391,7 +391,7 @@ describe('ProjectService', () => {
             return yield* projects.list();
           }),
         ),
-      ).rejects.toMatchObject({ _tag: 'ProjectMigrationError' });
+      ).rejects.toMatchObject({ _tag: 'ProjectValidationError' });
     }));
 
   it('publishes initial and triggered verified project lists', () =>

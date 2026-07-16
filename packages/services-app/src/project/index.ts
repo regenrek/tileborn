@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { rejectSymlinkEscape } from '@tileborne/asset-pipeline';
+import { rejectPathTraversal, rejectSymlinkEscape } from '@tileborne/asset-pipeline';
 import {
   ContentHash,
   PERSISTED_SCHEMA_VERSIONS,
@@ -107,6 +107,8 @@ export interface ProjectUpgradeResult {
   readonly fromVersion: number;
   readonly toVersion: number;
   readonly changed: boolean;
+  /** Project-relative exact-byte source backup created before migration writes. */
+  readonly backupPath?: string | undefined;
 }
 
 export interface ProjectCleanResult {
@@ -273,6 +275,8 @@ const PROJECT_CACHE_DIR = '.tileborne/cache';
 const PROJECT_DERIVED_DIR = '.tileborne/derived';
 const PROJECT_IMPORT_RECORDS_PATH = '.tileborne/import-records.json';
 const PROJECT_BEHAVIOR_REGISTRY_PATH = 'behaviors/registry.json';
+const PROJECT_MANIFEST_BACKUP_DIRECTORY = '.tileborne/backups/project-manifest';
+const PROJECT_MANIFEST_BACKUP_FILE = /^project-v(\d+)-([a-f0-9]{64})\.json$/;
 
 const markImportedBehaviorRegistryUntrusted = async (projectRoot: string): Promise<void> => {
   const registryFile = path.join(projectRoot, PROJECT_BEHAVIOR_REGISTRY_PATH);
@@ -296,11 +300,138 @@ const markImportedBehaviorRegistryUntrusted = async (projectRoot: string): Promi
   await rename(temporary, registryFile);
 };
 
-const projectMigrationChain = defineMigrationChain<ProjectManifest>({
+/**
+ * The original project manifest predates an explicit schemaVersion. Treat that
+ * missing-version shape as v0 and migrate it exactly once to the current v1
+ * envelope. The current schema remains the only in-memory shape.
+ */
+export const projectMigrationChain = defineMigrationChain<ProjectManifest>({
   entity: 'project',
   latestVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
-  migrators: [],
+  migrators: [
+    {
+      entity: 'project',
+      fromVersion: 0,
+      toVersion: 1,
+      migrate: (input: unknown): unknown =>
+        typeof input === 'object' && input !== null && !Array.isArray(input)
+          ? { ...input, schemaVersion: 1 }
+          : input,
+    },
+  ],
 });
+
+const atomicWriteText = async (filePath: string, contents: string): Promise<void> => {
+  const temporary = `${filePath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(temporary, contents, { encoding: 'utf8', flag: 'wx' });
+    await rename(temporary, filePath);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+};
+
+const decodeRestorableProjectManifest = (raw: string): ProjectManifest => {
+  const parsed: unknown = JSON.parse(raw);
+  const fromVersion = readSchemaVersion(parsed) ?? 0;
+  const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
+  if (Result.isFailure(migrated)) {
+    throw new Error(migrated.failure);
+  }
+  return Schema.decodeUnknownSync(ProjectManifestSchema)(migrated.success);
+};
+
+const verifyProjectManifestBackupIdentity = (backupPath: string, raw: string): void => {
+  const match = PROJECT_MANIFEST_BACKUP_FILE.exec(path.basename(backupPath));
+  if (match === null) {
+    throw new Error('project manifest backup filename is invalid');
+  }
+  const parsed: unknown = JSON.parse(raw);
+  const fromVersion = readSchemaVersion(parsed) ?? 0;
+  if (Number(match[1]) !== fromVersion) {
+    throw new Error('project manifest backup filename version does not match its contents');
+  }
+  const digest = createHash('sha256').update(raw).digest('hex');
+  if (match[2] !== digest) {
+    throw new Error('project manifest backup content hash does not match its filename');
+  }
+};
+
+const verifiedProjectManifestBackup = async (
+  projectRoot: string,
+  raw: string,
+  fromVersion: number,
+): Promise<string> => {
+  const backupDirectory = path.join(projectRoot, PROJECT_MANIFEST_BACKUP_DIRECTORY);
+  await mkdir(backupDirectory, { recursive: true });
+  await rejectSymlinkEscape(projectRoot, backupDirectory);
+
+  const digest = createHash('sha256').update(raw).digest('hex');
+  const relativeBackupPath = path.join(
+    PROJECT_MANIFEST_BACKUP_DIRECTORY,
+    `project-v${fromVersion}-${digest}.json`,
+  );
+  const backupPath = path.join(projectRoot, relativeBackupPath);
+  let existing: string | undefined;
+  try {
+    existing = await readFile(backupPath, 'utf8');
+    await rejectSymlinkEscape(projectRoot, backupPath);
+  } catch (cause) {
+    if (!isNotFound(cause)) throw cause;
+  }
+  if (existing === undefined) {
+    await atomicWriteText(backupPath, raw);
+  } else if (existing !== raw) {
+    throw new Error(`project migration backup collision at ${relativeBackupPath}`);
+  }
+
+  const verifiedPath = await rejectSymlinkEscape(projectRoot, backupPath);
+  const verifiedRaw = await readFile(verifiedPath, 'utf8');
+  if (verifiedRaw !== raw) {
+    throw new Error(`project migration backup verification failed at ${relativeBackupPath}`);
+  }
+  const parsed: unknown = JSON.parse(verifiedRaw);
+  if ((readSchemaVersion(parsed) ?? 0) !== fromVersion) {
+    throw new Error(`project migration backup version mismatch at ${relativeBackupPath}`);
+  }
+  verifyProjectManifestBackupIdentity(relativeBackupPath, verifiedRaw);
+  decodeRestorableProjectManifest(verifiedRaw);
+  return relativeBackupPath;
+};
+
+/**
+ * Restore an exact-byte project-manifest migration backup after validating that
+ * it is contained by the project, unmodified, and still migrates to the current
+ * schema. The integrity lock remains valid because it hashes the deterministic
+ * current in-memory manifest produced by the same migration chain.
+ */
+export const restoreProjectManifestBackupAtRoot = (
+  projectRoot: string,
+  relativeBackupPath: string,
+): Effect.Effect<void, ProjectMigrationError> =>
+  Effect.tryPromise({
+    try: async () => {
+      const backupPath = rejectPathTraversal(projectRoot, relativeBackupPath);
+      const expectedDirectory = path.resolve(projectRoot, PROJECT_MANIFEST_BACKUP_DIRECTORY);
+      if (path.dirname(backupPath) !== expectedDirectory) {
+        throw new Error('project manifest backup path is outside the canonical backup directory');
+      }
+      const verifiedPath = await rejectSymlinkEscape(projectRoot, backupPath);
+      const raw = await readFile(verifiedPath, 'utf8');
+      verifyProjectManifestBackupIdentity(backupPath, raw);
+      decodeRestorableProjectManifest(raw);
+      await atomicWriteText(projectManifestPath(projectRoot), raw);
+      const restored = await readFile(projectManifestPath(projectRoot), 'utf8');
+      if (restored !== raw) {
+        throw new Error('restored project manifest does not match its verified backup');
+      }
+    },
+    catch: (cause) =>
+      new ProjectMigrationError({
+        path: projectManifestPath(projectRoot),
+        message: `failed to restore project manifest backup: ${errorMessage(cause)}`,
+      }),
+  });
 
 export class ProjectService extends Context.Service<
   ProjectService,
@@ -962,7 +1093,16 @@ export const ProjectServiceLive = Layer.effect(
           }),
       });
       const changed = fromVersion !== PERSISTED_SCHEMA_VERSIONS.projectManifest;
+      let backupPath: string | undefined;
       if (changed) {
+        backupPath = yield* Effect.tryPromise({
+          try: () => verifiedProjectManifestBackup(projectRoot, raw, fromVersion),
+          catch: (cause) =>
+            new ProjectMigrationError({
+              path: manifestFile,
+              message: `failed to create verified pre-migration backup: ${errorMessage(cause)}`,
+            }),
+        });
         const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
           Effect.catchTag('ProjectValidationError', () =>
             Effect.succeed(
@@ -982,6 +1122,7 @@ export const ProjectServiceLive = Layer.effect(
         fromVersion,
         toVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
         changed,
+        ...(backupPath === undefined ? {} : { backupPath }),
       };
     });
 

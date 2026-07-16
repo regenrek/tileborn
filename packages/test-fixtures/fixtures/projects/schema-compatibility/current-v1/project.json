@@ -1,0 +1,12 @@
+{
+  "id": "project:550e8400-e29b-41d4-a716-446655440031",
+  "name": "Current Project",
+  "schemaVersion": 1,
+  "engineVersion": "0.1.0",
+  "plugins": [],
+  "assetPacks": [],
+  "maps": [],
+  "settings": {
+    "migrationSentinel": "preserve-current-source"
+  }
+}

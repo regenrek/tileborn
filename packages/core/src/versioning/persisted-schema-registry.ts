@@ -134,7 +134,13 @@ export const PERSISTED_SCHEMA_REGISTRY: readonly PersistedSchemaRegistration[] =
     storage: '<project>/project.json',
     codecOwner: 'packages/core/src/project/index.ts#ProjectManifest',
     migrationOwner: 'packages/services-app/src/project/index.ts#projectMigrationChain',
-    compatibility: strictCurrent(PERSISTED_SCHEMA_VERSIONS.projectManifest),
+    compatibility: {
+      readableVersions: [0, PERSISTED_SCHEMA_VERSIONS.projectManifest],
+      older: 'migrate',
+      future: 'refuse',
+      corrupt: 'refuse',
+    },
+    note: 'The missing-schemaVersion v0 manifest migrates sequentially to v1 through a verified backup-first project upgrade.',
   }),
   versioned('tileborneMap', {
     versionLocation: 'payload',

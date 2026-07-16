@@ -37,60 +37,62 @@ slice.
 
 ## Compatibility matrix
 
-| Format                                         |       Current | Readable                      | Older                        | Future / corrupt           | Durability and owner evidence                                              |
-| ---------------------------------------------- | ------------: | ----------------------------- | ---------------------------- | -------------------------- | -------------------------------------------------------------------------- |
-| Project manifest                               |             1 | 1                             | refuse (empty chain)         | refuse / refuse            | source; core `ProjectManifest`, services-app `projectMigrationChain`       |
-| Tileborne map                                  |             1 | 1 + legacy shape              | current-only shape transform | refuse / refuse            | source; core `decodePersistedTileborneMapJson`                             |
-| Project content                                |             1 | 1 + legacy bare catalog shape | current-only shape transform | refuse / refuse            | source; plugin-api `decodeProjectContentDocument`                          |
-| Game-object catalog + entries                  |             1 | 1                             | refuse                       | refuse / refuse            | source; core `GameObjectCatalog`/`GameObjectType`                          |
-| Weapon catalog                                 |             1 | 1                             | refuse                       | refuse / refuse            | source; plugin-api `WeaponCatalog`                                         |
-| Visual behavior definition                     |             1 | 1                             | refuse                       | refuse / refuse            | source; core `migrateBehaviorDefinitionJson`                               |
-| Behavior manifest / authoring registry catalog |             1 | 1                             | refuse                       | refuse / refuse            | source; core behavior codecs                                               |
-| Project behavior registry                      |             1 | 1                             | refuse                       | refuse / refuse            | source; services-app behavior service                                      |
-| Project import records                         |             1 | 1                             | refuse                       | refuse / refuse            | source; services-app project service                                       |
-| Tileborne home config                          |             1 | 1                             | refuse                       | refuse / refuse            | preference; services-foundation `TileborneConfig`                          |
-| Brand config (`branding/tokens.json`)          |             1 | 1 + missing-version shape     | refuse                       | refuse / refuse            | source; core `BrandConfig`, CLI template                                   |
-| Thin-game project config                       |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; CLI-generated `tileborne.config.json`                             |
-| Working-palette store                          |             1 | 1                             | refuse                       | refuse / refuse            | source; core codec + services-app asset-library service                    |
-| Generic asset-pack manifest                    |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; asset-pipeline generic codec                                      |
-| Tileset manifest/pack                          |             1 | 1                             | refuse                       | refuse / refuse            | source; sdk-tileset parser/writer                                          |
-| Plugin manifest                                |             1 | 1                             | refuse (empty/unused chain)  | refuse / refuse            | source; plugin-api codec + services-plugin chain                           |
-| Project revision journal / owner               |         1 / 1 | 1 / 1                         | refuse                       | refuse / restore-or-refuse | recovery; services-app revision transaction                                |
-| Behavior transaction journal                   |             2 | 2                             | refuse                       | refuse / refuse-quarantine | recovery; services-app behavior service                                    |
-| Document recovery record                       |             1 | 1                             | reset                        | reset / reset              | recovery; desktop document lifecycle                                       |
-| Project integrity lock                         |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app project service                                      |
-| Project registry                               |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app registry                                             |
-| Project asset index                            |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app asset service                                        |
-| Asset-pack integrity lock                      |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app asset service                                        |
-| Plugin install lock                            |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; **reader identity/version validation gap**                        |
-| Plugin archive metadata sidecar                |             1 | 1                             | refuse                       | refuse / refuse            | shipped; services-plugin writer; **runtime reader gap**                    |
-| Asset-library / editor-tileset indexes         |         1 / 1 | 1 / 1                         | rebuild                      | rebuild / rebuild          | derived; services-app + sdk-tileset                                        |
-| Thumbnail cache / tile-palette metadata        |         1 / 1 | 1 / 1                         | rebuild                      | rebuild / rebuild          | derived; desktop main/renderer                                             |
-| Runtime map package                            |             4 | 4                             | refuse/rebuild artifact      | refuse / refuse            | shipped; core codec + runtime loader                                       |
-| Runtime behavior / project-content sections    |         1 / 1 | 1 / 1                         | refuse/rebuild artifact      | refuse / refuse            | shipped; core/plugin-api codecs                                            |
-| Bundled game manifest                          |             1 | 1                             | refuse/rebuild artifact      | refuse / refuse            | shipped; game-host builder; **runtime decode gap**                         |
-| Build/export metadata                          |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; services-build integrity wrapper                                  |
-| Room Durable Object state                      |             3 | 1, 2, 3                       | migrate 1→2→3                | refuse / refuse            | server; game-host `migrateRoomStorage`; **current payload validation gap** |
-| Input / HUD user overlays                      |   1 / 1 (key) | 1 / 1                         | reset                        | reset / reset              | preference; game-client owns input persistence; desktop delegates          |
-| Editor UI store                                | 0 (container) | 0                             | reset                        | reset / reset              | preference; explicit Zustand persist version                               |
-| Lobby model selection                          |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; raw localStorage string                                           |
-| Battle Royale loadout selection                |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; plugin raw localStorage string                                    |
-| Lobby reconnect credential                     |       1 (key) | 1                             | reset                        | reset / reset              | preference; game-client localStorage (security-sensitive)                  |
-| Persistent job record                          |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; services-foundation operational recovery cache                    |
+| Format                                         |       Current | Readable                      | Older                        | Future / corrupt           | Durability and owner evidence                                                     |
+| ---------------------------------------------- | ------------: | ----------------------------- | ---------------------------- | -------------------------- | --------------------------------------------------------------------------------- |
+| Project manifest                               |             1 | 0, 1                          | migrate missing-version v0   | refuse / refuse            | source; core `ProjectManifest`, services-app backup-first `projectMigrationChain` |
+| Tileborne map                                  |             1 | 1 + legacy shape              | current-only shape transform | refuse / refuse            | source; core `decodePersistedTileborneMapJson`                                    |
+| Project content                                |             1 | 1 + legacy bare catalog shape | current-only shape transform | refuse / refuse            | source; plugin-api `decodeProjectContentDocument`                                 |
+| Game-object catalog + entries                  |             1 | 1                             | refuse                       | refuse / refuse            | source; core `GameObjectCatalog`/`GameObjectType`                                 |
+| Weapon catalog                                 |             1 | 1                             | refuse                       | refuse / refuse            | source; plugin-api `WeaponCatalog`                                                |
+| Visual behavior definition                     |             1 | 1                             | refuse                       | refuse / refuse            | source; core `migrateBehaviorDefinitionJson`                                      |
+| Behavior manifest / authoring registry catalog |             1 | 1                             | refuse                       | refuse / refuse            | source; core behavior codecs                                                      |
+| Project behavior registry                      |             1 | 1                             | refuse                       | refuse / refuse            | source; services-app behavior service                                             |
+| Project import records                         |             1 | 1                             | refuse                       | refuse / refuse            | source; services-app project service                                              |
+| Tileborne home config                          |             1 | 1                             | refuse                       | refuse / refuse            | preference; services-foundation `TileborneConfig`                                 |
+| Brand config (`branding/tokens.json`)          |             1 | 1 + missing-version shape     | refuse                       | refuse / refuse            | source; core `BrandConfig`, CLI template                                          |
+| Thin-game project config                       |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; CLI-generated `tileborne.config.json`                                    |
+| Working-palette store                          |             1 | 1                             | refuse                       | refuse / refuse            | source; core codec + services-app asset-library service                           |
+| Generic asset-pack manifest                    |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; asset-pipeline generic codec                                             |
+| Tileset manifest/pack                          |             1 | 1                             | refuse                       | refuse / refuse            | source; sdk-tileset parser/writer                                                 |
+| Plugin manifest                                |             1 | 1                             | refuse (empty/unused chain)  | refuse / refuse            | source; plugin-api codec + services-plugin chain                                  |
+| Project revision journal / owner               |         1 / 1 | 1 / 1                         | refuse                       | refuse / restore-or-refuse | recovery; services-app revision transaction                                       |
+| Behavior transaction journal                   |             2 | 2                             | refuse                       | refuse / refuse-quarantine | recovery; services-app behavior service                                           |
+| Document recovery record                       |             1 | 1                             | reset                        | reset / reset              | recovery; desktop document lifecycle                                              |
+| Project integrity lock                         |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app project service                                             |
+| Project registry                               |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app registry                                                    |
+| Project asset index                            |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app asset service                                               |
+| Asset-pack integrity lock                      |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; services-app asset service                                               |
+| Plugin install lock                            |             1 | 1                             | rebuild                      | rebuild / rebuild          | derived; **reader identity/version validation gap**                               |
+| Plugin archive metadata sidecar                |             1 | 1                             | refuse                       | refuse / refuse            | shipped; services-plugin writer; **runtime reader gap**                           |
+| Asset-library / editor-tileset indexes         |         1 / 1 | 1 / 1                         | rebuild                      | rebuild / rebuild          | derived; services-app + sdk-tileset                                               |
+| Thumbnail cache / tile-palette metadata        |         1 / 1 | 1 / 1                         | rebuild                      | rebuild / rebuild          | derived; desktop main/renderer                                                    |
+| Runtime map package                            |             4 | 4                             | refuse/rebuild artifact      | refuse / refuse            | shipped; core codec + runtime loader                                              |
+| Runtime behavior / project-content sections    |         1 / 1 | 1 / 1                         | refuse/rebuild artifact      | refuse / refuse            | shipped; core/plugin-api codecs                                                   |
+| Bundled game manifest                          |             1 | 1                             | refuse/rebuild artifact      | refuse / refuse            | shipped; game-host builder; **runtime decode gap**                                |
+| Build/export metadata                          |   unversioned | none declared                 | n/a                          | refuse / refuse            | **gap**; services-build integrity wrapper                                         |
+| Room Durable Object state                      |             3 | 1, 2, 3                       | migrate 1→2→3                | refuse / refuse            | server; game-host `migrateRoomStorage`; **current payload validation gap**        |
+| Input / HUD user overlays                      |   1 / 1 (key) | 1 / 1                         | reset                        | reset / reset              | preference; game-client owns input persistence; desktop delegates                 |
+| Editor UI store                                | 0 (container) | 0                             | reset                        | reset / reset              | preference; explicit Zustand persist version                                      |
+| Lobby model selection                          |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; raw localStorage string                                                  |
+| Battle Royale loadout selection                |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; plugin raw localStorage string                                           |
+| Lobby reconnect credential                     |       1 (key) | 1                             | reset                        | reset / reset              | preference; game-client localStorage (security-sensitive)                         |
+| Persistent job record                          |   unversioned | none declared                 | n/a                          | reset / reset              | **gap**; services-foundation operational recovery cache                           |
 
 ## Audit verdict and next-slice handoff
 
 The registry closes version-number drift and makes the present compatibility
-claim testable. It does **not** claim migration support that does not exist.
-The following items are intentionally left for the next Planr durability item:
+claim testable. Project-manifest upgrades now preserve an exact-byte,
+content-addressed v0 source backup under the project root, verify it before the
+first source write, and expose a containment-checked restore owner. Future and
+corrupt manifests are refused before backup or mutation. It does **not** claim
+migration support that does not exist. The remaining gaps are:
 
-1. committed legacy/current/future/corrupt fixtures;
-2. real ordered project/map/content migrations with backup-first orchestration;
-3. restore verification and unsupported-version source-preservation receipts;
-4. runtime validation for room state and the bundled game manifest;
-5. explicit envelopes for generic asset packs, thin-game config, job records,
+1. further schema-version migrations beyond the committed project v0→v1 chain
+   and the current-version map/content shape migrations;
+2. runtime validation for room state and the bundled game manifest;
+3. explicit envelopes for generic asset packs, thin-game config, job records,
    model/loadout selections, and build/export metadata;
-6. plugin-lock identity/version enforcement and activation of the plugin
+4. plugin-lock identity/version enforcement and activation of the plugin
    manifest migration chain.
 
 Journal phase fault injection remains a separate subsequent item.

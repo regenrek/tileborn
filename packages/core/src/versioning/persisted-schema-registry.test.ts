@@ -56,8 +56,13 @@ describe('persisted schema registry', () => {
       ).toBe(true);
 
       if (compatibility.older === 'migrate') {
+        const firstReadable = compatibility.readableVersions[0];
+        expect([0, 1], id).toContain(firstReadable);
         expect(compatibility.readableVersions, id).toEqual(
-          Array.from({ length: currentVersion }, (_, index) => index + 1),
+          Array.from(
+            { length: currentVersion - (firstReadable ?? 1) + 1 },
+            (_, index) => index + (firstReadable ?? 1),
+          ),
         );
       }
     }

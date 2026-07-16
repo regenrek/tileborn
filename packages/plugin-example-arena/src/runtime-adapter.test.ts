@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { createRuntimeAdapter } from "./runtime-adapter.js";
-import type { ArenaPluginWorld, ArenaRuntimeInput } from "./types/runtime-plugin.js";
-import { ArenaSnapshot, decodeArenaServerMessage } from "./wire-codec.js";
+import { createRuntimeAdapter } from './runtime-adapter.js';
+import type { ArenaPluginWorld, ArenaRuntimeInput } from './types/runtime-plugin.js';
+import { ArenaSnapshot, decodeArenaServerMessage } from './wire-codec.js';
 
 const world: ArenaPluginWorld = {
   createEntity: () => 0,
@@ -10,14 +10,14 @@ const world: ArenaPluginWorld = {
 
 const snapshotFrom = (frame: Uint8Array): ArenaSnapshot => {
   const decoded = decodeArenaServerMessage(frame);
-  if (decoded._tag !== "ArenaSnapshot") {
+  if (decoded._tag !== 'ArenaSnapshot') {
     throw new Error(`expected ArenaSnapshot, got ${decoded._tag}`);
   }
   return decoded;
 };
 
-describe("arena runtime adapter", () => {
-  it("fires the arena weapon through simulation and damages the dummy", () => {
+describe('arena runtime adapter', () => {
+  it('fires the arena weapon through simulation and damages the dummy', () => {
     const frames: Uint8Array[] = [];
     const input: ArenaRuntimeInput = {
       tick: 1,
@@ -35,8 +35,8 @@ describe("arena runtime adapter", () => {
     runtime.onTick?.(world, 1 / 20, 1);
 
     const snapshot = snapshotFrom(frames.at(-1) ?? new Uint8Array());
-    const dummy = snapshot.entities.find((entity) => entity.id === "dummy-1");
-    const player = snapshot.entities.find((entity) => entity.id === "player-1");
+    const dummy = snapshot.entities.find((entity) => entity.id === 'dummy-1');
+    const player = snapshot.entities.find((entity) => entity.id === 'player-1');
 
     expect(player?.health).toBe(100);
     expect(player?.x).toBe(0);
@@ -47,7 +47,7 @@ describe("arena runtime adapter", () => {
     expect(dummy?.hitTick).toBe(1);
   });
 
-  it("paces movement snapshots instead of emitting every tick", () => {
+  it('paces movement snapshots instead of emitting every tick', () => {
     const frames: Uint8Array[] = [];
     const input: ArenaRuntimeInput = {
       tick: 1,
@@ -68,14 +68,14 @@ describe("arena runtime adapter", () => {
     runtime.onTick?.(world, 1 / 20, 4);
 
     const snapshot = snapshotFrom(frames.at(-1) ?? new Uint8Array());
-    const player = snapshot.entities.find((entity) => entity.id === "player-1");
+    const player = snapshot.entities.find((entity) => entity.id === 'player-1');
 
     expect(frames.map((frame) => snapshotFrom(frame).tick)).toEqual([0, 2, 4]);
     expect(player?.x).toBeCloseTo(8);
     expect(player?.y).toBe(0);
   });
 
-  it("does not refresh replay frames on every idle tick", () => {
+  it('does not refresh replay frames on every idle tick', () => {
     const replayFrames: Uint8Array[][] = [];
     const runtime = createRuntimeAdapter({
       setReplayFrames: (frames) => replayFrames.push([...frames]),
@@ -86,13 +86,14 @@ describe("arena runtime adapter", () => {
     for (let tick = 1; tick <= 9; tick += 1) {
       runtime.onTick?.(world, 1 / 20, tick);
     }
-    expect(replayFrames.map((frames) => snapshotFrom(frames[0] ?? new Uint8Array()).tick)).toEqual([0]);
+    expect(replayFrames.map((frames) => snapshotFrom(frames[0] ?? new Uint8Array()).tick)).toEqual([
+      0,
+    ]);
 
     runtime.onTick?.(world, 1 / 20, 10);
 
     expect(replayFrames.map((frames) => snapshotFrom(frames[0] ?? new Uint8Array()).tick)).toEqual([
-      0,
-      10,
+      0, 10,
     ]);
   });
 });

@@ -2,8 +2,8 @@ import type {
   RenderableEntity,
   RenderableEntityProjector,
   RuntimePluginRenderManifest,
-} from "@tileborne/runtime";
-import { Option } from "effect";
+} from '@tileborne/runtime';
+import { Option } from 'effect';
 
 import {
   ArenaHeartbeat,
@@ -15,7 +15,7 @@ import {
   encodeArenaClientMessage,
   encodeArenaServerMessage,
   type ArenaDirection8,
-} from "../wire-codec.js";
+} from '../wire-codec.js';
 import {
   ARENA_DUMMY_TEXTURE_ASSET_ID,
   ARENA_HEALTH_BAR_TEXTURE_ASSET_ID,
@@ -23,7 +23,7 @@ import {
   ARENA_MELEE_SWING_TEXTURE_ASSET_ID,
   ARENA_PLAYER_TEXTURE_ASSET_ID,
   createArenaBundledAssets,
-} from "./bundled-assets.js";
+} from './bundled-assets.js';
 
 export {
   ARENA_DUMMY_TEXTURE_ASSET_ID,
@@ -32,7 +32,7 @@ export {
   ARENA_MELEE_SWING_TEXTURE_ASSET_ID,
   ARENA_PLAYER_TEXTURE_ASSET_ID,
   createArenaBundledAssets,
-} from "./bundled-assets.js";
+} from './bundled-assets.js';
 
 export type InputDirection = ArenaDirection8;
 
@@ -64,12 +64,12 @@ export interface ClientInputFrame {
 }
 
 export type ClientFrameView =
-  | { readonly kind: "heartbeat"; readonly tick: number }
-  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
-  | ({ readonly kind: "input" } & ClientInputFrame);
+  | { readonly kind: 'heartbeat'; readonly tick: number }
+  | { readonly kind: 'ack'; readonly tick: number; readonly receivedAtMs: number }
+  | ({ readonly kind: 'input' } & ClientInputFrame);
 
 export type ServerFrameView = {
-  readonly kind: "initial";
+  readonly kind: 'initial';
   readonly tick: number;
   readonly players: readonly InitialFramePlayerView[];
   readonly zone: ZoneView;
@@ -89,10 +89,10 @@ const MELEE_SWING_OFFSET = 10;
 const HIT_FLASH_ANCHOR = { x: 0.5, y: 0.5 } as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const isArenaSnapshot = (value: unknown): value is ArenaSnapshot =>
-  isRecord(value) && value._tag === "ArenaSnapshot";
+  isRecord(value) && value._tag === 'ArenaSnapshot';
 
 const healthRatio = (health: number, maxHealth: number): number => {
   if (!Number.isFinite(maxHealth) || maxHealth <= 0) {
@@ -101,10 +101,8 @@ const healthRatio = (health: number, maxHealth: number): number => {
   return Math.max(0.05, Math.min(1, health / maxHealth));
 };
 
-export const mergeArenaFrame = (
-  previousFullState: unknown | undefined,
-  frame: unknown,
-): unknown => (isArenaSnapshot(frame) ? frame : previousFullState);
+export const mergeArenaFrame = (previousFullState: unknown | undefined, frame: unknown): unknown =>
+  isArenaSnapshot(frame) ? frame : previousFullState;
 
 export const projectArenaSnapshot = (snapshot: unknown): readonly RenderableEntity[] => {
   if (!isArenaSnapshot(snapshot)) {
@@ -117,12 +115,12 @@ export const projectArenaSnapshot = (snapshot: unknown): readonly RenderableEnti
       const sprite: RenderableEntity = {
         id: `arena:${entity.kind}:${entity.id}`,
         assetId:
-          entity.kind === "player" ? ARENA_PLAYER_TEXTURE_ASSET_ID : ARENA_DUMMY_TEXTURE_ASSET_ID,
+          entity.kind === 'player' ? ARENA_PLAYER_TEXTURE_ASSET_ID : ARENA_DUMMY_TEXTURE_ASSET_ID,
         x: entity.x,
         y: entity.y,
         rotation: headingRad,
         scale: 1,
-        layerIndex: entity.kind === "player" ? 10 : 9,
+        layerIndex: entity.kind === 'player' ? 10 : 9,
         anchor: ENTITY_ANCHOR,
       };
       const bar: RenderableEntity = {
@@ -189,20 +187,20 @@ export const decodeServerFrame = (bytes: Uint8Array): unknown => decodeArenaServ
 
 export const encodeServerFrame = (frame: unknown): Uint8Array => {
   if (!isRecord(frame)) {
-    throw new Error("Cannot encode non-object arena server frame");
+    throw new Error('Cannot encode non-object arena server frame');
   }
   return encodeArenaServerMessage(frame as unknown as ArenaSnapshot);
 };
 
 export const createInitialFrame = (input: InitialFrameInput): unknown => {
-  const player = input.players[0] ?? { playerId: "player-1", x: 0, y: 0, health: 100 };
+  const player = input.players[0] ?? { playerId: 'player-1', x: 0, y: 0, health: 100 };
   return new ArenaSnapshot({
     tick: input.tick,
     serverTimestampMs: 0,
     entities: [
       {
         id: player.playerId,
-        kind: "player",
+        kind: 'player',
         x: player.x,
         y: player.y,
         health: player.health,
@@ -211,8 +209,8 @@ export const createInitialFrame = (input: InitialFrameInput): unknown => {
         attacking: false,
       },
       {
-        id: "dummy-1",
-        kind: "dummy",
+        id: 'dummy-1',
+        kind: 'dummy',
         x: player.x + DEFAULT_DUMMY_OFFSET_X,
         y: player.y,
         health: 100,
@@ -243,15 +241,15 @@ export const encodeClientInputFrame = (input: ClientInputFrame): Uint8Array =>
 
 export const decodeClientFrameView = (bytes: Uint8Array): ClientFrameView | undefined => {
   const frame = decodeArenaClientMessage(bytes);
-  if (frame._tag === "ArenaHeartbeat") {
-    return { kind: "heartbeat", tick: frame.tick };
+  if (frame._tag === 'ArenaHeartbeat') {
+    return { kind: 'heartbeat', tick: frame.tick };
   }
-  if (frame._tag === "ArenaSnapshotAck") {
-    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
+  if (frame._tag === 'ArenaSnapshotAck') {
+    return { kind: 'ack', tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
-  if (frame._tag === "ArenaPlayerInput") {
+  if (frame._tag === 'ArenaPlayerInput') {
     return {
-      kind: "input",
+      kind: 'input',
       tick: frame.tick,
       seq: frame.seq,
       ...(Option.isSome(frame.dir) ? { dir: frame.dir.value } : {}),
@@ -267,7 +265,7 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
     return undefined;
   }
   return {
-    kind: "initial",
+    kind: 'initial',
     tick: frame.tick,
     players: frame.entities.map((entity) => ({
       playerId: entity.id,

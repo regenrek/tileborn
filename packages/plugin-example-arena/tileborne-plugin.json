@@ -71,7 +71,12 @@
         "capability": "example-arena.combat",
         "icon": "bot",
         "inputs": [
-          { "key": "objectType", "label": "Enemy type", "valueKind": "catalog-reference", "required": true }
+          {
+            "key": "objectType",
+            "label": "Enemy type",
+            "valueKind": "catalog-reference",
+            "required": true
+          }
         ],
         "outputs": []
       }
@@ -85,9 +90,7 @@
         "icon": "swords",
         "requiredCapabilities": ["example-arena.combat"],
         "when": { "entryId": "example-arena.enemy-defeated", "arguments": {} },
-        "do": [
-          { "entryId": "example-arena.spawn-enemy", "arguments": {} }
-        ]
+        "do": [{ "entryId": "example-arena.spawn-enemy", "arguments": {} }]
       }
     ],
     "panels": [
@@ -114,8 +117,22 @@
             "scope": "map",
             "invalidMessage": "Arena settings must be valid numbers within range.",
             "fields": [
-              { "key": "arenaRadius", "label": "Arena radius", "min": 4, "max": 256, "step": 1, "default": 32 },
-              { "key": "enemyCount", "label": "Enemy count", "min": 0, "max": 64, "step": 1, "default": 8 }
+              {
+                "key": "arenaRadius",
+                "label": "Arena radius",
+                "min": 4,
+                "max": 256,
+                "step": 1,
+                "default": 32
+              },
+              {
+                "key": "enemyCount",
+                "label": "Enemy count",
+                "min": 0,
+                "max": 64,
+                "step": 1,
+                "default": 8
+              }
             ]
           }
         }
@@ -208,13 +225,41 @@
             ],
             "schemeDefaults": {
               "keyboard-mouse": [
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyW" }, "axisRole": "y-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyS" }, "axisRole": "y+" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyA" }, "axisRole": "x-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyD" }, "axisRole": "x+" },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyW" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyS" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyA" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyD" },
+                  "axisRole": "x+"
+                },
                 { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
-                { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "mouseButton", "button": 0 } },
-                { "_tag": "InputBinding", "action": "core.Dash", "trigger": { "_tag": "key", "code": "ShiftLeft" } }
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "mouseButton", "button": 0 }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Dash",
+                  "trigger": { "_tag": "key", "code": "ShiftLeft" }
+                }
               ]
             }
           }

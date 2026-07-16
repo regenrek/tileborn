@@ -5,8 +5,8 @@ import {
   WeaponDefinitionId,
   makeWeaponDefinition,
   type MeleeDelivery,
-} from "@tileborne/simulation";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/simulation';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * The arena mode's single melee weapon as plain DATA (the manifest
@@ -20,8 +20,8 @@ import { Option, Result, Schema } from "effect";
  * with no engine edits.
  */
 
-export const ARENA_WEAPON_ID = "weapon:c1111111-1111-4111-8111-111111111111";
-export const ARENA_WEAPON_CATALOG_CONTRIBUTION_ID = "arena-weapon-catalog";
+export const ARENA_WEAPON_ID = 'weapon:c1111111-1111-4111-8111-111111111111';
+export const ARENA_WEAPON_CATALOG_CONTRIBUTION_ID = 'arena-weapon-catalog';
 export const ARENA_WEAPON_CATALOG_SCHEMA_VERSION = 1;
 
 /** Quarter-turn melee arc in radians (≈ π/2), authored as a JSON literal. */
@@ -44,7 +44,7 @@ export const buildArenaWeaponCatalogData = (): {
         reloadTicks: 0,
       },
       delivery: {
-        _tag: "MeleeDelivery",
+        _tag: 'MeleeDelivery',
         damage: 15,
         range: 28,
         arc: MELEE_ARC,
@@ -59,7 +59,7 @@ export const buildArenaWeaponCatalogData = (): {
 export class ArenaWeaponCatalogError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ArenaWeaponCatalogError";
+    this.name = 'ArenaWeaponCatalogError';
   }
 }
 
@@ -73,14 +73,14 @@ export const resolveArenaWeapon = (): WeaponDefinition => {
   const raw = buildArenaWeaponCatalogData().weapons[0] as { readonly weapon?: unknown };
   const decoded = Schema.decodeUnknownOption(WeaponDefinition)(raw.weapon);
   if (Option.isNone(decoded)) {
-    throw new ArenaWeaponCatalogError("arena weapon entry is not a valid WeaponDefinition");
+    throw new ArenaWeaponCatalogError('arena weapon entry is not a valid WeaponDefinition');
   }
   const validated = makeWeaponDefinition(decoded.value);
   if (Result.isFailure(validated)) {
     throw new ArenaWeaponCatalogError(validated.failure.message);
   }
   if (validated.success.id !== ARENA_WEAPON_DEFINITION_ID) {
-    throw new ArenaWeaponCatalogError("arena weapon id did not round-trip");
+    throw new ArenaWeaponCatalogError('arena weapon id did not round-trip');
   }
   return validated.success;
 };
@@ -98,14 +98,14 @@ export const resolveArenaWeaponEntry = (): ArenaWeaponEntry => {
   const weapon = resolveArenaWeapon();
   const decodedDelivery = Schema.decodeUnknownOption(DamageDelivery)(raw.delivery);
   if (Option.isNone(decodedDelivery)) {
-    throw new ArenaWeaponCatalogError("arena weapon entry is not a valid DamageDelivery");
+    throw new ArenaWeaponCatalogError('arena weapon entry is not a valid DamageDelivery');
   }
   const validatedDelivery = validateDamageDelivery(decodedDelivery.value);
   if (Result.isFailure(validatedDelivery)) {
     throw new ArenaWeaponCatalogError(validatedDelivery.failure.message);
   }
-  if (validatedDelivery.success._tag !== "MeleeDelivery") {
-    throw new ArenaWeaponCatalogError("arena weapon delivery is not melee");
+  if (validatedDelivery.success._tag !== 'MeleeDelivery') {
+    throw new ArenaWeaponCatalogError('arena weapon delivery is not melee');
   }
   return { weapon, delivery: validatedDelivery.success };
 };

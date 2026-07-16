@@ -17,10 +17,22 @@ export const validateMap = (map: TileborneMap) => {
   const enemyCount = readNumber(record?.enemyCount, 8);
   const issues = [
     ...(arenaRadius < 4 || arenaRadius > 256
-      ? [{ severity: 'error' as const, message: 'Arena radius must be between 4 and 256.', location: 'properties.arenaRadius' }]
+      ? [
+          {
+            severity: 'error' as const,
+            message: 'Arena radius must be between 4 and 256.',
+            location: 'properties.arenaRadius',
+          },
+        ]
       : []),
     ...(enemyCount < 0 || enemyCount > 64
-      ? [{ severity: 'error' as const, message: 'Enemy count must be between 0 and 64.', location: 'properties.enemyCount' }]
+      ? [
+          {
+            severity: 'error' as const,
+            message: 'Enemy count must be between 0 and 64.',
+            location: 'properties.enemyCount',
+          },
+        ]
       : []),
   ];
   return { ok: issues.length === 0, issues };

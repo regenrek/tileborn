@@ -1,11 +1,11 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
 import {
   ArenaWireError,
   decodeArenaClientMessage,
   decodeArenaServerMessage,
   encodeArenaServerMessage,
-} from "./wire-codec.js";
+} from './wire-codec.js';
 
 export interface RuntimeClientInputFrame {
   readonly tick: number;
@@ -16,10 +16,10 @@ export interface RuntimeClientInputFrame {
 }
 
 export type RuntimeClientFrameView =
-  | { readonly kind: "heartbeat"; readonly tick: number }
-  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
+  | { readonly kind: 'heartbeat'; readonly tick: number }
+  | { readonly kind: 'ack'; readonly tick: number; readonly receivedAtMs: number }
   | {
-      readonly kind: "input";
+      readonly kind: 'input';
       readonly input: RuntimeClientInputFrame;
       readonly sortKey: {
         readonly tick: number;
@@ -28,9 +28,9 @@ export type RuntimeClientFrameView =
     };
 
 export type RuntimeClientFrameDecodeResult =
-  | { readonly kind: "accepted"; readonly frame: RuntimeClientFrameView }
+  | { readonly kind: 'accepted'; readonly frame: RuntimeClientFrameView }
   | {
-      readonly kind: "rejected";
+      readonly kind: 'rejected';
       readonly frame: Uint8Array;
       readonly closeCode: number;
       readonly closeReason: string;
@@ -40,13 +40,13 @@ export const decodeHostClientFrameView = (
   bytes: Uint8Array,
 ): RuntimeClientFrameView | undefined => {
   const frame = decodeArenaClientMessage(bytes);
-  if (frame._tag === "ArenaHeartbeat") {
-    return { kind: "heartbeat", tick: frame.tick };
+  if (frame._tag === 'ArenaHeartbeat') {
+    return { kind: 'heartbeat', tick: frame.tick };
   }
-  if (frame._tag === "ArenaSnapshotAck") {
-    return { kind: "ack", tick: frame.tick, receivedAtMs: frame.receivedAtMs };
+  if (frame._tag === 'ArenaSnapshotAck') {
+    return { kind: 'ack', tick: frame.tick, receivedAtMs: frame.receivedAtMs };
   }
-  if (frame._tag === "ArenaPlayerInput") {
+  if (frame._tag === 'ArenaPlayerInput') {
     const input: RuntimeClientInputFrame = {
       tick: frame.tick,
       seq: frame.seq,
@@ -55,7 +55,7 @@ export const decodeHostClientFrameView = (
       ...(Option.isSome(frame.aimDeg) ? { aimDeg: frame.aimDeg.value } : {}),
     };
     return {
-      kind: "input",
+      kind: 'input',
       input,
       sortKey: {
         tick: frame.tick,
@@ -69,22 +69,22 @@ export const decodeHostClientFrameView = (
 export const encodeInvalidClientFrame = (): Uint8Array =>
   encodeArenaServerMessage(
     new ArenaWireError({
-      code: "invalid_protocol_frame",
-      message: "invalid protocol frame",
+      code: 'invalid_protocol_frame',
+      message: 'invalid protocol frame',
     }),
   );
 
 const rejectInvalidClientFrame = (): RuntimeClientFrameDecodeResult => ({
-  kind: "rejected",
+  kind: 'rejected',
   frame: encodeInvalidClientFrame(),
   closeCode: 1003,
-  closeReason: "invalid frame",
+  closeReason: 'invalid frame',
 });
 
 export const decodeHostClientFrame = (bytes: Uint8Array): RuntimeClientFrameDecodeResult => {
   try {
     const frame = decodeHostClientFrameView(bytes);
-    return frame === undefined ? rejectInvalidClientFrame() : { kind: "accepted", frame };
+    return frame === undefined ? rejectInvalidClientFrame() : { kind: 'accepted', frame };
   } catch {
     return rejectInvalidClientFrame();
   }
@@ -92,7 +92,7 @@ export const decodeHostClientFrame = (bytes: Uint8Array): RuntimeClientFrameDeco
 
 export const isHostWelcomeFrame = (bytes: Uint8Array): boolean => {
   try {
-    return decodeArenaServerMessage(bytes)._tag === "ArenaSnapshot";
+    return decodeArenaServerMessage(bytes)._tag === 'ArenaSnapshot';
   } catch {
     return false;
   }

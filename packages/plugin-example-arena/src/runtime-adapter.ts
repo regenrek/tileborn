@@ -15,20 +15,16 @@ import {
   type SeededRng,
   type Vec2,
   type WeaponState,
-} from "@tileborne/simulation";
-import { Option } from "effect";
+} from '@tileborne/simulation';
+import { Option } from 'effect';
 
-import { ARENA_PLUGIN_ID } from "./constants.js";
-import type { ArenaRuntimeHost, ArenaRuntimePlugin } from "./types/runtime-plugin.js";
-import {
-  ArenaEntitySnapshot,
-  ArenaSnapshot,
-  encodeArenaServerMessage,
-} from "./wire-codec.js";
-import { resolveArenaWeaponEntry } from "./weapon-catalog.js";
+import { ARENA_PLUGIN_ID } from './constants.js';
+import type { ArenaRuntimeHost, ArenaRuntimePlugin } from './types/runtime-plugin.js';
+import { ArenaEntitySnapshot, ArenaSnapshot, encodeArenaServerMessage } from './wire-codec.js';
+import { resolveArenaWeaponEntry } from './weapon-catalog.js';
 
-const PLAYER_ID = "player-1";
-const DUMMY_ID = "dummy-1";
+const PLAYER_ID = 'player-1';
+const DUMMY_ID = 'dummy-1';
 const PLAYER_ENTITY = makeCombatEntityId(1);
 const DUMMY_ENTITY = makeCombatEntityId(2);
 const PLAYER_MAX_HEALTH = 100;
@@ -43,7 +39,7 @@ const HIT_FLASH_TICKS = 4;
 
 interface ArenaActorState {
   readonly id: string;
-  readonly kind: "player" | "dummy";
+  readonly kind: 'player' | 'dummy';
   readonly entity: CombatEntityId;
   x: number;
   y: number;
@@ -56,13 +52,15 @@ interface ArenaActorState {
 }
 
 const seedNumber = (seed: string | number | undefined): number =>
-  typeof seed === "number"
+  typeof seed === 'number'
     ? seed
-    : [...String(seed ?? "arena")]
+    : [...String(seed ?? 'arena')]
         .map((char) => char.charCodeAt(0))
         .reduce((hash, code) => (hash * 31 + code) >>> 0, 0);
 
-const directionVector = (dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7): { readonly x: number; readonly y: number } => {
+const directionVector = (
+  dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7,
+): { readonly x: number; readonly y: number } => {
   const diagonal = Math.SQRT1_2;
   switch (dir) {
     case 0:
@@ -105,7 +103,7 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
   const rng: SeededRng = createSeededRng(seedNumber(host.seed));
   const player: ArenaActorState = {
     id: PLAYER_ID,
-    kind: "player",
+    kind: 'player',
     entity: PLAYER_ENTITY,
     x: 0,
     y: 0,
@@ -116,7 +114,7 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
   };
   const dummy: ArenaActorState = {
     id: DUMMY_ID,
-    kind: "dummy",
+    kind: 'dummy',
     entity: DUMMY_ENTITY,
     x: 20,
     y: 0,
@@ -126,7 +124,7 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
     hitFlashUntilTick: -1,
   };
   let lastSnapshotTick = Number.NEGATIVE_INFINITY;
-  let lastSnapshotSignature = "";
+  let lastSnapshotSignature = '';
   let dirtySinceSnapshot = true;
   let lastSnapshotHadTransientVisual = false;
 
@@ -171,35 +169,33 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
           actor.y.toFixed(3),
           actor.headingDeg.toFixed(3),
           actor.health.current,
-          isAttacking(actor, tick) ? (actor.lastAttackTick ?? "") : "",
-          isHitFlashing(actor, tick) ? (actor.lastHitTick ?? "") : "",
-        ].join(":"),
+          isAttacking(actor, tick) ? (actor.lastAttackTick ?? '') : '',
+          isHitFlashing(actor, tick) ? (actor.lastHitTick ?? '') : '',
+        ].join(':'),
       )
-      .join("|");
+      .join('|');
 
   const buildSnapshot = (tick: number): ArenaSnapshot =>
     new ArenaSnapshot({
       tick,
       serverTimestampMs: tick * HOST_TICK_MS,
-      entities: [player, dummy].map(
-        (actor) => {
-          const attacking = isAttacking(actor, tick);
-          const hitFlashing = isHitFlashing(actor, tick);
-          return new ArenaEntitySnapshot({
-            id: actor.id,
-            kind: actor.kind,
-            x: actor.x,
-            y: actor.y,
-            health: actor.health.current,
-            maxHealth: actor.health.max,
-            headingDeg: actor.headingDeg,
-            ...(attacking && actor.lastAttackTick !== undefined
-              ? { attacking: true, attackTick: actor.lastAttackTick }
-              : {}),
-            ...(hitFlashing && actor.lastHitTick !== undefined ? { hitTick: actor.lastHitTick } : {}),
-          });
-        },
-      ),
+      entities: [player, dummy].map((actor) => {
+        const attacking = isAttacking(actor, tick);
+        const hitFlashing = isHitFlashing(actor, tick);
+        return new ArenaEntitySnapshot({
+          id: actor.id,
+          kind: actor.kind,
+          x: actor.x,
+          y: actor.y,
+          health: actor.health.current,
+          maxHealth: actor.health.max,
+          headingDeg: actor.headingDeg,
+          ...(attacking && actor.lastAttackTick !== undefined
+            ? { attacking: true, attackTick: actor.lastAttackTick }
+            : {}),
+          ...(hitFlashing && actor.lastHitTick !== undefined ? { hitTick: actor.lastHitTick } : {}),
+        });
+      }),
     });
 
   const emitSnapshot = (tick: number): void => {
@@ -263,7 +259,7 @@ export const createRuntimeAdapter = (host: ArenaRuntimeHost): ArenaRuntimePlugin
         if (input.shoot) {
           const fired = fireWeapon(weapon, weaponState);
           weaponState = fired.state;
-          if (fired.outcome._tag === "WeaponFired") {
+          if (fired.outcome._tag === 'WeaponFired') {
             const dummyHealthBefore = dummy.health.current;
             player.lastAttackTick = tick;
             player.attackUntilTick = tick + ATTACK_VISUAL_TICKS;

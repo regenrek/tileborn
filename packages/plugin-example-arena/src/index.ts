@@ -3,13 +3,13 @@ export {
   ARENA_RUNTIME_SYSTEM_ID,
   ARENA_SETTINGS_PANEL_ID,
   ARENA_SETTINGS_FORM_ID,
-} from "./constants.js";
-export { createRuntimeAdapter } from "./runtime-adapter.js";
+} from './constants.js';
+export { createRuntimeAdapter } from './runtime-adapter.js';
 export {
   ARENA_INPUT_MAP_CONTRIBUTION_ID,
   ARENA_INPUT_MAP_ID,
   buildArenaInputMapData,
-} from "./input-map.js";
+} from './input-map.js';
 export {
   ARENA_WEAPON_ID,
   ARENA_WEAPON_CATALOG_CONTRIBUTION_ID,
@@ -17,7 +17,7 @@ export {
   buildArenaWeaponCatalogData,
   resolveArenaWeaponEntry,
   resolveArenaWeapon,
-} from "./weapon-catalog.js";
+} from './weapon-catalog.js';
 export {
   ArenaEntitySnapshot,
   ArenaHeartbeat,
@@ -36,7 +36,7 @@ export {
   type ArenaEntityKind,
   type ArenaMessage,
   type ArenaServerToClientMessage,
-} from "./wire-codec.js";
+} from './wire-codec.js';
 export {
   ARENA_DUMMY_TEXTURE_ASSET_ID,
   ARENA_HEALTH_BAR_TEXTURE_ASSET_ID,
@@ -61,9 +61,9 @@ export {
   type InputDirection,
   type ServerFrameView,
   type ZoneView,
-} from "./renderer/arena-projector.js";
+} from './renderer/arena-projector.js';
 export type {
   ArenaRuntimeHost,
   ArenaRuntimeInput,
   ArenaRuntimePlugin,
-} from "./types/runtime-plugin.js";
+} from './types/runtime-plugin.js';

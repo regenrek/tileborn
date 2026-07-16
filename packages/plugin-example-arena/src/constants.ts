@@ -8,13 +8,13 @@
  */
 
 /** Plugin id (mirrors the manifest `id`; the neutral game-mode identity). */
-export const ARENA_PLUGIN_ID = "@tileborne-plugins/example-arena" as const;
+export const ARENA_PLUGIN_ID = '@tileborne-plugins/example-arena' as const;
 
 /** Runtime-system contribution id — the manifest signal "this plugin is a mode". */
-export const ARENA_RUNTIME_SYSTEM_ID = "arena-runtime" as const;
+export const ARENA_RUNTIME_SYSTEM_ID = 'arena-runtime' as const;
 
 /** Authoring settings-panel contribution id (zone `plugins`, capability `settings`). */
-export const ARENA_SETTINGS_PANEL_ID = "arena-settings" as const;
+export const ARENA_SETTINGS_PANEL_ID = 'arena-settings' as const;
 
 /** `EditorGameSettingsForm` contribution id (same declaration as the panel data). */
-export const ARENA_SETTINGS_FORM_ID = "arena-settings-form" as const;
+export const ARENA_SETTINGS_FORM_ID = 'arena-settings-form' as const;

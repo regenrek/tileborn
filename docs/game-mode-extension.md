@@ -49,28 +49,32 @@ This is an integration example, not an implemented Tileborne mode:
 ```json
 {
   "contributes": {
-    "gameModes": [{
-      "_tag": "GameModeContribution",
-      "id": "top-down",
-      "kind": "declarative",
-      "display": { "label": "Top-down Adventure" },
-      "runtimeSystemId": "top-down-runtime",
-      "settingsFormId": "top-down-settings-form",
-      "mapValidatorId": "top-down-map-validator",
-      "starter": {
-        "templateId": "top-down-starter-v1",
-        "label": "Top-down Starter"
-      },
-      "checklistFacts": [{
-        "id": "walkable-start",
-        "label": "Walkable player start",
-        "sources": ["map", "game-mode"]
-      }],
-      "capabilities": {
-        "renderer": "top-down.renderer",
-        "starter": "top-down.starter"
+    "gameModes": [
+      {
+        "_tag": "GameModeContribution",
+        "id": "top-down",
+        "kind": "declarative",
+        "display": { "label": "Top-down Adventure" },
+        "runtimeSystemId": "top-down-runtime",
+        "settingsFormId": "top-down-settings-form",
+        "mapValidatorId": "top-down-map-validator",
+        "starter": {
+          "templateId": "top-down-starter-v1",
+          "label": "Top-down Starter"
+        },
+        "checklistFacts": [
+          {
+            "id": "walkable-start",
+            "label": "Walkable player start",
+            "sources": ["map", "game-mode"]
+          }
+        ],
+        "capabilities": {
+          "renderer": "top-down.renderer",
+          "starter": "top-down.starter"
+        }
       }
-    }]
+    ]
   }
 }
 ```

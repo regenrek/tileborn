@@ -167,7 +167,8 @@ describe('JobService', () => {
     const home = await mkdtemp(path.join(tmpdir(), 'tileborne-jobs-'));
     const previousHome = process.env['TILEBORNE_HOME'];
     process.env['TILEBORNE_HOME'] = home;
-    const persistentLayer = () => JobServicePersistentLive.pipe(Layer.provideMerge(HomeServiceLive));
+    const persistentLayer = () =>
+      JobServicePersistentLive.pipe(Layer.provideMerge(HomeServiceLive));
     try {
       const ids = await Effect.runPromise(
         Effect.gen(function* () {

@@ -233,18 +233,20 @@ interface PersistedJobState {
 
 const statusFromTag = (tag: PersistedJobState['status']): JobStatus => {
   switch (tag) {
-    case 'Pending': return new Pending({});
-    case 'Running': return new Running({});
-    case 'Completed': return new Completed({});
-    case 'Failed': return new Failed({});
-    case 'Cancelled': return new Cancelled({});
+    case 'Pending':
+      return new Pending({});
+    case 'Running':
+      return new Running({});
+    case 'Completed':
+      return new Completed({});
+    case 'Failed':
+      return new Failed({});
+    case 'Cancelled':
+      return new Cancelled({});
   }
 };
 
-const encodePersistedState = (
-  state: JobState,
-  createdAt: string,
-): PersistedJobState => ({
+const encodePersistedState = (state: JobState, createdAt: string): PersistedJobState => ({
   id: state.id,
   status: state.status._tag,
   ...(Option.isSome(state.progress) ? { progress: state.progress.value } : {}),
@@ -255,7 +257,9 @@ const encodePersistedState = (
   createdAt,
 });
 
-const decodePersistedState = (value: unknown): { readonly state: JobState; readonly createdAt: string } => {
+const decodePersistedState = (
+  value: unknown,
+): { readonly state: JobState; readonly createdAt: string } => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('persisted job must be an object');
   }
@@ -265,19 +269,22 @@ const decodePersistedState = (value: unknown): { readonly state: JobState; reado
   if (!['Pending', 'Running', 'Completed', 'Failed', 'Cancelled'].includes(String(tag))) {
     throw new Error(`invalid persisted job status: ${String(tag)}`);
   }
-  const logs = Array.isArray(raw.logs) && raw.logs.every((entry) => typeof entry === 'string')
-    ? raw.logs
-    : [];
+  const logs =
+    Array.isArray(raw.logs) && raw.logs.every((entry) => typeof entry === 'string') ? raw.logs : [];
   const interrupted = tag === 'Pending' || tag === 'Running';
   return {
     state: {
       id,
       status: interrupted ? new Cancelled({}) : statusFromTag(tag as PersistedJobState['status']),
-      progress: typeof raw.progress === 'number' && !interrupted ? Option.some(raw.progress) : Option.none(),
+      progress:
+        typeof raw.progress === 'number' && !interrupted
+          ? Option.some(raw.progress)
+          : Option.none(),
       result: raw.hasResult === true && !interrupted ? Option.some(raw.result) : Option.none(),
-      error: typeof raw.error === 'string' && !interrupted
-        ? Option.some(new JobError({ message: raw.error }))
-        : Option.none(),
+      error:
+        typeof raw.error === 'string' && !interrupted
+          ? Option.some(new JobError({ message: raw.error }))
+          : Option.none(),
       logs: interrupted ? [...logs, 'Cancelled because the app restarted.'] : logs,
     },
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : '1970-01-01T00:00:00.000Z',
@@ -306,7 +313,11 @@ export const JobServicePersistentLive = Layer.effect(
         for (const entry of entries) {
           if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
           try {
-            values.push(decodePersistedState(JSON.parse(await readFile(path.join(jobsDirectory, entry.name), 'utf8'))));
+            values.push(
+              decodePersistedState(
+                JSON.parse(await readFile(path.join(jobsDirectory, entry.name), 'utf8')),
+              ),
+            );
           } catch {
             // A corrupt single job record must not prevent the editor booting.
           }
@@ -346,27 +357,47 @@ export const JobServicePersistentLive = Layer.effect(
       if (spec.run) {
         const run = spec.run;
         const fiber = yield* Effect.gen(function* () {
-          yield* updateJob(entry, (state) => ({ ...state, status: new Running({}), progress: Option.some(0) }), persist);
+          yield* updateJob(
+            entry,
+            (state) => ({ ...state, status: new Running({}), progress: Option.some(0) }),
+            persist,
+          );
           yield* Effect.matchEffect(run, {
-            onFailure: (cause) => updateJob(entry, (state) => ({
-              ...state,
-              status: new Failed({}),
-              progress: Option.none(),
-              error: Option.some(new JobError({ message: cause instanceof Error ? cause.message : String(cause) })),
-            }), persist),
-            onSuccess: (result) => updateJob(entry, (state) => ({
-              ...state,
-              status: new Completed({}),
-              progress: Option.some(1),
-              result: Option.some(result),
-            }), persist),
+            onFailure: (cause) =>
+              updateJob(
+                entry,
+                (state) => ({
+                  ...state,
+                  status: new Failed({}),
+                  progress: Option.none(),
+                  error: Option.some(
+                    new JobError({
+                      message: cause instanceof Error ? cause.message : String(cause),
+                    }),
+                  ),
+                }),
+                persist,
+              ),
+            onSuccess: (result) =>
+              updateJob(
+                entry,
+                (state) => ({
+                  ...state,
+                  status: new Completed({}),
+                  progress: Option.some(1),
+                  result: Option.some(result),
+                }),
+                persist,
+              ),
           });
         }).pipe(
-          Effect.ensuring(Ref.update(fibers, (current) => {
-            const next = new Map(current);
-            next.delete(id);
-            return next;
-          })),
+          Effect.ensuring(
+            Ref.update(fibers, (current) => {
+              const next = new Map(current);
+              next.delete(id);
+              return next;
+            }),
+          ),
           Effect.forkDetach,
         );
         yield* Ref.update(fibers, (current) => new Map(current).set(id, fiber));
@@ -375,30 +406,44 @@ export const JobServicePersistentLive = Layer.effect(
     });
 
     const subscribe = (jobId: JobId): Stream.Stream<JobState, JobNotFoundError> =>
-      Stream.unwrap(getEntry(jobs, jobId).pipe(Effect.map((entry) => SubscriptionRef.changes(entry.ref))));
+      Stream.unwrap(
+        getEntry(jobs, jobId).pipe(Effect.map((entry) => SubscriptionRef.changes(entry.ref))),
+      );
     const list = Effect.fn('JobService.listPersistent')(function* () {
-      return [...(yield* Ref.get(jobs)).values()].map((entry) => SubscriptionRef.getUnsafe(entry.ref));
+      return [...(yield* Ref.get(jobs)).values()].map((entry) =>
+        SubscriptionRef.getUnsafe(entry.ref),
+      );
     });
     const cancel = Effect.fn('JobService.cancelPersistent')(function* (jobId: JobId) {
       const entry = yield* getEntry(jobs, jobId);
       const fiber = (yield* Ref.get(fibers)).get(jobId);
       if (fiber) yield* Fiber.interrupt(fiber);
-      return yield* updateJob(entry, (state) => ({
-        ...state,
-        status: new Cancelled({}),
-        progress: Option.none(),
-      }), persist);
+      return yield* updateJob(
+        entry,
+        (state) => ({
+          ...state,
+          status: new Cancelled({}),
+          progress: Option.none(),
+        }),
+        persist,
+      );
     });
     const report = Effect.fn('JobService.reportPersistent')(function* (
       jobId: JobId,
       update: { readonly progress?: number; readonly message?: string },
     ) {
       const entry = yield* getEntry(jobs, jobId);
-      return yield* updateJob(entry, (state) => ({
-        ...state,
-        ...(update.progress === undefined ? {} : { progress: Option.some(Math.max(0, Math.min(1, update.progress))) }),
-        ...(update.message === undefined ? {} : { logs: [...state.logs, update.message] }),
-      }), persist);
+      return yield* updateJob(
+        entry,
+        (state) => ({
+          ...state,
+          ...(update.progress === undefined
+            ? {}
+            : { progress: Option.some(Math.max(0, Math.min(1, update.progress))) }),
+          ...(update.message === undefined ? {} : { logs: [...state.logs, update.message] }),
+        }),
+        persist,
+      );
     });
 
     return { create, subscribe, list, cancel, report };

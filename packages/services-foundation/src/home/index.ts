@@ -1,21 +1,24 @@
-import { homedir } from "node:os";
-import path from "node:path";
-import { mkdir, lstat, readFile, writeFile } from "node:fs/promises";
+import { homedir } from 'node:os';
+import path from 'node:path';
+import { mkdir, lstat, readFile, writeFile } from 'node:fs/promises';
 
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from 'effect';
 
 export class HomeInitializationError extends Schema.TaggedErrorClass<HomeInitializationError>()(
-  "HomeInitializationError",
+  'HomeInitializationError',
   {
     path: Schema.String,
     message: Schema.String,
   },
 ) {}
 
-export class HomeSecurityError extends Schema.TaggedErrorClass<HomeSecurityError>()("HomeSecurityError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class HomeSecurityError extends Schema.TaggedErrorClass<HomeSecurityError>()(
+  'HomeSecurityError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export type HomeServiceError = HomeInitializationError | HomeSecurityError;
 
@@ -29,27 +32,30 @@ export interface TileborneHomePaths {
   readonly logs: string;
 }
 
-export class HomeService extends Context.Service<HomeService, {
-  readonly init: () => Effect.Effect<TileborneHomePaths, HomeServiceError>;
-  readonly setRoot: (root: string) => Effect.Effect<TileborneHomePaths, HomeServiceError>;
-  readonly paths: TileborneHomePaths;
-}>()("@tileborne/services-foundation/HomeService") {}
+export class HomeService extends Context.Service<
+  HomeService,
+  {
+    readonly init: () => Effect.Effect<TileborneHomePaths, HomeServiceError>;
+    readonly setRoot: (root: string) => Effect.Effect<TileborneHomePaths, HomeServiceError>;
+    readonly paths: TileborneHomePaths;
+  }
+>()('@tileborne/services-foundation/HomeService') {}
 
-const HOME_POINTER_FILE = path.join(homedir(), ".tileborne-home");
+const HOME_POINTER_FILE = path.join(homedir(), '.tileborne-home');
 
 const readHomePointer = (): Effect.Effect<string | undefined, HomeServiceError> =>
   Effect.tryPromise({
     try: async () => {
       try {
-        const raw = await readFile(HOME_POINTER_FILE, "utf8");
+        const raw = await readFile(HOME_POINTER_FILE, 'utf8');
         const trimmed = raw.trim();
         return trimmed.length > 0 ? trimmed : undefined;
       } catch (cause) {
         if (
-          typeof cause === "object" &&
+          typeof cause === 'object' &&
           cause !== null &&
-          "code" in cause &&
-          (cause as { readonly code?: unknown }).code === "ENOENT"
+          'code' in cause &&
+          (cause as { readonly code?: unknown }).code === 'ENOENT'
         ) {
           return undefined;
         }
@@ -64,13 +70,15 @@ const readHomePointer = (): Effect.Effect<string | undefined, HomeServiceError> 
   });
 
 const homeFromEnv = (): string => {
-  const override = process.env["TILEBORNE_HOME"];
-  return path.resolve(override && override.length > 0 ? override : path.join(homedir(), ".tileborne"));
+  const override = process.env['TILEBORNE_HOME'];
+  return path.resolve(
+    override && override.length > 0 ? override : path.join(homedir(), '.tileborne'),
+  );
 };
 
 const resolveHomeRoot = (): Effect.Effect<string, HomeServiceError> =>
   Effect.gen(function* () {
-    const envOverride = process.env["TILEBORNE_HOME"];
+    const envOverride = process.env['TILEBORNE_HOME'];
     if (envOverride && envOverride.length > 0) {
       return path.resolve(envOverride);
     }
@@ -83,12 +91,12 @@ const resolveHomeRoot = (): Effect.Effect<string, HomeServiceError> =>
 
 const makePaths = (root: string): TileborneHomePaths => ({
   root,
-  config: path.join(root, "config.json"),
-  plugins: path.join(root, "plugins"),
-  assets: path.join(root, "assets"),
-  projects: path.join(root, "projects"),
-  cache: path.join(root, "cache"),
-  logs: path.join(root, "logs"),
+  config: path.join(root, 'config.json'),
+  plugins: path.join(root, 'plugins'),
+  assets: path.join(root, 'assets'),
+  projects: path.join(root, 'projects'),
+  cache: path.join(root, 'cache'),
+  logs: path.join(root, 'logs'),
 });
 
 const ensureDirectory = (directory: string): Effect.Effect<void, HomeServiceError> =>
@@ -101,10 +109,13 @@ const ensureDirectory = (directory: string): Effect.Effect<void, HomeServiceErro
       }
     });
     if (before?.isSymbolicLink()) {
-      yield* new HomeSecurityError({ path: directory, message: "directory must not be a symlink" });
+      yield* new HomeSecurityError({ path: directory, message: 'directory must not be a symlink' });
     }
     if (before && !before.isDirectory()) {
-      yield* new HomeSecurityError({ path: directory, message: "path exists and is not a directory" });
+      yield* new HomeSecurityError({
+        path: directory,
+        message: 'path exists and is not a directory',
+      });
     }
 
     yield* Effect.tryPromise({
@@ -125,14 +136,17 @@ const ensureDirectory = (directory: string): Effect.Effect<void, HomeServiceErro
         }),
     });
     if (after.isSymbolicLink()) {
-      yield* new HomeSecurityError({ path: directory, message: "directory must not be a symlink" });
+      yield* new HomeSecurityError({ path: directory, message: 'directory must not be a symlink' });
     }
     if (!after.isDirectory()) {
-      yield* new HomeSecurityError({ path: directory, message: "path exists and is not a directory" });
+      yield* new HomeSecurityError({
+        path: directory,
+        message: 'path exists and is not a directory',
+      });
     }
   });
 
-const initializeHome = Effect.fn("HomeService.init")(function* () {
+const initializeHome = Effect.fn('HomeService.init')(function* () {
   const root = yield* resolveHomeRoot();
   const paths = makePaths(root);
   yield* ensureDirectory(paths.root);
@@ -144,17 +158,17 @@ const initializeHome = Effect.fn("HomeService.init")(function* () {
   return paths;
 });
 
-const setRoot = Effect.fn("HomeService.setRoot")(function* (root: string) {
+const setRoot = Effect.fn('HomeService.setRoot')(function* (root: string) {
   const resolved = path.resolve(root);
   yield* Effect.tryPromise({
-    try: () => writeFile(HOME_POINTER_FILE, `${resolved}\n`, "utf8"),
+    try: () => writeFile(HOME_POINTER_FILE, `${resolved}\n`, 'utf8'),
     catch: (cause) =>
       new HomeInitializationError({
         path: HOME_POINTER_FILE,
         message: cause instanceof Error ? cause.message : String(cause),
       }),
   });
-  process.env["TILEBORNE_HOME"] = resolved;
+  process.env['TILEBORNE_HOME'] = resolved;
   return yield* initializeHome();
 });
 

@@ -1,16 +1,19 @@
-import path from "node:path";
-import { inspect } from "node:util";
-import { appendFile, readFile, readdir, rm } from "node:fs/promises";
-import { watch as watchFs } from "node:fs";
+import path from 'node:path';
+import { inspect } from 'node:util';
+import { appendFile, readFile, readdir, rm } from 'node:fs/promises';
+import { watch as watchFs } from 'node:fs';
 
-import { createConsola, type ConsolaReporter } from "consola";
-import { Context, Effect, Layer, PubSub, Schema, Semaphore, Stream } from "effect";
+import { createConsola, type ConsolaReporter } from 'consola';
+import { Context, Effect, Layer, PubSub, Schema, Semaphore, Stream } from 'effect';
 
-import { ConfigService, type ConfigServiceError, type LoggerLevel } from "../config/index.js";
-import { HomeService, type HomeServiceError } from "../home/index.js";
+import { ConfigService, type ConfigServiceError, type LoggerLevel } from '../config/index.js';
+import { HomeService, type HomeServiceError } from '../home/index.js';
 
 export type LogFields = Readonly<Record<string, unknown>>;
-export type LogMethod = (message: string, fields?: LogFields) => Effect.Effect<void, LoggerServiceError>;
+export type LogMethod = (
+  message: string,
+  fields?: LogFields,
+) => Effect.Effect<void, LoggerServiceError>;
 
 export interface LoggerTailOptions {
   readonly sinceMs?: number;
@@ -20,34 +23,43 @@ export interface LoggerTailOptions {
 
 export interface TileborneLogLine {
   readonly ts: string;
-  readonly level: Exclude<LoggerLevel, "silent">;
+  readonly level: Exclude<LoggerLevel, 'silent'>;
   readonly msg: string;
   readonly fields: LogFields;
 }
 
-export class LoggerWriteError extends Schema.TaggedErrorClass<LoggerWriteError>()("LoggerWriteError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class LoggerWriteError extends Schema.TaggedErrorClass<LoggerWriteError>()(
+  'LoggerWriteError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export type LoggerServiceError = LoggerWriteError | HomeServiceError | ConfigServiceError;
 
-export class LoggerService extends Context.Service<LoggerService, {
-  readonly info: LogMethod;
-  readonly warn: LogMethod;
-  readonly error: LogMethod;
-  readonly debug: LogMethod;
-  readonly trace: LogMethod;
-  readonly fatal: LogMethod;
-  readonly subscribe: Stream.Stream<void>;
-  readonly tail: (opts?: LoggerTailOptions) => Effect.Effect<AsyncIterable<string>, LoggerServiceError>;
-  readonly latestLogPath: () => Effect.Effect<string | undefined, LoggerServiceError>;
-}>()("@tileborne/services-foundation/LoggerService") {}
+export class LoggerService extends Context.Service<
+  LoggerService,
+  {
+    readonly info: LogMethod;
+    readonly warn: LogMethod;
+    readonly error: LogMethod;
+    readonly debug: LogMethod;
+    readonly trace: LogMethod;
+    readonly fatal: LogMethod;
+    readonly subscribe: Stream.Stream<void>;
+    readonly tail: (
+      opts?: LoggerTailOptions,
+    ) => Effect.Effect<AsyncIterable<string>, LoggerServiceError>;
+    readonly latestLogPath: () => Effect.Effect<string | undefined, LoggerServiceError>;
+  }
+>()('@tileborne/services-foundation/LoggerService') {}
 
 const stderrReporter: ConsolaReporter = {
   log(logObj) {
-    const fields = logObj.args.length > 0 ? ` ${logObj.args.map((arg) => inspect(arg)).join(" ")}` : "";
-    process.stderr.write(`${logObj.message ?? ""}${fields}\n`);
+    const fields =
+      logObj.args.length > 0 ? ` ${logObj.args.map((arg) => inspect(arg)).join(' ')}` : '';
+    process.stderr.write(`${logObj.message ?? ''}${fields}\n`);
   },
 };
 
@@ -81,7 +93,7 @@ async function* tailLogFile(
 ): AsyncIterable<string> {
   const emitLines = (raw: string): Generator<string> =>
     (function* () {
-      for (const line of raw.split("\n").filter((entry) => entry.trim().length > 0)) {
+      for (const line of raw.split('\n').filter((entry) => entry.trim().length > 0)) {
         try {
           const parsed = JSON.parse(line) as { ts?: string };
           const ts = parsed.ts ? Date.parse(parsed.ts) : 0;
@@ -94,7 +106,7 @@ async function* tailLogFile(
       }
     })();
 
-  yield* emitLines(await readFile(filePath, "utf8"));
+  yield* emitLines(await readFile(filePath, 'utf8'));
   if (!follow) {
     return;
   }
@@ -102,8 +114,11 @@ async function* tailLogFile(
   const pending: string[] = [];
   let wake: (() => void) | undefined;
   const watcher = watchFs(filePath, () => {
-    void readFile(filePath, "utf8").then((next) => {
-      const tail = next.split("\n").filter((line) => line.trim().length > 0).at(-1);
+    void readFile(filePath, 'utf8').then((next) => {
+      const tail = next
+        .split('\n')
+        .filter((line) => line.trim().length > 0)
+        .at(-1);
       if (tail) {
         pending.push(tail);
         wake?.();
@@ -118,7 +133,7 @@ async function* tailLogFile(
       }
       await new Promise<void>((resolve) => {
         wake = resolve;
-        signal?.addEventListener("abort", () => resolve(), { once: true });
+        signal?.addEventListener('abort', () => resolve(), { once: true });
       });
     }
   } finally {
@@ -126,7 +141,10 @@ async function* tailLogFile(
   }
 }
 
-const rotateLogs = (logsDirectory: string, keepDays: number): Effect.Effect<void, LoggerWriteError> =>
+const rotateLogs = (
+  logsDirectory: string,
+  keepDays: number,
+): Effect.Effect<void, LoggerWriteError> =>
   Effect.gen(function* () {
     const entries = yield* Effect.tryPromise({
       try: () => readdir(logsDirectory),
@@ -163,7 +181,7 @@ const writeLogLine = (
 ): Effect.Effect<void, LoggerWriteError> => {
   const filePath = path.join(logsDirectory, logFileName(new Date(line.ts)));
   return Effect.tryPromise({
-    try: () => appendFile(filePath, `${JSON.stringify(line)}\n`, "utf8"),
+    try: () => appendFile(filePath, `${JSON.stringify(line)}\n`, 'utf8'),
     catch: (cause) =>
       new LoggerWriteError({
         path: filePath,
@@ -182,7 +200,7 @@ export const LoggerServiceLive = Layer.effect(
     const writeGate = yield* Semaphore.make(1);
     const appended = yield* PubSub.unbounded<void>();
 
-    const log = (level: Exclude<LoggerLevel, "silent">): LogMethod =>
+    const log = (level: Exclude<LoggerLevel, 'silent'>): LogMethod =>
       Effect.fn(`LoggerService.${level}`)(function* (message: string, fields: LogFields = {}) {
         const current = yield* config.get;
         if (levelRank[current.loggerLevel] < levelRank[level]) {
@@ -206,11 +224,14 @@ export const LoggerServiceLive = Layer.effect(
         );
       });
 
-    const fatal: LogMethod = Effect.fn("LoggerService.fatal")(function* (message: string, fields: LogFields = {}) {
-      yield* log("error")(message, fields);
+    const fatal: LogMethod = Effect.fn('LoggerService.fatal')(function* (
+      message: string,
+      fields: LogFields = {},
+    ) {
+      yield* log('error')(message, fields);
     });
 
-    const latestLogPath = Effect.fn("LoggerService.latestLogPath")(function* () {
+    const latestLogPath = Effect.fn('LoggerService.latestLogPath')(function* () {
       return yield* Effect.tryPromise({
         try: () => latestLogFile(paths.logs),
         catch: (cause) =>
@@ -221,20 +242,20 @@ export const LoggerServiceLive = Layer.effect(
       });
     });
 
-    const tail = Effect.fn("LoggerService.tail")(function* (opts: LoggerTailOptions = {}) {
+    const tail = Effect.fn('LoggerService.tail')(function* (opts: LoggerTailOptions = {}) {
       const filePath = yield* latestLogPath();
       if (!filePath) {
-        yield* new LoggerWriteError({ path: paths.logs, message: "no log file found" });
+        yield* new LoggerWriteError({ path: paths.logs, message: 'no log file found' });
       }
       return tailLogFile(filePath as string, opts.sinceMs ?? 0, opts.follow ?? false, opts.signal);
     });
 
     return {
-      info: log("info"),
-      warn: log("warn"),
-      error: log("error"),
-      debug: log("debug"),
-      trace: log("trace"),
+      info: log('info'),
+      warn: log('warn'),
+      error: log('error'),
+      debug: log('debug'),
+      trace: log('trace'),
       fatal,
       subscribe: Stream.fromPubSub(appended),
       tail,

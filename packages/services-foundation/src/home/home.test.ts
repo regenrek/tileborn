@@ -1,14 +1,14 @@
-import { lstat, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { Effect } from "effect";
+import { lstat, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
 
-import { HomeService, HomeServiceLive } from "./index.js";
-import { withTempHome } from "../test-utils.js";
+import { HomeService, HomeServiceLive } from './index.js';
+import { withTempHome } from '../test-utils.js';
 
-describe("HomeService", () => {
-  it("initializes the home directory tree", () =>
+describe('HomeService', () => {
+  it('initializes the home directory tree', () =>
     withTempHome(async (home) => {
       const paths = await Effect.runPromise(
         Effect.gen(function* () {
@@ -18,14 +18,22 @@ describe("HomeService", () => {
       );
 
       expect(paths.root).toBe(home);
-      await expect(lstat(paths.plugins)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
-      await expect(lstat(paths.assets)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
-      await expect(lstat(paths.projects)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
-      await expect(lstat(paths.cache)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
+      await expect(lstat(paths.plugins)).resolves.toMatchObject({
+        isDirectory: expect.any(Function),
+      });
+      await expect(lstat(paths.assets)).resolves.toMatchObject({
+        isDirectory: expect.any(Function),
+      });
+      await expect(lstat(paths.projects)).resolves.toMatchObject({
+        isDirectory: expect.any(Function),
+      });
+      await expect(lstat(paths.cache)).resolves.toMatchObject({
+        isDirectory: expect.any(Function),
+      });
       await expect(lstat(paths.logs)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
     }));
 
-  it("is idempotent when run more than once", () =>
+  it('is idempotent when run more than once', () =>
     withTempHome(async () => {
       const paths = await Effect.runPromise(
         Effect.gen(function* () {
@@ -39,11 +47,11 @@ describe("HomeService", () => {
       expect(paths[0]).toEqual(paths[1]);
     }));
 
-  it("rejects a file at TILEBORNE_HOME", () =>
+  it('rejects a file at TILEBORNE_HOME', () =>
     withTempHome(async (home) => {
-      const fileHome = path.join(home, "not-a-directory");
-      await writeFile(fileHome, "not a directory");
-      process.env["TILEBORNE_HOME"] = fileHome;
+      const fileHome = path.join(home, 'not-a-directory');
+      await writeFile(fileHome, 'not a directory');
+      process.env['TILEBORNE_HOME'] = fileHome;
 
       await expect(
         Effect.runPromise(
@@ -52,15 +60,15 @@ describe("HomeService", () => {
             return yield* service.init();
           }).pipe(Effect.provide(HomeServiceLive)),
         ),
-      ).rejects.toMatchObject({ _tag: "HomeSecurityError" });
+      ).rejects.toMatchObject({ _tag: 'HomeSecurityError' });
     }));
 
-  it("rejects TILEBORNE_HOME when it is a symlink", () =>
+  it('rejects TILEBORNE_HOME when it is a symlink', () =>
     withTempHome(async (home) => {
-      const target = await mkdtemp(path.join(tmpdir(), "tileborne-home-target-"));
-      const linkedHome = path.join(home, "linked-home");
-      await symlink(target, linkedHome, "dir");
-      process.env["TILEBORNE_HOME"] = linkedHome;
+      const target = await mkdtemp(path.join(tmpdir(), 'tileborne-home-target-'));
+      const linkedHome = path.join(home, 'linked-home');
+      await symlink(target, linkedHome, 'dir');
+      process.env['TILEBORNE_HOME'] = linkedHome;
 
       try {
         await expect(
@@ -70,7 +78,7 @@ describe("HomeService", () => {
               return yield* service.init();
             }).pipe(Effect.provide(HomeServiceLive)),
           ),
-        ).rejects.toMatchObject({ _tag: "HomeSecurityError" });
+        ).rejects.toMatchObject({ _tag: 'HomeSecurityError' });
       } finally {
         await rm(target, { recursive: true, force: true });
       }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, isCancelledError } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { AssetLibraryGroup, AssetLibraryReference, makePackId, makeTileId } from '@tileborne/core';
 import type { ReactNode } from 'react';
@@ -9,8 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assetThumbnailUrl } from '@/lib/asset-url';
 import {
   ASSET_LIBRARY_PAGE_SIZE,
+  assetLibraryPageQueryOptions,
   useAssetLibraryCacheStatus,
   useAssetPackLibraryPages,
+  useWorkingPalettePreviews,
+  workingPalettePreviewsQueryOptions,
 } from './queries';
 
 const packId = makePackId('550e8400-e29b-41d4-a716-446655440000');
@@ -39,6 +42,7 @@ describe('asset library query pagination', () => {
   let getPackLibrary: ReturnType<typeof vi.fn>;
   let getPackCacheStatus: ReturnType<typeof vi.fn>;
   let getAssetDataUrl: ReturnType<typeof vi.fn>;
+  let resolvePreviews: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     client = new QueryClient({
@@ -72,10 +76,11 @@ describe('asset library query pagination', () => {
       },
     }));
     getAssetDataUrl = vi.fn(async () => ({ dataUrl: 'data:image/png;base64,atlas' }));
+    resolvePreviews = vi.fn(async () => ({ previews: [] }));
     Object.defineProperty(window, 'tileborne', {
       configurable: true,
       value: {
-        assetLibrary: { getPackLibrary, getPackCacheStatus },
+        assetLibrary: { getPackLibrary, getPackCacheStatus, resolvePreviews },
         assets: { getAssetDataUrl },
       },
     });
@@ -130,6 +135,87 @@ describe('asset library query pagination', () => {
     expect(result.current.data?.cacheVersion).toContain('2026-05-25T16:40:00.000Z');
     expect(result.current.data?.thumbnailCacheVersion).toBeUndefined();
     expect(result.current.data?.message).toContain('42 groups');
+  });
+
+  it('bounds working-palette preview IPC requests to 64 references', async () => {
+    const refs = Array.from({ length: 130 }, (_, index) => {
+      const id = makeTileId(`550e8400-e29b-41d4-a716-${index.toString(16).padStart(12, '0')}`);
+      return new AssetLibraryReference({ packId, kind: 'tile', refId: id, tileId: id });
+    });
+
+    renderHook(() => useWorkingPalettePreviews(refs), { wrapper });
+
+    await waitFor(() => expect(resolvePreviews).toHaveBeenCalledTimes(3));
+    const batchSizes = resolvePreviews.mock.calls.map((call) => {
+      const input = call[0] as { readonly refs: readonly AssetLibraryReference[] };
+      return input.refs.length;
+    });
+    expect(batchSizes).toEqual([64, 64, 2]);
+  });
+
+  it('cancels an obsolete asset search before its delayed IPC result can populate cache', async () => {
+    let resolveRequest: ((value: unknown) => void) | undefined;
+    getPackLibrary.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const options = assetLibraryPageQueryOptions({
+      packId,
+      groupKind: 'sprite',
+      query: 'old search',
+      offset: 0,
+      limit: 48,
+      keepPreviousData: false,
+    });
+    const observed = client.fetchQuery(options).catch((error: unknown) => error);
+
+    await waitFor(() => expect(getPackLibrary).toHaveBeenCalledTimes(1));
+    await client.cancelQueries({ queryKey: options.queryKey });
+    resolveRequest?.({
+      packId,
+      total: 0,
+      offset: 0,
+      limit: 48,
+      groups: [],
+    });
+
+    expect(isCancelledError(await observed)).toBe(true);
+    expect(client.getQueryData(options.queryKey)).toBeUndefined();
+  });
+
+  it('suppresses an obsolete preview batch after cancellation while retaining the current batch', async () => {
+    const nextTileId = makeTileId('550e8400-e29b-41d4-a716-446655440099');
+    const nextRef = new AssetLibraryReference({
+      packId,
+      kind: 'tile',
+      refId: nextTileId,
+      tileId: nextTileId,
+    });
+    let resolveObsolete: ((value: unknown) => void) | undefined;
+    resolvePreviews
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveObsolete = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ previews: [{ key: 'current', ref: nextRef }] });
+    const obsolete = workingPalettePreviewsQueryOptions(String(packId), [tileRef]);
+    const current = workingPalettePreviewsQueryOptions(String(packId), [nextRef]);
+    const observedObsolete = client.fetchQuery(obsolete).catch((error: unknown) => error);
+
+    await waitFor(() => expect(resolvePreviews).toHaveBeenCalledTimes(1));
+    await client.cancelQueries({ queryKey: obsolete.queryKey });
+    await client.fetchQuery(current);
+    resolveObsolete?.({ previews: [{ key: 'obsolete', ref: tileRef }] });
+
+    expect(isCancelledError(await observedObsolete)).toBe(true);
+    expect(client.getQueryData(obsolete.queryKey)).toBeUndefined();
+    expect(client.getQueryData(current.queryKey)).toEqual({
+      previews: [{ key: 'current', ref: nextRef }],
+    });
   });
 
   it('addresses thumbnails by crop geometry on the tileborne-asset thumb host', () => {

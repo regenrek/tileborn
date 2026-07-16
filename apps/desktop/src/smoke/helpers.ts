@@ -142,9 +142,23 @@ export async function launchElectron(
 }
 
 export async function closeSmokeApp(context: SmokeContext): Promise<void> {
-  const closed = context.app.waitForEvent('close', { timeout: 10_000 });
-  await context.app.evaluate(({ app }) => app.quit()).catch(() => undefined);
-  await closed;
+  const mainProcessId = await context.app.evaluate(() => process.pid);
+  await context.app.close();
+
+  // Playwright's close event can precede final OS process reaping. A rapid
+  // relaunch must not mistake the prior process' durable transaction owner for
+  // a live foreign writer.
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(mainProcessId, 0);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'ESRCH') return;
+      throw cause;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Electron main process ${mainProcessId} remained alive after close`);
 }
 
 export async function disposeSmokeContext(context: SmokeContext | undefined): Promise<void> {

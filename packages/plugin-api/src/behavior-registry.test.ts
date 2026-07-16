@@ -58,10 +58,11 @@ describe('resolveBehaviorAuthoringRegistry', () => {
     ]);
     expect(effective.entryOwners['battle-royale.spawn-loot']).toBe(battleRoyale.id);
     expect(effective.entryOwners['example-arena.spawn-enemy']).toBe(arena.id);
+    const coreCapabilities = [
+      ...new Set(CORE_BEHAVIOR_REGISTRY.entries.map(({ capability }) => String(capability))),
+    ];
     expect(effective.capabilities.map(String)).toEqual([
-      'lifecycle.core',
-      'time.deterministic',
-      'state.core',
+      ...coreCapabilities,
       'battle-royale.match',
       'battle-royale.loot',
       'example-arena.combat',
@@ -90,6 +91,7 @@ describe('resolveBehaviorAuthoringRegistry', () => {
 
   it('fails closed when a plugin claims another owner capability', () => {
     const pluginId = Schema.decodeUnknownSync(PluginId)('@tileborne-plugins/test');
+    const coreCapability = String(CORE_BEHAVIOR_REGISTRY.entries[0]!.capability);
     expect(() =>
       resolveBehaviorAuthoringRegistry([
         {
@@ -104,7 +106,7 @@ describe('resolveBehaviorAuthoringRegistry', () => {
           } as never,
         },
       ]),
-    ).toThrow(/capability lifecycle\.core.*already owned by core/);
+    ).toThrow(`behavior capability ${coreCapability} from ${pluginId} is already owned by core`);
   });
 
   it('fails closed when a template omits an invoked capability', () => {

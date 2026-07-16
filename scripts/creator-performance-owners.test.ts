@@ -29,10 +29,7 @@ import {
   validateProjectContentCorpus,
 } from '../packages/services-app/src/index.js';
 import { packDirectory } from '../packages/services-app/src/internal/layout.js';
-import {
-  commitMapProjectRevision,
-  makeProjectRevisionFilesystemOwner,
-} from '../packages/services-app/src/internal/project-revision-transaction.js';
+import { commitMapProjectRevision } from '../packages/services-app/src/internal/project-revision-transaction.js';
 import { HomeServiceLive } from '../packages/services-foundation/src/home/index.js';
 import { JobServiceLive } from '../packages/services-foundation/src/job/index.js';
 import {
@@ -441,13 +438,24 @@ describe('creator-v1 canonical owner execution', () => {
         };
       },
     });
-    const copyRegressionSource = path.join(root, 'revision-copy-source');
-    const copyRegressionTarget = path.join(root, 'revision-copy-target');
-    await mkdir(copyRegressionSource, { recursive: true });
-    await writeFile(path.join(copyRegressionSource, 'project.json'), '{}\n');
-    const copyRegressionOwner = makeProjectRevisionFilesystemOwner();
-    await copyRegressionOwner.copyProjectDirectory(copyRegressionSource, copyRegressionTarget);
-    const copyRegressionObservation = copyRegressionOwner.observe();
+    const copyRegressionObservation = await commitMapProjectRevision({
+      projectRoot: transactionRoot,
+      projectId: transactionProjectId,
+      mapId: transactionMapId,
+      mapTarget: path.join(transactionRoot, 'maps', `${transactionMapId}.json`),
+      projectDirectoryCopyTarget: `${transactionRoot}-copy-regression`,
+      buildSnapshots: ({ map, project }) => {
+        const mapSnapshot = { ...(map as object), copyRegression: true };
+        return {
+          map: mapSnapshot,
+          project,
+          lock: {
+            projectHash: hashJsonStable(project),
+            maps: [{ id: transactionMapId, hash: hashJsonStable(mapSnapshot) }],
+          },
+        };
+      },
+    });
 
     const compilerEvents: Array<{ sourceBytes: number; modules: number }> = [];
     const registry = new BehaviorRegistryManifest({ schemaVersion: 1, entries: [] });
@@ -647,10 +655,7 @@ describe('creator-v1 canonical owner execution', () => {
       queryRecords: referenceEvents.queries[0]!,
       resolutionRecords: referenceEvents.resolutions[0]!,
     };
-    const buildReceipt = (
-      assetPage: typeof normalPageEvent,
-      fullProjectDirectoryCopies = revisionObservation.fullProjectDirectoryCopies,
-    ) => ({
+    const buildReceipt = (assetPage: typeof normalPageEvent, revision = revisionObservation) => ({
       schemaVersion: 1,
       fixtureId: fixture.id,
       budgetId: budgets.id,
@@ -701,10 +706,10 @@ describe('creator-v1 canonical owner execution', () => {
           metric('records-inspected', validation.recordsInspected),
         ]),
         flow('save', [
-          metric('changed-resources', revisionObservation.changedResources),
-          metric('content-files-rewritten', revisionObservation.contentFilesInstalled),
-          metric('journal-phase-transitions', revisionObservation.phaseTransitions),
-          metric('full-project-directory-copies', fullProjectDirectoryCopies),
+          metric('changed-resources', revision.changedResources),
+          metric('content-files-rewritten', revision.contentFilesInstalled),
+          metric('journal-phase-transitions', revision.phaseTransitions),
+          metric('full-project-directory-copies', revision.fullProjectDirectoryCopies),
         ]),
         flow('playtest-start', [
           metric('selected-map-packages', playtestEvents.maps.length),
@@ -731,10 +736,7 @@ describe('creator-v1 canonical owner execution', () => {
     });
     receipt = buildReceipt(normalPageEvent);
     regressedReceipt = buildReceipt(regressedPageEvent);
-    copyRegressedReceipt = buildReceipt(
-      normalPageEvent,
-      copyRegressionObservation.fullProjectDirectoryCopies,
-    );
+    copyRegressedReceipt = buildReceipt(normalPageEvent, copyRegressionObservation);
     assertCreatorPerformanceReceipt(budgets, receipt);
   }, 300_000);
 
@@ -760,7 +762,7 @@ describe('creator-v1 canonical owner execution', () => {
     );
   });
 
-  it('fails after the canonical revision filesystem owner performs a full directory copy', () => {
+  it('fails after commitMapProjectRevision performs a full project directory copy', () => {
     expect(() => assertCreatorPerformanceReceipt(budgets, copyRegressedReceipt)).toThrow(
       /save.full-project-directory-copies/,
     );

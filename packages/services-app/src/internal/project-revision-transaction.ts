@@ -95,6 +95,12 @@ export interface CommitMapProjectRevisionInput {
     | ((phase: ProjectRevisionTransactionFaultPhase) => void | Promise<void>)
     | undefined;
   readonly observer?: ProjectRevisionTransactionObserver | undefined;
+  /**
+   * Optional explicit whole-project snapshot target. Normal incremental saves
+   * omit this; callers that require a snapshot pay for and observe exactly one
+   * recursive copy while durable transaction ownership is held.
+   */
+  readonly projectDirectoryCopyTarget?: string | undefined;
 }
 
 export interface ProjectRevisionTransactionObserver {
@@ -104,7 +110,7 @@ export interface ProjectRevisionTransactionObserver {
   readonly onProjectDirectoryCopied?: (() => void) | undefined;
 }
 
-export interface ProjectRevisionFilesystemObservation {
+interface ProjectRevisionFilesystemObservation {
   readonly fullProjectDirectoryCopies: number;
 }
 
@@ -113,18 +119,18 @@ export interface ProjectRevisionFilesystemObservation {
  * persistence. Keeping the count beside the real `cp` call means a successful
  * copy cannot bypass performance observation inside this owner.
  */
-export interface ProjectRevisionFilesystemOwner {
+interface ProjectRevisionFilesystemOwner {
   readonly copyProjectDirectory: (source: string, destination: string) => Promise<void>;
   readonly observe: () => ProjectRevisionFilesystemObservation;
 }
 
-export const makeProjectRevisionFilesystemOwner = (
+const makeProjectRevisionFilesystemOwner = (
   observer?: Pick<ProjectRevisionTransactionObserver, 'onProjectDirectoryCopied'>,
 ): ProjectRevisionFilesystemOwner => {
   let fullProjectDirectoryCopies = 0;
   return {
     copyProjectDirectory: async (source, destination) => {
-      await cp(source, destination, { recursive: true });
+      await cp(source, destination, { recursive: true, errorOnExist: true, force: false });
       fullProjectDirectoryCopies += 1;
       observer?.onProjectDirectoryCopied?.();
     },
@@ -750,6 +756,18 @@ export const commitMapProjectRevision = async (
   try {
     await input.faultAfterPhase?.('owner-acquired');
     await recoverJournalWithoutAcquiringOwner(input.projectRoot);
+    if (input.projectDirectoryCopyTarget !== undefined) {
+      const source = path.resolve(input.projectRoot);
+      const destination = path.resolve(input.projectDirectoryCopyTarget);
+      const relativeDestination = path.relative(source, destination);
+      if (
+        relativeDestination === '' ||
+        (!relativeDestination.startsWith(`..${path.sep}`) && relativeDestination !== '..')
+      ) {
+        throw new Error('Project directory copy target must be outside the project root');
+      }
+      await filesystem.copyProjectDirectory(source, destination);
+    }
     const targets = {
       map: input.mapTarget,
       project: path.join(input.projectRoot, PROJECT_TARGET),

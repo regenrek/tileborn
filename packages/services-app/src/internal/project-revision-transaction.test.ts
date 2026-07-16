@@ -10,7 +10,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   commitMapProjectRevision,
   commitProjectManifestRevision,
-  makeProjectRevisionFilesystemOwner,
   projectRevisionOwnerClaimPrefix,
   projectRevisionOwnerPath,
   projectRevisionTransactionPath,
@@ -228,22 +227,23 @@ describe('project revision transaction recovery', () => {
     });
   });
 
-  it('counts only successful real directory copies at the canonical filesystem owner', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'tileborne-project-revision-copy-'));
-    roots.push(root);
-    const source = path.join(root, 'source');
-    await writeJson(path.join(source, 'project.json'), { id: 'fixture' });
-    const filesystem = makeProjectRevisionFilesystemOwner();
+  it('reports a real whole-project copy performed by commitMapProjectRevision itself', async () => {
+    const state = await fixture();
+    const destination = `${state.projectRoot}-snapshot`;
+    roots.push(destination);
 
-    await expect(
-      filesystem.copyProjectDirectory(path.join(root, 'missing'), path.join(root, 'failed')),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(filesystem.observe().fullProjectDirectoryCopies).toBe(0);
+    const observation = await commitMapProjectRevision({
+      projectRoot: state.projectRoot,
+      projectId: state.projectId,
+      mapId: state.mapId,
+      mapTarget: state.mapTarget,
+      buildSnapshots: () => state.next,
+      projectDirectoryCopyTarget: destination,
+    });
 
-    const destination = path.join(root, 'destination');
-    await filesystem.copyProjectDirectory(source, destination);
-    expect(filesystem.observe().fullProjectDirectoryCopies).toBe(1);
-    expect(await readJson(path.join(destination, 'project.json'))).toEqual({ id: 'fixture' });
+    expect(observation.fullProjectDirectoryCopies).toBe(1);
+    expect(await readJson(path.join(destination, 'project.json'))).toEqual(state.old.project);
+    expect(await readJson(state.mapTarget)).toEqual(state.next.map);
   });
 
   for (const faultPhase of [

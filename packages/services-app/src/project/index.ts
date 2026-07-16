@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, cp, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -39,12 +39,14 @@ import {
   projectMapsDirectory,
 } from "../internal/layout.js";
 import { encodeJson, errorMessage, hashEncodedJson, isNotFound, readJson } from "../internal/files.js";
+import { recoverProjectRevisionTransaction } from "../internal/project-revision-transaction.js";
 
 export interface ProjectCreateSpec {
   readonly name: string;
   readonly engineVersion?: string;
   readonly plugins?: readonly ProjectPluginRef[];
   readonly assetPacks?: readonly ProjectAssetPackRef[];
+  readonly settings?: ProjectManifest['settings'];
 }
 
 export interface ProjectSummary {
@@ -198,6 +200,29 @@ const SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PROJECT_CACHE_DIR = ".tileborne/cache";
 const PROJECT_DERIVED_DIR = ".tileborne/derived";
 const PROJECT_IMPORT_RECORDS_PATH = ".tileborne/import-records.json";
+const PROJECT_BEHAVIOR_REGISTRY_PATH = "behaviors/registry.json";
+
+const markImportedBehaviorRegistryUntrusted = async (projectRoot: string): Promise<void> => {
+  const registryFile = path.join(projectRoot, PROJECT_BEHAVIOR_REGISTRY_PATH);
+  let raw: string;
+  try {
+    raw = await readFile(registryFile, "utf8");
+  } catch (cause) {
+    if (isNotFound(cause)) return;
+    throw cause;
+  }
+  const parsed = JSON.parse(raw) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+  const registry = parsed as Record<string, unknown>;
+  const updated = {
+    ...registry,
+    revision: typeof registry["revision"] === "number" ? registry["revision"] + 1 : 1,
+    trust: "imported-untrusted",
+  };
+  const temporary = `${registryFile}.tmp-${randomUUID()}`;
+  await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+  await rename(temporary, registryFile);
+};
 
 const projectMigrationChain = defineMigrationChain<ProjectManifest>({
   entity: "project",
@@ -275,6 +300,14 @@ export const readVerifiedProjectAtRoot = (
 > =>
   Effect.gen(function* () {
     const manifestFile = projectManifestPath(projectRoot);
+    yield* Effect.tryPromise({
+      try: () => recoverProjectRevisionTransaction(projectRoot),
+      catch: (cause) =>
+        new ProjectValidationError({
+          path: manifestFile,
+          message: `failed to recover project revision transaction: ${errorMessage(cause)}`,
+        }),
+    });
     const project = yield* readManifestAtRoot(projectRoot).pipe(
       Effect.mapError((error) =>
         error._tag === "ProjectPathNotFoundError"
@@ -566,6 +599,7 @@ export const ProjectServiceLive = Layer.effect(
         plugins: [...(spec.plugins ?? [])],
         assetPacks: [...(spec.assetPacks ?? [])],
         maps: [],
+        ...(spec.settings === undefined ? {} : { settings: spec.settings }),
       });
       const staging = path.join(paths.projects, `.staging-${projectId}-${randomUUID()}`);
       const target = projectDirectory(paths.projects, projectId);
@@ -624,7 +658,10 @@ export const ProjectServiceLive = Layer.effect(
       const alreadyRegistered = yield* Effect.promise(() => homeProjectExists(paths.projects, project.id));
       if (!alreadyRegistered) {
         yield* Effect.tryPromise({
-          try: () => cp(resolved, target, { recursive: true, force: false }),
+          try: async () => {
+            await cp(resolved, target, { recursive: true, force: false });
+            await markImportedBehaviorRegistryUntrusted(target);
+          },
           catch: (cause) => new ProjectSaveError({ path: target, message: errorMessage(cause) }),
         });
         yield* PubSub.publish(trigger, void 0);

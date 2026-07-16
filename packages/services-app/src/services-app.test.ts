@@ -37,7 +37,7 @@ import {
   PluginRegistryService,
   PluginServicesLayer,
 } from '@tileborne/services-plugin';
-import { Effect, Fiber, Layer, Option, Schema, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -604,9 +604,18 @@ describe('MapService', () => {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
           const projectId = yield* projects.create({ name: 'Sub Maps' });
+          const initialEmission = yield* Deferred.make<void>();
           const fiber = yield* maps
             .subscribe(projectId)
-            .pipe(Stream.take(2), Stream.runCollect, Effect.forkChild);
+            .pipe(
+              Stream.mapEffect((summaries) =>
+                Deferred.succeed(initialEmission, void 0).pipe(Effect.as(summaries)),
+              ),
+              Stream.take(2),
+              Stream.runCollect,
+              Effect.forkChild,
+            );
+          yield* Deferred.await(initialEmission);
           yield* maps.create(projectId, { width: 1, height: 1 });
           return yield* Fiber.join(fiber);
         }),

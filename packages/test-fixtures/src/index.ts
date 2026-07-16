@@ -144,6 +144,7 @@ export interface CreatorPerformanceBudgetMetric {
 
 export interface CreatorPerformanceBudgetFlow {
   readonly id: CreatorPerformanceFlowId;
+  readonly owner: string;
   readonly description: string;
   readonly metrics: readonly CreatorPerformanceBudgetMetric[];
 }
@@ -225,6 +226,7 @@ type CanonicalMetricSpec = Readonly<{
 const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   {
     id: 'startup',
+    owner: 'apps/desktop Electron main/renderer lifecycle',
     description: 'Cold editor startup before a project is opened.',
     metrics: [
       { id: 'project-records-eagerly-decoded', unit: 'count', limit: 'max', value: 64 },
@@ -234,6 +236,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'reopen',
+    owner: 'apps/desktop Electron main/renderer lifecycle',
     description: 'Reopen creator-performance-v1 and render its initial editor shell.',
     metrics: [
       { id: 'project-manifest-input-bytes', unit: 'bytes', limit: 'exact', value: 32_768 },
@@ -245,6 +248,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'asset-library-2000',
+    owner: '@tileborne/services-app asset library',
     description: 'Browse and scroll the 2,048-asset library and working palette.',
     metrics: [
       { id: 'fixture-assets', unit: 'count', limit: 'exact', value: 2_048 },
@@ -261,6 +265,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'large-behaviors-references',
+    owner: 'apps/desktop behavior reference index',
     description: 'Open, search, and resolve the large behavior/reference corpus.',
     metrics: [
       { id: 'fixture-behaviors', unit: 'count', limit: 'exact', value: 512 },
@@ -272,6 +277,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'validation',
+    owner: '@tileborne/services-app project/behavior validators',
     description: 'Validate the valid corpus and its deterministic 64-fault variant.',
     metrics: [
       { id: 'fixture-validation-records', unit: 'count', limit: 'exact', value: 14_857 },
@@ -283,6 +289,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'save',
+    owner: '@tileborne/services-app project revision transaction',
     description: 'Persist one changed map and its project revision atomically.',
     metrics: [
       { id: 'changed-resources', unit: 'count', limit: 'exact', value: 1 },
@@ -293,6 +300,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'playtest-start',
+    owner: '@tileborne/services-build PlaytestService/compiler',
     description: 'Compile the selected map and start a local playtest session.',
     metrics: [
       { id: 'selected-map-packages', unit: 'count', limit: 'exact', value: 1 },
@@ -303,6 +311,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'package',
+    owner: '@tileborne/services-build runtime map-package assembler',
     description: 'Assemble all eight fixture maps into verified runtime map packages.',
     metrics: [
       { id: 'runtime-map-packages', unit: 'count', limit: 'exact', value: 8 },
@@ -315,6 +324,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
   {
     id: 'ship',
+    owner: '@tileborne/services-build BuildService',
     description: 'Promote the packaged corpus into one verified local Ship artifact.',
     metrics: [
       { id: 'runtime-map-packages', unit: 'count', limit: 'exact', value: 8 },
@@ -331,6 +341,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
   },
 ] as const satisfies readonly {
   readonly id: CreatorPerformanceFlowId;
+  readonly owner: string;
   readonly description: string;
   readonly metrics: readonly CanonicalMetricSpec[];
 }[];
@@ -535,12 +546,13 @@ const decodePerformanceBudgets = (
       throw new Error(`Invalid creator performance contract: ${label}`);
     }
     const flow = requireRecord(flowValue, label);
-    requireExactKeys(flow, ['id', 'description', 'metrics'], label);
+    requireExactKeys(flow, ['id', 'owner', 'description', 'metrics'], label);
     if (!Array.isArray(flow.metrics) || flow.metrics.length !== canonicalFlow.metrics.length) {
       throw new Error(`Invalid creator performance contract: ${label}.metrics`);
     }
     return {
       id: requireLiteral(flow.id, canonicalFlow.id, `${label}.id`),
+      owner: requireLiteral(flow.owner, canonicalFlow.owner, `${label}.owner`),
       description: requireLiteral(
         flow.description,
         canonicalFlow.description,

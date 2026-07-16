@@ -76,6 +76,15 @@ export interface ProjectBehaviorSnapshot {
   readonly diagnostics: readonly BehaviorDiagnostic[];
 }
 
+/** Registry-only projection for lists and reference pickers. Source bodies are opened on demand. */
+export interface ProjectBehaviorRegistrySnapshot {
+  readonly projectId: ProjectId;
+  readonly projectRoot: string;
+  readonly revision: number;
+  readonly trust: ProjectBehaviorTrust;
+  readonly manifests: readonly BehaviorManifest[];
+}
+
 type ProjectBehaviorTransactionOperation = 'create' | 'update' | 'remove' | 'convert';
 
 interface ProjectBehaviorTransactionJournal {
@@ -199,6 +208,9 @@ export class ProjectBehaviorService extends Context.Service<
     readonly open: (
       projectId: ProjectId,
     ) => Effect.Effect<ProjectBehaviorSnapshot, ProjectBehaviorServiceError>;
+    readonly list: (
+      projectId: ProjectId,
+    ) => Effect.Effect<ProjectBehaviorRegistrySnapshot, ProjectBehaviorServiceError>;
     readonly createVisual: (
       projectId: ProjectId,
       input: CreateVisualProjectBehaviorInput,
@@ -1458,6 +1470,22 @@ export const makeProjectBehaviorServiceLive = (
 
       return {
         open: (projectId) => withProjectWrite(projectId, snapshot(projectId)),
+        list: (projectId) =>
+          withProjectWrite(
+            projectId,
+            Effect.gen(function* () {
+              const projectRoot = yield* rootFor(projectId);
+              yield* recoverTransaction(projectRoot, projectId);
+              const registry = yield* readRegistry(projectRoot, projectId);
+              return {
+                projectId,
+                projectRoot,
+                revision: registry.revision,
+                trust: registry.trust,
+                manifests: registry.entries,
+              } satisfies ProjectBehaviorRegistrySnapshot;
+            }),
+          ),
         createVisual,
         createTypeScript,
         saveVisual,

@@ -298,6 +298,16 @@ const clampLimit = (limit: number | undefined): number => {
 const normalizeOffset = (offset: number | undefined): number =>
   offset === undefined || !Number.isFinite(offset) ? 0 : Math.max(0, Math.trunc(offset));
 
+/** Canonical bounded page owner shared by the service and deterministic performance gate. */
+export const paginateAssetLibraryGroups = <T>(
+  groups: readonly T[],
+  input: { readonly offset?: number | undefined; readonly limit?: number | undefined },
+) => {
+  const offset = normalizeOffset(input.offset);
+  const limit = clampLimit(input.limit);
+  return { offset, limit, total: groups.length, groups: groups.slice(offset, offset + limit) };
+};
+
 const humanizeIdentifier = (value: string): string => {
   const raw = value.includes(':') ? value.slice(value.lastIndexOf(':') + 1) : value;
   const words = raw
@@ -1498,17 +1508,13 @@ export const AssetLibraryServiceLive = Layer.effect(
         filePath: context.filePath,
       });
       const filtered = filterLibraryGroups(cached.index.groups, input);
-      const offset = normalizeOffset(input.offset);
-      const limit = clampLimit(input.limit);
+      const page = paginateAssetLibraryGroups(filtered, input);
       return {
         packId: input.packId,
         integrityHash: context.integrityHash,
         indexSchemaVersion: ASSET_LIBRARY_INDEX_SCHEMA_VERSION,
         previewRefLimit: PREVIEW_REF_LIMIT,
-        total: filtered.length,
-        offset,
-        limit,
-        groups: filtered.slice(offset, offset + limit),
+        ...page,
       };
     });
 

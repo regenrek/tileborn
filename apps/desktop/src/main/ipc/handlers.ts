@@ -471,8 +471,8 @@ const buildHandlers = Effect.gen(function* () {
           detail: origin === 'project' ? 'Project content' : 'Plugin content',
         }));
       }
-      const behaviorSnapshot = yield* projectBehaviors.open(projectId);
-      return behaviorSnapshot.resources.map(({ manifest }) => ({
+      const behaviorRegistry = yield* projectBehaviors.list(projectId);
+      return behaviorRegistry.manifests.map((manifest) => ({
         id: String(manifest.id),
         label: manifest.label,
         reference: new NestedBehaviorReference({ behaviorId: manifest.id }),

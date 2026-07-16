@@ -127,6 +127,38 @@ const makePendingSaveJournal = async (
 };
 
 describe('ProjectBehaviorService', () => {
+  it('lists registry manifests without opening behavior source bodies', () =>
+    withTempHome(async (home) => {
+      const result = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Registry-only behavior list' });
+          const created = yield* behaviors.createTypeScript(projectId, {
+            label: 'Lazy source',
+            source: 'export default Object.freeze({ on: {} });\n',
+          });
+          const resource = created.resources[0];
+          if (resource?.kind !== 'typescript') throw new Error('expected TypeScript behavior');
+          yield* Effect.promise(() =>
+            rm(path.join(home, 'projects', projectId, resource.manifest.source.sourcePath)),
+          );
+          const listed = yield* behaviors.list(projectId);
+          const opened = yield* Effect.result(behaviors.open(projectId));
+          return { listed, opened };
+        }),
+      );
+
+      expect(result.listed.manifests).toHaveLength(1);
+      expect(result.listed.manifests[0]?.label).toBe('Lazy source');
+      expect(result.opened._tag).toBe('Success');
+      if (result.opened._tag !== 'Success') throw new Error('expected diagnostic snapshot');
+      expect(result.opened.success.resources).toHaveLength(0);
+      expect(result.opened.success.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'behavior.source-invalid' })]),
+      );
+    }));
+
   it('serializes concurrent same-revision saves with exactly one winner', () =>
     withTempHome(async () => {
       const result = await runApp(

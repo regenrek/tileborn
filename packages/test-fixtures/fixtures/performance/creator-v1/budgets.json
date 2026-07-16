@@ -10,6 +10,7 @@
   "flows": [
     {
       "id": "startup",
+      "owner": "apps/desktop Electron main/renderer lifecycle",
       "description": "Cold editor startup before a project is opened.",
       "metrics": [
         {
@@ -37,6 +38,7 @@
     },
     {
       "id": "reopen",
+      "owner": "apps/desktop Electron main/renderer lifecycle",
       "description": "Reopen creator-performance-v1 and render its initial editor shell.",
       "metrics": [
         {
@@ -78,6 +80,7 @@
     },
     {
       "id": "asset-library-2000",
+      "owner": "@tileborne/services-app asset library",
       "description": "Browse and scroll the 2,048-asset library and working palette.",
       "metrics": [
         {
@@ -119,6 +122,7 @@
     },
     {
       "id": "large-behaviors-references",
+      "owner": "apps/desktop behavior reference index",
       "description": "Open, search, and resolve the large behavior/reference corpus.",
       "metrics": [
         {
@@ -160,6 +164,7 @@
     },
     {
       "id": "validation",
+      "owner": "@tileborne/services-app project/behavior validators",
       "description": "Validate the valid corpus and its deterministic 64-fault variant.",
       "metrics": [
         {
@@ -201,6 +206,7 @@
     },
     {
       "id": "save",
+      "owner": "@tileborne/services-app project revision transaction",
       "description": "Persist one changed map and its project revision atomically.",
       "metrics": [
         {
@@ -235,6 +241,7 @@
     },
     {
       "id": "playtest-start",
+      "owner": "@tileborne/services-build PlaytestService/compiler",
       "description": "Compile the selected map and start a local playtest session.",
       "metrics": [
         {
@@ -269,6 +276,7 @@
     },
     {
       "id": "package",
+      "owner": "@tileborne/services-build runtime map-package assembler",
       "description": "Assemble all eight fixture maps into verified runtime map packages.",
       "metrics": [
         {
@@ -317,6 +325,7 @@
     },
     {
       "id": "ship",
+      "owner": "@tileborne/services-build BuildService",
       "description": "Promote the packaged corpus into one verified local Ship artifact.",
       "metrics": [
         {

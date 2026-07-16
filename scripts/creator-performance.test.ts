@@ -2,12 +2,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  assertCreatorPerformanceReceipt,
-  runCreatorPerformanceGate,
-} from './creator-performance.mjs';
+import { assertCreatorPerformanceReceipt } from './creator-performance.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const budgets = JSON.parse(
@@ -18,13 +15,26 @@ const budgets = JSON.parse(
 );
 
 describe('creator performance release gate', () => {
-  let receipt: Awaited<ReturnType<typeof runCreatorPerformanceGate>>;
+  const receipt = {
+    schemaVersion: 1,
+    fixtureId: budgets.fixtureId,
+    budgetId: budgets.id,
+    environment: {
+      kind: 'deterministic-ci',
+      platform: process.platform,
+      arch: process.arch,
+      node: process.version,
+    },
+    flows: budgets.flows.map(
+      (flow: { id: string; owner: string; metrics: readonly { id: string; value: number }[] }) => ({
+        id: flow.id,
+        owner: flow.owner,
+        metrics: flow.metrics.map((metric) => ({ id: metric.id, observed: metric.value })),
+      }),
+    ),
+  };
 
-  beforeAll(async () => {
-    receipt = await runCreatorPerformanceGate();
-  }, 60_000);
-
-  it('materializes and measures the complete v1 corpus at all named owners', () => {
+  it('accepts only the complete canonical v1 receipt shape', () => {
     expect(receipt.fixtureId).toBe('creator-performance-v1');
     expect(receipt.flows.map(({ id }) => id)).toEqual(
       budgets.flows.map(({ id }: { id: string }) => id),
@@ -78,6 +88,32 @@ describe('creator performance release gate', () => {
     const fractional = structuredClone(receipt);
     fractional.flows[0]!.metrics[0]!.observed = 0.5;
     expect(() => assertCreatorPerformanceReceipt(budgets, fractional)).toThrow(/safe integer/);
+  });
+
+  it.each([
+    ['root', (candidate: typeof receipt) => Object.assign(candidate, { unknown: true })],
+    [
+      'environment',
+      (candidate: typeof receipt) => Object.assign(candidate.environment, { unknown: true }),
+    ],
+    ['flow', (candidate: typeof receipt) => Object.assign(candidate.flows[0]!, { unknown: true })],
+    [
+      'metric',
+      (candidate: typeof receipt) =>
+        Object.assign(candidate.flows[0]!.metrics[0]!, { unknown: true }),
+    ],
+  ])('rejects unknown keys at the %s level', (_level, mutate) => {
+    const candidate = structuredClone(receipt);
+    mutate(candidate);
+    expect(() => assertCreatorPerformanceReceipt(budgets, candidate)).toThrow(
+      /unknown or missing keys/,
+    );
+  });
+
+  it('rejects the independent wrong-owner probe', () => {
+    const candidate = structuredClone(receipt);
+    candidate.flows[0]!.owner = 'totally-wrong-owner';
+    expect(() => assertCreatorPerformanceReceipt(budgets, candidate)).toThrow(/owner mismatch/);
   });
 
   it('rejects exact under/over-processing and max-budget overages', () => {

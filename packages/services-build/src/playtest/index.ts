@@ -127,6 +127,10 @@ export class PlaytestService extends Context.Service<
   }
 >()('@tileborne/services-build/PlaytestService') {}
 
+export interface PlaytestServiceObserver {
+  readonly onSessionTransition?: ((status: 'Starting' | 'Running' | 'Stopped') => void) | undefined;
+}
+
 const replaceSession = (
   sessions: readonly PlaytestSession[],
   next: PlaytestSession,
@@ -150,143 +154,149 @@ const playtestIndexHtml = (artifactDir: string): string => `<!doctype html>
 const playtestArtifactDirectory = (playtestRoot: string, sessionId: PlaytestSessionId): string =>
   path.join(playtestRoot, sessionId.replace(':', '-'));
 
-export const PlaytestServiceLive = Layer.effect(
-  PlaytestService,
-  Effect.gen(function* () {
-    const home = yield* HomeService;
-    const maps = yield* MapService;
-    const projects = yield* ProjectService;
-    const registry = yield* PluginRegistryService;
-    const paths = yield* home.init();
-    const playtestRoot = path.join(paths.cache, 'playtest');
-    yield* ensureDirectory(playtestRoot);
-    const sessions = yield* Ref.make<readonly PlaytestSession[]>([]);
-    const events = yield* PubSub.unbounded<void>();
+export const makePlaytestServiceLive = (observer: PlaytestServiceObserver = {}) =>
+  Layer.effect(
+    PlaytestService,
+    Effect.gen(function* () {
+      const home = yield* HomeService;
+      const maps = yield* MapService;
+      const projects = yield* ProjectService;
+      const registry = yield* PluginRegistryService;
+      const paths = yield* home.init();
+      const playtestRoot = path.join(paths.cache, 'playtest');
+      yield* ensureDirectory(playtestRoot);
+      const sessions = yield* Ref.make<readonly PlaytestSession[]>([]);
+      const events = yield* PubSub.unbounded<void>();
 
-    const list = Effect.fn('PlaytestService.list')(function* () {
-      return yield* Ref.get(sessions);
-    });
-
-    const assembleArtifact = Effect.fn('PlaytestService.assembleArtifact')(function* (
-      input: AssemblePlaytestInput,
-    ) {
-      // Validate the map exists and decodes before creating the artifact
-      // directory; the map itself ships ONLY inside the runtime map package
-      // (`assembleRuntimeMapPackage` is the single writer of `map.json`).
-      yield* maps.load(input.projectId, input.mapId);
-      const artifactId = `playtest-artifact-${Date.now()}`;
-      const directory =
-        input.outputDirectory ?? (yield* verifiedChildPath(playtestRoot, artifactId));
-      yield* ensureDirectory(directory);
-      const indexPath = path.join(directory, 'index.html');
-      const manifestPath = path.join(directory, metadataFileName);
-      yield* writeTextFile(indexPath, playtestIndexHtml(directory));
-      const manifest = new PlaytestArtifactManifest({
-        mapId: input.mapId,
-        projectId: input.projectId,
-        plugins: [...(input.plugins ?? [])],
-        createdAt: new Date().toISOString(),
-        integrityHash: emptyContentHash,
-      });
-      const integrityHash = yield* writeVerifiedJson(
-        manifestPath,
-        PlaytestArtifactManifest,
-        manifest,
-      );
-      return new PlaytestArtifact({
-        directory,
-        manifestPath,
-        indexPath,
-        manifest: new PlaytestArtifactManifest({ ...manifest, integrityHash }),
-      });
-    });
-
-    const start = Effect.fn('PlaytestService.start')(function* (
-      projectId: ProjectId,
-      mapId: MapId,
-      options = new PlaytestOptions({
-        slot: Option.none(),
-        runtimeUrl: Option.none(),
-        delayMs: Option.none(),
-      }),
-    ) {
-      const project = yield* projects.open(projectId);
-      const installed = yield* registry.list();
-      const modeCandidates = installed.map((plugin) => ({
-        pluginId: plugin.id,
-        enabled: plugin.enabled,
-        contributions: plugin.manifest.contributes,
-      }));
-      const activeModeSelection = readProjectActiveGameModeId(project);
-      const availableModes = enabledPlaytestGameModes(modeCandidates);
-      const enabledPlugins = activePlaytestPluginIds(modeCandidates, activeModeSelection);
-      const modeSelectionIssue =
-        enabledPlugins.length === 0
-          ? describeActiveModeSelectionIssue(availableModes, activeModeSelection)
-          : undefined;
-      if (modeSelectionIssue !== undefined) {
-        yield* new ServicesBuildError({ path: Option.none(), message: modeSelectionIssue });
-      }
-
-      const sessionId = makePlaytestSessionId();
-      const session = new PlaytestSession({
-        id: sessionId,
-        projectId,
-        mapId,
-        status: new Starting({}),
-        startedAt: new Date().toISOString(),
-        stoppedAt: Option.none(),
-        runtimeUrl: options.runtimeUrl,
-        artifactDirectory: Option.none(),
-        activePlugins: [],
-      });
-      yield* Ref.update(sessions, (current) => [...current, session]);
-      yield* PubSub.publish(events, void 0);
-
-      const artifact = yield* assembleArtifact({
-        projectId,
-        mapId,
-        plugins: enabledPlugins,
-        outputDirectory: playtestArtifactDirectory(playtestRoot, sessionId),
+      const list = Effect.fn('PlaytestService.list')(function* () {
+        return yield* Ref.get(sessions);
       });
 
-      yield* Effect.sleep(Option.getOrElse(options.delayMs, () => 0));
-      const running = new PlaytestSession({
-        ...session,
-        status: new Running({}),
-        artifactDirectory: Option.some(artifact.directory),
-        activePlugins: [...enabledPlugins],
-      });
-      yield* Ref.update(sessions, (current) => replaceSession(current, running));
-      yield* PubSub.publish(events, void 0);
-      return running;
-    });
-
-    const stop = Effect.fn('PlaytestService.stop')(function* (sessionId: PlaytestSessionId) {
-      const current = yield* Ref.get(sessions);
-      const session = current.find((entry) => entry.id === sessionId);
-      if (!session) {
-        yield* new PlaytestSessionNotFoundError({
-          sessionId,
-          message: `playtest session not found: ${sessionId}`,
+      const assembleArtifact = Effect.fn('PlaytestService.assembleArtifact')(function* (
+        input: AssemblePlaytestInput,
+      ) {
+        // Validate the map exists and decodes before creating the artifact
+        // directory; the map itself ships ONLY inside the runtime map package
+        // (`assembleRuntimeMapPackage` is the single writer of `map.json`).
+        yield* maps.load(input.projectId, input.mapId);
+        const artifactId = `playtest-artifact-${Date.now()}`;
+        const directory =
+          input.outputDirectory ?? (yield* verifiedChildPath(playtestRoot, artifactId));
+        yield* ensureDirectory(directory);
+        const indexPath = path.join(directory, 'index.html');
+        const manifestPath = path.join(directory, metadataFileName);
+        yield* writeTextFile(indexPath, playtestIndexHtml(directory));
+        const manifest = new PlaytestArtifactManifest({
+          mapId: input.mapId,
+          projectId: input.projectId,
+          plugins: [...(input.plugins ?? [])],
+          createdAt: new Date().toISOString(),
+          integrityHash: emptyContentHash,
         });
-      }
-      const stopped = new PlaytestSession({
-        ...(session as PlaytestSession),
-        status: new Stopped({}),
-        stoppedAt: Option.some(new Date().toISOString()),
+        const integrityHash = yield* writeVerifiedJson(
+          manifestPath,
+          PlaytestArtifactManifest,
+          manifest,
+        );
+        return new PlaytestArtifact({
+          directory,
+          manifestPath,
+          indexPath,
+          manifest: new PlaytestArtifactManifest({ ...manifest, integrityHash }),
+        });
       });
-      yield* Ref.update(sessions, (entries) => replaceSession(entries, stopped));
-      yield* PubSub.publish(events, void 0);
-      return stopped;
-    });
 
-    return {
-      start,
-      stop,
-      list,
-      subscribe: Stream.fromPubSub(events),
-      assembleArtifact,
-    };
-  }),
-);
+      const start = Effect.fn('PlaytestService.start')(function* (
+        projectId: ProjectId,
+        mapId: MapId,
+        options = new PlaytestOptions({
+          slot: Option.none(),
+          runtimeUrl: Option.none(),
+          delayMs: Option.none(),
+        }),
+      ) {
+        const project = yield* projects.open(projectId);
+        const installed = yield* registry.list();
+        const modeCandidates = installed.map((plugin) => ({
+          pluginId: plugin.id,
+          enabled: plugin.enabled,
+          contributions: plugin.manifest.contributes,
+        }));
+        const activeModeSelection = readProjectActiveGameModeId(project);
+        const availableModes = enabledPlaytestGameModes(modeCandidates);
+        const enabledPlugins = activePlaytestPluginIds(modeCandidates, activeModeSelection);
+        const modeSelectionIssue =
+          enabledPlugins.length === 0
+            ? describeActiveModeSelectionIssue(availableModes, activeModeSelection)
+            : undefined;
+        if (modeSelectionIssue !== undefined) {
+          yield* new ServicesBuildError({ path: Option.none(), message: modeSelectionIssue });
+        }
+
+        const sessionId = makePlaytestSessionId();
+        const session = new PlaytestSession({
+          id: sessionId,
+          projectId,
+          mapId,
+          status: new Starting({}),
+          startedAt: new Date().toISOString(),
+          stoppedAt: Option.none(),
+          runtimeUrl: options.runtimeUrl,
+          artifactDirectory: Option.none(),
+          activePlugins: [],
+        });
+        yield* Ref.update(sessions, (current) => [...current, session]);
+        observer.onSessionTransition?.('Starting');
+        yield* PubSub.publish(events, void 0);
+
+        const artifact = yield* assembleArtifact({
+          projectId,
+          mapId,
+          plugins: enabledPlugins,
+          outputDirectory: playtestArtifactDirectory(playtestRoot, sessionId),
+        });
+
+        yield* Effect.sleep(Option.getOrElse(options.delayMs, () => 0));
+        const running = new PlaytestSession({
+          ...session,
+          status: new Running({}),
+          artifactDirectory: Option.some(artifact.directory),
+          activePlugins: [...enabledPlugins],
+        });
+        yield* Ref.update(sessions, (current) => replaceSession(current, running));
+        observer.onSessionTransition?.('Running');
+        yield* PubSub.publish(events, void 0);
+        return running;
+      });
+
+      const stop = Effect.fn('PlaytestService.stop')(function* (sessionId: PlaytestSessionId) {
+        const current = yield* Ref.get(sessions);
+        const session = current.find((entry) => entry.id === sessionId);
+        if (!session) {
+          yield* new PlaytestSessionNotFoundError({
+            sessionId,
+            message: `playtest session not found: ${sessionId}`,
+          });
+        }
+        const stopped = new PlaytestSession({
+          ...(session as PlaytestSession),
+          status: new Stopped({}),
+          stoppedAt: Option.some(new Date().toISOString()),
+        });
+        yield* Ref.update(sessions, (entries) => replaceSession(entries, stopped));
+        observer.onSessionTransition?.('Stopped');
+        yield* PubSub.publish(events, void 0);
+        return stopped;
+      });
+
+      return {
+        start,
+        stop,
+        list,
+        subscribe: Stream.fromPubSub(events),
+        assembleArtifact,
+      };
+    }),
+  );
+
+export const PlaytestServiceLive = makePlaytestServiceLive();

@@ -2,6 +2,9 @@
 node_modules/
 dist/
 build/
+# This CC0 fixture intentionally models an installed plugin's compiled entry.
+!packages/test-fixtures/fixtures/plugins/smoke-fixture/dist/
+!packages/test-fixtures/fixtures/plugins/smoke-fixture/dist/runtime.js
 # `src/build/` directories are SOURCE (e.g. apps/game-host/src/build,
 # packages/services-build/src/build), not build output — re-include them.
 !**/src/build/

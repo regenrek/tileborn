@@ -1,12 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
-import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import fs from 'node:fs';
+import path from 'node:path';
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
 
-import { collectImports, parseSourceFile } from "../lib/import-walker.js";
-import { repoRoot } from "../lib/repo-root.js";
-import { sourceWithoutComments } from "../lib/source-scan.js";
-import { walkFiles } from "../lib/walk-files.js";
+import { collectImports, parseSourceFile } from '../lib/import-walker.js';
+import { repoRoot } from '../lib/repo-root.js';
+import { sourceWithoutComments } from '../lib/source-scan.js';
+import { walkFiles } from '../lib/walk-files.js';
 
 // ADR-0030 Slice 6: boundary tests for the neutral RuntimeMapPackage pipeline.
 // `packages/core/src/map-package` owns the schema and `packages/runtime/src/
@@ -18,47 +18,44 @@ import { walkFiles } from "../lib/walk-files.js";
 // — the monolithic untyped `ExportedArtifact` handoff is hard-cut.
 
 const relativeRepoPath = (absolutePath: string): string =>
-  path.relative(repoRoot, absolutePath).split(path.sep).join("/");
+  path.relative(repoRoot, absolutePath).split(path.sep).join('/');
 
 // The two neutral map-package layers, each with its only permitted external
 // imports (relative `./`/`../` siblings within the owning package aside).
 const NEUTRAL_MAP_PACKAGE_LAYERS = [
   {
-    root: "packages/core/src/map-package",
-    allowedExternal: ["effect"],
+    root: 'packages/core/src/map-package',
+    allowedExternal: ['effect'],
   },
   {
-    root: "packages/runtime/src/map-package",
+    root: 'packages/runtime/src/map-package',
     // The registry runs the canonical ADR-0019 merge from plugin-api; concrete
     // plugin packages stay forbidden.
-    allowedExternal: ["@tileborne/core", "@tileborne/plugin-api", "effect"],
+    allowedExternal: ['@tileborne/core', '@tileborne/plugin-api', 'effect'],
   },
 ] as const;
 
 // Shipped source only; `.test.ts` files exercise the layer with genre-shaped
 // fixtures and are not part of its neutral surface (mirrors the catalog test).
 const mapPackageSourceFiles = (root: string): readonly string[] =>
-  walkFiles({ rootDir: path.join(repoRoot, root), extensions: [".ts"] }).filter(
-    (filePath) => !filePath.endsWith(".test.ts"),
+  walkFiles({ rootDir: path.join(repoRoot, root), extensions: ['.ts'] }).filter(
+    (filePath) => !filePath.endsWith('.test.ts'),
   );
 
-const isAllowedExternalImport = (
-  specifier: string,
-  allowedExternal: readonly string[],
-): boolean =>
+const isAllowedExternalImport = (specifier: string, allowedExternal: readonly string[]): boolean =>
   allowedExternal.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`));
 
 // Brand / product / plugin-name literals that must never appear in the neutral
 // package layer (mirrors the catalog/simulation neutrality denylists).
 const FORBIDDEN_BRAND_TOKENS = [
-  "petwars",
-  "grassland",
-  "erw:",
-  ".pwmap",
-  "battle-royale",
-  "battleRoyale",
-  "plugin-battle-royale",
-  "@tileborne-plugins/",
+  'petwars',
+  'grassland',
+  'erw:',
+  '.pwmap',
+  'battle-royale',
+  'battleRoyale',
+  'plugin-battle-royale',
+  '@tileborne-plugins/',
 ] as const;
 
 // BR genre vocabulary forbidden in the neutral layer (case-insensitive
@@ -67,18 +64,18 @@ const FORBIDDEN_BRAND_TOKENS = [
 // (`spawn-point`, `loot-source`, …) legitimately live in
 // `packages/core/src/catalog/components.ts` — the package layer references
 // catalog components generically and never names one.
-const FORBIDDEN_GENRE_TOKENS = ["shrink", "loot", "spawn"] as const;
+const FORBIDDEN_GENRE_TOKENS = ['shrink', 'loot', 'spawn'] as const;
 
 // The BR `ObjectPlacementRole` closed enum is hard-cut (ADR-0030): placements
 // are role-free, so no role-named identifier or closed role literal union may
 // return to the package/loader layer.
 const FORBIDDEN_ROLE_PATTERNS: readonly { readonly rule: string; readonly pattern: RegExp }[] = [
   {
-    rule: "no role identifier (placement meaning derives from catalog components)",
+    rule: 'no role identifier (placement meaning derives from catalog components)',
     pattern: /\b\w*[Rr]ole\w*\b/,
   },
   {
-    rule: "no closed role/genre literal union",
+    rule: 'no closed role/genre literal union',
     pattern: /Role\w*\s*=\s*Schema\.Literals/,
   },
 ];
@@ -91,8 +88,8 @@ const strippedLayerSources = (): readonly { readonly file: string; readonly text
     })),
   );
 
-describe("ADR-0030 neutral runtime map package boundaries", () => {
-  it("scans a non-empty set of map-package source files in both layers", () => {
+describe('ADR-0030 neutral runtime map package boundaries', () => {
+  it('scans a non-empty set of map-package source files in both layers', () => {
     for (const { root } of NEUTRAL_MAP_PACKAGE_LAYERS) {
       expect(mapPackageSourceFiles(root).length, `${root} has no source files`).toBeGreaterThan(0);
     }
@@ -105,19 +102,19 @@ describe("ADR-0030 neutral runtime map package boundaries", () => {
         const file = relativeRepoPath(filePath);
         for (const collected of collectImports(parseSourceFile(filePath))) {
           const specifier = collected.moduleSpecifier;
-          if (specifier.startsWith(".") || isAllowedExternalImport(specifier, allowedExternal)) {
+          if (specifier.startsWith('.') || isAllowedExternalImport(specifier, allowedExternal)) {
             continue;
           }
           violations.push(
-            `${file}:${collected.line} imports "${specifier}" (allowed: ${allowedExternal.join(", ")}, or a relative path)`,
+            `${file}:${collected.line} imports "${specifier}" (allowed: ${allowedExternal.join(', ')}, or a relative path)`,
           );
         }
       }
     }
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 
-  it("contains no brand, product, or plugin-name literals", () => {
+  it('contains no brand, product, or plugin-name literals', () => {
     const violations: string[] = [];
     for (const { file, text } of strippedLayerSources()) {
       for (const token of FORBIDDEN_BRAND_TOKENS) {
@@ -126,10 +123,10 @@ describe("ADR-0030 neutral runtime map package boundaries", () => {
         }
       }
     }
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 
-  it("contains no BR genre vocabulary (shrink/loot/spawn)", () => {
+  it('contains no BR genre vocabulary (shrink/loot/spawn)', () => {
     const violations: string[] = [];
     for (const { file, text } of strippedLayerSources()) {
       const lowered = text.toLowerCase();
@@ -139,10 +136,10 @@ describe("ADR-0030 neutral runtime map package boundaries", () => {
         }
       }
     }
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 
-  it("keeps placements role-free — no role identifiers or closed role enums", () => {
+  it('keeps placements role-free — no role identifiers or closed role enums', () => {
     const violations: string[] = [];
     for (const { file, text } of strippedLayerSources()) {
       for (const forbidden of FORBIDDEN_ROLE_PATTERNS) {
@@ -151,7 +148,7 @@ describe("ADR-0030 neutral runtime map package boundaries", () => {
         }
       }
     }
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 });
 
@@ -164,31 +161,31 @@ describe("ADR-0030 neutral runtime map package boundaries", () => {
 
 const MODE_DATA_SCHEMA_FILE = path.join(
   repoRoot,
-  "packages/plugin-battle-royale/src/mode-data-schema.ts",
+  'packages/plugin-battle-royale/src/mode-data-schema.ts',
 );
 
 // The full permitted wire shape of `modeData.<br-plugin-id>`.
 const ALLOWED_MODE_DATA_FIELDS = [
-  "battleRoyale",
-  "lootTables",
-  "maxPlayers",
-  "schemaVersion",
-  "shrinkSchedule",
+  'battleRoyale',
+  'lootTables',
+  'maxPlayers',
+  'schemaVersion',
+  'shrinkSchedule',
 ] as const;
 
 // Neutral package sections that must NEVER be duplicated into mode data.
 const FORBIDDEN_MODE_DATA_FIELDS = [
-  "spawnPoints",
-  "spawnAnchors",
-  "placements",
-  "objectPlacements",
-  "playerModels",
-  "overlayVisuals",
-  "weaponVisuals",
-  "collision",
-  "tilesetPack",
-  "map",
-  "catalog",
+  'spawnPoints',
+  'spawnAnchors',
+  'placements',
+  'objectPlacements',
+  'playerModels',
+  'overlayVisuals',
+  'weaponVisuals',
+  'collision',
+  'tilesetPack',
+  'map',
+  'catalog',
 ] as const;
 
 /** Field names of the `Schema.Class` object literal backing BattleRoyaleModeData. */
@@ -199,7 +196,7 @@ const battleRoyaleModeDataFields = (): readonly string[] => {
   const visit = (node: ts.Node): void => {
     if (
       ts.isClassDeclaration(node) &&
-      node.name?.text === "BattleRoyaleModeData" &&
+      node.name?.text === 'BattleRoyaleModeData' &&
       node.heritageClauses !== undefined
     ) {
       for (const clause of node.heritageClauses) {
@@ -229,17 +226,17 @@ const battleRoyaleModeDataFields = (): readonly string[] => {
   return fields;
 };
 
-describe("ADR-0030 BR modeData section stays engine-opaque", () => {
-  it("carries only the engine-opaque BR fields", () => {
+describe('ADR-0030 BR modeData section stays engine-opaque', () => {
+  it('carries only the engine-opaque BR fields', () => {
     expect([...battleRoyaleModeDataFields()].sort()).toEqual([...ALLOWED_MODE_DATA_FIELDS]);
   });
 
-  it("duplicates no neutral package section into the mode data", () => {
+  it('duplicates no neutral package section into the mode data', () => {
     const fields = new Set(battleRoyaleModeDataFields());
     const violations = FORBIDDEN_MODE_DATA_FIELDS.filter((field) => fields.has(field)).map(
       (field) => `BattleRoyaleModeData duplicates neutral package section "${field}"`,
     );
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 });
 
@@ -247,50 +244,50 @@ describe("ADR-0030 BR modeData section stays engine-opaque", () => {
 // `RuntimePluginHost.getMapPackage()` / `mapPackage` room storage — the
 // retired untyped artifact handoff identifiers must never return.
 
-const HOST_ROOTS = ["apps/desktop/src/main", "apps/game-host/src"] as const;
+const HOST_ROOTS = ['apps/desktop/src/main', 'apps/game-host/src'] as const;
 
 // M5 S4 extension: the retired identifiers must not reappear in ANY engine
 // package either — the ship pipeline (game build → bundled map packages →
 // packageless /rooms/create) replaced the artifact handoff end to end.
 const ENGINE_PACKAGE_ROOTS = [
-  "packages/core/src",
-  "packages/runtime/src",
-  "packages/simulation/src",
-  "packages/services-app/src",
-  "packages/services-build/src",
-  "packages/services-foundation/src",
-  "packages/services-plugin/src",
-  "packages/plugin-api/src",
-  "packages/ipc-contracts/src",
+  'packages/core/src',
+  'packages/runtime/src',
+  'packages/simulation/src',
+  'packages/services-app/src',
+  'packages/services-build/src',
+  'packages/services-foundation/src',
+  'packages/services-plugin/src',
+  'packages/plugin-api/src',
+  'packages/ipc-contracts/src',
 ] as const;
 
 const FORBIDDEN_HOST_IDENTIFIER = /\b(?:runtimeArtifact|exportArtifact|getArtifact)\b/;
 
 // Host inputs that must reference the package by its `mapPackage` handle.
 const MAP_PACKAGE_CARRIER_FILES = [
-  "apps/game-host/src/rooms/storage-schema.ts",
-  "packages/ipc-contracts/src/contracts/runtime.ts",
+  'apps/game-host/src/rooms/storage-schema.ts',
+  'packages/ipc-contracts/src/contracts/runtime.ts',
 ] as const;
 
-const PLAYTEST_HOST_FILE = "apps/desktop/src/main/playtest-runtime-host.ts";
+const PLAYTEST_HOST_FILE = 'apps/desktop/src/main/playtest-runtime-host.ts';
 
 const hostSourceFiles = (): readonly string[] =>
   HOST_ROOTS.flatMap((root) =>
-    walkFiles({ rootDir: path.join(repoRoot, root), extensions: [".ts", ".tsx"] }),
+    walkFiles({ rootDir: path.join(repoRoot, root), extensions: ['.ts', '.tsx'] }),
   );
 
 const engineSourceFiles = (): readonly string[] =>
   ENGINE_PACKAGE_ROOTS.flatMap((root) =>
-    walkFiles({ rootDir: path.join(repoRoot, root), extensions: [".ts", ".tsx"] }),
+    walkFiles({ rootDir: path.join(repoRoot, root), extensions: ['.ts', '.tsx'] }),
   );
 
 const retiredIdentifierViolations = (files: readonly string[]): readonly string[] => {
   const violations: string[] = [];
   for (const filePath of files) {
-    const content = fs.readFileSync(filePath, "utf8");
-    const lines = content.split("\n");
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-      const line = lines[lineIndex] ?? "";
+      const line = lines[lineIndex] ?? '';
       if (FORBIDDEN_HOST_IDENTIFIER.test(line)) {
         violations.push(`${relativeRepoPath(filePath)}:${lineIndex + 1}: ${line.trim()}`);
       }
@@ -299,32 +296,32 @@ const retiredIdentifierViolations = (files: readonly string[]): readonly string[
   return violations;
 };
 
-describe("ADR-0030 host package boundary", () => {
-  it("scans a non-empty set of host source files", () => {
+describe('ADR-0030 host package boundary', () => {
+  it('scans a non-empty set of host source files', () => {
     expect(hostSourceFiles().length).toBeGreaterThan(0);
   });
 
-  it("no host references the retired untyped-artifact identifiers", () => {
+  it('no host references the retired untyped-artifact identifiers', () => {
     const violations = retiredIdentifierViolations(hostSourceFiles());
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 
-  it("no engine package references the retired untyped-artifact identifiers (M5)", () => {
+  it('no engine package references the retired untyped-artifact identifiers (M5)', () => {
     expect(engineSourceFiles().length).toBeGreaterThan(0);
     const violations = retiredIdentifierViolations(engineSourceFiles());
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 
-  it("room and playtest host inputs carry the runtime map package", () => {
+  it('room and playtest host inputs carry the runtime map package', () => {
     for (const file of MAP_PACKAGE_CARRIER_FILES) {
-      const content = fs.readFileSync(path.join(repoRoot, file), "utf8");
-      expect(content, `${file} must carry a mapPackage input`).toContain("mapPackage");
+      const content = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+      expect(content, `${file} must carry a mapPackage input`).toContain('mapPackage');
     }
-    const playtestHost = fs.readFileSync(path.join(repoRoot, PLAYTEST_HOST_FILE), "utf8");
+    const playtestHost = fs.readFileSync(path.join(repoRoot, PLAYTEST_HOST_FILE), 'utf8');
     expect(
       playtestHost,
       `${PLAYTEST_HOST_FILE} must hand plugins the package via getMapPackage`,
-    ).toContain("getMapPackage");
+    ).toContain('getMapPackage');
   });
 
   // `modeData` is engine-OPAQUE (ADR-0030; codified at the M2 review, F2/N3):
@@ -336,19 +333,19 @@ describe("ADR-0030 host package boundary", () => {
   // fixtures by design.
   const MODE_DATA_SECTION_READS: readonly { readonly rule: string; readonly pattern: RegExp }[] = [
     {
-      rule: "indexes into a modeData section (modeData.<key> / modeData[...])",
+      rule: 'indexes into a modeData section (modeData.<key> / modeData[...])',
       pattern: /\bmodeData\s*(?:\.\s*[A-Za-z_$]|\[)/,
     },
     {
-      rule: "enumerates modeData sections (Object.keys/values/entries)",
+      rule: 'enumerates modeData sections (Object.keys/values/entries)',
       pattern: /Object\.(?:keys|values|entries)\([^)]*\bmodeData\b/,
     },
   ];
 
-  it("no host reads modeData contents — the sections stay engine-opaque", () => {
+  it('no host reads modeData contents — the sections stay engine-opaque', () => {
     const violations: string[] = [];
     for (const filePath of hostSourceFiles()) {
-      if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
+      if (filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx')) {
         continue;
       }
       const text = sourceWithoutComments(parseSourceFile(filePath));
@@ -358,6 +355,6 @@ describe("ADR-0030 host package boundary", () => {
         }
       }
     }
-    expect(violations, violations.join("\n")).toEqual([]);
+    expect(violations, violations.join('\n')).toEqual([]);
   });
 });

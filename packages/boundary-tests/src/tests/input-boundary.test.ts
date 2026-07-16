@@ -37,7 +37,10 @@ const isAllowedExternalImport = (specifier: string): boolean =>
 const FORBIDDEN_IMPORT_PATTERNS: readonly { readonly rule: string; readonly pattern: RegExp }[] = [
   { rule: 'must not depend on @tileborne/plugin-api', pattern: /^@tileborne\/plugin-api(?:\/|$)/ },
   { rule: 'must not import a plugin package', pattern: /^@tileborne\/plugin-/ },
-  { rule: 'must not import @tileborne/ipc-contracts', pattern: /^@tileborne\/ipc-contracts(?:\/|$)/ },
+  {
+    rule: 'must not import @tileborne/ipc-contracts',
+    pattern: /^@tileborne\/ipc-contracts(?:\/|$)/,
+  },
   { rule: 'must not import a runtime-loaded plugin', pattern: /^@tileborne-plugins\// },
   { rule: 'must not reach into apps/desktop', pattern: /apps\/desktop/ },
   { rule: 'must not reach into apps/game-host', pattern: /apps\/game-host/ },

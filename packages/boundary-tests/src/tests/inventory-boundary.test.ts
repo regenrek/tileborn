@@ -39,8 +39,7 @@ type InventoryModuleFile = (typeof INVENTORY_MODULE_FILES)[number];
 
 const moduleFilePath = (file: InventoryModuleFile): string => path.join(SIMULATION_SRC, file);
 
-const relativeRepoPath = (file: InventoryModuleFile): string =>
-  `packages/simulation/src/${file}`;
+const relativeRepoPath = (file: InventoryModuleFile): string => `packages/simulation/src/${file}`;
 
 const strippedSource = (file: InventoryModuleFile): string =>
   sourceWithoutComments(parseSourceFile(moduleFilePath(file)));
@@ -208,7 +207,11 @@ const numericParameterDefaults = (
       ts.isNumericLiteral(expression.operand));
 
   const visit = (node: ts.Node): void => {
-    if (ts.isParameter(node) && node.initializer !== undefined && isNumericLiteral(node.initializer)) {
+    if (
+      ts.isParameter(node) &&
+      node.initializer !== undefined &&
+      isNumericLiteral(node.initializer)
+    ) {
       defaults.push({
         line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
         text: node.getText(sourceFile),
@@ -245,7 +248,10 @@ const isCoreSpecifier = (moduleSpecifier: string): boolean =>
 // diagnostic (the simulation-wide allow-list also rejects them).
 const FORBIDDEN_MODULE_PATTERNS: readonly { readonly rule: string; readonly pattern: RegExp }[] = [
   { rule: 'must not import catalog JSON', pattern: /\.json$/ },
-  { rule: 'must not import a plugin package', pattern: /^@tileborne\/plugin-|^@tileborne-plugins\// },
+  {
+    rule: 'must not import a plugin package',
+    pattern: /^@tileborne\/plugin-|^@tileborne-plugins\//,
+  },
 ];
 
 describe('ADR-0018 addendum inventory/loot module boundaries', () => {

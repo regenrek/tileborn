@@ -1,14 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-const DEFAULT_SKIP_DIRS = new Set([
-  "node_modules",
-  "dist",
-  ".turbo",
-  "coverage",
-  ".vite",
-  "out",
-]);
+const DEFAULT_SKIP_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', '.vite', 'out']);
 
 export type WalkOptions = {
   readonly rootDir: string;
@@ -17,7 +10,7 @@ export type WalkOptions = {
 };
 
 export function walkFiles(options: WalkOptions): string[] {
-  const extensions = options.extensions ?? [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".css"];
+  const extensions = options.extensions ?? ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css'];
   const skipDirNames = options.skipDirNames ?? DEFAULT_SKIP_DIRS;
   const results: string[] = [];
 

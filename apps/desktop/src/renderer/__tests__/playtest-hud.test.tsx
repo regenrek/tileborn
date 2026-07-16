@@ -133,7 +133,14 @@ describe('PlaytestHudOverlay', () => {
                 { playerId: 'player-1', x: 10, y: 20, local: true, alive: true, health: 65 },
               ],
               objects: [
-                { objectId: 'crate-1', x: 12, y: 18, kind: 'pickup', tier: 'rare', available: true },
+                {
+                  objectId: 'crate-1',
+                  x: 12,
+                  y: 18,
+                  kind: 'pickup',
+                  tier: 'rare',
+                  available: true,
+                },
               ],
             },
           },
@@ -295,8 +302,8 @@ describe('PlaytestHudOverlay', () => {
     // Two alive-count instances render; each sits in its layout-declared anchor.
     const aliveCounts = scoped.getAllByTestId('playtest-hud-alive-count');
     expect(aliveCounts).toHaveLength(2);
-    const anchors = aliveCounts.map(
-      (node) => node.closest('[data-hud-anchor]')?.getAttribute('data-hud-anchor'),
+    const anchors = aliveCounts.map((node) =>
+      node.closest('[data-hud-anchor]')?.getAttribute('data-hud-anchor'),
     );
     expect(anchors).toContain('bottom-right');
     expect(anchors).toContain('top-center');
@@ -312,9 +319,9 @@ describe('PlaytestHudOverlay', () => {
     // Unknown kind is skipped without breaking the chassis.
     expect(container.querySelector('[data-hud-widget-id="mana"]')).toBeNull();
     // The layout identity is exposed for tooling.
-    expect(
-      scoped.getByTestId('playtest-hud-overlay').getAttribute('data-hud-layout-id'),
-    ).toBe('custom-hud');
+    expect(scoped.getByTestId('playtest-hud-overlay').getAttribute('data-hud-layout-id')).toBe(
+      'custom-hud',
+    );
   });
 
   it('normalizes legacy HUD placement offsets before rendering the shared overlay', () => {
@@ -350,9 +357,9 @@ describe('PlaytestHudOverlay', () => {
       />,
     );
 
-    expect(container.querySelector('[data-hud-widget-id="alive-count"]')?.getAttribute('style')).toBe(
-      null,
-    );
+    expect(
+      container.querySelector('[data-hud-widget-id="alive-count"]')?.getAttribute('style'),
+    ).toBe(null);
     expect(
       (container.querySelector('[data-hud-widget-id="alive-count-offset"]') as HTMLElement).style
         .transform,
@@ -412,9 +419,7 @@ describe('PlaytestHudOverlay', () => {
     });
     const target = container.querySelector('[data-hud-drop-zone="bottom-left"]');
     act(() => {
-      target!.dispatchEvent(
-        Object.assign(new Event('drop', { bubbles: true }), { dataTransfer }),
-      );
+      target!.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer }));
     });
     expect(onMoveWidget).toHaveBeenCalledWith('alive-count', 'bottom-left');
   });

@@ -52,8 +52,7 @@ if (!rootElement) {
   throw new Error('Root element #root not found');
 }
 
-const devtoolsEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_TILEBORNE_DEVTOOLS === '1';
+const devtoolsEnabled = import.meta.env.DEV && import.meta.env.VITE_TILEBORNE_DEVTOOLS === '1';
 
 createRoot(rootElement).render(
   <StrictMode>

@@ -1,12 +1,12 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-import { Effect } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
+import { Effect } from 'effect';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { hashPluginDirectory } from "./filesystem.js";
-import { PluginInstallerLayer, PluginInstallerService } from "./index.js";
+import { hashPluginDirectory } from './filesystem.js';
+import { PluginInstallerLayer, PluginInstallerService } from './index.js';
 
 const tempDirs: string[] = [];
 
@@ -20,38 +20,40 @@ afterEach(async () => {
 });
 
 const withDir = async <A>(run: (dir: string) => Promise<A>): Promise<A> => {
-  const dir = await mkdtemp(path.join(tmpdir(), "tileborne-plugin-scaffold-"));
+  const dir = await mkdtemp(path.join(tmpdir(), 'tileborne-plugin-scaffold-'));
   tempDirs.push(dir);
-  process.env["TILEBORNE_HOME"] = await mkdtemp(path.join(tmpdir(), "tileborne-plugin-home-"));
+  process.env['TILEBORNE_HOME'] = await mkdtemp(path.join(tmpdir(), 'tileborne-plugin-home-'));
   return run(dir);
 };
 
-describe("PluginInstallerService scaffold", () => {
-  it("creates expected plugin scaffold files", () =>
+describe('PluginInstallerService scaffold', () => {
+  it('creates expected plugin scaffold files', () =>
     withDir(async (cwd) => {
       const created = await Effect.runPromise(
         Effect.gen(function* () {
           const installer = yield* PluginInstallerService;
-          return yield* installer.create("demo-plugin", undefined, cwd);
+          return yield* installer.create('demo-plugin', undefined, cwd);
         }).pipe(Effect.provide(PluginInstallerLayer)),
       );
-      expect(created.directory).toBe(path.join(cwd, "demo-plugin"));
-      await expect(readFile(path.join(created.directory, "tileborne-plugin.json"), "utf8")).resolves.toContain(
-        "@tileborne-plugins/demo-plugin",
+      expect(created.directory).toBe(path.join(cwd, 'demo-plugin'));
+      await expect(
+        readFile(path.join(created.directory, 'tileborne-plugin.json'), 'utf8'),
+      ).resolves.toContain('@tileborne-plugins/demo-plugin');
+      await expect(readFile(path.join(created.directory, 'README.md'), 'utf8')).resolves.toContain(
+        'demo-plugin',
       );
-      await expect(readFile(path.join(created.directory, "README.md"), "utf8")).resolves.toContain("demo-plugin");
     }));
 
-  it("packs a plugin directory with stable integrity metadata", () =>
+  it('packs a plugin directory with stable integrity metadata', () =>
     withDir(async (cwd) => {
-      const source = path.join(cwd, "pack-me");
+      const source = path.join(cwd, 'pack-me');
       await Effect.runPromise(
         Effect.gen(function* () {
           const installer = yield* PluginInstallerService;
-          yield* installer.create("pack-me", undefined, cwd);
+          yield* installer.create('pack-me', undefined, cwd);
         }).pipe(Effect.provide(PluginInstallerLayer)),
       );
-      const out = path.join(cwd, "dist", "pack-me.tbpack");
+      const out = path.join(cwd, 'dist', 'pack-me.tbpack');
       const packed = await Effect.runPromise(
         Effect.gen(function* () {
           const installer = yield* PluginInstallerService;
@@ -60,6 +62,6 @@ describe("PluginInstallerService scaffold", () => {
       );
       const expected = await hashPluginDirectory(source);
       expect(packed.integrity).toBe(expected);
-      await expect(readFile(`${out}.meta.json`, "utf8")).resolves.toContain(expected);
+      await expect(readFile(`${out}.meta.json`, 'utf8')).resolves.toContain(expected);
     }));
 });

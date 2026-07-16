@@ -1,16 +1,27 @@
-import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
-import { access, cp, lstat, readdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import {
+  access,
+  cp,
+  lstat,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   AssetPathSecurityError,
   assertWithinRoot,
   rejectPathTraversal,
   rejectSymlinkEscape,
-} from "@tileborne/asset-pipeline";
-import { ContentHash, hashBytes } from "@tileborne/core";
-import { Schema } from "effect";
+} from '@tileborne/asset-pipeline';
+import { ContentHash, hashBytes } from '@tileborne/core';
+import { Schema } from 'effect';
 
 import {
   MAX_PLUGIN_BYTES,
@@ -22,24 +33,22 @@ import {
   PluginIntegrityError,
   PluginValidationError,
   InstalledPlugin,
-} from "./model.js";
+} from './model.js';
 
 export const pluginDirectoryName = (pluginId: string, version: string): string =>
   `${encodeURIComponent(pluginId)}-${version}`;
 
-export const rejectUnsafeSourcePath = (
-  sourcePath: string,
-): PluginValidationError | undefined => {
+export const rejectUnsafeSourcePath = (sourcePath: string): PluginValidationError | undefined => {
   if (!path.isAbsolute(sourcePath)) {
     return new PluginValidationError({
       path: sourcePath,
-      message: "plugin source path must be absolute",
+      message: 'plugin source path must be absolute',
     });
   }
-  if (sourcePath.split(path.sep).includes("..")) {
+  if (sourcePath.split(path.sep).includes('..')) {
     return new PluginValidationError({
       path: sourcePath,
-      message: "plugin source path must not contain traversal segments",
+      message: 'plugin source path must not contain traversal segments',
     });
   }
   return undefined;
@@ -49,10 +58,10 @@ export const validateRelativePluginPath = (rootPath: string, candidatePath: stri
   const normalized = candidatePath.replaceAll(path.win32.sep, path.posix.sep);
   const rawSegments = normalized.split(path.posix.sep);
 
-  if (path.posix.isAbsolute(normalized) || rawSegments.includes("..")) {
+  if (path.posix.isAbsolute(normalized) || rawSegments.includes('..')) {
     throw new PluginValidationError({
       path: candidatePath,
-      message: "plugin manifest path must stay inside the plugin root",
+      message: 'plugin manifest path must stay inside the plugin root',
     });
   }
 
@@ -82,17 +91,17 @@ export const resolvePluginManifestPath = async (
 };
 
 const collectManifestPaths = (value: unknown, key?: string): readonly string[] => {
-  if (typeof value === "string") {
-    return key === "path" || key === "entry" ? [value] : [];
+  if (typeof value === 'string') {
+    return key === 'path' || key === 'entry' ? [value] : [];
   }
   if (Array.isArray(value)) {
     return value.flatMap((entry) => collectManifestPaths(entry));
   }
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === 'object' && value !== null) {
     return Object.entries(value).flatMap(([entryKey, entryValue]) => {
-      if (entryKey === "entry" && typeof entryValue === "object" && entryValue !== null) {
+      if (entryKey === 'entry' && typeof entryValue === 'object' && entryValue !== null) {
         return Object.values(entryValue).flatMap((nestedValue) =>
-          typeof nestedValue === "string" ? [nestedValue] : collectManifestPaths(nestedValue),
+          typeof nestedValue === 'string' ? [nestedValue] : collectManifestPaths(nestedValue),
         );
       }
       return collectManifestPaths(entryValue, entryKey);
@@ -107,76 +116,77 @@ export const validatePluginManifestPaths = (rootPath: string, manifest: unknown)
   }
 };
 
-const toMessage = (cause: unknown): string => cause instanceof Error ? cause.message : String(cause);
+const toMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 export const readManifestJson = async (rootPath: string): Promise<unknown> => {
   const manifestPath = path.join(rootPath, PLUGIN_MANIFEST_FILE);
-  const raw = await readFile(manifestPath, "utf8");
+  const raw = await readFile(manifestPath, 'utf8');
   return materializePluginManifestInput(JSON.parse(raw) as unknown);
 };
 
 const optionalContributionKeys = {
-  contributes: ["panels", "tools", "assetPacks", "tilesetPacks", "editor", "runtime", "server"],
-  entry: ["editor", "runtime", "server"],
+  contributes: ['panels', 'tools', 'assetPacks', 'tilesetPacks', 'editor', 'runtime', 'server'],
+  entry: ['editor', 'runtime', 'server'],
   editor: [
-    "tabs",
-    "tools",
-    "inspectors",
-    "commands",
-    "menus",
-    "settings",
-    "paletteCategories",
-    "paletteSubFilters",
-    "paletteItemActions",
-    "viewportActions",
-    "toolDock",
-    "overlays",
-    "inspectorPanels",
-    "settingsPanels",
-    "mapKinds",
-    "presets",
-    "panels",
-    "validators",
-    "exporters",
-    "generators",
-    "assetMetadata",
-    "playerModelPolicies",
-    "gameSettingsForms",
+    'tabs',
+    'tools',
+    'inspectors',
+    'commands',
+    'menus',
+    'settings',
+    'paletteCategories',
+    'paletteSubFilters',
+    'paletteItemActions',
+    'viewportActions',
+    'toolDock',
+    'overlays',
+    'inspectorPanels',
+    'settingsPanels',
+    'mapKinds',
+    'presets',
+    'panels',
+    'validators',
+    'exporters',
+    'generators',
+    'assetMetadata',
+    'playerModelPolicies',
+    'gameSettingsForms',
   ],
   runtime: [
-    "systems",
-    "components",
-    "events",
-    "assetLoaders",
-    "clientSystems",
-    "hudWidgets",
-    "hudLayouts",
-    "lobbyPanels",
-    "menuSections",
-    "inputMaps",
-    "audioBuses",
-    "cameras",
-    "interpolators",
-    "assetPacks",
-    "errorMappers",
-    "gameObjectCatalogs",
-    "weaponCatalogs",
+    'systems',
+    'components',
+    'events',
+    'assetLoaders',
+    'clientSystems',
+    'hudWidgets',
+    'hudLayouts',
+    'lobbyPanels',
+    'menuSections',
+    'inputMaps',
+    'audioBuses',
+    'cameras',
+    'interpolators',
+    'assetPacks',
+    'errorMappers',
+    'gameObjectCatalogs',
+    'weaponCatalogs',
   ],
   server: [
-    "rules",
-    "scoring",
-    "lootTables",
-    "matchmaking",
-    "serverSystems",
-    "roomRules",
-    "mapValidators",
-    "matchPhases",
-    "replayWriters",
+    'rules',
+    'scoring',
+    'lootTables',
+    'matchmaking',
+    'serverSystems',
+    'roomRules',
+    'mapValidators',
+    'matchPhases',
+    'replayWriters',
   ],
 } as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const withUndefinedKeys = (value: unknown, keys: readonly string[]): unknown => {
   if (!isRecord(value)) {
@@ -192,24 +202,24 @@ const withUndefinedKeys = (value: unknown, keys: readonly string[]): unknown => 
 };
 
 const materializeContributionDisplay = (value: unknown): unknown =>
-  withUndefinedKeys(value, ["description", "icon", "order"]);
+  withUndefinedKeys(value, ['description', 'icon', 'order']);
 
 const materializeContributionEntry = (value: unknown): unknown => {
   if (!isRecord(value)) {
     return value;
   }
   const next: Record<string, unknown> = { ...value };
-  if ("display" in next) {
+  if ('display' in next) {
     next.display = materializeContributionDisplay(next.display);
   }
-  return withUndefinedKeys(next, ["display"]);
+  return withUndefinedKeys(next, ['display']);
 };
 
 const materializeSidebarPanelContributionEntry = (value: unknown): unknown =>
-  withUndefinedKeys(value, ["description", "group", "order", "capabilities", "data"]);
+  withUndefinedKeys(value, ['description', 'group', 'order', 'capabilities', 'data']);
 
 const materializeSidebarToolContributionEntry = (value: unknown): unknown =>
-  withUndefinedKeys(value, ["description", "group", "order", "commandId", "capabilities", "data"]);
+  withUndefinedKeys(value, ['description', 'group', 'order', 'commandId', 'capabilities', 'data']);
 
 const materializeContributionList = (value: unknown): unknown => {
   if (!Array.isArray(value)) {
@@ -236,30 +246,38 @@ export const materializePluginManifestInput = (input: unknown): unknown => {
   if (!isRecord(input)) {
     return input;
   }
-  const manifest = withUndefinedKeys(input, ["repository", "homepage", "entry", "migrations"]) as Record<string, unknown>;
-  manifest["contributes"] = withUndefinedKeys(manifest["contributes"], optionalContributionKeys.contributes);
-  manifest["entry"] = withUndefinedKeys(manifest["entry"], optionalContributionKeys.entry);
-  if (isRecord(manifest["contributes"])) {
-    if (Array.isArray(manifest["contributes"]["panels"])) {
-      manifest["contributes"]["panels"] = manifest["contributes"]["panels"].map(
+  const manifest = withUndefinedKeys(input, [
+    'repository',
+    'homepage',
+    'entry',
+    'migrations',
+  ]) as Record<string, unknown>;
+  manifest['contributes'] = withUndefinedKeys(
+    manifest['contributes'],
+    optionalContributionKeys.contributes,
+  );
+  manifest['entry'] = withUndefinedKeys(manifest['entry'], optionalContributionKeys.entry);
+  if (isRecord(manifest['contributes'])) {
+    if (Array.isArray(manifest['contributes']['panels'])) {
+      manifest['contributes']['panels'] = manifest['contributes']['panels'].map(
         materializeSidebarPanelContributionEntry,
       );
     }
-    if (Array.isArray(manifest["contributes"]["tools"])) {
-      manifest["contributes"]["tools"] = manifest["contributes"]["tools"].map(
+    if (Array.isArray(manifest['contributes']['tools'])) {
+      manifest['contributes']['tools'] = manifest['contributes']['tools'].map(
         materializeSidebarToolContributionEntry,
       );
     }
-    manifest["contributes"]["editor"] = materializeContributionBucket(
-      manifest["contributes"]["editor"],
+    manifest['contributes']['editor'] = materializeContributionBucket(
+      manifest['contributes']['editor'],
       optionalContributionKeys.editor,
     );
-    manifest["contributes"]["runtime"] = materializeContributionBucket(
-      manifest["contributes"]["runtime"],
+    manifest['contributes']['runtime'] = materializeContributionBucket(
+      manifest['contributes']['runtime'],
       optionalContributionKeys.runtime,
     );
-    manifest["contributes"]["server"] = materializeContributionBucket(
-      manifest["contributes"]["server"],
+    manifest['contributes']['server'] = materializeContributionBucket(
+      manifest['contributes']['server'],
       optionalContributionKeys.server,
     );
   }
@@ -268,9 +286,9 @@ export const materializePluginManifestInput = (input: unknown): unknown => {
 
 export const readInstalledLock = async (rootPath: string): Promise<ContentHash> => {
   const lockPath = path.join(rootPath, PLUGIN_LOCK_FILE);
-  const parsed = JSON.parse(await readFile(lockPath, "utf8")) as { readonly integrity?: unknown };
-  if (typeof parsed.integrity !== "string") {
-    throw new Error("plugin lock is missing integrity");
+  const parsed = JSON.parse(await readFile(lockPath, 'utf8')) as { readonly integrity?: unknown };
+  if (typeof parsed.integrity !== 'string') {
+    throw new Error('plugin lock is missing integrity');
   }
   return Schema.decodeUnknownSync(ContentHash)(parsed.integrity);
 };
@@ -289,7 +307,7 @@ export const validatePluginDirectory = async (rootPath: string): Promise<Directo
     const relative = path.relative(rootPath, current);
     try {
       assertWithinRoot(rootPath, current);
-      rejectPathTraversal(rootPath, relative || ".");
+      rejectPathTraversal(rootPath, relative || '.');
       await rejectSymlinkEscape(rootPath, current);
     } catch (cause) {
       if (cause instanceof AssetPathSecurityError) {
@@ -303,7 +321,7 @@ export const validatePluginDirectory = async (rootPath: string): Promise<Directo
     if (path.isAbsolute(relative)) {
       throw new PluginValidationError({
         path: current,
-        message: "plugin source contains path traversal",
+        message: 'plugin source contains path traversal',
       });
     }
     if (stat.isDirectory()) {
@@ -318,7 +336,7 @@ export const validatePluginDirectory = async (rootPath: string): Promise<Directo
     if (!stat.isFile()) {
       throw new PluginValidationError({
         path: current,
-        message: "plugin source contains an unsupported filesystem entry",
+        message: 'plugin source contains an unsupported filesystem entry',
       });
     }
     fileCount += 1;
@@ -342,11 +360,11 @@ export const validatePluginDirectory = async (rootPath: string): Promise<Directo
 };
 
 export const hashPluginDirectory = async (rootPath: string): Promise<ContentHash> => {
-  const hash = createHash("sha256");
+  const hash = createHash('sha256');
 
   const visit = async (current: string): Promise<void> => {
     const stat = await lstat(current);
-    const relative = path.relative(rootPath, current).split(path.sep).join("/");
+    const relative = path.relative(rootPath, current).split(path.sep).join('/');
     if (relative === PLUGIN_LOCK_FILE || relative === PLUGIN_SEED_FINGERPRINT_FILE) {
       return;
     }
@@ -364,21 +382,22 @@ export const hashPluginDirectory = async (rootPath: string): Promise<ContentHash
     if (stat.isFile()) {
       hash.update(`file:${relative}\0`);
       hash.update(await readFile(current));
-      hash.update("\0");
+      hash.update('\0');
     }
   };
 
   await visit(rootPath);
-  return `sha256:${hash.digest("hex")}` as ContentHash;
+  return `sha256:${hash.digest('hex')}` as ContentHash;
 };
 
-export const hashFile = async (filePath: string): Promise<ContentHash> => hashBytes(await readFile(filePath));
+export const hashFile = async (filePath: string): Promise<ContentHash> =>
+  hashBytes(await readFile(filePath));
 
 const rewriteDistPrefixedPath = (value: string): string =>
-  value.startsWith("./dist/") ? `./${value.slice("./dist/".length)}` : value;
+  value.startsWith('./dist/') ? `./${value.slice('./dist/'.length)}` : value;
 
 const rewriteManifestPathStrings = (value: unknown): unknown => {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return rewriteDistPrefixedPath(value);
   }
   if (Array.isArray(value)) {
@@ -397,7 +416,7 @@ const rewriteManifestPathStrings = (value: unknown): unknown => {
 const hasPackedPluginArtifacts = async (rootPath: string): Promise<boolean> => {
   try {
     await access(path.join(rootPath, PLUGIN_MANIFEST_FILE));
-    await access(path.join(rootPath, "runtime.js"));
+    await access(path.join(rootPath, 'runtime.js'));
     return true;
   } catch {
     return false;
@@ -406,10 +425,10 @@ const hasPackedPluginArtifacts = async (rootPath: string): Promise<boolean> => {
 
 const rootManifestUsesDistEntries = async (rootPath: string): Promise<boolean> => {
   try {
-    const raw = JSON.parse(await readFile(path.join(rootPath, PLUGIN_MANIFEST_FILE), "utf8")) as {
+    const raw = JSON.parse(await readFile(path.join(rootPath, PLUGIN_MANIFEST_FILE), 'utf8')) as {
       readonly entry?: Record<string, string>;
     };
-    return Object.values(raw.entry ?? {}).some((entry) => entry.startsWith("./dist/"));
+    return Object.values(raw.entry ?? {}).some((entry) => entry.startsWith('./dist/'));
   } catch {
     return false;
   }
@@ -417,7 +436,7 @@ const rootManifestUsesDistEntries = async (rootPath: string): Promise<boolean> =
 
 export const resolveLocalPluginInstallRoot = async (sourcePath: string): Promise<string> => {
   const resolved = path.resolve(sourcePath);
-  const packedRoot = path.join(resolved, "dist");
+  const packedRoot = path.join(resolved, 'dist');
   if (await hasPackedPluginArtifacts(packedRoot)) {
     if (resolved !== packedRoot || (await rootManifestUsesDistEntries(resolved))) {
       return packedRoot;
@@ -428,12 +447,15 @@ export const resolveLocalPluginInstallRoot = async (sourcePath: string): Promise
 
 export const rewritePackedManifestEntryPaths = async (packagePath: string): Promise<void> => {
   const manifestPath = path.join(packagePath, PLUGIN_MANIFEST_FILE);
-  const raw = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
+  const raw = JSON.parse(await readFile(manifestPath, 'utf8')) as unknown;
   const rewritten = rewriteManifestPathStrings(raw);
-  await writeFile(manifestPath, `${JSON.stringify(rewritten, null, 2)}\n`, "utf8");
+  await writeFile(manifestPath, `${JSON.stringify(rewritten, null, 2)}\n`, 'utf8');
 };
 
-export const copyPluginDirectory = async (sourcePath: string, targetPath: string): Promise<void> => {
+export const copyPluginDirectory = async (
+  sourcePath: string,
+  targetPath: string,
+): Promise<void> => {
   const installRoot = await resolveLocalPluginInstallRoot(sourcePath);
   await cp(installRoot, targetPath, {
     recursive: true,
@@ -442,11 +464,11 @@ export const copyPluginDirectory = async (sourcePath: string, targetPath: string
     verbatimSymlinks: true,
     filter: (entry) => {
       const relative = path.relative(installRoot, entry);
-      if (!relative || relative === ".") {
+      if (!relative || relative === '.') {
         return true;
       }
       const segments = relative.split(path.sep);
-      return !segments.some((segment) => segment === "node_modules" || segment === ".git");
+      return !segments.some((segment) => segment === 'node_modules' || segment === '.git');
     },
   });
   if (installRoot.endsWith(`${path.sep}dist`)) {
@@ -454,8 +476,11 @@ export const copyPluginDirectory = async (sourcePath: string, targetPath: string
   }
 };
 
-export const symlinkPluginDirectory = async (sourcePath: string, targetPath: string): Promise<void> => {
-  await symlink(sourcePath, targetPath, "dir");
+export const symlinkPluginDirectory = async (
+  sourcePath: string,
+  targetPath: string,
+): Promise<void> => {
+  await symlink(sourcePath, targetPath, 'dir');
 };
 
 export const removePath = async (targetPath: string): Promise<void> => {
@@ -463,10 +488,10 @@ export const removePath = async (targetPath: string): Promise<void> => {
 };
 
 const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" &&
+  typeof cause === 'object' &&
   cause !== null &&
-  "code" in cause &&
-  (cause as { readonly code?: unknown }).code === "ENOENT";
+  'code' in cause &&
+  (cause as { readonly code?: unknown }).code === 'ENOENT';
 
 export const replaceDirectory = async (sourcePath: string, targetPath: string): Promise<void> => {
   try {
@@ -480,10 +505,10 @@ export const replaceDirectory = async (sourcePath: string, targetPath: string): 
     await rename(sourcePath, targetPath);
   } catch (cause) {
     const code =
-      typeof cause === "object" && cause !== null && "code" in cause
+      typeof cause === 'object' && cause !== null && 'code' in cause
         ? (cause as { readonly code?: unknown }).code
         : undefined;
-    if (code === "ENOTEMPTY" || code === "EEXIST") {
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') {
       await rm(targetPath, { recursive: true, force: true });
       await rename(sourcePath, targetPath);
       return;
@@ -492,19 +517,15 @@ export const replaceDirectory = async (sourcePath: string, targetPath: string): 
   }
 };
 
-export const runCommand = (
-  command: string,
-  args: readonly string[],
-  cwd: string,
-): Promise<void> =>
+export const runCommand = (command: string, args: readonly string[], cwd: string): Promise<void> =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { cwd, stdio: "ignore" });
-    child.once("error", reject);
-    child.once("close", (code) => {
+    const child = spawn(command, [...args], { cwd, stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('close', (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${command} exited with ${code ?? "unknown"}`));
+        reject(new Error(`${command} exited with ${code ?? 'unknown'}`));
       }
     });
   });
@@ -524,12 +545,16 @@ export const writeInstalledLock = async (plugin: InstalledPlugin): Promise<void>
   const encoded = Schema.encodeSync(InstalledPlugin)(plugin);
   await writeFile(
     path.join(plugin.rootPath, PLUGIN_LOCK_FILE),
-    `${JSON.stringify({
-      schemaVersion: 1,
-      pluginId: encoded.id,
-      version: encoded.version,
-      integrity: encoded.integrity,
-    }, null, 2)}\n`,
-    "utf8",
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        pluginId: encoded.id,
+        version: encoded.version,
+        integrity: encoded.integrity,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
   );
 };

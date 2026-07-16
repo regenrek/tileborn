@@ -1,23 +1,29 @@
-import { Layer } from "effect";
+import { Layer } from 'effect';
 
-import { ConfigLayer } from "@tileborne/services-foundation";
+import { ConfigLayer } from '@tileborne/services-foundation';
 
-import { PluginInstallerServiceLive } from "./installer/index.js";
-import { PluginExecutionContextService, PluginLoaderServiceLive } from "./loader/index.js";
-import { PluginRegistryServiceLive } from "./registry/index.js";
+import { PluginInstallerServiceLive } from './installer/index.js';
+import { PluginExecutionContextService, PluginLoaderServiceLive } from './loader/index.js';
+import { PluginRegistryServiceLive } from './registry/index.js';
 
-export * from "./model.js";
-export * from "./registry/index.js";
-export * from "./installer/index.js";
-export * from "./loader/index.js";
-export * from "./scaffold.js";
-export * from "./catalog.js";
-export * from "./manifest-version.js";
-export { hashPluginDirectory, materializePluginManifestInput, resolvePluginManifestPath } from "./filesystem.js";
+export * from './model.js';
+export * from './registry/index.js';
+export * from './installer/index.js';
+export * from './loader/index.js';
+export * from './scaffold.js';
+export * from './catalog.js';
+export * from './manifest-version.js';
+export {
+  hashPluginDirectory,
+  materializePluginManifestInput,
+  resolvePluginManifestPath,
+} from './filesystem.js';
 
 export const PluginRegistryLayer = PluginRegistryServiceLive.pipe(Layer.provideMerge(ConfigLayer));
 
-export const PluginInstallerLayer = PluginInstallerServiceLive.pipe(Layer.provideMerge(PluginRegistryLayer));
+export const PluginInstallerLayer = PluginInstallerServiceLive.pipe(
+  Layer.provideMerge(PluginRegistryLayer),
+);
 
 export const PluginLoaderMainLayer = PluginLoaderServiceLive.pipe(
   Layer.provideMerge(PluginRegistryLayer),

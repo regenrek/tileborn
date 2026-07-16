@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
 import {
   type CatalogContributionInput,
@@ -8,16 +8,17 @@ import {
   type RuntimeGameObjectCatalogContribution,
   type RuntimeWeaponCatalogContribution,
   type WeaponCatalogContributionInput,
-} from "@tileborne/plugin-api";
-import { Effect, Option, Result } from "effect";
+} from '@tileborne/plugin-api';
+import { Effect, Option, Result } from 'effect';
 
-import { resolvePluginManifestPath } from "./filesystem.js";
-import { PluginValidationError } from "./model.js";
+import { resolvePluginManifestPath } from './filesystem.js';
+import { PluginValidationError } from './model.js';
 
-const toMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+const toMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Materialize the raw catalog JSON a declarative catalog contribution's `data`
@@ -34,7 +35,7 @@ const materializeContributionData = (
 ): Effect.Effect<unknown, PluginValidationError> =>
   Effect.gen(function* () {
     const indexPath =
-      isRecord(data) && typeof data.indexPath === "string" ? data.indexPath : undefined;
+      isRecord(data) && typeof data.indexPath === 'string' ? data.indexPath : undefined;
     if (indexPath === undefined) {
       // No indirection: the contribution embeds the catalog content pack inline.
       return data;
@@ -47,12 +48,14 @@ const materializeContributionData = (
           : new PluginValidationError({ path: indexPath, message: toMessage(cause) }),
     });
     const raw = yield* Effect.tryPromise({
-      try: () => readFile(resolvedPath, "utf8"),
-      catch: (cause) => new PluginValidationError({ path: resolvedPath, message: toMessage(cause) }),
+      try: () => readFile(resolvedPath, 'utf8'),
+      catch: (cause) =>
+        new PluginValidationError({ path: resolvedPath, message: toMessage(cause) }),
     });
     return yield* Effect.try({
       try: (): unknown => JSON.parse(raw),
-      catch: (cause) => new PluginValidationError({ path: resolvedPath, message: toMessage(cause) }),
+      catch: (cause) =>
+        new PluginValidationError({ path: resolvedPath, message: toMessage(cause) }),
     });
   });
 

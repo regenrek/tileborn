@@ -1,36 +1,39 @@
-import { ContentHash, GameObjectCatalog, PluginId } from "@tileborne/core";
-import { MAX_PACK_BYTES } from "@tileborne/asset-pipeline";
-import { PluginContributions, PluginManifest, WeaponCatalog } from "@tileborne/plugin-api";
-import { Schema } from "effect";
+import { ContentHash, GameObjectCatalog, PluginId } from '@tileborne/core';
+import { MAX_PACK_BYTES } from '@tileborne/asset-pipeline';
+import { PluginContributions, PluginManifest, WeaponCatalog } from '@tileborne/plugin-api';
+import { Schema } from 'effect';
 
-export const PLUGIN_MANIFEST_FILE = "tileborne-plugin.json";
-export const PLUGIN_LOCK_FILE = "lock.json";
-export const PLUGIN_SEED_FINGERPRINT_FILE = ".tileborne-seed-fingerprint";
+export const PLUGIN_MANIFEST_FILE = 'tileborne-plugin.json';
+export const PLUGIN_LOCK_FILE = 'lock.json';
+export const PLUGIN_SEED_FINGERPRINT_FILE = '.tileborne-seed-fingerprint';
 export const MAX_PLUGIN_BYTES = Math.min(MAX_PACK_BYTES, 100 * 1024 * 1024);
 export const MAX_PLUGIN_FILES = 10_000;
 
-export class NpmPluginSource extends Schema.TaggedClass<NpmPluginSource>()("npm", {
+export class NpmPluginSource extends Schema.TaggedClass<NpmPluginSource>()('npm', {
   packageName: Schema.String,
   version: Schema.OptionFromOptional(Schema.String),
 }) {}
 
-export class LocalPluginSource extends Schema.TaggedClass<LocalPluginSource>()("local", {
+export class LocalPluginSource extends Schema.TaggedClass<LocalPluginSource>()('local', {
   path: Schema.String,
 }) {}
 
-export class TarballPluginSource extends Schema.TaggedClass<TarballPluginSource>()("tarball", {
+export class TarballPluginSource extends Schema.TaggedClass<TarballPluginSource>()('tarball', {
   url: Schema.String,
   integrity: Schema.OptionFromOptional(ContentHash),
 }) {}
 
-export class GitPluginSource extends Schema.TaggedClass<GitPluginSource>()("git", {
+export class GitPluginSource extends Schema.TaggedClass<GitPluginSource>()('git', {
   repo: Schema.String,
   ref: Schema.OptionFromOptional(Schema.String),
 }) {}
 
-export class DevSymlinkPluginSource extends Schema.TaggedClass<DevSymlinkPluginSource>()("dev-symlink", {
-  linkPath: Schema.String,
-}) {}
+export class DevSymlinkPluginSource extends Schema.TaggedClass<DevSymlinkPluginSource>()(
+  'dev-symlink',
+  {
+    linkPath: Schema.String,
+  },
+) {}
 
 export const PluginSource = Schema.Union([
   NpmPluginSource,
@@ -41,15 +44,17 @@ export const PluginSource = Schema.Union([
 ]);
 export type PluginSource = Schema.Schema.Type<typeof PluginSource>;
 
-export const PluginProcessKind = Schema.Literals(["main", "renderer", "cli"]);
+export const PluginProcessKind = Schema.Literals(['main', 'renderer', 'cli']);
 export type PluginProcessKind = Schema.Schema.Type<typeof PluginProcessKind>;
 
-export class PluginExecutionContext extends Schema.Class<PluginExecutionContext>("PluginExecutionContext")({
+export class PluginExecutionContext extends Schema.Class<PluginExecutionContext>(
+  'PluginExecutionContext',
+)({
   processKind: PluginProcessKind,
   allowedInRenderer: Schema.Boolean,
 }) {}
 
-export class InstalledPlugin extends Schema.Class<InstalledPlugin>("InstalledPlugin")({
+export class InstalledPlugin extends Schema.Class<InstalledPlugin>('InstalledPlugin')({
   id: PluginId,
   version: Schema.String,
   enabled: Schema.Boolean,
@@ -59,7 +64,9 @@ export class InstalledPlugin extends Schema.Class<InstalledPlugin>("InstalledPlu
   integrity: ContentHash,
 }) {}
 
-export class PluginRegistrySnapshot extends Schema.Class<PluginRegistrySnapshot>("PluginRegistrySnapshot")({
+export class PluginRegistrySnapshot extends Schema.Class<PluginRegistrySnapshot>(
+  'PluginRegistrySnapshot',
+)({
   plugins: Schema.Array(InstalledPlugin),
 }) {}
 
@@ -71,7 +78,7 @@ export class PluginRegistrySnapshot extends Schema.Class<PluginRegistrySnapshot>
  * deferred to the runtime-map-package capstone.
  */
 export class MaterializedGameObjectCatalog extends Schema.Class<MaterializedGameObjectCatalog>(
-  "MaterializedGameObjectCatalog",
+  'MaterializedGameObjectCatalog',
 )({
   contributionId: Schema.String,
   catalog: GameObjectCatalog,
@@ -86,13 +93,15 @@ export class MaterializedGameObjectCatalog extends Schema.Class<MaterializedGame
  * {@link MaterializedGameObjectCatalog} / ADR-0019.
  */
 export class MaterializedWeaponCatalog extends Schema.Class<MaterializedWeaponCatalog>(
-  "MaterializedWeaponCatalog",
+  'MaterializedWeaponCatalog',
 )({
   contributionId: Schema.String,
   catalog: WeaponCatalog,
 }) {}
 
-export class LoadedDeclarativePlugin extends Schema.Class<LoadedDeclarativePlugin>("LoadedDeclarativePlugin")({
+export class LoadedDeclarativePlugin extends Schema.Class<LoadedDeclarativePlugin>(
+  'LoadedDeclarativePlugin',
+)({
   pluginId: PluginId,
   manifest: PluginManifest,
   contributions: PluginContributions,
@@ -117,39 +126,51 @@ export interface LoadedExecutablePlugin {
   readonly module: unknown;
 }
 
-export class PluginNotFoundError extends Schema.TaggedErrorClass<PluginNotFoundError>()("PluginNotFoundError", {
-  pluginId: PluginId,
-  message: Schema.String,
-}) {}
+export class PluginNotFoundError extends Schema.TaggedErrorClass<PluginNotFoundError>()(
+  'PluginNotFoundError',
+  {
+    pluginId: PluginId,
+    message: Schema.String,
+  },
+) {}
 
-export class PluginResolveError extends Schema.TaggedErrorClass<PluginResolveError>()("PluginResolveError", {
-  source: Schema.String,
-  message: Schema.String,
-}) {}
+export class PluginResolveError extends Schema.TaggedErrorClass<PluginResolveError>()(
+  'PluginResolveError',
+  {
+    source: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export class PluginValidationError extends Schema.TaggedErrorClass<PluginValidationError>()(
-  "PluginValidationError",
+  'PluginValidationError',
   {
     path: Schema.String,
     message: Schema.String,
   },
 ) {}
 
-export class PluginInstallError extends Schema.TaggedErrorClass<PluginInstallError>()("PluginInstallError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class PluginInstallError extends Schema.TaggedErrorClass<PluginInstallError>()(
+  'PluginInstallError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
-export class PluginIntegrityError extends Schema.TaggedErrorClass<PluginIntegrityError>()("PluginIntegrityError", {
-  path: Schema.String,
-  pluginId: Schema.optionalKey(PluginId),
-  expectedHash: Schema.optionalKey(ContentHash),
-  actualHash: Schema.optionalKey(ContentHash),
-  message: Schema.String,
-}) {}
+export class PluginIntegrityError extends Schema.TaggedErrorClass<PluginIntegrityError>()(
+  'PluginIntegrityError',
+  {
+    path: Schema.String,
+    pluginId: Schema.optionalKey(PluginId),
+    expectedHash: Schema.optionalKey(ContentHash),
+    actualHash: Schema.optionalKey(ContentHash),
+    message: Schema.String,
+  },
+) {}
 
 export class PluginExecutionForbiddenError extends Schema.TaggedErrorClass<PluginExecutionForbiddenError>()(
-  "PluginExecutionForbiddenError",
+  'PluginExecutionForbiddenError',
   {
     pluginId: PluginId,
     processKind: PluginProcessKind,
@@ -157,7 +178,10 @@ export class PluginExecutionForbiddenError extends Schema.TaggedErrorClass<Plugi
   },
 ) {}
 
-export type PluginRegistryError = PluginNotFoundError | PluginValidationError | PluginIntegrityError;
+export type PluginRegistryError =
+  | PluginNotFoundError
+  | PluginValidationError
+  | PluginIntegrityError;
 export type PluginInstallerError =
   | PluginResolveError
   | PluginValidationError
@@ -170,7 +194,7 @@ export type PluginLoaderError =
   | PluginExecutionForbiddenError
   | PluginInstallError;
 
-export class PluginVerifyResult extends Schema.Class<PluginVerifyResult>("PluginVerifyResult")({
+export class PluginVerifyResult extends Schema.Class<PluginVerifyResult>('PluginVerifyResult')({
   pluginId: PluginId,
   version: Schema.optionalKey(Schema.String),
   enabled: Schema.optionalKey(Schema.Boolean),

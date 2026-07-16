@@ -938,7 +938,7 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
           readonly postBuildStatus: string;
         };
       };
-      const currentRoot = await realpath(process.cwd());
+      const currentRoot = await realpath(path.resolve(process.cwd(), '../..'));
       if (
         preflight.schemaVersion !== 1 ||
         preflight.checkout.cwdRealpath !== currentRoot ||

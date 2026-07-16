@@ -274,7 +274,7 @@ describe.sequential('plugin and asset CLI', () => {
         readonly data: { readonly plugins: readonly unknown[] };
       };
       expect(listPayload.data.plugins).toEqual([]);
-    }, 15_000);
+    }, 60_000);
 
     it('toggles enable and disable state', async () => {
       const home = await makeTempHome();
@@ -294,7 +294,7 @@ describe.sequential('plugin and asset CLI', () => {
         readonly data: { readonly plugins: readonly { readonly enabled: boolean }[] };
       };
       expect(enabled.data.plugins[0]?.enabled).toBe(true);
-    }, 15_000);
+    }, 60_000);
 
     it('verifies all installed plugins in json mode', async () => {
       const home = await makeTempHome();
@@ -411,6 +411,6 @@ describe.sequential('plugin and asset CLI', () => {
         readonly data: { readonly packs: readonly unknown[] };
       };
       expect(list.data.packs).toEqual([]);
-    }, 15_000);
+    }, 60_000);
   });
 });

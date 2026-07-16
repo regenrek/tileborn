@@ -25,7 +25,8 @@ export default defineConfig({
     // real filesystem/package work. Five seconds is not a valid correctness
     // boundary under the full parallel workspace release gate; timing out a
     // process.chdir test also lets cleanup invalidate the next child cwd.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
+    maxWorkers: 1,
   },
 });

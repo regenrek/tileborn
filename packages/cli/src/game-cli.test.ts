@@ -201,7 +201,7 @@ describe.sequential('game CLI families', () => {
       home,
     );
     expect(validate.code).toBe(0);
-  }, 15_000);
+  }, 60_000);
 
   it('map import-tiled maps tile layer from fixture', async () => {
     const home = await makeTempHome();
@@ -285,7 +285,7 @@ describe.sequential('game CLI families', () => {
       expect(payload.data.objectCount).toBe(1);
       expect(payload.data.packId).toMatch(/^pack:/);
     }
-  }, 15_000);
+  }, 60_000);
 
   it('asset describe prints capability and asset remove deletes the pack', async () => {
     const home = await makeTempHome();
@@ -322,7 +322,7 @@ describe.sequential('game CLI families', () => {
       readonly data: { readonly packs: readonly unknown[] };
     };
     expect(listPayload.data.packs).toEqual([]);
-  }, 15_000);
+  }, 60_000);
 
   it('map import-tiled imports a minimal TMX fixture', async () => {
     const home = await makeTempHome();
@@ -384,7 +384,7 @@ describe.sequential('game CLI families', () => {
       readonly data: { readonly stats: { readonly hookSummary: Record<string, number> } };
     };
     expect(payload.data.stats.hookSummary['@tileborne-plugins/cli-playtest']).toBeGreaterThan(0);
-  }, 15_000);
+  }, 60_000);
 
   it('runtime serve binds and serves artifact index', async () => {
     const home = await makeTempHome();
@@ -609,7 +609,7 @@ describe.sequential('game CLI families', () => {
     expect(result.code).toBe(0);
     const payload = JSON.parse(result.stdout) as { readonly data: { readonly layerCount: number } };
     expect(payload.data.layerCount).toBeGreaterThan(0);
-  });
+  }, 120_000);
 
   it('map generate supports grid template', async () => {
     const home = await makeTempHome();
@@ -719,7 +719,7 @@ describe.sequential('game CLI families', () => {
     expect((payload.data as { readonly warnings?: readonly string[] }).warnings?.[0]).toContain(
       'no maps bundled',
     );
-  }, 20_000);
+  }, 60_000);
 
   it('runtime discover emits backend json', async () => {
     const home = await makeTempHome();

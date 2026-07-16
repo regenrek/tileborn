@@ -30,7 +30,11 @@ describe('editor-ui-store workspace tabs', () => {
     expect(normalizeWorkspaceTabs(tabs)).toEqual([
       { id: 'assets:project-1', kind: 'assets', projectId: 'project-1' },
       { id: 'overview:project:encoded', kind: 'overview', projectId: 'project:encoded' },
-      { id: 'player-model-editor:project:encoded', kind: 'player-model-editor', projectId: 'project:encoded' },
+      {
+        id: 'player-model-editor:project:encoded',
+        kind: 'player-model-editor',
+        projectId: 'project:encoded',
+      },
       { id: 'settings:global', kind: 'settings' },
     ]);
   });

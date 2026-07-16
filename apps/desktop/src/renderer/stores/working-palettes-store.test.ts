@@ -103,16 +103,15 @@ const installWorkingPaletteBridge = () => {
       return { palette: palettes.find((palette) => palette.id === input.paletteId)! };
     }),
     addItems: vi.fn(
-      async (input: {
-        paletteId: WorkingPaletteId;
-        items: readonly WorkingPaletteItemDraft[];
-      }) => {
+      async (input: { paletteId: WorkingPaletteId; items: readonly WorkingPaletteItemDraft[] }) => {
         const existing = palettes.find((palette) => palette.id === input.paletteId)!;
         const next: WorkingPalette = {
           ...existing,
           items: [
             ...existing.items,
-            ...input.items.map((item, index) => itemFromDraft(item, existing.items.length + index + 1)),
+            ...input.items.map((item, index) =>
+              itemFromDraft(item, existing.items.length + index + 1),
+            ),
           ],
         };
         palettes = palettes.map((palette) => (palette.id === next.id ? next : palette));
@@ -131,7 +130,10 @@ const installWorkingPaletteBridge = () => {
       },
     ),
     reorderItems: vi.fn(
-      async (input: { paletteId: WorkingPaletteId; itemIds: readonly WorkingPaletteItem['id'][] }) => {
+      async (input: {
+        paletteId: WorkingPaletteId;
+        itemIds: readonly WorkingPaletteItem['id'][];
+      }) => {
         const existing = palettes.find((palette) => palette.id === input.paletteId)!;
         const byId = new Map(existing.items.map((item) => [item.id, item] as const));
         const next: WorkingPalette = {

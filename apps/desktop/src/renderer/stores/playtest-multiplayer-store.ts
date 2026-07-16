@@ -132,10 +132,7 @@ const startLobbyPolling = (
 
   const poll = async (): Promise<void> => {
     lobbyPollTimer = null;
-    if (
-      generation !== lobbyPollGeneration ||
-      !sameParticipant(get().participantSession, session)
-    ) {
+    if (generation !== lobbyPollGeneration || !sameParticipant(get().participantSession, session)) {
       return;
     }
 
@@ -301,7 +298,14 @@ export const usePlaytestMultiplayerStore = create<
     }
   },
 
-  joinFromInput: async (input, rendererCapabilityId, mapId, mapWidth, mapHeight, fallbackBaseUrl) => {
+  joinFromInput: async (
+    input,
+    rendererCapabilityId,
+    mapId,
+    mapWidth,
+    mapHeight,
+    fallbackBaseUrl,
+  ) => {
     if (rendererCapabilityId === undefined) {
       notifyError('The active game mode does not declare capabilities.renderer');
       return;

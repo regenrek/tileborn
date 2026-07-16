@@ -98,13 +98,15 @@ describe('playtest multiplayer lobby coordination', () => {
   });
 
   it('retains participant credentials, remains in the lobby, and cleans up polling on reset', async () => {
-    await usePlaytestMultiplayerStore.getState().joinFromInput(
-      'http://127.0.0.1:8787/rooms/room-1',
-      'battle-royale.renderer',
-      'map-1',
-      64,
-      64,
-    );
+    await usePlaytestMultiplayerStore
+      .getState()
+      .joinFromInput(
+        'http://127.0.0.1:8787/rooms/room-1',
+        'battle-royale.renderer',
+        'map-1',
+        64,
+        64,
+      );
     await vi.advanceTimersByTimeAsync(0);
 
     expect(usePlaytestMultiplayerStore.getState()).toMatchObject({

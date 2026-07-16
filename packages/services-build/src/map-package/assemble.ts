@@ -106,6 +106,19 @@ export interface AssembleRuntimeMapPackageInput {
   readonly outputDirectory: string;
   /** Cooperative cancellation shared with the owning Ship job. */
   readonly signal?: AbortSignal;
+  readonly observer?: RuntimeMapPackageAssemblerObserver | undefined;
+}
+
+export interface RuntimeMapPackageAssemblerObserver {
+  readonly onInputAccepted?:
+    | ((input: {
+        readonly assets: number;
+        readonly behaviorModules: number;
+        readonly assetPayloadBytes: number;
+      }) => void)
+    | undefined;
+  readonly onInputTraversal?: ((phase: 'hash' | 'write') => void) | undefined;
+  readonly onFileWritten?: ((relativePath: string) => void) | undefined;
 }
 
 export interface AssembledRuntimeMapPackage {
@@ -245,6 +258,11 @@ export const assembleRuntimeMapPackage = (
     const assetInputs = input.assets ?? [];
     const behaviorPackage = input.behaviors ?? EMPTY_RUNTIME_BEHAVIOR_PACKAGE;
     const behaviorModuleInputs = input.behaviorModules ?? [];
+    input.observer?.onInputAccepted?.({
+      assets: assetInputs.length,
+      behaviorModules: behaviorModuleInputs.length,
+      assetPayloadBytes: assetInputs.reduce((sum, asset) => sum + asset.bytes.byteLength, 0),
+    });
     for (const asset of assetInputs) {
       if (!asset.path.startsWith('assets/')) {
         return yield* serviceError(`asset path must live under assets/: ${asset.path}`);
@@ -280,6 +298,7 @@ export const assembleRuntimeMapPackage = (
         );
       }
     }
+    input.observer?.onInputTraversal?.('hash');
     const assetEntriesJson = yield* Effect.gen(function* () {
       const entries: { path: string; hash: string; assetId?: string }[] = [];
       for (const asset of assetInputs) {
@@ -378,18 +397,22 @@ export const assembleRuntimeMapPackage = (
       yield* checkpoint();
       const filePath = yield* verifiedChildPath(input.outputDirectory, fileName);
       yield* writeBytes(filePath, sectionBytes.get(entryName as RuntimeMapPackageEntryName)!);
+      input.observer?.onFileWritten?.(fileName);
     }
+    input.observer?.onInputTraversal?.('write');
     for (const asset of assetInputs) {
       yield* checkpoint();
       const filePath = yield* verifiedChildPath(input.outputDirectory, asset.path);
       yield* ensureDirectory(path.dirname(filePath));
       yield* writeBytes(filePath, asset.bytes);
+      input.observer?.onFileWritten?.(asset.path);
     }
     for (const module of behaviorModuleInputs) {
       yield* checkpoint();
       const filePath = yield* verifiedChildPath(input.outputDirectory, module.path);
       yield* ensureDirectory(path.dirname(filePath));
       yield* writeBytes(filePath, module.bytes);
+      input.observer?.onFileWritten?.(module.path);
     }
     const manifestPath = yield* verifiedChildPath(
       input.outputDirectory,
@@ -397,6 +420,7 @@ export const assembleRuntimeMapPackage = (
     );
     yield* checkpoint();
     yield* writeBytes(manifestPath, encodeJsonBytes(manifestJson));
+    input.observer?.onFileWritten?.(RUNTIME_MAP_PACKAGE_MANIFEST_FILE);
 
     return {
       directory: input.outputDirectory,

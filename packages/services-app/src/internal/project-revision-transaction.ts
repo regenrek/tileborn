@@ -94,6 +94,14 @@ export interface CommitMapProjectRevisionInput {
   readonly faultAfterPhase?:
     | ((phase: ProjectRevisionTransactionFaultPhase) => void | Promise<void>)
     | undefined;
+  readonly observer?: ProjectRevisionTransactionObserver | undefined;
+}
+
+export interface ProjectRevisionTransactionObserver {
+  readonly onPrepared?: ((input: { readonly changedResources: number }) => void) | undefined;
+  readonly onPhaseTransition?: ((phase: ProjectRevisionTransactionPhase) => void) | undefined;
+  readonly onContentFileInstalled?: ((target: 'map' | 'project' | 'lock') => void) | undefined;
+  readonly onProjectDirectoryCopied?: (() => void) | undefined;
 }
 
 export interface CommitProjectManifestRevisionInput {
@@ -444,6 +452,7 @@ const installNewRevision = async (
   projectRoot: string,
   journal: ProjectRevisionTransactionJournal,
   faultAfterPhase?: CommitMapProjectRevisionInput['faultAfterPhase'],
+  observer?: ProjectRevisionTransactionObserver,
 ): Promise<void> => {
   const targets = targetPaths(projectRoot, journal);
   const steps =
@@ -468,6 +477,8 @@ const installNewRevision = async (
       : writeDurableJsonAtomic(target, current.snapshots[key]));
     current = { ...current, phase };
     await writeDurableJsonAtomic(transactionPath(projectRoot), current);
+    observer?.onContentFileInstalled?.(key);
+    observer?.onPhaseTransition?.(phase);
     await faultAfterPhase?.(phase);
   }
   await removeJournal(projectRoot);
@@ -720,6 +731,11 @@ export const commitMapProjectRevision = async (
       project: hashJsonStable(snapshots.project),
       lock: hashJsonStable(snapshots.lock),
     };
+    input.observer?.onPrepared?.({
+      changedResources: (['map', 'project'] as const).filter(
+        (key) => oldHashes[key] !== newHashes[key],
+      ).length,
+    });
     const journal: ProjectRevisionTransactionJournal = decodeJournal(input.projectRoot, {
       schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectRevisionJournal,
       id: randomUUID(),
@@ -746,8 +762,9 @@ export const commitMapProjectRevision = async (
       await handle.close();
     }
     await syncDirectory(path.dirname(journalFile));
+    input.observer?.onPhaseTransition?.('prepared');
     await input.faultAfterPhase?.('prepared');
-    await installNewRevision(input.projectRoot, journal, input.faultAfterPhase);
+    await installNewRevision(input.projectRoot, journal, input.faultAfterPhase, input.observer);
   } finally {
     await releaseProjectRevisionOwner(input.projectRoot, owner);
   }

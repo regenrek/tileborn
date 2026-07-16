@@ -211,6 +211,10 @@ export class ProjectBehaviorService extends Context.Service<
     readonly list: (
       projectId: ProjectId,
     ) => Effect.Effect<ProjectBehaviorRegistrySnapshot, ProjectBehaviorServiceError>;
+    readonly openResource: (
+      projectId: ProjectId,
+      behaviorId: BehaviorId,
+    ) => Effect.Effect<ProjectBehaviorResource, ProjectBehaviorServiceError>;
     readonly createVisual: (
       projectId: ProjectId,
       input: CreateVisualProjectBehaviorInput,
@@ -275,6 +279,13 @@ export interface ProjectBehaviorPersistenceOperations {
   readonly renameFile?: ((from: string, to: string) => Promise<void>) | undefined;
   readonly syncDirectory?: ((directoryPath: string) => Promise<void>) | undefined;
   readonly onProjectGateCountChanged?: ((count: number) => void) | undefined;
+}
+
+export interface ProjectBehaviorServiceObserver {
+  readonly onRegistryListed?:
+    | ((input: { readonly manifests: number; readonly sourceBodiesRead: number }) => void)
+    | undefined;
+  readonly onSourceBodyRead?: ((input: { readonly bytes: number }) => void) | undefined;
 }
 
 const syncDirectory = async (directoryPath: string): Promise<void> => {
@@ -393,6 +404,7 @@ const behaviorDiagnostic = (input: ConstructorParameters<typeof BehaviorDiagnost
 
 export const makeProjectBehaviorServiceLive = (
   persistence: ProjectBehaviorPersistenceOperations = defaultPersistenceOperations,
+  observer: ProjectBehaviorServiceObserver = {},
 ) =>
   Layer.effect(
     ProjectBehaviorService,
@@ -400,6 +412,7 @@ export const makeProjectBehaviorServiceLive = (
       const home = yield* HomeService;
       const paths = yield* home.init();
       const cwd = process.cwd();
+      let sourceBodyReads = 0;
       const withProjectWrite = <A, E, R>(
         projectId: ProjectId,
         effect: Effect.Effect<A, E, R>,
@@ -479,6 +492,8 @@ export const makeProjectBehaviorServiceLive = (
                 'utf8',
               );
               const definition = decodePersistedBehaviorDefinitionJson(JSON.parse(raw));
+              sourceBodyReads += 1;
+              observer.onSourceBodyRead?.({ bytes: Buffer.byteLength(raw, 'utf8') });
               if (definition.id !== manifest.id)
                 throw new Error(`visual behavior id mismatch: ${manifest.id}`);
               return {
@@ -494,6 +509,8 @@ export const makeProjectBehaviorServiceLive = (
               path.join(projectRoot, manifest.source.sourcePath),
               'utf8',
             );
+            sourceBodyReads += 1;
+            observer.onSourceBodyRead?.({ bytes: Buffer.byteLength(source, 'utf8') });
             return {
               kind: 'typescript',
               manifest: manifest as BehaviorManifest & {
@@ -1474,9 +1491,14 @@ export const makeProjectBehaviorServiceLive = (
           withProjectWrite(
             projectId,
             Effect.gen(function* () {
+              const sourceBodyReadsBefore = sourceBodyReads;
               const projectRoot = yield* rootFor(projectId);
               yield* recoverTransaction(projectRoot, projectId);
               const registry = yield* readRegistry(projectRoot, projectId);
+              observer.onRegistryListed?.({
+                manifests: registry.entries.length,
+                sourceBodiesRead: sourceBodyReads - sourceBodyReadsBefore,
+              });
               return {
                 projectId,
                 projectRoot,
@@ -1484,6 +1506,24 @@ export const makeProjectBehaviorServiceLive = (
                 trust: registry.trust,
                 manifests: registry.entries,
               } satisfies ProjectBehaviorRegistrySnapshot;
+            }),
+          ),
+        openResource: (projectId, behaviorId) =>
+          withProjectWrite(
+            projectId,
+            Effect.gen(function* () {
+              const projectRoot = yield* rootFor(projectId);
+              yield* recoverTransaction(projectRoot, projectId);
+              const registry = yield* readRegistry(projectRoot, projectId);
+              const manifest = registry.entries.find((entry) => entry.id === behaviorId);
+              if (manifest === undefined) {
+                return yield* new ProjectBehaviorError({
+                  projectId,
+                  path: `${BEHAVIORS_DIRECTORY}/${REGISTRY_FILE}`,
+                  message: `behavior not found: ${behaviorId}`,
+                });
+              }
+              return yield* readResource(projectRoot, projectId, manifest);
             }),
           ),
         createVisual,

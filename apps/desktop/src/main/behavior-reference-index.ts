@@ -13,6 +13,18 @@ export interface IndexedBehaviorReferenceOption {
 
 type Loader = () => Promise<readonly IndexedBehaviorReferenceOption[]>;
 
+export interface BehaviorReferenceIndexObserver {
+  readonly onIndexLoaded?:
+    | ((input: {
+        readonly projectId: string;
+        readonly kind: BehaviorReferenceKind;
+        readonly records: number;
+      }) => void)
+    | undefined;
+  readonly onQueryCompleted?: ((input: { readonly records: number }) => void) | undefined;
+  readonly onResolutionCompleted?: ((input: { readonly records: number }) => void) | undefined;
+}
+
 const keyFor = (projectId: string, kind: BehaviorReferenceKind): string => `${projectId}:${kind}`;
 
 export const behaviorReferenceId = (reference: BehaviorReference): string => {
@@ -37,6 +49,8 @@ export class BehaviorReferenceIndex {
   readonly #inFlight = new Map<string, Promise<readonly IndexedBehaviorReferenceOption[]>>();
   readonly #generations = new Map<string, number>();
 
+  constructor(private readonly observer: BehaviorReferenceIndexObserver = {}) {}
+
   async load(
     projectId: string,
     kind: BehaviorReferenceKind,
@@ -56,6 +70,7 @@ export class BehaviorReferenceIndex {
       )
       .then((options) => {
         if ((this.#generations.get(key) ?? 0) === generation) this.#settled.set(key, options);
+        this.observer.onIndexLoaded?.({ projectId, kind, records: options.length });
         return options;
       })
       .finally(() => {
@@ -72,7 +87,33 @@ export class BehaviorReferenceIndex {
     loader: Loader,
   ) {
     const options = await this.load(projectId, kind, loader);
-    return paginateBehaviorReferenceOptions(options, input);
+    const page = paginateBehaviorReferenceOptions(options, input);
+    this.observer.onQueryCompleted?.({ records: page.options.length });
+    return page;
+  }
+
+  async resolve(
+    projectId: string,
+    kind: BehaviorReferenceKind,
+    references: readonly BehaviorReference[],
+    loader: Loader,
+  ): Promise<{
+    readonly options: readonly IndexedBehaviorReferenceOption[];
+    readonly missing: readonly BehaviorReference[];
+  }> {
+    if (references.length > 64)
+      throw new Error('At most 64 behavior references can be resolved at once');
+    const indexed = await this.load(projectId, kind, loader);
+    const byId = new Map(indexed.map((option) => [option.id, option]));
+    const options: IndexedBehaviorReferenceOption[] = [];
+    const missing: BehaviorReference[] = [];
+    for (const reference of references) {
+      const option = byId.get(behaviorReferenceId(reference));
+      if (option === undefined) missing.push(reference);
+      else options.push(option);
+    }
+    this.observer.onResolutionCompleted?.({ records: options.length });
+    return { options, missing };
   }
 
   invalidate(projectId?: string, kind?: BehaviorReferenceKind): void {

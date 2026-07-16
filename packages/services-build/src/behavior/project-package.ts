@@ -24,6 +24,12 @@ export interface ProjectBehaviorPackageResult {
   readonly modules?: readonly RuntimeMapPackageBehaviorModuleInput[];
 }
 
+export interface ProjectBehaviorCompilerObserver {
+  readonly onPackageCompiled?:
+    | ((input: { readonly sourceBytes: number; readonly modules: number }) => void)
+    | undefined;
+}
+
 const diagnostic = (
   code: string,
   message: string,
@@ -127,6 +133,7 @@ export const compileProjectBehaviorModule = async (
 export const compileProjectBehaviorPackage = async (
   snapshot: ProjectBehaviorSnapshot,
   registry: BehaviorRegistryManifest,
+  observer: ProjectBehaviorCompilerObserver = {},
 ): Promise<ProjectBehaviorPackageResult> => {
   const diagnostics: BehaviorCompileDiagnostic[] = snapshot.diagnostics
     .filter((entry) => entry.severity === 'error')
@@ -201,7 +208,7 @@ export const compileProjectBehaviorPackage = async (
   if (diagnostics.length > 0) return { ok: false, diagnostics };
 
   const encoder = new TextEncoder();
-  return {
+  const result = {
     ok: true,
     diagnostics: [],
     behaviorPackage: new RuntimeBehaviorPackage({
@@ -225,4 +232,13 @@ export const compileProjectBehaviorPackage = async (
       bytes: encoder.encode(artifact.code),
     })),
   };
+  observer.onPackageCompiled?.({
+    sourceBytes: snapshot.resources.reduce(
+      (sum, resource) =>
+        sum + (resource.kind === 'typescript' ? encoder.encode(resource.source).byteLength : 0),
+      0,
+    ),
+    modules: result.modules.length,
+  });
+  return result;
 };

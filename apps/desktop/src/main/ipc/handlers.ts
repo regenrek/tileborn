@@ -140,9 +140,12 @@ import { resolveGameModeHostRegistration } from '../game-mode-host-registrations
 import { defaultGameModeStarterRegistration } from '../game-mode-starter-registrations.js';
 import {
   BehaviorReferenceIndex,
-  behaviorReferenceId,
   type IndexedBehaviorReferenceOption,
 } from '../behavior-reference-index.js';
+import {
+  runDesktopProjectListLifecycle,
+  runDesktopProjectReopenLifecycle,
+} from '../project-lifecycle.js';
 
 const triggerPayload = {};
 const TILEBORNE_PACK_MANIFEST = 'tileborne-asset-pack.json';
@@ -479,11 +482,6 @@ const buildHandlers = Effect.gen(function* () {
         detail: manifest.source._tag === 'visual' ? 'Event sheet' : 'TypeScript',
       }));
     });
-
-  const cachedBehaviorReferenceOptions = (projectId: ProjectId, kind: BehaviorReferenceKind) =>
-    behaviorReferenceIndex.load(String(projectId), kind, () =>
-      Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
-    );
 
   /**
    * Assemble the ONE typed `RuntimeMapPackage` (ADR-0030 step 1) every playtest
@@ -990,12 +988,16 @@ const buildHandlers = Effect.gen(function* () {
   const projectHandlers = handlerBuilder(MainIpcRegistry)
     .add('tileborne:projects:list', () =>
       ipcCatchAll('tileborne:projects:list')(
-        projects.list().pipe(Effect.map((items) => ({ projects: [...items] }))),
+        runDesktopProjectListLifecycle(() => projects.list()).pipe(
+          Effect.map((items) => ({ projects: [...items] })),
+        ),
       ),
     )
     .add('tileborne:projects:get', ({ projectId }) =>
       ipcCatchAll('tileborne:projects:get')(
-        projects.open(projectId).pipe(Effect.map((project) => ({ project }))),
+        runDesktopProjectReopenLifecycle(() => projects.open(projectId)).pipe(
+          Effect.map((project) => ({ project })),
+        ),
       ),
     )
     .add('tileborne:projects:create', ({ name, engineVersion }) =>
@@ -1133,7 +1135,9 @@ const buildHandlers = Effect.gen(function* () {
     )
     .add('tileborne:projects:open', ({ projectId }) =>
       ipcCatchAll('tileborne:projects:open')(
-        projects.open(projectId).pipe(Effect.map((project) => ({ project }))),
+        runDesktopProjectReopenLifecycle(() => projects.open(projectId)).pipe(
+          Effect.map((project) => ({ project })),
+        ),
       ),
     )
     .add('tileborne:projects:close', () =>
@@ -1397,13 +1401,14 @@ const buildHandlers = Effect.gen(function* () {
               const missing: BehaviorReference[] = [];
               await Promise.all(
                 [...byKind].map(async ([kind, requested]) => {
-                  const indexed = await cachedBehaviorReferenceOptions(projectId, kind);
-                  const byId = new Map(indexed.map((option) => [option.id, option]));
-                  for (const reference of requested) {
-                    const option = byId.get(behaviorReferenceId(reference));
-                    if (option === undefined) missing.push(reference);
-                    else options.push(option);
-                  }
+                  const batch = await behaviorReferenceIndex.resolve(
+                    String(projectId),
+                    kind,
+                    requested,
+                    () => Effect.runPromise(behaviorReferenceOptions(projectId, kind)),
+                  );
+                  options.push(...batch.options);
+                  missing.push(...batch.missing);
                 }),
               );
               return { options, missing };

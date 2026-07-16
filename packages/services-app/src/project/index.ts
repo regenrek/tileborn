@@ -562,6 +562,22 @@ export class ProjectService extends Context.Service<
   }
 >()('@tileborne/services-app/ProjectService') {}
 
+export interface ProjectServiceObserver {
+  readonly onProjectsListed?: ((input: { readonly recordsDecoded: number }) => void) | undefined;
+  readonly onProjectOpened?:
+    | ((input: {
+        readonly manifestInputBytes: number;
+        readonly manifestDecodes: number;
+        readonly recoverySnapshotReads: number;
+      }) => void)
+    | undefined;
+}
+
+interface ProjectReadObserver {
+  readonly onManifestDecoded?: ((input: { readonly bytes: number }) => void) | undefined;
+  readonly onRecoverySnapshotRead?: (() => void) | undefined;
+}
+
 const execFileAsync = promisify(execFile);
 
 const newProjectId = (): ProjectId => makeProjectId(randomUUID() as Uuid);
@@ -617,6 +633,7 @@ export const readVerifiedProject = (
 
 export const readVerifiedProjectAtRoot = (
   projectRoot: string,
+  observer: ProjectReadObserver = {},
 ): Effect.Effect<
   ProjectManifest,
   ProjectNotFoundError | ProjectValidationError | ProjectMigrationError
@@ -631,7 +648,8 @@ export const readVerifiedProjectAtRoot = (
           message: `failed to recover project revision transaction: ${errorMessage(cause)}`,
         }),
     });
-    const project = yield* readManifestAtRoot(projectRoot).pipe(
+    observer.onRecoverySnapshotRead?.();
+    const project = yield* readManifestAtRoot(projectRoot, observer).pipe(
       Effect.mapError((error) =>
         error._tag === 'ProjectPathNotFoundError'
           ? new ProjectNotFoundError({
@@ -990,6 +1008,7 @@ const resolveProjectRoot = (at: string | undefined, cwd: string): string =>
 
 const readManifestAtRoot = (
   projectRoot: string,
+  observer: ProjectReadObserver = {},
 ): Effect.Effect<
   ProjectManifest,
   ProjectPathNotFoundError | ProjectValidationError | ProjectMigrationError
@@ -1027,6 +1046,7 @@ const readManifestAtRoot = (
           message: errorMessage(cause),
         }),
     });
+    observer.onManifestDecoded?.({ bytes: Buffer.byteLength(raw as string, 'utf8') });
     const fromVersion = yield* Effect.try({
       try: () => projectManifestSchemaVersion(parsed),
       catch: (cause) =>
@@ -1069,267 +1089,287 @@ const ensureCliProjectLayout = (projectRoot: string): Effect.Effect<void, Projec
     });
   });
 
-export const ProjectServiceLive = Layer.effect(
-  ProjectService,
-  Effect.gen(function* () {
-    const home = yield* HomeService;
-    const paths = yield* home.init();
-    const trigger = yield* PubSub.unbounded<void>();
-    const cwd = process.cwd();
+export const makeProjectServiceLive = (observer: ProjectServiceObserver = {}) =>
+  Layer.effect(
+    ProjectService,
+    Effect.gen(function* () {
+      const home = yield* HomeService;
+      const paths = yield* home.init();
+      const trigger = yield* PubSub.unbounded<void>();
+      const cwd = process.cwd();
 
-    const create = Effect.fn('ProjectService.create')(function* (spec: ProjectCreateSpec) {
-      const projectId = newProjectId();
-      const project = new ProjectManifest({
-        id: projectId,
-        name: spec.name,
-        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
-        engineVersion: spec.engineVersion ?? '0.1.0',
-        plugins: [...(spec.plugins ?? [])],
-        assetPacks: [...(spec.assetPacks ?? [])],
-        maps: [],
-        ...(spec.settings === undefined ? {} : { settings: spec.settings }),
-      });
-      const staging = path.join(paths.projects, `.staging-${projectId}-${randomUUID()}`);
-      const target = projectDirectory(paths.projects, projectId);
-      yield* Effect.tryPromise({
-        try: () => mkdir(staging, { recursive: true }),
-        catch: (cause) => new ProjectSaveError({ path: staging, message: errorMessage(cause) }),
-      });
-      yield* writeProjectWithLock(staging, project, []);
-      yield* Effect.tryPromise({
-        try: () => rename(staging, target),
-        catch: (cause) => new ProjectSaveError({ path: target, message: errorMessage(cause) }),
-      });
-      yield* PubSub.publish(trigger, void 0);
-      return projectId;
-    });
-
-    const open = Effect.fn('ProjectService.open')(function* (projectId: ProjectId) {
-      // Resolve the actual root first (home dir, cwd ancestors, registry):
-      // projects created with `project init <slug>` or `--here` do NOT live at
-      // the id-named home directory `readVerifiedProject` assumes.
-      const root = yield* resolveProjectRootForId(paths.projects, cwd, projectId);
-      const project = yield* readVerifiedProjectAtRoot(root);
-      if (project.id !== projectId) {
-        return yield* Effect.fail(
-          new ProjectValidationError({
-            path: projectManifestPath(root),
-            message: `project id mismatch: expected ${projectId} got ${project.id}`,
-          }),
-        );
-      }
-      return project;
-    });
-
-    const save = Effect.fn('ProjectService.save')(function* (project: ProjectManifest) {
-      yield* writeProjectPreservingMapLocks(paths.projects, project);
-      yield* PubSub.publish(trigger, void 0);
-    });
-
-    const list = Effect.fn('ProjectService.list')(function* () {
-      return yield* listVerifiedProjects(paths.projects);
-    });
-
-    const importFromDirectory = Effect.fn('ProjectService.importFromDirectory')(function* (
-      sourcePath: string,
-    ) {
-      const resolved = path.resolve(sourcePath);
-      const project = yield* readVerifiedProjectAtRoot(resolved).pipe(
-        Effect.mapError((error) =>
-          error._tag === 'ProjectNotFoundError'
-            ? new ProjectPathNotFoundError({
-                path: resolved,
-                message: 'project.json not found in selected folder',
-              })
-            : error,
-        ),
-      );
-      const target = projectDirectory(paths.projects, project.id);
-      const alreadyRegistered = yield* Effect.promise(() =>
-        homeProjectExists(paths.projects, project.id),
-      );
-      if (!alreadyRegistered) {
+      const create = Effect.fn('ProjectService.create')(function* (spec: ProjectCreateSpec) {
+        const projectId = newProjectId();
+        const project = new ProjectManifest({
+          id: projectId,
+          name: spec.name,
+          schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+          engineVersion: spec.engineVersion ?? '0.1.0',
+          plugins: [...(spec.plugins ?? [])],
+          assetPacks: [...(spec.assetPacks ?? [])],
+          maps: [],
+          ...(spec.settings === undefined ? {} : { settings: spec.settings }),
+        });
+        const staging = path.join(paths.projects, `.staging-${projectId}-${randomUUID()}`);
+        const target = projectDirectory(paths.projects, projectId);
         yield* Effect.tryPromise({
-          try: async () => {
-            await cp(resolved, target, { recursive: true, force: false });
-            await markImportedBehaviorRegistryUntrusted(target);
-          },
+          try: () => mkdir(staging, { recursive: true }),
+          catch: (cause) => new ProjectSaveError({ path: staging, message: errorMessage(cause) }),
+        });
+        yield* writeProjectWithLock(staging, project, []);
+        yield* Effect.tryPromise({
+          try: () => rename(staging, target),
           catch: (cause) => new ProjectSaveError({ path: target, message: errorMessage(cause) }),
         });
         yield* PubSub.publish(trigger, void 0);
-      }
-      return project.id;
-    });
-
-    const exportArchive = Effect.fn('ProjectService.exportArchive')(function* (
-      projectId: ProjectId,
-      destinationDirectory: string,
-    ) {
-      const project = yield* readVerifiedProject(paths.projects, projectId);
-      const projectDir = projectDirectory(paths.projects, projectId);
-      const safeName =
-        project.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
-      const archivePath = path.join(
-        path.resolve(destinationDirectory),
-        `${safeName}-${projectId}.tar.gz`,
-      );
-      yield* Effect.tryPromise({
-        try: () => mkdir(path.dirname(archivePath), { recursive: true }),
-        catch: (cause) => new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
+        return projectId;
       });
-      yield* Effect.tryPromise({
-        try: () =>
-          execFileAsync('tar', ['-czf', archivePath, '-C', projectDir, '.'], {
-            maxBuffer: 32 * 1024 * 1024,
-          }),
-        catch: (cause) => new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
-      });
-      return { archivePath };
-    });
 
-    const init = Effect.fn('ProjectService.init')(function* (input: ProjectInitInput) {
-      const isExplicitPath =
-        path.isAbsolute(input.slug) || input.slug.includes('/') || input.slug.includes('\\');
-      const slug = yield* validateSlug(
-        isExplicitPath ? path.basename(path.resolve(cwd, input.slug)) : input.slug,
-      );
-      const projectRoot = input.here
-        ? path.resolve(cwd)
-        : isExplicitPath
-          ? path.resolve(cwd, input.slug)
-          : path.join(paths.projects, slug);
-      const projectName = isExplicitPath ? path.basename(projectRoot) : slug;
-      const manifestFile = projectManifestPath(projectRoot);
-
-      const existing = yield* Effect.tryPromise({
-        try: async () => {
-          try {
-            await readFile(manifestFile, 'utf8');
-            return true;
-          } catch (cause) {
-            if (isNotFound(cause)) {
-              return false;
-            }
-            throw cause;
-          }
-        },
-        catch: (cause) =>
-          new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
-      });
-      if (existing) {
-        yield* new ProjectAlreadyExistsError({
-          path: projectRoot,
-          message: `project already exists at ${projectRoot}`,
+      const open = Effect.fn('ProjectService.open')(function* (projectId: ProjectId) {
+        // Resolve the actual root first (home dir, cwd ancestors, registry):
+        // projects created with `project init <slug>` or `--here` do NOT live at
+        // the id-named home directory `readVerifiedProject` assumes.
+        const root = yield* resolveProjectRootForId(paths.projects, cwd, projectId);
+        let manifestInputBytes = 0;
+        let manifestDecodes = 0;
+        let recoverySnapshotReads = 0;
+        const project = yield* readVerifiedProjectAtRoot(root, {
+          onManifestDecoded: ({ bytes }) => {
+            manifestInputBytes += bytes;
+            manifestDecodes += 1;
+          },
+          onRecoverySnapshotRead: () => {
+            recoverySnapshotReads += 1;
+          },
         });
-      }
+        if (project.id !== projectId) {
+          return yield* Effect.fail(
+            new ProjectValidationError({
+              path: projectManifestPath(root),
+              message: `project id mismatch: expected ${projectId} got ${project.id}`,
+            }),
+          );
+        }
+        observer.onProjectOpened?.({ manifestInputBytes, manifestDecodes, recoverySnapshotReads });
+        return project;
+      });
 
-      if (!input.here) {
-        yield* Effect.tryPromise({
-          try: () => mkdir(projectRoot, { recursive: true }),
-          catch: (cause) =>
-            new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
-        });
-        if (!isExplicitPath) {
+      const save = Effect.fn('ProjectService.save')(function* (project: ProjectManifest) {
+        yield* writeProjectPreservingMapLocks(paths.projects, project);
+        yield* PubSub.publish(trigger, void 0);
+      });
+
+      const list = Effect.fn('ProjectService.list')(function* () {
+        const projects = yield* listVerifiedProjects(paths.projects);
+        observer.onProjectsListed?.({ recordsDecoded: projects.length });
+        return projects;
+      });
+
+      const importFromDirectory = Effect.fn('ProjectService.importFromDirectory')(function* (
+        sourcePath: string,
+      ) {
+        const resolved = path.resolve(sourcePath);
+        const project = yield* readVerifiedProjectAtRoot(resolved).pipe(
+          Effect.mapError((error) =>
+            error._tag === 'ProjectNotFoundError'
+              ? new ProjectPathNotFoundError({
+                  path: resolved,
+                  message: 'project.json not found in selected folder',
+                })
+              : error,
+          ),
+        );
+        const target = projectDirectory(paths.projects, project.id);
+        const alreadyRegistered = yield* Effect.promise(() =>
+          homeProjectExists(paths.projects, project.id),
+        );
+        if (!alreadyRegistered) {
           yield* Effect.tryPromise({
-            try: () => rejectSymlinkEscape(paths.projects, slug),
+            try: async () => {
+              await cp(resolved, target, { recursive: true, force: false });
+              await markImportedBehaviorRegistryUntrusted(target);
+            },
+            catch: (cause) => new ProjectSaveError({ path: target, message: errorMessage(cause) }),
+          });
+          yield* PubSub.publish(trigger, void 0);
+        }
+        return project.id;
+      });
+
+      const exportArchive = Effect.fn('ProjectService.exportArchive')(function* (
+        projectId: ProjectId,
+        destinationDirectory: string,
+      ) {
+        const project = yield* readVerifiedProject(paths.projects, projectId);
+        const projectDir = projectDirectory(paths.projects, projectId);
+        const safeName =
+          project.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
+        const archivePath = path.join(
+          path.resolve(destinationDirectory),
+          `${safeName}-${projectId}.tar.gz`,
+        );
+        yield* Effect.tryPromise({
+          try: () => mkdir(path.dirname(archivePath), { recursive: true }),
+          catch: (cause) =>
+            new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
+        });
+        yield* Effect.tryPromise({
+          try: () =>
+            execFileAsync('tar', ['-czf', archivePath, '-C', projectDir, '.'], {
+              maxBuffer: 32 * 1024 * 1024,
+            }),
+          catch: (cause) =>
+            new ProjectSaveError({ path: archivePath, message: errorMessage(cause) }),
+        });
+        return { archivePath };
+      });
+
+      const init = Effect.fn('ProjectService.init')(function* (input: ProjectInitInput) {
+        const isExplicitPath =
+          path.isAbsolute(input.slug) || input.slug.includes('/') || input.slug.includes('\\');
+        const slug = yield* validateSlug(
+          isExplicitPath ? path.basename(path.resolve(cwd, input.slug)) : input.slug,
+        );
+        const projectRoot = input.here
+          ? path.resolve(cwd)
+          : isExplicitPath
+            ? path.resolve(cwd, input.slug)
+            : path.join(paths.projects, slug);
+        const projectName = isExplicitPath ? path.basename(projectRoot) : slug;
+        const manifestFile = projectManifestPath(projectRoot);
+
+        const existing = yield* Effect.tryPromise({
+          try: async () => {
+            try {
+              await readFile(manifestFile, 'utf8');
+              return true;
+            } catch (cause) {
+              if (isNotFound(cause)) {
+                return false;
+              }
+              throw cause;
+            }
+          },
+          catch: (cause) =>
+            new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
+        });
+        if (existing) {
+          yield* new ProjectAlreadyExistsError({
+            path: projectRoot,
+            message: `project already exists at ${projectRoot}`,
+          });
+        }
+
+        if (!input.here) {
+          yield* Effect.tryPromise({
+            try: () => mkdir(projectRoot, { recursive: true }),
             catch: (cause) =>
               new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
           });
+          if (!isExplicitPath) {
+            yield* Effect.tryPromise({
+              try: () => rejectSymlinkEscape(paths.projects, slug),
+              catch: (cause) =>
+                new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),
+            });
+          }
         }
-      }
 
-      yield* ensureCliProjectLayout(projectRoot);
-      const manifest = new ProjectManifest({
-        id: newProjectId(),
-        name: projectName,
-        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
-        engineVersion: '0.1.0',
-        plugins: (input.plugins ?? []).map(
-          (pluginId) =>
-            new ProjectPluginRef({ id: pluginId as ProjectPluginRef['id'], version: '*' }),
-        ),
-        assetPacks: [],
-        maps: [],
-      });
-      yield* writeProjectWithLock(projectRoot, manifest, []);
-      yield* upsertProjectRegistryEntry(
-        paths.projects,
-        new ProjectRegistryEntry({
-          id: manifest.id,
-          name: manifest.name,
-          path: projectRoot,
-        }),
-      );
-      return {
-        manifest,
-        path: projectRoot,
-        template: input.template ? Option.some(input.template) : Option.none(),
-      };
-    });
-
-    const info = Effect.fn('ProjectService.info')(function* (at?: string | undefined) {
-      const projectRoot = resolveProjectRoot(at, cwd);
-      const manifest = yield* readManifestAtRoot(projectRoot);
-      const entries = yield* Effect.tryPromise({
-        try: () => readdir(projectRoot),
-        catch: (cause) =>
-          new ProjectValidationError({ path: projectRoot, message: errorMessage(cause) }),
-      });
-      return { manifest, path: projectRoot, entries };
-    });
-
-    const upgrade = Effect.fn('ProjectService.upgrade')(function* (at?: string | undefined) {
-      const projectRoot = resolveProjectRoot(at, cwd);
-      return yield* upgradeProjectManifestAtRoot(projectRoot);
-    });
-
-    const clean = Effect.fn('ProjectService.clean')(function* (at?: string | undefined) {
-      const projectRoot = resolveProjectRoot(at, cwd);
-      yield* readManifestAtRoot(projectRoot);
-      const targets = [
-        path.join(projectRoot, PROJECT_CACHE_DIR),
-        path.join(projectRoot, PROJECT_DERIVED_DIR),
-      ];
-      const removed: string[] = [];
-      yield* Effect.forEach(
-        targets,
-        (target) =>
-          Effect.tryPromise({
-            try: async () => {
-              try {
-                await rm(target, { recursive: true, force: true });
-                removed.push(path.relative(projectRoot, target));
-              } catch (cause) {
-                if (!isNotFound(cause)) {
-                  throw cause;
-                }
-              }
-            },
-            catch: (cause) => new ProjectSaveError({ path: target, message: errorMessage(cause) }),
+        yield* ensureCliProjectLayout(projectRoot);
+        const manifest = new ProjectManifest({
+          id: newProjectId(),
+          name: projectName,
+          schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+          engineVersion: '0.1.0',
+          plugins: (input.plugins ?? []).map(
+            (pluginId) =>
+              new ProjectPluginRef({ id: pluginId as ProjectPluginRef['id'], version: '*' }),
+          ),
+          assetPacks: [],
+          maps: [],
+        });
+        yield* writeProjectWithLock(projectRoot, manifest, []);
+        yield* upsertProjectRegistryEntry(
+          paths.projects,
+          new ProjectRegistryEntry({
+            id: manifest.id,
+            name: manifest.name,
+            path: projectRoot,
           }),
-        { discard: true },
-      );
-      yield* ensureCliProjectLayout(projectRoot);
-      return { path: projectRoot, removed };
-    });
+        );
+        return {
+          manifest,
+          path: projectRoot,
+          template: input.template ? Option.some(input.template) : Option.none(),
+        };
+      });
 
-    return {
-      create,
-      open,
-      save,
-      list,
-      subscribe: Stream.concat(
-        Stream.fromEffect(listVerifiedProjects(paths.projects)),
-        Stream.fromPubSub(trigger).pipe(
-          Stream.mapEffect(() => listVerifiedProjects(paths.projects)),
+      const info = Effect.fn('ProjectService.info')(function* (at?: string | undefined) {
+        const projectRoot = resolveProjectRoot(at, cwd);
+        const manifest = yield* readManifestAtRoot(projectRoot);
+        const entries = yield* Effect.tryPromise({
+          try: () => readdir(projectRoot),
+          catch: (cause) =>
+            new ProjectValidationError({ path: projectRoot, message: errorMessage(cause) }),
+        });
+        return { manifest, path: projectRoot, entries };
+      });
+
+      const upgrade = Effect.fn('ProjectService.upgrade')(function* (at?: string | undefined) {
+        const projectRoot = resolveProjectRoot(at, cwd);
+        return yield* upgradeProjectManifestAtRoot(projectRoot);
+      });
+
+      const clean = Effect.fn('ProjectService.clean')(function* (at?: string | undefined) {
+        const projectRoot = resolveProjectRoot(at, cwd);
+        yield* readManifestAtRoot(projectRoot);
+        const targets = [
+          path.join(projectRoot, PROJECT_CACHE_DIR),
+          path.join(projectRoot, PROJECT_DERIVED_DIR),
+        ];
+        const removed: string[] = [];
+        yield* Effect.forEach(
+          targets,
+          (target) =>
+            Effect.tryPromise({
+              try: async () => {
+                try {
+                  await rm(target, { recursive: true, force: true });
+                  removed.push(path.relative(projectRoot, target));
+                } catch (cause) {
+                  if (!isNotFound(cause)) {
+                    throw cause;
+                  }
+                }
+              },
+              catch: (cause) =>
+                new ProjectSaveError({ path: target, message: errorMessage(cause) }),
+            }),
+          { discard: true },
+        );
+        yield* ensureCliProjectLayout(projectRoot);
+        return { path: projectRoot, removed };
+      });
+
+      return {
+        create,
+        open,
+        save,
+        list,
+        subscribe: Stream.concat(
+          Stream.fromEffect(listVerifiedProjects(paths.projects)),
+          Stream.fromPubSub(trigger).pipe(
+            Stream.mapEffect(() => listVerifiedProjects(paths.projects)),
+          ),
         ),
-      ),
-      importFromDirectory,
-      exportArchive,
-      init,
-      info,
-      upgrade,
-      clean,
-    };
-  }),
-);
+        importFromDirectory,
+        exportArchive,
+        init,
+        info,
+        upgrade,
+        clean,
+      };
+    }),
+  );
+
+export const ProjectServiceLive = makeProjectServiceLive();

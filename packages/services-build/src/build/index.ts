@@ -1,4 +1,4 @@
-import { readFile, rename, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -163,6 +163,95 @@ export const gameArtifactBuildId = (input: {
       .map(([relativePath, hash]) => ({ path: relativePath, hash })),
   });
 
+export interface ShipRuntimeMapPackagesObserver {
+  readonly onPackageCopied?: ((input: { readonly files: number }) => void) | undefined;
+  readonly onArtifactPromoted?: (() => void) | undefined;
+  readonly onIntegrityTraversal?: ((input: { readonly files: number }) => void) | undefined;
+}
+
+export interface ShipRuntimeMapPackagesInput {
+  readonly packageDirectories: readonly string[];
+  readonly directory: string;
+  readonly operations?: BuildPromotionOperations | undefined;
+  readonly observer?: ShipRuntimeMapPackagesObserver | undefined;
+}
+
+export interface ShipRuntimeMapPackagesReport {
+  readonly runtimeMapPackages: number;
+  readonly artifactFiles: number;
+  readonly artifactBytes: number;
+  readonly promotions: number;
+  readonly integrityTraversals: number;
+}
+
+const listArtifactFiles = async (root: string): Promise<readonly string[]> => {
+  const files: string[] = [];
+  const visit = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(absolute);
+      else if (entry.isFile()) files.push(absolute);
+    }
+  };
+  await visit(root);
+  return files.sort();
+};
+
+/** Canonical BuildService path for copying, promoting, and verifying complete runtime packages. */
+export const shipRuntimeMapPackages = async (
+  input: ShipRuntimeMapPackagesInput,
+): Promise<ShipRuntimeMapPackagesReport> => {
+  const workDirectory = `${input.directory}.building-${randomUUID()}`;
+  await rm(workDirectory, { recursive: true, force: true });
+  await mkdir(workDirectory, { recursive: true });
+  let promotions = 0;
+  let integrityTraversals = 0;
+  try {
+    for (const [index, source] of input.packageDirectories.entries()) {
+      const sourceFiles = await listArtifactFiles(source);
+      await cp(source, path.join(workDirectory, 'maps', String(index)), { recursive: true });
+      input.observer?.onPackageCopied?.({ files: sourceFiles.length });
+    }
+    const workFiles = await listArtifactFiles(workDirectory);
+    const fileHashes: Record<string, ContentHash> = {};
+    for (const file of workFiles) {
+      fileHashes[path.relative(workDirectory, file)] = await hashBundleFile(file);
+    }
+    const promotion = await promoteBuildDirectory({
+      directory: input.directory,
+      workDirectory,
+      fileHashes,
+      ...(input.operations === undefined ? {} : { operations: input.operations }),
+    });
+    if (promotion === 'promoted') {
+      promotions += 1;
+      input.observer?.onArtifactPromoted?.();
+    }
+
+    const finalFiles = await listArtifactFiles(input.directory);
+    integrityTraversals += 1;
+    input.observer?.onIntegrityTraversal?.({ files: finalFiles.length });
+    let artifactBytes = 0;
+    for (const file of finalFiles) {
+      artifactBytes += (await stat(file)).size;
+      const relative = path.relative(input.directory, file);
+      if ((await hashBundleFile(file)) !== fileHashes[relative]) {
+        throw new Error(`post-promotion integrity mismatch: ${relative}`);
+      }
+    }
+    return {
+      runtimeMapPackages: input.packageDirectories.length,
+      artifactFiles: finalFiles.length,
+      artifactBytes,
+      promotions,
+      integrityTraversals,
+    };
+  } catch (cause) {
+    await rm(workDirectory, { recursive: true, force: true });
+    throw cause;
+  }
+};
+
 /**
  * Serve instructions baked into the `local` target artifact (M5 S2): the
  * single command a non-cloudflare user runs to boot this directory into a
@@ -198,6 +287,9 @@ export class BuildService extends Context.Service<BuildService, {
   readonly build: (projectId: ProjectId, options?: BuildOptions) => Effect.Effect<JobId>;
   readonly buildGame: (options: GameBuildOptions) => Effect.Effect<GameBuildArtifact, ServicesBuildError>;
   readonly verifyGameArtifact: (artifact: GameBuildArtifact | string) => Effect.Effect<GameBuildArtifact, ServicesBuildError | IntegrityMismatchError>;
+  readonly shipRuntimeMapPackages: (
+    input: ShipRuntimeMapPackagesInput,
+  ) => Effect.Effect<ShipRuntimeMapPackagesReport, ServicesBuildError>;
   readonly getBuild: (
     buildId: BuildId,
   ) => Effect.Effect<BuildArtifact, ServicesBuildError | BuildNotFoundError | IntegrityMismatchError>;
@@ -835,10 +927,20 @@ export const makeBuildServiceLive = (
       return durable;
     });
 
+    const shipPackages = Effect.fn("BuildService.shipRuntimeMapPackages")(function* (
+      input: ShipRuntimeMapPackagesInput,
+    ) {
+      return yield* Effect.tryPromise({
+        try: () => shipRuntimeMapPackages(input),
+        catch: (cause) => buildError(errorMessage(cause)),
+      });
+    });
+
     return {
       build,
       buildGame,
       verifyGameArtifact,
+      shipRuntimeMapPackages: shipPackages,
       getBuild,
       listBuilds,
       deleteBuild,

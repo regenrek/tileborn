@@ -129,6 +129,7 @@ export class PlaytestService extends Context.Service<
 
 export interface PlaytestServiceObserver {
   readonly onSessionTransition?: ((status: 'Starting' | 'Running' | 'Stopped') => void) | undefined;
+  readonly onMapPackageSelected?: ((mapId: MapId) => void) | undefined;
 }
 
 const replaceSession = (
@@ -179,6 +180,7 @@ export const makePlaytestServiceLive = (observer: PlaytestServiceObserver = {}) 
         // directory; the map itself ships ONLY inside the runtime map package
         // (`assembleRuntimeMapPackage` is the single writer of `map.json`).
         yield* maps.load(input.projectId, input.mapId);
+        observer.onMapPackageSelected?.(input.mapId);
         const artifactId = `playtest-artifact-${Date.now()}`;
         const directory =
           input.outputDirectory ?? (yield* verifiedChildPath(playtestRoot, artifactId));

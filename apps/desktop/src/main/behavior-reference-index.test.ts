@@ -42,4 +42,38 @@ describe('BehaviorReferenceIndex', () => {
     await index.query('project-1', 'asset', { limit: 32 }, loader);
     expect(loader).toHaveBeenCalledTimes(2);
   });
+
+  it('owns bounded reference resolution without exposing the full cached index', async () => {
+    const resolvedCounts: number[] = [];
+    const index = new BehaviorReferenceIndex({
+      onResolutionCompleted: ({ records }) => resolvedCounts.push(records),
+    });
+    const options = Array.from({ length: 128 }, (_, item) => {
+      const assetId = makeAssetId(uuid(item + 1));
+      return {
+        id: String(assetId),
+        label: `Asset ${item}`,
+        reference: new AssetBehaviorReference({ assetId }),
+      };
+    });
+
+    const result = await index.resolve(
+      'project-1',
+      'asset',
+      Array.from({ length: 64 }, (_, index) => options[index]!.reference),
+      async () => options,
+    );
+
+    expect(result.options).toHaveLength(64);
+    expect(result.missing).toHaveLength(0);
+    expect(resolvedCounts).toEqual([64]);
+    await expect(
+      index.resolve(
+        'project-1',
+        'asset',
+        Array.from({ length: 65 }, (_, index) => options[index]!.reference),
+        async () => options,
+      ),
+    ).rejects.toThrow('At most 64');
+  });
 });

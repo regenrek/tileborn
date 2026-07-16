@@ -14,6 +14,7 @@ export * from './asset-library/index.js';
 export * from './behavior/index.js';
 export * from './map/index.js';
 export * from './project/index.js';
+export * from './validation/project-corpus.js';
 
 const AssetBackedAssetLibraryServiceLive = AssetLibraryServiceLive.pipe(
   Layer.provideMerge(AssetServiceLive),

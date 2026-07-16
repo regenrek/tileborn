@@ -1,24 +1,16 @@
-import {
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { AssetPackManifest, AssetPackManifestAsset } from '../packages/asset-pipeline/src/index.js';
 import {
+  AssetBehaviorReference,
   BehaviorManifest,
   BehaviorRegistryManifest,
   GameModeId,
   GameObjectCatalog,
   PluginId,
-  ProjectId,
+  ProjectManifestSchema,
   RuntimeBehaviorPackage,
   TileborneMap,
   decodePersistedTileborneMapJson,
@@ -26,19 +18,32 @@ import {
   hashJsonStable,
 } from '../packages/core/src/index.js';
 import {
+  AssetLibraryService,
+  AssetService,
   MapService,
+  ProjectBehaviorService,
   ProjectService,
-  type ProjectBehaviorSnapshot,
+  makeAssetLibraryServiceLive,
+  makeProjectBehaviorServiceLive,
+  makeProjectServiceLive,
+  validateProjectContentCorpus,
 } from '../packages/services-app/src/index.js';
-import { HomeServiceLive } from '../packages/services-foundation/src/home/index.js';
-import { PluginRegistryService } from '../packages/services-plugin/src/index.js';
-import { PluginContributions } from '../packages/plugin-api/src/index.js';
-import { paginateAssetLibraryGroups } from '../packages/services-app/src/asset-library/index.js';
+import { packDirectory } from '../packages/services-app/src/internal/layout.js';
 import { commitMapProjectRevision } from '../packages/services-app/src/internal/project-revision-transaction.js';
+import { HomeServiceLive } from '../packages/services-foundation/src/home/index.js';
+import { JobServiceLive } from '../packages/services-foundation/src/job/index.js';
+import {
+  PluginLoaderService,
+  PluginRegistryService,
+} from '../packages/services-plugin/src/index.js';
+import { PluginContributions } from '../packages/plugin-api/src/index.js';
 import { BehaviorReferenceIndex } from '../apps/desktop/src/main/behavior-reference-index.js';
-import { observeDesktopCreatorLifecycle } from '../apps/desktop/src/main/creator-performance-owner.js';
-import { promoteBuildDirectory } from '../packages/services-build/src/build/index.js';
+import {
+  runDesktopProjectListLifecycle,
+  runDesktopProjectReopenLifecycle,
+} from '../apps/desktop/src/main/project-lifecycle.js';
 import { compileProjectBehaviorPackage } from '../packages/services-build/src/behavior/project-package.js';
+import { BuildService, makeBuildServiceLive } from '../packages/services-build/src/build/index.js';
 import { assembleRuntimeMapPackage } from '../packages/services-build/src/map-package/assemble.js';
 import {
   makePlaytestServiceLive,
@@ -61,19 +66,6 @@ const exactSource = (index: number) => {
   const prefix = `// behavior ${index}\nexport default Object.freeze({ on: {} });\n`;
   return `${prefix}${' '.repeat(fixture.project.behaviors.sourceBytesPerBehavior - prefix.length)}`;
 };
-const listFiles = async (root: string): Promise<string[]> => {
-  const files: string[] = [];
-  const visit = async (directory: string) => {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const absolute = path.join(directory, entry.name);
-      if (entry.isDirectory()) await visit(absolute);
-      else if (entry.isFile()) files.push(absolute);
-    }
-  };
-  await visit(root);
-  return files.sort();
-};
-
 const owner = (id: string) => budgets.flows.find((flow: { id: string }) => flow.id === id).owner;
 const metric = (id: string, observed: number) => ({ id, observed });
 const flow = (id: string, metrics: readonly { id: string; observed: number }[]) => ({
@@ -84,66 +76,34 @@ const flow = (id: string, metrics: readonly { id: string; observed: number }[]) 
 
 describe('creator-v1 canonical owner execution', () => {
   let root = '';
+  let previousHome: string | undefined;
   let receipt: Record<string, unknown>;
+  let regressedReceipt: Record<string, unknown>;
 
   beforeAll(async () => {
     root = await mkdtemp(path.join(os.tmpdir(), 'tileborne-creator-owner-gate-'));
+    previousHome = process.env['TILEBORNE_HOME'];
+    process.env['TILEBORNE_HOME'] = root;
 
-    // Desktop/services-app bounded owners: these are the same paging/index implementations
-    // called by getPackLibrary and the behavior-reference IPC handlers.
-    const assetGroups = Array.from({ length: fixture.project.assets.assetCount }, (_, index) => ({
-      id: `asset-${index}`,
-      previewRefs: Array.from({ length: 8 }, (__, preview) => `${index}:${preview}`),
-    }));
-    const assetPage = paginateAssetLibraryGroups(assetGroups, { offset: 0, limit: 64 });
-    const desktopProjectsRoot = path.join(root, 'desktop-projects');
-    const desktopProjectRoot = path.join(desktopProjectsRoot, 'creator-v1');
-    const desktopBehaviorPath = path.join(desktopProjectRoot, 'behaviors', 'initial.ts');
-    const desktopRecoveryPath = path.join(desktopProjectRoot, '.tileborne', 'recovery.json');
-    await mkdir(path.dirname(desktopBehaviorPath), { recursive: true });
-    await mkdir(path.dirname(desktopRecoveryPath), { recursive: true });
-    const manifestBase = JSON.stringify({ schemaVersion: 1, id: fixture.id, padding: '' });
-    const manifestPadding =
-      fixture.project.projectManifestBytes - Buffer.byteLength(manifestBase, 'utf8');
-    const manifestText = JSON.stringify({
-      schemaVersion: 1,
-      id: fixture.id,
-      padding: 'x'.repeat(manifestPadding),
-    });
-    if (Buffer.byteLength(manifestText, 'utf8') !== fixture.project.projectManifestBytes) {
-      throw new Error('could not materialize exact desktop project manifest');
-    }
-    await writeFile(path.join(desktopProjectRoot, 'project.json'), manifestText);
-    await writeFile(desktopBehaviorPath, exactSource(0));
-    await writeFile(desktopRecoveryPath, '{"schemaVersion":1}\n');
-    const lifecycle = await observeDesktopCreatorLifecycle({
-      projectsRoot: desktopProjectsRoot,
-      projectRoot: desktopProjectRoot,
-      loadInitialAssetPage: async () => assetPage.groups,
-      loadInitialBehaviorBody: () => readFile(desktopBehaviorPath),
-      recoverySnapshotPath: desktopRecoveryPath,
-    });
-    const referenceOptions = Array.from(
-      { length: fixture.project.behaviors.totalReferences },
-      (_, index) => ({
-        id: `reference-${index}`,
-        label: `Reference ${index}`,
-        reference: {} as never,
-      }),
-    );
-    const referenceIndex = new BehaviorReferenceIndex();
-    const referencePage = await referenceIndex.query(
-      'creator-v1',
-      'asset',
-      { limit: 32 },
-      async () => referenceOptions,
-    );
-    const resolvedReferenceBatch = (
-      await referenceIndex.load('creator-v1', 'asset', async () => referenceOptions)
-    ).slice(0, 64);
+    const projectListEvents: Array<{ recordsDecoded: number }> = [];
+    const projectOpenEvents: Array<{
+      manifestInputBytes: number;
+      manifestDecodes: number;
+      recoverySnapshotReads: number;
+    }> = [];
+    const assetPageEvents: Array<{
+      packAssets: number;
+      records: number;
+      previewReferencesPerGroup: readonly number[];
+    }> = [];
+    const previewEvents: Array<{
+      requested: number;
+      resolved: number;
+      fullCorpusRequest: boolean;
+    }> = [];
+    const behaviorListEvents: Array<{ manifests: number; sourceBodiesRead: number }> = [];
+    const behaviorBodyEvents: Array<{ bytes: number }> = [];
 
-    // Compile every behavior through the canonical compiler owner. Batching bounds concurrent
-    // compiler memory while keeping the required gate representative of the complete corpus.
     const manifests = Array.from({ length: fixture.project.behaviors.count }, (_, index) =>
       Schema.decodeUnknownSync(BehaviorManifest)({
         schemaVersion: 1,
@@ -158,102 +118,200 @@ describe('creator-v1 canonical owner execution', () => {
       }),
     );
     const behaviorSources = manifests.map((_, index) => exactSource(index));
-    const oneSnapshot: ProjectBehaviorSnapshot = {
-      projectId: Schema.decodeUnknownSync(ProjectId)(`project:${uuid(1)}`),
-      projectRoot: root,
-      revision: 1,
-      trust: 'trusted',
-      resources: [
-        {
-          kind: 'typescript',
-          manifest: manifests[0] as never,
-          source: behaviorSources[0]!,
-        },
-      ],
-      useSites: [],
-      diagnostics: [],
-    };
-    const registry = new BehaviorRegistryManifest({ schemaVersion: 1, entries: [] });
-    const behaviorModules: Array<{
-      path: string;
-      bytes: Uint8Array;
-      manifest: (typeof manifests)[number];
-    }> = [];
-    for (let offset = 0; offset < manifests.length; offset += 32) {
-      const batch = manifests.slice(offset, offset + 32);
-      const compiledBatch = await Promise.all(
-        batch.map((manifest, batchIndex) => {
-          const index = offset + batchIndex;
-          return compileProjectBehaviorPackage(
-            {
-              ...oneSnapshot,
-              resources: [
-                {
-                  kind: 'typescript',
-                  manifest: manifest as never,
-                  source: behaviorSources[index]!,
-                },
-              ],
-            },
-            registry,
-          );
-        }),
-      );
-      for (let batchIndex = 0; batchIndex < compiledBatch.length; batchIndex += 1) {
-        const compiled = compiledBatch[batchIndex]!;
-        const manifest = batch[batchIndex]!;
-        if (
-          !compiled.ok ||
-          compiled.behaviorPackage === undefined ||
-          compiled.modules === undefined
-        ) {
-          throw new Error(
-            `canonical behavior compiler failed: ${JSON.stringify(compiled.diagnostics)}`,
-          );
-        }
-        const module = compiled.modules[0];
-        if (module === undefined)
-          throw new Error(`canonical behavior compiler omitted ${manifest.id}`);
-        behaviorModules.push({ path: module.path, bytes: module.bytes, manifest });
-      }
-    }
-    const behaviorPackage = Schema.decodeUnknownSync(RuntimeBehaviorPackage)({
-      schemaVersion: 1,
-      manifests,
-      visualDefinitions: [],
-      modules: behaviorModules.map(({ path: modulePath, bytes, manifest }) => ({
-        behaviorId: manifest.id,
-        sourceKind: 'typescript',
-        modulePath,
-        hash: hashBytes(bytes),
-      })),
+
+    const assetPayload = new Uint8Array(fixture.project.assets.payloadBytesPerAsset).fill(0x61);
+    const payloadHash = hashBytes(assetPayload);
+    const assetRecordInputs = Array.from(
+      { length: fixture.project.assets.assetCount },
+      (_, index) => ({
+        id: `asset:${uuid(30_000 + index)}`,
+        path: `assets/asset-${index.toString().padStart(4, '0')}.bin`,
+        mime: 'application/octet-stream',
+        size: assetPayload.byteLength,
+        hash: payloadHash,
+        license: undefined,
+      }),
+    );
+    const assetRecords = assetRecordInputs.map((input) =>
+      Schema.decodeUnknownSync(AssetPackManifestAsset)(input),
+    );
+    const packId = `pack:${uuid(29_000)}`;
+    const packVersion = '1.0.0';
+    const packManifest = Schema.decodeUnknownSync(AssetPackManifest)({
+      id: packId,
+      name: 'Creator performance pack',
+      version: packVersion,
+      license: { spdxId: 'CC0-1.0', redistributable: true },
+      assets: assetRecordInputs,
     });
+    const packRoot = packDirectory(path.join(root, 'assets'), packManifest.id, packVersion);
+    await mkdir(packRoot, { recursive: true });
+    const tilesets = assetRecords.map((asset, index) => ({
+      id: `tileset:${uuid(50_000 + index)}`,
+      name: `Asset ${index}`,
+      atlasAssetId: asset.id,
+      cellSize: { width: 16, height: 16 },
+      margin: 0,
+      spacing: 0,
+    }));
+    const tiles = assetRecords.map((_, index) => ({
+      id: `tile:${uuid(60_000 + index)}`,
+      tilesetId: tilesets[index]!.id,
+      uv: { x: 0, y: 0, w: 16, h: 16 },
+      tags: [],
+    }));
+    await writeFile(
+      path.join(packRoot, 'tileborne-asset-pack.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        ...Schema.encodeSync(AssetPackManifest)(packManifest),
+        terrainClasses: [],
+        tilesets,
+        tiles,
+        animations: [],
+        collisionMasks: [],
+        autotileRules: [],
+        variantFilters: [],
+        terrainTransitions: [],
+      })}\n`,
+    );
+
+    const assetLayer = Layer.succeed(AssetService, {
+      getPack: () => Effect.succeed({ ...packManifest, capability: { tileCount: tiles.length } }),
+    } as never);
+    const projectLayer = makeProjectServiceLive({
+      onProjectsListed: (event) => projectListEvents.push(event),
+      onProjectOpened: (event) => projectOpenEvents.push(event),
+    }).pipe(Layer.provideMerge(HomeServiceLive));
+    const behaviorLayer = makeProjectBehaviorServiceLive(undefined, {
+      onRegistryListed: (event) => behaviorListEvents.push(event),
+      onSourceBodyRead: (event) => behaviorBodyEvents.push(event),
+    }).pipe(Layer.provideMerge(HomeServiceLive));
+    const assetLibraryLayer = makeAssetLibraryServiceLive({
+      onPageCompleted: (event) => assetPageEvents.push(event),
+      onPreviewResolutionCompleted: (event) => previewEvents.push(event),
+    }).pipe(Layer.provideMerge(HomeServiceLive), Layer.provideMerge(assetLayer));
+    const appLayer = Layer.mergeAll(projectLayer, behaviorLayer, assetLibraryLayer, assetLayer);
+
+    const projectId = await Effect.runPromise(
+      Effect.gen(function* () {
+        const projects = yield* ProjectService;
+        return yield* projects.create({ name: 'Creator performance project' });
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const projectRoot = path.join(root, 'projects', projectId);
+    const manifestPath = path.join(projectRoot, 'project.json');
+    const rawManifest = (await readFile(manifestPath, 'utf8')).trimEnd();
+    const paddingBytes = fixture.project.projectManifestBytes - Buffer.byteLength(rawManifest) - 1;
+    await writeFile(manifestPath, `${rawManifest}${' '.repeat(paddingBytes)}\n`);
+
+    await mkdir(path.join(projectRoot, 'behaviors', 'sources'), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, 'behaviors', 'registry.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        projectId,
+        revision: 1,
+        trust: 'trusted',
+        entries: manifests,
+      })}\n`,
+    );
+    await Promise.all(
+      manifests.map((manifest, index) =>
+        writeFile(path.join(projectRoot, manifest.source.sourcePath), behaviorSources[index]!),
+      ),
+    );
+
+    const lifecycleBefore = {
+      assetPages: assetPageEvents.length,
+      behaviorBodies: behaviorBodyEvents.length,
+    };
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const projects = yield* ProjectService;
+        yield* runDesktopProjectListLifecycle(() => projects.list());
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const startupObservation = {
+      projectRecordsDecoded: projectListEvents.at(-1)!.recordsDecoded,
+      assetRecordsDecoded: assetPageEvents.length - lifecycleBefore.assetPages,
+      behaviorBodiesDecoded: behaviorBodyEvents.length - lifecycleBefore.behaviorBodies,
+    };
+
+    const reopenBeforeBodies = behaviorBodyEvents.length;
+    const normalAssetPage = await Effect.runPromise(
+      Effect.gen(function* () {
+        const projects = yield* ProjectService;
+        const library = yield* AssetLibraryService;
+        const behaviors = yield* ProjectBehaviorService;
+        yield* runDesktopProjectReopenLifecycle(() => projects.open(projectId));
+        const page = yield* library.getPackLibrary({ packId: packManifest.id, limit: 64 });
+        yield* behaviors.list(projectId);
+        yield* behaviors.openResource(projectId, manifests[0]!.id);
+        return page;
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const normalPageEvent = assetPageEvents.at(-1)!;
+    const reopenObservation = {
+      ...projectOpenEvents.at(-1)!,
+      initialAssetPageRecords: normalPageEvent.records,
+      initialBehaviorBodies: behaviorBodyEvents.length - reopenBeforeBodies,
+    };
+    const previewRefs = normalAssetPage.groups.flatMap((group) => group.previewRefs);
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const library = yield* AssetLibraryService;
+        yield* library.resolvePreviews({ packId: packManifest.id, refs: previewRefs });
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const previewEvent = previewEvents.at(-1)!;
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const library = yield* AssetLibraryService;
+        yield* library.getPackLibrary({ packId: packManifest.id, limit: 200 });
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const regressedPageEvent = assetPageEvents.at(-1)!;
+
+    const referenceOptions = Array.from(
+      { length: fixture.project.behaviors.totalReferences },
+      (_, index) => {
+        const reference = new AssetBehaviorReference({
+          assetId: assetRecords[index % assetRecords.length]!.id,
+        });
+        return { id: `reference-${index}`, label: `Reference ${index}`, reference };
+      },
+    );
+    const referenceEvents = {
+      indexes: [] as number[],
+      queries: [] as number[],
+      resolutions: [] as number[],
+    };
+    const referenceIndex = new BehaviorReferenceIndex({
+      onIndexLoaded: ({ records }) => referenceEvents.indexes.push(records),
+      onQueryCompleted: ({ records }) => referenceEvents.queries.push(records),
+      onResolutionCompleted: ({ records }) => referenceEvents.resolutions.push(records),
+    });
+    await referenceIndex.query('creator-v1', 'asset', { limit: 32 }, async () => referenceOptions);
+    const requestedReferences = Array.from(
+      { length: 64 },
+      (_, index) => referenceOptions[index]!.reference,
+    );
+    await referenceIndex.resolve(
+      'creator-v1',
+      'asset',
+      requestedReferences,
+      async () => referenceOptions,
+    );
 
     const pluginName = '@tileborne-plugins/creator-performance';
     const pluginId = Schema.decodeUnknownSync(PluginId)(pluginName);
     const modeId = Schema.decodeUnknownSync(GameModeId)(pluginName);
-    const pluginContributions = Schema.decodeUnknownSync(PluginContributions)({
-      gameModes: [
-        {
-          _tag: 'GameModeContribution',
-          id: 'creator-performance',
-          kind: 'declarative',
-          display: { label: 'Creator performance' },
-          runtimeSystemId: 'creator-performance-runtime',
-        },
-      ],
-      panels: undefined,
-      tools: undefined,
-      assetPacks: undefined,
-      tilesetPacks: undefined,
-      editor: undefined,
-      runtime: undefined,
-      server: undefined,
-    });
     const typeId = `gobj:${uuid(2)}`;
     const catalog = Schema.decodeUnknownSync(GameObjectCatalog)({
       id: `catalog:${uuid(2)}`,
       schemaVersion: 1,
+      label: 'Creator performance catalog',
       objectTypes: [
         {
           id: typeId,
@@ -295,95 +353,61 @@ describe('creator-v1 canonical owner execution', () => {
         properties: { [pluginName]: { maxPlayers: 16 } },
       }),
     );
-    const validationPasses = maps.map((map) =>
-      decodePersistedTileborneMapJson(Schema.encodeSync(TileborneMap)(map)),
-    );
-    const diagnostics = Array.from(
+    const encodedMaps = maps.map((map) => Schema.encodeSync(TileborneMap)(map));
+    const invalidMapVariants = Array.from(
       { length: fixture.project.validation.invalidVariantFaults },
       (_, index) => {
-        try {
-          decodePersistedTileborneMapJson({ schemaVersion: 1, id: `broken-${index}` });
-          return undefined;
-        } catch (error) {
-          return error;
+        const candidate = structuredClone(encodedMaps[index % encodedMaps.length]!) as Record<
+          string,
+          unknown
+        >;
+        switch (index % 8) {
+          case 0:
+            delete candidate['id'];
+            break;
+          case 1:
+            candidate['id'] = 42;
+            break;
+          case 2:
+            candidate['size'] = null;
+            break;
+          case 3:
+            candidate['tileSize'] = null;
+            break;
+          case 4:
+            candidate['layers'] = null;
+            break;
+          case 5:
+            candidate['objects'] = null;
+            break;
+          case 6:
+            candidate['properties'] = [];
+            break;
+          default:
+            candidate['schemaVersion'] = 'invalid';
         }
+        return candidate;
       },
-    ).filter((entry) => entry !== undefined);
+    );
+    const openedProject = await Effect.runPromise(
+      Effect.gen(function* () {
+        const projects = yield* ProjectService;
+        return yield* projects.open(projectId);
+      }).pipe(Effect.provide(appLayer)),
+    );
+    const validation = validateProjectContentCorpus({
+      project: Schema.encodeSync(ProjectManifestSchema)(openedProject),
+      maps: encodedMaps,
+      assets: assetRecords.map((asset) => Schema.encodeSync(AssetPackManifestAsset)(asset)),
+      behaviors: manifests,
+      references: referenceOptions.map(({ reference }) => reference),
+      invalidMapVariants,
+    });
 
-    const assetPayload = new Uint8Array(fixture.project.assets.payloadBytesPerAsset).fill(0x61);
-    const assets = Array.from({ length: fixture.project.assets.assetCount }, (_, index) => ({
-      path: `assets/asset-${index.toString().padStart(4, '0')}.bin`,
-      bytes: assetPayload,
-      assetId: `asset:${uuid(30_000 + index)}`,
-    }));
-    const packageRoots: string[] = [];
-    for (let index = 0; index < maps.length; index += 1) {
-      const outputDirectory = path.join(root, 'packages', String(index));
-      packageRoots.push(outputDirectory);
-      await Effect.runPromise(
-        assembleRuntimeMapPackage({
-          projectId: `project:${uuid(1)}`,
-          map: maps[index]!,
-          activeMode: { modeId, pluginId },
-          pluginCatalogs: [
-            { pluginId, catalogs: [{ contributionId: 'fixture/catalog', catalog }] },
-          ],
-          playerModels: [],
-          playerCapacity: 16,
-          assets,
-          behaviors: behaviorPackage,
-          behaviorModules: behaviorModules.map(({ path: modulePath, bytes }) => ({
-            path: modulePath,
-            bytes,
-          })),
-          engineVersion: '0.1.0',
-          outputDirectory,
-        }),
-      );
-    }
-    const packageFiles = await listFiles(packageRoots[0]!);
-
-    const playtestTransitions: string[] = [];
-    const previousHome = process.env['TILEBORNE_HOME'];
-    process.env['TILEBORNE_HOME'] = path.join(root, 'playtest-home');
-    try {
-      const projectLayer = Layer.succeed(ProjectService, {
-        open: () => Effect.succeed({ settings: { activeGameMode: modeId } }),
-      } as never);
-      const mapLayer = Layer.succeed(MapService, { load: () => Effect.succeed(maps[0]!) } as never);
-      const registryLayer = Layer.succeed(PluginRegistryService, {
-        list: () =>
-          Effect.succeed([
-            {
-              id: pluginId,
-              enabled: true,
-              manifest: {
-                contributes: pluginContributions,
-              },
-            },
-          ]),
-      } as never);
-      const dependencies = Layer.mergeAll(HomeServiceLive, projectLayer, mapLayer, registryLayer);
-      const playtestLayer = makePlaytestServiceLive({
-        onSessionTransition: (status) => playtestTransitions.push(status),
-      }).pipe(Layer.provideMerge(dependencies));
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const playtest = yield* PlaytestService;
-          const session = yield* playtest.start(oneSnapshot.projectId, maps[0]!.id);
-          yield* playtest.stop(session.id);
-        }).pipe(Effect.provide(playtestLayer)),
-      );
-    } finally {
-      if (previousHome === undefined) delete process.env['TILEBORNE_HOME'];
-      else process.env['TILEBORNE_HOME'] = previousHome;
-    }
-
-    // Real project revision transaction with its production four durable phases.
     const transactionRoot = path.join(root, 'revision-owner');
     const transactionMapId = 'fixture-map';
+    const transactionProjectId = String(projectId);
     await mkdir(path.join(transactionRoot, 'maps'), { recursive: true });
-    const transactionProjectId = `project:${uuid(1)}`;
     await writeFile(
       path.join(transactionRoot, 'project.json'),
       `${JSON.stringify({ id: transactionProjectId })}\n`,
@@ -393,7 +417,12 @@ describe('creator-v1 canonical owner execution', () => {
       path.join(transactionRoot, 'maps', `${transactionMapId}.json`),
       `${JSON.stringify({ id: transactionMapId })}\n`,
     );
-    const phases: string[] = [];
+    const revisionEvents = {
+      changed: [] as number[],
+      installed: [] as string[],
+      phases: [] as string[],
+      copies: 0,
+    };
     await commitMapProjectRevision({
       projectRoot: transactionRoot,
       projectId: transactionProjectId,
@@ -410,136 +439,207 @@ describe('creator-v1 canonical owner execution', () => {
           },
         };
       },
-      faultAfterPhase: (phase) => {
-        if (['prepared', 'map-installed', 'project-installed', 'lock-installed'].includes(phase)) {
-          phases.push(phase);
-        }
+      observer: {
+        onPrepared: ({ changedResources }) => revisionEvents.changed.push(changedResources),
+        onContentFileInstalled: (target) => revisionEvents.installed.push(target),
+        onPhaseTransition: (phase) => revisionEvents.phases.push(phase),
+        onProjectDirectoryCopied: () => {
+          revisionEvents.copies += 1;
+        },
       },
     });
 
-    // BuildService's crash-safe promotion owner promotes the eight verified wire packages once,
-    // then the gate traverses every final file for integrity.
-    const shipWork = path.join(root, 'ship-work');
-    const shipFinal = path.join(root, 'ship-final');
-    await mkdir(shipWork, { recursive: true });
-    for (let index = 0; index < packageRoots.length; index += 1) {
-      await cp(
-        path.join(packageRoots[index]!, 'manifest.json'),
-        path.join(shipWork, `map-${index}.json`),
+    const compilerEvents: Array<{ sourceBytes: number; modules: number }> = [];
+    const registry = new BehaviorRegistryManifest({ schemaVersion: 1, entries: [] });
+    const behaviorModules: Array<{
+      path: string;
+      bytes: Uint8Array;
+      manifest: (typeof manifests)[number];
+    }> = [];
+    for (let offset = 0; offset < manifests.length; offset += 32) {
+      const batch = manifests.slice(offset, offset + 32);
+      const results = await Promise.all(
+        batch.map((manifest, batchIndex) =>
+          compileProjectBehaviorPackage(
+            {
+              projectId,
+              projectRoot,
+              revision: 1,
+              trust: 'trusted',
+              resources: [
+                {
+                  kind: 'typescript',
+                  manifest: manifest as never,
+                  source: behaviorSources[offset + batchIndex]!,
+                },
+              ],
+              useSites: [],
+              diagnostics: [],
+            },
+            registry,
+            { onPackageCompiled: (event) => compilerEvents.push(event) },
+          ),
+        ),
       );
-    }
-    const shipFiles = await listFiles(shipWork);
-    const fileHashes = Object.fromEntries(
-      await Promise.all(
-        shipFiles.map(async (file) => [
-          path.relative(shipWork, file),
-          hashBytes(new Uint8Array(await readFile(file))),
-        ]),
-      ),
-    );
-    let promotions = 0;
-    await promoteBuildDirectory({
-      directory: shipFinal,
-      workDirectory: shipWork,
-      fileHashes,
-      operations: {
-        rename: async (from, to) => {
-          await rename(from, to);
-          if (from === shipWork && to === shipFinal) promotions += 1;
-        },
-        remove: (target) => rm(target, { recursive: true, force: true }),
-      },
-    });
-    const finalFiles = await listFiles(shipFinal);
-    let artifactBytes = 0;
-    for (const file of finalFiles) {
-      artifactBytes += (await stat(file)).size;
-      const relative = path.relative(shipFinal, file);
-      if (hashBytes(new Uint8Array(await readFile(file))) !== fileHashes[relative]) {
-        throw new Error(`post-promotion integrity mismatch: ${relative}`);
+      for (let index = 0; index < results.length; index += 1) {
+        const compiled = results[index]!;
+        if (!compiled.ok || compiled.modules?.[0] === undefined)
+          throw new Error(`compiler failed: ${JSON.stringify(compiled.diagnostics)}`);
+        behaviorModules.push({ ...compiled.modules[0], manifest: batch[index]! });
       }
     }
 
-    const sourceBehaviorBytes = behaviorSources.reduce(
-      (sum, source) => sum + Buffer.byteLength(source, 'utf8'),
-      0,
+    const packageEvents = Array.from({ length: maps.length }, () => ({
+      inputs: [] as Array<{ assets: number; behaviorModules: number; assetPayloadBytes: number }>,
+      traversals: [] as string[],
+      files: [] as string[],
+    }));
+    const packageRoots: string[] = [];
+    const assets = assetRecords.map((asset) => ({
+      path: asset.path,
+      bytes: assetPayload,
+      assetId: asset.id,
+    }));
+    for (let index = 0; index < maps.length; index += 1) {
+      const outputDirectory = path.join(root, 'packages', String(index));
+      packageRoots.push(outputDirectory);
+      const packageAssets = assets.slice(index * 256, (index + 1) * 256);
+      const packageModules = behaviorModules.slice(index * 64, (index + 1) * 64);
+      const behaviorPackage = Schema.decodeUnknownSync(RuntimeBehaviorPackage)({
+        schemaVersion: 1,
+        manifests: packageModules.map(({ manifest }) => manifest),
+        visualDefinitions: [],
+        modules: packageModules.map(({ path: modulePath, bytes, manifest }) => ({
+          behaviorId: manifest.id,
+          sourceKind: 'typescript',
+          modulePath,
+          hash: hashBytes(bytes),
+        })),
+      });
+      await Effect.runPromise(
+        assembleRuntimeMapPackage({
+          projectId: String(projectId),
+          map: maps[index]!,
+          activeMode: { modeId, pluginId },
+          pluginCatalogs: [
+            { pluginId, catalogs: [{ contributionId: 'fixture/catalog', catalog }] },
+          ],
+          playerModels: [],
+          playerCapacity: 16,
+          assets: packageAssets,
+          behaviors: behaviorPackage,
+          behaviorModules: packageModules.map(({ path: modulePath, bytes }) => ({
+            path: modulePath,
+            bytes,
+          })),
+          engineVersion: '0.1.0',
+          outputDirectory,
+          observer: {
+            onInputAccepted: (event) => packageEvents[index]!.inputs.push(event),
+            onInputTraversal: (phase) => packageEvents[index]!.traversals.push(phase),
+            onFileWritten: (file) => packageEvents[index]!.files.push(file),
+          },
+        }),
+      );
+    }
+
+    const pluginContributions = Schema.decodeUnknownSync(PluginContributions)({
+      gameModes: [
+        {
+          _tag: 'GameModeContribution',
+          id: 'creator-performance',
+          kind: 'declarative',
+          display: { label: 'Creator performance' },
+          runtimeSystemId: 'creator-performance-runtime',
+        },
+      ],
+      panels: undefined,
+      tools: undefined,
+      assetPacks: undefined,
+      tilesetPacks: undefined,
+      editor: undefined,
+      runtime: undefined,
+      server: undefined,
+    });
+    const registryLayer = Layer.succeed(PluginRegistryService, {
+      list: () =>
+        Effect.succeed([
+          { id: pluginId, enabled: true, manifest: { contributes: pluginContributions } },
+        ]),
+    } as never);
+    const mapLayer = Layer.succeed(MapService, { load: () => Effect.succeed(maps[0]!) } as never);
+    const playtestEvents = { maps: [] as string[], transitions: [] as string[] };
+    const playtestLayer = makePlaytestServiceLive({
+      onMapPackageSelected: (mapId) => playtestEvents.maps.push(String(mapId)),
+      onSessionTransition: (status) => playtestEvents.transitions.push(status),
+    }).pipe(
+      Layer.provideMerge(Layer.mergeAll(HomeServiceLive, projectLayer, mapLayer, registryLayer)),
     );
-    const validationRecords =
-      1 +
-      maps.length +
-      maps.reduce((sum, map) => sum + map.objects.length, 0) +
-      assets.length +
-      manifests.length +
-      referenceOptions.length;
-    const flows = [
-      flow('startup', [
-        metric('project-records-eagerly-decoded', lifecycle.startup.projectRecordsDecoded),
-        metric('asset-records-eagerly-decoded', lifecycle.startup.assetRecordsDecoded),
-        metric('behavior-bodies-eagerly-decoded', lifecycle.startup.behaviorBodiesDecoded),
-      ]),
-      flow('reopen', [
-        metric('project-manifest-input-bytes', lifecycle.reopen.manifestInputBytes),
-        metric('project-manifest-decodes', lifecycle.reopen.manifestDecodes),
-        metric('initial-asset-page-records', lifecycle.reopen.initialAssetPageRecords),
-        metric('initial-behavior-bodies', lifecycle.reopen.initialBehaviorBodies),
-        metric('recovery-snapshot-reads', lifecycle.reopen.recoverySnapshotReads),
-      ]),
-      flow('asset-library-2000', [
-        metric('fixture-assets', assetGroups.length),
-        metric('asset-page-records', assetPage.groups.length),
-        metric('preview-references-per-request', Math.min(64, assetGroups.length)),
-        metric(
-          'preview-references-per-group-summary',
-          Math.max(...assetPage.groups.map((group) => group.previewRefs.length)),
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const playtest = yield* PlaytestService;
+        const session = yield* playtest.start(projectId, maps[0]!.id);
+        yield* playtest.stop(session.id);
+      }).pipe(Effect.provide(playtestLayer)),
+    );
+
+    const shipEvents = { packages: [] as number[], promotions: 0, integrity: [] as number[] };
+    const loaderLayer = Layer.succeed(PluginLoaderService, {} as never);
+    const buildLayer = makeBuildServiceLive().pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          HomeServiceLive,
+          JobServiceLive,
+          registryLayer,
+          loaderLayer,
+          assetLayer,
+          projectLayer,
+          behaviorLayer,
+          mapLayer,
         ),
-        metric('full-corpus-preview-requests-before-scroll', 0),
-      ]),
-      flow('large-behaviors-references', [
-        metric('fixture-behaviors', manifests.length),
-        metric('fixture-references', referenceOptions.length),
-        metric('reference-search-page-records', referencePage.options.length),
-        metric('reference-resolution-batch-records', resolvedReferenceBatch.length),
-        metric('behavior-bodies-opened-by-list', 0),
-      ]),
-      flow('validation', [
-        metric('fixture-validation-records', validationRecords),
-        metric('full-project-validation-passes', validationPasses.length === maps.length ? 1 : 0),
-        metric('invalid-variant-faults', fixture.project.validation.invalidVariantFaults),
-        metric('diagnostics-returned', diagnostics.length),
-        metric('records-inspected', validationRecords),
-      ]),
-      flow('save', [
-        metric('changed-resources', 1),
-        metric('content-files-rewritten', 3),
-        metric('journal-phase-transitions', phases.length),
-        metric('full-project-directory-copies', 0),
-      ]),
-      flow('playtest-start', [
-        metric('selected-map-packages', 1),
-        metric('compiled-behavior-modules', behaviorModules.length),
-        metric('source-behavior-bytes', sourceBehaviorBytes),
-        metric('session-start-transitions', playtestTransitions.length),
-      ]),
-      flow('package', [
-        metric('runtime-map-packages', packageRoots.length),
-        metric('input-assets', assets.length),
-        metric('input-behavior-modules', behaviorModules.length),
-        metric(
-          'asset-payload-input-bytes',
-          assets.reduce((sum, asset) => sum + asset.bytes.byteLength, 0),
-        ),
-        metric('package-files', packageFiles.length),
-        metric('full-input-traversals', 2),
-      ]),
-      flow('ship', [
-        metric('runtime-map-packages', packageRoots.length),
-        metric('artifact-files', finalFiles.length),
-        metric('artifact-bytes', artifactBytes),
-        metric('artifact-promotions', promotions),
-        metric('post-promotion-integrity-traversals', 1),
-      ]),
-    ];
-    receipt = {
+      ),
+    );
+    const ship = await Effect.runPromise(
+      Effect.gen(function* () {
+        const builds = yield* BuildService;
+        return yield* builds.shipRuntimeMapPackages({
+          packageDirectories: packageRoots,
+          directory: path.join(root, 'ship-final'),
+          observer: {
+            onPackageCopied: ({ files }) => shipEvents.packages.push(files),
+            onArtifactPromoted: () => {
+              shipEvents.promotions += 1;
+            },
+            onIntegrityTraversal: ({ files }) => shipEvents.integrity.push(files),
+          },
+        });
+      }).pipe(Effect.provide(buildLayer)),
+    );
+
+    const compilerObservation = compilerEvents.reduce(
+      (total, event) => ({
+        sourceBytes: total.sourceBytes + event.sourceBytes,
+        modules: total.modules + event.modules,
+      }),
+      { sourceBytes: 0, modules: 0 },
+    );
+    const packageObservation = packageEvents.reduce(
+      (total, event) => ({
+        assets: total.assets + event.inputs[0]!.assets,
+        behaviorModules: total.behaviorModules + event.inputs[0]!.behaviorModules,
+        assetPayloadBytes: total.assetPayloadBytes + event.inputs[0]!.assetPayloadBytes,
+        files: total.files + event.files.length,
+        traversals: Math.max(total.traversals, event.traversals.length),
+      }),
+      { assets: 0, behaviorModules: 0, assetPayloadBytes: 0, files: 0, traversals: 0 },
+    );
+    const behaviorListEvent = behaviorListEvents[0]!;
+    const referenceObservation = {
+      fixtureReferences: referenceEvents.indexes[0]!,
+      queryRecords: referenceEvents.queries[0]!,
+      resolutionRecords: referenceEvents.resolutions[0]!,
+    };
+    const buildReceipt = (assetPage: typeof normalPageEvent) => ({
       schemaVersion: 1,
       fixtureId: fixture.id,
       budgetId: budgets.id,
@@ -549,14 +649,85 @@ describe('creator-v1 canonical owner execution', () => {
         arch: process.arch,
         node: process.version,
       },
-      flows,
-    };
+      flows: [
+        flow('startup', [
+          metric('project-records-eagerly-decoded', startupObservation.projectRecordsDecoded),
+          metric('asset-records-eagerly-decoded', startupObservation.assetRecordsDecoded),
+          metric('behavior-bodies-eagerly-decoded', startupObservation.behaviorBodiesDecoded),
+        ]),
+        flow('reopen', [
+          metric('project-manifest-input-bytes', reopenObservation.manifestInputBytes),
+          metric('project-manifest-decodes', reopenObservation.manifestDecodes),
+          metric('initial-asset-page-records', reopenObservation.initialAssetPageRecords),
+          metric('initial-behavior-bodies', reopenObservation.initialBehaviorBodies),
+          metric('recovery-snapshot-reads', reopenObservation.recoverySnapshotReads),
+        ]),
+        flow('asset-library-2000', [
+          metric('fixture-assets', assetPage.packAssets),
+          metric('asset-page-records', assetPage.records),
+          metric('preview-references-per-request', previewEvent.requested),
+          metric(
+            'preview-references-per-group-summary',
+            Math.max(...assetPage.previewReferencesPerGroup),
+          ),
+          metric(
+            'full-corpus-preview-requests-before-scroll',
+            previewEvents.filter(({ fullCorpusRequest }) => fullCorpusRequest).length,
+          ),
+        ]),
+        flow('large-behaviors-references', [
+          metric('fixture-behaviors', behaviorListEvent.manifests),
+          metric('fixture-references', referenceObservation.fixtureReferences),
+          metric('reference-search-page-records', referenceObservation.queryRecords),
+          metric('reference-resolution-batch-records', referenceObservation.resolutionRecords),
+          metric('behavior-bodies-opened-by-list', behaviorListEvent.sourceBodiesRead),
+        ]),
+        flow('validation', [
+          metric('fixture-validation-records', validation.recordsInspected),
+          metric('full-project-validation-passes', validation.validProjectPasses),
+          metric('invalid-variant-faults', validation.invalidVariantFaults),
+          metric('diagnostics-returned', validation.diagnostics.length),
+          metric('records-inspected', validation.recordsInspected),
+        ]),
+        flow('save', [
+          metric('changed-resources', revisionEvents.changed[0]!),
+          metric('content-files-rewritten', revisionEvents.installed.length),
+          metric('journal-phase-transitions', revisionEvents.phases.length),
+          metric('full-project-directory-copies', revisionEvents.copies),
+        ]),
+        flow('playtest-start', [
+          metric('selected-map-packages', playtestEvents.maps.length),
+          metric('compiled-behavior-modules', compilerObservation.modules),
+          metric('source-behavior-bytes', compilerObservation.sourceBytes),
+          metric('session-start-transitions', playtestEvents.transitions.length),
+        ]),
+        flow('package', [
+          metric('runtime-map-packages', packageEvents.length),
+          metric('input-assets', packageObservation.assets),
+          metric('input-behavior-modules', packageObservation.behaviorModules),
+          metric('asset-payload-input-bytes', packageObservation.assetPayloadBytes),
+          metric('package-files', packageObservation.files),
+          metric('full-input-traversals', packageObservation.traversals),
+        ]),
+        flow('ship', [
+          metric('runtime-map-packages', ship.runtimeMapPackages),
+          metric('artifact-files', ship.artifactFiles),
+          metric('artifact-bytes', ship.artifactBytes),
+          metric('artifact-promotions', shipEvents.promotions),
+          metric('post-promotion-integrity-traversals', ship.integrityTraversals),
+        ]),
+      ],
+    });
+    receipt = buildReceipt(normalPageEvent);
+    regressedReceipt = buildReceipt(regressedPageEvent);
     assertCreatorPerformanceReceipt(budgets, receipt);
-  }, 120_000);
+  }, 300_000);
 
   afterAll(async () => {
+    if (previousHome === undefined) delete process.env['TILEBORNE_HOME'];
+    else process.env['TILEBORNE_HOME'] = previousHome;
     await rm(root, { recursive: true, force: true });
-  });
+  }, 60_000);
 
   it('executes every canonical owner and passes all 42 deterministic metrics', () => {
     expect((receipt.flows as readonly unknown[]).length).toBe(9);
@@ -568,14 +739,8 @@ describe('creator-v1 canonical owner execution', () => {
     ).toBe(42);
   });
 
-  it('fails when a canonical bounded owner regresses', () => {
-    const regressed = structuredClone(receipt) as typeof receipt & {
-      flows: Array<{ id: string; metrics: Array<{ id: string; observed: number }> }>;
-    };
-    regressed.flows
-      .find(({ id }) => id === 'asset-library-2000')!
-      .metrics.find(({ id }) => id === 'asset-page-records')!.observed = 201;
-    expect(() => assertCreatorPerformanceReceipt(budgets, regressed)).toThrow(
+  it('fails when the real AssetLibraryService owner returns an oversized initial page', () => {
+    expect(() => assertCreatorPerformanceReceipt(budgets, regressedReceipt)).toThrow(
       /asset-library-2000.asset-page-records/,
     );
   });

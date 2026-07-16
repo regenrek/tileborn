@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["TILEBORNE_SOURCE_COMMIT"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

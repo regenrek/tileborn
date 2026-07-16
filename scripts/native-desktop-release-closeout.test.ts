@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -58,5 +58,19 @@ describe('native desktop closeout preflight', () => {
     ]);
 
     expect(outputDirectories(root)).toEqual(['apps/desktop/out', 'packages/core/dist']);
+  });
+
+  it('passes clean-checkout source provenance through Turbo builds', async () => {
+    const repositoryRoot = path.resolve(import.meta.dirname, '..');
+    const cleanCheckoutScript = await readFile(
+      path.join(repositoryRoot, 'scripts/clean-checkout-smoke.sh'),
+      'utf8',
+    );
+    const turboConfig = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'turbo.json'), 'utf8'),
+    ) as { globalEnv?: unknown };
+
+    expect(cleanCheckoutScript).toContain('export TILEBORNE_SOURCE_COMMIT');
+    expect(turboConfig.globalEnv).toContain('TILEBORNE_SOURCE_COMMIT');
   });
 });

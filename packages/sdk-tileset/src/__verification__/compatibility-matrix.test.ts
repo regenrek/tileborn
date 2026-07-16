@@ -1,48 +1,48 @@
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { makeTileId, type Uuid } from "@tileborne/core";
+import { makeTileId, type Uuid } from '@tileborne/core';
 
 import {
   compileAutotileRule,
   formatMaskKey,
   neighborhoodForRule,
   resolveAutotile,
-} from "../autotile/index.js";
-import { diagnosticTag } from "../diagnostics.js";
-import { compileTiledSourceWallRulePhase } from "../importers/tiled-source/wall-rules.js";
-import { minimalLdtkProject, PROJECT_PATH } from "../ldtk/__tests__/fixtures.js";
-import { parseLdtkProject } from "../ldtk/ldtk-parse.js";
-import { parseTilesetManifest } from "../manifest/parse.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
-import { AutotileRuleId, TerrainClass } from "../schemas/index.js";
-import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "../tiled/tile-data.js";
-import { parseTsj } from "../tiled/tsj-parse.js";
+} from '../autotile/index.js';
+import { diagnosticTag } from '../diagnostics.js';
+import { compileTiledSourceWallRulePhase } from '../importers/tiled-source/wall-rules.js';
+import { minimalLdtkProject, PROJECT_PATH } from '../ldtk/__tests__/fixtures.js';
+import { parseLdtkProject } from '../ldtk/ldtk-parse.js';
+import { parseTilesetManifest } from '../manifest/parse.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
+import { AutotileRuleId, TerrainClass } from '../schemas/index.js';
+import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from '../tiled/tile-data.js';
+import { parseTsj } from '../tiled/tsj-parse.js';
 
-import goldenMatrix from "./__goldens__/compatibility-matrix.json" with { type: "json" };
-import { tiledWallRuleTmx } from "./fixtures/cross-format.js";
+import goldenMatrix from './__goldens__/compatibility-matrix.json' with { type: 'json' };
+import { tiledWallRuleTmx } from './fixtures/cross-format.js';
 
 type SourceFormat = (typeof goldenMatrix.formats)[number];
 type AutotilePattern = (typeof goldenMatrix.patterns)[number];
 
 const patternRuleSuffix: Record<AutotilePattern, string> = {
-  wang2edge: "000000000001",
-  wang2corner: "000000000002",
-  wang4corner: "000000000003",
-  blob47: "000000000004",
-  rpgmA2: "000000000005",
-  rpgmA3: "000000000006",
-  rpgmA4: "000000000007",
+  wang2edge: '000000000001',
+  wang2corner: '000000000002',
+  wang4corner: '000000000003',
+  blob47: '000000000004',
+  rpgmA2: '000000000005',
+  rpgmA3: '000000000006',
+  rpgmA4: '000000000007',
 };
 
-const TILESET_ID = "tileset:62656465-0000-4000-8000-000000000902";
+const TILESET_ID = 'tileset:62656465-0000-4000-8000-000000000902';
 
-const PACK_SEED = "compat-matrix";
-const COMPRESSED_GZIP_GIDS_1_2_3_4 = "H4sIAAAAAAAAE2NkYGBgAmJmIGYBYgDv1AWvEAAAAA==";
-const COMPRESSED_ZLIB_GIDS_1_2_3_4 = "eJxjZGBgYAJiZiBmAWIAAGAACw==";
+const PACK_SEED = 'compat-matrix';
+const COMPRESSED_GZIP_GIDS_1_2_3_4 = 'H4sIAAAAAAAAE2NkYGBgAmJmIGYBYgDv1AWvEAAAAA==';
+const COMPRESSED_ZLIB_GIDS_1_2_3_4 = 'eJxjZGBgYAJiZiBmAWIAAGAACw==';
 
 const uuid = (suffix: string): Uuid =>
-  `62656465-0000-4000-8000-${suffix.padStart(12, "0")}` as Uuid;
+  `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
 
 const tileId = (suffix: string) => makeTileId(uuid(suffix));
 const ruleIdFor = (suffix: string) =>
@@ -53,11 +53,11 @@ const tileLayerBase64 = (gids: readonly number[]): string => {
   const bytes = new Uint8Array(gids.length * 4);
   const view = new DataView(bytes.buffer);
   gids.forEach((gid, index) => view.setUint32(index * 4, gid, true));
-  return Buffer.from(bytes).toString("base64");
+  return Buffer.from(bytes).toString('base64');
 };
 
 const cellsForCount = (count: number): readonly ReturnType<typeof tileId>[] =>
-  Array.from({ length: count }, (_, index) => tileId(String(index + 1).padStart(2, "0")));
+  Array.from({ length: count }, (_, index) => tileId(String(index + 1).padStart(2, '0')));
 
 const assertRuleResolves = (rule: AutotileRule): void => {
   const entries = Object.entries(rule.maskToTileIds);
@@ -80,7 +80,7 @@ const assertRuleResolves = (rule: AutotileRule): void => {
     return;
   }
 
-  if (rule._tag === "wang4corner") {
+  if (rule._tag === 'wang4corner') {
     const [key, tileIds] = entries[0]!;
     expect(key.length).toBeGreaterThan(0);
     expect(tileIds[0]).toBeDefined();
@@ -94,29 +94,29 @@ const compilePatternRule = (pattern: AutotilePattern): AutotileRule => {
   const baseInput = {
     id: ruleIdFor(patternRuleSuffix[pattern]),
     name: `${pattern}-matrix`,
-    terrainClasses: [terrain("grass")],
+    terrainClasses: [terrain('grass')],
   } as const;
 
   const sourceByPattern = {
     wang2edge: {
-      kind: "wang" as const,
-      pattern: "wang2edge" as const,
-      entries: [{ wangid: [1, 0, 0, 0, 1, 0, 0, 0], tileId: tileId("01") }],
+      kind: 'wang' as const,
+      pattern: 'wang2edge' as const,
+      entries: [{ wangid: [1, 0, 0, 0, 1, 0, 0, 0], tileId: tileId('01') }],
     },
     wang2corner: {
-      kind: "wang" as const,
-      pattern: "wang2corner" as const,
-      entries: [{ wangid: [0, 1, 0, 1, 0, 1, 0, 1], tileId: tileId("02") }],
+      kind: 'wang' as const,
+      pattern: 'wang2corner' as const,
+      entries: [{ wangid: [0, 1, 0, 1, 0, 1, 0, 1], tileId: tileId('02') }],
     },
     wang4corner: {
-      kind: "wang" as const,
-      pattern: "wang4corner" as const,
+      kind: 'wang' as const,
+      pattern: 'wang4corner' as const,
       cells: cellsForCount(16),
     },
-    blob47: { kind: "blob47" as const, cells: cellsForCount(47) },
-    rpgmA2: { kind: "rpgm" as const, set: "A2" as const, cells: cellsForCount(47) },
-    rpgmA3: { kind: "rpgm" as const, set: "A3" as const, cells: cellsForCount(16) },
-    rpgmA4: { kind: "rpgm" as const, set: "A4" as const, cells: cellsForCount(16) },
+    blob47: { kind: 'blob47' as const, cells: cellsForCount(47) },
+    rpgmA2: { kind: 'rpgm' as const, set: 'A2' as const, cells: cellsForCount(47) },
+    rpgmA3: { kind: 'rpgm' as const, set: 'A3' as const, cells: cellsForCount(16) },
+    rpgmA4: { kind: 'rpgm' as const, set: 'A4' as const, cells: cellsForCount(16) },
   } as const;
 
   const compiled = compileAutotileRule({
@@ -138,23 +138,23 @@ const manifestForPattern = (pattern: AutotilePattern) => {
 
   return {
     schemaVersion: 1,
-    id: "pack:62656465-0000-4000-8000-000000000900",
-    name: "Compatibility Matrix Pack",
-    version: "1.0.0",
-    license: { spdxId: "CC0-1.0" },
+    id: 'pack:62656465-0000-4000-8000-000000000900',
+    name: 'Compatibility Matrix Pack',
+    version: '1.0.0',
+    license: { spdxId: 'CC0-1.0' },
     assets: [
       {
-        id: "asset:62656465-0000-4000-8000-000000000901",
-        path: "atlases/matrix.png",
-        mime: "image/png",
+        id: 'asset:62656465-0000-4000-8000-000000000901',
+        path: 'atlases/matrix.png',
+        mime: 'image/png',
       },
     ],
-    terrainClasses: ["grass"],
+    terrainClasses: ['grass'],
     tilesets: [
       {
         id: TILESET_ID,
-        name: "Matrix",
-        atlasAssetId: "asset:62656465-0000-4000-8000-000000000901",
+        name: 'Matrix',
+        atlasAssetId: 'asset:62656465-0000-4000-8000-000000000901',
         cellSize: { width: 16, height: 16 },
         margin: 0,
         spacing: 0,
@@ -164,8 +164,8 @@ const manifestForPattern = (pattern: AutotilePattern) => {
       id,
       tilesetId: TILESET_ID,
       uv: { x: (index % 8) * 16, y: Math.floor(index / 8) * 16, w: 16, h: 16 },
-      tags: ["grass"],
-      terrainClass: "grass",
+      tags: ['grass'],
+      terrainClass: 'grass',
     })),
     animations: [],
     collisionMasks: [],
@@ -186,34 +186,40 @@ const manifestForPattern = (pattern: AutotilePattern) => {
   };
 };
 
-const tiledWangType = (pattern: Extract<AutotilePattern, "wang2edge" | "wang2corner" | "wang4corner">) => {
+const tiledWangType = (
+  pattern: Extract<AutotilePattern, 'wang2edge' | 'wang2corner' | 'wang4corner'>,
+) => {
   switch (pattern) {
-    case "wang2edge":
-      return "edge";
-    case "wang4corner":
-      return "mixed";
-    case "wang2corner":
+    case 'wang2edge':
+      return 'edge';
+    case 'wang4corner':
+      return 'mixed';
+    case 'wang2corner':
     default:
-      return "corner";
+      return 'corner';
   }
 };
 
-const tiledWangId = (pattern: Extract<AutotilePattern, "wang2edge" | "wang2corner" | "wang4corner">) => {
+const tiledWangId = (
+  pattern: Extract<AutotilePattern, 'wang2edge' | 'wang2corner' | 'wang4corner'>,
+) => {
   switch (pattern) {
-    case "wang2edge":
+    case 'wang2edge':
       return [1, 0, 0, 0, 1, 0, 0, 0];
-    case "wang4corner":
+    case 'wang4corner':
       return [1, 0, 0, 0, 0, 0, 0, 0];
-    case "wang2corner":
+    case 'wang2corner':
     default:
       return [0, 1, 0, 1, 0, 1, 0, 1];
   }
 };
 
-const importTiledRule = (pattern: Extract<AutotilePattern, "wang2edge" | "wang2corner" | "wang4corner">) => {
+const importTiledRule = (
+  pattern: Extract<AutotilePattern, 'wang2edge' | 'wang2corner' | 'wang4corner'>,
+) => {
   const parsed = parseTsj(
     JSON.stringify({
-      name: "matrix",
+      name: 'matrix',
       tilewidth: 16,
       tileheight: 16,
       tilecount: 4,
@@ -222,20 +228,20 @@ const importTiledRule = (pattern: Extract<AutotilePattern, "wang2edge" | "wang2c
       spacing: 0,
       imagewidth: 32,
       imageheight: 32,
-      image: "matrix.png",
+      image: 'matrix.png',
       tiles: [{ id: 1 }],
       wangsets: [
         {
-          name: "ground",
+          name: 'ground',
           type: tiledWangType(pattern),
-          colors: [{ name: "grass", color: "#00ff00", tile: 0 }],
+          colors: [{ name: 'grass', color: '#00ff00', tile: 0 }],
           wangtiles: [{ tileid: 1, wangid: tiledWangId(pattern) }],
         },
       ],
     }),
     {
       packIdSeed: PACK_SEED,
-      tilesetSeed: "matrix",
+      tilesetSeed: 'matrix',
     },
   );
 
@@ -268,7 +274,7 @@ const importManifestRule = (pattern: AutotilePattern) => {
 
 const importTiledSourceRule = () => {
   const compiled = compileTiledSourceWallRulePhase({
-    rulePath: "Rules/verification-wall.tmx",
+    rulePath: 'Rules/verification-wall.tmx',
     raw: tiledWallRuleTmx,
     tileIdForSource: (_sourcePath, localTileId) => tileId(String(localTileId + 1)),
   });
@@ -280,16 +286,18 @@ const importTiledSourceRule = () => {
 
 const importRule = (format: SourceFormat, pattern: AutotilePattern): AutotileRule => {
   switch (format) {
-    case "tiled":
-      return importTiledRule(pattern as Extract<AutotilePattern, "wang2edge" | "wang2corner" | "wang4corner">);
-    case "ldtk": {
+    case 'tiled':
+      return importTiledRule(
+        pattern as Extract<AutotilePattern, 'wang2edge' | 'wang2corner' | 'wang4corner'>,
+      );
+    case 'ldtk': {
       const { rules } = importLdtkRules(minimalLdtkProject);
       expect(rules.some((rule) => rule._tag === pattern)).toBe(true);
       return rules.find((rule) => rule._tag === pattern)!;
     }
-    case "manifest":
+    case 'manifest':
       return importManifestRule(pattern);
-    case "tiled-source": {
+    case 'tiled-source': {
       const rule = importTiledSourceRule();
       expect(rule._tag).toBe(pattern);
       return rule;
@@ -303,32 +311,32 @@ const importRule = (format: SourceFormat, pattern: AutotilePattern): AutotileRul
 
 const assertUnsupported = (format: SourceFormat, pattern: AutotilePattern): void => {
   switch (format) {
-    case "tiled": {
+    case 'tiled': {
       const parsed = parseTsj(
         JSON.stringify({
-          name: "plain",
+          name: 'plain',
           tilewidth: 16,
           tileheight: 16,
           tilecount: 2,
           columns: 2,
           imagewidth: 32,
           imageheight: 16,
-          image: "plain.png",
+          image: 'plain.png',
           tiles: [{ id: 0 }],
         }),
-        { packIdSeed: PACK_SEED, tilesetSeed: "plain" },
+        { packIdSeed: PACK_SEED, tilesetSeed: 'plain' },
       );
       expect(parsed.diagnostics).toEqual([]);
       expect(parsed.value?.tileset.autotileRules.some((rule) => rule._tag === pattern)).toBe(false);
       return;
     }
-    case "ldtk": {
+    case 'ldtk': {
       const cornerAttempt = {
         ...minimalLdtkProject,
         defs: {
           ...minimalLdtkProject.defs,
           layers: minimalLdtkProject.defs.layers.map((layer) =>
-            layer.__type === "AutoLayer"
+            layer.__type === 'AutoLayer'
               ? {
                   ...layer,
                   autoRuleGroups: [
@@ -352,17 +360,17 @@ const assertUnsupported = (format: SourceFormat, pattern: AutotilePattern): void
       const { rules, diagnostics } = importLdtkRules(cornerAttempt);
       expect(rules.some((rule) => rule._tag === pattern)).toBe(false);
       expect(
-        rules.some((rule) => rule._tag === "custom") ||
-          diagnostics.some((diagnostic) => diagnosticTag(diagnostic) === "LdtkUnmappedAutoRule"),
+        rules.some((rule) => rule._tag === 'custom') ||
+          diagnostics.some((diagnostic) => diagnosticTag(diagnostic) === 'LdtkUnmappedAutoRule'),
       ).toBe(true);
       return;
     }
-    case "manifest":
-      throw new Error("manifest supports all matrix patterns");
-    case "tiled-source": {
+    case 'manifest':
+      throw new Error('manifest supports all matrix patterns');
+    case 'tiled-source': {
       const rule = importTiledSourceRule();
       expect(rule._tag).not.toBe(pattern);
-      expect(rule._tag).toBe("wang4corner");
+      expect(rule._tag).toBe('wang4corner');
       return;
     }
     default: {
@@ -373,19 +381,19 @@ const assertUnsupported = (format: SourceFormat, pattern: AutotilePattern): void
 };
 
 const summarizeMatrix = (): string => {
-  const header = ["format \\ pattern", ...goldenMatrix.patterns].join("\t");
+  const header = ['format \\ pattern', ...goldenMatrix.patterns].join('\t');
   const rows = goldenMatrix.formats.map((format) => {
     const cells = goldenMatrix.patterns.map((pattern) => {
       const supported = goldenMatrix.matrix[format][pattern];
-      return supported ? "yes" : "no";
+      return supported ? 'yes' : 'no';
     });
-    return [format, ...cells].join("\t");
+    return [format, ...cells].join('\t');
   });
-  return [header, ...rows].join("\n");
+  return [header, ...rows].join('\n');
 };
 
-describe("format × autotile pattern compatibility matrix", () => {
-  it("prints the committed compatibility summary table", () => {
+describe('format × autotile pattern compatibility matrix', () => {
+  it('prints the committed compatibility summary table', () => {
     console.info(`\n${summarizeMatrix()}\n`);
     expect(goldenMatrix.formats).toHaveLength(4);
     expect(goldenMatrix.patterns).toHaveLength(7);
@@ -395,7 +403,7 @@ describe("format × autotile pattern compatibility matrix", () => {
     for (const pattern of goldenMatrix.patterns) {
       const supported = goldenMatrix.matrix[format][pattern];
 
-      it(`${format} × ${pattern} is ${supported ? "supported" : "unsupported"}`, () => {
+      it(`${format} × ${pattern} is ${supported ? 'supported' : 'unsupported'}`, () => {
         expect(goldenMatrix.matrix[format][pattern]).toBe(supported);
 
         if (supported) {
@@ -410,40 +418,40 @@ describe("format × autotile pattern compatibility matrix", () => {
   }
 });
 
-describe("Tiled tile-layer data compatibility matrix", () => {
-  it("keeps raw, CSV, base64, gzip, and zlib supported while zstd is diagnostic-only", async () => {
+describe('Tiled tile-layer data compatibility matrix', () => {
+  it('keeps raw, CSV, base64, gzip, and zlib supported while zstd is diagnostic-only', async () => {
     const gids = [1, 2, 3, 4] as const;
 
     const cases = [
-      decodeTileLayerDataSync({ layerName: "raw", width: 2, height: 2, data: gids }),
+      decodeTileLayerDataSync({ layerName: 'raw', width: 2, height: 2, data: gids }),
       decodeTileLayerDataSync({
-        layerName: "csv",
+        layerName: 'csv',
         width: 2,
         height: 2,
-        encoding: "csv",
-        text: gids.join(","),
+        encoding: 'csv',
+        text: gids.join(','),
       }),
       decodeTileLayerDataSync({
-        layerName: "base64",
+        layerName: 'base64',
         width: 2,
         height: 2,
-        encoding: "base64",
+        encoding: 'base64',
         text: tileLayerBase64(gids),
       }),
       await decodeTileLayerDataAsync({
-        layerName: "gzip",
+        layerName: 'gzip',
         width: 2,
         height: 2,
-        encoding: "base64",
-        compression: "gzip",
+        encoding: 'base64',
+        compression: 'gzip',
         text: COMPRESSED_GZIP_GIDS_1_2_3_4,
       }),
       await decodeTileLayerDataAsync({
-        layerName: "zlib",
+        layerName: 'zlib',
         width: 2,
         height: 2,
-        encoding: "base64",
-        compression: "zlib",
+        encoding: 'base64',
+        compression: 'zlib',
         text: COMPRESSED_ZLIB_GIDS_1_2_3_4,
       }),
     ];
@@ -453,21 +461,21 @@ describe("Tiled tile-layer data compatibility matrix", () => {
     }
 
     const zstd = await decodeTileLayerDataAsync({
-      layerName: "zstd",
+      layerName: 'zstd',
       width: 2,
       height: 2,
-      encoding: "base64",
-      compression: "zstd",
+      encoding: 'base64',
+      compression: 'zstd',
       text: tileLayerBase64(gids),
     });
 
     expect(zstd.data).toEqual([]);
     expect(zstd.diagnostics).toEqual([
       expect.objectContaining({
-        _tag: "TiledUnsupportedCompression",
-        severity: "warning",
-        layerName: "zstd",
-        compression: "zstd",
+        _tag: 'TiledUnsupportedCompression',
+        severity: 'warning',
+        layerName: 'zstd',
+        compression: 'zstd',
       }),
     ]);
   });

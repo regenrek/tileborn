@@ -1,14 +1,6 @@
 {
   "formats": ["tiled", "ldtk", "manifest", "tiled-source"],
-  "patterns": [
-    "wang2edge",
-    "wang2corner",
-    "wang4corner",
-    "blob47",
-    "rpgmA2",
-    "rpgmA3",
-    "rpgmA4"
-  ],
+  "patterns": ["wang2edge", "wang2corner", "wang4corner", "blob47", "rpgmA2", "rpgmA3", "rpgmA4"],
   "matrix": {
     "tiled": {
       "wang2edge": true,

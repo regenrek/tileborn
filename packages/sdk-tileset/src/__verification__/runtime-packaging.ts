@@ -7,8 +7,7 @@ const tileIdsReferencedByAnimations = (
   const animationIds = new Set(
     ((manifest.tiles as ManifestRecord[] | undefined) ?? [])
       .filter(
-        (tile) =>
-          referencedTileIds.has(String(tile.id)) && typeof tile.animationId === "string",
+        (tile) => referencedTileIds.has(String(tile.id)) && typeof tile.animationId === 'string',
       )
       .map((tile) => String(tile.animationId)),
   );
@@ -46,7 +45,7 @@ export const buildReferencedTilesetManifest = (
   );
   const referencedAnimationIds = new Set(
     referencedTiles.flatMap((tile) =>
-      typeof tile.animationId === "string" ? [String(tile.animationId)] : [],
+      typeof tile.animationId === 'string' ? [String(tile.animationId)] : [],
     ),
   );
 

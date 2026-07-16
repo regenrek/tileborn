@@ -1,26 +1,26 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { makeTileId, type Uuid } from "@tileborne/core";
+import { makeTileId, type Uuid } from '@tileborne/core';
 
-import { compileAnimation } from "../animation/compile.js";
-import { resolveAnimatedTile } from "../animation/resolve.js";
-import { perfectGrid16, grid32MarginSpacing } from "../atlas/__fixtures__/slice-fixtures.js";
-import { sliceAtlas } from "../atlas/slice.js";
-import { Around8Bits, formatMaskKey, NEIGHBORHOODS } from "../autotile/index.js";
-import { compileTiledSourceWallRulePhase } from "../importers/tiled-source/wall-rules.js";
-import { parseLdtkProject } from "../ldtk/ldtk-parse.js";
-import { meadowPack } from "../manifest/__fixtures__/fixtures.js";
-import { parseTilesetManifest } from "../manifest/parse.js";
-import { writeTilesetManifest } from "../manifest/write.js";
-import { compileCollisionFromTiledObject } from "../metadata/collision.js";
-import { buildFrameIndex } from "../renderer/frame-index.js";
-import { renderTileLayout, type RenderGridCell } from "../renderer/layout-snapshot.js";
-import { AutotileRuleId, Blob47AutotileRule, TerrainClass } from "../schemas/index.js";
-import { parseTmjSync } from "../tiled/tmj-parse.js";
-import { parseTmx } from "../tiled/tmx-parse.js";
-import { resolveTerrainCell } from "../terrain/transitions.js";
-import type { TerrainClassRegistry } from "../terrain/types.js";
-import { selectVariant } from "../variants/select.js";
+import { compileAnimation } from '../animation/compile.js';
+import { resolveAnimatedTile } from '../animation/resolve.js';
+import { perfectGrid16, grid32MarginSpacing } from '../atlas/__fixtures__/slice-fixtures.js';
+import { sliceAtlas } from '../atlas/slice.js';
+import { Around8Bits, formatMaskKey, NEIGHBORHOODS } from '../autotile/index.js';
+import { compileTiledSourceWallRulePhase } from '../importers/tiled-source/wall-rules.js';
+import { parseLdtkProject } from '../ldtk/ldtk-parse.js';
+import { meadowPack } from '../manifest/__fixtures__/fixtures.js';
+import { parseTilesetManifest } from '../manifest/parse.js';
+import { writeTilesetManifest } from '../manifest/write.js';
+import { compileCollisionFromTiledObject } from '../metadata/collision.js';
+import { buildFrameIndex } from '../renderer/frame-index.js';
+import { renderTileLayout, type RenderGridCell } from '../renderer/layout-snapshot.js';
+import { AutotileRuleId, Blob47AutotileRule, TerrainClass } from '../schemas/index.js';
+import { parseTmjSync } from '../tiled/tmj-parse.js';
+import { parseTmx } from '../tiled/tmx-parse.js';
+import { resolveTerrainCell } from '../terrain/transitions.js';
+import type { TerrainClassRegistry } from '../terrain/types.js';
+import { selectVariant } from '../variants/select.js';
 
 import {
   crossFormatLdtkProject,
@@ -33,12 +33,16 @@ import {
   tinyMapTileRefs,
   VERIFICATION_PACK_SEED,
   VERIFICATION_PROJECT_ROOT,
-} from "./fixtures/cross-format.js";
-import { normalizeLayoutSnapshot, normalizeMapCells, normalizePackForComparison } from "./normalize.js";
-import { buildReferencedTilesetManifest, manifestSummary } from "./runtime-packaging.js";
+} from './fixtures/cross-format.js';
+import {
+  normalizeLayoutSnapshot,
+  normalizeMapCells,
+  normalizePackForComparison,
+} from './normalize.js';
+import { buildReferencedTilesetManifest, manifestSummary } from './runtime-packaging.js';
 
 const uuid = (suffix: string): Uuid =>
-  `62656465-0000-4000-8000-${suffix.padStart(12, "0")}` as Uuid;
+  `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
 
 const tileId = (suffix: string) => makeTileId(uuid(suffix));
 const ruleId = (suffix: string) =>
@@ -46,8 +50,8 @@ const ruleId = (suffix: string) =>
 const terrain = (value: string) => Schema.decodeUnknownSync(TerrainClass)(value);
 
 const meadowPackValue = parseTilesetManifest(meadowPack).value!;
-const variantTileId = tileId("1");
-const staticTileId = tileId("2");
+const variantTileId = tileId('1');
+const staticTileId = tileId('2');
 
 const makeCheckerGrid = (size: number): RenderGridCell[] => {
   const cells: RenderGridCell[] = [];
@@ -87,8 +91,8 @@ const importCrossFormatLdtk = () =>
 const importCrossFormatManifest = () => parseTilesetManifest(crossFormatManifest).value!;
 
 const tiledTileLayer = (map: TiledMapImport): TiledMapTileLayer | undefined => {
-  const layer = map.layers.find((entry) => entry.kind === "tile");
-  return layer?.kind === "tile" ? layer : undefined;
+  const layer = map.layers.find((entry) => entry.kind === 'tile');
+  return layer?.kind === 'tile' ? layer : undefined;
 };
 
 const tiledMapCells = (
@@ -139,8 +143,8 @@ const tileLayerCells = (
 };
 
 const ldtkTileLayerCells = (result: ReturnType<typeof parseLdtkProject>) => {
-  const tileLayer = result.levels[0]?.layers.find((layer) => layer.type === "tiles");
-  if (tileLayer?.type !== "tiles") {
+  const tileLayer = result.levels[0]?.layers.find((layer) => layer.type === 'tiles');
+  if (tileLayer?.type !== 'tiles') {
     return [];
   }
   return tileLayer.cells.map((cell) => ({
@@ -158,7 +162,10 @@ export const buildCrossFormatEquivalenceGolden = async () => {
   const formats = {
     tmj: {
       pack: normalizePackForComparison(tmj.value!.pack),
-      mapCells: normalizeMapCells(tmj.value!.pack, tileLayerCells(tmj.value!.pack, tmj.value!.tiledMap)),
+      mapCells: normalizeMapCells(
+        tmj.value!.pack,
+        tileLayerCells(tmj.value!.pack, tmj.value!.tiledMap),
+      ),
       layout: normalizeLayoutSnapshot(
         tmj.value!.pack,
         renderTileLayout(
@@ -169,7 +176,10 @@ export const buildCrossFormatEquivalenceGolden = async () => {
     },
     tmx: {
       pack: normalizePackForComparison(tmx.value!.pack),
-      mapCells: normalizeMapCells(tmx.value!.pack, tileLayerCells(tmx.value!.pack, tmx.value!.tiledMap)),
+      mapCells: normalizeMapCells(
+        tmx.value!.pack,
+        tileLayerCells(tmx.value!.pack, tmx.value!.tiledMap),
+      ),
       layout: normalizeLayoutSnapshot(
         tmx.value!.pack,
         renderTileLayout(
@@ -198,10 +208,10 @@ export const buildCrossFormatEquivalenceGolden = async () => {
       layout: normalizeLayoutSnapshot(
         manifest,
         renderTileLayout(manifest, [
-          { x: 0, y: 0, tileId: makeTileId("62656465-0000-4000-8000-000000000103" as Uuid) },
-          { x: 1, y: 0, tileId: makeTileId("62656465-0000-4000-8000-000000000104" as Uuid) },
-          { x: 0, y: 1, tileId: makeTileId("62656465-0000-4000-8000-000000000104" as Uuid) },
-          { x: 1, y: 1, tileId: makeTileId("62656465-0000-4000-8000-000000000103" as Uuid) },
+          { x: 0, y: 0, tileId: makeTileId('62656465-0000-4000-8000-000000000103' as Uuid) },
+          { x: 1, y: 0, tileId: makeTileId('62656465-0000-4000-8000-000000000104' as Uuid) },
+          { x: 0, y: 1, tileId: makeTileId('62656465-0000-4000-8000-000000000104' as Uuid) },
+          { x: 1, y: 1, tileId: makeTileId('62656465-0000-4000-8000-000000000103' as Uuid) },
         ]),
       ),
     },
@@ -230,10 +240,10 @@ export const buildReplayGolden = () => {
     brushSequence.map((cell) => {
       const selected = selectVariant(filter, {
         mapSeed: 4242,
-        layerId: "terrain-brush",
+        layerId: 'terrain-brush',
         cellX: cell.x,
         cellY: cell.y,
-        terrainClass: terrain("grass"),
+        terrainClass: terrain('grass'),
       });
       return {
         x: cell.x,
@@ -256,23 +266,23 @@ export const buildReplayGolden = () => {
 };
 
 export const buildLayoutGoldens = () => ({
-  "4x4-basic": renderTileLayout(meadowPackValue, makeCheckerGrid(4), {
+  '4x4-basic': renderTileLayout(meadowPackValue, makeCheckerGrid(4), {
     mapSeed: 1337,
-    layerId: "ground",
+    layerId: 'ground',
   }),
-  "4x4-variants": renderTileLayout(meadowPackValue, makeCheckerGrid(4), {
+  '4x4-variants': renderTileLayout(meadowPackValue, makeCheckerGrid(4), {
     mapSeed: 1337,
-    layerId: "ground",
-    terrainClass: terrain("grass"),
+    layerId: 'ground',
+    terrainClass: terrain('grass'),
     useVariants: true,
   }),
-  "8x8-basic": renderTileLayout(meadowPackValue, makeCheckerGrid(8), {
+  '8x8-basic': renderTileLayout(meadowPackValue, makeCheckerGrid(8), {
     mapSeed: 2048,
-    layerId: "ground",
+    layerId: 'ground',
   }),
-  "16x16-basic": renderTileLayout(meadowPackValue, makeCheckerGrid(16), {
+  '16x16-basic': renderTileLayout(meadowPackValue, makeCheckerGrid(16), {
     mapSeed: 4096,
-    layerId: "ground",
+    layerId: 'ground',
   }),
 });
 
@@ -282,19 +292,19 @@ export const buildUvGoldens = () => {
   const index = buildFrameIndex(meadowPackValue);
 
   return {
-    "perfect-grid-16": {
+    'perfect-grid-16': {
       columns: perfect.columns,
       rows: perfect.rows,
       totalTiles: perfect.totalTiles,
       tiles: perfect.tiles,
     },
-    "grid-32-margin-spacing": {
+    'grid-32-margin-spacing': {
       columns: marginSpacing.columns,
       rows: marginSpacing.rows,
       totalTiles: marginSpacing.totalTiles,
       tiles: marginSpacing.tiles,
     },
-    "meadow-frame-index": {
+    'meadow-frame-index': {
       static: index.lookup(staticTileId),
       animated: index.lookup(variantTileId),
     },
@@ -317,7 +327,8 @@ export const buildAnimationDeterminismGolden = () => {
   return {
     totalDurationMs: compiled.totalDurationMs,
     ticks,
-    replayMatches: JSON.stringify(replay) === JSON.stringify(ticks.map((entry) => entry.frameTileId)),
+    replayMatches:
+      JSON.stringify(replay) === JSON.stringify(ticks.map((entry) => entry.frameTileId)),
   };
 };
 
@@ -356,7 +367,7 @@ export const buildCollisionRoundtripGolden = () => {
     roundtrip: roundtripMask.map((entry) => ({
       tileId: entry.tileId,
       tag: entry.mask._tag,
-      ...(entry.mask._tag === "polygon"
+      ...(entry.mask._tag === 'polygon'
         ? { edgeCount: entry.mask.edges.length, blocksMovement: entry.mask.blocksMovement }
         : { passable: entry.mask.passable, blocked: entry.mask.blocked }),
     })),
@@ -383,7 +394,7 @@ export const buildRuntimePackagingGoldens = () => {
 
 export const buildTiledSourceWallRulesGolden = () => {
   const compiled = compileTiledSourceWallRulePhase({
-    rulePath: "Rules/verification-wall.tmx",
+    rulePath: 'Rules/verification-wall.tmx',
     raw: tiledWallRuleTmx,
     tileIdForSource: (_sourcePath, localTileId) => tileId(String(localTileId + 1)),
   });
@@ -402,16 +413,16 @@ export const buildTiledSourceWallRulesGolden = () => {
 };
 
 export const buildTerrainTransitionGolden = () => {
-  const grassToWaterRuleId = ruleId("30");
+  const grassToWaterRuleId = ruleId('30');
   const grassToWaterRule = new Blob47AutotileRule({
     id: grassToWaterRuleId,
-    name: "grass-water-verification",
-    terrainClasses: [terrain("grass"), terrain("water")],
+    name: 'grass-water-verification',
+    terrainClasses: [terrain('grass'), terrain('water')],
     maskToTileIds: {
-      [formatMaskKey(1 << Around8Bits.N, NEIGHBORHOODS.around8)]: [tileId("31")],
-      [formatMaskKey(1 << Around8Bits.E, NEIGHBORHOODS.around8)]: [tileId("32")],
+      [formatMaskKey(1 << Around8Bits.N, NEIGHBORHOODS.around8)]: [tileId('31')],
+      [formatMaskKey(1 << Around8Bits.E, NEIGHBORHOODS.around8)]: [tileId('32')],
       [formatMaskKey((1 << Around8Bits.N) | (1 << Around8Bits.E), NEIGHBORHOODS.around8)]: [
-        tileId("33"),
+        tileId('33'),
       ],
     },
     fallbackTileId: Option.none(),
@@ -419,8 +430,8 @@ export const buildTerrainTransitionGolden = () => {
 
   const transitions = [
     {
-      from: terrain("grass"),
-      to: terrain("water"),
+      from: terrain('grass'),
+      to: terrain('water'),
       ruleId: grassToWaterRuleId,
     },
   ];
@@ -428,24 +439,24 @@ export const buildTerrainTransitionGolden = () => {
   const rulesById = new Map([[grassToWaterRuleId, grassToWaterRule]]);
   const registry: TerrainClassRegistry = {
     baseTileForClass: (terrainClass) =>
-      terrainClass === terrain("grass") ? tileId("10") : tileId("11"),
+      terrainClass === terrain('grass') ? tileId('10') : tileId('11'),
     ruleForId: (id) => rulesById.get(id),
   };
 
   const grid = [
-    { x: 0, y: 0, terrainClass: terrain("grass") },
-    { x: 1, y: 0, terrainClass: terrain("water") },
-    { x: 2, y: 0, terrainClass: terrain("grass") },
-    { x: 0, y: 1, terrainClass: terrain("grass") },
-    { x: 1, y: 1, terrainClass: terrain("grass") },
-    { x: 2, y: 1, terrainClass: terrain("grass") },
-    { x: 0, y: 2, terrainClass: terrain("grass") },
-    { x: 1, y: 2, terrainClass: terrain("water") },
-    { x: 2, y: 2, terrainClass: terrain("grass") },
+    { x: 0, y: 0, terrainClass: terrain('grass') },
+    { x: 1, y: 0, terrainClass: terrain('water') },
+    { x: 2, y: 0, terrainClass: terrain('grass') },
+    { x: 0, y: 1, terrainClass: terrain('grass') },
+    { x: 1, y: 1, terrainClass: terrain('grass') },
+    { x: 2, y: 1, terrainClass: terrain('grass') },
+    { x: 0, y: 2, terrainClass: terrain('grass') },
+    { x: 1, y: 2, terrainClass: terrain('water') },
+    { x: 2, y: 2, terrainClass: terrain('grass') },
   ];
 
   const center = grid[4]!;
-  const neighbors = [{ dx: 0, dy: -1, terrainClass: terrain("water") }];
+  const neighbors = [{ dx: 0, dy: -1, terrainClass: terrain('water') }];
 
   const resolved = resolveTerrainCell({
     cell: center,
@@ -471,13 +482,13 @@ export const buildTerrainTransitionGolden = () => {
 };
 
 export const allGoldenScenarios = async () => ({
-  "cross-format-equivalence": await buildCrossFormatEquivalenceGolden(),
+  'cross-format-equivalence': await buildCrossFormatEquivalenceGolden(),
   replay: buildReplayGolden(),
   layouts: buildLayoutGoldens(),
   uvs: buildUvGoldens(),
-  "animation-determinism": buildAnimationDeterminismGolden(),
-  "collision-roundtrip": buildCollisionRoundtripGolden(),
-  "runtime-packaging": buildRuntimePackagingGoldens(),
-  "tiled-wall-rules": buildTiledSourceWallRulesGolden(),
-  "terrain-transition-grass-water": buildTerrainTransitionGolden(),
+  'animation-determinism': buildAnimationDeterminismGolden(),
+  'collision-roundtrip': buildCollisionRoundtripGolden(),
+  'runtime-packaging': buildRuntimePackagingGoldens(),
+  'tiled-wall-rules': buildTiledSourceWallRulesGolden(),
+  'terrain-transition-grass-water': buildTerrainTransitionGolden(),
 });

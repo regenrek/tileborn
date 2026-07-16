@@ -1,13 +1,10 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { TilesetPack } from "../schemas/tileset-pack.js";
-import type { LayoutSnapshot } from "../renderer/layout-snapshot.js";
-import { uvKey } from "./helpers.js";
+import type { TilesetPack } from '../schemas/tileset-pack.js';
+import type { LayoutSnapshot } from '../renderer/layout-snapshot.js';
+import { uvKey } from './helpers.js';
 
-const tileSemanticKey = (
-  pack: TilesetPack,
-  tileId: string,
-): string => {
+const tileSemanticKey = (pack: TilesetPack, tileId: string): string => {
   for (const tileset of pack.tilesets) {
     for (const tile of tileset.tiles) {
       if (String(tile.id) === tileId) {
@@ -37,7 +34,7 @@ export const normalizePackForComparison = (pack: TilesetPack): unknown => {
           onNone: () => undefined,
           onSome: (mask) => ({
             tag: mask._tag,
-            ...(mask._tag === "bitmask"
+            ...(mask._tag === 'bitmask'
               ? { passable: mask.passable, blocked: mask.blocked }
               : {
                   edgeCount: mask.edges.length,
@@ -81,15 +78,14 @@ export const normalizePackForComparison = (pack: TilesetPack): unknown => {
     })),
     tiles,
     autotileRules,
-    terrainClasses: [...new Set(tiles.flatMap((tile) => (tile.terrainClass ? [tile.terrainClass] : [])))].sort(),
+    terrainClasses: [
+      ...new Set(tiles.flatMap((tile) => (tile.terrainClass ? [tile.terrainClass] : []))),
+    ].sort(),
   };
 };
 
 /** Canonical layout snapshot with semantic tile keys instead of opaque IDs. */
-export const normalizeLayoutSnapshot = (
-  pack: TilesetPack,
-  snapshot: LayoutSnapshot,
-): unknown => ({
+export const normalizeLayoutSnapshot = (pack: TilesetPack, snapshot: LayoutSnapshot): unknown => ({
   width: snapshot.width,
   height: snapshot.height,
   cells: snapshot.cells.map((cell) => ({
@@ -102,9 +98,7 @@ export const normalizeLayoutSnapshot = (
     ...(cell.flipV === undefined ? {} : { flipV: cell.flipV }),
     ...(cell.flipD === undefined ? {} : { flipD: cell.flipD }),
     sourceAssetPaths: [...cell.sourceAssetPaths].sort(),
-    ...(cell.animationId === undefined
-      ? {}
-      : { hasAnimation: true }),
+    ...(cell.animationId === undefined ? {} : { hasAnimation: true }),
   })),
 });
 

@@ -145,7 +145,7 @@ allowBuilds:
   sharp: false
   # electron@42 postinstall downloads the platform binary (required for Forge).
   electron: true
-  # Packaging maker native helpers — explicitly blocked until signing ADR; install must not fail.
+  # Packaging maker native helpers required by the macOS DMG release path.
   electron-winstaller: false
-  fs-xattr: false
-  macos-alias: false
+  fs-xattr: true
+  macos-alias: true

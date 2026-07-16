@@ -2,6 +2,11 @@
 
 The first-class native TypeScript authoring API for Tileborne gameplay behaviors. It is normal TypeScript: project-relative modules, functions, types, generics, and tests remain available. Safety and determinism are enforced at the SDK capability and build boundary rather than by inventing a proprietary language subset.
 
+The supported authoring contract is the exported SDK and generated capability registry, not ambient
+Node/Electron APIs. Game behaviors must not read release credentials, operator environments,
+desktop project storage, or arbitrary network/filesystem state. Keep secrets outside project source;
+project behaviors and shipped game artifacts are user content and may be inspected or shared.
+
 ```ts
 import { defineBehavior, refs } from '@tileborne/game-sdk';
 
@@ -51,3 +56,8 @@ The machine-readable built-in inventory is exported as `@tileborne/game-sdk/capa
 - Treat visual-to-TypeScript conversion as one-way and edit the generated `.ts` source only after the conversion operation succeeds.
 
 The core example is [examples/open-exit.ts](./examples/open-exit.ts); plugin declaration merging is demonstrated by [examples/plugin-event.ts](./examples/plugin-event.ts). The complete creator, developer, agent, plugin, ownership, versioning, security, and deferred-graph contract is published in the [Gameplay Behaviors guide](../../apps/docs/src/content/docs/gameplay-behaviors/index.md).
+
+Capability availability does not imply desktop platform support. SDK behavior compilation,
+playtest, and Ship evidence are separate from the signed desktop distribution decision. See the
+[desktop release runbook](../../docs/desktop-release-runbook.md) for the current macOS arm64
+candidate and explicit unsupported surfaces.

@@ -64,6 +64,27 @@ reports.
 - npm package publishing and Electron auto-update channel security are not
   executed by this repository without explicit release approval.
 
+### Desktop release credentials and private evidence
+
+- Desktop signing/notarization inputs (`TILEBORNE_APPLE_SIGNING_IDENTITY`,
+  `TILEBORNE_APPLE_TEAM_ID`, `TILEBORNE_APPLE_API_KEY_PATH`,
+  `TILEBORNE_APPLE_API_KEY_ID`, and `TILEBORNE_APPLE_API_ISSUER`) and the scoped
+  GitHub publication token are supplied only through an approved operator/CI
+  secret store. Key files, `.env` files, token values, shell transcripts that
+  expose values, and notarization credentials must not be committed.
+- `TILEBORNE_DESKTOP_PUBLISH_APPROVED=1` represents a specific maintainer
+  approval; it is not a durable configuration default. Credential presence is
+  insufficient: the release contract verifies the active GitHub auth boundary.
+- Native release status receipts, Playwright traces, support bundles, and project
+  backup archives may contain local paths or user project metadata. Keep them
+  restricted, inspect redaction before sharing through a private channel, and
+  delete them according to the release owner retention policy.
+- Remote crash reporting is unsupported in desktop 1.0. Local fail-fast logs,
+  main-process recovery, and an opt-in manual redacted support bundle are not
+  consent for automatic upload.
+
+The exact procedure is in [`docs/desktop-release-runbook.md`](docs/desktop-release-runbook.md).
+
 ## Dependency Audits
 
 Release candidates must run `pnpm audit --audit-level moderate` locally before

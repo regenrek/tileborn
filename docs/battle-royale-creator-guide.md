@@ -29,6 +29,8 @@ path and cannot be converted back to visual blocks.
 
 Dirty documents offer **Save**, **Discard**, and **Cancel**. A failed save blocks close and remains dirty. Project map, manifest, and integrity lock publish as one recoverable revision; after a crash, reopen the recovery snapshot and save or explicitly discard it.
 
+Before manual repair, copy the affected project directory. Do not edit its integrity lock to hide a mismatch and do not delete the main-process-owned recovery snapshot before choosing Save or Discard. Project recovery is separate from downgrading the desktop application; a downgrade requires the verified backup and retained-installer procedure in the [desktop release runbook](https://github.com/tileborne/tileborne/blob/main/docs/desktop-release-runbook.md).
+
 Use **Ship** from Overview, the top bar, or the command palette. All entry points use the same readiness and build flow. The local target produces a self-contained artifact with its worker, selected startup map package, project content, plugin runtime, integrity hashes, and run instructions. Verify the copied artifact outside the workspace before distributing it.
 
 ## Keyboard and accessibility
@@ -38,5 +40,6 @@ Labeled form controls, semantic buttons, problems, and status text are exposed t
 ## Known limits for the 1.0 candidate
 
 - Cloudflare deployment still requires the optional native Wrangler/Forge environment; local Ship is the release oracle.
-- The two-client Electron creator flow is proven through explicit ready, active simulation, Victory/Defeat, durable terminal results, and participant exit without stopping the owner-hosted room. The Forge production package is also proven independently: root build 23/23, a lockfile-derived 29-package runtime closure, and a 2/2 copied out-of-workspace `.app` smoke reaching a visible packaged renderer without repository module resolution.
+- The two-client Electron creator flow and a copied unpacked macOS arm64 `.app` runtime closure have independent evidence. Neither proves a distributable desktop release. The sole desktop 1.0 candidate remains **NO-GO** until a signed/notarized DMG, native install/relaunch, backup/rollback, and publication boundary pass the canonical contract.
+- macOS x64, Windows, Linux, automatic desktop update/rollback, and remote crash reporting are unsupported for desktop 1.0. Forge maker entries are not evidence of support.
 - Missing/disabled mode plugins, moved or corrupt assets, denied/disk-full saves, and failed builds are surfaced as actionable errors; they are not auto-repaired or silently ignored.

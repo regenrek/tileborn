@@ -11,6 +11,16 @@ This is the durable input to the 1.0 release-contract and documentation work. It
 recorded where they provide useful adjacent evidence, but they do not prove a desktop installer,
 desktop signing, desktop update, or desktop rollback capability.
 
+> **Post-audit implementation note:** the minimum closed-schema contract described below now lives
+> in `scripts/desktop-release-policy.json`, `scripts/desktop-release-contract.mjs`,
+> `scripts/macos-desktop-release-verifier.mjs`, and the fail-closed Forge release mode. That source
+> implementation does not change the audited distribution decision: the evidence-free status is
+> still **NO-GO** because no candidate DMG, approved retained DMG/LKG entry, native backup/rollback
+> run, approved Team ID, publish approval, or active scoped credential is present. Use
+> [`docs/desktop-release-runbook.md`](desktop-release-runbook.md) for the current procedure and
+> stable blocker meanings. The tables and evidence ledger below remain the historical observations
+> at the audited source revision.
+
 ## Decision vocabulary
 
 - **Implemented and proven** means an executable check exercised the capability on the claimed
@@ -79,10 +89,10 @@ local evidence and is not a source-controlled release artifact.
    tests prove content hashes for shipped games. No equivalent desktop distribution manifest or
    checksum contract exists.
 
-## Required next contract slice
+## Contract slice required by this audit
 
-The next implementation item should not broaden platform support. Its minimum 1.0 desktop slice
-is:
+This minimum source slice has since been implemented without broadening platform support. Every
+listed item still requires executable release evidence before the candidate may be called GO:
 
 1. hard-code/document the support promise as **macOS arm64 only** and make every other maker
    non-claiming;

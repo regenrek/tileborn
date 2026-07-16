@@ -40,6 +40,19 @@ Production release candidates must pass the local security hygiene gate before h
 
 For the 2026-06-15 Production 1.0 audit, mature patched releases removed the actionable Playwright, Wrangler, Hono, Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core` findings. `esbuild >=0.17.0 <0.28.1` remains blocked because the patched `0.28.1` release is still inside the repository's seven-day `minimumReleaseAge` window.
 
+## Desktop release secrets and private evidence
+
+Apple signing identity, Team ID, App Store Connect key path/id/issuer, and the scoped GitHub release
+token are operator/CI secrets. Do not commit or print their values, key files, `.env` files, or
+shell transcripts that expose them. `TILEBORNE_DESKTOP_PUBLISH_APPROVED=1` is a one-run maintainer
+approval, not a durable default, and credential presence alone is insufficient.
+
+Native release receipts, Playwright traces, redacted support bundles, and project backup archives
+may still contain local paths or project metadata. Keep them restricted, inspect them before private
+sharing, and follow the release owner's retention/deletion policy. Remote crash reporting is
+unsupported in desktop 1.0; local fail-fast logs, recovery, and an opt-in support bundle are not
+consent for automatic upload. See [Desktop Release](/desktop-release/).
+
 ## Path traversal and symlink escape
 
 All filesystem writes under user data (`~/.tileborne`) and project directories go through services that call `@tileborne/asset-pipeline` guards:

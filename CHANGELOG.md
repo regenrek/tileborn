@@ -5,6 +5,33 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Closed-schema macOS arm64 desktop release policy and verifier for artifact
+  SHA-256/source provenance, Developer ID/notarization/stapling, native
+  install/first-launch/relaunch, verified project backup, approved retained-
+  installer rollback, and explicit GitHub publication authorization.
+- Creator performance release budgets for the canonical 2,048-asset,
+  512-behavior, and 8,192-reference workload, with separate advisory native
+  timing traces.
+- Maintainer runbooks for desktop support, external secrets, stable blocker
+  meanings, project-content recovery, last-known-good approval, rollback, and
+  release handoff.
+
+### Changed
+
+- Desktop support is now stated fail-closed: macOS arm64 is the sole 1.0
+  candidate and remains **NO-GO** without native release evidence. Forge maker
+  entries no longer imply Windows, Linux, or macOS x64 support.
+
+### Security
+
+- Apple signing/notarization and GitHub release credentials remain external;
+  native receipts, support bundles, traces, and project backups are treated as
+  restricted evidence rather than committed artifacts.
+
 ## [1.0.0-rc.0] - 2026-06-15
 
 Production 1.0 release candidate. Focus: committed BR vertical proof, BYO
@@ -113,3 +140,4 @@ First open-source, local-first release. Focus: editor + SDK tileset pipeline + B
 
 [0.1.0]: https://github.com/tileborne/tileborne/releases/tag/v0.1.0
 [1.0.0-rc.0]: https://github.com/tileborne/tileborne/compare/v0.1.0...v1.0.0-rc.0
+[Unreleased]: https://github.com/tileborne/tileborne/compare/v1.0.0-rc.0...HEAD

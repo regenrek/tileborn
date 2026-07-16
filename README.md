@@ -8,7 +8,10 @@ Build maps in the Electron editor, extend behavior with plugins, and run determi
 
 ## Status
 
-**v0.1.0** — local-first OSS snapshot. The desktop editor, SDK tileset pipeline, Battle Royale plugin demo, and miniflare-backed multiplayer playtest are the headline features. npm publish, Cloudflare deploy, and GitHub release automation are out of scope for this milestone.
+`main` is preparing `1.0.0-rc.0`; no tag or desktop distribution is implied. The creator/game Ship
+vertical has committed evidence, while the desktop editor remains **NO-GO** for distribution.
+macOS arm64 is the sole desktop 1.0 candidate; Windows, Linux, macOS x64, automatic updates, and
+remote crash reporting are unsupported. See the [desktop release runbook](docs/desktop-release-runbook.md).
 
 ## Quick start
 
@@ -98,6 +101,7 @@ Run `pnpm --filter @tileborne/desktop dev:cdp` to explore the editor locally.
 - [Security](SECURITY.md)
 - [Docs site](apps/docs/) — build with `pnpm docs:dev`
 - [Release readiness](apps/docs/src/content/docs/release-readiness/index.md)
+- [Desktop release and rollback](docs/desktop-release-runbook.md)
 
 ## Contributing
 

@@ -1,6 +1,12 @@
 # Battle Royale creator 1.0 release evidence
 
-Status: **creator/gameplay release oracle and self-contained Forge production package proven**.
+Status: **creator/gameplay release oracle and unpacked Forge runtime closure proven**.
+
+This is not desktop distribution evidence. The macOS arm64 desktop candidate remains **NO-GO**
+until the signed/notarized DMG, manifest, native install/relaunch, verified backup, approved
+retained-installer rollback, and publication boundary pass the canonical desktop release contract.
+macOS x64, Windows, and Linux are unsupported for desktop 1.0; Forge maker configuration does not
+change that decision.
 
 Evidence classes are intentionally separate: `current automated`, `prior live Electron`, and `fresh live Electron`. Automated artifact execution must never be reported as fresh UI evidence.
 
@@ -43,6 +49,6 @@ git diff --check
 
 Local-listen integration tests require permission to bind Miniflare to `127.0.0.1`. All waits in the copied-artifact lifecycle are bounded so a denied listen, stalled socket, poll, alarm, or shutdown fails with a named timeout.
 
-## Production package proof
+## Unpacked application runtime proof
 
-The Forge package is now verified as a self-contained runtime artifact. The successful root build completed all 23 tasks, the package hook deployed the 29-package binary-backed runtime closure, and the 2/2 copied-app smoke proved that the fresh `.app` starts independently of the repository and reaches a visible renderer. This packaged-app proof remains separate from the fresh two-client gameplay receipt above; neither is substituted for the other.
+The unpacked Forge application is verified as a self-contained runtime closure. The successful root build completed all 23 tasks, the package hook deployed the 29-package binary-backed runtime closure, and the 2/2 copied-app smoke proved that the fresh `.app` starts independently of the repository and reaches a visible renderer. This copied-app proof remains separate from the fresh two-client gameplay receipt above; neither substitutes for the signed/notarized installer and native rollback evidence required by the [desktop release runbook](desktop-release-runbook.md).

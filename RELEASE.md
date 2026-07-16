@@ -4,6 +4,20 @@ This file is the maintainer handoff for preparing `v1.0.0-rc.0`. It is not a
 record that the tag, GitHub release, npm publish, Homebrew publish, or
 Cloudflare deploy has already happened.
 
+## Current decision: desktop NO-GO
+
+The Battle Royale creator/game Ship vertical has committed evidence, but the
+desktop editor distribution is **NO-GO**. macOS arm64 is the only desktop 1.0
+candidate. It is not releasable until the signed/notarized DMG, manifest,
+native install/relaunch, verified project backup, approved last-known-good
+retained-installer rollback, publication approval, and scoped credential all
+pass the canonical contract. macOS x64, Windows, Linux, automatic desktop
+updates/rollback, and remote crash reporting are unsupported in 1.0.
+
+Read [`docs/desktop-release-runbook.md`](docs/desktop-release-runbook.md) before
+any desktop release operation. `scripts/desktop-release-policy.json` is the
+machine-readable support owner; Forge maker configuration is never evidence.
+
 ## Version Policy
 
 - Release-candidate tag: `v1.0.0-rc.0`.
@@ -21,19 +35,27 @@ Run from a clean checkout before tagging:
 
 ```bash
 git status --short --branch
+pnpm install --frozen-lockfile
+pnpm release:gates
+pnpm docs:build
 pnpm typecheck
 pnpm lint
 pnpm test -- --run
-pnpm --filter @tileborne/game-host test:smoke
-pnpm --filter @tileborne/cli exec vitest --run src/ship-pipeline.integration.test.ts
-pnpm -r build
+pnpm build
 pnpm audit --audit-level moderate
+git diff --check
 ```
 
-`pnpm audit --audit-level moderate` is not clean on 2026-06-15 because
-`esbuild@0.28.1` is still inside the repository's seven-day
-`minimumReleaseAge` window. Do not call the release candidate ready unless that
-has aged in and been upgraded, or a release owner records an explicit override.
+Then inspect the fail-closed baseline explicitly:
+
+```bash
+pnpm release:desktop:policy
+pnpm release:desktop:status
+```
+
+An evidence-free checkout must remain NO-GO. Do not suppress dependency audit
+findings or desktop blocker codes. Any accepted advisory exception requires an
+explicit, dated release-owner decision; it is not implied by an older handoff.
 
 ## Approval Boundaries
 
@@ -49,6 +71,13 @@ wrangler deploy
 
 Cloudflare deploy also requires out-of-band `CLOUDFLARE_API_TOKEN`,
 `HANDOFF_SIGNING_KEY`, and any Alchemy production secrets.
+
+Desktop publication additionally requires protected Apple signing/notarization
+inputs, an approved Team ID, a scoped `GH_TOKEN`, and a one-run
+`TILEBORNE_DESKTOP_PUBLISH_APPROVED=1`. Secret presence is not approval. The
+desktop contract verifies active GitHub auth, but does not tag, upload, or
+publish. Never commit keys, tokens, `.env` files, project backups, support
+bundles, native traces, or release receipts.
 
 ## Worktree preservation and classification
 
@@ -70,7 +99,7 @@ The 588 baseline worktree entries have this deterministic disposition:
 | Unrelated user work                                   |       0 |         0 | None was identified in the captured baseline. Any newly discovered or ambiguous path defaults to preservation and requires an explicit owner decision.                                         |
 
 The source/test/docs class is path-bounded to the captured changes under
-`apps/`, `packages/`, and the three public root `docs/` contracts, together
+`apps/`, `packages/`, and the explicitly allowlisted public root `docs/` contracts, together
 with `.gitignore`, `package.json`, and `tsconfig.base.json`. The generated class
 is limited to `pnpm-lock.yaml`, `packages/game-sdk/CAPABILITIES.md`, and
 `packages/game-sdk/src/generated/capabilities.ts`; the latter two declare their
@@ -98,8 +127,8 @@ only from stable committed inputs.
 
 ## Release Notes
 
-Tileborne `1.0.0-rc.0` packages the BR vertical as a production release
-candidate:
+Tileborne `1.0.0-rc.0` prepares the BR vertical for a production release
+candidate decision:
 
 - Electron desktop editor with committed BR playtest verification.
 - CLI ship pipeline for thin product repos and local-compatible Cloudflare
@@ -108,6 +137,8 @@ candidate:
 - Battle Royale plugin runtime, lobby flow, HUD, input, and synthesized audio
   proof.
 - Release-readiness docs, security guidance, rollback notes, and known caveats.
+- A fail-closed macOS arm64 desktop release contract with immutable artifact,
+  source, Team/LKG, native backup/rollback, and publication boundaries.
 
 Known caveats:
 
@@ -115,5 +146,10 @@ Known caveats:
   explicit publish approval.
 - Default audio remains synthesized pending final sound assets.
 - Physical speaker output is not externally measured by automated gates.
-- npm, Homebrew, GitHub release, and production tag steps require separate
-  maintainer approval.
+- The desktop distribution remains NO-GO; an unpacked Forge `.app` smoke is not
+  a signed/notarized installer receipt.
+- macOS x64, Windows, Linux, automatic desktop update/rollback, and remote crash
+  reporting are unsupported for desktop 1.0.
+- npm, Homebrew, GitHub release, desktop publication, and production tag steps
+  require separate maintainer approval. npm and Homebrew are not desktop 1.0
+  channels.

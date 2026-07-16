@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -141,7 +142,11 @@ function usage() {
 function main(argv) {
   const [mode, ...args] = argv;
   if (mode === 'matrix') {
-    console.log(`matrix=${JSON.stringify(createReleaseGateMatrix())}`);
+    const output = `matrix=${JSON.stringify(createReleaseGateMatrix())}`;
+    console.log(output);
+    if (process.env.GITHUB_OUTPUT !== undefined) {
+      appendFileSync(process.env.GITHUB_OUTPUT, `${output}\n`, 'utf8');
+    }
     return;
   }
 

@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -55,6 +57,29 @@ describe('canonical release gates', () => {
       'pnpm docs:build',
     ]) {
       expect(workflow).not.toContain(`run: ${command}`);
+    }
+  });
+
+  it('writes a parseable matrix to the GitHub Actions output contract', () => {
+    const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'tileborne-release-gates-'));
+    const githubOutput = path.join(temporaryDirectory, 'github-output');
+
+    try {
+      const result = spawnSync(process.execPath, ['scripts/release-gates.mjs', 'matrix'], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_OUTPUT: githubOutput },
+      });
+
+      expect(result.status, result.stderr).toBe(0);
+      const output = readFileSync(githubOutput, 'utf8');
+      expect(output.endsWith('\n')).toBe(true);
+      const [assignment, ...unexpectedLines] = output.trimEnd().split('\n');
+      expect(unexpectedLines).toEqual([]);
+      expect(assignment).toMatch(/^matrix=/);
+      expect(JSON.parse(assignment!.slice('matrix='.length))).toEqual(createReleaseGateMatrix());
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true });
     }
   });
 });

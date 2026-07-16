@@ -11,6 +11,7 @@ export * from './scan.js';
 export * from './source-inventory.js';
 export * from './infer.js';
 export * from './import.js';
+export * from './import-plan-schema.js';
 export * from './tsj-parse.js';
 export * from './tsx-parse.js';
 export * from './tmj-parse.js';

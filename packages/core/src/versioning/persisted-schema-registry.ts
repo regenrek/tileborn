@@ -206,7 +206,7 @@ export const PERSISTED_SCHEMA_REGISTRY: readonly PersistedSchemaRegistration[] =
     versionLocation: 'payload',
     durability: 'authoring-source',
     storage: '<project>/.tileborne/import-records.json',
-    codecOwner: 'packages/services-app/src/project/index.ts#appendProjectImportRecord',
+    codecOwner: 'packages/services-app/src/project/index.ts#ProjectImportRecordSchema',
     migrationOwner: 'packages/services-app/src/project/index.ts#appendProjectImportRecord',
     compatibility: strictCurrent(PERSISTED_SCHEMA_VERSIONS.projectImportRecords),
   }),
@@ -341,7 +341,7 @@ export const PERSISTED_SCHEMA_REGISTRY: readonly PersistedSchemaRegistration[] =
   versioned('assetLibraryIndex', {
     versionLocation: 'payload',
     durability: 'replaceable-derived',
-    storage: '<home>/cache/asset-library/indexes/*.json',
+    storage: '<home>/cache/asset-library/index-metadata/*.json',
     codecOwner: 'packages/services-app/src/asset-library/index.ts#AssetLibraryIndexCacheFile',
     migrationOwner: 'packages/services-app/src/asset-library/index.ts',
     compatibility: rebuildable(PERSISTED_SCHEMA_VERSIONS.assetLibraryIndex),
@@ -349,7 +349,7 @@ export const PERSISTED_SCHEMA_REGISTRY: readonly PersistedSchemaRegistration[] =
   versioned('editorTilesetIndex', {
     versionLocation: 'payload',
     durability: 'replaceable-derived',
-    storage: '<home>/cache/asset-library/editor-indexes/*.json',
+    storage: '<home>/cache/asset-library/editor-index/*.json',
     codecOwner: 'packages/sdk-tileset/src/editor-index/types.ts#EditorTilesetIndexJson',
     migrationOwner: 'packages/services-app/src/asset-library/index.ts',
     compatibility: rebuildable(PERSISTED_SCHEMA_VERSIONS.editorTilesetIndex),

@@ -285,6 +285,7 @@ describe('MapService export/import path security', () => {
       for (const raw of [
         '{"schemaVersion":0,"records":[]}',
         '{"schemaVersion":2,"records":[],"future":"preserve"}',
+        '{"schemaVersion":1,"records":[{"id":"import:00000000-0000-4000-8000-000000000000","projectId":"invalid-project","createdAt":"2026-07-16T00:00:00.000Z","sourceIdentity":{},"appliedPlan":{},"report":{}}],"sentinel":"preserve-corrupt-v1"}',
         '{not-json',
       ]) {
         await writeFile(recordsPath, raw);

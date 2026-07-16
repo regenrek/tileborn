@@ -22,7 +22,11 @@ import {
   readSchemaVersion,
   type ProjectMapRef,
 } from '@tileborne/core';
-import type { TiledAppliedImportPlan } from '@tileborne/sdk-tileset/tiled';
+import {
+  ImportRecordIdSchema,
+  TiledAppliedImportPlanSchema,
+  type TiledAppliedImportPlan,
+} from '@tileborne/sdk-tileset/tiled';
 import {
   HomeService,
   writeJsonAtomic,
@@ -153,6 +157,50 @@ export interface ImportRecord {
   readonly appliedPlan: TiledAppliedImportPlan;
   readonly report: ImportCenterApplyReport;
 }
+
+const ImportCenterSourceIdentitySchema = Schema.Struct({
+  kind: Schema.Literals([
+    'tileborne-pack',
+    'tiled-map',
+    'tiled-tileset',
+    'tiled-source-folder',
+    'raw-source-folder',
+  ]),
+  path: Schema.String,
+  detectedAt: Schema.String,
+  fingerprint: Schema.optional(
+    Schema.Struct({
+      realPath: Schema.String,
+      size: Schema.Number,
+      mtimeMs: Schema.Number,
+      isDirectory: Schema.Boolean,
+    }),
+  ),
+});
+
+const ImportCenterApplyReportSchema = Schema.Struct({
+  importRecordId: ImportRecordIdSchema,
+  sourceIdentity: ImportCenterSourceIdentitySchema,
+  diagnostics: TiledAppliedImportPlanSchema.fields.diagnostics,
+  appliedPlan: TiledAppliedImportPlanSchema,
+  outputs: Schema.Struct({
+    kind: Schema.Literals(['map', 'asset-pack']),
+    mapId: Schema.optional(MapId),
+    packId: Schema.optional(PackId),
+    layerCount: Schema.optional(Schema.Number),
+    objectCount: Schema.optional(Schema.Number),
+  }),
+});
+
+/** Canonical runtime codec for records persisted in import-records.json. */
+export const ProjectImportRecordSchema = Schema.Struct({
+  id: ImportRecordIdSchema,
+  projectId: ProjectId,
+  createdAt: Schema.String,
+  sourceIdentity: ImportCenterSourceIdentitySchema,
+  appliedPlan: TiledAppliedImportPlanSchema,
+  report: ImportCenterApplyReportSchema,
+});
 
 export class ProjectNotFoundError extends Schema.TaggedErrorClass<ProjectNotFoundError>()(
   'ProjectNotFoundError',
@@ -469,39 +517,22 @@ export const updateProjectMaps = (
 const importRecordsPath = (projectDir: string): string =>
   path.join(projectDir, PROJECT_IMPORT_RECORDS_PATH);
 
+const ProjectImportRecordsDocumentSchema = Schema.Struct({
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectImportRecords),
+  records: Schema.Array(ProjectImportRecordSchema),
+});
+
 interface ProjectImportRecordsDocument {
   readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectImportRecords;
   readonly records: readonly ImportRecord[];
 }
 
-const isObjectRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isImportRecord = (value: unknown): value is ImportRecord =>
-  isObjectRecord(value) &&
-  typeof value.id === 'string' &&
-  typeof value.projectId === 'string' &&
-  typeof value.createdAt === 'string' &&
-  isObjectRecord(value.sourceIdentity) &&
-  isObjectRecord(value.appliedPlan) &&
-  isObjectRecord(value.report);
-
 const decodeProjectImportRecordsDocument = (raw: string): ProjectImportRecordsDocument => {
   const parsed: unknown = JSON.parse(raw);
-  if (
-    !isObjectRecord(parsed) ||
-    parsed.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectImportRecords ||
-    !Array.isArray(parsed.records) ||
-    !parsed.records.every(isImportRecord)
-  ) {
-    throw new Error(
-      `Unsupported or invalid project import records; expected schemaVersion ${PERSISTED_SCHEMA_VERSIONS.projectImportRecords}`,
-    );
-  }
-  return {
-    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectImportRecords,
-    records: parsed.records,
-  };
+  const decoded = Schema.decodeUnknownSync(ProjectImportRecordsDocumentSchema)(parsed);
+  // Effect's optional-field type includes explicit undefined, while the SDK's
+  // exact optional properties do not. Runtime shapes are fully decoded above.
+  return decoded as unknown as ProjectImportRecordsDocument;
 };
 
 export const appendProjectImportRecord = (

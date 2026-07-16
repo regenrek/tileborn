@@ -84,4 +84,19 @@ describe('persisted schema registry repository audit', () => {
       PERSISTED_SCHEMA_REGISTRY.find(({ id }) => id === 'tileborneConfig')?.currentVersion,
     );
   });
+
+  it('keeps asset-library cache storage evidence aligned with its owner constants', () => {
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, '../packages/services-app/src/asset-library/index.ts'),
+      'utf8',
+    );
+    for (const [id, constant] of [
+      ['assetLibraryIndex', 'ASSET_LIBRARY_CACHE_DIR'],
+      ['editorTilesetIndex', 'EDITOR_INDEX_CACHE_DIR'],
+    ] as const) {
+      const value = source.match(new RegExp(`${constant} = '([^']+)'`))?.[1];
+      expect(value, constant).toBeDefined();
+      expect(PERSISTED_SCHEMA_REGISTRY.find((entry) => entry.id === id)?.storage).toContain(value);
+    }
+  });
 });

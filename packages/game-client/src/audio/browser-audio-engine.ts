@@ -6,7 +6,7 @@ import {
   type RuntimeAudioCueDefinition,
   type RuntimeAudioFocusState,
   type RuntimeAudioSettings,
-} from "@tileborne/runtime";
+} from '@tileborne/runtime';
 
 export interface RuntimeAudioCueRequest {
   readonly cueId: string;
@@ -50,7 +50,7 @@ const webAudioContextConstructor = (): AudioContextConstructor | undefined => {
 };
 
 const requestFrom = (request: RuntimeAudioCueRequest | string): RuntimeAudioCueRequest =>
-  typeof request === "string" ? { cueId: request } : request;
+  typeof request === 'string' ? { cueId: request } : request;
 
 const cueFrequency = (cueId: string): number => {
   let hash = 0;
@@ -64,7 +64,7 @@ const playSyntheticCue = (context: AudioContext, cueId: string, gainValue: numbe
   const now = context.currentTime;
   const oscillator = context.createOscillator();
   const gain = context.createGain();
-  oscillator.type = "square";
+  oscillator.type = 'square';
   oscillator.frequency.value = cueFrequency(cueId);
   gain.gain.value = gainValue;
   oscillator.connect(gain);
@@ -82,7 +82,7 @@ export const createBrowserRuntimeAudioEngine = ({
   const busById = new Map(buses.map((bus) => [bus.id, bus] as const));
   const cueById = new Map(cues.map((cue) => [cue.id, cue] as const));
   let currentSettings = settings;
-  let focusState: RuntimeAudioFocusState = "focused";
+  let focusState: RuntimeAudioFocusState = 'focused';
   let context: AudioContext | undefined;
   let contextSupported = true;
   let playCount = 0;
@@ -96,13 +96,15 @@ export const createBrowserRuntimeAudioEngine = ({
     if (context !== undefined) {
       return context;
     }
-    const create = audioContextFactory ?? (() => {
-      const Context = webAudioContextConstructor();
-      if (Context === undefined) {
-        throw new Error("Web Audio API is unavailable.");
-      }
-      return new Context();
-    });
+    const create =
+      audioContextFactory ??
+      (() => {
+        const Context = webAudioContextConstructor();
+        if (Context === undefined) {
+          throw new Error('Web Audio API is unavailable.');
+        }
+        return new Context();
+      });
     try {
       context = create();
       contextSupported = true;
@@ -110,7 +112,7 @@ export const createBrowserRuntimeAudioEngine = ({
       return context;
     } catch (error) {
       contextSupported = false;
-      lastError = error instanceof Error ? error.message : "Web Audio API is unavailable.";
+      lastError = error instanceof Error ? error.message : 'Web Audio API is unavailable.';
       return undefined;
     }
   };
@@ -152,9 +154,9 @@ export const createBrowserRuntimeAudioEngine = ({
         unsupportedPlayCount += 1;
         return resolved;
       }
-      if (activeContext.state === "suspended") {
+      if (activeContext.state === 'suspended') {
         void activeContext.resume().catch((error: unknown) => {
-          lastError = error instanceof Error ? error.message : "Audio context resume failed.";
+          lastError = error instanceof Error ? error.message : 'Audio context resume failed.';
         });
       }
       playSyntheticCue(activeContext, resolved.cueId, resolved.gain);
@@ -183,9 +185,9 @@ export const createBrowserRuntimeAudioEngine = ({
     dispose() {
       const activeContext = context;
       context = undefined;
-      if (activeContext !== undefined && activeContext.state !== "closed") {
+      if (activeContext !== undefined && activeContext.state !== 'closed') {
         void activeContext.close().catch((error: unknown) => {
-          lastError = error instanceof Error ? error.message : "Audio context close failed.";
+          lastError = error instanceof Error ? error.message : 'Audio context close failed.';
         });
       }
     },
@@ -197,20 +199,20 @@ export const bindBrowserRuntimeAudioFocusState = (
   targetWindow: Window = window,
 ): (() => void) => {
   const updateFocusState = () => {
-    const hidden = targetWindow.document.visibilityState === "hidden";
-    engine.setFocusState(hidden ? "backgrounded" : "focused");
+    const hidden = targetWindow.document.visibilityState === 'hidden';
+    engine.setFocusState(hidden ? 'backgrounded' : 'focused');
   };
-  const onBlur = () => engine.setFocusState("backgrounded");
+  const onBlur = () => engine.setFocusState('backgrounded');
   const onFocus = updateFocusState;
 
   updateFocusState();
-  targetWindow.addEventListener("blur", onBlur);
-  targetWindow.addEventListener("focus", onFocus);
-  targetWindow.document.addEventListener("visibilitychange", updateFocusState);
+  targetWindow.addEventListener('blur', onBlur);
+  targetWindow.addEventListener('focus', onFocus);
+  targetWindow.document.addEventListener('visibilitychange', updateFocusState);
   return () => {
-    targetWindow.removeEventListener("blur", onBlur);
-    targetWindow.removeEventListener("focus", onFocus);
-    targetWindow.document.removeEventListener("visibilitychange", updateFocusState);
+    targetWindow.removeEventListener('blur', onBlur);
+    targetWindow.removeEventListener('focus', onFocus);
+    targetWindow.document.removeEventListener('visibilitychange', updateFocusState);
   };
 };
 

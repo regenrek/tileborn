@@ -1,5 +1,5 @@
-import type { BrandConfig } from "@tileborne/core";
-import type { ReactElement } from "react";
+import type { BrandConfig } from '@tileborne/core';
+import type { ReactElement } from 'react';
 
 export interface BootSplashProps {
   readonly brand: BrandConfig;
@@ -13,7 +13,7 @@ export function BootSplash({ brand, progress }: BootSplashProps): ReactElement {
   return (
     <div className="tb-boot" data-testid="boot-splash" role="status" aria-live="polite">
       {brand.logo ? (
-        <img src={brand.logo.src} alt={brand.logo.alt} style={{ maxHeight: "5rem" }} />
+        <img src={brand.logo.src} alt={brand.logo.alt} style={{ maxHeight: '5rem' }} />
       ) : (
         <h1 className="tb-title">{brand.title}</h1>
       )}

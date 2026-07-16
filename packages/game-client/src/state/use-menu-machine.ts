@@ -1,11 +1,6 @@
-import { useReducer } from "react";
+import { useReducer } from 'react';
 
-import {
-  initialMenuState,
-  menuReducer,
-  type MenuEvent,
-  type MenuState,
-} from "./menu-machine.js";
+import { initialMenuState, menuReducer, type MenuEvent, type MenuState } from './menu-machine.js';
 
 export interface MenuMachine {
   readonly state: MenuState;

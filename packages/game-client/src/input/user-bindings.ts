@@ -5,9 +5,9 @@ import {
   type ActionValueKind,
   type ControlScheme,
   type InputBinding,
-} from "@tileborne/core";
-import { resolveEffectiveInputMap } from "@tileborne/plugin-api";
-import { Option, Schema } from "effect";
+} from '@tileborne/core';
+import { resolveEffectiveInputMap } from '@tileborne/plugin-api';
+import { Option, Schema } from 'effect';
 
 /**
  * User keybind remap model + persistence for the game-client Controls UI
@@ -24,7 +24,7 @@ import { Option, Schema } from "effect";
  */
 
 /** Durable id stamped on the user remap overlay binding set. */
-export const USER_OVERLAY_BINDING_SET_ID = "user-overlay";
+export const USER_OVERLAY_BINDING_SET_ID = 'user-overlay';
 
 /**
  * `localStorage` key for the persisted user overlay. Versioned for forward
@@ -32,7 +32,7 @@ export const USER_OVERLAY_BINDING_SET_ID = "user-overlay";
  * (`apps/desktop/.../playtest-user-bindings.ts`) — they share one durable
  * contract so a remap saved here is the overlay the playtest reads.
  */
-export const USER_INPUT_OVERLAY_STORAGE_KEY = "tileborne:input:user-overlay:v1";
+export const USER_INPUT_OVERLAY_STORAGE_KEY = 'tileborne:input:user-overlay:v1';
 
 /** Persistence port for the user remap overlay (localStorage-backed by default). */
 export interface UserInputBindingsStore {
@@ -66,7 +66,7 @@ export const createLocalStorageBindingsStore = (options?: {
 }): UserInputBindingsStore => {
   const key = options?.key ?? USER_INPUT_OVERLAY_STORAGE_KEY;
   const storage =
-    options?.storage ?? (typeof localStorage === "undefined" ? undefined : localStorage);
+    options?.storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
   return {
     load: (): InputMap | undefined => {
       if (storage === undefined) {
@@ -86,10 +86,10 @@ export const createLocalStorageBindingsStore = (options?: {
 
 /** Mutable plain-data form of an `InputMap` (its Schema encoding) we edit between decodes. */
 interface OverlayBindingData {
-  readonly _tag: "InputBinding";
+  readonly _tag: 'InputBinding';
   readonly action: string;
   readonly trigger: unknown;
-  readonly axisRole?: "x+" | "x-" | "y+" | "y-";
+  readonly axisRole?: 'x+' | 'x-' | 'y+' | 'y-';
 }
 
 interface OverlayData {
@@ -152,7 +152,7 @@ export const rebindActionTrigger = (params: {
   const kept = (data.schemeDefaults[scheme] ?? []).filter((binding) => binding.action !== actionId);
   data.schemeDefaults[scheme] = [
     ...kept,
-    { _tag: "InputBinding", action: actionId, trigger: triggerData },
+    { _tag: 'InputBinding', action: actionId, trigger: triggerData },
   ];
 
   return Schema.decodeUnknownSync(InputMap)(data);
@@ -196,10 +196,10 @@ export const resetActionInScheme = (params: {
 };
 
 const KEY_LABEL_PREFIXES: readonly [string, string][] = [
-  ["Key", ""],
-  ["Digit", ""],
-  ["Numpad", "Numpad "],
-  ["Arrow", "Arrow "],
+  ['Key', ''],
+  ['Digit', ''],
+  ['Numpad', 'Numpad '],
+  ['Arrow', 'Arrow '],
 ];
 
 const labelForKeyCode = (code: string): string => {
@@ -212,9 +212,9 @@ const labelForKeyCode = (code: string): string => {
 };
 
 const MOUSE_BUTTON_LABELS: Record<number, string> = {
-  0: "Left",
-  1: "Middle",
-  2: "Right",
+  0: 'Left',
+  1: 'Middle',
+  2: 'Right',
 };
 
 /**
@@ -223,15 +223,15 @@ const MOUSE_BUTTON_LABELS: Record<number, string> = {
  */
 export const triggerLabel = (trigger: RawTrigger): string => {
   switch (trigger._tag) {
-    case "key":
+    case 'key':
       return labelForKeyCode(trigger.code);
-    case "mouseButton":
+    case 'mouseButton':
       return `Mouse ${MOUSE_BUTTON_LABELS[trigger.button] ?? `Button ${trigger.button}`}`;
-    case "gamepadButton":
+    case 'gamepadButton':
       return `Pad Button ${trigger.button}`;
-    case "axis":
-      return `Axis ${trigger.axis}${trigger.sign > 0 ? "+" : "-"}`;
-    case "pointer":
-      return "Pointer";
+    case 'axis':
+      return `Axis ${trigger.axis}${trigger.sign > 0 ? '+' : '-'}`;
+    case 'pointer':
+      return 'Pointer';
   }
 };

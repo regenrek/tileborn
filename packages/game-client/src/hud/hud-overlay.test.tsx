@@ -1,15 +1,15 @@
-import { CORE_HUD_WIDGETS, HudLayout } from "@tileborne/core";
-import { render, within } from "@testing-library/react";
-import { Schema } from "effect";
-import { describe, expect, it, vi } from "vitest";
+import { CORE_HUD_WIDGETS, HudLayout } from '@tileborne/core';
+import { render, within } from '@testing-library/react';
+import { Schema } from 'effect';
+import { describe, expect, it, vi } from 'vitest';
 
-import { HudOverlay } from "./hud-overlay.js";
+import { HudOverlay } from './hud-overlay.js';
 import {
   formatAlivePlayersLabel,
   formatZoneStatusLabel,
   healthPercent,
   type HudMetrics,
-} from "./hud-state.js";
+} from './hud-state.js';
 
 const baseMetrics: HudMetrics = {
   playerCount: 2,
@@ -17,56 +17,56 @@ const baseMetrics: HudMetrics = {
   hud: {
     totalPlayers: 4,
     localPlayer: {
-      playerId: "player-1",
-      displayName: "Player 1",
+      playerId: 'player-1',
+      displayName: 'Player 1',
       health: 65,
       maxHealth: 100,
     },
     zoneStatus: {
-      phase: "countdown",
+      phase: 'countdown',
       secondsRemaining: 42,
     },
     gameplayEvents: [],
   },
 };
 
-describe("hud-state helpers", () => {
-  it("formats alive player and zone labels", () => {
-    expect(formatAlivePlayersLabel(2, 4)).toBe("2 / 4 players alive");
-    expect(formatZoneStatusLabel({ phase: "countdown", secondsRemaining: 42 })).toBe(
-      "Zone shrinks in 42s",
+describe('hud-state helpers', () => {
+  it('formats alive player and zone labels', () => {
+    expect(formatAlivePlayersLabel(2, 4)).toBe('2 / 4 players alive');
+    expect(formatZoneStatusLabel({ phase: 'countdown', secondsRemaining: 42 })).toBe(
+      'Zone shrinks in 42s',
     );
-    expect(formatZoneStatusLabel({ phase: "shrinking" })).toBe("Zone shrinking");
-    expect(formatZoneStatusLabel({ phase: "stable" })).toBe("Zone stable");
+    expect(formatZoneStatusLabel({ phase: 'shrinking' })).toBe('Zone shrinking');
+    expect(formatZoneStatusLabel({ phase: 'stable' })).toBe('Zone stable');
     expect(healthPercent(65, 100)).toBe(65);
   });
 });
 
-describe("HudOverlay", () => {
-  it("renders the baseline widgets from runtime metrics", () => {
+describe('HudOverlay', () => {
+  it('renders the baseline widgets from runtime metrics', () => {
     const { container } = render(<HudOverlay metrics={baseMetrics} />);
     const view = within(container);
 
-    expect(view.getByTestId("playtest-hud-alive-count").textContent).toBe("2 / 4 players alive");
-    expect(view.getByTestId("playtest-hud-player-name").textContent).toBe("Player 1");
-    expect(view.getByTestId("playtest-hud-zone-status").textContent).toBe("Zone shrinks in 42s");
+    expect(view.getByTestId('playtest-hud-alive-count').textContent).toBe('2 / 4 players alive');
+    expect(view.getByTestId('playtest-hud-player-name').textContent).toBe('Player 1');
+    expect(view.getByTestId('playtest-hud-zone-status').textContent).toBe('Zone shrinks in 42s');
   });
 
-  it("renders widgets only at the anchors named by the HudLayout data", () => {
+  it('renders widgets only at the anchors named by the HudLayout data', () => {
     const layout = Schema.decodeUnknownSync(HudLayout)({
-      id: "test.layout",
+      id: 'test.layout',
       widgets: [
         {
-          id: "alive",
+          id: 'alive',
           kind: CORE_HUD_WIDGETS.AliveCount,
-          anchor: "bottom-left",
+          anchor: 'bottom-left',
           order: 0,
           enabled: true,
         },
         {
-          id: "zone",
+          id: 'zone',
           kind: CORE_HUD_WIDGETS.ZoneStatus,
-          anchor: "top-center",
+          anchor: 'top-center',
           order: 0,
           enabled: false,
         },
@@ -75,17 +75,17 @@ describe("HudOverlay", () => {
     const { container } = render(<HudOverlay metrics={baseMetrics} layout={layout} />);
     const view = within(container);
 
-    const alive = view.getByTestId("playtest-hud-alive-count");
-    expect(alive.closest("[data-hud-anchor]")?.getAttribute("data-hud-anchor")).toBe("bottom-left");
-    expect(view.queryByTestId("playtest-hud-zone-status")).toBeNull();
-    expect(view.queryByTestId("playtest-hud-local-player")).toBeNull();
+    const alive = view.getByTestId('playtest-hud-alive-count');
+    expect(alive.closest('[data-hud-anchor]')?.getAttribute('data-hud-anchor')).toBe('bottom-left');
+    expect(view.queryByTestId('playtest-hud-zone-status')).toBeNull();
+    expect(view.queryByTestId('playtest-hud-local-player')).toBeNull();
   });
 
-  it("renders custom widget kinds via customWidgets registrations", () => {
+  it('renders custom widget kinds via customWidgets registrations', () => {
     const layout = Schema.decodeUnknownSync(HudLayout)({
-      id: "test.customWidget",
+      id: 'test.customWidget',
       widgets: [
-        { id: "mana", kind: "arena.manaBar", anchor: "bottom-left", order: 0, enabled: true },
+        { id: 'mana', kind: 'arena.manaBar', anchor: 'bottom-left', order: 0, enabled: true },
       ],
     });
     const { container } = render(
@@ -94,8 +94,8 @@ describe("HudOverlay", () => {
         layout={layout}
         customWidgets={[
           {
-            kind: "arena.manaBar",
-            source: "plugin",
+            kind: 'arena.manaBar',
+            source: 'plugin',
             Component: ({ ctx }) => (
               <div data-testid="arena-mana-bar">MP {ctx.localPlayer?.health}</div>
             ),
@@ -105,48 +105,55 @@ describe("HudOverlay", () => {
     );
     const view = within(container);
 
-    expect(view.getByTestId("arena-mana-bar").textContent).toBe("MP 65");
-    const host = view.getByTestId("arena-mana-bar").closest("[data-hud-widget-kind]");
-    expect(host?.getAttribute("data-hud-widget-kind")).toBe("arena.manaBar");
+    expect(view.getByTestId('arena-mana-bar').textContent).toBe('MP 65');
+    const host = view.getByTestId('arena-mana-bar').closest('[data-hud-widget-kind]');
+    expect(host?.getAttribute('data-hud-widget-kind')).toBe('arena.manaBar');
   });
 
-  it("never lets customWidgets override engine core kinds", () => {
+  it('never lets customWidgets override engine core kinds', () => {
     const Fake = () => <div data-testid="fake-alive-count">hacked</div>;
     const { container } = render(
-      <HudOverlay metrics={baseMetrics} customWidgets={[{ kind: CORE_HUD_WIDGETS.AliveCount, Component: Fake }]} />,
+      <HudOverlay
+        metrics={baseMetrics}
+        customWidgets={[{ kind: CORE_HUD_WIDGETS.AliveCount, Component: Fake }]}
+      />,
     );
     const view = within(container);
 
-    expect(view.queryByTestId("fake-alive-count")).toBeNull();
-    expect(view.getByTestId("playtest-hud-alive-count").textContent).toBe("2 / 4 players alive");
+    expect(view.queryByTestId('fake-alive-count')).toBeNull();
+    expect(view.getByTestId('playtest-hud-alive-count').textContent).toBe('2 / 4 players alive');
   });
 
-  it("renders unregistered kinds as draggable placeholders in edit mode", () => {
+  it('renders unregistered kinds as draggable placeholders in edit mode', () => {
     const layout = Schema.decodeUnknownSync(HudLayout)({
-      id: "test.placeholder",
-      widgets: [
-        { id: "mana", kind: "arena.manaBar", anchor: "top-left", order: 0, enabled: true },
-      ],
+      id: 'test.placeholder',
+      widgets: [{ id: 'mana', kind: 'arena.manaBar', anchor: 'top-left', order: 0, enabled: true }],
     });
     const { container } = render(
       <HudOverlay metrics={baseMetrics} layout={layout} editing onMoveWidget={vi.fn()} />,
     );
     const view = within(container);
 
-    expect(view.getByTestId("hud-widget-placeholder").textContent).toBe("Mana Bar");
+    expect(view.getByTestId('hud-widget-placeholder').textContent).toBe('Mana Bar');
     const host = container.querySelector('[data-hud-widget-id="mana"]');
-    expect(host?.getAttribute("draggable")).toBe("true");
+    expect(host?.getAttribute('draggable')).toBe('true');
   });
 
-  it("skips unknown plugin widget kinds without breaking the chassis", () => {
+  it('skips unknown plugin widget kinds without breaking the chassis', () => {
     const layout = Schema.decodeUnknownSync(HudLayout)({
-      id: "test.custom",
+      id: 'test.custom',
       widgets: [
-        { id: "custom", kind: "myplugin.specialMeter", anchor: "top-left", order: 0, enabled: true },
         {
-          id: "alive",
+          id: 'custom',
+          kind: 'myplugin.specialMeter',
+          anchor: 'top-left',
+          order: 0,
+          enabled: true,
+        },
+        {
+          id: 'alive',
           kind: CORE_HUD_WIDGETS.AliveCount,
-          anchor: "top-right",
+          anchor: 'top-right',
           order: 0,
           enabled: true,
         },
@@ -155,18 +162,18 @@ describe("HudOverlay", () => {
     const { container } = render(<HudOverlay metrics={baseMetrics} layout={layout} />);
     const view = within(container);
 
-    expect(view.getByTestId("playtest-hud-alive-count")).toBeTruthy();
+    expect(view.getByTestId('playtest-hud-alive-count')).toBeTruthy();
     expect(container.querySelector('[data-hud-widget-kind="myplugin.specialMeter"]')).toBeNull();
   });
 
-  it("treats missing placement offsets as no offset", () => {
+  it('treats missing placement offsets as no offset', () => {
     const layout = {
-      id: "legacy-project-layout",
+      id: 'legacy-project-layout',
       widgets: [
         {
-          id: "alive",
+          id: 'alive',
           kind: CORE_HUD_WIDGETS.AliveCount,
-          anchor: "top-right",
+          anchor: 'top-right',
           order: 0,
           enabled: true,
         },
@@ -175,20 +182,20 @@ describe("HudOverlay", () => {
     const { container } = render(<HudOverlay metrics={baseMetrics} layout={layout} />);
     const view = within(container);
 
-    expect(view.getByTestId("playtest-hud-alive-count").textContent).toBe("2 / 4 players alive");
-    expect(container.querySelector('[data-hud-widget-id="alive"]')?.getAttribute("style")).toBe(
+    expect(view.getByTestId('playtest-hud-alive-count').textContent).toBe('2 / 4 players alive');
+    expect(container.querySelector('[data-hud-widget-id="alive"]')?.getAttribute('style')).toBe(
       null,
     );
   });
 
-  it("accepts plain durable placement offsets before schema rehydration", () => {
+  it('accepts plain durable placement offsets before schema rehydration', () => {
     const layout = {
-      id: "durable-project-layout",
+      id: 'durable-project-layout',
       widgets: [
         {
-          id: "alive",
+          id: 'alive',
           kind: CORE_HUD_WIDGETS.AliveCount,
-          anchor: "top-right",
+          anchor: 'top-right',
           order: 0,
           enabled: true,
           offset: { x: 6, y: -4 },
@@ -199,18 +206,18 @@ describe("HudOverlay", () => {
 
     expect(
       (container.querySelector('[data-hud-widget-id="alive"]') as HTMLElement).style.transform,
-    ).toBe("translate(6px, -4px)");
+    ).toBe('translate(6px, -4px)');
   });
 
-  it("exposes drop zones and notifies onMoveWidget while editing", () => {
+  it('exposes drop zones and notifies onMoveWidget while editing', () => {
     const onMoveWidget = vi.fn();
     const layout = Schema.decodeUnknownSync(HudLayout)({
-      id: "test.edit",
+      id: 'test.edit',
       widgets: [
         {
-          id: "alive",
+          id: 'alive',
           kind: CORE_HUD_WIDGETS.AliveCount,
-          anchor: "top-left",
+          anchor: 'top-left',
           order: 0,
           enabled: true,
         },
@@ -220,9 +227,9 @@ describe("HudOverlay", () => {
       <HudOverlay metrics={baseMetrics} layout={layout} editing onMoveWidget={onMoveWidget} />,
     );
 
-    const dropZones = container.querySelectorAll("[data-hud-drop-zone]");
+    const dropZones = container.querySelectorAll('[data-hud-drop-zone]');
     expect(dropZones.length).toBe(9);
     const draggable = container.querySelector('[data-hud-widget-id="alive"]');
-    expect(draggable?.getAttribute("draggable")).toBe("true");
+    expect(draggable?.getAttribute('draggable')).toBe('true');
   });
 });

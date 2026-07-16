@@ -1,6 +1,6 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { PlaytestRuntimeHud, type GameplayEvent } from "@tileborne/ipc-contracts";
+import { PlaytestRuntimeHud, type GameplayEvent } from '@tileborne/ipc-contracts';
 
 /**
  * Neutral HUD state shape consumed by the shared HUD chassis ({@link HudOverlay}).
@@ -18,15 +18,15 @@ export type HudMetrics = {
   readonly hud?: HudState | undefined;
 };
 
-export function formatZoneStatusLabel(zoneStatus: NonNullable<HudState["zoneStatus"]>): string {
-  if (zoneStatus.phase === "countdown") {
+export function formatZoneStatusLabel(zoneStatus: NonNullable<HudState['zoneStatus']>): string {
+  if (zoneStatus.phase === 'countdown') {
     const seconds = zoneStatus.secondsRemaining ?? 0;
     return `Zone shrinks in ${seconds}s`;
   }
-  if (zoneStatus.phase === "shrinking") {
-    return "Zone shrinking";
+  if (zoneStatus.phase === 'shrinking') {
+    return 'Zone shrinking';
   }
-  return "Zone stable";
+  return 'Zone stable';
 }
 
 export function formatAlivePlayersLabel(alive: number, total: number): string {
@@ -42,25 +42,25 @@ export function healthPercent(health: number, maxHealth: number): number {
 
 export function eventKey(event: HudEvent): string {
   switch (event._tag) {
-    case "WeaponFired":
+    case 'WeaponFired':
       return `WeaponFired:${event.sourceId}:${event.weaponId}:${event.tick}`;
-    case "DamageApplied":
-      return `DamageApplied:${event.targetId}:${event.sourceId ?? "environment"}:${event.tick}`;
-    case "EntityDefeated":
-      return `EntityDefeated:${event.targetId}:${event.sourceId ?? "environment"}:${event.tick}`;
-    case "ItemGranted":
+    case 'DamageApplied':
+      return `DamageApplied:${event.targetId}:${event.sourceId ?? 'environment'}:${event.tick}`;
+    case 'EntityDefeated':
+      return `EntityDefeated:${event.targetId}:${event.sourceId ?? 'environment'}:${event.tick}`;
+    case 'ItemGranted':
       return `ItemGranted:${event.targetId}:${event.itemId}:${event.quantity}:${event.tick}`;
-    case "ItemDropped":
+    case 'ItemDropped':
       return `ItemDropped:${event.sourceId}:${event.itemId}:${event.tick}`;
-    case "ItemConsumed":
+    case 'ItemConsumed':
       return `ItemConsumed:${event.sourceId}:${event.itemId}:${event.tick}`;
-    case "StatusApplied":
+    case 'StatusApplied':
       return `StatusApplied:${event.targetId}:${event.effectId}:${event.tick}`;
-    case "StatusExpired":
+    case 'StatusExpired':
       return `StatusExpired:${event.targetId}:${event.effectId}:${event.tick}`;
-    case "ZonePhaseChanged":
+    case 'ZonePhaseChanged':
       return `ZonePhaseChanged:${event.phase}:${event.tick}`;
-    case "MatchPhaseChanged":
-      return `MatchPhaseChanged:${event.phase}:${event.winnerId ?? "none"}:${event.tick}`;
+    case 'MatchPhaseChanged':
+      return `MatchPhaseChanged:${event.phase}:${event.winnerId ?? 'none'}:${event.tick}`;
   }
 }

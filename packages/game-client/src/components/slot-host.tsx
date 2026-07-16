@@ -1,11 +1,11 @@
-import type { RuntimeMenuSlot } from "@tileborne/plugin-api";
-import type { ReactElement } from "react";
+import type { RuntimeMenuSlot } from '@tileborne/plugin-api';
+import type { ReactElement } from 'react';
 
 import {
   sectionsForSlot,
   type MenuSectionProps,
   type MenuSectionRegistration,
-} from "../contributions/menu-registry.js";
+} from '../contributions/menu-registry.js';
 
 export interface SlotHostProps extends MenuSectionProps {
   readonly slot: RuntimeMenuSlot;

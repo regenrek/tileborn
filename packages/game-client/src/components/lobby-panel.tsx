@@ -1,9 +1,9 @@
-import { Button } from "@tileborne/ui";
-import type { FormEvent, ReactElement } from "react";
+import { Button } from '@tileborne/ui';
+import type { FormEvent, ReactElement } from 'react';
 
-import type { RoomLobbySummary } from "../lobby-client.js";
+import type { RoomLobbySummary } from '../lobby-client.js';
 
-export type LobbyPanelStatus = "idle" | "loading" | "ready" | "error";
+export type LobbyPanelStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface LobbyPanelSession {
   readonly roomId: string;
@@ -42,7 +42,7 @@ export interface LobbyPanelProps {
   readonly onBack: () => void;
 }
 
-const playerLabel = (player: RoomLobbySummary["players"][number]): string =>
+const playerLabel = (player: RoomLobbySummary['players'][number]): string =>
   player.displayName ?? player.playerId;
 
 const redactedWebSocketLabel = (wsUrl: string, roomId: string): string => {
@@ -74,7 +74,7 @@ export function LobbyPanel({
   onStartMatch,
   onBack,
 }: LobbyPanelProps): ReactElement {
-  const busy = status === "loading";
+  const busy = status === 'loading';
   const lobby = session?.lobby;
   const localPlayer = session?.playerId
     ? lobby?.players.find((player) => player.playerId === session.playerId)
@@ -94,11 +94,11 @@ export function LobbyPanel({
   return (
     <div className="tb-scrim">
       <div className="tb-panel" data-testid="lobby">
-        <h2 className="tb-title">{matchmaking ? "Connecting…" : "Lobby"}</h2>
+        <h2 className="tb-title">{matchmaking ? 'Connecting…' : 'Lobby'}</h2>
         <p className="tb-tagline">
           {lobby
             ? `${lobby.playerCount} / ${lobby.maxPlayers} players · ${lobby.phase}`
-            : "Create a lobby or join with a code."}
+            : 'Create a lobby or join with a code.'}
         </p>
 
         {message ? (
@@ -147,7 +147,11 @@ export function LobbyPanel({
                   data-testid="lobby-map-id"
                 />
               </label>
-              <Button type="submit" disabled={busy || mapId.trim().length === 0} data-testid="create-lobby">
+              <Button
+                type="submit"
+                disabled={busy || mapId.trim().length === 0}
+                data-testid="create-lobby"
+              >
                 Create lobby
               </Button>
             </form>
@@ -162,7 +166,11 @@ export function LobbyPanel({
                   data-testid="lobby-join-code"
                 />
               </label>
-              <Button type="submit" disabled={busy || joinCode.trim().length === 0} data-testid="join-lobby">
+              <Button
+                type="submit"
+                disabled={busy || joinCode.trim().length === 0}
+                data-testid="join-lobby"
+              >
                 Join lobby
               </Button>
             </form>
@@ -171,9 +179,13 @@ export function LobbyPanel({
           <>
             <div className="tb-lobby-card">
               <strong>Join code</strong>
-              <span data-testid="lobby-code">{session.joinCode ?? lobby?.lobby.joinCode ?? "Private"}</span>
+              <span data-testid="lobby-code">
+                {session.joinCode ?? lobby?.lobby.joinCode ?? 'Private'}
+              </span>
               {session.wsUrl ? (
-                <small data-testid="lobby-ws-url">{redactedWebSocketLabel(session.wsUrl, session.roomId)}</small>
+                <small data-testid="lobby-ws-url">
+                  {redactedWebSocketLabel(session.wsUrl, session.roomId)}
+                </small>
               ) : (
                 <small data-testid="lobby-ws-url">Room {session.roomId}</small>
               )}
@@ -185,7 +197,7 @@ export function LobbyPanel({
                 <li key={player.playerId} data-testid={`lobby-player-${player.playerId}`}>
                   <span>{playerLabel(player)}</span>
                   <span>{player.status}</span>
-                  <span>{player.ready ? "Ready" : "Not ready"}</span>
+                  <span>{player.ready ? 'Ready' : 'Not ready'}</span>
                 </li>
               ))}
             </ul>
@@ -199,7 +211,7 @@ export function LobbyPanel({
                   onClick={() => void onReadyChange(!localReady)}
                   data-testid="ready-toggle"
                 >
-                  {localReady ? "Unready" : "Ready up"}
+                  {localReady ? 'Unready' : 'Ready up'}
                 </Button>
               ) : null}
               <Button
@@ -214,7 +226,7 @@ export function LobbyPanel({
           </>
         )}
 
-        <div className="tb-actions" style={{ marginTop: "1rem" }}>
+        <div className="tb-actions" style={{ marginTop: '1rem' }}>
           <Button variant="outline" onClick={onBack} data-testid="lobby-back">
             Back
           </Button>

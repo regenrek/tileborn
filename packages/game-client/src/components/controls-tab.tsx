@@ -4,10 +4,10 @@ import {
   type ActionId,
   type ControlScheme,
   type InputMap,
-} from "@tileborne/core";
-import { Button } from "@tileborne/ui";
-import { Schema } from "effect";
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+} from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import { Schema } from 'effect';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import {
   effectiveBindingsForAction,
@@ -15,7 +15,7 @@ import {
   resetActionInScheme,
   triggerLabel,
   type UserInputBindingsStore,
-} from "../input/user-bindings.js";
+} from '../input/user-bindings.js';
 
 export interface ControlsTabConfig {
   /** The active plugin/mode's DEFAULT input map (the base the overlay layers on). */
@@ -34,7 +34,7 @@ export interface ControlsTabConfig {
 
 /** Only digital actions are single-trigger remappable here; analog/pointer are read-only. */
 const isRemappable = (declaration: ActionDeclaration): boolean =>
-  declaration.valueKind === "digital";
+  declaration.valueKind === 'digital';
 
 const decodeTrigger = (data: unknown): RawTrigger => Schema.decodeUnknownSync(RawTrigger)(data);
 
@@ -77,11 +77,11 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       event.preventDefault();
-      if (event.code === "Escape") {
+      if (event.code === 'Escape') {
         setCapturing(undefined);
         return;
       }
-      applyTrigger(capturing, decodeTrigger({ _tag: "key", code: event.code }));
+      applyTrigger(capturing, decodeTrigger({ _tag: 'key', code: event.code }));
     };
     const onMouseDown = (event: MouseEvent): void => {
       // A press inside the controls UI (e.g. the Cancel/Reset buttons) is a UI
@@ -92,13 +92,13 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
         return;
       }
       event.preventDefault();
-      applyTrigger(capturing, decodeTrigger({ _tag: "mouseButton", button: event.button }));
+      applyTrigger(capturing, decodeTrigger({ _tag: 'mouseButton', button: event.button }));
     };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('mousedown', onMouseDown);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('mousedown', onMouseDown);
     };
   }, [capturing, applyTrigger]);
 
@@ -138,8 +138,8 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
           const bindings = effectiveBindingsForAction(inputMap, overlay, scheme, action);
           const label =
             bindings.length === 0
-              ? "Unbound"
-              : bindings.map((binding) => triggerLabel(binding.trigger)).join(", ");
+              ? 'Unbound'
+              : bindings.map((binding) => triggerLabel(binding.trigger)).join(', ');
           const remappable = isRemappable(declaration);
           const isCapturing = capturing === action;
           return (
@@ -150,13 +150,13 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
             >
               <span className="tb-controls-action">{actionId}</span>
               <span className="tb-controls-binding" data-testid={`controls-binding-${actionId}`}>
-                {isCapturing ? "Press a key or mouse button…" : label}
+                {isCapturing ? 'Press a key or mouse button…' : label}
               </span>
               {remappable ? (
                 <span className="tb-controls-actions">
                   <Button
                     size="sm"
-                    variant={isCapturing ? "default" : "outline"}
+                    variant={isCapturing ? 'default' : 'outline'}
                     aria-pressed={isCapturing}
                     onClick={() => {
                       setCapturing(isCapturing ? undefined : action);
@@ -164,7 +164,7 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
                     }}
                     data-testid={`controls-rebind-${actionId}`}
                   >
-                    {isCapturing ? "Cancel" : "Rebind"}
+                    {isCapturing ? 'Cancel' : 'Rebind'}
                   </Button>
                   <Button
                     size="sm"
@@ -183,7 +183,7 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
         })}
       </ul>
 
-      <div className="tb-actions-row" style={{ marginTop: "1rem" }}>
+      <div className="tb-actions-row" style={{ marginTop: '1rem' }}>
         <Button size="sm" onClick={save} data-testid="controls-save">
           Save
         </Button>
@@ -191,7 +191,7 @@ export function ControlsTab({ inputMap, scheme, store, onApply }: ControlsTabCon
           Reset all
         </Button>
         {saved ? (
-          <span className="tb-tagline" data-testid="controls-saved" style={{ margin: "auto 0" }}>
+          <span className="tb-tagline" data-testid="controls-saved" style={{ margin: 'auto 0' }}>
             Saved
           </span>
         ) : null}

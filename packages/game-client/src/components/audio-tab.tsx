@@ -1,10 +1,10 @@
-import type { ReactElement } from "react";
-import type { RuntimeAudioBusDefinition, RuntimeAudioCueDefinition } from "@tileborne/runtime";
+import type { ReactElement } from 'react';
+import type { RuntimeAudioBusDefinition, RuntimeAudioCueDefinition } from '@tileborne/runtime';
 
 import type {
   BrowserRuntimeAudioEngineConfig,
   RuntimeAudioPlaybackEngine,
-} from "../audio/browser-audio-engine.js";
+} from '../audio/browser-audio-engine.js';
 
 export type AudioBusControl = RuntimeAudioBusDefinition;
 
@@ -19,7 +19,9 @@ export interface AudioTabConfig {
   readonly settings: AudioSettingsValue;
   readonly buses: readonly AudioBusControl[];
   readonly cues?: readonly RuntimeAudioCueDefinition[] | undefined;
-  readonly engineFactory?: ((config: BrowserRuntimeAudioEngineConfig) => RuntimeAudioPlaybackEngine) | undefined;
+  readonly engineFactory?:
+    | ((config: BrowserRuntimeAudioEngineConfig) => RuntimeAudioPlaybackEngine)
+    | undefined;
   readonly onChange: (settings: AudioSettingsValue) => void;
 }
 
@@ -29,14 +31,14 @@ const fromPercent = (value: string): number => Math.min(1, Math.max(0, Number(va
 
 const busLabel = (bus: AudioBusControl): string => `${bus.label} ${percentLabel(bus.kind)}`;
 
-const percentLabel = (kind: AudioBusControl["kind"]): string => {
+const percentLabel = (kind: AudioBusControl['kind']): string => {
   switch (kind) {
-    case "music":
-      return "music";
-    case "sfx":
-      return "sfx";
-    case "ui":
-      return "ui";
+    case 'music':
+      return 'music';
+    case 'sfx':
+      return 'sfx';
+    case 'ui':
+      return 'ui';
   }
 };
 

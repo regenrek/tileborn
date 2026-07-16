@@ -284,7 +284,7 @@
  * app does not compile @tileborne/ui's Tailwind layer. @tileborne/ui's Button
  * sets `data-slot="button"`; we style by that attribute under the shell root.
  */
-.tb-root [data-slot="button"] {
+.tb-root [data-slot='button'] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -298,27 +298,29 @@
   cursor: pointer;
   background: var(--tb-menu-accent, #6ee7a8);
   color: var(--tb-menu-bg, #0b1220);
-  transition: filter 120ms ease, background 120ms ease;
+  transition:
+    filter 120ms ease,
+    background 120ms ease;
 }
 
-.tb-root [data-slot="button"]:hover {
+.tb-root [data-slot='button']:hover {
   filter: brightness(1.08);
 }
 
-.tb-root [data-slot="button"]:disabled {
+.tb-root [data-slot='button']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.tb-root [data-slot="button"][aria-selected="true"],
-.tb-root [data-slot="button"][aria-pressed="true"] {
+.tb-root [data-slot='button'][aria-selected='true'],
+.tb-root [data-slot='button'][aria-pressed='true'] {
   outline: 2px solid var(--tb-menu-accent, #6ee7a8);
   outline-offset: 1px;
 }
 
 /* Outline / ghost variants render with the accent border on the surface. */
-.tb-root [data-slot="button"].border-border,
-.tb-root [data-slot="button"][data-variant="outline"] {
+.tb-root [data-slot='button'].border-border,
+.tb-root [data-slot='button'][data-variant='outline'] {
   background: transparent;
   color: var(--tb-menu-text, #f8fafc);
   border-color: color-mix(in srgb, var(--tb-menu-text-muted, #94a3b8) 45%, transparent);

@@ -1,7 +1,7 @@
-import { CORE_HUD_WIDGETS } from "@tileborne/core";
-import type { ComponentType } from "react";
+import { CORE_HUD_WIDGETS } from '@tileborne/core';
+import type { ComponentType } from 'react';
 
-import type { HudWidgetProps } from "./hud-overlay.js";
+import type { HudWidgetProps } from './hud-overlay.js';
 
 /**
  * A runtime registration pairing a custom HUD widget KIND with the React
@@ -22,11 +22,11 @@ export interface HudWidgetRegistration {
    */
   readonly kind: string;
   /** Origin tag, useful for debugging/boundary inspection. */
-  readonly source?: "plugin" | "brand";
+  readonly source?: 'plugin' | 'brand';
   readonly Component: ComponentType<HudWidgetProps>;
 }
 
-const RESERVED_KIND_PREFIX = "core.";
+const RESERVED_KIND_PREFIX = 'core.';
 
 const CORE_KINDS: ReadonlySet<string> = new Set(Object.values(CORE_HUD_WIDGETS));
 
@@ -50,7 +50,9 @@ export const findInvalidHudWidgetRegistrations = (
     if (registration.kind.startsWith(RESERVED_KIND_PREFIX) || CORE_KINDS.has(registration.kind)) {
       violations.push(`reserved core kind: "${registration.kind}"`);
     } else if (!KIND_PATTERN.test(registration.kind)) {
-      violations.push(`malformed kind (expected namespaced dotted identifier): "${registration.kind}"`);
+      violations.push(
+        `malformed kind (expected namespaced dotted identifier): "${registration.kind}"`,
+      );
     }
   }
   for (const [kind, count] of seen) {

@@ -1,8 +1,8 @@
-import type { JsonObject } from "@tileborne/core";
+import type { JsonObject } from '@tileborne/core';
 
-export type RoomLifecyclePhase = "lobby" | "countdown" | "active" | "finished" | "archived";
-export type RoomLobbyVisibility = "private" | "public";
-export type RoomPlayerPresenceStatus = "connected" | "disconnected";
+export type RoomLifecyclePhase = 'lobby' | 'countdown' | 'active' | 'finished' | 'archived';
+export type RoomLobbyVisibility = 'private' | 'public';
+export type RoomPlayerPresenceStatus = 'connected' | 'disconnected';
 
 export interface RoomPlayerModelSelection {
   readonly playerId: string;
@@ -126,20 +126,20 @@ export class LobbyClientError extends Error {
 
   constructor(message: string, status: number) {
     super(message);
-    this.name = "LobbyClientError";
+    this.name = 'LobbyClientError';
     this.status = status;
   }
 }
 
-export const normalizeHostBaseUrl = (baseUrl: string): string => baseUrl.replace(/\/+$/, "");
+export const normalizeHostBaseUrl = (baseUrl: string): string => baseUrl.replace(/\/+$/, '');
 
 export const toLobbyWebSocketUrl = (url: string): string =>
-  url.replace(/^http:\/\//i, "ws://").replace(/^https:\/\//i, "wss://");
+  url.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
   try {
     const body = (await response.json()) as { readonly error?: unknown };
-    return typeof body.error === "string" && body.error.length > 0 ? body.error : fallback;
+    return typeof body.error === 'string' && body.error.length > 0 ? body.error : fallback;
   } catch {
     return fallback;
   }
@@ -162,8 +162,8 @@ const requestJson = async <ResponseBody>(
 };
 
 const jsonPost = <Body>(body: Body): RequestInit => ({
-  method: "POST",
-  headers: { "content-type": "application/json" },
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
 });
 
@@ -186,7 +186,7 @@ export const createGameHostLobbyClient = (
   options: GameHostLobbyClientOptions = {},
 ): GameHostLobbyClient => {
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
-  const baseUrl = normalizeHostBaseUrl(options.baseUrl ?? globalThis.location?.origin ?? "");
+  const baseUrl = normalizeHostBaseUrl(options.baseUrl ?? globalThis.location?.origin ?? '');
 
   return {
     createLobby: async (request) =>
@@ -194,7 +194,7 @@ export const createGameHostLobbyClient = (
         await requestJson<LobbyCreateResponse>(
           fetchImpl,
           baseUrl,
-          "/lobbies/create",
+          '/lobbies/create',
           jsonPost(request),
         ),
       ),
@@ -203,7 +203,7 @@ export const createGameHostLobbyClient = (
         await requestJson<LobbyJoinResponse>(
           fetchImpl,
           baseUrl,
-          "/lobbies/join",
+          '/lobbies/join',
           jsonPost(request),
         ),
       ),
@@ -227,7 +227,7 @@ export const createGameHostLobbyClient = (
         await requestJson<RoomReconnectResponse>(
           fetchImpl,
           baseUrl,
-          "/rooms/reconnect",
+          '/rooms/reconnect',
           jsonPost(request),
         ),
       ),

@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 import {
   useEffect,
   useMemo,
@@ -7,7 +7,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type DragEvent,
-} from "react";
+} from 'react';
 
 import {
   CORE_HUD_WIDGETS,
@@ -16,8 +16,8 @@ import {
   type HudLayout,
   type HudWidgetInstanceId,
   type HudWidgetPlacement,
-} from "@tileborne/core";
-import { Badge, cn, Progress, typography } from "@tileborne/ui";
+} from '@tileborne/core';
+import { Badge, cn, Progress, typography } from '@tileborne/ui';
 
 import {
   eventKey,
@@ -26,8 +26,8 @@ import {
   healthPercent,
   type HudMetrics,
   type HudState,
-} from "./hud-state.js";
-import { hudWidgetComponents, type HudWidgetRegistration } from "./hud-widget-registry.js";
+} from './hud-state.js';
+import { hudWidgetComponents, type HudWidgetRegistration } from './hud-widget-registry.js';
 
 /**
  * Layout-driven HUD chassis shared by the editor playtest and the shipped
@@ -85,29 +85,29 @@ export interface HudOverlayProps {
 interface HudToast {
   readonly id: string;
   readonly message: string;
-  readonly variant: "destructive" | "warning";
+  readonly variant: 'destructive' | 'warning';
 }
 
 const TOAST_DURATION_MS = 2_000;
 const DAMAGE_INDICATOR_TICKS = 40;
 const MINIMAP_SIZE = 128;
 
-type LocalPlayerState = NonNullable<HudState["localPlayer"]>;
-type MinimapState = NonNullable<HudState["minimap"]>;
-type ScoreboardEntry = NonNullable<HudState["scoreboard"]>[number];
-type HudEventState = HudState["gameplayEvents"][number];
+type LocalPlayerState = NonNullable<HudState['localPlayer']>;
+type MinimapState = NonNullable<HudState['minimap']>;
+type ScoreboardEntry = NonNullable<HudState['scoreboard']>[number];
+type HudEventState = HudState['gameplayEvents'][number];
 
 const UUID_SEGMENT_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 const compactWeaponName = (weaponId: string): string => {
-  const compactId = weaponId.split(":").at(-1) ?? weaponId;
-  return UUID_SEGMENT_PATTERN.test(compactId) ? "Primary" : compactId;
+  const compactId = weaponId.split(':').at(-1) ?? weaponId;
+  return UUID_SEGMENT_PATTERN.test(compactId) ? 'Primary' : compactId;
 };
 
 const clampPercent = (value: number): number => Math.max(0, Math.min(100, value));
 
-const reloadPercent = (weapon: NonNullable<LocalPlayerState["weapon"]>): number => {
+const reloadPercent = (weapon: NonNullable<LocalPlayerState['weapon']>): number => {
   const total = weapon.reloadTotalTicks ?? 0;
   const remaining = weapon.reloadRemainingTicks ?? 0;
   if (total <= 0 || remaining <= 0) {
@@ -123,20 +123,20 @@ const minimapCoord = (value: number, center: number, radius: number): number => 
   return clampPercent(50 + ((value - center) / (radius * 2)) * 100);
 };
 
-const minimapObjectTone = (kind: MinimapState["objects"][number]["kind"]): string => {
-  if (kind === "hazard") {
-    return "bg-destructive";
+const minimapObjectTone = (kind: MinimapState['objects'][number]['kind']): string => {
+  if (kind === 'hazard') {
+    return 'bg-destructive';
   }
-  if (kind === "pickup") {
-    return "bg-warning";
+  if (kind === 'pickup') {
+    return 'bg-warning';
   }
-  return "bg-info";
+  return 'bg-info';
 };
 
 const isFreshDamageIndicator = (
-  damageIndicator: LocalPlayerState["damageIndicator"] | undefined,
+  damageIndicator: LocalPlayerState['damageIndicator'] | undefined,
   tickCount: number | undefined,
-): damageIndicator is NonNullable<LocalPlayerState["damageIndicator"]> =>
+): damageIndicator is NonNullable<LocalPlayerState['damageIndicator']> =>
   damageIndicator !== undefined &&
   tickCount !== undefined &&
   tickCount - damageIndicator.tick >= 0 &&
@@ -151,7 +151,7 @@ export interface HudWidgetContext {
   readonly localPlayer: LocalPlayerState | undefined;
   readonly scoreboard: readonly ScoreboardEntry[];
   readonly teamRoster: readonly ScoreboardEntry[];
-  readonly killFeed: readonly Extract<HudEventState, { _tag: "EntityDefeated" }>[];
+  readonly killFeed: readonly Extract<HudEventState, { _tag: 'EntityDefeated' }>[];
 }
 
 export interface HudWidgetProps {
@@ -172,7 +172,7 @@ function LocalPlayerStatusWidget({ ctx }: HudWidgetProps) {
         <Badge variant="secondary" data-testid="playtest-hud-player-name">
           {localPlayer.displayName}
         </Badge>
-        <span className={cn(typography.bodyMicro, "text-muted-foreground")}>
+        <span className={cn(typography.bodyMicro, 'text-muted-foreground')}>
           {Math.round(localPlayer.health)} HP
         </span>
       </div>
@@ -190,15 +190,25 @@ function LocalPlayerStatusWidget({ ctx }: HudWidgetProps) {
           </Badge>
         </div>
       ) : null}
-      {localPlayer.shield || localPlayer.statusEffects?.length || localPlayer.abilityCooldowns?.length ? (
+      {localPlayer.shield ||
+      localPlayer.statusEffects?.length ||
+      localPlayer.abilityCooldowns?.length ? (
         <div className="mt-2 flex max-w-full flex-wrap gap-1" data-testid="playtest-hud-status-row">
           {localPlayer.statusEffects?.map((effect) => (
-            <Badge key={effect.effectId} variant="outline" className="max-w-full break-all text-[10px]">
+            <Badge
+              key={effect.effectId}
+              variant="outline"
+              className="max-w-full break-all text-[10px]"
+            >
               {effect.effectId} {effect.remainingTicks}
             </Badge>
           ))}
           {localPlayer.abilityCooldowns?.map((cooldown) => (
-            <Badge key={cooldown.abilityId} variant="secondary" className="max-w-full break-all text-[10px]">
+            <Badge
+              key={cooldown.abilityId}
+              variant="secondary"
+              className="max-w-full break-all text-[10px]"
+            >
               {cooldown.abilityId} {cooldown.remainingTicks}
             </Badge>
           ))}
@@ -217,17 +227,26 @@ function TeamRosterWidget({ ctx }: HudWidgetProps) {
       className="pointer-events-auto rounded-lg border border-border/80 bg-background/85 px-3 py-2 shadow-sm backdrop-blur-sm"
       data-testid="playtest-hud-team-roster"
     >
-      <div className={cn(typography.bodyMicro, "mb-1 text-muted-foreground")}>
-        {ctx.localPlayer?.team ? `Team ${ctx.localPlayer.team}` : "Team"}
+      <div className={cn(typography.bodyMicro, 'mb-1 text-muted-foreground')}>
+        {ctx.localPlayer?.team ? `Team ${ctx.localPlayer.team}` : 'Team'}
       </div>
       <div className="flex flex-col gap-1">
         {ctx.teamRoster.slice(0, 4).map((entry) => (
-          <div key={entry.playerId} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs">
-            <span className={cn("truncate", entry.alive ? "text-foreground" : "text-muted-foreground")}>
+          <div
+            key={entry.playerId}
+            className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs"
+          >
+            <span
+              className={cn('truncate', entry.alive ? 'text-foreground' : 'text-muted-foreground')}
+            >
               {entry.displayName}
             </span>
-            <span className="tabular-nums text-muted-foreground">{Math.round(entry.health)} HP</span>
-            <span className="tabular-nums">{entry.kills}/{entry.deaths}</span>
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round(entry.health)} HP
+            </span>
+            <span className="tabular-nums">
+              {entry.kills}/{entry.deaths}
+            </span>
           </div>
         ))}
       </div>
@@ -265,8 +284,8 @@ function MinimapWidget({ ctx }: HudWidgetProps) {
           style={{
             left: `${minimapCoord(minimap.zone.cx - minimap.zone.radius, minimap.zone.cx, minimap.zone.radius)}%`,
             top: `${minimapCoord(minimap.zone.cy - minimap.zone.radius, minimap.zone.cy, minimap.zone.radius)}%`,
-            width: "100%",
-            height: "100%",
+            width: '100%',
+            height: '100%',
           }}
         />
       ) : null}
@@ -274,9 +293,9 @@ function MinimapWidget({ ctx }: HudWidgetProps) {
         <span
           key={object.objectId}
           className={cn(
-            "absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm",
+            'absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm',
             minimapObjectTone(object.kind),
-            object.available === false ? "opacity-35" : "opacity-90",
+            object.available === false ? 'opacity-35' : 'opacity-90',
           )}
           style={{
             left: `${minimapCoord(object.x, minimap.zone?.cx ?? 0, minimap.zone?.radius ?? 1)}%`,
@@ -288,8 +307,8 @@ function MinimapWidget({ ctx }: HudWidgetProps) {
         <span
           key={player.playerId}
           className={cn(
-            "absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-background",
-            player.local ? "bg-success" : player.alive ? "bg-foreground" : "bg-muted-foreground",
+            'absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-background',
+            player.local ? 'bg-success' : player.alive ? 'bg-foreground' : 'bg-muted-foreground',
           )}
           style={{
             left: `${minimapCoord(player.x, minimap.zone?.cx ?? 0, minimap.zone?.radius ?? 1)}%`,
@@ -311,8 +330,16 @@ function ScoreboardWidget({ ctx }: HudWidgetProps) {
       data-testid="playtest-hud-scoreboard"
     >
       {ctx.scoreboard.slice(0, 5).map((entry) => (
-        <div key={entry.playerId} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 py-0.5 text-xs">
-          <span className={cn("min-w-0 truncate", entry.alive ? "text-foreground" : "text-muted-foreground")}>
+        <div
+          key={entry.playerId}
+          className="grid grid-cols-[1fr_auto_auto] items-center gap-2 py-0.5 text-xs"
+        >
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              entry.alive ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
             {entry.displayName}
             {entry.team ? (
               <span className="ml-1 text-[10px] text-muted-foreground">{entry.team}</span>
@@ -357,8 +384,8 @@ function PickupPromptWidget({ ctx }: HudWidgetProps) {
         className="pointer-events-auto rounded-lg border border-warning/50 bg-background/90 px-3 py-1.5 text-center shadow-sm backdrop-blur-sm"
         data-testid="playtest-hud-pickup-prompt"
       >
-        <span className={cn(typography.bodyMicro, "text-warning")}>
-          {pickupPrompt.itemKind ?? "loot"} {pickupPrompt.tier ?? ""}
+        <span className={cn(typography.bodyMicro, 'text-warning')}>
+          {pickupPrompt.itemKind ?? 'loot'} {pickupPrompt.tier ?? ''}
         </span>
       </div>
     </div>
@@ -378,16 +405,18 @@ function WeaponPanelWidget({ ctx }: HudWidgetProps) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className={cn(typography.bodyMicro, "text-muted-foreground")}>Slot {weapon?.slot ?? "-"}</div>
+          <div className={cn(typography.bodyMicro, 'text-muted-foreground')}>
+            Slot {weapon?.slot ?? '-'}
+          </div>
           <div className="truncate text-sm font-semibold" data-testid="playtest-hud-weapon-name">
-            {weapon ? compactWeaponName(weapon.weaponId) : "Unarmed"}
+            {weapon ? compactWeaponName(weapon.weaponId) : 'Unarmed'}
           </div>
         </div>
         <div className="text-right">
           <div className="text-lg font-semibold tabular-nums" data-testid="playtest-hud-ammo">
-            {weapon?.ammoInMagazine ?? "-"} / {weapon?.magazineSize ?? "-"}
+            {weapon?.ammoInMagazine ?? '-'} / {weapon?.magazineSize ?? '-'}
           </div>
-          <div className={cn(typography.bodyMicro, "text-muted-foreground")}>
+          <div className={cn(typography.bodyMicro, 'text-muted-foreground')}>
             Reserve {weapon?.reserveAmmo ?? 0}
           </div>
         </div>
@@ -406,7 +435,7 @@ function WeaponPanelWidget({ ctx }: HudWidgetProps) {
               key={index}
               className="flex h-7 min-w-0 items-center justify-center rounded border border-border/70 bg-muted/40 px-1 text-[10px]"
             >
-              <span className="truncate">{inventory.itemIds[index] ?? ""}</span>
+              <span className="truncate">{inventory.itemIds[index] ?? ''}</span>
             </div>
           ))}
         </div>
@@ -448,18 +477,18 @@ function EventToastWidget({ ctx }: HudWidgetProps) {
         continue;
       }
       seenEventsRef.current.add(key);
-      if (event._tag === "EntityDefeated") {
+      if (event._tag === 'EntityDefeated') {
         setToast({
           id: key,
           message: `${event.targetId} eliminated`,
-          variant: "destructive",
+          variant: 'destructive',
         });
-      } else if (event._tag === "ItemGranted") {
-        const [itemKind, tier] = String(event.itemId).split(":");
+      } else if (event._tag === 'ItemGranted') {
+        const [itemKind, tier] = String(event.itemId).split(':');
         setToast({
           id: key,
-          message: `${itemKind}${tier ? ` ${tier}` : ""} x${event.quantity}`,
-          variant: "warning",
+          message: `${itemKind}${tier ? ` ${tier}` : ''} x${event.quantity}`,
+          variant: 'warning',
         });
       }
     }
@@ -533,17 +562,21 @@ const HUD_WIDGET_REGISTRY: Readonly<Record<string, ComponentType<HudWidgetProps>
  * crosshair-like indicators stay exactly centered.
  */
 const HUD_ANCHOR_CLASSES: Readonly<Record<HudAnchor, string>> = {
-  "top-left": "absolute left-3 top-3 flex max-w-[min(16rem,40vw)] flex-col gap-2 sm:left-4 sm:top-4",
-  "top-center": "absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-2 sm:top-4",
-  "top-right":
-    "absolute right-3 top-3 flex max-w-[min(18rem,42vw)] flex-col items-end gap-2 sm:right-4 sm:top-4",
-  "center-left": "absolute left-3 top-1/2 flex -translate-y-1/2 flex-col gap-2 sm:left-4",
-  center: "absolute inset-0",
-  "center-right": "absolute right-3 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2 sm:right-4",
-  "bottom-left": "absolute bottom-4 left-3 flex max-w-[min(18rem,38vw)] flex-col gap-1 sm:left-4",
-  "bottom-center":
-    "absolute bottom-4 left-1/2 flex w-[min(36rem,88vw)] -translate-x-1/2 flex-col gap-2",
-  "bottom-right": "absolute bottom-4 right-3 flex max-w-[min(18rem,38vw)] flex-col items-end gap-1 sm:right-4",
+  'top-left':
+    'absolute left-3 top-3 flex max-w-[min(16rem,40vw)] flex-col gap-2 sm:left-4 sm:top-4',
+  'top-center':
+    'absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-2 sm:top-4',
+  'top-right':
+    'absolute right-3 top-3 flex max-w-[min(18rem,42vw)] flex-col items-end gap-2 sm:right-4 sm:top-4',
+  'center-left': 'absolute left-3 top-1/2 flex -translate-y-1/2 flex-col gap-2 sm:left-4',
+  center: 'absolute inset-0',
+  'center-right':
+    'absolute right-3 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2 sm:right-4',
+  'bottom-left': 'absolute bottom-4 left-3 flex max-w-[min(18rem,38vw)] flex-col gap-1 sm:left-4',
+  'bottom-center':
+    'absolute bottom-4 left-1/2 flex w-[min(36rem,88vw)] -translate-x-1/2 flex-col gap-2',
+  'bottom-right':
+    'absolute bottom-4 right-3 flex max-w-[min(18rem,38vw)] flex-col items-end gap-1 sm:right-4',
 };
 
 const HUD_ANCHORS = Object.keys(HUD_ANCHOR_CLASSES) as readonly HudAnchor[];
@@ -557,15 +590,15 @@ const HUD_ANCHORS = Object.keys(HUD_ANCHOR_CLASSES) as readonly HudAnchor[];
 const HUD_EDIT_ANCHOR_CLASSES: Readonly<Record<HudAnchor, string>> = {
   ...HUD_ANCHOR_CLASSES,
   center:
-    "absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2",
+    'absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2',
 };
 
-const HUD_WIDGET_DRAG_MIME = "application/x-tileborne-hud-widget";
+const HUD_WIDGET_DRAG_MIME = 'application/x-tileborne-hud-widget';
 
 /** Compact label for placeholder chips, e.g. "arena.manaBar" -> "Mana Bar". */
 const placeholderLabel = (kind: string): string => {
-  const segment = kind.split(".").at(-1) ?? kind;
-  return segment.replace(/([a-z0-9])([A-Z])/gu, "$1 $2").replace(/^./u, (c) => c.toUpperCase());
+  const segment = kind.split('.').at(-1) ?? kind;
+  return segment.replace(/([a-z0-9])([A-Z])/gu, '$1 $2').replace(/^./u, (c) => c.toUpperCase());
 };
 
 /**
@@ -587,7 +620,11 @@ function HudWidgetPlaceholder({ kind }: { readonly kind: string }) {
 }
 
 const resolveWidgetOffset = (
-  rawOffset: HudWidgetPlacement["offset"] | { readonly x: number; readonly y: number } | null | undefined,
+  rawOffset:
+    | HudWidgetPlacement['offset']
+    | { readonly x: number; readonly y: number }
+    | null
+    | undefined,
 ): { readonly x: number; readonly y: number } | undefined => {
   if (rawOffset === undefined || rawOffset === null) {
     return undefined;
@@ -629,7 +666,7 @@ function HudAnchorSlot({
   }
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     const widgetId = event.dataTransfer.getData(HUD_WIDGET_DRAG_MIME);
-    if (widgetId === "") {
+    if (widgetId === '') {
       return;
     }
     event.preventDefault();
@@ -640,14 +677,14 @@ function HudAnchorSlot({
       className={cn(
         editing ? HUD_EDIT_ANCHOR_CLASSES[anchor] : HUD_ANCHOR_CLASSES[anchor],
         editing &&
-          "pointer-events-auto min-h-12 min-w-24 rounded-lg border border-dashed border-info/50 bg-info/5 p-1",
+          'pointer-events-auto min-h-12 min-w-24 rounded-lg border border-dashed border-info/50 bg-info/5 p-1',
       )}
       data-hud-anchor={anchor}
       {...(editing
         ? {
             onDragOver: (event: DragEvent<HTMLDivElement>) => event.preventDefault(),
             onDrop: handleDrop,
-            "data-hud-drop-zone": anchor,
+            'data-hud-drop-zone': anchor,
           }
         : {})}
     >
@@ -660,8 +697,8 @@ function HudAnchorSlot({
           <div
             key={placement.id as string}
             className={cn(
-              !editing && anchor === "center" ? "absolute inset-0" : undefined,
-              editing && "cursor-grab rounded-md ring-1 ring-info/60 active:cursor-grabbing",
+              !editing && anchor === 'center' ? 'absolute inset-0' : undefined,
+              editing && 'cursor-grab rounded-md ring-1 ring-info/60 active:cursor-grabbing',
             )}
             style={editing ? undefined : widgetOffsetStyle(placement)}
             data-hud-widget-id={placement.id as string}
@@ -671,7 +708,7 @@ function HudAnchorSlot({
                   draggable: true,
                   onDragStart: (event: DragEvent<HTMLDivElement>) => {
                     event.dataTransfer.setData(HUD_WIDGET_DRAG_MIME, placement.id as string);
-                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.effectAllowed = 'move';
                   },
                 }
               : {})}
@@ -722,7 +759,7 @@ export const deriveHudWidgetContext = (metrics: HudMetrics | undefined): HudWidg
     ? scoreboard.filter((entry) => entry.team === localPlayer.team)
     : scoreboard.filter((entry) => entry.playerId === localPlayer?.playerId);
   const killFeed = (hud?.gameplayEvents ?? [])
-    .filter((event) => event._tag === "EntityDefeated")
+    .filter((event) => event._tag === 'EntityDefeated')
     .slice(-4)
     .reverse();
   return {

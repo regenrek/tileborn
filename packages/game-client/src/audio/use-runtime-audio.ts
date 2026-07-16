@@ -1,12 +1,12 @@
-import { useEffect, useRef } from "react";
-import { defaultRuntimeAudioSettings } from "@tileborne/runtime";
+import { useEffect, useRef } from 'react';
+import { defaultRuntimeAudioSettings } from '@tileborne/runtime';
 
-import type { AudioTabConfig } from "../components/audio-tab.js";
+import type { AudioTabConfig } from '../components/audio-tab.js';
 import {
   bindBrowserRuntimeAudioFocusState,
   createBrowserRuntimeAudioEngine,
   type RuntimeAudioPlaybackEngine,
-} from "./browser-audio-engine.js";
+} from './browser-audio-engine.js';
 
 const audioTopologyKey = (audio: AudioTabConfig | undefined): string | undefined => {
   if (audio === undefined) {

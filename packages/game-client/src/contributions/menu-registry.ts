@@ -1,5 +1,5 @@
-import type { RuntimeMenuSlot } from "@tileborne/plugin-api";
-import type { ComponentType } from "react";
+import type { RuntimeMenuSlot } from '@tileborne/plugin-api';
+import type { ComponentType } from 'react';
 
 /**
  * Props passed to every contributed menu section. Brand- and plugin-neutral:
@@ -28,7 +28,7 @@ export interface MenuSectionRegistration {
   /** Lower order renders first; missing order sorts after explicit orders. */
   readonly order?: number;
   /** Origin tag, useful for debugging/boundary inspection. */
-  readonly source?: "plugin" | "brand";
+  readonly source?: 'plugin' | 'brand';
   readonly Component: ComponentType<MenuSectionProps>;
 }
 

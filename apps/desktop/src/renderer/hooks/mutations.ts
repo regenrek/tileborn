@@ -37,7 +37,11 @@ import {
   mutationSuccessToast,
   isMutationSilent,
 } from '@/lib/mutation-notifications';
-import { invalidateAssetUseSites, invalidateBehaviorReferences, queryKeys } from '@/lib/query-client';
+import {
+  invalidateAssetUseSites,
+  invalidateBehaviorReferences,
+  queryKeys,
+} from '@/lib/query-client';
 import { localPluginSource, type PluginInstallSource } from '@/lib/plugin-source';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 import { useWorkingPalettesStore } from '@/stores/working-palettes-store';

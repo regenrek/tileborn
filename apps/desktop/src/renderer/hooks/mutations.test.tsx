@@ -201,26 +201,29 @@ describe('behavior reference invalidation', () => {
     ['save', useSaveVisualBehavior, saveVisualBehaviorBridgeMock],
     ['save TypeScript', useSaveTypeScriptBehavior, saveTypeScriptBehaviorBridgeMock],
     ['remove', useRemoveBehavior, removeBehaviorBridgeMock],
-  ] as const)('refreshes the project registry after behavior %s', async (_operation, useHook, bridgeMock) => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    bridgeMock.mockResolvedValue({});
-    const { result } = renderHook(() => useHook(), {
-      wrapper: wrapperWithClient(client),
-    });
+  ] as const)(
+    'refreshes the project registry after behavior %s',
+    async (_operation, useHook, bridgeMock) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+      bridgeMock.mockResolvedValue({});
+      const { result } = renderHook(() => useHook(), {
+        wrapper: wrapperWithClient(client),
+      });
 
-    await result.current.mutateAsync({ projectId: 'project-behaviors' } as never);
+      await result.current.mutateAsync({ projectId: 'project-behaviors' } as never);
 
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.behaviorReferences.kind('project-behaviors', 'behavior'),
-    });
-    expect(invalidateSpy).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.behaviors.registry('project-behaviors'),
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.behaviorReferences.resolveAll('project-behaviors'),
-    });
-  });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: queryKeys.behaviorReferences.kind('project-behaviors', 'behavior'),
+      });
+      expect(invalidateSpy).not.toHaveBeenCalledWith({
+        queryKey: queryKeys.behaviors.registry('project-behaviors'),
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: queryKeys.behaviorReferences.resolveAll('project-behaviors'),
+      });
+    },
+  );
 
   it('refreshes all registries after importing a sprite sheet', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

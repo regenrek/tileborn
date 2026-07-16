@@ -1,10 +1,5 @@
 import { useCallback, useState } from 'react';
-import type {
-  HudAnchor,
-  HudLayout,
-  HudWidgetInstanceId,
-  ProjectManifest,
-} from '@tileborne/core';
+import type { HudAnchor, HudLayout, HudWidgetInstanceId, ProjectManifest } from '@tileborne/core';
 
 import { useUpdateProject } from '@/hooks/mutations';
 import { moveWidgetOrder, setWidgetAnchor, setWidgetEnabled } from '@/lib/hud-layout-editing';

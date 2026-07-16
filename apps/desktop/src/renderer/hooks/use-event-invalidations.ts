@@ -2,7 +2,11 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type { AssetPacksListResponse } from '@/lib/bridge-types';
-import { invalidateAssetUseSites, invalidateBehaviorReferences, queryKeys } from '@/lib/query-client';
+import {
+  invalidateAssetUseSites,
+  invalidateBehaviorReferences,
+  queryKeys,
+} from '@/lib/query-client';
 
 export const isMapsListQuery = (queryKey: readonly unknown[]): boolean =>
   queryKey[0] === queryKeys.maps.all[0] && queryKey[2] === 'list';

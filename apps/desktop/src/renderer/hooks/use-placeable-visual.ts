@@ -33,9 +33,7 @@ export const usePlaceableVisual = (
     }
     for (const [index, packId] of packIds.entries()) {
       const tilesetPack = packResults[index]?.data;
-      const placeable = tilesetPack?.placeables?.find(
-        (entry) => String(entry.id) === placeableId,
-      );
+      const placeable = tilesetPack?.placeables?.find((entry) => String(entry.id) === placeableId);
       if (tilesetPack === undefined || placeable === undefined) {
         continue;
       }

@@ -37,16 +37,20 @@ export function usePlaytestControls() {
         setPlaytestActive(result.session.status === 'Running');
         notifyInfo(`Playtest session ${result.session.id} started`);
         if (result.session.runtimeMetrics) {
-          notifySuccess(
-            `Plugin runtime active · Tick ${result.session.runtimeMetrics.tickCount}`,
-          );
+          notifySuccess(`Plugin runtime active · Tick ${result.session.runtimeMetrics.tickCount}`);
         }
       } catch (error) {
         notifyError(error instanceof Error ? error.message : 'Failed to start playtest');
         throw error;
       }
     },
-    [setPlaytestActive, setPlaytestActivePlugins, setPlaytestMode, setPlaytestSessionId, startPlaytest],
+    [
+      setPlaytestActive,
+      setPlaytestActivePlugins,
+      setPlaytestMode,
+      setPlaytestSessionId,
+      startPlaytest,
+    ],
   );
 
   const stop = useCallback(async () => {

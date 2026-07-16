@@ -7,12 +7,7 @@ import {
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
 import { useMemo, useRef } from 'react';
 
-import {
-  useAssetPacks,
-  useProject,
-  useResolvedCatalog,
-  useTilesetPacks,
-} from '@/hooks/queries';
+import { useAssetPacks, useProject, useResolvedCatalog, useTilesetPacks } from '@/hooks/queries';
 import { usePlayerModelPolicy } from '@/hooks/use-player-model-policy';
 import {
   buildPlayerModelRenderData,
@@ -72,10 +67,7 @@ export function usePlaytestPlayerModels(
   const project = projectQuery.data?.project as ProjectManifest | undefined;
   const policy = usePlayerModelPolicy(map, project);
   const models = useMemo(() => policy?.models ?? [], [policy]);
-  const packIds = useMemo(
-    () => [...new Set(models.map((model) => model.ref.packId))],
-    [models],
-  );
+  const packIds = useMemo(() => [...new Set(models.map((model) => model.ref.packId))], [models]);
   const packResults = useTilesetPacks(packIds);
 
   const built = useMemo(() => {
@@ -120,9 +112,16 @@ export function usePlaytestPlayerModels(
   }
   const builtModels = stableRef.current.value;
 
-  const roster = useMemo(() => models.map((model) => ({ id: model.id, label: model.label })), [models]);
+  const roster = useMemo(
+    () => models.map((model) => ({ id: model.id, label: model.label })),
+    [models],
+  );
   const selectedModelId = useMemo(
-    () => resolveSelectedModelId(projectId, models.map((model) => model.id)),
+    () =>
+      resolveSelectedModelId(
+        projectId,
+        models.map((model) => model.id),
+      ),
     [projectId, models],
   );
 
@@ -236,7 +235,10 @@ export function usePlaytestWeaponVisuals(projectId: string): PlaytestWeaponVisua
   }, [catalogQuery.data?.objectTypes, packIds, packResults]);
 
   const signature = built
-    .map((entry) => `${entry.weaponId}:${entry.data.equipped.assetId}:${entry.data.equipped.frames.length}`)
+    .map(
+      (entry) =>
+        `${entry.weaponId}:${entry.data.equipped.assetId}:${entry.data.equipped.frames.length}`,
+    )
     .join('|');
   const stableRef = useRef<{ sig: string; value: readonly BuiltWeaponVisual[] }>({
     sig: signature,

@@ -587,7 +587,8 @@ export function usePluginsList() {
 export function useBehaviors(projectId: string | undefined): UseQueryResult<BehaviorsOpenResponse> {
   return useQuery<BehaviorsOpenResponse>({
     queryKey: queryKeys.behaviors.documents(projectId ?? ''),
-    queryFn: () => invokeIpc(() => window.tileborne.behaviors.open({ projectId: projectId! as ProjectId })),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.behaviors.open({ projectId: projectId! as ProjectId })),
     enabled: projectId !== undefined && projectId.length > 0,
     staleTime: 0,
   });
@@ -598,7 +599,8 @@ export function useBehaviorRegistry(
 ): UseQueryResult<BehaviorsRegistryResponse> {
   return useQuery<BehaviorsRegistryResponse>({
     queryKey: queryKeys.behaviors.registry(projectId ?? ''),
-    queryFn: () => invokeIpc(() => window.tileborne.behaviors.registry({ projectId: projectId! as ProjectId })),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.behaviors.registry({ projectId: projectId! as ProjectId })),
     enabled: projectId !== undefined && projectId.length > 0,
   });
 }
@@ -636,10 +638,7 @@ export const behaviorReferencePageQueryOptions = (input: {
           }),
         ),
       ),
-    enabled:
-      input.enabled !== false &&
-      input.projectId !== undefined &&
-      input.projectId.length > 0,
+    enabled: input.enabled !== false && input.projectId !== undefined && input.projectId.length > 0,
     placeholderData: keepPreviousData,
   });
 };
@@ -657,10 +656,14 @@ export function useBehaviorReferences(input: {
 
 const behaviorReferenceIdentity = (reference: BehaviorReference): string => {
   switch (reference._tag) {
-    case 'entity': return `${reference._tag}:${reference.objectId}`;
-    case 'asset': return `${reference._tag}:${reference.assetId}`;
-    case 'catalog': return `${reference._tag}:${reference.objectTypeId}`;
-    case 'behavior': return `${reference._tag}:${reference.behaviorId}`;
+    case 'entity':
+      return `${reference._tag}:${reference.objectId}`;
+    case 'asset':
+      return `${reference._tag}:${reference.assetId}`;
+    case 'catalog':
+      return `${reference._tag}:${reference.objectTypeId}`;
+    case 'behavior':
+      return `${reference._tag}:${reference.behaviorId}`;
   }
 };
 
@@ -668,29 +671,33 @@ export const behaviorReferenceResolveQueryOptions = (
   projectId: string | undefined,
   references: readonly BehaviorReference[],
 ) => {
-  if (references.length > 64) throw new Error('Behavior reference resolve chunks are limited to 64 items');
+  if (references.length > 64)
+    throw new Error('Behavior reference resolve chunks are limited to 64 items');
   const referencesKey = references.map(behaviorReferenceIdentity).sort().join('|');
   return queryOptions<BehaviorsResolveReferencesResponse>({
     queryKey: queryKeys.behaviorReferences.resolve(projectId ?? '', referencesKey),
     queryFn: ({ signal }) =>
       runAbortableQuery(signal, () =>
-        invokeIpc(() => window.tileborne.behaviors.resolveReferences({
-          projectId: projectId! as ProjectId,
-          references,
-        })),
+        invokeIpc(() =>
+          window.tileborne.behaviors.resolveReferences({
+            projectId: projectId! as ProjectId,
+            references,
+          }),
+        ),
       ),
-    enabled:
-      projectId !== undefined &&
-      projectId.length > 0 &&
-      references.length > 0,
+    enabled: projectId !== undefined && projectId.length > 0 && references.length > 0,
   });
 };
 
 export const chunkBehaviorReferences = (
   references: readonly BehaviorReference[],
 ): readonly (readonly BehaviorReference[])[] => {
-  const unique = new Map(references.map((reference) => [behaviorReferenceIdentity(reference), reference]));
-  const stable = [...unique].sort(([left], [right]) => left.localeCompare(right)).map(([, reference]) => reference);
+  const unique = new Map(
+    references.map((reference) => [behaviorReferenceIdentity(reference), reference]),
+  );
+  const stable = [...unique]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, reference]) => reference);
   return Array.from({ length: Math.ceil(stable.length / 64) }, (_, index) =>
     stable.slice(index * 64, (index + 1) * 64),
   );
@@ -699,9 +706,10 @@ export const chunkBehaviorReferences = (
 export const behaviorReferenceResolveQueries = (
   projectId: string | undefined,
   references: readonly BehaviorReference[],
-) => chunkBehaviorReferences(references).map((chunk) =>
-  behaviorReferenceResolveQueryOptions(projectId, chunk),
-);
+) =>
+  chunkBehaviorReferences(references).map((chunk) =>
+    behaviorReferenceResolveQueryOptions(projectId, chunk),
+  );
 
 export function useResolveBehaviorReferences(
   projectId: string | undefined,
@@ -816,9 +824,9 @@ export function useLogs() {
   });
 }
 
-export function usePlaytestSessions(
-  options?: { refetchInterval?: number | false },
-): UseQueryResult<PlaytestListResponse> {
+export function usePlaytestSessions(options?: {
+  refetchInterval?: number | false;
+}): UseQueryResult<PlaytestListResponse> {
   return useQuery<PlaytestListResponse>({
     queryKey: queryKeys.playtest.list(),
     queryFn: () => invokeIpc(() => window.tileborne.playtest.list({})),
@@ -832,9 +840,12 @@ export function usePlaytestBehaviorDebug(
 ) {
   return useQuery({
     queryKey: queryKeys.playtest.behaviorDebug(sessionId ?? ''),
-    queryFn: () => invokeIpc(() => window.tileborne.playtest.behaviorDebugInspect({
-      sessionId: sessionId! as PlaytestSessionId,
-    })),
+    queryFn: () =>
+      invokeIpc(() =>
+        window.tileborne.playtest.behaviorDebugInspect({
+          sessionId: sessionId! as PlaytestSessionId,
+        }),
+      ),
     enabled: sessionId !== null,
     refetchInterval: options?.refetchInterval ?? false,
   });

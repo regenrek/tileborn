@@ -22,9 +22,7 @@ export function usePluginCommandContributions(): readonly PluginContributionView
     queries: enabledPlugins.map((plugin) => ({
       queryKey: queryKeys.plugins.manifest(plugin.id),
       queryFn: (): Promise<PluginManifestResponse> =>
-        invokeIpc(() =>
-          window.tileborne.plugins.getManifest({ pluginId: plugin.id }),
-        ),
+        invokeIpc(() => window.tileborne.plugins.getManifest({ pluginId: plugin.id })),
       enabled: enabledPlugins.length > 0,
     })),
   });

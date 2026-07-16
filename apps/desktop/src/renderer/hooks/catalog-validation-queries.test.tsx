@@ -82,12 +82,10 @@ describe('catalog report refresh', () => {
   });
 
   it('does not invalidate when an import is rejected by validation (nothing persisted)', async () => {
-    const importFn = vi
-      .fn()
-      .mockResolvedValue({
-        imported: false,
-        report: { ok: false, issues: [{ kind: 'coherence', message: 'x' }] },
-      });
+    const importFn = vi.fn().mockResolvedValue({
+      imported: false,
+      report: { ok: false, issues: [{ kind: 'coherence', message: 'x' }] },
+    });
     setBridge({ catalog: { import: importFn } });
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
 

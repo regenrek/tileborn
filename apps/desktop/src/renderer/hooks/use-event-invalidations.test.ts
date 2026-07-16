@@ -29,23 +29,36 @@ describe('isMapsListQuery', () => {
 
   it('live-invalidates open reference pickers for project, map, asset, and plugin events', () => {
     const handlers = new Map<string, () => void>();
-    const events = new Proxy({}, {
-      get: (_target, property) => (handler: () => void) => {
-        handlers.set(String(property), handler);
-        return vi.fn();
+    const events = new Proxy(
+      {},
+      {
+        get: (_target, property) => (handler: () => void) => {
+          handlers.set(String(property), handler);
+          return vi.fn();
+        },
       },
-    });
+    );
     Object.assign(globalThis.window, { tileborne: { events } });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
     renderHook(() => useEventInvalidations(), {
-      wrapper: ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children),
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
     });
 
-    for (const event of ['onProjectsChanged', 'onMapsChanged', 'onAssetsChanged', 'onPluginsChanged']) {
+    for (const event of [
+      'onProjectsChanged',
+      'onMapsChanged',
+      'onAssetsChanged',
+      'onPluginsChanged',
+    ]) {
       handlers.get(event)?.();
     }
-    expect(invalidateQueries.mock.calls.filter(([input]) =>
-      JSON.stringify(input?.queryKey) === JSON.stringify(queryKeys.behaviorReferences.all))).toHaveLength(4);
+    expect(
+      invalidateQueries.mock.calls.filter(
+        ([input]) =>
+          JSON.stringify(input?.queryKey) === JSON.stringify(queryKeys.behaviorReferences.all),
+      ),
+    ).toHaveLength(4);
   });
 });

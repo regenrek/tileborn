@@ -49,9 +49,7 @@ describe('useFocusSearchShortcut', () => {
     render(<SearchField label="Search asset packs" />);
     const input = screen.getByLabelText('Search asset packs');
 
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }),
-    );
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }));
 
     expect(document.activeElement).not.toBe(input);
   });

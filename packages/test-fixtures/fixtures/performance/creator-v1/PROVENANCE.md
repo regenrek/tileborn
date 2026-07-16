@@ -11,5 +11,7 @@ third-party art, project data, or benchmark recording is embedded.
 
 `budgets.json` defines environment-independent count, byte, and operation
 ceilings/floors only. Native timing baselines and machine/environment receipts
-are intentionally not represented as fixture provenance; those are calibrated
-and recorded by the follow-up CI/native-evidence item named in the contract.
+are intentionally not represented as fixture provenance. Deterministic units
+are enforced by the required `creator-performance` release gate; native timing
+and trace receipts are calibrated separately by the advisory
+`creator-performance-native` gate.

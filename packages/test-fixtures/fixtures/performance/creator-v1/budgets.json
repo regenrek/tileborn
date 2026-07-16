@@ -4,8 +4,8 @@
   "fixtureId": "creator-performance-v1",
   "measurementPolicy": {
     "deterministicUnitsOnly": true,
-    "ciEnforcement": "deferred-to-plan-item-i-enforce-stable-count-size-budget-3518",
-    "nativeTimingCalibration": "deferred-to-plan-item-i-enforce-stable-count-size-budget-3518"
+    "ciEnforcement": "required-release-gate:creator-performance",
+    "nativeTimingCalibration": "advisory-release-gate:creator-performance-native"
   },
   "flows": [
     {

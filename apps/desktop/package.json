@@ -18,6 +18,7 @@
     "test:renderer-boot": "vitest run --config vitest.electron.config.ts",
     "test:electron-smoke": "vitest run --config vitest.electron.config.ts",
     "test:packaged-smoke": "vitest run --config vitest.smoke.config.ts src/smoke/packaged-runtime-closure.smoke.spec.ts",
+    "test:creator-performance-native": "vitest run --config vitest.electron.config.ts src/smoke/creator-performance-native.electron.test.ts",
     "verify:electron-main-local-behavior": "node scripts/verify-electron-main-local-behavior.mjs",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:desktop-smoke": "pnpm test:electron-smoke && pnpm test:smoke",

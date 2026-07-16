@@ -154,8 +154,8 @@ export interface CreatorPerformanceBudgets {
   readonly fixtureId: CreatorPerformanceFixture['id'];
   readonly measurementPolicy: {
     readonly deterministicUnitsOnly: true;
-    readonly ciEnforcement: 'deferred-to-plan-item-i-enforce-stable-count-size-budget-3518';
-    readonly nativeTimingCalibration: 'deferred-to-plan-item-i-enforce-stable-count-size-budget-3518';
+    readonly ciEnforcement: 'required-release-gate:creator-performance';
+    readonly nativeTimingCalibration: 'advisory-release-gate:creator-performance-native';
   };
   readonly flows: readonly CreatorPerformanceBudgetFlow[];
 }
@@ -211,8 +211,9 @@ const requireString = (value: unknown, label: string): string => {
   return value;
 };
 
-const DEFERRED_PERFORMANCE_ITEM =
-  'deferred-to-plan-item-i-enforce-stable-count-size-budget-3518' as const;
+const CREATOR_PERFORMANCE_CI_POLICY = 'required-release-gate:creator-performance' as const;
+const CREATOR_PERFORMANCE_NATIVE_POLICY =
+  'advisory-release-gate:creator-performance-native' as const;
 
 type CanonicalMetricSpec = Readonly<{
   id: string;
@@ -576,12 +577,12 @@ const decodePerformanceBudgets = (
       ),
       ciEnforcement: requireLiteral(
         policy.ciEnforcement,
-        DEFERRED_PERFORMANCE_ITEM,
+        CREATOR_PERFORMANCE_CI_POLICY,
         'budgets.measurementPolicy.ciEnforcement',
       ),
       nativeTimingCalibration: requireLiteral(
         policy.nativeTimingCalibration,
-        DEFERRED_PERFORMANCE_ITEM,
+        CREATOR_PERFORMANCE_NATIVE_POLICY,
         'budgets.measurementPolicy.nativeTimingCalibration',
       ),
     },

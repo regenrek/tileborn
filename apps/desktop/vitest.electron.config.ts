@@ -18,6 +18,7 @@ export default defineConfig({
       'src/smoke/game-mode-example-arena.electron.test.ts',
       'src/smoke/ship-game.electron.test.ts',
       'src/smoke/behavior-goal-oracle.electron.test.ts',
+      'src/smoke/creator-performance-native.electron.test.ts',
     ],
     testTimeout: 120_000,
     hookTimeout: 120_000,

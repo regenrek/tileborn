@@ -41,6 +41,9 @@ export const releaseGates = Object.freeze([
   gate('services-build-hermetic', 'Hermetic services build', [
     ['pnpm', 'test:services-build-hermetic'],
   ]),
+  gate('creator-performance', 'Creator deterministic performance budgets', [
+    ['pnpm', 'test:creator-performance'],
+  ]),
   gate('docs', 'Docs build', [
     ['pnpm', 'build'],
     ['pnpm', 'docs:build'],
@@ -64,6 +67,12 @@ export const releaseGates = Object.freeze([
     { xvfb: true },
   ),
   gate('clean-checkout', 'Clean checkout', [['pnpm', 'test:clean-checkout']]),
+  gate(
+    'creator-performance-native',
+    'Creator native performance calibration',
+    [['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native']],
+    { required: false, xvfb: true },
+  ),
   gate(
     'clean-checkout-time',
     'Clean checkout timing',

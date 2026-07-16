@@ -109,11 +109,11 @@ describe('@tileborne/test-fixtures', () => {
     });
     expect(budgets.fixtureId).toBe(fixture.id);
     expect(budgets.measurementPolicy.deterministicUnitsOnly).toBe(true);
-    expect(budgets.measurementPolicy.ciEnforcement).toContain(
-      'i-enforce-stable-count-size-budget-3518',
+    expect(budgets.measurementPolicy.ciEnforcement).toBe(
+      'required-release-gate:creator-performance',
     );
-    expect(budgets.measurementPolicy.nativeTimingCalibration).toContain(
-      'i-enforce-stable-count-size-budget-3518',
+    expect(budgets.measurementPolicy.nativeTimingCalibration).toBe(
+      'advisory-release-gate:creator-performance-native',
     );
   });
 

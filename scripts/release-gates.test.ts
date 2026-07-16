@@ -25,6 +25,22 @@ describe('canonical release gates', () => {
     );
   });
 
+  it('requires deterministic creator budgets and keeps native timing advisory', () => {
+    const deterministic = releaseGates.find(({ id }) => id === 'creator-performance');
+    const native = releaseGates.find(({ id }) => id === 'creator-performance-native');
+
+    expect(deterministic).toMatchObject({
+      required: true,
+      xvfb: false,
+      commands: [['pnpm', 'test:creator-performance']],
+    });
+    expect(native).toMatchObject({
+      required: false,
+      xvfb: true,
+      commands: [['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native']],
+    });
+  });
+
   it('makes root CI delegate to the canonical runner', () => {
     const rootPackage = JSON.parse(read('package.json')) as {
       readonly scripts: Record<string, string>;

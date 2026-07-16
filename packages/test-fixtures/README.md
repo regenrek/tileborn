@@ -42,9 +42,13 @@ schema version; do not mutate `creator-v1` to represent a different workload.
 The loader is a closed schema: unknown keys, reordered/omitted flows or metrics,
 and changes to a v1 metric's id, unit, limit, or value are rejected. Explanatory
 rationales remain required non-empty text.
-The v1 contract intentionally contains no wall-clock limits. CI enforcement and
-native Electron timing calibration are owned by the follow-up hardening item
-named in `measurementPolicy`.
+The v1 contract intentionally contains no wall-clock limits. The required
+`creator-performance` release gate materializes the full recipe on disk, runs
+all nine owner-boundary workloads, and validates one closed receipt. Missing,
+extra, duplicate, under-processed, non-finite, or over-budget observations fail
+the gate. Native Electron timing and traces run separately in the advisory
+`creator-performance-native` gate; elapsed milliseconds are evidence, never a
+flaky required CI threshold.
 
 ### Metric semantics and owners
 

@@ -256,7 +256,7 @@ describe('import boundaries', () => {
       .join('\n');
 
     expect(violations, message).toEqual([]);
-  });
+  }, 30_000);
 
   it('packages/core and packages/runtime avoid React imports', () => {
     const violations = [

@@ -20,6 +20,30 @@ const releaseVersion = JSON.parse(
 ).version as string;
 const canonicalSurfaces = loadReleaseDocumentationSurfaces();
 
+const contradictionForStatus = (status: string) =>
+  status === 'candidate' ? 'go' : status === 'unsupported' ? 'supported' : 'complete';
+
+const supportContradictionCases = policy.support.flatMap((support) => {
+  const decision = contradictionForStatus(support.status);
+  return [
+    { name: `${support.id} policy id`, identity: support.id, decision },
+    {
+      name: `${support.id} documentation label`,
+      identity: support.documentationLabel,
+      decision,
+    },
+  ];
+});
+
+const supportListCases = policy.support.flatMap((support) => [
+  { name: `${support.id} policy id`, identity: support.id, decision: support.status },
+  {
+    name: `${support.id} documentation label`,
+    identity: support.documentationLabel,
+    decision: support.status,
+  },
+]);
+
 const mutated = (relativePath: string, transform: (source: string) => string) => {
   const original = canonicalSurfaces[relativePath]!;
   const changed = transform(original);
@@ -181,6 +205,50 @@ describe('desktop release documentation contract', () => {
       ),
       'release-docs.unbound-blocker-table',
     );
+  });
+
+  it.each(supportContradictionCases)(
+    'rejects an unbound contradictory table row for $name',
+    ({ identity, decision }) => {
+      assertMutatedContractFails(
+        mutated(
+          'docs/desktop-release-runbook.md',
+          (source) =>
+            `${source}\nPolicy identity | Decision\n--- | ---\n\`${identity}\` | \`${decision}\`\n`,
+        ),
+        'release-docs.unbound-support-table',
+      );
+    },
+  );
+
+  it.each(supportListCases)(
+    'rejects an unbound decision list row for $name',
+    ({ identity, decision }) => {
+      assertMutatedContractFails(
+        mutated(
+          'docs/desktop-release-runbook.md',
+          (source) => `${source}\n- \`${identity}\`: \`${decision}\`\n`,
+        ),
+        'release-docs.unbound-support-table',
+      );
+    },
+  );
+
+  it('does not interpret ordinary prose or fenced examples as decision rows', () => {
+    const surfaces = mutated(
+      'docs/desktop-release-runbook.md',
+      (source) => `${source}
+The identifier \`platform.macos-arm64\` is discussed here; the word GO alone is not a decision row.
+
+\`\`\`text
+| platform.macos-arm64 | go |
+- capability.auto-update: supported
+\`\`\`
+`,
+    );
+    expect(() =>
+      assertReleaseDocumentation({ surfaces, policy, baselineStatus, releaseVersion }),
+    ).not.toThrow();
   });
 
   it('rejects a missing, extra, reordered, or renamed canonical blocker row', () => {

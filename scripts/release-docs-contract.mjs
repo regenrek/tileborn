@@ -106,6 +106,96 @@ const parseCanonicalTable = (lines, label) => {
     .filter((cells) => !cells.every((cell) => /^:?-{3,}:?$/.test(cell)));
 };
 
+const normalizeFactValue = (value) =>
+  value
+    .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
+    .replace(/[`*_~]/g, '')
+    .replace(/[–—]/g, '-')
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, ' ');
+
+const structuredFactRows = (text) => {
+  const rows = [];
+  let fence = null;
+  const visibleLines = [];
+  for (const line of text.split('\n')) {
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const delimiter = fenceMatch[1][0];
+      fence = fence === null ? delimiter : fence === delimiter ? null : fence;
+      continue;
+    }
+    if (fence === null) visibleLines.push(line);
+  }
+
+  const tableCells = (line) => {
+    if (!line.includes('|')) return null;
+    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    const cells = trimmed.split('|').map(normalizeFactValue);
+    return cells.length >= 2 ? cells : null;
+  };
+  const isSeparator = (cells) => cells !== null && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+
+  let tableActive = false;
+  for (const [index, line] of visibleLines.entries()) {
+    const cells = tableCells(line);
+    if (cells !== null) {
+      if (isSeparator(cells)) {
+        tableActive = true;
+        continue;
+      }
+      const nextCells = tableCells(visibleLines[index + 1] ?? '');
+      const hasOuterPipes = /^\s*\|.+\|\s*$/.test(line);
+      if (hasOuterPipes || tableActive || isSeparator(nextCells)) {
+        rows.push({ kind: 'table', cells });
+        continue;
+      }
+    }
+    tableActive = false;
+
+    const listMatch = line.match(/^\s*(?:[-+*]|\d+[.)])\s+(.+)$/);
+    if (listMatch) rows.push({ kind: 'list', cells: [normalizeFactValue(listMatch[1])] });
+  }
+  return rows;
+};
+
+const supportDecisionAliases = Object.freeze([
+  'candidate',
+  'unsupported',
+  'operator-blocked',
+  'operator blocked',
+  'supported',
+  'go',
+  'no-go',
+  'no go',
+  'blocked',
+  'complete',
+  'completed',
+  'published',
+  'approved',
+  'released',
+]);
+
+const rowContainsValue = (row, value) => {
+  const normalized = normalizeFactValue(value);
+  if (row.kind === 'table') return row.cells.some((cell) => cell === normalized);
+  const boundary = new RegExp(`(^|[^a-z0-9-])${escapeRegExp(normalized)}(?=$|[^a-z0-9-])`, 'i');
+  return row.cells.some((cell) => boundary.test(cell));
+};
+
+const rowIdentifiesSupport = (row, support) =>
+  rowContainsValue(row, support.id) || rowContainsValue(row, support.documentationLabel);
+
+const rowContainsDecision = (row, decisions = supportDecisionAliases) =>
+  decisions.some((decision) => rowContainsValue(row, decision));
+
+const contradictoryDecisions = (status) => {
+  if (status === 'unsupported') return ['supported', 'go', 'released'];
+  if (status === 'candidate') return ['supported', 'go', 'released'];
+  return ['complete', 'completed', 'published', 'approved', 'go'];
+};
+
 const withoutMarkerBlock = (text, marker) =>
   text.replace(
     new RegExp(
@@ -114,43 +204,29 @@ const withoutMarkerBlock = (text, marker) =>
     '',
   );
 
-const assertNoUnboundFactTables = (runbook, policy, baselineStatus) => {
-  const outsideCanonicalTables = withoutMarkerBlock(
+const assertNoUnboundFactRows = (runbook, policy, baselineStatus) => {
+  const outsideCanonicalRows = withoutMarkerBlock(
     withoutMarkerBlock(runbook, 'desktop-release-support'),
     'desktop-release-baseline-blockers',
   );
-  const tableRows = outsideCanonicalTables
-    .split('\n')
-    .filter((line) => /^\s*\|.+\|\s*$/.test(line))
-    .map((line) =>
-      line
-        .split('|')
-        .slice(1, -1)
-        .map((cell) => cell.replace(/[`*_]/g, '').trim()),
-    );
+  const factRows = structuredFactRows(outsideCanonicalRows);
   const blockerNamespaces = new Set(
     baselineStatus.blockers.map(({ code }) => code.split('.')[0]).filter(Boolean),
   );
-  for (const cells of tableRows) {
+  for (const row of factRows) {
     if (
-      cells.some((cell) => {
+      row.cells.some((cell) => {
         const [namespace, detail] = cell.split('.');
         return blockerNamespaces.has(namespace) && typeof detail === 'string' && detail.length > 0;
       })
     ) {
-      fail('release-docs.unbound-blocker-table', cells.join(' | '));
+      fail('release-docs.unbound-blocker-table', row.cells.join(' | '));
     }
     if (
-      policy.support.some(({ documentationLabel }) =>
-        cells.some((cell) =>
-          cell.toLocaleLowerCase().includes(documentationLabel.toLocaleLowerCase()),
-        ),
-      ) &&
-      cells.some((cell) =>
-        /^(?:candidate|unsupported|operator-blocked|supported|go|complete)$/i.test(cell),
-      )
+      policy.support.some((support) => rowIdentifiesSupport(row, support)) &&
+      rowContainsDecision(row)
     ) {
-      fail('release-docs.unbound-support-table', cells.join(' | '));
+      fail('release-docs.unbound-support-table', row.cells.join(' | '));
     }
   }
 };
@@ -183,28 +259,16 @@ const assertNoContradictions = (surfaces, policy) => {
         );
       }
     }
-    const tableRows = text
-      .split('\n')
-      .filter((line) => /^\s*\|.+\|\s*$/.test(line))
-      .map((line) =>
-        line
-          .split('|')
-          .slice(1, -1)
-          .map((cell) => cell.replace(/[`*_]/g, '').trim()),
-      );
-    for (const { documentationLabel, status } of policy.support) {
-      const decision =
-        status === 'unsupported' ? 'supported' : status === 'candidate' ? 'go' : 'complete';
-      const contradiction = tableRows.some(
-        (cells) =>
-          cells.some((cell) =>
-            cell.toLocaleLowerCase().includes(documentationLabel.toLocaleLowerCase()),
-          ) && cells.some((cell) => cell.toLocaleLowerCase() === decision),
+    const factRows = structuredFactRows(text);
+    for (const support of policy.support) {
+      const decisions = contradictoryDecisions(support.status);
+      const contradiction = factRows.some(
+        (row) => rowIdentifiesSupport(row, support) && rowContainsDecision(row, decisions),
       );
       if (contradiction) {
         fail(
           'release-docs.contradictory-table-claim',
-          `${surface}: ${documentationLabel} cannot be ${decision}`,
+          `${surface}: ${support.id} cannot claim ${decisions.join('/')}`,
         );
       }
     }
@@ -266,7 +330,7 @@ export function assertReleaseDocumentation({ surfaces, policy, baselineStatus, r
   if (baselineStatus.decision !== 'no-go') {
     fail('release-docs.baseline-decision-drift', baselineStatus.decision);
   }
-  assertNoUnboundFactTables(runbook, policy, baselineStatus);
+  assertNoUnboundFactRows(runbook, policy, baselineStatus);
   assertNoContradictions(surfaces, policy);
   return {
     stateSurfaces: releaseStateSurfacePaths.length,

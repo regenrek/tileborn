@@ -70,6 +70,8 @@ describe('renderer-realm tileborne bridge', () => {
       ],
       lootTables: [],
       items: [],
+      weapons: [],
+      definitionProvenance: {},
     }));
     const transport: TileborneIpcTransport = {
       invoke,
@@ -87,6 +89,51 @@ describe('renderer-realm tileborne bridge', () => {
       expect(Option.isNone(visualRef.assetId)).toBe(true);
       expect(visualRef.anchors).toEqual({});
     }
+  });
+
+  it('preserves project and plugin-template provenance across the main/preload bridge', async () => {
+    const projectItemId = 'item:550e8400-e29b-41d4-a716-446655440010';
+    const pluginWeaponId = 'weapon:550e8400-e29b-41d4-a716-446655440011';
+    const pluginLootTableId = 'loot-table:550e8400-e29b-41d4-a716-446655440012';
+    const invoke = vi.fn(async () => ({
+      objectTypes: [],
+      lootTables: [],
+      items: [],
+      weapons: [],
+      definitionProvenance: {
+        [projectItemId]: { _tag: 'project' },
+        [pluginWeaponId]: {
+          _tag: 'plugin-template',
+          pluginId: '@tileborne/plugin-battle-royale',
+          templateId: pluginWeaponId,
+        },
+        [pluginLootTableId]: {
+          _tag: 'plugin-template',
+          pluginId: '@tileborne/plugin-battle-royale',
+          templateId: pluginLootTableId,
+        },
+      },
+    }));
+    const bridge = buildTileborneRendererBridge({
+      invoke,
+      subscribe: () => () => undefined,
+    });
+
+    const response = await bridge.catalog.resolve({ projectId: PROJECT_ID });
+
+    expect(response.definitionProvenance).toEqual({
+      [projectItemId]: { _tag: 'project' },
+      [pluginWeaponId]: {
+        _tag: 'plugin-template',
+        pluginId: '@tileborne/plugin-battle-royale',
+        templateId: pluginWeaponId,
+      },
+      [pluginLootTableId]: {
+        _tag: 'plugin-template',
+        pluginId: '@tileborne/plugin-battle-royale',
+        templateId: pluginLootTableId,
+      },
+    });
   });
 
   it('exposes one event subscriber per main event channel', () => {

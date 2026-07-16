@@ -2,10 +2,11 @@ import { useNavigate, useRouterState } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
 import { cn, typography } from '@tileborne/ui';
 import { XIcon, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 
 import { useMap, useProject } from '@/hooks/queries';
 import { MAP_TAB_ICON, workspaceViewForKind } from '@/lib/workspace-views';
+import { requestDocumentClose } from '@/lib/document-lifecycle';
 import { useEditorUiStore, type WorkspaceTab } from '@/stores/editor-ui-store';
 
 import { describeTabForPath, isTabActive } from './workspace-tabs';
@@ -173,7 +174,8 @@ export function WorkspaceTabBar() {
   );
 
   const handleCloseTab = useCallback(
-    (tab: WorkspaceTab) => {
+    async (tab: WorkspaceTab) => {
+      if (!(await requestDocumentClose(tab.id))) return;
       const wasActive = isTabActive(tab, activeDescriptor);
       const successor = closeTabAction(tab.id);
       if (!wasActive) return;
@@ -185,6 +187,12 @@ export function WorkspaceTabBar() {
     },
     [activeDescriptor, closeTabAction, navigateToFallback, navigateToTab],
   );
+  const closeActiveTab = useEffectEvent(() => {
+    const activeTab = openTabs.find((tab) => isTabActive(tab, activeDescriptor));
+    if (activeTab === undefined) return false;
+    void handleCloseTab(activeTab);
+    return true;
+  });
 
   /** Cmd/Ctrl+W closes the active tab. */
   useEffect(() => {
@@ -192,14 +200,12 @@ export function WorkspaceTabBar() {
       const mod = event.metaKey || event.ctrlKey;
       if (!mod || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 'w') return;
-      const activeTab = openTabs.find((tab) => isTabActive(tab, activeDescriptor));
-      if (activeTab === undefined) return;
+      if (!closeActiveTab()) return;
       event.preventDefault();
-      handleCloseTab(activeTab);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeDescriptor, handleCloseTab, openTabs]);
+  }, []);
 
   if (openTabs.length === 0) {
     return null;
@@ -223,7 +229,7 @@ export function WorkspaceTabBar() {
           tab={tab}
           active={isTabActive(tab, activeDescriptor)}
           onActivate={() => navigateToTab(tab)}
-          onClose={() => handleCloseTab(tab)}
+          onClose={() => void handleCloseTab(tab)}
         />
       ))}
     </div>

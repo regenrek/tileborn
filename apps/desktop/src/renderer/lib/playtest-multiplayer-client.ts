@@ -3,6 +3,13 @@ import {
   type RuntimeMessage,
 } from '@tileborne/runtime';
 import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
+import {
+  GameplayEntityDefeated,
+  GameplayItemGranted,
+  GameplayMatchPhaseChanged,
+  makeGameplayEntityId,
+  makeGameplayItemId,
+} from '@tileborne/ipc-contracts';
 
 import type {
   HudEvent as PlaytestHudEvent,
@@ -21,7 +28,7 @@ type ServerFrameObjectView = NonNullable<InitialServerFrameView['objects']>[numb
 type MinimapObject = NonNullable<PlaytestHudState['minimap']>['objects'][number];
 type LocalPlayerState = NonNullable<PlaytestHudState['localPlayer']>;
 
-const MAX_RECENT_EVENTS = 20;
+const MAX_GAMEPLAY_EVENTS = 20;
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);
@@ -119,7 +126,7 @@ export class PlaytestMultiplayerClient {
   private localPlayerId: string | null = null;
   private zone: ZoneView = defaultZone(64, 64);
   private zoneStatus: ZoneStatusState = { phase: 'stable' };
-  private readonly recentEvents: PlaytestHudEvent[] = [];
+  private readonly gameplayEvents: PlaytestHudEvent[] = [];
   private readonly seenPickupToastKeys = new Set<string>();
   private gameOver: PlaytestHudState['gameOver'];
   private maxPlayersSeen = 0;
@@ -227,18 +234,16 @@ export class PlaytestMultiplayerClient {
       .sort((left, right) => left.objectId.localeCompare(right.objectId));
     const hud: PlaytestHudState = {
       totalPlayers,
-      recentEvents: gameOver
-        ? this.recentEvents.map((event) =>
-            event._tag === 'GameOver'
-              ? {
+      gameplayEvents: gameOver
+        ? this.gameplayEvents.map((event) =>
+            event._tag === 'MatchPhaseChanged' && event.phase === 'finished'
+              ? new GameplayMatchPhaseChanged({
                   ...event,
-                  alivePlayers: gameOver.alivePlayers,
-                  totalPlayers: gameOver.totalPlayers,
-                  tickCount: gameOver.tickCount,
-                }
+                  tick: gameOver.tickCount,
+                })
               : event,
           )
-        : [...this.recentEvents],
+        : [...this.gameplayEvents],
       ...(localPlayer
         ? {
             localPlayer: {
@@ -282,10 +287,10 @@ export class PlaytestMultiplayerClient {
     return hud;
   }
 
-  private pushRecentEvent(event: PlaytestHudEvent): void {
-    this.recentEvents.push(event);
-    if (this.recentEvents.length > MAX_RECENT_EVENTS) {
-      this.recentEvents.shift();
+  private pushGameplayEvent(event: PlaytestHudEvent): void {
+    this.gameplayEvents.push(event);
+    if (this.gameplayEvents.length > MAX_GAMEPLAY_EVENTS) {
+      this.gameplayEvents.shift();
     }
   }
 
@@ -300,30 +305,22 @@ export class PlaytestMultiplayerClient {
       return;
     }
     this.seenPickupToastKeys.add(key);
-    this.pushRecentEvent({
-      _tag: 'PickupCollected',
-      playerId: localPlayer.playerId,
-      playerDisplayName: formatPlayerDisplayName(localPlayer.playerId),
-      itemKind: pickupToast.itemKind,
-      tier: pickupToast.tier,
+    this.pushGameplayEvent(new GameplayItemGranted({
+      targetId: makeGameplayEntityId(localPlayer.playerId),
+      itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
       quantity: pickupToast.quantity,
       tick: pickupToast.tick,
-      emittedAtMs: Date.now(),
-    });
+    }));
   }
 
   private emitState(): void {
     this.onStateChange(this.getState());
   }
 
-  private emitWelcomeIfReady(): void {
-    if (this.phase === 'live' || this.players.size === 0) {
-      return;
-    }
+  private emitRuntimeSnapshotStarted(): void {
     this.phase = 'live';
     const snapshot = toInitialFrame(this.plugin, this.tick, [...this.players.values()], this.zone);
     this.onInitialFrame(snapshot);
-    this.emitState();
   }
 
   private handleRuntimeMessage(message: RuntimeMessage): void {
@@ -337,7 +334,6 @@ export class PlaytestMultiplayerClient {
           health: 100,
         });
       }
-      this.emitWelcomeIfReady();
       this.emitState();
       return;
     }
@@ -348,12 +344,13 @@ export class PlaytestMultiplayerClient {
     }
     if (message._tag === 'SnapshotDelta') {
       this.tick = message.tick;
+      this.phase = 'live';
       this.emitState();
       return;
     }
     if (message._tag === 'SnapshotFull') {
       this.tick += 1;
-      this.emitWelcomeIfReady();
+      this.emitRuntimeSnapshotStarted();
       this.emitState();
     }
   }
@@ -402,6 +399,7 @@ export class PlaytestMultiplayerClient {
     }
     if (message.kind === 'delta') {
       this.tick = message.tick;
+      this.phase = 'live';
       if (message.zone !== undefined) {
         const nextZone = message.zone;
         this.zoneStatus =
@@ -476,7 +474,6 @@ export class PlaytestMultiplayerClient {
         });
       }
       this.maxPlayersSeen = Math.max(this.maxPlayersSeen, this.players.size);
-      this.emitWelcomeIfReady();
       this.emitState();
       return;
     }
@@ -486,14 +483,11 @@ export class PlaytestMultiplayerClient {
       return;
     }
     if (message.kind === 'killed') {
-      this.pushRecentEvent({
-        _tag: 'PlayerKilled',
-        victimId: message.victim,
-        victimDisplayName: formatPlayerDisplayName(message.victim),
-        killerId: message.killer,
+      this.pushGameplayEvent(new GameplayEntityDefeated({
+        targetId: makeGameplayEntityId(message.victim),
+        sourceId: makeGameplayEntityId(message.killer),
         tick: message.tick,
-        emittedAtMs: Date.now(),
-      });
+      }));
       this.emitState();
       return;
     }
@@ -506,15 +500,11 @@ export class PlaytestMultiplayerClient {
         totalPlayers: Math.max(this.maxPlayersSeen, this.players.size),
         tickCount: this.tick,
       };
-      this.pushRecentEvent({
-        _tag: 'GameOver',
-        winnerId: message.winner,
-        winnerDisplayName,
-        alivePlayers: this.gameOver.alivePlayers,
-        totalPlayers: this.gameOver.totalPlayers,
-        tickCount: this.gameOver.tickCount,
-        emittedAtMs: Date.now(),
-      });
+      this.pushGameplayEvent(new GameplayMatchPhaseChanged({
+        tick: this.gameOver.tickCount,
+        phase: 'finished',
+        winnerId: makeGameplayEntityId(message.winner),
+      }));
       this.emitState();
     }
   }
@@ -660,7 +650,7 @@ export class PlaytestMultiplayerClient {
     this.errorMessage = null;
     this.zone = defaultZone(this.mapWidth, this.mapHeight);
     this.zoneStatus = { phase: 'stable' };
-    this.recentEvents.length = 0;
+    this.gameplayEvents.length = 0;
     this.seenPickupToastKeys.clear();
     this.gameOver = undefined;
     this.maxPlayersSeen = 0;

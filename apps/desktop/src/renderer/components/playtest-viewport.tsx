@@ -125,14 +125,10 @@ function usePlaytestRuntimeMount({
       return undefined;
     }
     if (pluginId === undefined) {
-      console.warn('[playtest] single-player viewport requires an active plugin id');
+      console.error('[playtest] active game mode does not declare capabilities.renderer');
       return undefined;
     }
     const basePlugin = resolvePlaytestPlugin(pluginId);
-    if (!basePlugin) {
-      console.warn(`[playtest] no projector for plugin ${pluginId}`);
-      return undefined;
-    }
     // The configured plugin is resolved inside performMount once the chosen
     // player-model atlases are fetched; onMounted reads this holder.
     let resolved: ResolvedPlaytestPlugin = basePlugin;
@@ -159,12 +155,11 @@ function usePlaytestRuntimeMount({
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
-            resolved =
-              resolvePlaytestPlugin(pluginId, {
+            resolved = resolvePlaytestPlugin(pluginId, {
                 ...(playerModels === undefined ? {} : { playerModels }),
                 ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
                 ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
-              }) ?? basePlugin;
+              });
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
@@ -248,9 +243,6 @@ function usePlaytestSnapshotRenderer({
       return undefined;
     }
     const plugin = resolvePlaytestPlugin(pluginId);
-    if (!plugin) {
-      return undefined;
-    }
     const store = new SnapshotEntityStore(plugin.projector.mergeFrame, {
       enableInterpolation: true,
       interpolationDelayMs: 100,
@@ -386,9 +378,6 @@ function usePlaytestInputBridge({
     // starts on the freshest saved bindings. The live `setEffectiveMap` seam
     // stays available for a future same-surface remap UI.
     const plugin = resolvePlaytestPlugin(pluginId);
-    if (!plugin) {
-      return undefined;
-    }
     const audioEngine =
       plugin.audio === undefined
         ? undefined
@@ -476,25 +465,39 @@ export function PlaytestViewport({
   // installed third-party mode's HUD arrangement applies without a bundled
   // code default; the bridge falls back to its bundled default otherwise.
   const contributionsQuery = usePluginContributions();
-  const manifestHudLayout = contributionsQuery.data?.gameModes.find(
+  const activeMode = contributionsQuery.data?.gameModes.find(
     (mode) => mode.pluginId === pluginId,
-  )?.hudLayout;
+  );
+  const rendererKey = activeMode?.rendererCapabilityId;
+  const manifestHudLayout = activeMode?.hudLayout;
   // The project's designer-authored HUD overlay sits between the plugin
   // default and the player's personal overlay (`pluginDefault ⊕ project ⊕ player`).
   const projectQuery = useProject(projectId);
   const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
-  const resolvedPlugin = useMemo(
-    () =>
-      pluginId !== undefined
-        ? resolvePlaytestPlugin(pluginId, {
-            ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
-            ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
-          })
-        : undefined,
+  const rendererResolution = useMemo(() => {
+    if (rendererKey === undefined) {
+      return {
+        error:
+          'Active game mode does not declare capabilities.renderer; update contributes.gameModes before playtest.',
+      } as const;
+    }
+    try {
+      return {
+        plugin: resolvePlaytestPlugin(rendererKey, {
+          ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
+          ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
+        }),
+      } as const;
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) } as const;
+    }
+  },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
-    [pluginId, manifestHudLayout, projectHudLayout, hudOverlayVersion],
+    [rendererKey, manifestHudLayout, projectHudLayout, hudOverlayVersion],
   );
+  const resolvedPlugin = 'plugin' in rendererResolution ? rendererResolution.plugin : undefined;
+  const rendererError = 'error' in rendererResolution ? rendererResolution.error : undefined;
   const bumpHudOverlayVersion = useCallback(
     () => setHudOverlayVersion((version) => version + 1),
     [],
@@ -502,6 +505,7 @@ export function PlaytestViewport({
   const hudEditing = useHudEditing({
     baseLayout: resolvedPlugin?.hudLayout,
     project: projectQuery.data?.project,
+    scopeId: `map:${projectId}:${map.id}`,
     onPersisted: bumpHudOverlayVersion,
   });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
@@ -514,12 +518,18 @@ export function PlaytestViewport({
     runtimeRef,
     projectId,
     map,
-    pluginId,
+    pluginId: rendererKey,
     builtModels,
     builtOverlays,
     builtWeapons,
   });
-  usePlaytestSnapshotRenderer({ containerRef, runtimeRef, map, pluginId, sessionId });
+  usePlaytestSnapshotRenderer({
+    containerRef,
+    runtimeRef,
+    map,
+    pluginId: rendererKey,
+    sessionId,
+  });
 
   useEffect(() => {
     runtimeRef.current?.controller.setShowGrid(showGrid);
@@ -535,10 +545,20 @@ export function PlaytestViewport({
 
   usePlaytestInputBridge({
     containerRef,
-    pluginId,
+    pluginId: rendererKey,
     sessionId,
     tickCount: session?.runtimeMetrics?.tickCount,
   });
+
+  if (rendererError !== undefined) {
+    return (
+      <div className="absolute inset-0 z-20 grid place-items-center bg-background/95 p-6">
+        <p role="alert" className="max-w-xl text-sm text-destructive">
+          {rendererError}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 z-20 flex min-h-0 flex-col bg-background/95 backdrop-blur-sm">
@@ -565,7 +585,7 @@ export function PlaytestViewport({
                   hud: session.runtimeMetrics.hud
                     ? {
                         totalPlayers: session.runtimeMetrics.hud.totalPlayers,
-                        recentEvents: [...session.runtimeMetrics.hud.recentEvents],
+                        gameplayEvents: [...session.runtimeMetrics.hud.gameplayEvents],
                         ...(session.runtimeMetrics.hud.localPlayer
                           ? { localPlayer: session.runtimeMetrics.hud.localPlayer }
                           : {}),

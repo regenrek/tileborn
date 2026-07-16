@@ -95,4 +95,24 @@ describe('SpriteGeometryCanvas', () => {
 
     expect(onHandleChange).toHaveBeenCalledWith('hand', { x: 0.8, y: 0.2 });
   });
+
+  it('shows authored attachment direction and edits rotation with immediate feedback', () => {
+    const onHandleRotationChange = vi.fn();
+    const { container } = render(
+      <SpriteGeometryCanvas
+        title="Weapon Geometry"
+        handles={[{ ...handles[1]!, rotationDeg: 45 }]}
+        onHandleChange={vi.fn()}
+        onHandleRotationChange={onHandleRotationChange}
+      />,
+    );
+
+    expect(screen.getByTestId('sprite-geometry-direction-hand')).toBeTruthy();
+    const rotationInput = Array.from(container.querySelectorAll('input')).find(
+      (input) => input.getAttribute('min') === '-360',
+    );
+    expect(rotationInput).toBeTruthy();
+    fireEvent.change(rotationInput!, { target: { value: '90' } });
+    expect(onHandleRotationChange).toHaveBeenCalledWith('hand', 90);
+  });
 });

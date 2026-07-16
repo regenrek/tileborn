@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { ProjectId, TileborneMap } from '@tileborne/core';
+import { TileborneMap, type ProjectId } from '@tileborne/core';
+import { Schema } from 'effect';
 
 import { useUpdateMap } from '@/hooks/mutations';
 import { queryKeys } from '@/lib/query-client';
+import { documentLifecycle, useDocumentLifecycle } from '@/lib/document-lifecycle';
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 
 import type { EditorCommand } from './editor-commands.js';
@@ -68,6 +70,7 @@ export function useEditorCommands({
   const rollbackMapRef = useRef<TileborneMap | undefined>(undefined);
   const saveInFlightMapRef = useRef<TileborneMap | undefined>(undefined);
   const [revision, setRevision] = useState(0);
+  const documentId = `map:${projectId}:${mapId}`;
 
   const setBridgeCommands = useEditorCommandsBridge((state) => state.setCommands);
   const clearBridgeCommands = useEditorCommandsBridge((state) => state.clearCommands);
@@ -189,6 +192,7 @@ export function useEditorCommands({
       }
     } catch (error) {
       console.error('[tileborne] failed to persist map edit', error);
+      documentLifecycle.markError(documentId, error);
       if (saveInFlightMapRef.current === pending) {
         saveInFlightMapRef.current = undefined;
       }
@@ -200,8 +204,39 @@ export function useEditorCommands({
         writeCache(rollback);
         onPersistSettled?.(rollback, 'rolled-back');
       }
+      throw error;
     }
-  }, [flushCachePatch, hasLocalPendingEdits, onPersistSettled, projectId, updateMap, writeCache]);
+  }, [documentId, flushCachePatch, hasLocalPendingEdits, onPersistSettled, projectId, updateMap, writeCache]);
+
+  useDocumentLifecycle({
+    id: documentId,
+    label: `Map ${mapId}`,
+    kind: 'map',
+    dirty: hasLocalPendingEdits(),
+    recoveryVersion: revision,
+    save: flushPersist,
+    discard: () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+      pendingMapRef.current = undefined;
+      rollbackMapRef.current = undefined;
+      saveInFlightMapRef.current = undefined;
+      if (map !== undefined) {
+        mapRef.current = map;
+        writeCache(map);
+      }
+    },
+    snapshot: () => mapRef.current,
+    recover: (snapshot) => {
+      const recovered = Schema.decodeUnknownSync(TileborneMap)(snapshot);
+      const durable = mapRef.current;
+      mapRef.current = recovered;
+      pendingMapRef.current = recovered;
+      rollbackMapRef.current = durable;
+      patchCache(recovered);
+      bump();
+    },
+  });
 
   const schedulePersist = useCallback(
     (nextMap: TileborneMap, rollback: TileborneMap) => {
@@ -214,7 +249,7 @@ export function useEditorCommands({
       }
       debounceRef.current = setTimeout(() => {
         debounceRef.current = undefined;
-        void flushPersist();
+        void flushPersist().catch(() => undefined);
       }, DEBOUNCE_MS);
     },
     [flushPersist],

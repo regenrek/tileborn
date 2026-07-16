@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { CORE_HUD_WIDGETS, HudLayout } from '@tileborne/core';
-import { render, screen, act, within } from '@testing-library/react';
+import { render, screen, act, fireEvent, within } from '@testing-library/react';
 import { Schema } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,10 +10,15 @@ import {
   formatZoneStatusLabel,
   healthPercent,
 } from '@tileborne/game-client';
+import {
+  GameplayEntityDefeated,
+  GameplayItemGranted,
+  GameplayMatchPhaseChanged,
+  makeGameplayEntityId,
+  makeGameplayItemId,
+} from '@tileborne/ipc-contracts';
 
 import { PlaytestHudOverlay } from '@/components/playtest-hud-overlay';
-
-const EVENT_TIMESTAMP_MS = 1_700_000_000_000;
 
 const baseMetrics = {
   playerCount: 2,
@@ -30,7 +35,7 @@ const baseMetrics = {
       phase: 'countdown' as const,
       secondsRemaining: 42,
     },
-    recentEvents: [],
+    gameplayEvents: [],
   },
 };
 
@@ -154,21 +159,18 @@ describe('PlaytestHudOverlay', () => {
     expect(screen.getByTestId('playtest-hud-damage-indicator')).toBeTruthy();
   });
 
-  it('shows an elimination toast for new PlayerKilled events', () => {
+  it('shows an elimination toast for new EntityDefeated events', () => {
     vi.useFakeTimers();
     const metrics = {
       ...baseMetrics,
       hud: {
         ...baseMetrics.hud,
-        recentEvents: [
-          {
-            _tag: 'PlayerKilled' as const,
-            victimId: 'player-2',
-            victimDisplayName: 'Player 2',
-            killerId: 'zone',
+        gameplayEvents: [
+          new GameplayEntityDefeated({
+            targetId: makeGameplayEntityId('player-2'),
+            sourceId: makeGameplayEntityId('zone'),
             tick: 130,
-            emittedAtMs: EVENT_TIMESTAMP_MS,
-          },
+          }),
         ],
       },
     };
@@ -183,7 +185,7 @@ describe('PlaytestHudOverlay', () => {
       />,
     );
 
-    expect(screen.getByTestId('playtest-hud-event-toast').textContent).toBe('Player 2 eliminated');
+    expect(screen.getByTestId('playtest-hud-event-toast').textContent).toBe('player-2 eliminated');
 
     act(() => {
       vi.advanceTimersByTime(2_000);
@@ -193,23 +195,19 @@ describe('PlaytestHudOverlay', () => {
     vi.useRealTimers();
   });
 
-  it('shows a pickup toast for new PickupCollected events', () => {
+  it('shows a pickup toast for new ItemGranted events', () => {
     vi.useFakeTimers();
     const metrics = {
       ...baseMetrics,
       hud: {
         ...baseMetrics.hud,
-        recentEvents: [
-          {
-            _tag: 'PickupCollected' as const,
-            playerId: 'player-1',
-            playerDisplayName: 'Player 1',
-            itemKind: 'ammo-box',
-            tier: 'common',
+        gameplayEvents: [
+          new GameplayItemGranted({
+            targetId: makeGameplayEntityId('player-1'),
+            itemId: makeGameplayItemId('ammo-box:common'),
             quantity: 1,
             tick: 132,
-            emittedAtMs: EVENT_TIMESTAMP_MS,
-          },
+          }),
         ],
       },
     };
@@ -421,7 +419,7 @@ describe('PlaytestHudOverlay', () => {
     expect(onMoveWidget).toHaveBeenCalledWith('alive-count', 'bottom-left');
   });
 
-  it('opens the win dialog when GameOver is present in hud metrics', () => {
+  it('opens the win dialog when the match is finished in hud metrics', () => {
     render(
       <PlaytestHudOverlay
         metrics={{
@@ -451,16 +449,12 @@ describe('PlaytestHudOverlay', () => {
               totalPlayers: 4,
               tickCount: 500,
             },
-            recentEvents: [
-              {
-                _tag: 'GameOver',
-                winnerId: 'player-1',
-                winnerDisplayName: 'Player 1',
-                alivePlayers: 1,
-                totalPlayers: 4,
-                tickCount: 500,
-                emittedAtMs: EVENT_TIMESTAMP_MS,
-              },
+            gameplayEvents: [
+              new GameplayMatchPhaseChanged({
+                tick: 500,
+                phase: 'finished',
+                winnerId: makeGameplayEntityId('player-1'),
+              }),
             ],
           },
         }}
@@ -472,6 +466,7 @@ describe('PlaytestHudOverlay', () => {
     );
 
     expect(screen.getByTestId('playtest-win-dialog')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Victory' })).toBeTruthy();
     expect(screen.getByTestId('playtest-win-winner').textContent).toBe('Player 1');
     expect(screen.getByTestId('playtest-win-survivors').textContent).toBe('1 / 4');
     expect(screen.getByTestId('playtest-win-ticks').textContent).toBe('500 ticks');
@@ -479,5 +474,55 @@ describe('PlaytestHudOverlay', () => {
     expect(screen.getByTestId('playtest-win-local-stats').textContent).toBe('3 / 1');
     expect(screen.getByTestId('playtest-win-play-again')).toBeTruthy();
     expect(screen.getByTestId('playtest-win-back-to-editor')).toBeTruthy();
+  });
+
+  it('shows Defeat for a losing client and disarms terminal actions during key rollover', async () => {
+    vi.useFakeTimers();
+    const onBackToEditor = vi.fn();
+    try {
+      render(
+        <PlaytestHudOverlay
+          metrics={{
+            ...baseMetrics,
+            hud: {
+              ...baseMetrics.hud,
+              localPlayer: {
+                ...baseMetrics.hud.localPlayer,
+                playerId: 'player-2',
+                displayName: 'Player 2',
+              },
+              gameOver: {
+                winnerId: 'player-1',
+                winnerDisplayName: 'Player 1',
+                alivePlayers: 1,
+                totalPlayers: 2,
+                tickCount: 160,
+              },
+            },
+          }}
+          localPlayerId="player-2"
+          projectId="project-1"
+          mapId="map-1"
+          onPlayAgain={vi.fn()}
+          onBackToEditor={onBackToEditor}
+        />,
+      );
+
+      expect(screen.getByRole('heading', { name: 'Defeat' })).toBeTruthy();
+      const back = screen.getAllByTestId('playtest-win-back-to-editor').at(-1);
+      if (back === undefined) {
+        throw new Error('expected Back to Editor action');
+      }
+      expect((back as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(back);
+      expect(onBackToEditor).not.toHaveBeenCalled();
+
+      await act(() => vi.advanceTimersByTimeAsync(500));
+      expect((back as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(back);
+      expect(onBackToEditor).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

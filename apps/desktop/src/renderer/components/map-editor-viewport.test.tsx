@@ -92,6 +92,7 @@ vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
     setSelection = vi.fn();
     setActiveLayerId = vi.fn();
     setCollisionFootprints = vi.fn();
+    setCatalogObjectVisuals = vi.fn();
     setHoverTile = vi.fn();
     setBrushPreview = vi.fn();
     syncMapContent = vi.fn();
@@ -564,7 +565,9 @@ describe('MapEditorViewport mount lifecycle', () => {
 
   it('mounts a fresh viewport when the map id changes', async () => {
     const makeBundleForCall = makeBundleFor();
-    loadViewportAssetBundleMock.mockImplementation((request) => Effect.succeed(makeBundleForCall(request)));
+    loadViewportAssetBundleMock.mockImplementation((request) =>
+      Effect.succeed(makeBundleForCall(request)),
+    );
 
     const { rerender } = renderViewport(
       <MapEditorViewport projectId="project-1" mapId="map-1" map={createTestMap()} />,
@@ -647,7 +650,9 @@ describe('resolveBrushAction', () => {
       ...placeablePack,
       id: makePackId(uuid('32')),
       name: 'Other Props Pack',
-      assets: [new TilesetPackAsset({ id: otherAssetId, path: 'props/other.png', mime: 'image/png' })],
+      assets: [
+        new TilesetPackAsset({ id: otherAssetId, path: 'props/other.png', mime: 'image/png' }),
+      ],
       placeables: [
         new Placeable({
           ...sourcePlaceable!,

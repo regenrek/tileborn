@@ -35,7 +35,7 @@ export function RightInspector() {
   const contributionsQuery = usePluginContributions();
   // ADR-0023 section B: mount the ACTIVE game mode's authoring panel by manifest
   // discovery (a plugin declaring a runtime system + settings panel), resolving
-  // the bundled panel component by plugin id — not a literal-id enabled-flag
+  // the bundled panel component by the manifest-declared authoring capability
   // check. Multi-mode projects must store an explicit
   // `project.settings.activeGameMode` selection before a mode panel is mounted.
   const activeMode = resolveProjectActiveGameMode(
@@ -44,7 +44,7 @@ export function RightInspector() {
   );
   const ActiveModePanel =
     activeMode?.hasAuthoringPanel === true
-      ? resolveModeAuthoringPanel(activeMode.pluginId)
+      ? resolveModeAuthoringPanel(activeMode.authoringCapabilityId)
       : undefined;
   // ADR-0023 section A: consume the active mode's first-class
   // `EditorGameSettingsForm` IPC projection. The renderer does not read forms

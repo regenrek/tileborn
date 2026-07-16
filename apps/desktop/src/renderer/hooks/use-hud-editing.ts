@@ -11,6 +11,11 @@ import { moveWidgetOrder, setWidgetAnchor, setWidgetEnabled } from '@/lib/hud-la
 import { writeProjectHudLayout } from '@/lib/project-hud-layout';
 import { clearUserHudOverlay, saveUserHudOverlay } from '@/lib/playtest-user-hud';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
+import {
+  documentLifecycle,
+  requestDocumentClose,
+  useDocumentLifecycle,
+} from '@/lib/document-lifecycle';
 
 /**
  * Owns the visual HUD editor's state for a playtest viewport: the edit-mode
@@ -23,25 +28,32 @@ import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 export function useHudEditing({
   baseLayout,
   project,
+  scopeId,
   onPersisted,
 }: {
   readonly baseLayout: HudLayout | undefined;
   readonly project: ProjectManifest | undefined;
+  readonly scopeId?: string | undefined;
   readonly onPersisted: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<HudLayout | undefined>(undefined);
   const updateProject = useUpdateProject();
+  const documentId = `hud-input:${project?.id ?? 'unloaded'}`;
 
   const start = useCallback(() => {
     setDraft(baseLayout);
     setEditing(true);
   }, [baseLayout]);
 
-  const close = useCallback(() => {
+  const forceClose = useCallback(() => {
     setEditing(false);
     setDraft(undefined);
   }, []);
+
+  const close = useCallback(async () => {
+    if (await requestDocumentClose(documentId)) forceClose();
+  }, [documentId, forceClose]);
 
   const apply = useCallback(
     (operation: (layout: HudLayout) => HudLayout) => {
@@ -78,29 +90,51 @@ export function useHudEditing({
     saveUserHudOverlay(draft);
     onPersisted();
     notifySuccess('HUD layout saved for you');
-    close();
-  }, [draft, close, onPersisted]);
+    documentLifecycle.markClean(documentId);
+    forceClose();
+  }, [documentId, draft, forceClose, onPersisted]);
 
-  const saveToProject = useCallback(async () => {
+  const persistToProject = useCallback(async () => {
     if (draft === undefined || project === undefined) {
       return;
     }
-    try {
-      await updateProject.mutateAsync({ project: writeProjectHudLayout(project, draft) });
-      onPersisted();
-      notifySuccess('HUD layout saved to project');
-      close();
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : 'Failed to save HUD layout');
+    await updateProject.mutateAsync({ project: writeProjectHudLayout(project, draft) });
+    onPersisted();
+  }, [draft, project, updateProject, onPersisted]);
+
+  useDocumentLifecycle({
+    id: documentId,
+    scopeId,
+    label: 'HUD and input layout',
+    kind: 'hud-input',
+    enabled: project !== undefined,
+    dirty: editing && draft !== undefined && JSON.stringify(draft) !== JSON.stringify(baseLayout),
+    recoveryVersion: draft === undefined ? '' : JSON.stringify(draft),
+    save: persistToProject,
+    discard: forceClose,
+    snapshot: () => draft,
+    recover: (snapshot) => {
+      setDraft(snapshot as HudLayout);
+      setEditing(true);
+    },
+  });
+
+  const saveToProject = useCallback(async () => {
+    if (!(await documentLifecycle.save(documentId))) {
+      notifyError(documentLifecycle.get(documentId)?.error ?? 'Failed to save HUD layout');
+      return;
     }
-  }, [draft, project, updateProject, close, onPersisted]);
+    notifySuccess('HUD layout saved to project');
+    forceClose();
+  }, [documentId, forceClose]);
 
   const resetUser = useCallback(() => {
     clearUserHudOverlay();
     onPersisted();
     notifySuccess('Your HUD changes were reset');
-    close();
-  }, [close, onPersisted]);
+    documentLifecycle.markClean(documentId);
+    forceClose();
+  }, [documentId, forceClose, onPersisted]);
 
   return {
     editing,

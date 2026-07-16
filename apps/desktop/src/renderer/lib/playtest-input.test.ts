@@ -15,7 +15,7 @@ import {
   type ResolvedInputIntent,
 } from './playtest-input';
 import {
-  BATTLE_ROYALE_PLUGIN_ID,
+  BATTLE_ROYALE_RENDERER_CAPABILITY_ID,
   resolvePlaytestPlugin,
 } from './playtest-plugin-bridge';
 import { clearUserInputOverlay, saveUserInputOverlay } from './playtest-user-bindings';
@@ -295,7 +295,7 @@ describe('persisted overlay applied on capture attach (bridge owner integration)
     // Mirror the bridge owner exactly: resolve the plugin WITHOUT injecting an
     // overlay (the production path), so `resolvePlaytestPlugin` loads the latest
     // persisted overlay itself, then attach capture to its effective input map.
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     if (plugin === undefined) {
       throw new Error('expected the battle royale playtest plugin to resolve');
     }

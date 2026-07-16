@@ -34,6 +34,7 @@ vi.mock('@/hooks/queries', () => ({
           label: 'Battle Royale Settings',
           runtimeSystemId: 'battle-royale-runtime',
           authoringSettingsPanelId: 'battle-royale-settings',
+          authoringCapabilityId: 'battle-royale.authoring',
           gameSettingsFormId: 'battle-royale-settings-form',
           gameSettingsForm: {
             scope: 'map',
@@ -109,8 +110,8 @@ vi.mock('@/components/plugins/battle-royale-authoring-panel', () => ({
 }));
 
 vi.mock('@/components/plugins/mode-authoring-panels', () => ({
-  resolveModeAuthoringPanel: (pluginId: string) =>
-    pluginId === battleRoyalePluginId
+  resolveModeAuthoringPanel: (capabilityId: string) =>
+    capabilityId === 'battle-royale.authoring'
       ? () => <section data-testid="battle-royale-authoring-panel">Battle Royale Settings</section>
       : undefined,
 }));

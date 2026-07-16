@@ -24,13 +24,13 @@ export function HomeEmptyState({
           No projects yet
         </p>
         <p className={typography.bodyCompact}>
-          Create a project to author maps, import asset packs, and install plugins.
+          Create a game to author maps, import asset packs, and install plugins.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button size="lg" disabled={createPending} onClick={onCreate}>
           <PlusIcon />
-          Create project
+          New game
         </Button>
         <Button variant="outline" size="lg" disabled={importPending} onClick={onImport}>
           <ImportIcon />

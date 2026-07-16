@@ -34,10 +34,10 @@ export function MapEditorPage() {
   const createMap = useCreateMap();
   // ADR-0023 section B: the deep-link join runs the ACTIVE game mode's
   // discovered playtest runtime, resolved from the project selection.
-  const activeModePluginId = resolveProjectActiveGameMode(
+  const rendererCapabilityId = resolveProjectActiveGameMode(
     contributionsQuery.data?.gameModes ?? [],
     projectQuery.data?.project,
-  )?.pluginId;
+  )?.rendererCapabilityId;
   const playtestActive = useEditorUiStore((state) => state.playtestActive);
   const playtestMode = useEditorUiStore((state) => state.playtestMode);
   const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
@@ -66,14 +66,14 @@ export function MapEditorPage() {
         : search.joinRoom;
     void joinFromInput(
       joinInput,
-      activeModePluginId,
+      rendererCapabilityId,
       mapId,
       mapQuery.data.map.size.width,
       mapQuery.data.map.size.height,
       search.joinBase,
     );
   }, [
-    activeModePluginId,
+    rendererCapabilityId,
     contributionsQuery.isLoading,
     projectQuery.isLoading,
     joinFromInput,

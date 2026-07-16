@@ -217,6 +217,34 @@ describe('playtest multiplayer modal flow', () => {
     expect(usePlaytestMultiplayerStore.getState().roomReady).toBeNull();
   });
 
+  it('leaving from a joined client never stops the app-wide local host', () => {
+    usePlaytestMultiplayerStore.setState({
+      roomReady: null,
+      flowPhase: 'finished',
+      participantSession: {
+        baseUrl: roomReady.baseUrl,
+        roomId: roomReady.roomId,
+        wsUrl: roomReady.wsUrl,
+        playerId: 'player-2',
+        handoffToken: 'handoff-2',
+        reconnectToken: 'reconnect-2',
+      },
+      roomResults: {
+        completedAt: '2026-07-14T13:30:00.000Z',
+        players: [{ playerId: 'player-2', outcome: 'completed', placement: 2 }],
+      },
+    });
+
+    usePlaytestMultiplayerStore.getState().leaveSession();
+
+    expect(window.tileborne.runtime.stopLocalHost).not.toHaveBeenCalled();
+    expect(usePlaytestMultiplayerStore.getState()).toMatchObject({
+      flowPhase: 'idle',
+      participantSession: null,
+      roomResults: null,
+    });
+  });
+
   it('route disposal does not stop the app-wide local host', () => {
     useEditorUiStore.getState().setLocalHostSession({
       ...roomReady,

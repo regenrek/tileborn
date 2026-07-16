@@ -25,14 +25,7 @@ import { SHORTCUTS } from '@/lib/keyboard-shortcuts';
 import { WORKSPACE_VIEWS } from '@/lib/workspace-views';
 import type { EditorTool } from '@/stores/editor-ui-store';
 
-export type ShellCommandGroupId =
-  | 'recent'
-  | 'file'
-  | 'edit'
-  | 'view'
-  | 'map'
-  | 'plugins'
-  | 'help';
+export type ShellCommandGroupId = 'recent' | 'file' | 'edit' | 'view' | 'map' | 'plugins' | 'help';
 
 export const SHELL_COMMAND_GROUP_ORDER: readonly ShellCommandGroupId[] = [
   'recent',
@@ -117,10 +110,10 @@ const workspaceViewCommands: ShellCommandDef[] = WORKSPACE_VIEWS.filter(
 export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
   {
     id: 'file.create-project',
-    label: 'Create project',
+    label: 'New game',
     group: 'file',
     icon: FolderOpenIcon,
-    keywords: ['new', 'project'],
+    keywords: ['new', 'game', 'project'],
   },
   {
     id: 'file.import-asset-pack',
@@ -203,11 +196,11 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
   },
   {
     id: 'map.start-build',
-    label: 'Start build',
+    label: 'Ship Game…',
     group: 'map',
     icon: HammerIcon,
     requiresProject: true,
-    keywords: ['build', 'compile'],
+    keywords: ['build', 'compile', 'ship', 'package', 'artifact'],
   },
   {
     id: 'map.start-playtest',

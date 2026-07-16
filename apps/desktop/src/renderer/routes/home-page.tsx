@@ -111,7 +111,7 @@ export function HomePage() {
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button size="lg" onClick={() => setCreateProjectDialogOpen(true)}>
           <PlusIcon />
-          Create project
+          New game
         </Button>
         <Button
           variant="outline"

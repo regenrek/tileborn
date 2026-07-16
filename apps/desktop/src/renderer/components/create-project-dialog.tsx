@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   Button,
@@ -16,7 +16,7 @@ import {
   FormField,
   usePendingDialogClose,
 } from '@/components/dialog-form';
-import { useCreateProject } from '@/hooks/mutations';
+import { useCreateGame } from '@/hooks/mutations';
 import { deriveProjectSlug } from '@/lib/derive-project-slug';
 import { getIpcError } from '@/lib/ipc';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
@@ -29,11 +29,14 @@ interface CreateProjectDialogProps {
 
 export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
   const navigate = useNavigate();
-  const createProject = useCreateProject();
+  const createGame = useCreateGame();
   const addRecentProject = useEditorUiStore((s) => s.addRecentProject);
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | undefined>(undefined);
-  const handleOpenChange = usePendingDialogClose(createProject.isPending, onOpenChange);
+  const idempotencyKey = useRef<string | undefined>(undefined);
+  const currentIdempotencyKey = idempotencyKey.current ?? crypto.randomUUID();
+  idempotencyKey.current = currentIdempotencyKey;
+  const handleOpenChange = usePendingDialogClose(createGame.isPending, onOpenChange);
 
   const slugPreview = useMemo(() => deriveProjectSlug(name), [name]);
 
@@ -46,10 +49,15 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setNameError(undefined);
 
     try {
-      const result = await createProject.mutateAsync({ name: trimmed });
+      const result = await createGame.mutateAsync({
+        name: trimmed,
+        gameType: 'battle-royale',
+        idempotencyKey: currentIdempotencyKey,
+      });
       addRecentProject(String(result.projectId));
-      notifySuccess(`Created project ${trimmed}`);
+      notifySuccess(`${result.resumed ? 'Resumed' : 'Created'} Battle Royale game ${trimmed}`);
       setName('');
+      idempotencyKey.current = crypto.randomUUID();
       onOpenChange(false);
       await navigate({
         to: '/projects/$projectId',
@@ -68,13 +76,28 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
       <DialogContent className="sm:max-w-md">
         <form action={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>New project</DialogTitle>
+            <DialogTitle>New game</DialogTitle>
             <DialogDescription>
-              Name your project. The slug is derived automatically for folders on disk.
+              Choose a game type and start with valid, editable content.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
+            <fieldset className="grid gap-2" role="radiogroup" aria-label="Game type">
+              <legend className="text-sm font-medium">Game type</legend>
+              <button
+                type="button"
+                role="radio"
+                aria-checked="true"
+                className="rounded-md border border-primary bg-primary/10 p-3 text-left"
+                data-testid="new-game-type-battle-royale"
+              >
+                <span className="block text-sm font-medium">Battle Royale</span>
+                <span className="block text-xs text-muted-foreground">
+                  Starter arena, Maltipoo players, HUD, controls, loot and weapons.
+                </span>
+              </button>
+            </fieldset>
             <FormField label="Project name" htmlFor="create-project-name" message={nameError}>
               <Input
                 id="create-project-name"
@@ -96,10 +119,10 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             </Button>
             <DialogSubmitButton
               type="submit"
-              pending={createProject.isPending}
+              pending={createGame.isPending}
               data-testid="create-project-submit"
             >
-              Create project
+              Create Battle Royale game
             </DialogSubmitButton>
           </DialogFooter>
         </form>

@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from 'react';
 import type { TileborneMap } from '@tileborne/core';
+import type { RoomLobbySummary } from '@tileborne/game-client';
 import { Button } from '@tileborne/ui';
 import { PencilRulerIcon } from 'lucide-react';
 import {
@@ -54,6 +55,10 @@ import type { BuiltPlayerModel } from '@/lib/player-model-render';
 import type { BuiltOverlayVisual } from '@/lib/overlay-visual-render';
 import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import type { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
+import type {
+  LocalMultiplayerParticipantSession,
+  LocalMultiplayerRoomResults,
+} from '@/lib/playtest-room-url';
 import { multiplayerStateToConnectionInput } from '@/lib/playtest-multiplayer-status';
 import { usePlaytestMultiplayerStore } from '@/stores/playtest-multiplayer-store';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -95,7 +100,7 @@ function useMultiplayerRuntimeMount({
   runtimeRef,
   projectId,
   map,
-  activeModePluginId,
+  rendererCapabilityId,
   builtModels,
   builtOverlays,
   builtWeapons,
@@ -104,7 +109,7 @@ function useMultiplayerRuntimeMount({
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly projectId: string;
   readonly map: TileborneMap;
-  readonly activeModePluginId: string | undefined;
+  readonly rendererCapabilityId: string | undefined;
   readonly builtModels: readonly BuiltPlayerModel[];
   readonly builtOverlays: readonly BuiltOverlayVisual[];
   readonly builtWeapons: readonly BuiltWeaponVisual[];
@@ -114,17 +119,12 @@ function useMultiplayerRuntimeMount({
     if (!container) {
       return undefined;
     }
-    // ADR-0023 section B: resolve the ACTIVE game mode by manifest discovery
-    // (the `gameModes` IPC), not a hardcoded battle-royale id. The bridge maps
-    // that mode's plugin id to its registered projector (MODE_RENDER_PROVIDERS).
-    if (activeModePluginId === undefined) {
+    // ADR-0023 section B: the manifest-declared renderer capability is the sole
+    // bridge key. Plugin ids are metadata and never act as runtime aliases.
+    if (rendererCapabilityId === undefined) {
       return undefined;
     }
-    const basePlugin = resolvePlaytestPlugin(activeModePluginId);
-    if (!basePlugin) {
-      console.error(`[playtest] no projector for plugin ${activeModePluginId}`);
-      return undefined;
-    }
+    const basePlugin = resolvePlaytestPlugin(rendererCapabilityId);
     let resolved: ResolvedPlaytestPlugin = basePlugin;
 
     const adapter = new PixiRendererAdapter({
@@ -148,12 +148,11 @@ function useMultiplayerRuntimeMount({
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
-            resolved =
-              resolvePlaytestPlugin(activeModePluginId, {
+            resolved = resolvePlaytestPlugin(rendererCapabilityId, {
                 ...(playerModels === undefined ? {} : { playerModels }),
                 ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
                 ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
-              }) ?? basePlugin;
+              });
           } catch (error) {
             console.error('[playtest] failed to load playtest visual atlases', error);
             resolved = basePlugin;
@@ -215,7 +214,7 @@ function useMultiplayerRuntimeMount({
         }
       });
     };
-  }, [containerRef, map, projectId, runtimeRef, activeModePluginId, builtModels, builtOverlays, builtWeapons]);
+  }, [containerRef, map, projectId, runtimeRef, rendererCapabilityId, builtModels, builtOverlays, builtWeapons]);
 }
 
 function useMultiplayerSnapshotRenderer({
@@ -223,19 +222,19 @@ function useMultiplayerSnapshotRenderer({
   containerRef,
   runtimeRef,
   map,
-  activeModePluginId,
+  rendererCapabilityId,
 }: {
   readonly client: PlaytestMultiplayerClient | null;
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly map: TileborneMap;
-  readonly activeModePluginId: string | undefined;
+  readonly rendererCapabilityId: string | undefined;
 }) {
   useEffect(() => {
-    if (!client || activeModePluginId === undefined) {
+    if (!client || rendererCapabilityId === undefined) {
       return undefined;
     }
-    const plugin = resolvePlaytestPlugin(activeModePluginId);
+    const plugin = resolvePlaytestPlugin(rendererCapabilityId);
     if (!plugin) {
       return undefined;
     }
@@ -316,27 +315,29 @@ function useMultiplayerSnapshotRenderer({
       cancelAnimationFrame(rafHandle);
       unsubscribe();
     };
-  }, [client, containerRef, map.size.height, map.size.width, runtimeRef, activeModePluginId]);
+  }, [client, containerRef, map.size.height, map.size.width, runtimeRef, rendererCapabilityId]);
 }
 
 function useMultiplayerInputBridge({
   client,
   containerRef,
-  activeModePluginId,
+  rendererCapabilityId,
+  enabled,
 }: {
   readonly client: PlaytestMultiplayerClient | null;
   readonly containerRef: RefObject<HTMLDivElement | null>;
-  readonly activeModePluginId: string | undefined;
+  readonly rendererCapabilityId: string | undefined;
+  readonly enabled: boolean;
 }) {
   useEffect(() => {
-    if (!client || activeModePluginId === undefined) {
+    if (!enabled || !client || rendererCapabilityId === undefined) {
       return undefined;
     }
     // Remap-apply policy (ADR-0024): remaps persisted by the Controls UI apply
     // on the NEXT playtest session. `resolvePlaytestPlugin` reloads the LATEST
     // persisted overlay on each capture-attach (effect run), so a session always
     // starts on the freshest saved bindings; no live cross-surface wiring here.
-    const plugin = resolvePlaytestPlugin(activeModePluginId);
+    const plugin = resolvePlaytestPlugin(rendererCapabilityId);
     if (!plugin) {
       return undefined;
     }
@@ -362,7 +363,160 @@ function useMultiplayerInputBridge({
     return () => {
       handle.dispose();
     };
-  }, [client, containerRef, activeModePluginId]);
+  }, [client, containerRef, enabled, rendererCapabilityId]);
+}
+
+function MultiplayerLobbyOverlay({
+  lobby,
+  participant,
+  results,
+  isReadyPending,
+  error,
+  onSetReady,
+  onBackToEditor,
+}: {
+  readonly lobby: RoomLobbySummary | null;
+  readonly participant: LocalMultiplayerParticipantSession | null;
+  readonly results: LocalMultiplayerRoomResults | null;
+  readonly isReadyPending: boolean;
+  readonly error: string | null;
+  readonly onSetReady: (ready: boolean) => Promise<void>;
+  readonly onBackToEditor: () => void | Promise<void>;
+}) {
+  if (lobby === null || lobby.phase === 'active') {
+    return null;
+  }
+
+  const terminal = lobby.phase === 'finished' || lobby.phase === 'archived';
+  const localPlayer = lobby.players.find(
+    (player) => player.playerId === participant?.playerId,
+  );
+  const readyPlayers = lobby.players.filter((player) => player.ready).length;
+
+  if (terminal) {
+    return (
+      <section
+        className="absolute inset-0 z-50 grid place-items-center bg-background/80 p-6 backdrop-blur-sm"
+        data-testid="multiplayer-results"
+        aria-label="Multiplayer results"
+      >
+        <div className="w-full max-w-lg rounded-lg border bg-card p-5 shadow-xl">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Match finished
+          </p>
+          <h2 className="mt-1 text-xl font-semibold">Results</h2>
+          {results === null ? (
+            <p className="mt-3 text-sm text-muted-foreground">Final results are loading…</p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {results.reason ?? 'Match completed'}
+              </p>
+              <ol className="mt-4 space-y-2">
+                {[...results.players]
+                  .sort(
+                    (left, right) =>
+                      (left.placement ?? Number.MAX_SAFE_INTEGER) -
+                        (right.placement ?? Number.MAX_SAFE_INTEGER) ||
+                      left.playerId.localeCompare(right.playerId),
+                  )
+                  .map((player) => (
+                    <li
+                      key={player.playerId}
+                      className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    >
+                      <span>
+                        {player.placement === undefined ? '—' : `#${player.placement}`} ·{' '}
+                        {player.playerId}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {player.outcome ?? 'finished'}
+                        {player.score === undefined ? '' : ` · ${player.score} pts`}
+                      </span>
+                    </li>
+                  ))}
+              </ol>
+            </>
+          )}
+          <Button className="mt-5 w-full" type="button" onClick={() => void onBackToEditor()}>
+            Back to editor
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  const canToggleReady =
+    localPlayer !== undefined &&
+    localPlayer.status === 'connected' &&
+    (lobby.phase === 'lobby' || lobby.phase === 'countdown');
+
+  return (
+    <section
+      className="absolute inset-0 z-50 grid place-items-center bg-background/75 p-6 backdrop-blur-sm"
+      data-testid="multiplayer-lobby"
+      aria-label="Multiplayer lobby"
+    >
+      <div className="w-full max-w-lg rounded-lg border bg-card p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Room {lobby.roomId}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">
+              {lobby.phase === 'countdown' ? 'Match starting…' : 'Ready lobby'}
+            </h2>
+          </div>
+          <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+            {lobby.playerCount}/{lobby.maxPlayers} players
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {readyPlayers}/{lobby.minReadyPlayers} required players ready
+        </p>
+        <ul className="mt-4 space-y-2">
+          {lobby.players.map((player) => (
+            <li
+              key={player.playerId}
+              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+              data-testid={`multiplayer-lobby-player-${player.playerId}`}
+            >
+              <span>
+                {player.displayName ?? player.playerId}
+                {player.playerId === participant?.playerId ? ' (you)' : ''}
+              </span>
+              <span className={player.ready ? 'text-emerald-500' : 'text-muted-foreground'}>
+                {player.status === 'disconnected'
+                  ? 'Disconnected'
+                  : player.ready
+                    ? 'Ready'
+                    : 'Not ready'}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {error === null ? null : (
+          <p className="mt-3 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          className="mt-5 w-full"
+          type="button"
+          data-testid="multiplayer-ready-toggle"
+          aria-pressed={localPlayer?.ready ?? false}
+          disabled={!canToggleReady || isReadyPending}
+          onClick={() => void onSetReady(!(localPlayer?.ready ?? false)).catch(() => undefined)}
+        >
+          {isReadyPending
+            ? 'Updating…'
+            : localPlayer?.ready
+              ? 'Unready'
+              : 'Ready up'}
+        </Button>
+      </div>
+    </section>
+  );
 }
 
 export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultiplayerViewportProps) {
@@ -373,7 +527,16 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
   const sessionState = usePlaytestMultiplayerStore((state) => state.sessionState);
   const client = usePlaytestMultiplayerStore((state) => state.client);
+  const participantSession = usePlaytestMultiplayerStore((state) => state.participantSession);
+  const lobbyState = usePlaytestMultiplayerStore((state) => state.lobbyState);
+  const roomResults = usePlaytestMultiplayerStore((state) => state.roomResults);
+  const roomReady = usePlaytestMultiplayerStore((state) => state.roomReady);
+  const isReadyPending = usePlaytestMultiplayerStore((state) => state.isReadyPending);
+  const lobbyError = usePlaytestMultiplayerStore((state) => state.lobbyError);
+  const setLocalReady = usePlaytestMultiplayerStore((state) => state.setLocalReady);
+  const leaveSession = usePlaytestMultiplayerStore((state) => state.leaveSession);
   const stopHosting = usePlaytestMultiplayerStore((state) => state.stopHosting);
+  const exitMultiplayer = roomReady === null ? leaveSession : stopHosting;
   // ADR-0023 section B: the active game mode is discovered from the enabled
   // plugins' manifests (the `gameModes` IPC), then resolved through the
   // per-project active selection. Multi-mode projects intentionally do not
@@ -386,6 +549,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     projectQuery.data?.project,
   );
   const activeModePluginId = activeMode?.pluginId;
+  const rendererCapabilityId = activeMode?.rendererCapabilityId;
   // Resolve the active plugin once to expose its render manifest (fixedZoom,
   // hudInsets) and effective HUD layout (manifest-discovered default ⊕ user
   // overlay) to the JSX layer without piping it through refs. The render loop
@@ -393,17 +557,49 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const manifestHudLayout = activeMode?.hudLayout;
   const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
-  const resolvedPlugin = useMemo(
-    () =>
-      activeModePluginId === undefined
-        ? undefined
-        : resolvePlaytestPlugin(activeModePluginId, {
+  const rendererResolution = useMemo((): {
+    readonly plugin: ResolvedPlaytestPlugin | undefined;
+    readonly error: string | undefined;
+  } => {
+    // This version is an explicit cache-buster: the resolver reads the latest
+    // persisted HUD overlay from storage after the HUD editor saves it.
+    void hudOverlayVersion;
+    if (rendererCapabilityId === undefined) {
+      return {
+        plugin: undefined,
+        error:
+          activeMode === undefined
+            ? 'Select an active game mode before starting multiplayer playtest.'
+            : `Game mode ${activeMode.modeId} does not declare a rendererCapabilityId. Fix or reinstall the plugin manifest.`,
+      };
+    }
+    try {
+      return {
+        plugin: resolvePlaytestPlugin(rendererCapabilityId, {
             ...(manifestHudLayout === undefined ? {} : { manifestHudLayout }),
             ...(projectHudLayout === undefined ? {} : { projectHudLayout }),
           }),
+        error: undefined,
+      };
+    } catch (error) {
+      return {
+        plugin: undefined,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
-    [activeModePluginId, manifestHudLayout, projectHudLayout, hudOverlayVersion],
+    [
+      activeMode,
+      rendererCapabilityId,
+      manifestHudLayout,
+      projectHudLayout,
+      hudOverlayVersion,
+    ],
   );
+  const resolvedPlugin = rendererResolution.plugin;
+  const usableRendererCapabilityId =
+    rendererResolution.error === undefined ? rendererCapabilityId : undefined;
   const bumpHudOverlayVersion = useCallback(
     () => setHudOverlayVersion((version) => version + 1),
     [],
@@ -411,6 +607,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
   const hudEditing = useHudEditing({
     baseLayout: resolvedPlugin?.hudLayout,
     project: projectQuery.data?.project,
+    scopeId: `map:${projectId}:${map.id}`,
     onPersisted: bumpHudOverlayVersion,
   });
   const hudInsets = resolvedPlugin?.manifest.hudInsets;
@@ -423,13 +620,24 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     runtimeRef,
     projectId,
     map,
-    activeModePluginId,
+    rendererCapabilityId: usableRendererCapabilityId,
     builtModels,
     builtOverlays,
     builtWeapons,
   });
-  useMultiplayerSnapshotRenderer({ client, containerRef, runtimeRef, map, activeModePluginId });
-  useMultiplayerInputBridge({ client, containerRef, activeModePluginId });
+  useMultiplayerSnapshotRenderer({
+    client,
+    containerRef,
+    runtimeRef,
+    map,
+    rendererCapabilityId: usableRendererCapabilityId,
+  });
+  useMultiplayerInputBridge({
+    client,
+    containerRef,
+    rendererCapabilityId: usableRendererCapabilityId,
+    enabled: lobbyState?.phase === 'active',
+  });
 
   useEffect(() => {
     runtimeRef.current?.controller.setShowGrid(showGrid);
@@ -457,14 +665,31 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
         activePlugins={activeModePluginId === undefined ? [] : [activeModePluginId]}
         session={multiplayerStateToConnectionInput(sessionState)}
         isStopping={false}
-        onStop={stopHosting}
+        onStop={exitMultiplayer}
       />
       <div className="relative min-h-0 flex-1">
+        {rendererResolution.error !== undefined ? (
+          <div
+            className="absolute inset-x-4 top-4 z-50 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            {rendererResolution.error}
+          </div>
+        ) : null}
         <div
           ref={containerRef}
           className="absolute inset-0 outline-none"
           data-testid="playtest-multiplayer-canvas"
           tabIndex={0}
+        />
+        <MultiplayerLobbyOverlay
+          lobby={lobbyState}
+          participant={participantSession}
+          results={roomResults}
+          isReadyPending={isReadyPending}
+          error={lobbyError}
+          onSetReady={setLocalReady}
+          onBackToEditor={exitMultiplayer}
         />
         <PlaytestHudOverlay
           metrics={
@@ -478,8 +703,11 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
           }
           projectId={projectId}
           mapId={map.id}
-          onBackToEditor={stopHosting}
-          onPlayAgain={stopHosting}
+          {...(sessionState === null
+            ? {}
+            : { localPlayerId: sessionState.localPlayerId })}
+          onBackToEditor={exitMultiplayer}
+          onPlayAgain={exitMultiplayer}
           {...(hudInsets ? { hudInsets } : {})}
           {...(hudEditing.layout !== undefined
             ? { layout: hudEditing.layout }

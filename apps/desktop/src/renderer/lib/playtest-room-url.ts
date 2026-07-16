@@ -1,6 +1,7 @@
 import {
   createGameHostLobbyClient,
   type LobbyCreateRequest,
+  type RoomLobbySummary,
 } from '@tileborne/game-client';
 
 const PLAYTEST_DEEPLINK_PREFIX = 'tileborne://playtest/';
@@ -115,7 +116,93 @@ export const createLocalMultiplayerRoom = async (
 export interface PlaytestJoinSession {
   readonly wsUrl: string;
   readonly playerId: string;
+  readonly handoffToken: string;
+  readonly reconnectToken?: string;
 }
+
+export interface LocalMultiplayerParticipantSession extends PlaytestJoinSession {
+  readonly baseUrl: string;
+  readonly roomId: string;
+}
+
+export interface LocalMultiplayerPlayerResult {
+  readonly playerId: string;
+  readonly outcome?: string;
+  readonly placement?: number;
+  readonly score?: number;
+}
+
+export interface LocalMultiplayerRoomResults {
+  readonly completedAt: string;
+  readonly reason?: string;
+  readonly players: readonly LocalMultiplayerPlayerResult[];
+}
+
+const REQUEST_TIMEOUT_MS = 3_000;
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abort = (): void => controller.abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+    init.signal?.removeEventListener('abort', abort);
+  }
+};
+
+export const getLocalMultiplayerLobby = (
+  baseUrl: string,
+  roomId: string,
+  signal?: AbortSignal,
+): Promise<RoomLobbySummary> =>
+  createGameHostLobbyClient({
+    baseUrl,
+    fetch: (input, init) =>
+      fetchWithTimeout(input, { ...init, ...(signal === undefined ? {} : { signal }) }),
+  }).getLobby(roomId);
+
+export const setLocalMultiplayerReady = async (
+  session: LocalMultiplayerParticipantSession,
+  ready: boolean,
+  signal?: AbortSignal,
+): Promise<RoomLobbySummary> => {
+  const response = await createGameHostLobbyClient({
+    baseUrl: session.baseUrl,
+    fetch: (input, init) =>
+      fetchWithTimeout(input, { ...init, ...(signal === undefined ? {} : { signal }) }),
+  }).setReady(session.roomId, {
+    playerId: session.playerId,
+    ready,
+    ...(session.reconnectToken === undefined
+      ? {}
+      : { reconnectToken: session.reconnectToken }),
+  });
+  return response.lobby;
+};
+
+export const getLocalMultiplayerResults = async (
+  baseUrl: string,
+  roomId: string,
+  signal?: AbortSignal,
+): Promise<LocalMultiplayerRoomResults | null> => {
+  const response = await fetchWithTimeout(
+    `${baseUrl.replace(/\/$/, '')}/rooms/${encodeURIComponent(roomId)}/results`,
+    signal === undefined ? {} : { signal },
+  );
+  if (!response.ok) {
+    throw new Error(`Playtest results failed: HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as {
+    readonly results: LocalMultiplayerRoomResults | null;
+  };
+  return body.results;
+};
 
 export const startPlaytestJoinSession = async (
   baseUrl: string,
@@ -136,9 +223,15 @@ export const startPlaytestJoinSession = async (
   const started = (await response.json()) as {
     readonly wsUrl: string;
     readonly playerId: string;
+    readonly handoffToken: string;
+    readonly reconnectToken?: string;
   };
   return {
     wsUrl: toWebSocketUrl(started.wsUrl),
     playerId: started.playerId,
+    handoffToken: started.handoffToken,
+    ...(started.reconnectToken === undefined
+      ? {}
+      : { reconnectToken: started.reconnectToken }),
   };
 };

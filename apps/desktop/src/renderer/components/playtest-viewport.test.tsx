@@ -170,8 +170,22 @@ const sessionsMock = vi.hoisted(() => ({
 }));
 vi.mock('@/hooks/queries', () => ({
   usePlaytestSessions: () => sessionsMock.current,
-  usePluginContributions: () => ({ data: undefined }),
-  useProject: () => ({ data: undefined }),
+  usePluginContributions: () => ({
+    data: {
+      gameModes: [
+        {
+          modeId: PLUGIN_ID,
+          pluginId: PLUGIN_ID,
+          label: 'Battle Royale',
+          rendererCapabilityId: 'battle-royale.renderer',
+          hasAuthoringPanel: true,
+        },
+      ],
+    },
+  }),
+  useProject: () => ({
+    data: { project: { settings: { activeGameMode: PLUGIN_ID } } },
+  }),
 }));
 
 vi.mock('@/hooks/mutations', () => ({
@@ -296,7 +310,7 @@ describe('PlaytestViewport overlay wiring', () => {
                   health: 100,
                   maxHealth: 100,
                 },
-                recentEvents: [],
+                gameplayEvents: [],
                 scoreboard: [
                   {
                     playerId: 'player-1',

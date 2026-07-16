@@ -20,6 +20,8 @@ export interface SpriteGeometryHandle {
   readonly label: string;
   readonly kind: SpriteGeometryHandleKind;
   readonly point: NormalizedPoint;
+  /** Optional authored facing/attachment direction, visualized from the handle. */
+  readonly rotationDeg?: number | undefined;
 }
 
 export type SpriteGeometryRectKind = 'hitbox' | 'footprint';
@@ -51,6 +53,7 @@ export interface SpriteGeometryCanvasProps {
   readonly activeFrameId?: string | undefined;
   readonly snapStep?: number | undefined;
   readonly onHandleChange: (id: string, point: NormalizedPoint) => void;
+  readonly onHandleRotationChange?: (id: string, rotationDeg: number) => void;
   readonly onRectChange?: (id: string, rect: NormalizedRect) => void;
   readonly onFrameChange?: (frameId: string) => void;
   readonly onResetDefaults?: () => void;
@@ -110,6 +113,7 @@ export function SpriteGeometryCanvas({
   activeFrameId,
   snapStep,
   onHandleChange,
+  onHandleRotationChange,
   onRectChange,
   onFrameChange,
   onResetDefaults,
@@ -256,7 +260,13 @@ export function SpriteGeometryCanvas({
                 data-testid={`sprite-geometry-rect-${entry.id}`}
               />
             ))}
-            {handles.map((handle) => (
+            {handles.map((handle) => {
+              const radians = ((handle.rotationDeg ?? 0) * Math.PI) / 180;
+              const originX = percent(handle.point.x);
+              const originY = percent(handle.point.y);
+              const directionX = originX + Math.cos(radians) * 12;
+              const directionY = originY + Math.sin(radians) * 12;
+              return (
               <g key={handle.id} data-testid={`sprite-geometry-handle-${handle.id}`}>
                 <line
                   x1={percent(handle.point.x)}
@@ -286,8 +296,22 @@ export function SpriteGeometryCanvas({
                   onPointerDown={(event) => handlePointerDown(event, handle.id)}
                   className="cursor-grab active:cursor-grabbing"
                 />
+                {handle.rotationDeg === undefined ? null : (
+                  <g data-testid={`sprite-geometry-direction-${handle.id}`}>
+                    <line
+                      x1={originX}
+                      y1={originY}
+                      x2={directionX}
+                      y2={directionY}
+                      stroke={HANDLE_COLORS[handle.kind]}
+                      strokeWidth="1.2"
+                    />
+                    <circle cx={directionX} cy={directionY} r="1.4" fill={HANDLE_COLORS[handle.kind]} />
+                  </g>
+                )}
               </g>
-            ))}
+              );
+            })}
           </svg>
         </div>
       </div>
@@ -320,6 +344,20 @@ export function SpriteGeometryCanvas({
                   step={snapStep ?? 0.01}
                   onChange={(y) => onHandleChange(handle.id, { ...handle.point, y })}
                 />
+                {handle.rotationDeg === undefined ? null : (
+                  <div className="col-span-2">
+                    <NumberField
+                      label="Rotation deg"
+                      value={handle.rotationDeg}
+                      min={-360}
+                      max={360}
+                      step={1}
+                      onChange={(rotationDeg) =>
+                        onHandleRotationChange?.(handle.id, rotationDeg)
+                      }
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ))}

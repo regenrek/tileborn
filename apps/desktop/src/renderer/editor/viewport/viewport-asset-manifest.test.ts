@@ -1,10 +1,4 @@
-import {
-  makeAssetId,
-  makePackId,
-  makePlaceableId,
-  makeTileId,
-  type Uuid,
-} from '@tileborne/core';
+import { makeAssetId, makePackId, makePlaceableId, makeTileId, type Uuid } from '@tileborne/core';
 import { type RuntimeAssetManifest } from '@tileborne/runtime';
 import { buildEditorTilesetIndex } from '@tileborne/sdk-tileset/editor-index';
 import {
@@ -163,7 +157,9 @@ describe('viewport asset manifest', () => {
       },
     });
 
-    const manifest = await Effect.runPromise(loadViewportAssetManifest({ projectId: 'project:test' }));
+    const manifest = await Effect.runPromise(
+      loadViewportAssetManifest({ projectId: 'project:test' }),
+    );
     expect(manifest.assets).toHaveLength(1);
     expect(manifest.name).toBe('viewport-blank-fallback');
     expect(manifest.assets[0]?.path.startsWith('data:image/png;base64,')).toBe(true);
@@ -173,7 +169,9 @@ describe('viewport asset manifest', () => {
     const getEditorIndex = stubWindow({
       packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
       listPacks: vi.fn().mockResolvedValue({
-        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+        packs: [
+          { id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version },
+        ],
       }),
     });
 
@@ -220,7 +218,11 @@ describe('viewport asset manifest', () => {
       tilesets: fakeTilesetPack.tilesets,
       assets: [
         ...fakeTilesetPack.assets,
-        new TilesetPackAsset({ id: decoyAssetId, path: 'props/decoy-sprite.png', mime: 'image/png' }),
+        new TilesetPackAsset({
+          id: decoyAssetId,
+          path: 'props/decoy-sprite.png',
+          mime: 'image/png',
+        }),
       ],
     });
     stubWindow({
@@ -287,11 +289,21 @@ describe('viewport asset manifest', () => {
       tilesets: fakeTilesetPack.tilesets,
       assets: [
         ...fakeTilesetPack.assets,
-        new TilesetPackAsset({ id: selectedAssetId, path: 'props/selected.png', mime: 'image/png' }),
+        new TilesetPackAsset({
+          id: selectedAssetId,
+          path: 'props/selected.png',
+          mime: 'image/png',
+        }),
         new TilesetPackAsset({ id: hiddenAssetId, path: 'props/hidden.png', mime: 'image/png' }),
       ],
       placeables: [
-        makeImagePlaceable(selectedPlaceableId, selectedAssetId, selectedTileId, 'props/selected.png', 0),
+        makeImagePlaceable(
+          selectedPlaceableId,
+          selectedAssetId,
+          selectedTileId,
+          'props/selected.png',
+          0,
+        ),
         makeImagePlaceable(hiddenPlaceableId, hiddenAssetId, hiddenTileId, 'props/hidden.png', 1),
       ],
     });
@@ -299,14 +311,20 @@ describe('viewport asset manifest', () => {
       packsById: new Map([[packWithPlaceables.id, packWithPlaceables]]),
       listPacks: vi.fn().mockResolvedValue({
         packs: [
-          { id: packWithPlaceables.id, name: packWithPlaceables.name, version: packWithPlaceables.version },
+          {
+            id: packWithPlaceables.id,
+            name: packWithPlaceables.name,
+            version: packWithPlaceables.version,
+          },
         ],
       }),
     });
 
     const bundle = await Effect.runPromise(
       loadViewportAssetBundle({
-        renderablePlaceableRefs: [{ packId: packWithPlaceables.id, placeableId: selectedPlaceableId }],
+        renderablePlaceableRefs: [
+          { packId: packWithPlaceables.id, placeableId: selectedPlaceableId },
+        ],
       }),
     );
     expect(bundle.renderableAssetIdByPath.get('tiles/sample.png')).toBe(sampleAssetId);
@@ -314,9 +332,10 @@ describe('viewport asset manifest', () => {
     expect(bundle.renderableAssetIdByPath.get('props/hidden.png')).toBeUndefined();
   });
 
-  it('loads packs referenced only by existing map object placeables', async () => {
-    // An object placed from a pack that is neither the map's tileset pack nor in
-    // the working palette must still resolve its placeable + atlas on map open.
+  it('discovers the owning pack for an unscoped catalog visual-ref', async () => {
+    // Catalog visual-refs deliberately carry globally unique placeable ids
+    // without duplicating an asset-pack id. The viewport must discover the
+    // owner and load only the referenced sprite frames.
     const objectPackId = makePackId('660e8400-e29b-41d4-a716-446655440077');
     const objectPlaceableId = makePlaceableId(uuid('400'));
     const objectAssetId = makeAssetId(uuid('401'));
@@ -365,12 +384,18 @@ describe('viewport asset manifest', () => {
         [fakeTilesetPack.id, fakeTilesetPack],
         [objectPackId, objectPack],
       ]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [
+          { id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version },
+          { id: objectPackId, name: objectPack.name, version: objectPack.version },
+        ],
+      }),
     });
 
     const bundle = await Effect.runPromise(
       loadViewportAssetBundle({
         packId: fakeTilesetPack.id,
-        renderablePlaceableRefs: [{ packId: objectPackId, placeableId: objectPlaceableId }],
+        renderablePlaceableRefs: [{ placeableId: objectPlaceableId }],
       }),
     );
 
@@ -412,7 +437,9 @@ describe('viewport asset manifest', () => {
     const getEditorIndex = stubWindow({
       packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
       listPacks: vi.fn().mockResolvedValue({
-        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+        packs: [
+          { id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version },
+        ],
       }),
     });
 
@@ -435,7 +462,9 @@ describe('viewport asset manifest', () => {
     stubWindow({
       packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
       listPacks: vi.fn().mockResolvedValue({
-        packs: [{ id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version }],
+        packs: [
+          { id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version },
+        ],
       }),
     });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,14 @@ const multiplayerStateMock = vi.hoisted(() => ({
   current: {
     sessionState: null as unknown,
     client: null as unknown,
+    roomReady: null as unknown,
+    participantSession: null as unknown,
+    lobbyState: null as unknown,
+    roomResults: null as unknown,
+    isReadyPending: false,
+    lobbyError: null as string | null,
+    setLocalReady: vi.fn(() => Promise.resolve()),
+    leaveSession: vi.fn(),
     stopHosting: vi.fn(),
   },
 }));
@@ -135,12 +143,14 @@ vi.mock('@/hooks/queries', () => ({
           modeId: activeModePluginId,
           pluginId: activeModePluginId,
           label: 'Battle Royale',
+          rendererCapabilityId: 'battle-royale.renderer',
           hasAuthoringPanel: true,
         },
         {
           modeId: arenaModePluginId,
           pluginId: arenaModePluginId,
           label: 'Example Arena',
+          rendererCapabilityId: 'example-arena.renderer',
           hasAuthoringPanel: true,
         },
       ],
@@ -244,6 +254,14 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     multiplayerStateMock.current = {
       sessionState: null,
       client: null,
+      roomReady: null,
+      participantSession: null,
+      lobbyState: null,
+      roomResults: null,
+      isReadyPending: false,
+      lobbyError: null,
+      setLocalReady: vi.fn(() => Promise.resolve()),
+      leaveSession: vi.fn(),
       stopHosting: vi.fn(),
     };
     projectStateMock.current = { settings: { activeGameMode: activeModePluginId } };
@@ -312,8 +330,115 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     renderViewport();
 
     await waitFor(() => {
-      expect(resolvePlaytestPlugin).toHaveBeenCalledWith(arenaModePluginId);
+      expect(resolvePlaytestPlugin).toHaveBeenCalledWith(
+        'example-arena.renderer',
+        expect.any(Object),
+      );
     });
+  });
+
+  it('keeps both players in the explicit lobby until ready, then shows active play and terminal results', async () => {
+    const setLocalReady = vi.fn(() => Promise.resolve());
+    const leaveSession = vi.fn();
+    const players = [
+      {
+        playerId: 'player-1',
+        status: 'connected',
+        ready: false,
+        reconnectEligible: true,
+        lastSeenAt: null,
+      },
+      {
+        playerId: 'player-2',
+        status: 'connected',
+        ready: false,
+        reconnectEligible: true,
+        lastSeenAt: null,
+      },
+    ];
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      // Regression: even a prematurely-live socket projection must not bypass
+      // the authoritative room lobby phase.
+      sessionState: { phase: 'live', localPlayerId: 'player-1', tick: 0, players: [] },
+      participantSession: {
+        baseUrl: 'http://127.0.0.1:8787',
+        roomId: 'room-1',
+        wsUrl: 'ws://127.0.0.1:8787/rooms/room-1/connect',
+        playerId: 'player-1',
+        handoffToken: 'handoff-1',
+        reconnectToken: 'reconnect-1',
+      },
+      lobbyState: {
+        roomId: 'room-1',
+        mapId: 'map-1',
+        phase: 'lobby',
+        lobby: { visibility: 'private' },
+        playerCount: 2,
+        maxPlayers: 8,
+        minReadyPlayers: 2,
+        canStart: false,
+        players,
+      },
+      setLocalReady,
+      leaveSession,
+    };
+
+    const { rerender } = renderViewport();
+
+    expect(screen.getByTestId('multiplayer-lobby')).toBeTruthy();
+    expect(screen.getAllByText('Not ready')).toHaveLength(2);
+    fireEvent.click(screen.getByTestId('multiplayer-ready-toggle'));
+    expect(setLocalReady).toHaveBeenCalledWith(true);
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      lobbyState: {
+        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        phase: 'lobby',
+        canStart: false,
+        players: [{ ...players[0], ready: true }, players[1]],
+      },
+    };
+    rerender(viewport());
+    expect(screen.getByTestId('multiplayer-lobby')).toBeTruthy();
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      sessionState: { phase: 'live', localPlayerId: 'player-1', tick: 1, players: [] },
+      lobbyState: {
+        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        phase: 'active',
+        canStart: true,
+        players: players.map((player) => ({ ...player, ready: true })),
+      },
+    };
+    rerender(viewport());
+    expect(screen.queryByTestId('multiplayer-lobby')).toBeNull();
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      lobbyState: {
+        ...multiplayerStateMock.current.lobbyState as Record<string, unknown>,
+        phase: 'finished',
+      },
+      roomResults: {
+        completedAt: '2026-07-14T12:00:00.000Z',
+        reason: 'last-player-standing',
+        players: [
+          { playerId: 'player-1', outcome: 'winner', placement: 1, score: 100 },
+          { playerId: 'player-2', outcome: 'eliminated', placement: 2, score: 25 },
+        ],
+      },
+    };
+    rerender(viewport());
+
+    expect(screen.getByTestId('multiplayer-results')).toBeTruthy();
+    expect(screen.getByText('last-player-standing')).toBeTruthy();
+    expect(screen.getByText('winner · 100 pts')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to editor' }));
+    expect(leaveSession).toHaveBeenCalledTimes(1);
+    expect(multiplayerStateMock.current.stopHosting).not.toHaveBeenCalled();
   });
 
   // Regression lock for the snapshot-interpolation smoothness fix: the

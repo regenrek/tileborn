@@ -21,6 +21,7 @@ import { CreateMapDialog } from '@/components/create-map-dialog';
 import { DuplicatePackDialog } from '@/components/duplicate-pack-dialog';
 import { GenerateMapDialog } from '@/components/generate-map-dialog';
 import { PluginInstallDialog } from '@/components/plugin-manager/plugin-install-dialog';
+import { ShipGameDialog } from '@/components/ship-game-dialog';
 import { BottomDrawer } from '@/components/shell/bottom-drawer';
 import { LeftSidebar } from '@/components/shell/left-sidebar';
 import { RightInspector } from '@/components/shell/right-inspector';
@@ -29,12 +30,14 @@ import { useWorkspaceTabSync } from '@/components/shell/use-workspace-tab-sync';
 import { WorkspaceTabBar } from '@/components/shell/workspace-tab-bar';
 import { modKeyLabel } from '@/lib/keyboard-shortcuts';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
+import { useReadinessProblemsOwner } from '@/hooks/use-readiness-problems-owner';
 
 const SIDEBAR_COLLAPSED_SIZE = '48px';
 const INSPECTOR_COLLAPSED_SIZE = '48px';
 
 export function AppShell() {
   useWorkspaceTabSync();
+  useReadinessProblemsOwner();
   const { projectId, mapId } = useParams({ strict: false });
   const bottomDrawerOpen = useEditorUiStore((s) => s.bottomDrawerOpen);
   const setBottomDrawerOpen = useEditorUiStore((s) => s.setBottomDrawerOpen);
@@ -52,6 +55,8 @@ export function AppShell() {
   const assetImportDialogOpen = useEditorUiStore((s) => s.assetImportDialogOpen);
   const spriteEditorOpen = useEditorUiStore((s) => s.spriteEditorOpen);
   const setSpriteEditorOpen = useEditorUiStore((s) => s.setSpriteEditorOpen);
+  const shipGameDialogOpen = useEditorUiStore((s) => s.shipGameDialogOpen);
+  const setShipGameDialogOpen = useEditorUiStore((s) => s.setShipGameDialogOpen);
 
   const sidebarPanelRef = usePanelRef();
   const inspectorPanelRef = usePanelRef();
@@ -240,6 +245,11 @@ export function AppShell() {
         projectId={projectId}
       />
       <SpriteAnimationStudio open={spriteEditorOpen} onOpenChange={setSpriteEditorOpen} />
+      <ShipGameDialog
+        open={shipGameDialogOpen}
+        onOpenChange={setShipGameDialogOpen}
+        projectId={projectId as ProjectId | undefined}
+      />
       <DuplicatePackDialog />
 
       <AppNotifications />

@@ -8,21 +8,25 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BATTLE_ROYALE_PLUGIN_ID,
+  BATTLE_ROYALE_RENDERER_CAPABILITY_ID,
   EXAMPLE_ARENA_PLUGIN_ID,
+  EXAMPLE_ARENA_RENDERER_CAPABILITY_ID,
   KNOWN_PLAYTEST_MODE_IDS,
   resolvePlaytestPlugin,
 } from './playtest-plugin-bridge';
 
 describe('playtest-plugin-bridge', () => {
-  it('resolves modes from a registry (no hardcoded switch) and returns undefined for unknown ids', () => {
+  it('resolves modes only by renderer capability and rejects plugin ids or unknown ids', () => {
     expect(KNOWN_PLAYTEST_MODE_IDS).toContain(BATTLE_ROYALE_PLUGIN_ID);
-    expect(resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID)).toBeDefined();
-    expect(resolvePlaytestPlugin('@tileborne-plugins/not-installed')).toBeUndefined();
+    expect(resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID)).toBeDefined();
+    expect(() => resolvePlaytestPlugin(BATTLE_ROYALE_PLUGIN_ID)).toThrow(/capability/);
+    expect(() => resolvePlaytestPlugin('@tileborne-plugins/not-installed')).toThrow(/capability/);
+    expect(() => resolvePlaytestPlugin(undefined)).toThrow(/capabilities\.renderer/);
   });
 
   it('resolves a NON-battle-royale mode (the example arena) to a projector', () => {
     expect(KNOWN_PLAYTEST_MODE_IDS).toContain(EXAMPLE_ARENA_PLUGIN_ID);
-    const arena = resolvePlaytestPlugin(EXAMPLE_ARENA_PLUGIN_ID);
+    const arena = resolvePlaytestPlugin(EXAMPLE_ARENA_RENDERER_CAPABILITY_ID);
     expect(arena).toBeDefined();
     expect(arena?.projector).toBeDefined();
     // Arena binds melee to mouse-0 only (no Space) — a distinct, decoded map.
@@ -32,7 +36,7 @@ describe('playtest-plugin-bridge', () => {
   });
 
   it('resolves the canonical battle royale manifest id and exposes decoding', () => {
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
 
     expect(BATTLE_ROYALE_PLUGIN_ID).toBe(PLUGIN_ID);
     expect(plugin).toBeDefined();
@@ -53,7 +57,7 @@ describe('playtest-plugin-bridge', () => {
   });
 
   it('exposes the plugin render manifest (fixedZoom + hudInsets) on the bridge result', () => {
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     expect(plugin?.manifest).toEqual({
       fixedZoom: 4,
       hudInsets: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -61,14 +65,14 @@ describe('playtest-plugin-bridge', () => {
   });
 
   it('fails playtest resolution before mount if a BR projector asset is missing', () => {
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     const registered = new Set(plugin?.bundledAssets.map((asset) => String(asset.assetId)) ?? []);
 
     expect(requiredBattleRoyaleRenderableAssetIds().filter((assetId) => !registered.has(assetId))).toEqual([]);
   });
 
   it('uses the BR plugin defaults when no user overlay is injected (Space + mouse bound)', () => {
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     expect(plugin?.inputCaptureProfile.boundKeyCodes.has('Space')).toBe(true);
     expect(plugin?.inputCaptureProfile.usesMouseButtons).toBe(true);
   });
@@ -92,7 +96,7 @@ describe('playtest-plugin-bridge', () => {
       },
     });
 
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { userInputOverlay: overlay });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { userInputOverlay: overlay });
     const scheme = plugin?.controlScheme;
     const bindings = scheme === undefined ? [] : (plugin?.inputMap.schemeDefaults[scheme] ?? []);
     const primary = bindings.filter((binding) => binding.action === CORE_ACTIONS.PrimaryAction);
@@ -108,7 +112,7 @@ describe('playtest-plugin-bridge', () => {
   });
 
   it('exposes the BR default HUD layout when no user HUD overlay is injected', () => {
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID);
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     const byId = new Map(
       (plugin?.hudLayout.widgets ?? []).map((widget) => [widget.id as string, widget]),
     );
@@ -131,7 +135,7 @@ describe('playtest-plugin-bridge', () => {
       ],
     });
 
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { manifestHudLayout: manifestLayout });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { manifestHudLayout: manifestLayout });
     expect(plugin?.hudLayout.id).toBe('manifest-hud');
     expect(plugin?.hudLayout.widgets).toHaveLength(1);
     expect(plugin?.hudLayout.widgets[0]?.anchor).toBe('bottom-left');
@@ -173,7 +177,7 @@ describe('playtest-plugin-bridge', () => {
       ],
     });
 
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID, {
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, {
       projectHudLayout: projectLayout,
       userHudOverlay: playerOverlay,
     });
@@ -203,7 +207,7 @@ describe('playtest-plugin-bridge', () => {
       ],
     });
 
-    const plugin = resolvePlaytestPlugin(PLUGIN_ID, { userHudOverlay: overlay });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { userHudOverlay: overlay });
     const byId = new Map(
       (plugin?.hudLayout.widgets ?? []).map((widget) => [widget.id as string, widget]),
     );

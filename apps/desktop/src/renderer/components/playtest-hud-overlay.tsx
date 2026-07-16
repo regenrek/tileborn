@@ -1,6 +1,6 @@
 import type { HudAnchor, HudLayout, HudWidgetInstanceId } from '@tileborne/core';
 import { Option } from 'effect';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   deriveHudWidgetContext,
   HudOverlay,
@@ -31,6 +31,7 @@ interface PlaytestHudOverlayProps {
   readonly projectId: string;
   readonly onPlayAgain: (projectId: string, mapId: string) => void | Promise<void>;
   readonly onBackToEditor: () => void | Promise<void>;
+  readonly localPlayerId?: string | null;
   readonly isRestarting?: boolean;
   /** Plugin-owned HUD insets (ADR-0014 Phase 1); see `HudOverlayProps.hudInsets`. */
   readonly hudInsets?: HudInsets;
@@ -70,6 +71,7 @@ export function PlaytestHudOverlay({
   projectId,
   onPlayAgain,
   onBackToEditor,
+  localPlayerId,
   isRestarting = false,
   hudInsets,
   layout,
@@ -79,6 +81,40 @@ export function PlaytestHudOverlay({
   const ctx = deriveHudWidgetContext(metrics);
   const overlayLayout = useMemo(() => normalizeHudLayoutForOverlay(layout), [layout]);
   const gameOver = ctx.hud?.gameOver;
+  const terminalMatchKey =
+    gameOver === undefined ? undefined : `${gameOver.winnerId}:${gameOver.tickCount}`;
+  const [terminalActionState, setTerminalActionState] = useState({
+    matchKey: terminalMatchKey,
+    armed: false,
+  });
+  if (terminalActionState.matchKey !== terminalMatchKey) {
+    setTerminalActionState({ matchKey: terminalMatchKey, armed: false });
+  }
+  useEffect(() => {
+    if (terminalMatchKey === undefined) {
+      return undefined;
+    }
+    // A gameplay key can be in flight at the exact frame GameOver opens the
+    // focus-trapped dialog. Briefly disarm actions so that key cannot
+    // accidentally activate Back to Editor / Play Again.
+    const timer = setTimeout(
+      () =>
+        setTerminalActionState((current) =>
+          current.matchKey === terminalMatchKey ? { ...current, armed: true } : current,
+        ),
+      500,
+    );
+    return () => clearTimeout(timer);
+  }, [terminalMatchKey]);
+  const terminalActionsArmed =
+    terminalActionState.matchKey === terminalMatchKey && terminalActionState.armed;
+  const effectiveLocalPlayerId = ctx.localPlayer?.playerId ?? localPlayerId ?? undefined;
+  const outcomeTitle =
+    gameOver === undefined || effectiveLocalPlayerId === undefined
+      ? 'Match complete'
+      : effectiveLocalPlayerId === gameOver.winnerId
+        ? 'Victory'
+        : 'Defeat';
   const localScoreboardEntry = ctx.scoreboard.find(
     (entry) => entry.playerId === ctx.localPlayer?.playerId,
   );
@@ -108,7 +144,7 @@ export function PlaytestHudOverlay({
           data-testid="playtest-win-dialog"
         >
           <DialogHeader>
-            <DialogTitle>Victory</DialogTitle>
+            <DialogTitle>{outcomeTitle}</DialogTitle>
             <DialogDescription>
               {gameOver ? `${gameOver.winnerDisplayName} wins the match.` : 'Match complete.'}
             </DialogDescription>
@@ -157,7 +193,7 @@ export function PlaytestHudOverlay({
             <Button
               type="button"
               variant="outline"
-              disabled={isRestarting}
+              disabled={isRestarting || !terminalActionsArmed}
               onClick={() => void onBackToEditor()}
               data-testid="playtest-win-back-to-editor"
             >
@@ -165,7 +201,7 @@ export function PlaytestHudOverlay({
             </Button>
             <Button
               type="button"
-              disabled={isRestarting}
+              disabled={isRestarting || !terminalActionsArmed}
               onClick={() => void onPlayAgain(projectId, mapId)}
               data-testid="playtest-win-play-again"
             >

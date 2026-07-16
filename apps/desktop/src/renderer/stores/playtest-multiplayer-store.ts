@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { RoomLobbySummary } from '@tileborne/game-client';
 
 import {
   PlaytestMultiplayerClient,
@@ -7,9 +8,14 @@ import {
 import { resolvePlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import {
   createLocalMultiplayerRoom,
+  getLocalMultiplayerLobby,
+  getLocalMultiplayerResults,
   parsePlaytestRoomInput,
+  setLocalMultiplayerReady,
   startPlaytestJoinSession,
   type LocalMultiplayerRoomReady,
+  type LocalMultiplayerParticipantSession,
+  type LocalMultiplayerRoomResults,
 } from '@/lib/playtest-room-url';
 import { readLobbyModelSelection } from '@/lib/lobby-model-selection';
 import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
@@ -21,7 +27,10 @@ export type PlaytestMultiplayerFlowPhase =
   | 'starting-host'
   | 'host-ready'
   | 'joining'
+  | 'lobby'
+  | 'countdown'
   | 'live'
+  | 'finished'
   | 'error';
 
 interface PlaytestMultiplayerStoreState {
@@ -30,6 +39,11 @@ interface PlaytestMultiplayerStoreState {
   sessionState: MultiplayerSessionState | null;
   welcomeSnapshot: unknown;
   client: PlaytestMultiplayerClient | null;
+  participantSession: LocalMultiplayerParticipantSession | null;
+  lobbyState: RoomLobbySummary | null;
+  roomResults: LocalMultiplayerRoomResults | null;
+  isReadyPending: boolean;
+  lobbyError: string | null;
 }
 
 interface PlaytestMultiplayerStoreActions {
@@ -37,19 +51,21 @@ interface PlaytestMultiplayerStoreActions {
   hostLocalMatch: (projectId: string, mapId: string) => Promise<void>;
   joinFromInput: (
     input: string,
-    activeModePluginId: string | undefined,
+    rendererCapabilityId: string | undefined,
     mapId: string,
     mapWidth: number,
     mapHeight: number,
     fallbackBaseUrl?: string,
   ) => Promise<void>;
   joinHostAsPlayer: (
-    activeModePluginId: string | undefined,
+    rendererCapabilityId: string | undefined,
     mapId: string,
     mapWidth: number,
     mapHeight: number,
   ) => Promise<void>;
   openSecondClient: (projectId: string, mapId: string) => Promise<void>;
+  setLocalReady: (ready: boolean) => Promise<void>;
+  leaveSession: () => void;
   stopHosting: () => Promise<void>;
   copyText: (label: string, value: string) => Promise<void>;
 }
@@ -60,17 +76,128 @@ const initialState: PlaytestMultiplayerStoreState = {
   sessionState: null,
   welcomeSnapshot: null,
   client: null,
+  participantSession: null,
+  lobbyState: null,
+  roomResults: null,
+  isReadyPending: false,
+  lobbyError: null,
+};
+
+type StoreSet = (
+  partial:
+    | Partial<PlaytestMultiplayerStoreState>
+    | ((state: PlaytestMultiplayerStoreState) => Partial<PlaytestMultiplayerStoreState>),
+) => void;
+
+const LOBBY_POLL_INTERVAL_MS = 250;
+let lobbyPollTimer: ReturnType<typeof setTimeout> | null = null;
+let lobbyPollAbort: AbortController | null = null;
+let lobbyPollGeneration = 0;
+
+const stopLobbyPolling = (): void => {
+  lobbyPollGeneration += 1;
+  if (lobbyPollTimer !== null) {
+    clearTimeout(lobbyPollTimer);
+    lobbyPollTimer = null;
+  }
+  lobbyPollAbort?.abort();
+  lobbyPollAbort = null;
+};
+
+const flowPhaseForLobby = (lobby: RoomLobbySummary): PlaytestMultiplayerFlowPhase => {
+  if (lobby.phase === 'active') {
+    return 'live';
+  }
+  if (lobby.phase === 'finished' || lobby.phase === 'archived') {
+    return 'finished';
+  }
+  return lobby.phase;
+};
+
+const sameParticipant = (
+  left: LocalMultiplayerParticipantSession | null,
+  right: LocalMultiplayerParticipantSession,
+): boolean =>
+  left?.baseUrl === right.baseUrl &&
+  left?.roomId === right.roomId &&
+  left?.playerId === right.playerId;
+
+const startLobbyPolling = (
+  session: LocalMultiplayerParticipantSession,
+  set: StoreSet,
+  get: () => PlaytestMultiplayerStoreState,
+): void => {
+  stopLobbyPolling();
+  const generation = lobbyPollGeneration;
+
+  const poll = async (): Promise<void> => {
+    lobbyPollTimer = null;
+    if (
+      generation !== lobbyPollGeneration ||
+      !sameParticipant(get().participantSession, session)
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    lobbyPollAbort = controller;
+    let shouldContinue = true;
+    try {
+      const lobby = await getLocalMultiplayerLobby(
+        session.baseUrl,
+        session.roomId,
+        controller.signal,
+      );
+      if (generation !== lobbyPollGeneration) {
+        return;
+      }
+      set({
+        lobbyState: lobby,
+        flowPhase: flowPhaseForLobby(lobby),
+        lobbyError: null,
+      });
+
+      if (lobby.phase === 'finished' || lobby.phase === 'archived') {
+        const results = await getLocalMultiplayerResults(
+          session.baseUrl,
+          session.roomId,
+          controller.signal,
+        );
+        if (generation !== lobbyPollGeneration) {
+          return;
+        }
+        set({ roomResults: results });
+        shouldContinue = results === null;
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && generation === lobbyPollGeneration) {
+        set({
+          lobbyError:
+            error instanceof Error ? error.message : 'Failed to refresh multiplayer lobby',
+        });
+      }
+    } finally {
+      if (lobbyPollAbort === controller) {
+        lobbyPollAbort = null;
+      }
+      if (
+        shouldContinue &&
+        generation === lobbyPollGeneration &&
+        sameParticipant(get().participantSession, session)
+      ) {
+        lobbyPollTimer = setTimeout(() => void poll(), LOBBY_POLL_INTERVAL_MS);
+      }
+    }
+  };
+
+  void poll();
 };
 
 const ensureClient = (
-  activeModePluginId: string,
+  rendererCapabilityId: string,
   mapWidth: number,
   mapHeight: number,
-  set: (
-    partial:
-      | Partial<PlaytestMultiplayerStoreState>
-      | ((state: PlaytestMultiplayerStoreState) => Partial<PlaytestMultiplayerStoreState>),
-  ) => void,
+  set: StoreSet,
   get: () => PlaytestMultiplayerStoreState,
 ): PlaytestMultiplayerClient => {
   const existing = get().client;
@@ -80,28 +207,18 @@ const ensureClient = (
   // ADR-0023 section B: the multiplayer client runs the ACTIVE game mode's
   // discovered playtest runtime — resolved here by the caller-provided mode
   // plugin id, never a hardcoded plugin literal.
-  const plugin = resolvePlaytestPlugin(activeModePluginId);
-  if (plugin === undefined) {
-    throw new Error(`No playtest runtime registered for active game mode ${activeModePluginId}`);
-  }
+  const plugin = resolvePlaytestPlugin(rendererCapabilityId);
   const client = new PlaytestMultiplayerClient(
     mapWidth,
     mapHeight,
     (sessionState) => {
       set({ sessionState });
-      if (sessionState.phase === 'live') {
-        set({ flowPhase: 'live' });
-        useEditorUiStore.getState().setPlaytestMode('multiplayer');
-        useEditorUiStore.getState().setPlaytestActive(true);
-      }
       if (sessionState.phase === 'error') {
         set({ flowPhase: 'error' });
       }
     },
     (welcomeSnapshot) => {
-      set({ welcomeSnapshot, flowPhase: 'live' });
-      useEditorUiStore.getState().setPlaytestMode('multiplayer');
-      useEditorUiStore.getState().setPlaytestActive(true);
+      set({ welcomeSnapshot });
     },
     plugin,
   );
@@ -111,22 +228,33 @@ const ensureClient = (
 
 const connectToRoom = async (
   baseUrl: string,
-  activeModePluginId: string,
+  rendererCapabilityId: string,
   mapId: string,
   roomId: string,
   mapWidth: number,
   mapHeight: number,
-  set: (
-    partial:
-      | Partial<PlaytestMultiplayerStoreState>
-      | ((state: PlaytestMultiplayerStoreState) => Partial<PlaytestMultiplayerStoreState>),
-  ) => void,
+  set: StoreSet,
   get: () => PlaytestMultiplayerStoreState,
 ): Promise<void> => {
+  stopLobbyPolling();
   set({ flowPhase: 'joining' });
   const joinSession = await startPlaytestJoinSession(baseUrl, mapId, roomId);
-  const client = ensureClient(activeModePluginId, mapWidth, mapHeight, set, get);
+  const participantSession: LocalMultiplayerParticipantSession = {
+    ...joinSession,
+    baseUrl: baseUrl.replace(/\/$/, ''),
+    roomId,
+  };
+  set({
+    participantSession,
+    lobbyState: null,
+    roomResults: null,
+    lobbyError: null,
+  });
+  useEditorUiStore.getState().setPlaytestMode('multiplayer');
+  useEditorUiStore.getState().setPlaytestActive(true);
+  const client = ensureClient(rendererCapabilityId, mapWidth, mapHeight, set, get);
   client.connect(joinSession.wsUrl, joinSession.playerId);
+  startLobbyPolling(participantSession, set, get);
 };
 
 export const usePlaytestMultiplayerStore = create<
@@ -135,12 +263,14 @@ export const usePlaytestMultiplayerStore = create<
   ...initialState,
 
   reset: () => {
+    stopLobbyPolling();
     get().client?.disconnect();
     set(initialState);
     useEditorUiStore.getState().resetMultiplayerPlaytest();
   },
 
   hostLocalMatch: async (projectId, mapId) => {
+    stopLobbyPolling();
     set({ flowPhase: 'starting-host' });
     useEditorUiStore.getState().setPlaytestHostModalOpen(true);
     try {
@@ -171,9 +301,9 @@ export const usePlaytestMultiplayerStore = create<
     }
   },
 
-  joinFromInput: async (input, activeModePluginId, mapId, mapWidth, mapHeight, fallbackBaseUrl) => {
-    if (activeModePluginId === undefined) {
-      notifyError('Select an active game mode before joining a match');
+  joinFromInput: async (input, rendererCapabilityId, mapId, mapWidth, mapHeight, fallbackBaseUrl) => {
+    if (rendererCapabilityId === undefined) {
+      notifyError('The active game mode does not declare capabilities.renderer');
       return;
     }
     const parsed = parsePlaytestRoomInput(input, fallbackBaseUrl);
@@ -185,7 +315,7 @@ export const usePlaytestMultiplayerStore = create<
     try {
       await connectToRoom(
         parsed.baseUrl,
-        activeModePluginId,
+        rendererCapabilityId,
         mapId,
         parsed.roomId,
         mapWidth,
@@ -200,19 +330,19 @@ export const usePlaytestMultiplayerStore = create<
     }
   },
 
-  joinHostAsPlayer: async (activeModePluginId, mapId, mapWidth, mapHeight) => {
+  joinHostAsPlayer: async (rendererCapabilityId, mapId, mapWidth, mapHeight) => {
     const room = get().roomReady;
     if (!room) {
       return;
     }
-    if (activeModePluginId === undefined) {
-      notifyError('Select an active game mode before joining a match');
+    if (rendererCapabilityId === undefined) {
+      notifyError('The active game mode does not declare capabilities.renderer');
       return;
     }
     useEditorUiStore.getState().setPlaytestHostModalOpen(false);
     await connectToRoom(
       room.baseUrl,
-      activeModePluginId,
+      rendererCapabilityId,
       mapId,
       room.roomId,
       mapWidth,
@@ -236,7 +366,50 @@ export const usePlaytestMultiplayerStore = create<
     notifySuccess('Opened second client window');
   },
 
+  setLocalReady: async (ready) => {
+    const session = get().participantSession;
+    const lobby = get().lobbyState;
+    if (
+      session === null ||
+      lobby === null ||
+      (lobby.phase !== 'lobby' && lobby.phase !== 'countdown')
+    ) {
+      return;
+    }
+    set({ isReadyPending: true, lobbyError: null });
+    try {
+      const nextLobby = await setLocalMultiplayerReady(session, ready);
+      if (!sameParticipant(get().participantSession, session)) {
+        return;
+      }
+      set({
+        lobbyState: nextLobby,
+        flowPhase: flowPhaseForLobby(nextLobby),
+      });
+    } catch (error) {
+      if (sameParticipant(get().participantSession, session)) {
+        const message = error instanceof Error ? error.message : 'Failed to update readiness';
+        set({ lobbyError: message });
+        notifyError(message);
+      }
+      throw error;
+    } finally {
+      if (sameParticipant(get().participantSession, session)) {
+        set({ isReadyPending: false });
+      }
+    }
+  },
+
+  leaveSession: () => {
+    stopLobbyPolling();
+    get().client?.disconnect();
+    set(initialState);
+    useEditorUiStore.getState().resetMultiplayerPlaytest();
+    notifyInfo('Left multiplayer room');
+  },
+
   stopHosting: async () => {
+    stopLobbyPolling();
     get().client?.disconnect();
     set({ ...initialState, client: null });
     try {
@@ -259,6 +432,7 @@ export const usePlaytestMultiplayerStore = create<
 }));
 
 export const disposePlaytestMultiplayerSession = (): void => {
+  stopLobbyPolling();
   usePlaytestMultiplayerStore.getState().client?.disconnect();
   usePlaytestMultiplayerStore.setState(initialState);
 };

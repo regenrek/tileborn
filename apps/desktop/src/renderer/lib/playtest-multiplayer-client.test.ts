@@ -1,6 +1,7 @@
 import {
   encodeMessage as encodeRuntimeMessage,
   Events,
+  PlayerJoined,
   SnapshotDelta,
 } from '@tileborne/runtime';
 import { Option } from 'effect';
@@ -222,6 +223,46 @@ describe('PlaytestMultiplayerClient', () => {
     );
   });
 
+  it('stays connecting for admission frames and becomes live only on a runtime snapshot', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const onStateChange = vi.fn();
+    const onInitialFrame = vi.fn();
+    const client = new PlaytestMultiplayerClient(
+      64,
+      64,
+      onStateChange,
+      onInitialFrame,
+      makePlugin(),
+    );
+
+    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    const socket = MockWebSocket.instances[0];
+    socket?.receive(
+      toArrayBuffer(
+        encodeRuntimeMessage(
+          new PlayerJoined({ playerId: 'player-1', displayName: Option.none() }),
+        ),
+      ),
+    );
+
+    expect(client.getState()).toMatchObject({ phase: 'connecting', tick: 0 });
+    expect(onInitialFrame).not.toHaveBeenCalled();
+
+    socket?.receive(
+      toArrayBuffer(
+        encodeRuntimeMessage(
+          new SnapshotDelta({
+            tick: 1,
+            baseTick: 0,
+            diff: Option.some([{ tick: 1, players: 1 }]),
+          }),
+        ),
+      ),
+    );
+
+    expect(client.getState()).toMatchObject({ phase: 'live', tick: 1 });
+  });
+
   it('projects BR snapshots and match events into HUD state', () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const onStateChange = vi.fn();
@@ -343,13 +384,13 @@ describe('PlaytestMultiplayerClient', () => {
       },
     });
     expect(
-      latestState?.hud.recentEvents.some(
-        (event: PlaytestHudEvent) => event._tag === 'PlayerKilled',
+      latestState?.hud.gameplayEvents.some(
+        (event: PlaytestHudEvent) => event._tag === 'EntityDefeated',
       ),
     ).toBe(true);
     expect(
-      latestState?.hud.recentEvents.some(
-        (event: PlaytestHudEvent) => event._tag === 'PickupCollected',
+      latestState?.hud.gameplayEvents.some(
+        (event: PlaytestHudEvent) => event._tag === 'ItemGranted',
       ),
     ).toBe(true);
   });

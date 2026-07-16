@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import type { MapId, PluginId, ProjectId } from '@tileborne/core';
+import type { ReadinessReport } from '@tileborne/ipc-contracts';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Command,
@@ -14,10 +15,7 @@ import {
 import { FolderOpenIcon } from 'lucide-react';
 
 import { PaletteCommandItem } from '@/components/shell/command-palette-item';
-import {
-  focusAdjacentCommandGroup,
-  rankRecentCommands,
-} from '@/lib/command-palette-utils';
+import { focusAdjacentCommandGroup, rankRecentCommands } from '@/lib/command-palette-utils';
 import {
   pluginCommandId,
   recentProjectCommandId,
@@ -29,13 +27,17 @@ import {
   type ShellCommandGroupId,
 } from '@/lib/shell-command-registry';
 import { workspaceViewForCommand } from '@/lib/workspace-views';
-import {
-  useInvokePluginEditorCommand,
-  useStartBuild,
-} from '@/hooks/mutations';
+import { useInvokePluginEditorCommand } from '@/hooks/mutations';
 import { usePluginCommandContributions } from '@/hooks/use-plugin-command-contributions';
-import { useProjectsList } from '@/hooks/queries';
+import { useProjectsList, useReadiness } from '@/hooks/queries';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
+import {
+  readinessGateMessage,
+  readinessWarnings,
+  rendererExecutionAction,
+  type RendererExecutionEntryPoint,
+  showReadinessProblems,
+} from '@/lib/readiness-gate';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorUiStore, type EditorTool } from '@/stores/editor-ui-store';
 
@@ -80,6 +82,7 @@ function useCommandPaletteModel({
   const setCreateProjectDialogOpen = useEditorUiStore((s) => s.setCreateProjectDialogOpen);
   const setPluginInstallDialogOpen = useEditorUiStore((s) => s.setPluginInstallDialogOpen);
   const setAssetImportDialogOpen = useEditorUiStore((s) => s.setAssetImportDialogOpen);
+  const setShipGameDialogOpen = useEditorUiStore((s) => s.setShipGameDialogOpen);
   const setSpriteEditorOpen = useEditorUiStore((s) => s.setSpriteEditorOpen);
   const selectTool = useEditorUiStore((s) => s.selectTool);
   const setShowGrid = useEditorUiStore((s) => s.setShowGrid);
@@ -90,9 +93,34 @@ function useCommandPaletteModel({
   const bottomDrawerOpen = useEditorUiStore((s) => s.bottomDrawerOpen);
   const projectsQuery = useProjectsList();
   const pluginCommands = usePluginCommandContributions();
-  const startBuild = useStartBuild();
   const invokePluginCommand = useInvokePluginEditorCommand();
   const { start: startPlaytest } = usePlaytestControls();
+  const playtestReadiness = useReadiness(projectId, mapId, 'playtest');
+
+  const canExecute = useCallback(
+    (
+      report: ReadinessReport | undefined,
+      pending: boolean,
+      entryPoint: RendererExecutionEntryPoint,
+    ): boolean => {
+      const action = rendererExecutionAction(entryPoint);
+      const message = readinessGateMessage(report, action);
+      if (pending || message.length > 0) {
+        notifyError(message || `Readiness is still being checked before ${action}.`);
+        setBottomDrawerOpen(true);
+        window.setTimeout(showReadinessProblems, 0);
+        return false;
+      }
+      const warnings = readinessWarnings(report);
+      if (warnings.length > 0) {
+        notifySuccess(
+          `${action === 'playtest' ? 'Playtest' : 'Build'} continuing with ${warnings.length} readiness warning${warnings.length === 1 ? '' : 's'}.`,
+        );
+      }
+      return true;
+    },
+    [setBottomDrawerOpen],
+  );
 
   const recentProjects = useMemo(() => {
     const all = projectsQuery.data?.projects ?? [];
@@ -195,11 +223,20 @@ function useCommandPaletteModel({
             return;
           }
           runCommand(command.id, () => {
-            void startBuild.mutateAsync({ projectId: projectId as ProjectId });
+            setShipGameDialogOpen(true);
           });
           return;
         case 'map.start-playtest':
           if (!projectId || !mapId) {
+            return;
+          }
+          if (
+            !canExecute(
+              playtestReadiness.data?.report,
+              playtestReadiness.isLoading,
+              'command-palette.playtest',
+            )
+          ) {
             return;
           }
           runCommand(command.id, () => {
@@ -225,9 +262,12 @@ function useCommandPaletteModel({
     },
     [
       bottomDrawerOpen,
+      canExecute,
       mapId,
       navigate,
       projectId,
+      playtestReadiness.data?.report,
+      playtestReadiness.isLoading,
       runCommand,
       selectTool,
       setBottomDrawerOpen,
@@ -236,11 +276,11 @@ function useCommandPaletteModel({
       setCreateProjectDialogOpen,
       setGenerateMapDialogOpen,
       setPluginInstallDialogOpen,
+      setShipGameDialogOpen,
       setShowCollisionOverlay,
       setShowGrid,
       showCollisionOverlay,
       showGrid,
-      startBuild,
       startPlaytest,
     ],
   );
@@ -386,13 +426,12 @@ function useCommandPaletteModel({
 export function CommandPalette({ open, onOpenChange, projectId, mapId }: CommandPaletteProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
-  const { groupedCommands, recentCommandEntries, visibleGroupIds } =
-    useCommandPaletteModel({
-      projectId,
-      mapId,
-      onOpenChange,
-      setSearch,
-    });
+  const { groupedCommands, recentCommandEntries, visibleGroupIds } = useCommandPaletteModel({
+    projectId,
+    mapId,
+    onOpenChange,
+    setSearch,
+  });
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -417,113 +456,110 @@ export function CommandPalette({ open, onOpenChange, projectId, mapId }: Command
         <CommandInput placeholder="Search commands, maps, plugins…" />
         <div ref={listRef}>
           <CommandList>
-          <CommandEmpty className={typography.bodyCompact}>
-            No matching commands. Try a different search or clear the filter.
-          </CommandEmpty>
+            <CommandEmpty className={typography.bodyCompact}>
+              No matching commands. Try a different search or clear the filter.
+            </CommandEmpty>
 
-          {recentCommandEntries.length > 0 ? (
-            <>
-              <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS.recent}>
-                {recentCommandEntries.map((command) => (
-                  <PaletteCommandItem
-                    key={`recent-${command.id}`}
-                    value={command.value}
-                    label={command.label}
-                    query={search}
-                    icon={command.icon}
-                    shortcut={command.shortcut}
-                    disabled={command.disabled}
-                    recent
-                    onSelect={command.run}
-                  />
-                ))}
-              </CommandGroup>
-              <CommandSeparator />
-            </>
-          ) : null}
-
-          {visibleGroupIds.map((groupId) => {
-            if (groupId === 'plugins') {
-              const generalPluginCommands = groupedCommands.get('plugins') ?? [];
-              const namedPluginSections: Array<[string, ResolvedCommand[]]> = [];
-              const sortedPluginSections = Array.from(groupedCommands.entries()).sort(
-                ([left], [right]) => left.localeCompare(right),
-              );
-              for (const section of sortedPluginSections) {
-                const [key] = section;
-                if (key.startsWith('plugins:') && key !== 'plugins:') {
-                  namedPluginSections.push(section);
-                }
-              }
-              if (generalPluginCommands.length === 0 && namedPluginSections.length === 0) {
-                return null;
-              }
-              return (
-                <section key={groupId}>
-                  <CommandSeparator />
-                  {generalPluginCommands.length > 0 ? (
-                    <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS.plugins}>
-                      {generalPluginCommands.map((command) => (
-                        <PaletteCommandItem
-                          key={command.id}
-                          value={command.value}
-                          label={command.label}
-                          query={search}
-                          icon={command.icon}
-                          shortcut={command.shortcut}
-                          disabled={command.disabled}
-                          onSelect={command.run}
-                        />
-                      ))}
-                    </CommandGroup>
-                  ) : null}
-                  {namedPluginSections.map(([sectionKey, commands]) => (
-                    <CommandGroup
-                      key={sectionKey}
-                      heading={sectionKey.replace(/^plugins:/, '')}
-                    >
-                      {commands.map((command) => (
-                        <PaletteCommandItem
-                          key={command.id}
-                          value={command.value}
-                          label={command.label}
-                          query={search}
-                          icon={command.icon}
-                          shortcut={command.shortcut}
-                          disabled={command.disabled}
-                          onSelect={command.run}
-                        />
-                      ))}
-                    </CommandGroup>
-                  ))}
-                </section>
-              );
-            }
-
-            const commands = groupedCommands.get(groupId);
-            if (!commands || commands.length === 0) {
-              return null;
-            }
-            return (
-              <section key={groupId}>
-                <CommandSeparator />
-                <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS[groupId]}>
-                  {commands.map((command) => (
+            {recentCommandEntries.length > 0 ? (
+              <>
+                <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS.recent}>
+                  {recentCommandEntries.map((command) => (
                     <PaletteCommandItem
-                      key={command.id}
+                      key={`recent-${command.id}`}
                       value={command.value}
                       label={command.label}
                       query={search}
                       icon={command.icon}
                       shortcut={command.shortcut}
                       disabled={command.disabled}
+                      recent
                       onSelect={command.run}
                     />
                   ))}
                 </CommandGroup>
-              </section>
-            );
-          })}
+                <CommandSeparator />
+              </>
+            ) : null}
+
+            {visibleGroupIds.map((groupId) => {
+              if (groupId === 'plugins') {
+                const generalPluginCommands = groupedCommands.get('plugins') ?? [];
+                const namedPluginSections: Array<[string, ResolvedCommand[]]> = [];
+                const sortedPluginSections = Array.from(groupedCommands.entries()).sort(
+                  ([left], [right]) => left.localeCompare(right),
+                );
+                for (const section of sortedPluginSections) {
+                  const [key] = section;
+                  if (key.startsWith('plugins:') && key !== 'plugins:') {
+                    namedPluginSections.push(section);
+                  }
+                }
+                if (generalPluginCommands.length === 0 && namedPluginSections.length === 0) {
+                  return null;
+                }
+                return (
+                  <section key={groupId}>
+                    <CommandSeparator />
+                    {generalPluginCommands.length > 0 ? (
+                      <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS.plugins}>
+                        {generalPluginCommands.map((command) => (
+                          <PaletteCommandItem
+                            key={command.id}
+                            value={command.value}
+                            label={command.label}
+                            query={search}
+                            icon={command.icon}
+                            shortcut={command.shortcut}
+                            disabled={command.disabled}
+                            onSelect={command.run}
+                          />
+                        ))}
+                      </CommandGroup>
+                    ) : null}
+                    {namedPluginSections.map(([sectionKey, commands]) => (
+                      <CommandGroup key={sectionKey} heading={sectionKey.replace(/^plugins:/, '')}>
+                        {commands.map((command) => (
+                          <PaletteCommandItem
+                            key={command.id}
+                            value={command.value}
+                            label={command.label}
+                            query={search}
+                            icon={command.icon}
+                            shortcut={command.shortcut}
+                            disabled={command.disabled}
+                            onSelect={command.run}
+                          />
+                        ))}
+                      </CommandGroup>
+                    ))}
+                  </section>
+                );
+              }
+
+              const commands = groupedCommands.get(groupId);
+              if (!commands || commands.length === 0) {
+                return null;
+              }
+              return (
+                <section key={groupId}>
+                  <CommandSeparator />
+                  <CommandGroup heading={SHELL_COMMAND_GROUP_LABELS[groupId]}>
+                    {commands.map((command) => (
+                      <PaletteCommandItem
+                        key={command.id}
+                        value={command.value}
+                        label={command.label}
+                        query={search}
+                        icon={command.icon}
+                        shortcut={command.shortcut}
+                        disabled={command.disabled}
+                        onSelect={command.run}
+                      />
+                    ))}
+                  </CommandGroup>
+                </section>
+              );
+            })}
           </CommandList>
         </div>
       </Command>

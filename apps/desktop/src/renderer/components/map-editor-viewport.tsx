@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CollisionFootprintComponent, PackId, TileborneMap } from '@tileborne/core';
 import { PixiRendererAdapter } from '@tileborne/runtime';
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import type {
   ViewportAssetBundle,
   ViewportPlaceableEntry,
+  ViewportPlaceableRef,
 } from '@/editor/viewport/viewport-asset-manifest';
 
 import { MapEditorMinimap } from '@/components/map-editor-minimap';
@@ -25,6 +26,7 @@ import {
 import {
   EditorViewportController,
   tileCoordsFromPointer,
+  type EditorCatalogObjectVisual,
 } from '@/editor/viewport/editor-viewport-controller';
 import {
   chainViewportDispose,
@@ -188,29 +190,68 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
     }
     return footprints;
   }, [catalogQuery.data]);
+  // Gameplay-object visuals are catalog-owned (`visual-ref`), not duplicated
+  // onto each MapObject placement. Project that canonical data into the
+  // viewport's lightweight render lookup.
+  const catalogVisualByObjectType = useMemo(() => {
+    const visuals = new Map<string, EditorCatalogObjectVisual>();
+    for (const entry of catalogQuery.data?.objectTypes ?? []) {
+      const visualRef = entry.objectType.components.find(
+        (component) => component._tag === 'visual-ref',
+      );
+      if (visualRef === undefined) {
+        continue;
+      }
+      const placeableId = Option.getOrUndefined(visualRef.placeableId);
+      if (placeableId === undefined) {
+        continue;
+      }
+      visuals.set(String(entry.objectType.id), {
+        placeableId,
+        width: visualRef.width,
+        height: visualRef.height,
+      });
+    }
+    return visuals;
+  }, [catalogQuery.data]);
   const brushPackId =
     brushIntent.kind === 'placeable' && brushIntent.packId !== map.properties.tilesetPackId
       ? brushIntent.packId
       : undefined;
   const extraPackIds = Array.from(
-    new Set(
-      [
-        ...(activePalette?.items ?? [])
-          .map((item) => item.ref.packId)
-          .filter((packId): packId is PackId => packId !== map.properties.tilesetPackId),
-        ...(brushPackId === undefined ? [] : [brushPackId]),
-      ],
-    ),
+    new Set([
+      ...(activePalette?.items ?? [])
+        .map((item) => item.ref.packId)
+        .filter((packId): packId is PackId => packId !== map.properties.tilesetPackId),
+      ...(brushPackId === undefined ? [] : [brushPackId]),
+    ]),
   ).sort();
-  const renderablePlaceableRefs =
-    brushIntent.kind === 'placeable'
-      ? [{ packId: brushIntent.packId, placeableId: brushIntent.placeableId }]
-      : [];
+  const renderablePlaceableRefs = useMemo(() => {
+    const refs = new Map<string, ViewportPlaceableRef>();
+    if (brushIntent.kind === 'placeable') {
+      refs.set(`${brushIntent.packId ?? '*'}:${brushIntent.placeableId}`, {
+        packId: brushIntent.packId,
+        placeableId: brushIntent.placeableId,
+      });
+    }
+    for (const object of map.objects) {
+      const visual = catalogVisualByObjectType.get(String(object.kind));
+      if (visual !== undefined) {
+        refs.set(`*:${visual.placeableId}`, { placeableId: visual.placeableId });
+      }
+    }
+    return [...refs.values()];
+  }, [brushIntent, catalogVisualByObjectType, map.objects]);
   const extraPackIdsKey = extraPackIds.join('|');
   const renderablePlaceableRefsKey = renderablePlaceableRefs
     .map((ref) => `${ref.packId ?? ''}:${ref.placeableId}`)
     .join('|');
-  const resolvedActiveLayerId = resolveToolActiveLayerId(map, activeLayerId, activeTool, brushIntent);
+  const resolvedActiveLayerId = resolveToolActiveLayerId(
+    map,
+    activeLayerId,
+    activeTool,
+    brushIntent,
+  );
 
   const { applyCommand, undo, redo } = useEditorCommands({
     projectId,
@@ -442,6 +483,10 @@ export function MapEditorViewport({ projectId, mapId, map }: MapEditorViewportPr
   useEffect(() => {
     controllerRef.current?.setCollisionFootprints(collisionFootprintByObjectType);
   }, [collisionFootprintByObjectType, mountVersion]);
+
+  useEffect(() => {
+    controllerRef.current?.setCatalogObjectVisuals(catalogVisualByObjectType);
+  }, [catalogVisualByObjectType, mountVersion]);
 
   useEffect(() => {
     controllerRef.current?.setShowDebug(showDebugOverlay);

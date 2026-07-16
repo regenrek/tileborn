@@ -9,8 +9,9 @@
  *
  * Discovery (ADR-0023 section B): resolution is now a **registry lookup**, not
  * a per-plugin-id switch. Each built-in mode provider registers its projector +
- * frame codecs keyed by plugin id; `resolvePlaytestPlugin` resolves the active
- * mode's plugin id against that registry. A new genre plugin becomes resolvable
+ * frame codecs behind manifest-declared renderer capability ids;
+ * `resolvePlaytestPlugin` resolves the active mode's declared renderer
+ * capability against that registry. A new genre plugin becomes resolvable
  * by registering a provider here — no per-id `case` to grow. The renderer can't
  * execute plugin code (ADR-0004), so the projector code is still bundled and
  * registered in this one boundary file; WHICH plugin is the active mode is
@@ -69,6 +70,7 @@ import {
   decodeInputMap,
   resolveEffectiveHudLayout,
   resolveEffectiveInputMap,
+  type GameModeCapabilityId,
 } from '@tileborne/plugin-api';
 import { Result } from 'effect';
 import {
@@ -389,6 +391,8 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
  * resolves arena as the active mode purely by manifest discovery.
  */
 export const EXAMPLE_ARENA_PLUGIN_ID = ARENA_PLUGIN_ID;
+export const BATTLE_ROYALE_RENDERER_CAPABILITY_ID = 'battle-royale.renderer' as const;
+export const EXAMPLE_ARENA_RENDERER_CAPABILITY_ID = 'example-arena.renderer' as const;
 
 const ARENA_MOVE_ACTION = coreActionId(CORE_ACTIONS.Move);
 const ARENA_PRIMARY_ACTION = coreActionId(CORE_ACTIONS.PrimaryAction);
@@ -466,23 +470,61 @@ const createExampleArenaPlaytestPlugin: ModeRenderProvider = (options) => {
 };
 
 /**
- * Registry of built-in mode render providers keyed by plugin id. Battle Royale
+ * Registry of built-in mode render providers. Capability ids are the only
+ * runtime keys declared by `contributes.gameModes`; plugin ids remain metadata
+ * for discovery and overlays and are never renderer aliases.
  * is the first registered mode (ADR-0023: BR is one discovered mode, not a
  * hardcoded `case`); the example arena is the second, proving the registry
  * extends to a new genre. Adding a genre = registering another provider here.
  */
-const MODE_RENDER_PROVIDERS: ReadonlyMap<string, ModeRenderProvider> = new Map([
-  [BATTLE_ROYALE_PLUGIN_ID, createBattleRoyalePlaytestPlugin],
-  [EXAMPLE_ARENA_PLUGIN_ID, createExampleArenaPlaytestPlugin],
-]);
+interface BundledModeRenderRegistration {
+  readonly pluginId: string;
+  readonly capabilityId: GameModeCapabilityId;
+  readonly provider: ModeRenderProvider;
+}
+
+const MODE_RENDER_REGISTRATIONS: readonly BundledModeRenderRegistration[] = [
+  {
+    pluginId: BATTLE_ROYALE_PLUGIN_ID,
+    capabilityId: BATTLE_ROYALE_RENDERER_CAPABILITY_ID as GameModeCapabilityId,
+    provider: createBattleRoyalePlaytestPlugin,
+  },
+  {
+    pluginId: EXAMPLE_ARENA_PLUGIN_ID,
+    capabilityId: EXAMPLE_ARENA_RENDERER_CAPABILITY_ID as GameModeCapabilityId,
+    provider: createExampleArenaPlaytestPlugin,
+  },
+];
+
+const MODE_RENDER_PROVIDERS: ReadonlyMap<GameModeCapabilityId, ModeRenderProvider> = new Map(
+  MODE_RENDER_REGISTRATIONS.map((registration) => [
+    registration.capabilityId,
+    registration.provider,
+  ]),
+);
 
 /** Plugin ids that have a bundled render provider (id-list discovery surface). */
-export const KNOWN_PLAYTEST_MODE_IDS: readonly string[] = [...MODE_RENDER_PROVIDERS.keys()];
+export const KNOWN_PLAYTEST_MODE_IDS: readonly string[] = MODE_RENDER_REGISTRATIONS.map(
+  ({ pluginId }) => pluginId,
+);
 
 export const resolvePlaytestPlugin = (
-  pluginId: string,
+  rendererCapabilityId: GameModeCapabilityId | string | undefined,
   options: ResolvePlaytestPluginOptions = {},
-): ResolvedPlaytestPlugin | undefined => MODE_RENDER_PROVIDERS.get(pluginId)?.(options);
+): ResolvedPlaytestPlugin => {
+  if (rendererCapabilityId === undefined) {
+    throw new Error(
+      'Active game mode does not declare capabilities.renderer; add a renderer capability to contributes.gameModes.',
+    );
+  }
+  const provider = MODE_RENDER_PROVIDERS.get(rendererCapabilityId as GameModeCapabilityId);
+  if (provider === undefined) {
+    throw new Error(
+      `No bundled playtest renderer is registered for capability ${rendererCapabilityId}. Check contributes.gameModes.capabilities.renderer.`,
+    );
+  }
+  return provider(options);
+};
 
 const registerBundledAssets = (
   assets: readonly BundledAssetSpec[],

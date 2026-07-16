@@ -16,7 +16,10 @@ describe('shipped artifact evidence', () => {
     await mkdir(evidence);
     await writeFile(path.join(source, 'worker.js'), 'export default {}\n');
     await writeFile(path.join(source, 'maps', 'map.json'), '{"id":"map:one"}\n');
-    const snapshot = await snapshotShippedArtifact({ sourceDirectory: source, evidenceRoot: evidence });
+    const snapshot = await snapshotShippedArtifact({
+      sourceDirectory: source,
+      evidenceRoot: evidence,
+    });
     expect(snapshot.files.map((file) => file.path)).toEqual(['maps/map.json', 'worker.js']);
     expect(await inventoryArtifact(path.join(evidence, snapshot.directory))).toEqual({
       files: snapshot.files,

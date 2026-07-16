@@ -42,10 +42,7 @@ const cleanEvidenceFixture = async () => {
   const checkoutRoot = path.join(root, 'checkout');
   const oracleRoot = path.join(root, 'oracle-artifacts');
   const shippedRoot = path.join(oracleRoot, 'shipped-game');
-  await Promise.all([
-    mkdir(checkoutRoot),
-    mkdir(shippedRoot, { recursive: true }),
-  ]);
+  await Promise.all([mkdir(checkoutRoot), mkdir(shippedRoot, { recursive: true })]);
   await writeFile(path.join(shippedRoot, 'worker.js'), 'worker');
   const gitHead = 'a'.repeat(40);
   const install = await commandEvidence(root, 'install');
@@ -167,15 +164,24 @@ describe('external shipped artifact Oracle integrity', () => {
       fileHashes: { 'manifest.json': manifestHash, 'worker.js': fileHash },
     };
     const canonical = (value: unknown): string => {
-      if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+      if (value === null || typeof value === 'boolean' || typeof value === 'string')
+        return JSON.stringify(value);
       if (typeof value === 'number') return value.toString();
       if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
       const record = value as Record<string, unknown>;
-      return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
+      return `{${Object.keys(record)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`)
+        .join(',')}}`;
     };
     const integrityHash = `sha256:${await import('node:crypto').then(({ createHash }) => createHash('sha256').update(canonical(payload)).digest('hex'))}`;
-    await writeFile(path.join(root, 'build-artifact.json'), JSON.stringify({ ...payload, integrityHash }));
-    await expect(validateBuildArtifact(root)).resolves.toMatchObject({ record: { buildId: payload.buildId } });
+    await writeFile(
+      path.join(root, 'build-artifact.json'),
+      JSON.stringify({ ...payload, integrityHash }),
+    );
+    await expect(validateBuildArtifact(root)).resolves.toMatchObject({
+      record: { buildId: payload.buildId },
+    });
     await writeFile(path.join(root, 'worker.js'), 'tampered');
     await expect(validateBuildArtifact(root)).rejects.toThrow('checksum mismatch: worker.js');
     expect(await readFile(path.join(root, 'worker.js'), 'utf8')).toBe('tampered');
@@ -188,7 +194,9 @@ describe('external shipped artifact Oracle integrity', () => {
     await mkdir(path.join(root, 'bin'));
     await writeFile(path.join(root, 'bin', 'runtime'), 'runtime');
     await symlink('bin/runtime', path.join(root, 'runtime'));
-    await expect(inventoryRuntimeClosure(root)).resolves.toMatchObject({ symlinks: [{ path: 'runtime', target: 'bin/runtime' }] });
+    await expect(inventoryRuntimeClosure(root)).resolves.toMatchObject({
+      symlinks: [{ path: 'runtime', target: 'bin/runtime' }],
+    });
     await symlink('/etc/hosts', path.join(root, 'escape'));
     await expect(inventoryRuntimeClosure(root)).rejects.toThrow('runtime symlink escapes closure');
   });
@@ -229,7 +237,13 @@ describe('external shipped artifact Oracle integrity', () => {
       TMPDIR: path.join(runRoot, 'tmp'),
       TMP: path.join(runRoot, 'tmp'),
       TEMP: path.join(runRoot, 'tmp'),
-      PATH: [path.join(runtimeRoot, 'node_modules', '.bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(path.delimiter),
+      PATH: [
+        path.join(runtimeRoot, 'node_modules', '.bin'),
+        '/usr/bin',
+        '/bin',
+        '/usr/sbin',
+        '/sbin',
+      ].join(path.delimiter),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
       NO_COLOR: '1',
@@ -244,10 +258,13 @@ describe('external shipped artifact Oracle integrity', () => {
     const runtimeRoot = path.join(runRoot, 'runtime');
     const dist = path.join(runtimeRoot, 'dist');
     await mkdir(dist, { recursive: true });
-    await writeFile(path.join(runtimeRoot, 'package.json'), JSON.stringify({
-      name: '@tileborne/cli',
-      bin: { tileborne: './dist/main.js' },
-    }));
+    await writeFile(
+      path.join(runtimeRoot, 'package.json'),
+      JSON.stringify({
+        name: '@tileborne/cli',
+        bin: { tileborne: './dist/main.js' },
+      }),
+    );
     const runtimeMain = path.join(dist, 'main.js');
     await writeFile(runtimeMain, '');
     const escapedMain = path.join(await temporaryDirectory('external-main-escape-'), 'main.js');

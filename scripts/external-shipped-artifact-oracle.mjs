@@ -44,7 +44,11 @@ const assertWithin = (root, candidate, label) => {
 };
 
 const readBoundFile = async (root, relativePath, expected) => {
-  if (typeof relativePath !== 'string' || relativePath.length === 0 || path.isAbsolute(relativePath))
+  if (
+    typeof relativePath !== 'string' ||
+    relativePath.length === 0 ||
+    path.isAbsolute(relativePath)
+  )
     throw new Error('bound evidence path must be a non-empty relative path');
   const candidate = path.resolve(root, relativePath);
   assertWithin(root, candidate, 'bound evidence path');
@@ -114,7 +118,11 @@ export const validateCleanCheckoutEvidence = async (runnerReceiptPath) => {
     preflight.checkout.preexistingOutputs.length !== 0
   )
     throw new Error('clean-checkout preflight does not prove a detached clean null-build checkout');
-  const install = await validateRecordedCommand(evidenceRoot, preflight.commands?.install, 'install');
+  const install = await validateRecordedCommand(
+    evidenceRoot,
+    preflight.commands?.install,
+    'install',
+  );
   const predev = await validateRecordedCommand(evidenceRoot, preflight.commands?.predev, 'predev');
   const oracle = await validateRecordedCommand(evidenceRoot, runner.oracle, 'creator oracle');
   const oracleReceiptFile = await readBoundFile(
@@ -197,9 +205,13 @@ export const buildSanitizedChildEnvironment = async ({
   inputEnvironment,
   execArgv = [],
 }) => {
-  const injectedKeys = Object.keys(inputEnvironment).filter((key) => dangerousEnvironmentKeys.has(key));
+  const injectedKeys = Object.keys(inputEnvironment).filter((key) =>
+    dangerousEnvironmentKeys.has(key),
+  );
   if (injectedKeys.length !== 0)
-    throw new Error(`dangerous Node environment injection rejected: ${injectedKeys.sort().join(',')}`);
+    throw new Error(
+      `dangerous Node environment injection rejected: ${injectedKeys.sort().join(',')}`,
+    );
   if (execArgv.some(dangerousExecArg))
     throw new Error(`dangerous Node loader argument rejected: ${execArgv.join(' ')}`);
   const home = path.join(runRoot, 'home');
@@ -307,7 +319,8 @@ export const validateBuildArtifact = async (artifactRoot) => {
   const recordBytes = await readFile(path.join(artifactRoot, 'build-artifact.json'));
   const record = JSON.parse(recordBytes.toString('utf8'));
   const { integrityHash, ...payload } = record;
-  if (stableHash(payload) !== integrityHash) throw new Error('build-artifact integrityHash mismatch');
+  if (stableHash(payload) !== integrityHash)
+    throw new Error('build-artifact integrityHash mismatch');
   if (!Array.isArray(record.files) || typeof record.fileHashes !== 'object')
     throw new Error('invalid build-artifact inventory');
   if (
@@ -452,7 +465,8 @@ const executeShippedBehaviors = async ({ artifactRoot, miniflarePath, packageId,
         }),
       });
       const body = await response.json();
-      if (!response.ok || body.ok !== true) throw new Error(`behavior failed: ${JSON.stringify(body)}`);
+      if (!response.ok || body.ok !== true)
+        throw new Error(`behavior failed: ${JSON.stringify(body)}`);
       const trace = body.traces.find((entry) => entry.behaviorId === behavior.behaviorId);
       const state = body.snapshot.states.find((entry) => entry.behaviorId === behavior.behaviorId);
       if (trace?.sourceKind !== behavior.sourceKind || state?.state?.proof !== true)
@@ -498,7 +512,11 @@ export const runExternalShippedArtifactOracle = async ({
     throw new Error('external artifact does not match source receipt');
   const { record, manifest } = await validateBuildArtifact(artifactRoot);
 
-  const runtime = await resolveRuntimeClosure({ runRoot: resolvedRun, runtimeMain, forbiddenRoots });
+  const runtime = await resolveRuntimeClosure({
+    runRoot: resolvedRun,
+    runtimeMain,
+    forbiddenRoots,
+  });
   const runtimeInventory = await inventoryRuntimeClosure(runtime.runtimeRoot);
   const sanitized = await buildSanitizedChildEnvironment({
     runRoot: resolvedRun,
@@ -547,21 +565,19 @@ export const runExternalShippedArtifactOracle = async ({
     `--port=${port}`,
     `--dir=${artifactRoot}`,
   ];
-  const child = spawn(
-    process.execPath,
-    childArgv,
-    {
-      cwd: resolvedRun,
-      env: sanitized.environment,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const child = spawn(process.execPath, childArgv, {
+    cwd: resolvedRun,
+    env: sanitized.environment,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   child.stdout.on('data', (chunk) => stdout.push(Buffer.from(chunk)));
   child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)));
   const baseUrl = `http://127.0.0.1:${port}`;
   let exit;
   let descendantsBeforeShutdown;
-  const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
+  const exited = new Promise((resolve) =>
+    child.once('exit', (code, signal) => resolve({ code, signal })),
+  );
   const observations = {};
   try {
     observations.health = await waitFor(
@@ -606,7 +622,8 @@ export const runExternalShippedArtifactOracle = async ({
     );
     observations.progress = await waitFor(
       () => jsonFetch(baseUrl, `/playtest/${roomId}`),
-      (value) => Number(value?.body?.metrics?.tickCount ?? 0) > 0 || value?.body?.lastTickAt !== null,
+      (value) =>
+        Number(value?.body?.metrics?.tickCount ?? 0) > 0 || value?.body?.lastTickAt !== null,
       'match progress',
     );
     observations.results = await waitFor(
@@ -624,7 +641,8 @@ export const runExternalShippedArtifactOracle = async ({
     for (const player of players) player.socket.close(1000, 'oracle complete');
 
     const mapDirectory = path.dirname(
-      sourceReceipt.shippedArtifact.files.find((entry) => entry.path.endsWith('/behaviors.json')).path,
+      sourceReceipt.shippedArtifact.files.find((entry) => entry.path.endsWith('/behaviors.json'))
+        .path,
     );
     const behaviorPackage = JSON.parse(
       await readFile(path.join(artifactRoot, mapDirectory, 'behaviors.json'), 'utf8'),
@@ -680,7 +698,8 @@ export const runExternalShippedArtifactOracle = async ({
   } catch (error) {
     tamperError = error instanceof Error ? error.message : String(error);
   }
-  if (!tamperError?.includes('checksum mismatch')) throw new Error('tamper negative did not fail closed');
+  if (!tamperError?.includes('checksum mismatch'))
+    throw new Error('tamper negative did not fail closed');
 
   const stdoutBytes = Buffer.concat(stdout);
   const stderrBytes = Buffer.concat(stderr);
@@ -690,7 +709,9 @@ export const runExternalShippedArtifactOracle = async ({
   ]);
   const descendantsAfterShutdown = descendantProcesses(child.pid);
   if (descendantsAfterShutdown.length !== 0)
-    throw new Error(`runtime descendants survived shutdown: ${JSON.stringify(descendantsAfterShutdown)}`);
+    throw new Error(
+      `runtime descendants survived shutdown: ${JSON.stringify(descendantsAfterShutdown)}`,
+    );
   const receipt = {
     schemaVersion: 1,
     state: 'closed',
@@ -740,8 +761,16 @@ export const runExternalShippedArtifactOracle = async ({
       exit,
       descendantsBeforeShutdown,
       descendantsAfterShutdown,
-      stdout: { file: 'serve.stdout.log', bytes: stdoutBytes.byteLength, sha256: sha256(stdoutBytes) },
-      stderr: { file: 'serve.stderr.log', bytes: stderrBytes.byteLength, sha256: sha256(stderrBytes) },
+      stdout: {
+        file: 'serve.stdout.log',
+        bytes: stdoutBytes.byteLength,
+        sha256: sha256(stdoutBytes),
+      },
+      stderr: {
+        file: 'serve.stderr.log',
+        bytes: stderrBytes.byteLength,
+        sha256: sha256(stderrBytes),
+      },
     },
     observations,
     tamperNegative: { mutation: 'append worker.js', rejectedWith: tamperError },
@@ -764,7 +793,9 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
       .flatMap((value, index) => (value === '--forbidden-root' ? [process.argv[index + 1]] : []))
       .map((value) => required(value, '--forbidden-root')),
   })
-    .then(({ receiptPath, sha256: digest }) => console.log(JSON.stringify({ receiptPath, sha256: digest })))
+    .then(({ receiptPath, sha256: digest }) =>
+      console.log(JSON.stringify({ receiptPath, sha256: digest })),
+    )
     .catch((error) => {
       console.error(error instanceof Error ? error.stack : error);
       process.exitCode = 1;

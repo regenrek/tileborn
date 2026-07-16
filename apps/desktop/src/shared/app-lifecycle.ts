@@ -1,16 +1,25 @@
+import type { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
 export const APP_CLOSE_REQUESTED_CHANNEL = 'tileborne:app-close:requested';
 export const APP_CLOSE_RESOLVED_CHANNEL = 'tileborne:app-close:resolved';
 export const APP_RECOVERY_STORAGE_LOAD_CHANNEL = 'tileborne:app-recovery-storage:load';
 export const APP_RECOVERY_STORAGE_COMMIT_CHANNEL = 'tileborne:app-recovery-storage:commit';
 
 export interface AppRecoveryStorageRecord {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.documentRecovery;
   readonly documentId: string;
   readonly kind: string;
   readonly label: string;
   readonly revision: number;
   readonly updatedAt: string;
   readonly snapshot: unknown;
+}
+
+export interface AppRecoveryStorageDiagnostic {
+  readonly code: 'recovery-registry-repaired';
+  readonly severity: 'warning';
+  readonly message: string;
+  readonly quarantinedFile: string;
 }
 
 export type AppRecoveryStorageMutation =
@@ -23,6 +32,7 @@ export interface AppRecoveryStorageCommit {
 
 export interface AppRecoveryStorageSnapshot {
   readonly records: readonly AppRecoveryStorageRecord[];
+  readonly diagnostic?: AppRecoveryStorageDiagnostic;
 }
 
 export interface AppCloseRequest {

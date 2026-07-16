@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
 import type {
   AppRecoveryStorageCommit,
+  AppRecoveryStorageDiagnostic,
   AppRecoveryStorageRecord,
   AppRecoveryStorageSnapshot,
 } from '../shared/app-lifecycle.js';
 
-const REGISTRY_SCHEMA_VERSION = 1;
+const REGISTRY_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.documentRecovery;
 
 interface RecoveryRegistryFile {
   readonly schemaVersion: typeof REGISTRY_SCHEMA_VERSION;
@@ -30,16 +33,63 @@ const isRecord = (value: unknown): value is AppRecoveryStorageRecord => {
   );
 };
 
-const decodeRegistry = (raw: string): readonly AppRecoveryStorageRecord[] => {
-  const value = JSON.parse(raw) as Partial<RecoveryRegistryFile>;
-  if (
-    value.schemaVersion !== REGISTRY_SCHEMA_VERSION ||
-    !Array.isArray(value.records) ||
-    !value.records.every(isRecord)
-  ) {
-    throw new Error('Document recovery registry is invalid or unsupported');
+class RecoveryRegistryDecodeError extends Error {
+  constructor(readonly reason: 'corrupt' | 'unsupported') {
+    super(`Document recovery registry is ${reason}`);
+  }
+}
+
+export const decodeRegistry = (raw: string): readonly AppRecoveryStorageRecord[] => {
+  let value: Partial<RecoveryRegistryFile>;
+  try {
+    value = JSON.parse(raw) as Partial<RecoveryRegistryFile>;
+  } catch {
+    throw new RecoveryRegistryDecodeError('corrupt');
+  }
+  if (value.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+    throw new RecoveryRegistryDecodeError('unsupported');
+  }
+  if (!Array.isArray(value.records) || !value.records.every(isRecord)) {
+    throw new RecoveryRegistryDecodeError('corrupt');
   }
   return value.records;
+};
+
+export const loadOrRepairRegistry = async (
+  filePath: string,
+): Promise<{
+  readonly records: readonly AppRecoveryStorageRecord[];
+  readonly diagnostic?: AppRecoveryStorageDiagnostic;
+}> => {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, 'utf8');
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return { records: [] };
+    throw cause;
+  }
+  try {
+    return { records: decodeRegistry(raw) };
+  } catch (cause) {
+    if (!(cause instanceof RecoveryRegistryDecodeError)) throw cause;
+    const directory = path.dirname(filePath);
+    await mkdir(directory, { recursive: true });
+    const quarantinedFile = `${filePath}.${cause.reason}-${randomUUID()}`;
+    await rename(filePath, quarantinedFile);
+    await syncDirectory(directory);
+    await writeRegistry(filePath, []);
+    return {
+      records: [],
+      diagnostic: {
+        code: 'recovery-registry-repaired',
+        severity: 'warning',
+        message:
+          `Tileborne repaired ${cause.reason} draft recovery data. ` +
+          'The previous file was quarantined; new drafts will be recovered normally.',
+        quarantinedFile,
+      },
+    };
+  }
 };
 
 const syncDirectory = async (directory: string): Promise<void> => {
@@ -85,15 +135,14 @@ export interface DocumentRecoveryStore {
 
 export const createDocumentRecoveryStore = (filePath: string): DocumentRecoveryStore => {
   let records: Map<string, AppRecoveryStorageRecord> | undefined;
+  let diagnostic: AppRecoveryStorageDiagnostic | undefined;
   let operation = Promise.resolve();
 
   const ensureLoaded = async (): Promise<Map<string, AppRecoveryStorageRecord>> => {
     if (records !== undefined) return records;
-    const loaded = await readFile(filePath, 'utf8').then(decodeRegistry, (cause: unknown) => {
-      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      throw cause;
-    });
-    records = new Map(loaded.map((record) => [record.documentId, record]));
+    const loaded = await loadOrRepairRegistry(filePath);
+    diagnostic = loaded.diagnostic;
+    records = new Map(loaded.records.map((record) => [record.documentId, record]));
     return records;
   };
 
@@ -110,6 +159,7 @@ export const createDocumentRecoveryStore = (filePath: string): DocumentRecoveryS
     load: () =>
       serialize(async () => ({
         records: [...(await ensureLoaded()).values()],
+        ...(diagnostic === undefined ? {} : { diagnostic }),
       })),
     commit: (commit) =>
       serialize(async () => {

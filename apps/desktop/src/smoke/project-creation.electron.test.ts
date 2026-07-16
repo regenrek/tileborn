@@ -1,3 +1,6 @@
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
 import { expect } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
@@ -358,6 +361,98 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     await smokeContext.page.getByTestId('content-tab-items').click();
     await expect(smokeContext.page.getByTestId('content-name')).toHaveValue('');
     await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('clean');
+  });
+
+  it('repairs unsupported recovery storage, warns the creator, and persists later drafts', async () => {
+    const context = smokeContext!;
+    const appClosed = context.app.waitForEvent('close');
+    context.app.process().kill('SIGKILL');
+    await appClosed;
+
+    const recoveryDirectory = path.join(context.tileborneHome, 'electron-user-data', 'recovery');
+    const recoveryFile = path.join(recoveryDirectory, 'documents.json');
+    const unsupportedRegistry = JSON.stringify({ schemaVersion: 999, records: [] });
+    await mkdir(recoveryDirectory, { recursive: true });
+    await writeFile(recoveryFile, unsupportedRegistry, 'utf8');
+
+    smokeContext = await launchElectron(context.tileborneHome);
+    const warning = smokeContext.page.getByTestId('recovery-storage-warning');
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText('repaired unsupported draft recovery data');
+    const repaired = await smokeContext.page.evaluate(() =>
+      window.tileborneAppLifecycle.loadRecoveryStorage(),
+    );
+    expect(repaired).toMatchObject({
+      records: [],
+      diagnostic: {
+        code: 'recovery-registry-repaired',
+        severity: 'warning',
+      },
+    });
+    const quarantined = (await readdir(recoveryDirectory)).find((name) =>
+      name.startsWith('documents.json.unsupported-'),
+    );
+    expect(quarantined).toBeDefined();
+    expect(await readFile(path.join(recoveryDirectory, quarantined!), 'utf8')).toBe(
+      unsupportedRegistry,
+    );
+
+    const recoveryDocumentId = 'game-content:repaired-registry-native';
+    await smokeContext.page.evaluate(async (documentId) => {
+      await window.tileborneAppLifecycle.commitRecoveryStorage({
+        mutations: [
+          {
+            _tag: 'upsert',
+            record: {
+              schemaVersion: 1,
+              documentId,
+              kind: 'project-content',
+              label: 'Repaired registry native proof',
+              revision: 1,
+              updatedAt: '2026-07-16T00:00:00.000Z',
+              snapshot: { label: 'Potion After Repair' },
+            },
+          },
+        ],
+      });
+    }, recoveryDocumentId);
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.some((record) => record.documentId === documentId);
+        }, recoveryDocumentId),
+      )
+      .toBe(true);
+
+    const repairedAppClosed = smokeContext.app.waitForEvent('close');
+    smokeContext.app.process().kill('SIGKILL');
+    await repairedAppClosed;
+    smokeContext = await launchElectron(context.tileborneHome);
+    await expect(smokeContext.page.getByTestId('recovery-storage-warning')).toHaveCount(0);
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.some((record) => record.documentId === documentId);
+        }, recoveryDocumentId),
+      )
+      .toBe(true);
+    await smokeContext.page.evaluate(
+      async (documentId) =>
+        window.tileborneAppLifecycle.commitRecoveryStorage({
+          mutations: [{ _tag: 'delete', documentId }],
+        }),
+      recoveryDocumentId,
+    );
+    await expect
+      .poll(() =>
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.every((record) => record.documentId !== documentId);
+        }, recoveryDocumentId),
+      )
+      .toBe(true);
   });
 
   it('completes an IPC ping round-trip after project creation', async () => {

@@ -10,7 +10,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { RouterProvider } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
-import { StrictMode } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { StartupBoundary } from '@/components/startup/startup-boundary';
@@ -22,6 +22,7 @@ import {
   installGracefulAppClose,
 } from '@/lib/document-lifecycle';
 import { router } from '@/router';
+import type { AppRecoveryStorageDiagnostic } from '../shared/app-lifecycle';
 
 import './index.css';
 import '@tileborne/ui/styles/index.css';
@@ -56,7 +57,38 @@ if (!rootElement) {
 
 const devtoolsEnabled = import.meta.env.DEV && import.meta.env.VITE_TILEBORNE_DEVTOOLS === '1';
 
-void initializeDocumentRecoveryStorage().then(() => {
+function RecoveryStorageWarning({
+  diagnostic,
+}: {
+  readonly diagnostic: AppRecoveryStorageDiagnostic;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex justify-center px-4">
+      <div
+        role="alert"
+        data-testid="recovery-storage-warning"
+        className="pointer-events-auto max-w-2xl rounded-md border border-amber-500/40 bg-background/95 p-3 text-sm shadow-lg"
+      >
+        <div className="font-medium">Draft recovery was repaired</div>
+        <div className="mt-1 text-muted-foreground">{diagnostic.message}</div>
+        <div className="mt-1 break-all text-xs text-muted-foreground">
+          Quarantined copy: {diagnostic.quarantinedFile}
+        </div>
+        <button
+          type="button"
+          className="mt-2 text-xs font-medium text-foreground underline"
+          onClick={() => setDismissed(true)}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+void initializeDocumentRecoveryStorage().then((recoveryDiagnostic) => {
   installDocumentBeforeUnload();
   installGracefulAppClose();
   createRoot(rootElement).render(
@@ -65,6 +97,9 @@ void initializeDocumentRecoveryStorage().then(() => {
         <StartupBoundary>
           <RouterProvider router={router} />
         </StartupBoundary>
+        {recoveryDiagnostic === undefined ? null : (
+          <RecoveryStorageWarning diagnostic={recoveryDiagnostic} />
+        )}
         {devtoolsEnabled ? (
           <>
             <ReactQueryDevtools initialIsOpen={false} />

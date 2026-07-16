@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 
 import type {
+  AppRecoveryStorageDiagnostic,
   AppRecoveryStorageMutation,
   TileborneAppLifecycleBridge,
 } from '../../shared/app-lifecycle';
@@ -177,13 +178,15 @@ const clearRecovery = (documentId: string): void => {
 
 export const initializeDocumentRecoveryStorage = async (
   bridge: TileborneAppLifecycleBridge = globalThis.window.tileborneAppLifecycle,
-): Promise<void> => {
+): Promise<AppRecoveryStorageDiagnostic | undefined> => {
   recoveryStorageBridge = bridge;
   const merged = new Map<string, DocumentRecoveryRecord>();
+  let diagnostic: AppRecoveryStorageDiagnostic | undefined;
   let mainLoaded = false;
   try {
     const mainSnapshot = await bridge.loadRecoveryStorage();
     mainLoaded = true;
+    diagnostic = mainSnapshot.diagnostic;
     for (const candidate of mainSnapshot.records) {
       const record = decodeRecoveryRecord(candidate);
       if (record !== undefined) merged.set(record.documentId, record);
@@ -231,6 +234,7 @@ export const initializeDocumentRecoveryStorage = async (
   }
   recoveryRecords.clear();
   for (const [documentId, record] of merged) recoveryRecords.set(documentId, record);
+  return diagnostic;
 };
 
 const setState = (

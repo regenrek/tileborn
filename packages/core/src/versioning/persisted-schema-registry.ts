@@ -307,10 +307,11 @@ export const PERSISTED_SCHEMA_REGISTRY: readonly PersistedSchemaRegistration[] =
   versioned('documentRecovery', {
     versionLocation: 'payload',
     durability: 'recovery-state',
-    storage: 'localStorage tileborne:document-recovery:v1:*',
-    codecOwner: 'apps/desktop/src/renderer/lib/document-lifecycle.ts#DocumentRecoveryRecord',
-    migrationOwner: 'apps/desktop/src/renderer/lib/document-lifecycle.ts#readRecovery',
+    storage: '<userData>/recovery/documents.json',
+    codecOwner: 'apps/desktop/src/main/document-recovery-store.ts#decodeRegistry',
+    migrationOwner: 'apps/desktop/src/main/document-recovery-store.ts#loadOrRepairRegistry',
     compatibility: resettable(PERSISTED_SCHEMA_VERSIONS.documentRecovery),
+    note: 'The renderer imports legacy browser-origin records once, but the main-process registry is the sole durable owner.',
   }),
   versioned('projectIntegrityLock', {
     versionLocation: 'payload',

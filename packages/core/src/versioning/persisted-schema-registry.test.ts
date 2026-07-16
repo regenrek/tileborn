@@ -80,4 +80,20 @@ describe('persisted schema registry', () => {
       );
     }
   });
+
+  it('registers the main-owned document recovery registry as the only durable owner', () => {
+    const recovery = PERSISTED_SCHEMA_REGISTRY.find(({ id }) => id === 'documentRecovery');
+    expect(recovery).toMatchObject({
+      currentVersion: PERSISTED_SCHEMA_VERSIONS.documentRecovery,
+      storage: '<userData>/recovery/documents.json',
+      codecOwner: 'apps/desktop/src/main/document-recovery-store.ts#decodeRegistry',
+      migrationOwner: 'apps/desktop/src/main/document-recovery-store.ts#loadOrRepairRegistry',
+      compatibility: {
+        future: 'reset',
+        corrupt: 'reset',
+      },
+    });
+    expect(JSON.stringify(recovery)).not.toContain('localStorage');
+    expect(JSON.stringify(recovery)).not.toContain('readRecovery');
+  });
 });

@@ -205,6 +205,16 @@ const runtimeVersion = await readRuntimeVersion();
 const createdAt = '1970-01-01T00:00:00.000Z';
 const { buildBundledManifest } = await import(manifestModulePath);
 
+// The bundler is also invoked directly by CLI E2E setup after a Turbo-cached
+// build. Generated source files are intentionally not build-cache outputs, so
+// recreate them here instead of relying on a package-manager prebuild hook.
+logStep('generating initial bundled modules');
+const initial = await generateBundledModules({
+  workerVersion: runtimeVersion,
+  createdAt,
+  workerFiles: [],
+});
+
 await mkdir(path.dirname(generatedRuntimeTargetPath), { recursive: true });
 await copyFile(generatedRuntimeSourcePath, generatedRuntimeTargetPath);
 logStep('copied generated plugin runtime');
@@ -227,13 +237,6 @@ if (hasAssemblyStubImports(compiledWorkerSource)) {
     );
   }
 }
-
-logStep('generating initial bundled modules');
-const initial = await generateBundledModules({
-  workerVersion: runtimeVersion,
-  createdAt,
-  workerFiles: [],
-});
 
 await bundleWorker(initial.manifest, runtimeVersion, 'initial');
 

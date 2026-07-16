@@ -11,7 +11,8 @@ describe('generated capability discovery', () => {
     const docs = await readFile(resolve(import.meta.dirname, '../../CAPABILITIES.md'), 'utf8');
     expect(docs).toContain('@tileborne/game-sdk/capabilities.json');
     expect(docs).toContain('`time.deterministic`');
-    expect(capabilityInventory.capabilities.find(({ id }) => id === 'time.deterministic')?.events)
-      .toContain('runtime.tick');
+    expect(
+      capabilityInventory.capabilities.find(({ id }) => id === 'time.deterministic')?.events,
+    ).toContain('runtime.tick');
   });
 });

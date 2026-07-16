@@ -164,10 +164,19 @@ describe('built authoring validator regressions', () => {
 
   it.each([
     ['Reflect.get call', "Reflect.get(() => {}, 'constructor')('return globalThis')();"],
-    ['Reflect.get alias', "const get = Reflect.get; get(() => {}, 'constructor')('return globalThis')();"],
+    [
+      'Reflect.get alias',
+      "const get = Reflect.get; get(() => {}, 'constructor')('return globalThis')();",
+    ],
     ['computed Reflect.get', "const method = 'get'; Reflect[method](() => {}, 'constructor');"],
-    ['Object descriptor', "Object.getOwnPropertyDescriptor(() => {}, 'constructor')?.value('return process')();"],
-    ['computed Object descriptor alias', "const method = 'getOwnPropertyDescriptor'; const get = Object[method]; get(() => {}, 'constructor');"],
+    [
+      'Object descriptor',
+      "Object.getOwnPropertyDescriptor(() => {}, 'constructor')?.value('return process')();",
+    ],
+    [
+      'computed Object descriptor alias',
+      "const method = 'getOwnPropertyDescriptor'; const get = Object[method]; get(() => {}, 'constructor');",
+    ],
   ])('rejects %s reflective dynamic-code retrieval', (_label, sourceText) => {
     expect(validateBuiltArtifact(sourceText).map(({ code }) => code)).toEqual(['TBSDK1003']);
   });

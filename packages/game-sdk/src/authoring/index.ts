@@ -223,13 +223,15 @@ export const validateGameplayProgram = (
       node.expression.name.text === 'join' &&
       ts.isArrayLiteralExpression(node.expression.expression)
     ) {
-      const separator = node.arguments.length === 0
-        ? ','
-        : node.arguments[0] === undefined
-          ? undefined
-          : constantStringOf(node.arguments[0]);
+      const separator =
+        node.arguments.length === 0
+          ? ','
+          : node.arguments[0] === undefined
+            ? undefined
+            : constantStringOf(node.arguments[0]);
       const values = node.expression.expression.elements.map((element) =>
-        ts.isExpression(element) ? constantStringOf(element) : undefined);
+        ts.isExpression(element) ? constantStringOf(element) : undefined,
+      );
       return separator === undefined || values.some((value) => value === undefined)
         ? undefined
         : (values as string[]).join(separator);

@@ -74,16 +74,20 @@ describe('gameplay source validation', () => {
       { fileName: '/game/src/shared.ts', sourceText: 'export const value = 1;' },
       { fileName: '/game/src/unrelated.ts', sourceText: 'fetch("/unsafe");' },
     ];
-    expect(validateGameplayProgram({
-      projectRoot: '/game',
-      files,
-      rootFiles: ['/game/src/good.ts'],
-    })).toEqual([]);
-    expect(validateGameplayProgram({
-      projectRoot: '/game',
-      files,
-      rootFiles: ['/game/src/unrelated.ts'],
-    })).toEqual([expect.objectContaining({ code: 'TBSDK1002', fileName: '/game/src/unrelated.ts' })]);
+    expect(
+      validateGameplayProgram({
+        projectRoot: '/game',
+        files,
+        rootFiles: ['/game/src/good.ts'],
+      }),
+    ).toEqual([]);
+    expect(
+      validateGameplayProgram({
+        projectRoot: '/game',
+        files,
+        rootFiles: ['/game/src/unrelated.ts'],
+      }),
+    ).toEqual([expect.objectContaining({ code: 'TBSDK1002', fileName: '/game/src/unrelated.ts' })]);
   });
 
   it('throws one stable aggregate error for build-pipeline integration', () => {
@@ -126,7 +130,9 @@ describe('gameplay source validation', () => {
 
     expect(diagnostics).toHaveLength(3);
     expect(diagnostics.map(({ code }) => code)).toEqual(['TBSDK1003', 'TBSDK1003', 'TBSDK1003']);
-    expect(diagnostics.every(({ message }) => message.includes('reflective property retrieval'))).toBe(true);
+    expect(
+      diagnostics.every(({ message }) => message.includes('reflective property retrieval')),
+    ).toBe(true);
   });
 
   it('rejects reflection provenance and computed constructor escapes', () => {

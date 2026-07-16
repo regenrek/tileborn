@@ -18,7 +18,8 @@ import type {
   GameEventRegistry,
 } from './types.js';
 
-const BEHAVIOR_ID_PATTERN = /^(?:[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+|behavior:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
+const BEHAVIOR_ID_PATTERN =
+  /^(?:[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+|behavior:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 
 export const defineBehavior = <
   const Id extends string,

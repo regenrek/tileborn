@@ -2,7 +2,7 @@ import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { createLocalGameHost } from '@tileborne/services-build/local-game-host';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 

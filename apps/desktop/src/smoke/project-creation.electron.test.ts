@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {

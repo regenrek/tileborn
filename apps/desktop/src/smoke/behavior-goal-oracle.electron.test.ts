@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createLocalGameHost } from '@tileborne/game-host/local';
-import { expect, type Dialog, type Page } from '@playwright/test';
+import type { Dialog, Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
+
+import { expect } from './playwright-expect.js';
 
 import { snapshotShippedArtifact } from '../../../../scripts/shipped-artifact-evidence.mjs';
 
@@ -828,7 +830,7 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
               ? undefined
               : {
                   tick: state.tick,
-                  playerCount: state.players.length,
+                  playerCount: state.hud.totalPlayers,
                   localPlayerId: state.localPlayerId,
                   zoneRadius: state.zone?.radius,
                 };

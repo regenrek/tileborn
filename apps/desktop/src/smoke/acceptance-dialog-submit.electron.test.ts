@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import {
   createTileborneHome,

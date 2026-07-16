@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, stat, writeFile } from 'node:fs/promi
 import os from 'node:os';
 import path from 'node:path';
 
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, describe, it } from 'vitest';
 
 import {

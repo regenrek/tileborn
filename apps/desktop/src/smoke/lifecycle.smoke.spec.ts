@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 import {

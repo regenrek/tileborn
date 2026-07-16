@@ -1,20 +1,20 @@
-export const STARTUP_STATUS_GET_CHANNEL = "tileborne:startup:getStatus";
-export const STARTUP_STATUS_CHANGED_CHANNEL = "tileborne:startup:changed";
+export const STARTUP_STATUS_GET_CHANNEL = 'tileborne:startup:getStatus';
+export const STARTUP_STATUS_CHANGED_CHANNEL = 'tileborne:startup:changed';
 
 export const STARTUP_TASK_DEFINITIONS = [
-  { id: "app-ready", label: "Electron app ready", required: true },
-  { id: "create-load-window", label: "Create and load main window", required: true },
-  { id: "background-startup", label: "Background startup", required: true },
-  { id: "runtime-services", label: "Effect runtime boundary", required: true },
-  { id: "home-init", label: "Home directory initialization", required: true },
-  { id: "ipc-registration", label: "Domain IPC registration", required: true },
-  { id: "plugin-seed", label: "Battle Royale plugin seed", required: false },
-  { id: "asset-pack-seed", label: "Bundled asset pack seed", required: false },
+  { id: 'app-ready', label: 'Electron app ready', required: true },
+  { id: 'create-load-window', label: 'Create and load main window', required: true },
+  { id: 'background-startup', label: 'Background startup', required: true },
+  { id: 'runtime-services', label: 'Effect runtime boundary', required: true },
+  { id: 'home-init', label: 'Home directory initialization', required: true },
+  { id: 'ipc-registration', label: 'Domain IPC registration', required: true },
+  { id: 'plugin-seed', label: 'Battle Royale plugin seed', required: false },
+  { id: 'asset-pack-seed', label: 'Bundled asset pack seed', required: false },
 ] as const;
 
-export type StartupTaskId = (typeof STARTUP_TASK_DEFINITIONS)[number]["id"];
-export type StartupTaskStatus = "pending" | "running" | "completed" | "failed" | "timed-out";
-export type StartupState = "starting" | "ready" | "degraded" | "failed";
+export type StartupTaskId = (typeof STARTUP_TASK_DEFINITIONS)[number]['id'];
+export type StartupTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timed-out';
+export type StartupState = 'starting' | 'ready' | 'degraded' | 'failed';
 
 export interface StartupTaskSnapshot {
   readonly id: StartupTaskId;
@@ -30,7 +30,7 @@ export interface StartupTaskSnapshot {
 export interface StartupErrorSnapshot {
   readonly taskId: StartupTaskId;
   readonly label: string;
-  readonly status: "failed" | "timed-out";
+  readonly status: 'failed' | 'timed-out';
   readonly message: string;
   readonly at: string;
 }
@@ -55,7 +55,7 @@ export interface StartupStatusStore {
   readonly completeTask: (taskId: StartupTaskId, message?: string) => StartupTaskSnapshot;
   readonly failTask: (
     taskId: StartupTaskId,
-    status: "failed" | "timed-out",
+    status: 'failed' | 'timed-out',
     message: string,
   ) => StartupTaskSnapshot;
   readonly setState: (state: StartupState) => StartupStatusSnapshot;
@@ -78,7 +78,7 @@ const pendingTask = (taskId: StartupTaskId): StartupTaskSnapshot => {
     id: definition.id,
     label: definition.label,
     required: definition.required,
-    status: "pending",
+    status: 'pending',
   };
 };
 
@@ -109,11 +109,12 @@ export const createStartupStatusStore = (
   const tasks = new Map<StartupTaskId, StartupTaskSnapshot>();
   const errors: StartupErrorSnapshot[] = [];
   const subscribers = new Set<(snapshot: StartupStatusSnapshot) => void>();
-  let state: StartupState = "starting";
+  let state: StartupState = 'starting';
   let currentTaskId: StartupTaskId | undefined;
   let updatedAt = now().toISOString();
 
-  const getTask = (taskId: StartupTaskId): StartupTaskSnapshot => tasks.get(taskId) ?? pendingTask(taskId);
+  const getTask = (taskId: StartupTaskId): StartupTaskSnapshot =>
+    tasks.get(taskId) ?? pendingTask(taskId);
 
   const getSnapshot = (): StartupStatusSnapshot => {
     const snapshot = {
@@ -140,7 +141,7 @@ export const createStartupStatusStore = (
       return;
     }
     currentTaskId = STARTUP_TASK_DEFINITIONS.map((definition) => getTask(definition.id)).find(
-      (task) => task.status === "running",
+      (task) => task.status === 'running',
     )?.id;
   };
 
@@ -157,7 +158,7 @@ export const createStartupStatusStore = (
       const next = withMessage(
         {
           ...pendingTask(taskId),
-          status: "running",
+          status: 'running',
           startedAt,
         },
         message,
@@ -174,7 +175,7 @@ export const createStartupStatusStore = (
       const next = withMessage(
         {
           ...previous,
-          status: "completed",
+          status: 'completed',
           completedAt,
           ...(durationMs === undefined ? {} : { durationMs }),
         },
@@ -205,9 +206,9 @@ export const createStartupStatusStore = (
         at: completedAt,
       });
       if (previous.required) {
-        state = "failed";
-      } else if (state !== "failed") {
-        state = "degraded";
+        state = 'failed';
+      } else if (state !== 'failed') {
+        state = 'degraded';
       }
       updateCurrentTask(taskId);
       publish();

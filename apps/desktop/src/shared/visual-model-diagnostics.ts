@@ -35,13 +35,15 @@ const missingClipDiagnostics = (
   requiredClipKeys.flatMap((key): readonly VisualModelDiagnostic[] => {
     const clip = model.clips[key as keyof PlayerModelRef['clips']];
     return clip === undefined || String(clip).trim().length === 0
-      ? [{
-          severity: 'error',
-          code: 'player-model.clip-missing',
-          message: `${model.label} is missing the ${key} clip binding.`,
-          path: `playerModels.${model.id}.clips.${key}`,
-          modelId: model.id,
-        }]
+      ? [
+          {
+            severity: 'error',
+            code: 'player-model.clip-missing',
+            message: `${model.label} is missing the ${key} clip binding.`,
+            path: `playerModels.${model.id}.clips.${key}`,
+            modelId: model.id,
+          },
+        ]
       : [];
   });
 
@@ -50,12 +52,14 @@ export const diagnosePlayerModelPolicy = (
   diagnoseReference?: PlayerModelReferenceDiagnostics,
 ): readonly VisualModelDiagnostic[] => {
   if (policy === undefined) {
-    return [{
-      severity: 'error',
-      code: 'player-model.policy-missing',
-      message: 'No player-model policy is active for the enabled plugins.',
-      path: 'playerModels',
-    }];
+    return [
+      {
+        severity: 'error',
+        code: 'player-model.policy-missing',
+        message: 'No player-model policy is active for the enabled plugins.',
+        path: 'playerModels',
+      },
+    ];
   }
   const diagnostics: VisualModelDiagnostic[] = [];
   const placeholderModelIds = new Set(policy.placeholderModelIds);

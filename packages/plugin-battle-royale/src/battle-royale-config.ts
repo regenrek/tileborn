@@ -49,6 +49,11 @@ const BattleRoyaleRoomRulesOverride = Schema.Struct({
   respawnEnabled: Schema.optional(Schema.Boolean),
   friendlyFire: Schema.optional(Schema.Boolean),
   matchMode: Schema.optional(Schema.Literals(["solo", "duo", "squad"] as const)),
+  matchEndPolicy: Schema.optional(Schema.Literals(["last-standing", "continuous"] as const)),
+});
+
+const BattleRoyaleLoadoutOverride = Schema.Struct({
+  startingWeaponId: Schema.optional(Schema.String),
 });
 
 /** Partial per-room overrides for battle royale gameplay constants. */
@@ -60,6 +65,7 @@ export class BattleRoyaleConfig extends Schema.Class<BattleRoyaleConfig>("Battle
   damage: Schema.optional(BattleRoyaleDamageOverride),
   respawn: Schema.optional(BattleRoyaleRespawnOverride),
   roomRules: Schema.optional(BattleRoyaleRoomRulesOverride),
+  loadout: Schema.optional(BattleRoyaleLoadoutOverride),
 }) {}
 
 export type BattleRoyaleConfigInput = typeof BattleRoyaleConfig.Type;
@@ -94,6 +100,7 @@ export interface ResolvedBattleRoyaleConfig {
     readonly enabled: boolean;
   };
   readonly roomRules: RoomRulesConfig;
+  readonly loadout: { readonly startingWeaponId?: string };
 }
 
 export const DEFAULT_BATTLE_ROYALE_CONFIG: ResolvedBattleRoyaleConfig = {
@@ -136,7 +143,9 @@ export const DEFAULT_BATTLE_ROYALE_CONFIG: ResolvedBattleRoyaleConfig = {
     respawnEnabled: false,
     friendlyFire: false,
     matchMode: "solo",
+    matchEndPolicy: "last-standing",
   },
+  loadout: {},
 };
 
 export const decodeBattleRoyaleConfigOverride = (input: unknown): BattleRoyaleConfigInput | undefined => {
@@ -206,7 +215,15 @@ export const mergeBattleRoyaleConfig = (
         ? { friendlyFire: override.roomRules.friendlyFire }
         : {}),
       ...(override.roomRules?.matchMode !== undefined ? { matchMode: override.roomRules.matchMode } : {}),
+      ...(override.roomRules?.matchEndPolicy !== undefined
+        ? { matchEndPolicy: override.roomRules.matchEndPolicy }
+        : {}),
     }),
+    loadout: {
+      ...(override.loadout?.startingWeaponId === undefined
+        ? base.loadout
+        : { startingWeaponId: override.loadout.startingWeaponId }),
+    },
   };
 };
 

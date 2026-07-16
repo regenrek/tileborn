@@ -6,9 +6,11 @@ import {
   PLAYER_COMPONENT,
   PLAYER_STATS_COMPONENT,
   POSITION_COMPONENT,
+  TEAM_COMPONENT,
   type Player,
   type PlayerStats,
   type Position,
+  type Team,
 } from './components.js';
 import {
   createDamageSystemState,
@@ -35,6 +37,7 @@ const registerStores = (world: ReturnType<typeof createTestPluginWorld>): void =
   world.registerComponent(POSITION_COMPONENT);
   world.registerComponent(PLAYER_COMPONENT);
   world.registerComponent(PLAYER_STATS_COMPONENT);
+  world.registerComponent<Team>(TEAM_COMPONENT);
 };
 
 const spawnPlayer = (
@@ -54,6 +57,7 @@ const spawnPlayer = (
     team,
   });
   world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT).set(entity, { kills: 0, deaths: 0 });
+  world.getComponent<Team>(TEAM_COMPONENT).set(entity, { team });
   return entity;
 };
 
@@ -147,6 +151,73 @@ describe('damage system', () => {
     expect(gameOvers[0]).toMatchObject({
       winner: BattleRoyaleProtocol.makePlayerId('player-a'),
     });
+  });
+
+  it('ends a squad match when one team remains even while multiple teammates survive', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'alpha-1', 0, 0, DAMAGE.playerHealth, 'alpha');
+    spawnPlayer(world, 'alpha-2', 2, 0, DAMAGE.playerHealth, 'alpha');
+    const beta1 = spawnPlayer(world, 'beta-1', 10, 10, DAMAGE.playerHealth, 'beta');
+    const beta2 = spawnPlayer(world, 'beta-2', 12, 10, DAMAGE.playerHealth, 'beta');
+    const state = createDamageSystemState();
+    recordMatchStarters(world, state);
+    const collector = createMsgCollector();
+
+    eliminate(world, state, beta1, 'alpha-1');
+    eliminate(world, state, beta2, 'alpha-2');
+    runDamageTick(world, 5, {
+      msgOut: collector.msgOut,
+      roomRules: { matchMode: 'squad', matchEndPolicy: 'last-standing' },
+    }, state);
+
+    const gameOvers = collector.decodeAll().filter((message) => message._tag === 'GameOver');
+    expect(gameOvers).toHaveLength(1);
+    expect(gameOvers[0]).toMatchObject({ winner: BattleRoyaleProtocol.makePlayerId('alpha-1') });
+  });
+
+  it('does not end while an eliminated opponent is scheduled to respawn', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-winner-for-now', 0, 0);
+    const victim = spawnPlayer(world, 'player-respawning', 10, 10, PROJECTILE.damage);
+    const state = createDamageSystemState();
+    recordMatchStarters(world, state);
+    const collector = createMsgCollector();
+    const ctx: DamageSystemContext = {
+      msgOut: collector.msgOut,
+      roomRules: {
+        respawnEnabled: true,
+        matchEndPolicy: 'continuous',
+        matchMode: 'solo',
+      },
+      respawnDelayTicks: 4,
+    };
+
+    eliminate(world, state, victim, 'player-winner-for-now');
+    runDamageTick(world, 1, ctx, state);
+    runDamageTick(world, 5, ctx, state);
+
+    expect(collector.decodeAll().filter((message) => message._tag === 'GameOver')).toHaveLength(0);
+    expect(world.getComponent<Player>(PLAYER_COMPONENT).get(victim)).toMatchObject({ alive: 1 });
+  });
+
+  it('supports continuous matches without respawn or victory emission', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-standing', 0, 0);
+    const victim = spawnPlayer(world, 'player-eliminated', 10, 10, PROJECTILE.damage);
+    const state = createDamageSystemState();
+    recordMatchStarters(world, state);
+    const collector = createMsgCollector();
+
+    eliminate(world, state, victim, 'player-standing');
+    runDamageTick(world, 1, {
+      msgOut: collector.msgOut,
+      roomRules: { respawnEnabled: false, matchEndPolicy: 'continuous' },
+    }, state);
+
+    expect(collector.decodeAll().filter((message) => message._tag === 'GameOver')).toHaveLength(0);
   });
 
   it('increments killer kills and victim deaths', () => {

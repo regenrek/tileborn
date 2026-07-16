@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   GameObjectCatalog,
+  EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
   PluginId,
   RUNTIME_MAP_PACKAGE_SCHEMA_VERSION,
   RuntimeCatalogEntry,
@@ -96,6 +97,7 @@ export interface TestMapPackageInput {
   readonly playerModels?: readonly PlayerModelRef[];
   readonly visuals?: RuntimeMapPackageVisuals;
   readonly modeData?: Record<string, JsonObject>;
+  readonly content?: JsonObject;
   /** Neutral manifest capacity; defaults to the authored BR `maxPlayers`. */
   readonly playerCapacity?: number;
 }
@@ -140,6 +142,10 @@ export const buildTestMapPackage = (input: TestMapPackageInput): unknown => {
     catalog: Schema.encodeSync(CatalogEntries)(catalog),
     placements: Schema.encodeSync(Placements)(placements),
     settings,
+    content:
+      input.content ??
+      ({ schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} } satisfies JsonObject),
+    behaviors: EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
     visuals: Schema.encodeSync(RuntimeMapPackageVisuals)(visuals),
     assets: [] as unknown[],
     modeData,

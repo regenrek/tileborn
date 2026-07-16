@@ -557,6 +557,14 @@ const buildLibraryGroups = (
       ['objectType', objectType],
       ['tags', placeable.tags.join(', ')],
       ['placementMode', placeable.placementMode],
+      ['width', placeable.size.width],
+      ['height', placeable.size.height],
+      [
+        'clipsJson',
+        JSON.stringify(
+          (placeable.clips ?? []).map((clip) => ({ id: String(clip.id), name: clip.name })),
+        ),
+      ],
       ...(isSprite
         ? ([
             ['clipCount', String(placeable.clips?.length ?? 0)],

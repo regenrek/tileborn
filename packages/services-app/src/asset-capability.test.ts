@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -253,6 +253,7 @@ describe('Asset pack capability', () => {
       expect.arrayContaining([
         expect.objectContaining({
           _tag: 'PACK.unsupported-schema',
+          severity: 'warning',
           message: 'Autotile rule references an unknown tile',
         }),
       ]),
@@ -422,6 +423,90 @@ describe('Asset pack capability', () => {
       };
       expect(nextLock.capability?.integrityHash).not.toBe(oldVersionHash);
       expect(nextLock.capability?.capability?.['source']).toBe('tileborne');
+    }));
+
+  it('migrates a v6 lock and recomputes SDK warnings with non-blocking severity', () =>
+    withTempHome(async (home) => {
+      const fixture = path.join(repoRoot, 'packages/test-fixtures/fixtures/asset-packs/smoke-pack');
+      const source = path.join(home, 'legacy-v6-warning-pack');
+      await cp(fixture, source, { recursive: true });
+      const manifestPath = path.join(source, 'tileborne-asset-pack.json');
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+        readonly id: PackId;
+        readonly tilesets: readonly { readonly id: string }[];
+        readonly tiles: readonly { readonly id: string }[];
+        autotileRules: unknown[];
+      };
+      manifest.autotileRules = [{
+        _tag: 'wang2corner',
+        tilesetId: manifest.tilesets[0]!.id,
+        id: 'autotile-rule:550e8400-e29b-41d4-a716-446655440209',
+        name: 'legacy-warning',
+        terrainClasses: ['floor'],
+        maskToTileIds: {
+          '1111': [manifest.tiles[0]!.id, 'tile:550e8400-e29b-41d4-a716-446655449999'],
+        },
+      }];
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+      const imported = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          const packId = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+          return yield* assets.getPack(packId);
+        }),
+      );
+      expect(imported.capability.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'warning',
+          message: 'Autotile rule references an unknown tile',
+        }),
+      ]));
+
+      const installedRoot = packDir(home, imported.id, imported.version);
+      const installedManifestRaw = await readFile(
+        path.join(installedRoot, 'tileborne-asset-pack.json'),
+        'utf8',
+      );
+      const v6Hash = hashBytes(textEncoder.encode(`pack-capability-v6\n${installedManifestRaw}`));
+      const lockPath = path.join(installedRoot, 'lock.json');
+      const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+        capability: {
+          integrityHash: string;
+          capability: { diagnostics: Array<Record<string, unknown>> };
+        };
+      };
+      lock.capability.integrityHash = v6Hash;
+      lock.capability.capability.diagnostics = lock.capability.capability.diagnostics.map(
+        ({ severity, ...diagnostic }) => {
+          expect(severity).toBe('warning');
+          return diagnostic;
+        },
+      );
+      await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+
+      const migrated = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          return (yield* assets.listPacks()).find((candidate) => candidate.id === imported.id);
+        }),
+      );
+      const warning = migrated?.capability.diagnostics.find(
+        (diagnostic) => diagnostic.message === 'Autotile rule references an unknown tile',
+      );
+      expect(warning?.severity).toBe('warning');
+      expect(migrated?.capability.paintable).toBe(true);
+
+      const nextLock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+        readonly capability: {
+          readonly integrityHash: string;
+          readonly capability: { readonly diagnostics: readonly { readonly severity: string }[] };
+        };
+      };
+      expect(nextLock.capability.integrityHash).not.toBe(v6Hash);
+      expect(nextLock.capability.capability.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ severity: 'warning' }),
+      ]));
     }));
 
   it('marks an asset-only manifest as non-paintable and caches the result', () =>

@@ -94,6 +94,11 @@ describe("battle royale authoring", () => {
       holdSec: 10,
       shrinkPhases: 4,
       damagePerSecOutside: 7,
+      matchMode: "solo",
+      respawnEnabled: false,
+      matchEndPolicy: "last-standing",
+      friendlyFire: false,
+      startingWeaponId: undefined,
     });
   });
 
@@ -122,6 +127,11 @@ describe("battle royale authoring", () => {
       holdSec: 6,
       shrinkPhases: 5,
       damagePerSecOutside: 9,
+      matchMode: "solo",
+      respawnEnabled: false,
+      matchEndPolicy: "last-standing",
+      friendlyFire: false,
+      startingWeaponId: undefined,
     });
 
     // A save folds the legacy override (incl. non-settings fields) into the
@@ -133,6 +143,42 @@ describe("battle royale authoring", () => {
     expect(next.properties.battleRoyale).toBeUndefined();
     expect(next.properties.maxPlayers).toBeUndefined();
     expect(next.properties[PLUGIN_ID]).toMatchObject({ maxPlayers: 30 });
+  });
+
+  it("round-trips supported team, elimination and friendly-fire rules", () => {
+    const map = makeTileborneMap({
+      id: makeMapId(uuid("446655440010")),
+      width: 32,
+      height: 32,
+      tileWidth: 32,
+      tileHeight: 32,
+      properties: {},
+    });
+    const next = applyBattleRoyaleAuthoringSettings(map, {
+      ...readBattleRoyaleAuthoringSettings(map),
+      matchMode: "squad",
+      respawnEnabled: true,
+      friendlyFire: true,
+      startingWeaponId: "weapon:550e8400-e29b-41d4-a716-446655440099",
+    });
+
+    expect(next.properties[PLUGIN_ID]).toMatchObject({
+      roomRules: {
+        matchMode: "squad",
+        respawnEnabled: true,
+        matchEndPolicy: "continuous",
+        friendlyFire: true,
+      },
+      respawn: { enabled: true },
+      loadout: { startingWeaponId: "weapon:550e8400-e29b-41d4-a716-446655440099" },
+    });
+    expect(readBattleRoyaleAuthoringSettings(next)).toMatchObject({
+      matchMode: "squad",
+      respawnEnabled: true,
+      matchEndPolicy: "continuous",
+      friendlyFire: true,
+      startingWeaponId: "weapon:550e8400-e29b-41d4-a716-446655440099",
+    });
   });
 });
 

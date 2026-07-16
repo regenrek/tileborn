@@ -80,7 +80,10 @@ describe("example-arena proves genre-neutral extensibility", () => {
         "Arena radius",
         "Enemy count",
       ]);
-      expect(arenaMode?.label).toBe("Arena Settings");
+      expect(arenaMode?.label).toBe("Example Arena");
+      expect(arenaMode?.rendererCapabilityId).toBe("example-arena.renderer");
+      expect(arenaMode?.starterCapabilityId).toBe("example-arena.starter");
+      expect(arenaMode?.mapValidatorId).toBe("arena-map-validator");
     });
   });
 

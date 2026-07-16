@@ -35,6 +35,7 @@ import {
 } from "./map/index.js";
 import { Asset, Tile, TileSet } from "./tileset/index.js";
 import { hashJsonStable } from "./hashing/index.js";
+import { CORE_BEHAVIOR_REGISTRY } from "./behavior/index.js";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -86,6 +87,7 @@ describe("schema round-trips", () => {
       diagnostics: [
         {
           _tag: "PACK.missing-asset",
+          severity: "error",
           assetId: "asset:550e8400-e29b-41d4-a716-446655440001",
           path: "/tilesets/0/atlasAssetId",
           message: "Tileset atlas asset is missing or not an image.",
@@ -311,6 +313,17 @@ describe("schema round-trips", () => {
 });
 
 describe("factories", () => {
+  it("publishes the deterministic simulation tick to visual behavior authors", () => {
+    expect(CORE_BEHAVIOR_REGISTRY.entries).toContainEqual(
+      expect.objectContaining({
+        id: "runtime.tick",
+        kind: "event",
+        capability: "time.deterministic",
+        outputs: [expect.objectContaining({ key: "tick", valueKind: "number" })],
+      }),
+    );
+  });
+
   it("builds a project manifest with defaults", () => {
     const manifest = makeProjectManifest({
       id: makeProjectId(UUID),

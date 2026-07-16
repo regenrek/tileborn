@@ -11,7 +11,8 @@
     "tileborne": "^0.1.0"
   },
   "entry": {
-    "runtime": "./dist/runtime.js"
+    "runtime": "./dist/runtime.js",
+    "server": "./dist/server.js"
   },
   "permissions": [
     {
@@ -21,6 +22,74 @@
   ],
   "dependsOn": [],
   "contributes": {
+    "gameModes": [
+      {
+        "_tag": "GameModeContribution",
+        "id": "example-arena",
+        "kind": "declarative",
+        "display": {
+          "label": "Example Arena",
+          "description": "Small melee arena used as the non-Battle-Royale extension contract proof."
+        },
+        "runtimeSystemId": "arena-runtime",
+        "settingsPanelId": "arena-settings",
+        "settingsFormId": "arena-settings-form",
+        "mapValidatorId": "arena-map-validator",
+        "starter": {
+          "templateId": "example-arena-starter-v1",
+          "label": "Example Arena Starter",
+          "description": "Minimal arena with a player spawn and health pickup."
+        },
+        "checklistFacts": [
+          { "id": "arena-map", "label": "Arena map", "sources": ["map", "game-mode"] },
+          { "id": "arena-catalog", "label": "Arena combat catalog", "sources": ["catalog"] }
+        ],
+        "capabilities": {
+          "renderer": "example-arena.renderer",
+          "starter": "example-arena.starter"
+        }
+      }
+    ],
+    "behaviorEntries": [
+      {
+        "id": "example-arena.enemy-defeated",
+        "kind": "event",
+        "label": "Enemy defeated",
+        "category": "Arena",
+        "description": "Runs when an arena enemy is defeated.",
+        "capability": "example-arena.combat",
+        "icon": "swords",
+        "inputs": [],
+        "outputs": []
+      },
+      {
+        "id": "example-arena.spawn-enemy",
+        "kind": "action",
+        "label": "Spawn arena enemy",
+        "category": "Arena",
+        "description": "Spawns an enemy from a catalog object type.",
+        "capability": "example-arena.combat",
+        "icon": "bot",
+        "inputs": [
+          { "key": "objectType", "label": "Enemy type", "valueKind": "catalog-reference", "required": true }
+        ],
+        "outputs": []
+      }
+    ],
+    "behaviorTemplates": [
+      {
+        "id": "example-arena.next-wave",
+        "label": "Next enemy wave",
+        "description": "Spawn another enemy after one is defeated.",
+        "category": "Arena",
+        "icon": "swords",
+        "requiredCapabilities": ["example-arena.combat"],
+        "when": { "entryId": "example-arena.enemy-defeated", "arguments": {} },
+        "do": [
+          { "entryId": "example-arena.spawn-enemy", "arguments": {} }
+        ]
+      }
+    ],
     "panels": [
       {
         "id": "arena-settings",
@@ -49,6 +118,15 @@
               { "key": "enemyCount", "label": "Enemy count", "min": 0, "max": 64, "step": 1, "default": 8 }
             ]
           }
+        }
+      ],
+      "validators": [
+        {
+          "_tag": "ExecutableEditorValidatorContribution",
+          "id": "arena-map-validator",
+          "kind": "executable",
+          "display": { "label": "Example Arena Map Validator" },
+          "entry": "./dist/server.js"
         }
       ]
     },
@@ -140,6 +218,17 @@
               ]
             }
           }
+        }
+      ]
+    },
+    "server": {
+      "mapValidators": [
+        {
+          "_tag": "ExecutableServerMapValidatorContribution",
+          "id": "arena-map-validator",
+          "kind": "executable",
+          "display": { "label": "Example Arena Map Validator" },
+          "entry": "./dist/server.js"
         }
       ]
     }

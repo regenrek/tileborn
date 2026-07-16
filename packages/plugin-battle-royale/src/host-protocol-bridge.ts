@@ -35,6 +35,11 @@ export type RuntimeClientFrameDecodeResult =
       readonly closeReason: string;
     };
 
+export type RuntimeServerLifecycleFrameView = {
+  readonly kind: "game-over";
+  readonly winnerPlayerId: string;
+};
+
 export const decodeHostClientFrameView = (bytes: Uint8Array): RuntimeClientFrameView | undefined => {
   const frame = BattleRoyaleProtocol.decodeClientMessage(bytes);
   if (frame._tag === "Heartbeat") {
@@ -97,5 +102,23 @@ export const isHostWelcomeFrame = (bytes: Uint8Array): boolean => {
     return BattleRoyaleProtocol.decodeServerMessage(bytes)._tag === "WelcomeSnapshot";
   } catch {
     return false;
+  }
+};
+
+/**
+ * Build-time plugin bridge for the host's plugin-neutral room lifecycle.
+ * The plugin owns decoding its wire protocol; the Durable Object owns what a
+ * terminal mode event means for room persistence and scheduling.
+ */
+export const decodeHostServerLifecycleFrame = (
+  bytes: Uint8Array,
+): RuntimeServerLifecycleFrameView | undefined => {
+  try {
+    const frame = BattleRoyaleProtocol.decodeServerMessage(bytes);
+    return frame._tag === "GameOver"
+      ? { kind: "game-over", winnerPlayerId: frame.winner }
+      : undefined;
+  } catch {
+    return undefined;
   }
 };

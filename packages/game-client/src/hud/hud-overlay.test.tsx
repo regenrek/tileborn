@@ -26,7 +26,7 @@ const baseMetrics: HudMetrics = {
       phase: "countdown",
       secondsRemaining: 42,
     },
-    recentEvents: [],
+    gameplayEvents: [],
   },
 };
 

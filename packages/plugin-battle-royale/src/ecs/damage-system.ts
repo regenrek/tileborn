@@ -10,11 +10,13 @@ import {
   PLAYER_STATS_COMPONENT,
   POSITION_COMPONENT,
   RESPAWN_STATE_COMPONENT,
+  TEAM_COMPONENT,
   type MatchPhase,
   type Player,
   type PlayerStats,
   type Position,
   type RespawnState,
+  type Team,
 } from './components.js';
 import type { SpawnSlot } from './spawn-players.js';
 import { countAllPlayers } from './spawn-players.js';
@@ -23,12 +25,14 @@ export interface RoomRulesConfig {
   readonly respawnEnabled: boolean;
   readonly friendlyFire: boolean;
   readonly matchMode: 'solo' | 'duo' | 'squad';
+  readonly matchEndPolicy: 'last-standing' | 'continuous';
 }
 
 export const DEFAULT_ROOM_RULES: RoomRulesConfig = {
   respawnEnabled: false,
   friendlyFire: false,
   matchMode: 'solo',
+  matchEndPolicy: 'last-standing',
 };
 
 export interface DamageSystemContext {
@@ -79,6 +83,7 @@ const registerDamageComponents = (world: PluginWorld): void => {
   world.registerComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
   world.registerComponent<RespawnState>(RESPAWN_STATE_COMPONENT);
   world.registerComponent<MatchPhase>(MATCH_PHASE_COMPONENT);
+  world.registerComponent<Team>(TEAM_COMPONENT);
 };
 
 export const ensureMatchPhase = (
@@ -257,8 +262,14 @@ const emitGameOverIfNeeded = (
   tick: number,
   ctx: DamageSystemContext,
   state: DamageSystemState,
+  roomRules: RoomRulesConfig,
 ): void => {
-  if (state.gameOverEmitted) {
+  if (
+    state.gameOverEmitted ||
+    roomRules.respawnEnabled ||
+    roomRules.matchEndPolicy === 'continuous' ||
+    state.scheduledRespawns.length > 0
+  ) {
     return;
   }
 
@@ -268,31 +279,29 @@ const emitGameOverIfNeeded = (
   }
 
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
-  let lastAlivePlayerId: string | undefined;
-  let aliveCount = 0;
+  const alivePlayers: Array<readonly [number, Player]> = [];
 
-  for (const [, player] of players.entries()) {
-    if (player.alive !== 1) {
-      continue;
-    }
-    aliveCount += 1;
-    lastAlivePlayerId = player.playerId;
+  for (const entry of players.entries()) {
+    if (entry[1].alive === 1) alivePlayers.push(entry);
   }
 
-  if (aliveCount !== 1 || lastAlivePlayerId === undefined) {
-    if (
-      aliveCount !== 0 ||
-      state.lastEliminatedPlayerIds.length === 0 ||
-      state.scheduledRespawns.length > 0
-    ) {
-      return;
-    }
-    lastAlivePlayerId = [...state.lastEliminatedPlayerIds].sort((left, right) =>
-      left.localeCompare(right),
-    )[0];
-    if (lastAlivePlayerId === undefined) {
-      return;
-    }
+  const teams = world.getComponent<Team>(TEAM_COMPONENT);
+  const aliveCompetitors = new Set(
+    alivePlayers.map(([entity, player]) =>
+      roomRules.matchMode === 'solo'
+        ? player.playerId
+        : (teams.get(entity)?.team ?? `missing-team:${player.playerId}`),
+    ),
+  );
+  if (aliveCompetitors.size > 1 || state.lastEliminatedPlayerIds.length === 0) {
+    return;
+  }
+
+  const lastAlivePlayerId = alivePlayers.length > 0
+    ? alivePlayers.map(([, player]) => player.playerId).sort((left, right) => left.localeCompare(right))[0]
+    : [...state.lastEliminatedPlayerIds].sort((left, right) => left.localeCompare(right))[0];
+  if (lastAlivePlayerId === undefined) {
+    return;
   }
 
   state.gameOverEmitted = true;
@@ -327,5 +336,5 @@ export const runDamageSystem = (
   const roomRules = resolveRoomRules(ctx.roomRules);
   processScheduledRespawns(world, tick, ctx, state);
   emitPendingKills(world, tick, ctx, state, roomRules);
-  emitGameOverIfNeeded(world, tick, ctx, state);
+  emitGameOverIfNeeded(world, tick, ctx, state, roomRules);
 };

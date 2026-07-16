@@ -71,6 +71,8 @@ const packageJson = {
     },
   ],
   settings: { "@tileborne-plugins/example-mode": { maxPlayers: 4 } },
+  content: { schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} },
+  behaviors: { schemaVersion: 1, manifests: [], visualDefinitions: [], modules: [] },
   visuals: { playerModels: [], overlayVisuals: [], weaponVisuals: [] },
   assets: [{ path: "assets/ab/cdef.png", hash: HASH, assetId: `asset:${UUID}` }],
   modeData: { "@tileborne-plugins/example-mode": { zone: { phases: 3 } } },
@@ -82,6 +84,7 @@ describe("RuntimeMapPackage schema (ADR-0030)", () => {
     expect(decoded.manifest.mapId).toBe(`map:${UUID}`);
     expect(decoded.catalog).toHaveLength(2);
     expect(decoded.placements[0]?.typeId).toBe(`gobj:${UUID}`);
+    expect(decoded.behaviors.manifests).toEqual([]);
     expect(decoded.modeData["@tileborne-plugins/example-mode"]).toEqual({
       zone: { phases: 3 },
     });

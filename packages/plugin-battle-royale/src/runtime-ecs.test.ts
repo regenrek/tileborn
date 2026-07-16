@@ -175,7 +175,7 @@ describe("Battle Royale runtime ECS", () => {
       remainingTicks: 0,
     });
     expect(world.getComponent(RESPAWN_STATE_COMPONENT).get(playerEntity!)).toEqual({ state: "alive" });
-    expect(world.getComponent(TEAM_COMPONENT).get(playerEntity!)).toEqual({ team: "solo" });
+    expect(world.getComponent(TEAM_COMPONENT).get(playerEntity!)).toEqual({ team: "solo-1" });
     expect(world.getComponent(AIM_COMPONENT).get(playerEntity!)).toEqual({ deg: 0 });
     expect(world.getComponent(MUZZLE_COMPONENT).get(playerEntity!)).toBeDefined();
     expect(world.getComponent(HITBOX_COMPONENT).get(playerEntity!)).toBeDefined();

@@ -1,18 +1,17 @@
 import type { BattleRoyaleAbilityId } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import type {
+  RuntimeAdapter,
+  RuntimeAdapterComponentStore,
+  RuntimeAdapterContext,
+  RuntimeAdapterHost,
+  RuntimeAdapterWorld,
+} from "@tileborne/plugin-api";
 
 import type { BattleRoyaleConfigInput } from "../battle-royale-config.js";
 
-export interface ComponentStore<T extends object> {
-  readonly get: (entity: number) => T | undefined;
-  readonly set: (entity: number, value: T) => void;
-  readonly has: (entity: number) => boolean;
-  readonly delete: (entity: number) => void;
-  readonly entries: () => Iterable<[number, T]>;
-}
+export type ComponentStore<T extends object> = RuntimeAdapterComponentStore<T>;
 
-export interface PluginWorld {
-  readonly createEntity: () => number;
-  readonly destroyEntity: (entity: number) => void;
+export interface PluginWorld extends RuntimeAdapterWorld {
   readonly registerComponent: <T extends object>(name: string) => ComponentStore<T>;
   readonly getComponent: <T extends object>(name: string) => ComponentStore<T>;
 }
@@ -42,7 +41,7 @@ export interface PlayerModelSelection {
   readonly modelId: string;
 }
 
-export interface RuntimePluginHost {
+export interface RuntimePluginHost extends RuntimeAdapterHost {
   /**
    * The encoded `RuntimeMapPackage` wire JSON (ADR-0030): the ONE payload
    * every runtime host hands the plugin. The plugin decodes it through the
@@ -63,13 +62,9 @@ export interface RuntimePluginHost {
   readonly config?: RuntimeAdapterConfig;
 }
 
-export interface RuntimePluginContext {
-  readonly pluginId: string;
-}
+export type RuntimePluginContext = RuntimeAdapterContext;
 
-export interface RuntimePlugin {
-  readonly id: string;
+export interface RuntimePlugin extends RuntimeAdapter {
   readonly onInit?: (ctx: RuntimePluginContext, world: PluginWorld) => void;
   readonly onTick?: (world: PluginWorld, dt: number, tick: number) => void;
-  readonly onShutdown?: () => void;
 }

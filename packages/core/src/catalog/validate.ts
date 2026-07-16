@@ -160,9 +160,15 @@ export const validateCatalog = (
   const localLootTableIds = new Set<string>(
     Option.getOrElse(catalog.lootTables, () => []).map((table) => table.id),
   );
+  if (localLootTableIds.size !== Option.getOrElse(catalog.lootTables, () => []).length) {
+    issues.push("catalog contains duplicate loot table ids");
+  }
 
   const items = Option.getOrElse(catalog.items, () => []);
   const localItemIds = new Set<string>(items.map((item) => item.id));
+  if (localItemIds.size !== items.length) {
+    issues.push("catalog contains duplicate item ids");
+  }
 
   const grantUnresolved = (from: string, ref: GrantReference): string | undefined => {
     if (ref.kind === "item") {

@@ -2,6 +2,7 @@ import {
   GameObjectType,
   MapObject,
   RuntimeMapPackageVisuals,
+  RuntimeCatalogEntry,
   TileborneMap,
   gameObjectTypeIdForKey,
   makeTileborneMap,
@@ -26,6 +27,8 @@ import {
   toCatalogEntries,
 } from "./test-map-package.js";
 import { TEST_PLAYER_MODELS } from "./test-player-model.js";
+import { DEFAULT_BATTLE_ROYALE_CONFIG } from "./battle-royale-config.js";
+import { resolveBattleRoyaleWeaponEntry } from "./weapon-catalog.js";
 
 const makeTestObject = (
   id: (typeof TEST_OBJECT_IDS)[number],
@@ -268,5 +271,110 @@ describe("buildBattleRoyaleRuntimeState", () => {
     expect(state.playerModels).toEqual(TEST_PLAYER_MODELS);
     expect(state.defaultPlayerModelId).toBe(TEST_PLAYER_MODELS[0].id);
     expect(state.playerModelSelections).toEqual([]);
+  });
+
+  it("executes project item and loot definitions in the BR runtime snapshot", () => {
+    const itemId = "item:12345678-1234-4234-8234-123456789abc";
+    const lootId = "loot:12345678-1234-4234-8234-123456789abd";
+    const state = buildBattleRoyaleRuntimeState(
+      buildTestMapPackage({
+        map: makeFixtureMap(),
+        content: {
+          schemaVersion: 1,
+          items: [{ id: itemId, label: "Project potion", data: {} }],
+          lootTables: [{
+            id: lootId,
+            label: "Project drops",
+            entries: [{ itemId, tier: "epic", weight: 7 }],
+          }],
+          weapons: [],
+          provenance: {
+            [itemId]: { _tag: "project" },
+            [lootId]: { _tag: "project" },
+          },
+        },
+      }),
+    );
+    expect(state.lootTables).toEqual([{ itemKind: itemId, tier: "epic", weight: 7 }]);
+  });
+
+  it("uses a placed project weapon definition for combat instead of the plugin template", () => {
+    const weaponId = "weapon:12345678-1234-4234-8234-123456789abe";
+    const weaponType = Schema.decodeUnknownSync(GameObjectType)({
+      id: String(gameObjectTypeIdForKey("project-rifle")),
+      schemaVersion: 1,
+      label: "Project rifle",
+      family: "weapon",
+      components: [{ _tag: "weapon-ref", weaponId }],
+      instanceDefaults: {},
+    });
+    const map = makeTileborneMap({
+      id: TEST_MAP_ID,
+      width: 32,
+      height: 32,
+      tileWidth: 32,
+      tileHeight: 32,
+      objects: [makeTestObject(TEST_OBJECT_IDS[0], "project-rifle", 1, 1)],
+    });
+    const projectContent = {
+      schemaVersion: 1 as const,
+      items: [],
+      lootTables: [],
+      weapons: [{
+        weapon: {
+          id: weaponId,
+          damage: 91,
+          cooldownTicks: 3,
+          magazineSize: 4,
+          reloadTicks: 10,
+        },
+        delivery: {
+          _tag: "ProjectileDelivery" as const,
+          damage: 91,
+          speed: 9,
+          ttlTicks: 20,
+          radius: 0.4,
+          falloff: { _tag: "NoFalloff" as const },
+          knockback: 0,
+        },
+        appliesStatus: [],
+      }],
+      provenance: { [weaponId]: { _tag: "project" as const } },
+    };
+    const packageWire = buildTestMapPackage({
+      map,
+      catalog: [new RuntimeCatalogEntry({ origin: { _tag: "project" }, objectType: weaponType })],
+      content: projectContent,
+    });
+    const entry = resolveBattleRoyaleWeaponEntry(DEFAULT_BATTLE_ROYALE_CONFIG, packageWire);
+    expect(entry.weapon.id).toBe(weaponId);
+    expect(entry.weapon.damage).toBe(91);
+    expect(entry.delivery.speed).toBe(9);
+
+    const configuredWithoutPlacement = resolveBattleRoyaleWeaponEntry(
+      { ...DEFAULT_BATTLE_ROYALE_CONFIG, loadout: { startingWeaponId: weaponId } },
+      buildTestMapPackage({ map: makeFixtureMap(), content: projectContent }),
+    );
+    expect(configuredWithoutPlacement.weapon.id).toBe(weaponId);
+    expect(configuredWithoutPlacement.weapon.damage).toBe(91);
+    expect(() => resolveBattleRoyaleWeaponEntry(
+      { ...DEFAULT_BATTLE_ROYALE_CONFIG, loadout: { startingWeaponId: "weapon:12345678-1234-4234-8234-123456789aff" } },
+      buildTestMapPackage({ map: makeFixtureMap(), content: projectContent }),
+    )).toThrow(/selected starting weapon is unavailable/i);
+
+    const meleeId = "weapon:12345678-1234-4234-8234-123456789abf";
+    const meleeContent = {
+      ...projectContent,
+      weapons: [{
+        weapon: { id: meleeId, damage: 15, cooldownTicks: 12, magazineSize: 1, reloadTicks: 0 },
+        delivery: { _tag: "MeleeDelivery" as const, damage: 15, range: 28, arc: 1.2, knockback: 4 },
+        appliesStatus: [],
+      }],
+      provenance: { [meleeId]: { _tag: "project" as const } },
+    };
+    expect(() => resolveBattleRoyaleWeaponEntry(
+      { ...DEFAULT_BATTLE_ROYALE_CONFIG, loadout: { startingWeaponId: meleeId } },
+      buildTestMapPackage({ map: makeFixtureMap(), content: meleeContent }),
+    )).toThrow(/requires a projectile weapon/i);
   });
 });

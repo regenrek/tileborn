@@ -1,6 +1,10 @@
 import { DAMAGE } from "../constants.js";
-import { spreadOrderSpawnPoints } from "../spawn-layout.js";
 import type { ExportedArtifact, SpawnPointArtifact } from "../types/artifact.js";
+import {
+  assertBattleRoyaleTeamTopology,
+  selectBattleRoyaleSpawnTeamSlots,
+  type BattleRoyaleMatchMode,
+} from "../team-topology.js";
 import type { PluginWorld } from "../types/runtime-plugin.js";
 import {
   ANIMATION_STATE_COMPONENT,
@@ -32,27 +36,14 @@ export interface SpawnPlayersOptions {
   readonly playerHealth?: number;
   readonly playerIds?: readonly string[];
   readonly existingPlayerIds?: ReadonlySet<string>;
+  readonly matchMode?: BattleRoyaleMatchMode;
 }
 
-const compareSpawnPoints = (left: SpawnPointArtifact, right: SpawnPointArtifact): number =>
-  left.y - right.y || left.x - right.x || left.team.localeCompare(right.team);
-
-const resolveSpawnAssignments = (artifact: ExportedArtifact): readonly ResolvedSpawnSlot[] => {
-  const sortedMarkers = [...artifact.spawnAnchors].sort(compareSpawnPoints);
-  const spawnCount = Math.min(artifact.maxPlayers, sortedMarkers.length);
-  const markers =
-    spawnCount < sortedMarkers.length
-      ? spreadOrderSpawnPoints(sortedMarkers, compareSpawnPoints).slice(0, spawnCount)
-      : sortedMarkers;
-  return markers.map((marker) => ({
-    x: marker.x,
-    y: marker.y,
-    team: marker.team,
-  }));
-};
+const resolveSpawnMarkers = (artifact: ExportedArtifact): readonly SpawnPointArtifact[] =>
+  selectBattleRoyaleSpawnTeamSlots(artifact.spawnAnchors, artifact.maxPlayers);
 
 export const resolveSpawnSlots = (artifact: ExportedArtifact): readonly SpawnSlot[] =>
-  resolveSpawnAssignments(artifact).map((marker) => ({ x: marker.x, y: marker.y }));
+  resolveSpawnMarkers(artifact).map((marker) => ({ x: marker.x, y: marker.y }));
 
 const registerPlayerComponents = (world: PluginWorld): void => {
   world.registerComponent<Position>(POSITION_COMPONENT);
@@ -109,8 +100,14 @@ export const spawnPlayersFromArtifact = (
   const stats = world.getComponent<PlayerStats>(PLAYER_STATS_COMPONENT);
   const teams = world.getComponent<Team>(TEAM_COMPONENT);
   const facings = world.getComponent<Facing>(FACING_COMPONENT);
-  const slots = resolveSpawnAssignments(artifact);
-  const playerIds = resolveSpawnPlayerIds(slots, options.playerIds);
+  const markers = resolveSpawnMarkers(artifact);
+  const playerIds = resolveSpawnPlayerIds(markers, options.playerIds);
+  const topology = assertBattleRoyaleTeamTopology(options.matchMode ?? 'solo', markers);
+  const slots: readonly ResolvedSpawnSlot[] = markers.map((marker, index) => ({
+    x: marker.x,
+    y: marker.y,
+    team: topology.teamIds[index]!,
+  }));
   const entities: number[] = [];
 
   for (let index = 0; index < playerIds.length; index += 1) {

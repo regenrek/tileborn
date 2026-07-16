@@ -7,12 +7,29 @@ import { defineConfig } from 'tsup';
 // intentionally omitted — this example proves discovery + contract decode only.
 export default defineConfig([
   {
+    entry: { server: 'src/server-entry.ts' },
+    format: ['esm'],
+    platform: 'node',
+    target: 'node22',
+    outDir: 'dist',
+    clean: true,
+    sourcemap: true,
+    dts: false,
+    noExternal: [
+      '@tileborne/asset-pipeline',
+      '@tileborne/core',
+      '@tileborne/plugin-api',
+      '@tileborne/simulation',
+      'effect',
+    ],
+  },
+  {
     entry: { runtime: 'src/runtime-bundle.ts' },
     format: ['esm'],
     platform: 'browser',
     target: 'es2022',
     outDir: 'dist',
-    clean: true,
+    clean: false,
     sourcemap: true,
     dts: false,
     noExternal: ['@tileborne/core', '@tileborne/simulation', 'effect', 'msgpackr'],

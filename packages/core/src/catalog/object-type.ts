@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 import { CatalogId, GameObjectTypeId, ItemDefinitionId, LootTableId } from "../ids.js";
+import { AuthoringFieldSchema } from "../authoring/field-schema.js";
 import { JsonObject } from "../project/index.js";
 import { GameObjectComponent, GrantRef, OpenTag } from "./components.js";
 
@@ -33,6 +34,8 @@ export class GameObjectType extends Schema.Class<GameObjectType>("GameObjectType
   /** Soft hint for default editor layer placement; not authoritative ordering. */
   layerHint: Schema.OptionFromOptional(Schema.String),
   components: Schema.Array(GameObjectComponent),
+  /** Validated, schema-driven per-instance properties rendered by the generic editor. */
+  instanceFields: Schema.optional(Schema.Array(AuthoringFieldSchema)),
   /** Per-type authoring defaults applied to `MapObject.properties` overrides. */
   instanceDefaults: JsonObject,
 }) {}
@@ -80,11 +83,10 @@ export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>("GameObje
 
 /**
  * Project manifest `settings` key under which the project-authored catalog
- * fragment is persisted (ADR-0025 D4): a serialized {@link GameObjectCatalog}
- * pack, stored in the brand/mode-neutral settings bag — distinct from the
- * read-only plugin-shipped catalogs. Canonical owner of the key so every
- * consumer (editor catalog service, ship build assembly) reads the SAME
- * fragment instead of drifting copies.
+ * content document is persisted (ADR-0025 D4). Legacy values are serialized
+ * {@link GameObjectCatalog}s; current values compose that canonical catalog
+ * with simulation-owned weapon entries and immutable provenance. The key stays
+ * stable so editor, playtest and ship build read the SAME source.
  */
 export const PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY = "tileborne:catalogFragment";
 

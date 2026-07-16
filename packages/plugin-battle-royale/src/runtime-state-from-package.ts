@@ -3,6 +3,7 @@ import {
   type GameObjectComponent,
   type RuntimeObjectPlacement,
 } from "@tileborne/core";
+import { RuntimeProjectContent } from "@tileborne/plugin-api/project-content";
 import { Schema } from "effect";
 
 import { extractObjectCollisionRects } from "./collision-artifact.js";
@@ -75,6 +76,27 @@ const spawnPointFromPlacement = (placement: RuntimeObjectPlacement): SpawnPointA
   team: readString(placement.instanceProperties?.team, "solo"),
   weight: readNumber(placement.instanceProperties?.weight, 1),
 });
+
+const projectLootEntries = (
+  content: RuntimeProjectContent,
+): BattleRoyaleArtifact["lootTables"] => {
+  const itemIds = new Set(content.items.map((item) => String(item.id)));
+  return content.lootTables.flatMap((table) =>
+    table.entries.flatMap((entry) => {
+      const referencedItem =
+        typeof entry.itemId === "string" && itemIds.has(entry.itemId) ? entry.itemId : undefined;
+      const itemKind = referencedItem ?? (typeof entry.itemKind === "string" ? entry.itemKind : undefined);
+      if (itemKind === undefined) return [];
+      return [
+        {
+          itemKind,
+          tier: typeof entry.tier === "string" ? entry.tier : "project",
+          weight: typeof entry.weight === "number" && Number.isFinite(entry.weight) ? entry.weight : 1,
+        },
+      ];
+    }),
+  );
+};
 
 /**
  * Project a role-free package placement into the BR-internal roled union.
@@ -176,6 +198,8 @@ export const buildBattleRoyaleRuntimeState = (
     );
   }
   const modeData = decodeBattleRoyaleModeData(modeDataWire);
+  const projectContent = Schema.decodeUnknownSync(RuntimeProjectContent)(mapPackage.content);
+  const authoredLoot = projectLootEntries(projectContent);
 
   const resolveRole = buildRoleResolver(mapPackage);
   const grouped: Record<PlacementRole, ObjectPlacement[]> = {
@@ -222,7 +246,10 @@ export const buildBattleRoyaleRuntimeState = (
     spawnPoints,
     spawnAnchors: spawnPoints,
     shrinkSchedule: modeData.shrinkSchedule,
-    lootTables: modeData.lootTables,
+    // A project-authored loot table with valid item references is executable
+    // game content and intentionally overrides the mode template. Empty or
+    // unrelated project content preserves the plugin default.
+    lootTables: authoredLoot.length === 0 ? modeData.lootTables : authoredLoot,
     objectPlacements,
     ...(objectCollisionRects.length === 0 ? {} : { objectCollisionRects }),
     ...(modeData.battleRoyale === undefined ? {} : { battleRoyale: modeData.battleRoyale }),

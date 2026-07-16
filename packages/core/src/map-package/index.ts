@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 import { PlayerModelRef } from "../asset/library.js";
+import { RuntimeBehaviorPackage } from "../behavior/index.js";
 import { GameObjectType } from "../catalog/object-type.js";
 import { ResolvedOverlayVisual } from "../catalog/resolved-overlay-visuals.js";
 import { ResolvedWeaponVisuals } from "../catalog/resolved-weapon-visuals.js";
@@ -40,8 +41,15 @@ export type RuntimeMapPackageId = typeof RuntimeMapPackageId.Type;
  * v2: the manifest gained the required NEUTRAL `playerCapacity` field (M2
  * review, F2) — hosts size player slots from it instead of peeking into the
  * engine-opaque `modeData` sections.
+ * v3: packages gained the required first-class neutral `content` section for
+ * project-owned item, loot and weapon definition families. Its typed schema
+ * stays with the plugin/content composition owner; core carries the open JSON
+ * envelope and integrity-protects it like every other package section.
+ * v4: packages gained the required genre-neutral `behaviors` section. It
+ * carries typed manifests, visual definitions and compiled modules targeting
+ * one scheduler; raw TypeScript is never executed from a map package.
  */
-export const RUNTIME_MAP_PACKAGE_SCHEMA_VERSION = 2;
+export const RUNTIME_MAP_PACKAGE_SCHEMA_VERSION = 4;
 
 /**
  * Package manifest: identity, the active game mode the package was assembled
@@ -157,6 +165,10 @@ export class RuntimeMapPackage extends Schema.Class<RuntimeMapPackage>("RuntimeM
   catalog: Schema.Array(RuntimeCatalogEntry),
   placements: Schema.Array(RuntimeObjectPlacement),
   settings: Schema.Record(Schema.String, JsonObject),
+  /** Project-owned non-object definitions, typed by the content composition owner. */
+  content: JsonObject,
+  /** Canonical gameplay behavior payload shared by every runtime host. */
+  behaviors: RuntimeBehaviorPackage,
   visuals: RuntimeMapPackageVisuals,
   assets: Schema.Array(RuntimeMapPackageAssetEntry),
   modeData: Schema.Record(Schema.String, JsonObject),

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { PlaytestRuntimeHud, PlaytestRuntimeHudEvent } from "@tileborne/ipc-contracts";
+import { PlaytestRuntimeHud, type GameplayEvent } from "@tileborne/ipc-contracts";
 
 /**
  * Neutral HUD state shape consumed by the shared HUD chassis ({@link HudOverlay}).
@@ -10,7 +10,7 @@ import { PlaytestRuntimeHud, PlaytestRuntimeHudEvent } from "@tileborne/ipc-cont
  * client share.
  */
 export type HudState = Schema.Schema.Type<typeof PlaytestRuntimeHud>;
-export type HudEvent = Schema.Schema.Type<typeof PlaytestRuntimeHudEvent>;
+export type HudEvent = GameplayEvent;
 
 export type HudMetrics = {
   readonly playerCount: number;
@@ -41,11 +41,26 @@ export function healthPercent(health: number, maxHealth: number): number {
 }
 
 export function eventKey(event: HudEvent): string {
-  if (event._tag === "PlayerKilled") {
-    return `PlayerKilled:${event.victimId}:${event.tick}:${event.emittedAtMs}`;
+  switch (event._tag) {
+    case "WeaponFired":
+      return `WeaponFired:${event.sourceId}:${event.weaponId}:${event.tick}`;
+    case "DamageApplied":
+      return `DamageApplied:${event.targetId}:${event.sourceId ?? "environment"}:${event.tick}`;
+    case "EntityDefeated":
+      return `EntityDefeated:${event.targetId}:${event.sourceId ?? "environment"}:${event.tick}`;
+    case "ItemGranted":
+      return `ItemGranted:${event.targetId}:${event.itemId}:${event.quantity}:${event.tick}`;
+    case "ItemDropped":
+      return `ItemDropped:${event.sourceId}:${event.itemId}:${event.tick}`;
+    case "ItemConsumed":
+      return `ItemConsumed:${event.sourceId}:${event.itemId}:${event.tick}`;
+    case "StatusApplied":
+      return `StatusApplied:${event.targetId}:${event.effectId}:${event.tick}`;
+    case "StatusExpired":
+      return `StatusExpired:${event.targetId}:${event.effectId}:${event.tick}`;
+    case "ZonePhaseChanged":
+      return `ZonePhaseChanged:${event.phase}:${event.tick}`;
+    case "MatchPhaseChanged":
+      return `MatchPhaseChanged:${event.phase}:${event.winnerId ?? "none"}:${event.tick}`;
   }
-  if (event._tag === "PickupCollected") {
-    return `PickupCollected:${event.playerId}:${event.itemKind}:${event.tier}:${event.quantity}:${event.tick}:${event.emittedAtMs}`;
-  }
-  return `GameOver:${event.winnerId}:${event.emittedAtMs}`;
 }

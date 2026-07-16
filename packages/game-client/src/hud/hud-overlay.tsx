@@ -95,7 +95,7 @@ const MINIMAP_SIZE = 128;
 type LocalPlayerState = NonNullable<HudState["localPlayer"]>;
 type MinimapState = NonNullable<HudState["minimap"]>;
 type ScoreboardEntry = NonNullable<HudState["scoreboard"]>[number];
-type HudEventState = HudState["recentEvents"][number];
+type HudEventState = HudState["gameplayEvents"][number];
 
 const UUID_SEGMENT_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -151,7 +151,7 @@ export interface HudWidgetContext {
   readonly localPlayer: LocalPlayerState | undefined;
   readonly scoreboard: readonly ScoreboardEntry[];
   readonly teamRoster: readonly ScoreboardEntry[];
-  readonly killFeed: readonly Extract<HudEventState, { _tag: "PlayerKilled" }>[];
+  readonly killFeed: readonly Extract<HudEventState, { _tag: "EntityDefeated" }>[];
 }
 
 export interface HudWidgetProps {
@@ -426,7 +426,7 @@ function KillFeedWidget({ ctx }: HudWidgetProps) {
     >
       {ctx.killFeed.map((event) => (
         <Badge key={eventKey(event)} variant="destructive" className="justify-start truncate">
-          {event.victimDisplayName}
+          {event.targetId}
         </Badge>
       ))}
     </div>
@@ -434,35 +434,36 @@ function KillFeedWidget({ ctx }: HudWidgetProps) {
 }
 
 function EventToastWidget({ ctx }: HudWidgetProps) {
-  const recentEvents = ctx.hud?.recentEvents;
+  const gameplayEvents = ctx.hud?.gameplayEvents;
   const [toast, setToast] = useState<HudToast | null>(null);
   const seenEventsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!recentEvents?.length) {
+    if (!gameplayEvents?.length) {
       return;
     }
-    for (const event of recentEvents) {
+    for (const event of gameplayEvents) {
       const key = eventKey(event);
       if (seenEventsRef.current.has(key)) {
         continue;
       }
       seenEventsRef.current.add(key);
-      if (event._tag === "PlayerKilled") {
+      if (event._tag === "EntityDefeated") {
         setToast({
           id: key,
-          message: `${event.victimDisplayName} eliminated`,
+          message: `${event.targetId} eliminated`,
           variant: "destructive",
         });
-      } else if (event._tag === "PickupCollected") {
+      } else if (event._tag === "ItemGranted") {
+        const [itemKind, tier] = String(event.itemId).split(":");
         setToast({
           id: key,
-          message: `${event.itemKind} ${event.tier} x${event.quantity}`,
+          message: `${itemKind}${tier ? ` ${tier}` : ""} x${event.quantity}`,
           variant: "warning",
         });
       }
     }
-  }, [recentEvents]);
+  }, [gameplayEvents]);
 
   useEffect(() => {
     if (!toast) {
@@ -720,8 +721,8 @@ export const deriveHudWidgetContext = (metrics: HudMetrics | undefined): HudWidg
   const teamRoster = localPlayer?.team
     ? scoreboard.filter((entry) => entry.team === localPlayer.team)
     : scoreboard.filter((entry) => entry.playerId === localPlayer?.playerId);
-  const killFeed = (hud?.recentEvents ?? [])
-    .filter((event) => event._tag === "PlayerKilled")
+  const killFeed = (hud?.gameplayEvents ?? [])
+    .filter((event) => event._tag === "EntityDefeated")
     .slice(-4)
     .reverse();
   return {

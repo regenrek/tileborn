@@ -32,7 +32,13 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     dts: false,
-    noExternal: ['@tileborne/core', '@tileborne/ipc-contracts', '@tileborne/simulation', 'effect'],
+    noExternal: [
+      '@tileborne/core',
+      '@tileborne/ipc-contracts',
+      '@tileborne/plugin-api/project-content',
+      '@tileborne/simulation',
+      'effect',
+    ],
   },
   {
     entry: { index: 'src/index.ts' },
@@ -102,6 +108,19 @@ export default defineConfig([
     entry: { 'player-models': 'src/player-models/index.ts' },
     format: ['esm'],
     platform: 'browser',
+    target: 'es2022',
+    outDir: 'dist',
+    clean: false,
+    sourcemap: true,
+    dts: false,
+    external: ['@tileborne/core', 'effect'],
+  },
+  {
+    // Worker/main/renderer-safe policy entry. This is the single capability
+    // source consumed by BR runtime resolution and desktop readiness/UI.
+    entry: { policy: 'src/policy.ts' },
+    format: ['esm'],
+    platform: 'neutral',
     target: 'es2022',
     outDir: 'dist',
     clean: false,

@@ -10,9 +10,13 @@ export const PackCapabilitySource = Schema.Literals([
 ]);
 export type PackCapabilitySource = typeof PackCapabilitySource.Type;
 
+export const PackCapabilityDiagnosticSeverity = Schema.Literals(['error', 'warning', 'info']);
+export type PackCapabilityDiagnosticSeverity = typeof PackCapabilityDiagnosticSeverity.Type;
+
 export class PackNoTilesetsDiagnostic extends Schema.TaggedClass<PackNoTilesetsDiagnostic>()(
   'PACK.no-tilesets',
   {
+    severity: PackCapabilityDiagnosticSeverity,
     message: Schema.String,
   },
 ) {}
@@ -20,6 +24,7 @@ export class PackNoTilesetsDiagnostic extends Schema.TaggedClass<PackNoTilesetsD
 export class PackDuplicateIdDiagnostic extends Schema.TaggedClass<PackDuplicateIdDiagnostic>()(
   'PACK.duplicate-id',
   {
+    severity: PackCapabilityDiagnosticSeverity,
     packId: PackId,
     existingPackId: Schema.optional(PackId),
     newPackId: Schema.optional(PackId),
@@ -31,6 +36,7 @@ export class PackDuplicateIdDiagnostic extends Schema.TaggedClass<PackDuplicateI
 export class PackUnsupportedSchemaDiagnostic extends Schema.TaggedClass<PackUnsupportedSchemaDiagnostic>()(
   'PACK.unsupported-schema',
   {
+    severity: PackCapabilityDiagnosticSeverity,
     schemaVersion: Schema.OptionFromOptional(Schema.Number),
     message: Schema.String,
   },
@@ -39,6 +45,7 @@ export class PackUnsupportedSchemaDiagnostic extends Schema.TaggedClass<PackUnsu
 export class PackFlipFlagDroppedDiagnostic extends Schema.TaggedClass<PackFlipFlagDroppedDiagnostic>()(
   'PACK.flip-flag-dropped',
   {
+    severity: PackCapabilityDiagnosticSeverity,
     path: Schema.String,
     message: Schema.String,
   },
@@ -47,6 +54,7 @@ export class PackFlipFlagDroppedDiagnostic extends Schema.TaggedClass<PackFlipFl
 export class PackMissingAssetDiagnostic extends Schema.TaggedClass<PackMissingAssetDiagnostic>()(
   'PACK.missing-asset',
   {
+    severity: PackCapabilityDiagnosticSeverity,
     assetId: Schema.String,
     path: Schema.String,
     message: Schema.String,
@@ -110,6 +118,7 @@ export const makeAssetOnlyPackCapability = (packId: PackId): PackCapability =>
     source: 'asset-only',
     diagnostics: [
       new PackNoTilesetsDiagnostic({
+        severity: 'warning',
         message: 'Pack does not contain tilesets.',
       }),
     ],

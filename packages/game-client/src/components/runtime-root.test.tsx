@@ -224,7 +224,7 @@ describe("RuntimeRoot", () => {
         hudMetrics={{
           playerCount: 3,
           tickCount: 50,
-          hud: { totalPlayers: 8, recentEvents: [] },
+          hud: { totalPlayers: 8, gameplayEvents: [] },
         }}
         hudLayout={Schema.decodeUnknownSync(HudLayout)({
           id: "test.runtime-hud",

@@ -36,6 +36,10 @@
       "types": "./src/constants.ts",
       "default": "./dist/constants.js"
     },
+    "./policy": {
+      "types": "./src/policy.ts",
+      "default": "./dist/policy.js"
+    },
     "./dist/runtime.js": "./dist/runtime.js",
     "./dist/server.js": "./dist/server.js"
   },

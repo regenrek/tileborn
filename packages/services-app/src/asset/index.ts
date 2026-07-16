@@ -485,6 +485,56 @@ const dropLegacyCapabilityCache = (value: unknown): unknown => {
   return next;
 };
 
+const legacyCapabilityDiagnosticSeverity = (tag: unknown): 'error' | 'warning' | undefined => {
+  switch (tag) {
+    case 'PACK.no-tilesets':
+    case 'PACK.flip-flag-dropped':
+      return 'warning';
+    case 'PACK.duplicate-id':
+    case 'PACK.unsupported-schema':
+    case 'PACK.missing-asset':
+      return 'error';
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * v6 capability locks predate diagnostic severity. Normalize only this durable
+ * persistence shape before strict schema decoding; IPC/wire contracts continue
+ * to require severity and the v7 integrity hash then forces a fresh SDK probe.
+ */
+const migrateLegacyCapabilityDiagnosticSeverities = (value: unknown): unknown => {
+  if (!isRecord(value) || !isRecord(value.capability) || !isRecord(value.capability.capability)) {
+    return value;
+  }
+  const capability = value.capability.capability;
+  if (!Array.isArray(capability.diagnostics)) {
+    return value;
+  }
+  let changed = false;
+  const diagnostics = capability.diagnostics.map((diagnostic) => {
+    if (!isRecord(diagnostic) || 'severity' in diagnostic) {
+      return diagnostic;
+    }
+    const severity = legacyCapabilityDiagnosticSeverity(diagnostic._tag);
+    if (severity === undefined) {
+      return diagnostic;
+    }
+    changed = true;
+    return { ...diagnostic, severity };
+  });
+  return changed
+    ? {
+        ...value,
+        capability: {
+          ...value.capability,
+          capability: { ...capability, diagnostics },
+        },
+      }
+    : value;
+};
+
 const decodePackLock = (
   filePath: string,
   value: unknown,
@@ -507,7 +557,7 @@ const readPackLock = (
       try: (): unknown => JSON.parse(raw),
       catch: (cause) => new AssetIntegrityError({ path: filePath, message: errorMessage(cause) }),
     });
-    return yield* decodePackLock(filePath, parsed).pipe(
+    return yield* decodePackLock(filePath, migrateLegacyCapabilityDiagnosticSeverities(parsed)).pipe(
       Effect.catch((error) =>
         hasLegacyCapabilityWithoutPlaceableCount(parsed)
           ? decodePackLock(filePath, dropLegacyCapabilityCache(parsed))
@@ -640,6 +690,7 @@ const duplicatePackDiagnostics = (
     .map((pack) => {
       const integrityHashesMatch = hashAssetPackManifest(pack) === newIntegrityHash;
       return new PackDuplicateIdDiagnostic({
+        severity: 'error',
         packId: manifest.id,
         existingPackId: pack.id,
         newPackId: manifest.id,

@@ -25,6 +25,23 @@
           }
         }
       ],
+      "instanceFields": [
+        {
+          "key": "team",
+          "label": "Spawn team",
+          "help": "Solo ignores team labels; Duo and Squad group matching labels.",
+          "kind": "enum",
+          "default": "solo",
+          "options": [
+            { "value": "solo", "label": "Automatic / solo" },
+            { "value": "alpha", "label": "Team Alpha" },
+            { "value": "beta", "label": "Team Beta" },
+            { "value": "gamma", "label": "Team Gamma" },
+            { "value": "delta", "label": "Team Delta" }
+          ]
+        },
+        { "key": "weight", "label": "Spawn weight", "kind": "number", "default": 1, "min": 0.1, "step": 0.1 }
+      ],
       "instanceDefaults": {
         "team": "solo",
         "weight": 1
@@ -125,7 +142,23 @@
       "instanceDefaults": {
         "tier": "common",
         "respawnSeconds": 0
-      }
+      },
+      "instanceFields": [
+        {
+          "key": "tier",
+          "label": "Loot rarity",
+          "kind": "enum",
+          "default": "common",
+          "options": [
+            { "value": "common", "label": "Common" },
+            { "value": "uncommon", "label": "Uncommon" },
+            { "value": "rare", "label": "Rare" },
+            { "value": "epic", "label": "Epic" },
+            { "value": "legendary", "label": "Legendary" }
+          ]
+        },
+        { "key": "respawnSeconds", "label": "Loot respawn seconds", "kind": "number", "default": 0, "min": 0, "step": 1 }
+      ]
     },
     {
       "id": "gobj:3eb0db38-4591-8f16-8e66-ff41dff40cdd",

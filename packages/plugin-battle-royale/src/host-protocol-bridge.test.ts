@@ -2,9 +2,22 @@ import * as BattleRoyaleProtocol from "@tileborne/ipc-contracts/protocols/battle
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { decodeHostClientFrameView } from "./host-protocol-bridge.js";
+import {
+  decodeHostClientFrameView,
+  decodeHostServerLifecycleFrame,
+} from "./host-protocol-bridge.js";
 
 describe("host protocol bridge", () => {
+  it("projects GameOver into the plugin-neutral host lifecycle view", () => {
+    const bytes = BattleRoyaleProtocol.encodeServerMessage(
+      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId("player-2") }),
+    );
+
+    expect(decodeHostServerLifecycleFrame(bytes)).toEqual({
+      kind: "game-over",
+      winnerPlayerId: "player-2",
+    });
+  });
   it("decodes reload and interact action flags into runtime input", () => {
     const bytes = BattleRoyaleProtocol.encodeClientMessage(
       new BattleRoyaleProtocol.PlayerInput({

@@ -31,7 +31,7 @@ interface ProbeInput {
   readonly manifestPath: string;
 }
 
-const CAPABILITY_CACHE_VERSION = 6;
+const CAPABILITY_CACHE_VERSION = 7;
 const textEncoder = new TextEncoder();
 
 const capabilityIntegrityHash = (rawManifest: string): ContentHash =>
@@ -101,6 +101,7 @@ const unsupportedSchemaDiagnostic = (schemaVersion: unknown): PackCapabilityDiag
     return undefined;
   }
   return new PackUnsupportedSchemaDiagnostic({
+    severity: "error",
     schemaVersion: schemaVersionOption(schemaVersion),
     message: `Unsupported tileset manifest schema version: ${String(schemaVersion)}`,
   });
@@ -115,6 +116,7 @@ const parseDiagnostics = (
       case "MissingAtlas":
         return [
           new PackMissingAssetDiagnostic({
+            severity: diagnostic.severity,
             assetId: diagnostic.atlasAssetId,
             path: diagnostic.path,
             message: diagnostic.message,
@@ -123,6 +125,7 @@ const parseDiagnostics = (
       case "DuplicateTileId":
         return [
           new PackDuplicateIdDiagnostic({
+            severity: diagnostic.severity,
             packId,
             message: diagnostic.message,
           }),
@@ -130,6 +133,7 @@ const parseDiagnostics = (
       case "DuplicateAutotileRuleId":
         return [
           new PackDuplicateIdDiagnostic({
+            severity: diagnostic.severity,
             packId,
             message: diagnostic.message,
           }),
@@ -151,6 +155,7 @@ const missingImageAssetDiagnostics = (
     }
     return [
       new PackMissingAssetDiagnostic({
+        severity: "error",
         assetId,
         path: `/tilesets/${index}/atlasAssetId`,
         message: `Tileset atlas asset is missing or not an image: ${assetId}`,
@@ -203,6 +208,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
       ...missingAssets,
       ...parsed.diagnostics.map((diagnostic) =>
         new PackUnsupportedSchemaDiagnostic({
+          severity: diagnostic.severity,
           schemaVersion,
           message: diagnostic.message,
         }),
@@ -211,6 +217,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
     if (tilesetCount === 0 || tileCount === 0) {
       diagnostics.push(
         new PackNoTilesetsDiagnostic({
+          severity: "warning",
           message: "Pack does not contain paintable tilesets.",
         }),
       );
@@ -246,6 +253,7 @@ export const detectPackCapability = (packId: PackId, json: unknown): PackCapabil
   if (tilesetCount === 0 || tileCount === 0) {
     diagnostics.push(
       new PackNoTilesetsDiagnostic({
+        severity: "warning",
         message: "Pack does not contain paintable tilesets.",
       }),
     );

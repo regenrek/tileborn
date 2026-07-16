@@ -12,6 +12,9 @@ export default defineConfig({
     alias: {
       "@tileborne/core": resolveSrc("../core/src/index.ts"),
       "@tileborne/ipc-contracts": resolveSrc("../ipc-contracts/src/index.ts"),
+      "@tileborne/plugin-api/project-content": resolveSrc(
+        "../plugin-api/src/project-content.ts",
+      ),
       "@tileborne/plugin-api": resolveSrc("../plugin-api/src/index.ts"),
       "@tileborne/ui": resolveSrc("../ui/src/index.ts"),
     },

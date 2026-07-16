@@ -9,11 +9,14 @@ import {
   makeTileborneMap,
 } from "@tileborne/core";
 import { decodeServerMessage } from "@tileborne/ipc-contracts/protocols/battle-royale";
+import { makeCombatEntityId, makeTeamId, type HitContext } from "@tileborne/simulation";
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { ABILITY, DAMAGE, DEFAULT_MAX_PLAYERS, MOVEMENT, SPAWN_POINT_KIND, STATUS_EFFECT } from "./constants.js";
-import { PLAYER_COMPONENT, POSITION_COMPONENT, VELOCITY_COMPONENT, type Player } from "./ecs/components.js";
+import { ABILITY, DAMAGE, DEFAULT_MAX_PLAYERS, MOVEMENT, PLUGIN_ID, SPAWN_POINT_KIND, STATUS_EFFECT } from "./constants.js";
+import { createBattleRoyaleHitPolicy } from "./ecs/combat-world-view.js";
+import { PLAYER_COMPONENT, POSITION_COMPONENT, TEAM_COMPONENT, VELOCITY_COMPONENT, type Player, type Team } from "./ecs/components.js";
+import { createDamageSystemState, recordMatchStarters, runDamageSystem } from "./ecs/damage-system.js";
 import { countAlivePlayers, resolveSpawnSlots, spawnPlayersFromArtifact } from "./ecs/spawn-players.js";
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
 import { createRuntimeAdapter } from "./runtime-adapter.js";
@@ -207,6 +210,99 @@ describe("spawnPlayersFromArtifact", () => {
 });
 
 describe("createRuntimeAdapter", () => {
+  it("uses one canonical squad identity for spawn assignment, friendly fire, and match end", () => {
+    const squadMap = makeTileborneMap({
+      id: TEST_MAP_ID,
+      width: 64,
+      height: 64,
+      tileWidth: 32,
+      tileHeight: 32,
+      objects: TEST_OBJECT_IDS.map((id, index) =>
+        makeTestObject(id, SPAWN_POINT_KIND, 4 + (index % 4) * 12, 4 + Math.floor(index / 4) * 40, {
+          team: "solo",
+        }),
+      ),
+      properties: {
+        [PLUGIN_ID]: {
+          maxPlayers: 8,
+          roomRules: {
+            matchMode: "squad",
+            friendlyFire: false,
+            respawnEnabled: false,
+            matchEndPolicy: "last-standing",
+          },
+        },
+      },
+    });
+    const world = createTestPluginWorld();
+    const plugin = createRuntimeAdapter({ getMapPackage: () => makeRuntimeMapPackage(squadMap) });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+
+    const players = world.getComponent<Player>(PLAYER_COMPONENT);
+    const teams = world.getComponent<Team>(TEAM_COMPONENT);
+    const roster = [...players.entries()]
+      .map(([entity, player]) => ({ entity, player, team: teams.get(entity)?.team }))
+      .sort((left, right) => left.player.playerId.localeCompare(right.player.playerId));
+    expect(roster).toHaveLength(8);
+    expect(new Set(roster.map(({ team }) => team))).toEqual(new Set(["team-1", "team-2"]));
+    expect(roster.filter(({ team }) => team === "team-1")).toHaveLength(4);
+    expect(roster.filter(({ team }) => team === "team-2")).toHaveLength(4);
+    for (const { player, team } of roster) expect(player.team).toBe(team);
+
+    const sameTeam = roster.filter(({ team }) => team === roster[0]!.team);
+    const opponent = roster.find(({ team }) => team !== roster[0]!.team)!;
+    const hitContext = (source: typeof roster[number], target: typeof roster[number]): HitContext => ({
+      source: Option.some(makeCombatEntityId(source.entity)),
+      sourceTeam: Option.some(makeTeamId(source.team!)),
+      target: makeCombatEntityId(target.entity),
+      targetTeam: Option.some(makeTeamId(target.team!)),
+    });
+    const friendlyFireOff = createBattleRoyaleHitPolicy({
+      matchMode: "squad",
+      friendlyFire: false,
+      respawnEnabled: false,
+      matchEndPolicy: "last-standing",
+    });
+    expect(friendlyFireOff.isHostile(hitContext(sameTeam[0]!, sameTeam[1]!))).toBe(false);
+    expect(friendlyFireOff.isHostile(hitContext(sameTeam[0]!, opponent))).toBe(true);
+    expect(createBattleRoyaleHitPolicy({
+      matchMode: "squad",
+      friendlyFire: true,
+      respawnEnabled: false,
+      matchEndPolicy: "last-standing",
+    }).isHostile(hitContext(sameTeam[0]!, sameTeam[1]!))).toBe(true);
+
+    const frames: Uint8Array[] = [];
+    const damageState = createDamageSystemState();
+    const damageContext = {
+      msgOut: { push: (frame: Uint8Array) => frames.push(frame) },
+      roomRules: {
+        matchMode: "squad" as const,
+        friendlyFire: false,
+        respawnEnabled: false,
+        matchEndPolicy: "last-standing" as const,
+      },
+    };
+    recordMatchStarters(world, damageState);
+    const losingTeam = sameTeam;
+    for (const [index, victim] of losingTeam.entries()) {
+      players.set(victim.entity, { ...victim.player, health: 0, alive: 0 });
+      damageState.pendingKills.push({
+        victimEntity: victim.entity,
+        victimPlayerId: victim.player.playerId,
+        killerId: opponent.player.playerId,
+      });
+      runDamageSystem(world, index + 1, damageContext, damageState);
+      const messages = frames.map(decodeServerMessage);
+      if (index === 0) {
+        expect(messages.filter((message) => message._tag === "GameOver")).toHaveLength(0);
+        expect(countAlivePlayers(world)).toBe(7);
+      }
+    }
+    expect(frames.map(decodeServerMessage).filter((message) => message._tag === "GameOver")).toHaveLength(1);
+  });
+
   it("rejects packages that do not satisfy the runtime contract", () => {
     const mapWithoutSpawns = makeTileborneMap({
       id: TEST_MAP_ID,

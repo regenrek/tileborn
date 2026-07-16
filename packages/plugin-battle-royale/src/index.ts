@@ -1,5 +1,25 @@
 export { createRuntimeAdapter, BattleRoyaleConfig, resolveBattleRoyaleConfig } from "./runtime-adapter.js";
 export type { BattleRoyaleConfigInput, ResolvedBattleRoyaleConfig } from "./battle-royale-config.js";
+export {
+  assessBattleRoyaleWeaponCompatibility,
+  isBattleRoyaleWeaponCompatible,
+} from "./weapon-compatibility.js";
+export type {
+  BattleRoyaleWeaponCompatibilityCandidate,
+  BattleRoyaleWeaponCompatibilityCode,
+  BattleRoyaleWeaponCompatibilityResult,
+} from "./weapon-compatibility.js";
+export {
+  assertBattleRoyaleTeamTopology,
+  resolveBattleRoyaleTeamTopology,
+  selectBattleRoyaleSpawnTeamSlots,
+} from "./team-topology.js";
+export type {
+  BattleRoyaleAuthoredSpawnTeam,
+  BattleRoyaleMatchMode,
+  BattleRoyaleTeamTopology,
+  BattleRoyaleTeamTopologyIssue,
+} from "./team-topology.js";
 export { createSimulationRules, defaultPickupRadius } from "./simulation-rules.js";
 export { validateMap } from "./validate-map.js";
 export { generateMap } from "./generate-map.js";
@@ -98,6 +118,15 @@ export {
 } from "./weapon-visuals.js";
 export type { BattleRoyaleWeaponVisualsResult } from "./weapon-visuals.js";
 export { PLUGIN_ID } from "./constants.js";
+export {
+  applyBattleRoyaleStarterProject,
+  BATTLE_ROYALE_STARTER_CONTENT_TEMPLATE_IDS,
+  BATTLE_ROYALE_STARTER_TEMPLATE_ID,
+  BATTLE_ROYALE_STARTER_VERSION,
+  createBattleRoyaleStarterMap,
+  readBattleRoyaleStarterMetadata,
+} from "./starter.js";
+export type { BattleRoyaleStarterMetadata } from "./starter.js";
 export {
   BATTLE_ROYALE_CORE_PACK_ID,
   BATTLE_ROYALE_CORE_PACK_VERSION,

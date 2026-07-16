@@ -96,7 +96,7 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
   // it drives combat with — the same data backs the manifest slot, so the slot
   // is the single source of BR's weapon definition (ADR-0018 §7). The decode is
   // worker-safe (no `@tileborne/plugin-api` / `node:fs` in the worker bundle).
-  const weaponEntry = resolveBattleRoyaleWeaponEntry(config);
+  const weaponEntry = resolveBattleRoyaleWeaponEntry(config, host.getMapPackage());
   const weaponDelivery = weaponEntry.delivery as ProjectileDelivery;
   const playerPhysicsByModelId = buildPlayerPhysicsByModelId(artifact, {
     radius: config.movement.radius,
@@ -131,6 +131,7 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
       playerHealth: config.damage.playerHealth,
       ...(host.getPlayerIds === undefined ? {} : { playerIds: host.getPlayerIds() }),
       existingPlayerIds: spawnedPlayerIds,
+      matchMode: roomRules.matchMode,
     });
     if (created.length === 0 && spawnedPlayerIds.size > 0) {
       return;

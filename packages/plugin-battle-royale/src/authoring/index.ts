@@ -19,3 +19,8 @@ export {
   readBattleRoyaleMapSettings,
   type BattleRoyaleAuthoringSettings,
 } from "./map-settings.js";
+export {
+  assessBattleRoyaleWeaponCompatibility,
+  isBattleRoyaleWeaponCompatible,
+  type BattleRoyaleWeaponCompatibilityCandidate,
+} from "../weapon-compatibility.js";

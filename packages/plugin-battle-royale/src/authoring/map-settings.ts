@@ -26,6 +26,11 @@ export interface BattleRoyaleAuthoringSettings {
   readonly holdSec: number;
   readonly shrinkPhases: number;
   readonly damagePerSecOutside: number;
+  readonly matchMode: "solo" | "duo" | "squad";
+  readonly matchEndPolicy: "last-standing" | "continuous";
+  readonly respawnEnabled: boolean;
+  readonly friendlyFire: boolean;
+  readonly startingWeaponId: string | undefined;
 }
 
 /** Legacy keys hard-cut from `map.properties` on the next save (ADR-0023). */
@@ -38,6 +43,17 @@ const readObject = (value: unknown): JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as JsonObject)
     : {};
+
+const readMatchMode = (value: unknown): BattleRoyaleAuthoringSettings["matchMode"] =>
+  value === "duo" || value === "squad" ? value : "solo";
+
+const readMatchEndPolicy = (
+  value: unknown,
+  respawnEnabled: boolean,
+): BattleRoyaleAuthoringSettings["matchEndPolicy"] =>
+  value === "continuous" || (value !== "last-standing" && respawnEnabled)
+    ? "continuous"
+    : "last-standing";
 
 const omitKeys = (bag: JsonObject, keys: readonly string[]): JsonObject =>
   Object.fromEntries(Object.entries(bag).filter(([key]) => !keys.includes(key)));
@@ -72,6 +88,15 @@ export const readBattleRoyaleAuthoringSettings = (
   const settings = readBattleRoyaleMapSettings(map);
   const zone = readObject(settings.zone);
   const schedule = readObject(zone.schedule);
+  const roomRules = readObject(settings.roomRules);
+  const respawn = readObject(settings.respawn);
+  const loadout = readObject(settings.loadout);
+  const respawnEnabled =
+    typeof roomRules.respawnEnabled === "boolean"
+      ? roomRules.respawnEnabled
+      : typeof respawn.enabled === "boolean"
+        ? respawn.enabled
+        : false;
   return {
     maxPlayers: readPositiveNumber(settings.maxPlayers, DEFAULT_MAX_PLAYERS),
     waitSec: readPositiveNumber(schedule.waitSec, ZONE.schedule.waitSec),
@@ -79,6 +104,11 @@ export const readBattleRoyaleAuthoringSettings = (
     holdSec: readPositiveNumber(schedule.holdSec, ZONE.schedule.holdSec),
     shrinkPhases: readPositiveNumber(schedule.shrinkPhases, ZONE.schedule.shrinkPhases),
     damagePerSecOutside: readPositiveNumber(zone.damagePerSecOutside, ZONE.damagePerSecond),
+    matchMode: readMatchMode(roomRules.matchMode),
+    matchEndPolicy: readMatchEndPolicy(roomRules.matchEndPolicy, respawnEnabled),
+    respawnEnabled,
+    friendlyFire: typeof roomRules.friendlyFire === "boolean" ? roomRules.friendlyFire : false,
+    startingWeaponId: typeof loadout.startingWeaponId === "string" ? loadout.startingWeaponId : undefined,
   };
 };
 
@@ -90,11 +120,15 @@ export const battleRoyaleObjectCounts = (map: TileborneMap) => ({
 
 export const applyBattleRoyaleAuthoringSettings = (
   map: TileborneMap,
-  settings: BattleRoyaleAuthoringSettings,
+  settings: Omit<BattleRoyaleAuthoringSettings, "matchMode" | "matchEndPolicy" | "respawnEnabled" | "friendlyFire" | "startingWeaponId"> &
+    Partial<Pick<BattleRoyaleAuthoringSettings, "matchMode" | "matchEndPolicy" | "respawnEnabled" | "friendlyFire" | "startingWeaponId">>,
 ): TileborneMap => {
+  const current = readBattleRoyaleAuthoringSettings(map);
   const previous = readBattleRoyaleMapSettings(map);
   const previousZone = readObject(previous.zone);
   const previousSchedule = readObject(previousZone.schedule);
+  const previousRoomRules = readObject(previous.roomRules);
+  const previousRespawn = readObject(previous.respawn);
   const nextSettings: JsonObject = {
     ...previous,
     maxPlayers: Math.max(1, Math.round(settings.maxPlayers)),
@@ -109,6 +143,24 @@ export const applyBattleRoyaleAuthoringSettings = (
         shrinkPhases: Math.max(1, Math.round(settings.shrinkPhases)),
       },
     },
+    roomRules: {
+      ...previousRoomRules,
+      matchMode: settings.matchMode ?? current.matchMode,
+      matchEndPolicy: (settings.respawnEnabled ?? current.respawnEnabled)
+        ? "continuous"
+        : settings.matchEndPolicy ?? current.matchEndPolicy,
+      respawnEnabled: settings.respawnEnabled ?? current.respawnEnabled,
+      friendlyFire: settings.friendlyFire ?? current.friendlyFire,
+    },
+    respawn: {
+      ...previousRespawn,
+      enabled: settings.respawnEnabled ?? current.respawnEnabled,
+    },
+    loadout: settings.startingWeaponId === undefined
+      ? readObject(previous.loadout)
+      : settings.startingWeaponId.length === 0
+        ? {}
+        : { ...readObject(previous.loadout), startingWeaponId: settings.startingWeaponId },
   };
   // Write under the neutral namespace and hard-cut the legacy literal keys.
   return new TileborneMap({

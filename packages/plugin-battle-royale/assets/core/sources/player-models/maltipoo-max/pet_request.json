@@ -180,11 +180,7 @@
   "references": [],
   "chroma_key": {
     "hex": "#FF00FF",
-    "rgb": [
-      255,
-      0,
-      255
-    ],
+    "rgb": [255, 0, 255],
     "name": "magenta",
     "selection": "fallback"
   },

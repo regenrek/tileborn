@@ -946,13 +946,7 @@
           "defaultDurationMs": 100
         }
       ],
-      "tags": [
-        "sprite",
-        "player-model",
-        "battle-royale",
-        "maltipoo",
-        "maltipoo-mae"
-      ],
+      "tags": ["sprite", "player-model", "battle-royale", "maltipoo", "maltipoo-mae"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -975,109 +969,49 @@
             "idle": {
               "sourceState": "idle",
               "row": 0,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "walk": {
               "sourceState": "running",
               "row": 7,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "run": {
               "sourceState": "running",
               "row": 7,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "shoot": {
               "sourceState": "review",
               "row": 8,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
+              "frames": [0, 1, 2, 3, 4, 5],
               "fallbackNote": "Codex-pet Maltipoo atlas has no gun-fire row; BR weapon overlay and muzzle flash own shooting."
             },
             "reload": {
               "sourceState": "waiting",
               "row": 6,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
+              "frames": [0, 1, 2, 3, 4, 5],
               "fallbackNote": "Codex-pet Maltipoo atlas has no reload row; waiting loop is the visible reload fallback."
             },
             "hit": {
               "sourceState": "failed",
               "row": 5,
-              "frames": [
-                0,
-                1,
-                2,
-                3
-              ]
+              "frames": [0, 1, 2, 3]
             },
             "death": {
               "sourceState": "failed",
               "row": 5,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7
-              ]
+              "frames": [0, 1, 2, 3, 4, 5, 6, 7]
             },
             "dash": {
               "sourceState": "jumping",
               "row": 4,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4
-              ]
+              "frames": [0, 1, 2, 3, 4]
             },
             "pickup": {
               "sourceState": "waving",
               "row": 3,
-              "frames": [
-                0,
-                1,
-                2,
-                3
-              ]
+              "frames": [0, 1, 2, 3]
             }
           }
         }
@@ -1738,13 +1672,7 @@
           "defaultDurationMs": 100
         }
       ],
-      "tags": [
-        "sprite",
-        "player-model",
-        "battle-royale",
-        "maltipoo",
-        "maltipoo-max"
-      ],
+      "tags": ["sprite", "player-model", "battle-royale", "maltipoo", "maltipoo-max"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -1767,109 +1695,49 @@
             "idle": {
               "sourceState": "idle",
               "row": 0,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "walk": {
               "sourceState": "running",
               "row": 7,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "run": {
               "sourceState": "running",
               "row": 7,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ]
+              "frames": [0, 1, 2, 3, 4, 5]
             },
             "shoot": {
               "sourceState": "review",
               "row": 8,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
+              "frames": [0, 1, 2, 3, 4, 5],
               "fallbackNote": "Codex-pet Maltipoo atlas has no gun-fire row; BR weapon overlay and muzzle flash own shooting."
             },
             "reload": {
               "sourceState": "waiting",
               "row": 6,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
+              "frames": [0, 1, 2, 3, 4, 5],
               "fallbackNote": "Codex-pet Maltipoo atlas has no reload row; waiting loop is the visible reload fallback."
             },
             "hit": {
               "sourceState": "failed",
               "row": 5,
-              "frames": [
-                0,
-                1,
-                2,
-                3
-              ]
+              "frames": [0, 1, 2, 3]
             },
             "death": {
               "sourceState": "failed",
               "row": 5,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7
-              ]
+              "frames": [0, 1, 2, 3, 4, 5, 6, 7]
             },
             "dash": {
               "sourceState": "jumping",
               "row": 4,
-              "frames": [
-                0,
-                1,
-                2,
-                3,
-                4
-              ]
+              "frames": [0, 1, 2, 3, 4]
             },
             "pickup": {
               "sourceState": "waving",
               "row": 3,
-              "frames": [
-                0,
-                1,
-                2,
-                3
-              ]
+              "frames": [0, 1, 2, 3]
             }
           }
         }
@@ -1895,10 +1763,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "spawn-marker"
-      ],
+      "tags": ["battle-royale", "spawn-marker"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -1932,10 +1797,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "shrink-anchor"
-      ],
+      "tags": ["battle-royale", "shrink-anchor"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -1969,10 +1831,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "loot-crate"
-      ],
+      "tags": ["battle-royale", "loot-crate"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2006,10 +1865,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "trap"
-      ],
+      "tags": ["battle-royale", "trap"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2043,10 +1899,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "decoy"
-      ],
+      "tags": ["battle-royale", "decoy"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2080,10 +1933,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "barrier"
-      ],
+      "tags": ["battle-royale", "barrier"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2117,10 +1967,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "health-pack"
-      ],
+      "tags": ["battle-royale", "health-pack"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2154,10 +2001,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "ammo-box"
-      ],
+      "tags": ["battle-royale", "ammo-box"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2191,10 +2035,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "armor-vest"
-      ],
+      "tags": ["battle-royale", "armor-vest"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2228,10 +2069,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "rifle"
-      ],
+      "tags": ["battle-royale", "rifle"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2265,10 +2103,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "projectile-bolt"
-      ],
+      "tags": ["battle-royale", "projectile-bolt"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2302,10 +2137,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "muzzle-flash"
-      ],
+      "tags": ["battle-royale", "muzzle-flash"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2339,10 +2171,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "impact-burst"
-      ],
+      "tags": ["battle-royale", "impact-burst"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2376,10 +2205,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "shield-bubble"
-      ],
+      "tags": ["battle-royale", "shield-bubble"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2413,10 +2239,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "player-shadow"
-      ],
+      "tags": ["battle-royale", "player-shadow"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2450,10 +2273,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "hazard-flame"
-      ],
+      "tags": ["battle-royale", "hazard-flame"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2487,13 +2307,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "hitscan",
-        "ion-blaster"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "hitscan", "ion-blaster"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2539,13 +2353,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "hitscan",
-        "pulse-ranger"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "hitscan", "pulse-ranger"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2591,13 +2399,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "hitscan",
-        "arc-burst"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "hitscan", "arc-burst"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2643,13 +2445,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "projectile",
-        "pulse-carbine"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "projectile", "pulse-carbine"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2695,13 +2491,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "pellet",
-        "scatter-lance"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "pellet", "scatter-lance"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2747,13 +2537,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "charge",
-        "arc-charger"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "charge", "arc-charger"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2799,13 +2583,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "bounce",
-        "ricochet-disc"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "bounce", "ricochet-disc"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2851,13 +2629,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "pierce",
-        "rail-needle"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "pierce", "rail-needle"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2903,13 +2675,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "explosive",
-        "nova-launcher"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "explosive", "nova-launcher"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -2955,13 +2721,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "beam",
-        "prism-beam"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "beam", "prism-beam"],
       "placementMode": "object",
       "source": {
         "format": "tiled",
@@ -3007,13 +2767,7 @@
           "durationMs": 120
         }
       ],
-      "tags": [
-        "battle-royale",
-        "weapon",
-        "petwars",
-        "melee",
-        "plasma-sabre"
-      ],
+      "tags": ["battle-royale", "weapon", "petwars", "melee", "plasma-sabre"],
       "placementMode": "object",
       "source": {
         "format": "tiled",

@@ -1,18 +1,18 @@
-import rootConfig from "../../eslint.config.js";
+import rootConfig from '../../eslint.config.js';
 
 export default [
   ...rootConfig,
   {
-    files: ["**/*.test.ts", "src/test/**", "vitest.config.ts"],
+    files: ['**/*.test.ts', 'src/test/**', 'vitest.config.ts'],
     rules: {
-      "import/no-extraneous-dependencies": "off",
+      'import/no-extraneous-dependencies': 'off',
     },
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
-        Buffer: "readonly",
+        Buffer: 'readonly',
       },
     },
   },

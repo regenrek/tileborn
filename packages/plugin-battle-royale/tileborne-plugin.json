@@ -61,7 +61,11 @@
         "checklistFacts": [
           { "id": "playable-map", "label": "Playable map", "sources": ["map", "game-mode"] },
           { "id": "gameplay-catalog", "label": "Gameplay catalog", "sources": ["catalog"] },
-          { "id": "player-visuals", "label": "Player visuals", "sources": ["visual-model", "asset"] }
+          {
+            "id": "player-visuals",
+            "label": "Player visuals",
+            "sources": ["visual-model", "asset"]
+          }
         ],
         "capabilities": {
           "authoring": "battle-royale.authoring",
@@ -94,7 +98,13 @@
         "capability": "battle-royale.match",
         "icon": "users-round",
         "inputs": [
-          { "key": "count", "label": "Players", "valueKind": "number", "required": true, "defaultValue": 1 }
+          {
+            "key": "count",
+            "label": "Players",
+            "valueKind": "number",
+            "required": true,
+            "defaultValue": 1
+          }
         ],
         "outputs": []
       },
@@ -107,7 +117,12 @@
         "capability": "battle-royale.loot",
         "icon": "package-open",
         "inputs": [
-          { "key": "objectType", "label": "Loot object", "valueKind": "catalog-reference", "required": true }
+          {
+            "key": "objectType",
+            "label": "Loot object",
+            "valueKind": "catalog-reference",
+            "required": true
+          }
         ],
         "outputs": []
       }
@@ -121,12 +136,8 @@
         "icon": "trophy",
         "requiredCapabilities": ["battle-royale.match", "battle-royale.loot"],
         "when": { "entryId": "battle-royale.player-eliminated", "arguments": {} },
-        "if": [
-          { "entryId": "battle-royale.alive-count-at-most", "arguments": { "count": 1 } }
-        ],
-        "do": [
-          { "entryId": "battle-royale.spawn-loot", "arguments": {} }
-        ]
+        "if": [{ "entryId": "battle-royale.alive-count-at-most", "arguments": { "count": 1 } }],
+        "do": [{ "entryId": "battle-royale.spawn-loot", "arguments": {} }]
       }
     ],
     "panels": [
@@ -196,7 +207,13 @@
               { "key": "shrinkSec", "label": "Shrink time", "min": 1, "step": 1, "default": 30 },
               { "key": "holdSec", "label": "Hold time", "min": 1, "step": 1, "default": 30 },
               { "key": "shrinkPhases", "label": "Phases", "min": 1, "step": 1, "default": 3 },
-              { "key": "damagePerSecOutside", "label": "Zone DPS", "min": 1, "step": 0.5, "default": 5 }
+              {
+                "key": "damagePerSecOutside",
+                "label": "Zone DPS",
+                "min": 1,
+                "step": 0.5,
+                "default": 5
+              }
             ]
           }
         }
@@ -387,36 +404,160 @@
             ],
             "schemeDefaults": {
               "keyboard-mouse": [
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyW" }, "axisRole": "y-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowUp" }, "axisRole": "y-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyS" }, "axisRole": "y+" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowDown" }, "axisRole": "y+" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyA" }, "axisRole": "x-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowLeft" }, "axisRole": "x-" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "KeyD" }, "axisRole": "x+" },
-                { "_tag": "InputBinding", "action": "core.Move", "trigger": { "_tag": "key", "code": "ArrowRight" }, "axisRole": "x+" },
-                { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "key", "code": "Space" } },
-                { "_tag": "InputBinding", "action": "core.PrimaryAction", "trigger": { "_tag": "mouseButton", "button": 0 } },
-                { "_tag": "InputBinding", "action": "core.SecondaryAction", "trigger": { "_tag": "key", "code": "ShiftLeft" } },
-                { "_tag": "InputBinding", "action": "core.SecondaryAction", "trigger": { "_tag": "key", "code": "ShiftRight" } },
-                { "_tag": "InputBinding", "action": "core.Dash", "trigger": { "_tag": "key", "code": "KeyF" } },
-                { "_tag": "InputBinding", "action": "battle-royale.ScanPulse", "trigger": { "_tag": "key", "code": "KeyQ" } },
-                { "_tag": "InputBinding", "action": "battle-royale.PlaceTrap", "trigger": { "_tag": "key", "code": "KeyT" } },
-                { "_tag": "InputBinding", "action": "battle-royale.DeployDecoy", "trigger": { "_tag": "key", "code": "KeyC" } },
-                { "_tag": "InputBinding", "action": "battle-royale.DropItem", "trigger": { "_tag": "key", "code": "KeyG" } },
-                { "_tag": "InputBinding", "action": "core.Reload", "trigger": { "_tag": "key", "code": "KeyR" } },
-                { "_tag": "InputBinding", "action": "core.Interact", "trigger": { "_tag": "key", "code": "KeyE" } },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyW" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowUp" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyS" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowDown" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyA" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowLeft" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyD" },
+                  "axisRole": "x+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowRight" },
+                  "axisRole": "x+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "key", "code": "Space" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "mouseButton", "button": 0 }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.SecondaryAction",
+                  "trigger": { "_tag": "key", "code": "ShiftLeft" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.SecondaryAction",
+                  "trigger": { "_tag": "key", "code": "ShiftRight" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Dash",
+                  "trigger": { "_tag": "key", "code": "KeyF" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.ScanPulse",
+                  "trigger": { "_tag": "key", "code": "KeyQ" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.PlaceTrap",
+                  "trigger": { "_tag": "key", "code": "KeyT" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.DeployDecoy",
+                  "trigger": { "_tag": "key", "code": "KeyC" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.DropItem",
+                  "trigger": { "_tag": "key", "code": "KeyG" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Reload",
+                  "trigger": { "_tag": "key", "code": "KeyR" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Interact",
+                  "trigger": { "_tag": "key", "code": "KeyE" }
+                },
                 { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
-                { "_tag": "InputBinding", "action": "core.Slot1", "trigger": { "_tag": "key", "code": "Digit1" } },
-                { "_tag": "InputBinding", "action": "core.Slot1", "trigger": { "_tag": "key", "code": "Numpad1" } },
-                { "_tag": "InputBinding", "action": "core.Slot2", "trigger": { "_tag": "key", "code": "Digit2" } },
-                { "_tag": "InputBinding", "action": "core.Slot2", "trigger": { "_tag": "key", "code": "Numpad2" } },
-                { "_tag": "InputBinding", "action": "core.Slot3", "trigger": { "_tag": "key", "code": "Digit3" } },
-                { "_tag": "InputBinding", "action": "core.Slot3", "trigger": { "_tag": "key", "code": "Numpad3" } },
-                { "_tag": "InputBinding", "action": "core.Slot4", "trigger": { "_tag": "key", "code": "Digit4" } },
-                { "_tag": "InputBinding", "action": "core.Slot4", "trigger": { "_tag": "key", "code": "Numpad4" } },
-                { "_tag": "InputBinding", "action": "core.Slot5", "trigger": { "_tag": "key", "code": "Digit5" } },
-                { "_tag": "InputBinding", "action": "core.Slot5", "trigger": { "_tag": "key", "code": "Numpad5" } }
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot1",
+                  "trigger": { "_tag": "key", "code": "Digit1" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot1",
+                  "trigger": { "_tag": "key", "code": "Numpad1" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot2",
+                  "trigger": { "_tag": "key", "code": "Digit2" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot2",
+                  "trigger": { "_tag": "key", "code": "Numpad2" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot3",
+                  "trigger": { "_tag": "key", "code": "Digit3" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot3",
+                  "trigger": { "_tag": "key", "code": "Numpad3" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot4",
+                  "trigger": { "_tag": "key", "code": "Digit4" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot4",
+                  "trigger": { "_tag": "key", "code": "Numpad4" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot5",
+                  "trigger": { "_tag": "key", "code": "Digit5" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot5",
+                  "trigger": { "_tag": "key", "code": "Numpad5" }
+                }
               ]
             }
           }
@@ -494,17 +635,83 @@
           "data": {
             "id": "br-default-hud",
             "widgets": [
-              { "id": "local-player", "kind": "core.LocalPlayerStatus", "anchor": "top-left", "order": 0, "enabled": true },
-              { "id": "team-roster", "kind": "core.TeamRoster", "anchor": "top-left", "order": 1, "enabled": true },
-              { "id": "alive-count", "kind": "core.AliveCount", "anchor": "top-right", "order": 0, "enabled": true },
-              { "id": "minimap", "kind": "core.Minimap", "anchor": "top-right", "order": 1, "enabled": true },
-              { "id": "scoreboard", "kind": "core.Scoreboard", "anchor": "top-right", "order": 2, "enabled": true },
-              { "id": "zone-status", "kind": "core.ZoneStatus", "anchor": "bottom-center", "order": 0, "enabled": true },
-              { "id": "pickup-prompt", "kind": "core.PickupPrompt", "anchor": "bottom-center", "order": 1, "enabled": true },
-              { "id": "weapon-panel", "kind": "core.WeaponPanel", "anchor": "bottom-center", "order": 2, "enabled": true },
-              { "id": "kill-feed", "kind": "core.KillFeed", "anchor": "bottom-left", "order": 0, "enabled": true },
-              { "id": "event-toast", "kind": "core.EventToast", "anchor": "center", "order": 0, "enabled": true },
-              { "id": "damage-indicator", "kind": "core.DamageIndicator", "anchor": "center", "order": 1, "enabled": true }
+              {
+                "id": "local-player",
+                "kind": "core.LocalPlayerStatus",
+                "anchor": "top-left",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "team-roster",
+                "kind": "core.TeamRoster",
+                "anchor": "top-left",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "alive-count",
+                "kind": "core.AliveCount",
+                "anchor": "top-right",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "minimap",
+                "kind": "core.Minimap",
+                "anchor": "top-right",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "scoreboard",
+                "kind": "core.Scoreboard",
+                "anchor": "top-right",
+                "order": 2,
+                "enabled": true
+              },
+              {
+                "id": "zone-status",
+                "kind": "core.ZoneStatus",
+                "anchor": "bottom-center",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "pickup-prompt",
+                "kind": "core.PickupPrompt",
+                "anchor": "bottom-center",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "weapon-panel",
+                "kind": "core.WeaponPanel",
+                "anchor": "bottom-center",
+                "order": 2,
+                "enabled": true
+              },
+              {
+                "id": "kill-feed",
+                "kind": "core.KillFeed",
+                "anchor": "bottom-left",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "event-toast",
+                "kind": "core.EventToast",
+                "anchor": "center",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "damage-indicator",
+                "kind": "core.DamageIndicator",
+                "anchor": "center",
+                "order": 1,
+                "enabled": true
+              }
             ]
           }
         }

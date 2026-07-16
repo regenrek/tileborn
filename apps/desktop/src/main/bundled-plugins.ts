@@ -1,6 +1,6 @@
-import { accessSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { accessSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Generic bundled-plugin discovery + path resolution (replaces the former
@@ -14,8 +14,8 @@ import { fileURLToPath } from "node:url";
  * present only as ONE entry in this generic list.
  */
 
-const manifestFileName = "tileborne-plugin.json";
-const bundledPluginsDirectoryName = "bundled-plugins";
+const manifestFileName = 'tileborne-plugin.json';
+const bundledPluginsDirectoryName = 'bundled-plugins';
 
 /** A single bundled example plugin: its id + how to locate it in dev/packaged. */
 export interface BundledPluginSpec {
@@ -28,7 +28,7 @@ export interface BundledPluginSpec {
 }
 
 /** Battle Royale plugin id — retained ONLY as one entry of the generic list. */
-export const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
+export const BATTLE_ROYALE_PLUGIN_ID = '@tileborne-plugins/battle-royale';
 
 /**
  * The bundled example plugins the desktop app seeds + can install. Order is the
@@ -37,13 +37,13 @@ export const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
 export const BUNDLED_PLUGINS: readonly BundledPluginSpec[] = [
   {
     id: BATTLE_ROYALE_PLUGIN_ID,
-    bundledDirName: "battle-royale",
-    workspacePackageDir: "plugin-battle-royale",
+    bundledDirName: 'battle-royale',
+    workspacePackageDir: 'plugin-battle-royale',
   },
   {
-    id: "@tileborne-plugins/example-arena",
-    bundledDirName: "example-arena",
-    workspacePackageDir: "plugin-example-arena",
+    id: '@tileborne-plugins/example-arena',
+    bundledDirName: 'example-arena',
+    workspacePackageDir: 'plugin-example-arena',
   },
 ];
 
@@ -51,10 +51,10 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const electronResourcesPath = (process as NodeJS.Process & { readonly resourcesPath?: string })
   .resourcesPath;
 const resourcesPath =
-  typeof electronResourcesPath === "string" && electronResourcesPath.length > 0
+  typeof electronResourcesPath === 'string' && electronResourcesPath.length > 0
     ? electronResourcesPath
     : moduleDir;
-const workspacePackagesRoot = path.resolve(moduleDir, "../../../../packages");
+const workspacePackagesRoot = path.resolve(moduleDir, '../../../../packages');
 
 /** The packaged (resources/bundled-plugins/<dir>) root for a bundled plugin. */
 export const packagedBundledPluginRoot = (spec: BundledPluginSpec): string =>
@@ -74,22 +74,24 @@ const hasPluginManifest = (directory: string): boolean => {
 };
 
 /**
- * Resolve the on-disk root for a bundled plugin: prefer the packaged copy, fall
- * back to the workspace package in dev. Throws when neither carries a manifest
- * (the plugin package must be built before desktop packaging).
+ * Resolve the on-disk root for a bundled plugin: prefer the workspace package
+ * in development, then fall back to the packaged copy. Packaged applications
+ * do not contain the workspace path, while this order prevents a stale bundle
+ * under Electron's resources directory from shadowing the live package during
+ * development and smoke tests.
  */
 export const resolveBundledPluginPath = (spec: BundledPluginSpec): string => {
+  const resolved = workspaceBundledPluginRoot(spec);
+  if (hasPluginManifest(resolved)) {
+    return resolved;
+  }
   const bundled = packagedBundledPluginRoot(spec);
   if (hasPluginManifest(bundled)) {
     return bundled;
   }
-  const resolved = workspaceBundledPluginRoot(spec);
-  if (!hasPluginManifest(resolved)) {
-    throw new Error(
-      `Bundled plugin ${spec.id} not found. Checked packaged plugin ${bundled} and workspace plugin ${resolved}. Build the plugin package before desktop packaging.`,
-    );
-  }
-  return resolved;
+  throw new Error(
+    `Bundled plugin ${spec.id} not found. Checked workspace plugin ${resolved} and packaged plugin ${bundled}. Build the plugin package before desktop packaging.`,
+  );
 };
 
 /** Look up a bundled plugin spec by id (e.g. for the BR-named install IPC). */

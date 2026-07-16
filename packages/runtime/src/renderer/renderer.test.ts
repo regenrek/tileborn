@@ -1,23 +1,23 @@
-import { AssetPackManifest, AssetPackManifestAsset, License } from "@tileborne/asset-pipeline";
-import type { AssetId, ContentHash, PackId } from "@tileborne/core";
-import { Effect, Option } from "effect";
-import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { Assets, Container, Rectangle, Sprite, Texture, TextureSource } from "pixi.js";
-import { describe, expect, it, vi } from "vitest";
+import { AssetPackManifest, AssetPackManifestAsset, License } from '@tileborne/asset-pipeline';
+import type { AssetId, ContentHash, PackId } from '@tileborne/core';
+import { Effect, Option } from 'effect';
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Assets, Container, Rectangle, Sprite, Texture, TextureSource } from 'pixi.js';
+import { describe, expect, it, vi } from 'vitest';
 
-import { PositionComponent, RenderableComponent, VelocityComponent } from "../ecs/components.js";
-import { World } from "../ecs/world.js";
-import { makeGameRuntime } from "../runtime/game-runtime.js";
-import type { RenderableEntity } from "../plugin/renderable-entity.js";
+import { PositionComponent, RenderableComponent, VelocityComponent } from '../ecs/components.js';
+import { World } from '../ecs/world.js';
+import { makeGameRuntime } from '../runtime/game-runtime.js';
+import type { RenderableEntity } from '../plugin/renderable-entity.js';
 import {
   DEFAULT_RUNTIME_ASSET_CACHE_CAPACITY,
   RuntimeAssetLoader,
   type LoadedAssets,
   type RuntimeAssetManifest,
-} from "../assets/runtime-asset-loader.js";
-import type { BundledAssetId } from "../assets/bundled-asset.js";
+} from '../assets/runtime-asset-loader.js';
+import type { BundledAssetId } from '../assets/bundled-asset.js';
 import {
   capturePreviousPositions,
   previousPositionFor,
@@ -27,18 +27,21 @@ import {
   RendererRenderError,
   type MountedRenderer,
   type RendererAdapter,
-} from "./renderer-adapter.js";
-import { PixiRendererAdapter } from "./pixi/index.js";
+} from './renderer-adapter.js';
+import { PixiRendererAdapter } from './pixi/index.js';
 
-const ASSET_A = "asset:00000000-0000-4000-8000-000000000001" as AssetId;
-const ASSET_B = "asset:00000000-0000-4000-8000-000000000002" as AssetId;
-const ASSET_C = "asset:00000000-0000-4000-8000-000000000003" as AssetId;
-const PACK_ID = "pack:00000000-0000-4000-8000-000000000001" as PackId;
-const HASH = `sha256:${"0".repeat(64)}` as ContentHash;
+const readLocalAsset = async (filePath: string): Promise<Uint8Array> =>
+  new Uint8Array(await readFile(filePath));
+
+const ASSET_A = 'asset:00000000-0000-4000-8000-000000000001' as AssetId;
+const ASSET_B = 'asset:00000000-0000-4000-8000-000000000002' as AssetId;
+const ASSET_C = 'asset:00000000-0000-4000-8000-000000000003' as AssetId;
+const PACK_ID = 'pack:00000000-0000-4000-8000-000000000001' as PackId;
+const HASH = `sha256:${'0'.repeat(64)}` as ContentHash;
 
 const license = () =>
   new License({
-    spdxId: "MIT",
+    spdxId: 'MIT',
     attribution: Option.none(),
     sourceUrl: Option.none(),
     notes: Option.none(),
@@ -48,7 +51,7 @@ const manifestAsset = (id: AssetId, path: string, size = 1): AssetPackManifestAs
   new AssetPackManifestAsset({
     id,
     path,
-    mime: "image/png",
+    mime: 'image/png',
     size,
     hash: HASH,
     license: Option.none(),
@@ -57,8 +60,8 @@ const manifestAsset = (id: AssetId, path: string, size = 1): AssetPackManifestAs
 const manifest = (assets: readonly AssetPackManifestAsset[]): RuntimeAssetManifest =>
   new AssetPackManifest({
     id: PACK_ID,
-    name: "test-pack",
-    version: "0.0.0",
+    name: 'test-pack',
+    version: '0.0.0',
     license: license(),
     assets,
   });
@@ -67,13 +70,13 @@ class NoopRenderer implements RendererAdapter {
   readonly calls: string[] = [];
 
   mount(container: unknown): Effect.Effect<MountedRenderer, never> {
-    this.calls.push("mount");
+    this.calls.push('mount');
     return Effect.succeed({ container });
   }
 
   loadAssets(manifest: RuntimeAssetManifest): Effect.Effect<LoadedAssets, never> {
     void manifest;
-    this.calls.push("loadAssets");
+    this.calls.push('loadAssets');
     return Effect.succeed(new Map());
   }
 
@@ -83,54 +86,63 @@ class NoopRenderer implements RendererAdapter {
   }
 
   dispose(): Effect.Effect<void, never> {
-    this.calls.push("dispose");
+    this.calls.push('dispose');
     return Effect.void;
   }
 }
 
-describe("RendererAdapter", () => {
-  it("accepts a NoopRenderer that satisfies the canonical interface", async () => {
+describe('RendererAdapter', () => {
+  it('accepts a NoopRenderer that satisfies the canonical interface', async () => {
     const renderer: RendererAdapter = new NoopRenderer();
     const world = new World();
     await Effect.runPromise(renderer.mount({}));
     await Effect.runPromise(renderer.loadAssets(manifest([])));
     await Effect.runPromise(renderer.renderFrame(world, 0.5));
     await Effect.runPromise(renderer.dispose());
-    expect((renderer as NoopRenderer).calls).toEqual(["mount", "loadAssets", "renderFrame:0.5", "dispose"]);
+    expect((renderer as NoopRenderer).calls).toEqual([
+      'mount',
+      'loadAssets',
+      'renderFrame:0.5',
+      'dispose',
+    ]);
   });
 
-  it("exposes tagged renderer errors", () => {
-    expect(new RendererInitError({ message: "init" })._tag).toBe("RendererInitError");
-    expect(new RendererAssetError({ message: "asset", assetId: "a-1" })._tag).toBe("RendererAssetError");
-    expect(new RendererRenderError({ message: "render" })._tag).toBe("RendererRenderError");
-    expect(new RendererDisposeError({ message: "dispose" })._tag).toBe("RendererDisposeError");
+  it('exposes tagged renderer errors', () => {
+    expect(new RendererInitError({ message: 'init' })._tag).toBe('RendererInitError');
+    expect(new RendererAssetError({ message: 'asset', assetId: 'a-1' })._tag).toBe(
+      'RendererAssetError',
+    );
+    expect(new RendererRenderError({ message: 'render' })._tag).toBe('RendererRenderError');
+    expect(new RendererDisposeError({ message: 'dispose' })._tag).toBe('RendererDisposeError');
   });
 });
 
-describe("RuntimeAssetLoader", () => {
-  it("uses a 256 entry LRU cache by default", () => {
+describe('RuntimeAssetLoader', () => {
+  it('uses a 256 entry LRU cache by default', () => {
     expect(DEFAULT_RUNTIME_ASSET_CACHE_CAPACITY).toBe(256);
   });
 
-  it("loads bytes from a local file path", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "tileborne-assets-"));
+  it('loads bytes from a local file path', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tileborne-assets-'));
     try {
-      const file = join(dir, "sprite.bin");
+      const file = join(dir, 'sprite.bin');
       await writeFile(file, new Uint8Array([1, 2, 3]));
-      const loader = new RuntimeAssetLoader();
-      const loaded = await Effect.runPromise(loader.load(manifest([manifestAsset(ASSET_A, file, 3)])));
+      const loader = new RuntimeAssetLoader({ readFile: readLocalAsset });
+      const loaded = await Effect.runPromise(
+        loader.load(manifest([manifestAsset(ASSET_A, file, 3)])),
+      );
       expect(loaded.get(ASSET_A)?.bytes).toEqual(new Uint8Array([1, 2, 3]));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });
 
-  it("serves a cached asset on the second request", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "tileborne-assets-"));
+  it('serves a cached asset on the second request', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tileborne-assets-'));
     try {
-      const file = join(dir, "sprite.bin");
+      const file = join(dir, 'sprite.bin');
       await writeFile(file, new Uint8Array([4]));
-      const loader = new RuntimeAssetLoader();
+      const loader = new RuntimeAssetLoader({ readFile: readLocalAsset });
       const pack = manifest([manifestAsset(ASSET_A, file)]);
       await Effect.runPromise(loader.load(pack));
       await unlink(file);
@@ -142,17 +154,19 @@ describe("RuntimeAssetLoader", () => {
     }
   });
 
-  it("evicts the least recently used asset when capacity is exceeded", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "tileborne-assets-"));
+  it('evicts the least recently used asset when capacity is exceeded', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tileborne-assets-'));
     try {
-      const first = join(dir, "first.bin");
-      const second = join(dir, "second.bin");
-      const third = join(dir, "third.bin");
+      const first = join(dir, 'first.bin');
+      const second = join(dir, 'second.bin');
+      const third = join(dir, 'third.bin');
       await writeFile(first, new Uint8Array([1]));
       await writeFile(second, new Uint8Array([2]));
       await writeFile(third, new Uint8Array([3]));
-      const loader = new RuntimeAssetLoader({ capacity: 2 });
-      await Effect.runPromise(loader.load(manifest([manifestAsset(ASSET_A, first), manifestAsset(ASSET_B, second)])));
+      const loader = new RuntimeAssetLoader({ capacity: 2, readFile: readLocalAsset });
+      await Effect.runPromise(
+        loader.load(manifest([manifestAsset(ASSET_A, first), manifestAsset(ASSET_B, second)])),
+      );
       await Effect.runPromise(loader.load(manifest([manifestAsset(ASSET_C, third)])));
       expect(loader.has(ASSET_A)).toBe(false);
       expect(loader.has(ASSET_B)).toBe(true);
@@ -162,16 +176,16 @@ describe("RuntimeAssetLoader", () => {
     }
   });
 
-  it("promotes a cache hit to MRU so the other entry is evicted next", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "tileborne-assets-"));
+  it('promotes a cache hit to MRU so the other entry is evicted next', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tileborne-assets-'));
     try {
-      const first = join(dir, "first.bin");
-      const second = join(dir, "second.bin");
-      const third = join(dir, "third.bin");
+      const first = join(dir, 'first.bin');
+      const second = join(dir, 'second.bin');
+      const third = join(dir, 'third.bin');
       await writeFile(first, new Uint8Array([1]));
       await writeFile(second, new Uint8Array([2]));
       await writeFile(third, new Uint8Array([3]));
-      const loader = new RuntimeAssetLoader({ capacity: 2 });
+      const loader = new RuntimeAssetLoader({ capacity: 2, readFile: readLocalAsset });
       const ab = manifest([manifestAsset(ASSET_A, first), manifestAsset(ASSET_B, second)]);
       await Effect.runPromise(loader.load(ab));
       await Effect.runPromise(loader.load(manifest([manifestAsset(ASSET_A, first)])));
@@ -184,17 +198,19 @@ describe("RuntimeAssetLoader", () => {
     }
   });
 
-  it("loads bytes through fetch for URL assets", async () => {
+  it('loads bytes through fetch for URL assets', async () => {
     const loader = new RuntimeAssetLoader({
       fetch: async () => new Response(new Uint8Array([9, 8, 7])),
     });
-    const loaded = await Effect.runPromise(loader.load(manifest([manifestAsset(ASSET_A, "https://assets.test/sprite.png", 3)])));
+    const loaded = await Effect.runPromise(
+      loader.load(manifest([manifestAsset(ASSET_A, 'https://assets.test/sprite.png', 3)])),
+    );
     expect(loaded.get(ASSET_A)?.bytes).toEqual(new Uint8Array([9, 8, 7]));
   });
 });
 
-describe("renderer interpolation snapshots", () => {
-  it("captures previous positions before a fixed update mutates the world", () => {
+describe('renderer interpolation snapshots', () => {
+  it('captures previous positions before a fixed update mutates the world', () => {
     const world = new World();
     const entity = world.createEntity();
     const position = world.addComponent(entity, PositionComponent, { x: 1, y: 2 });
@@ -204,7 +220,7 @@ describe("renderer interpolation snapshots", () => {
     expect(previousPositionFor(world, entity)).toEqual({ x: 1, y: 2 });
   });
 
-  it("keeps renderable data in SoA query storage", () => {
+  it('keeps renderable data in SoA query storage', () => {
     const world = new World();
     const entity = world.createEntity();
     world.addComponent(entity, PositionComponent);
@@ -216,7 +232,7 @@ describe("renderer interpolation snapshots", () => {
     expect(seen).toEqual([1, 2]);
   });
 
-  it("produces lerped display positions across 3 fixed updates at alpha=0.5", async () => {
+  it('produces lerped display positions across 3 fixed updates at alpha=0.5', async () => {
     const world = new World();
     const entity = world.createEntity();
     world.addComponent(entity, PositionComponent, { x: 0, y: 0 });
@@ -256,38 +272,38 @@ describe("renderer interpolation snapshots", () => {
   });
 });
 
-describe("PixiRendererAdapter", () => {
-  it("can be constructed in a Node test process without mounting a canvas", () => {
+describe('PixiRendererAdapter', () => {
+  it('can be constructed in a Node test process without mounting a canvas', () => {
     const adapter = new PixiRendererAdapter();
     expect(adapter.spritePoolSize()).toBe(0);
   });
 
-  it("loads PNG data bundled assets through a decoded image source", async () => {
+  it('loads PNG data bundled assets through a decoded image source', async () => {
     const adapter = new PixiRendererAdapter();
     const bitmap = {} as ImageBitmap;
     const fetchMock = vi.fn(async () => ({
-      blob: async () => new Blob([new Uint8Array([1])], { type: "image/png" }),
+      blob: async () => new Blob([new Uint8Array([1])], { type: 'image/png' }),
     }));
     const createImageBitmapMock = vi.fn(async () => bitmap);
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("createImageBitmap", createImageBitmapMock);
-    const textureFrom = vi.spyOn(Texture, "from").mockReturnValue(Texture.EMPTY);
-    const assetsLoad = vi.spyOn(Assets, "load");
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('createImageBitmap', createImageBitmapMock);
+    const textureFrom = vi.spyOn(Texture, 'from').mockReturnValue(Texture.EMPTY);
+    const assetsLoad = vi.spyOn(Assets, 'load');
     try {
       await Effect.runPromise(
         adapter.loadBundledAssets([
           {
-            assetId: "test:ui-pixel" as BundledAssetId,
-            path: "data:image/png;base64,AA==",
-            mime: "image/png",
+            assetId: 'test:ui-pixel' as BundledAssetId,
+            path: 'data:image/png;base64,AA==',
+            mime: 'image/png',
           },
         ]),
       );
-      expect(fetchMock).toHaveBeenCalledWith("data:image/png;base64,AA==");
+      expect(fetchMock).toHaveBeenCalledWith('data:image/png;base64,AA==');
       expect(createImageBitmapMock).toHaveBeenCalledTimes(1);
       expect(textureFrom).toHaveBeenCalledWith(bitmap);
       expect(assetsLoad).not.toHaveBeenCalled();
-      expect(adapter.textureForRenderableAssetId("test:ui-pixel")).toBe(Texture.EMPTY);
+      expect(adapter.textureForRenderableAssetId('test:ui-pixel')).toBe(Texture.EMPTY);
     } finally {
       textureFrom.mockRestore();
       assetsLoad.mockRestore();
@@ -295,7 +311,7 @@ describe("PixiRendererAdapter", () => {
     }
   });
 
-  it("renderFromEntities grows and shrinks the string-keyed sprite pool", async () => {
+  it('renderFromEntities grows and shrinks the string-keyed sprite pool', async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
       app: { readonly stage: Container; readonly render: () => void };
@@ -307,14 +323,14 @@ describe("PixiRendererAdapter", () => {
     internals.texturesByRenderableAssetId.set(ASSET_B, Texture.EMPTY);
 
     const firstPass: readonly RenderableEntity[] = [
-      { id: "player-1", assetId: ASSET_A, x: 0, y: 0 },
-      { id: "projectile-1", assetId: ASSET_B, x: 10, y: 0 },
+      { id: 'player-1', assetId: ASSET_A, x: 0, y: 0 },
+      { id: 'projectile-1', assetId: ASSET_B, x: 10, y: 0 },
     ];
     await Effect.runPromise(adapter.renderFromEntities(firstPass, new Map(), 1));
     expect(internals.spritePoolByStringId.size).toBe(2);
 
     const secondPass: readonly RenderableEntity[] = [
-      { id: "player-1", assetId: ASSET_A, x: 5, y: 0 },
+      { id: 'player-1', assetId: ASSET_A, x: 5, y: 0 },
     ];
     await Effect.runPromise(
       adapter.renderFromEntities(
@@ -323,10 +339,10 @@ describe("PixiRendererAdapter", () => {
         0.5,
       ),
     );
-    expect([...internals.spritePoolByStringId.keys()]).toEqual(["player-1"]);
+    expect([...internals.spritePoolByStringId.keys()]).toEqual(['player-1']);
   });
 
-  it("applies renderable alpha, tint, non-uniform scale, and resets pooled sprite transforms", async () => {
+  it('applies renderable alpha, tint, non-uniform scale, and resets pooled sprite transforms', async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
       app: { readonly stage: Container; readonly render: () => void };
@@ -338,23 +354,25 @@ describe("PixiRendererAdapter", () => {
 
     await Effect.runPromise(
       adapter.renderFromEntities(
-        [{
-          id: "status-ring",
-          assetId: ASSET_A,
-          x: 0,
-          y: 0,
-          rotation: 1,
-          scaleX: 2,
-          scaleY: 0.5,
-          opacity: 0.4,
-          tint: 0xffcc00,
-          anchor: { x: 0.5, y: 0.5 },
-        }],
+        [
+          {
+            id: 'status-ring',
+            assetId: ASSET_A,
+            x: 0,
+            y: 0,
+            rotation: 1,
+            scaleX: 2,
+            scaleY: 0.5,
+            opacity: 0.4,
+            tint: 0xffcc00,
+            anchor: { x: 0.5, y: 0.5 },
+          },
+        ],
         new Map(),
         1,
       ),
     );
-    const sprite = internals.spritePoolByStringId.get("status-ring")!;
+    const sprite = internals.spritePoolByStringId.get('status-ring')!;
     expect(sprite.rotation).toBe(1);
     expect(sprite.scale.x).toBe(2);
     expect(sprite.scale.y).toBe(0.5);
@@ -363,7 +381,11 @@ describe("PixiRendererAdapter", () => {
     expect(sprite.anchor.x).toBe(0.5);
 
     await Effect.runPromise(
-      adapter.renderFromEntities([{ id: "status-ring", assetId: ASSET_A, x: 0, y: 0 }], new Map(), 1),
+      adapter.renderFromEntities(
+        [{ id: 'status-ring', assetId: ASSET_A, x: 0, y: 0 }],
+        new Map(),
+        1,
+      ),
     );
     expect(sprite.rotation).toBe(0);
     expect(sprite.scale.x).toBe(1);
@@ -373,7 +395,7 @@ describe("PixiRendererAdapter", () => {
     expect(sprite.anchor.x).toBe(0);
   });
 
-  it("applies atlas UVs for one-frame renderable animations", async () => {
+  it('applies atlas UVs for one-frame renderable animations', async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
       app: { readonly stage: Container; readonly render: () => void };
@@ -386,28 +408,30 @@ describe("PixiRendererAdapter", () => {
 
     await Effect.runPromise(
       adapter.renderFromEntities(
-        [{
-          id: "single-frame-pickup",
-          assetId: ASSET_A,
-          x: 0,
-          y: 0,
-          animation: {
-            frames: [{ assetId: ASSET_A, uv: { x: 8, y: 4, w: 16, h: 12 } }],
-            loop: false,
-            clockMs: 0,
+        [
+          {
+            id: 'single-frame-pickup',
+            assetId: ASSET_A,
+            x: 0,
+            y: 0,
+            animation: {
+              frames: [{ assetId: ASSET_A, uv: { x: 8, y: 4, w: 16, h: 12 } }],
+              loop: false,
+              clockMs: 0,
+            },
           },
-        }],
+        ],
         new Map(),
         1,
       ),
     );
 
-    const sprite = internals.spritePoolByStringId.get("single-frame-pickup")!;
+    const sprite = internals.spritePoolByStringId.get('single-frame-pickup')!;
     expect(sprite.texture).not.toBe(atlasTexture);
     expect(sprite.texture.frame).toEqual(new Rectangle(8, 4, 16, 12));
   });
 
-  it("culls entities outside the viewport while keeping in-view entities renderable", async () => {
+  it('culls entities outside the viewport while keeping in-view entities renderable', async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
       app: { readonly stage: Container; readonly render: () => void; readonly screen: Rectangle };
@@ -416,18 +440,22 @@ describe("PixiRendererAdapter", () => {
     };
     // A sized texture gives culled sprites meaningful (non-empty) global bounds.
     const sizedTexture = new Texture({ source: new TextureSource({ width: 32, height: 32 }) });
-    internals.app = { stage: new Container(), render: vi.fn(), screen: new Rectangle(0, 0, 800, 600) };
+    internals.app = {
+      stage: new Container(),
+      render: vi.fn(),
+      screen: new Rectangle(0, 0, 800, 600),
+    };
     internals.texturesByRenderableAssetId.set(ASSET_A, sizedTexture);
     internals.texturesByRenderableAssetId.set(ASSET_B, sizedTexture);
 
     const entities: readonly RenderableEntity[] = [
-      { id: "in-view", assetId: ASSET_A, x: 100, y: 100 },
-      { id: "off-screen", assetId: ASSET_B, x: 10_000, y: 10_000 },
+      { id: 'in-view', assetId: ASSET_A, x: 100, y: 100 },
+      { id: 'off-screen', assetId: ASSET_B, x: 10_000, y: 10_000 },
     ];
     await Effect.runPromise(adapter.renderFromEntities(entities, new Map(), 1));
 
-    const inView = internals.spritePoolByStringId.get("in-view")!;
-    const offScreen = internals.spritePoolByStringId.get("off-screen")!;
+    const inView = internals.spritePoolByStringId.get('in-view')!;
+    const offScreen = internals.spritePoolByStringId.get('off-screen')!;
 
     expect(inView.cullable).toBe(true);
     expect(offScreen.cullable).toBe(true);
@@ -437,7 +465,7 @@ describe("PixiRendererAdapter", () => {
     expect(offScreen.isRenderable).toBe(false);
   });
 
-  it("re-includes a culled entity once it scrolls back into the viewport", async () => {
+  it('re-includes a culled entity once it scrolls back into the viewport', async () => {
     const adapter = new PixiRendererAdapter();
     const internals = adapter as unknown as {
       app: { readonly stage: Container; readonly render: () => void; readonly screen: Rectangle };
@@ -445,25 +473,33 @@ describe("PixiRendererAdapter", () => {
       readonly spritePoolByStringId: Map<string, Sprite>;
     };
     const sizedTexture = new Texture({ source: new TextureSource({ width: 32, height: 32 }) });
-    internals.app = { stage: new Container(), render: vi.fn(), screen: new Rectangle(0, 0, 800, 600) };
+    internals.app = {
+      stage: new Container(),
+      render: vi.fn(),
+      screen: new Rectangle(0, 0, 800, 600),
+    };
     internals.texturesByRenderableAssetId.set(ASSET_A, sizedTexture);
 
     await Effect.runPromise(
-      adapter.renderFromEntities([{ id: "rover", assetId: ASSET_A, x: 5_000, y: 5_000 }], new Map(), 1),
+      adapter.renderFromEntities(
+        [{ id: 'rover', assetId: ASSET_A, x: 5_000, y: 5_000 }],
+        new Map(),
+        1,
+      ),
     );
-    const rover = internals.spritePoolByStringId.get("rover")!;
+    const rover = internals.spritePoolByStringId.get('rover')!;
     expect(rover.culled).toBe(true);
 
     await Effect.runPromise(
-      adapter.renderFromEntities([{ id: "rover", assetId: ASSET_A, x: 200, y: 200 }], new Map(), 1),
+      adapter.renderFromEntities([{ id: 'rover', assetId: ASSET_A, x: 200, y: 200 }], new Map(), 1),
     );
     expect(rover.culled).toBe(false);
     expect(rover.isRenderable).toBe(true);
   });
 });
 
-describe("GameRuntime renderer integration", () => {
-  it("keeps headless mode ticking", async () => {
+describe('GameRuntime renderer integration', () => {
+  it('keeps headless mode ticking', async () => {
     const runtime = makeGameRuntime();
     const state = await Effect.runPromise(runtime.init());
     const entity = state.world.createEntity();
@@ -471,7 +507,7 @@ describe("GameRuntime renderer integration", () => {
     state.world.addComponent(entity, VelocityComponent, { x: 60, y: 0 });
     await Effect.runPromise(
       runtime.registerSystem({
-        name: "movement",
+        name: 'movement',
         query: [PositionComponent, VelocityComponent],
         update: (world, dt) => {
           world.query([PositionComponent, VelocityComponent], (_moving, position, velocity) => {
@@ -484,21 +520,25 @@ describe("GameRuntime renderer integration", () => {
     expect(state.loop.tick).toBe(10);
   });
 
-  it("calls renderFrame once for each single-tick step", async () => {
+  it('calls renderFrame once for each single-tick step', async () => {
     const renderer = new NoopRenderer();
     const runtime = makeGameRuntime();
-    await Effect.runPromise(runtime.init({ renderer, rendererContainer: {}, assetManifest: manifest([]) }));
+    await Effect.runPromise(
+      runtime.init({ renderer, rendererContainer: {}, assetManifest: manifest([]) }),
+    );
     for (let index = 0; index < 10; index += 1) {
       await Effect.runPromise(runtime.step(1));
     }
-    expect(renderer.calls.filter((call) => call.startsWith("renderFrame")).length).toBe(10);
+    expect(renderer.calls.filter((call) => call.startsWith('renderFrame')).length).toBe(10);
   });
 
-  it("disposes the configured renderer on stop", async () => {
+  it('disposes the configured renderer on stop', async () => {
     const renderer = new NoopRenderer();
     const runtime = makeGameRuntime();
-    await Effect.runPromise(runtime.init({ renderer, rendererContainer: {}, assetManifest: manifest([]) }));
+    await Effect.runPromise(
+      runtime.init({ renderer, rendererContainer: {}, assetManifest: manifest([]) }),
+    );
     await Effect.runPromise(runtime.stop());
-    expect(renderer.calls.at(-1)).toBe("dispose");
+    expect(renderer.calls.at(-1)).toBe('dispose');
   });
 });

@@ -48,6 +48,17 @@ export async function waitForAppPage(app: ElectronApplication, timeoutMs = 30_00
   throw new Error(`Timed out after ${timeoutMs}ms waiting for renderer with window.tileborne`);
 }
 
+export async function waitForStartupCompletion(page: Page, timeoutMs = 30_000): Promise<void> {
+  await page.waitForFunction(
+    async () => {
+      const snapshot = await window.tileborneStartup.getStatus();
+      return snapshot.state !== 'starting';
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
+
 export function fixturePath(...segments: string[]): string {
   return path.join(smokeDir, 'fixtures', ...segments);
 }
@@ -74,7 +85,11 @@ function buildSmokeBundles(): void {
   if (smokeBundlesBuilt) {
     return;
   }
-  for (const config of ['vite.main.config.ts', 'vite.preload.config.ts', 'vite.renderer.config.ts']) {
+  for (const config of [
+    'vite.main.config.ts',
+    'vite.preload.config.ts',
+    'vite.renderer.config.ts',
+  ]) {
     execFileSync('pnpm', ['exec', 'vite', 'build', '--config', config], {
       cwd: desktopRoot,
       stdio: 'inherit',
@@ -119,6 +134,9 @@ export async function launchElectron(
 
   const page = await waitForAppPage(app);
   await page.waitForLoadState('domcontentloaded');
+  // IPC becomes available before optional bundled-content seeding completes.
+  // Smoke mutations must not race plugin installation and asset-pack import.
+  await waitForStartupCompletion(page);
 
   return { app, page, tileborneHome };
 }
@@ -258,7 +276,10 @@ export async function addBattleRoyaleSpawnAnchors(
         const anchorIds = new Set(requiredModeObjects.map((anchor) => anchor.id));
         const nextLayers = persisted.layers.map((layer) =>
           layer.id === objectLayer.id && Array.isArray(layer.objectIds)
-            ? { ...layer, objectIds: [...layer.objectIds.filter((id) => !anchorIds.has(id)), ...anchorIds] }
+            ? {
+                ...layer,
+                objectIds: [...layer.objectIds.filter((id) => !anchorIds.has(id)), ...anchorIds],
+              }
             : layer,
         );
         const updated = await window.tileborneIpc.invoke('tileborne:maps:update', {
@@ -330,11 +351,7 @@ export async function setProjectActiveGameMode(
 }
 
 export function pluginInstallDirectory(tileborneHome: string): string {
-  return path.join(
-    tileborneHome,
-    'plugins',
-    `${encodeURIComponent(FIXTURE_PLUGIN_ID)}-0.1.0`,
-  );
+  return path.join(tileborneHome, 'plugins', `${encodeURIComponent(FIXTURE_PLUGIN_ID)}-0.1.0`);
 }
 
 export function exportManifestPath(tileborneHome: string, exportId: string): string {

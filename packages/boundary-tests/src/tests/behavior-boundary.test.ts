@@ -27,7 +27,7 @@ describe('ADR-0031 canonical behavior boundaries', () => {
     const loader = read('packages/runtime/src/map-package/loader.ts');
 
     expect(mapPackage).toContain('behaviors: RuntimeBehaviorPackage');
-    expect(loader).toContain('behaviors: "behaviors.json"');
+    expect(loader).toMatch(/behaviors:\s*["']behaviors\.json["']/u);
     expect(loader).toContain('RuntimeBehaviorPackage');
     expect(loader).not.toMatch(/eval\s*\(|new\s+Function\s*\(/u);
   });
@@ -112,7 +112,7 @@ describe('ADR-0031 canonical behavior boundaries', () => {
     expect(shipBuilder).toContain('buildBundledBehaviorsSource');
     expect(shipBuilder).toContain('bundled-behaviors-stub');
     expect(shipBuilder).toContain('esbuildTransform(code');
-    expect(shipBuilder).toContain('format: "iife"');
+    expect(shipBuilder).toMatch(/format:\s*["']iife["']/u);
     expect(shipBuilder).toContain('createNamespace: () =>');
     expect(shipBuilder).not.toContain('import * as ${importName}');
     expect(shipBuilder).toContain('behavior-worker.js');
@@ -148,7 +148,7 @@ describe('ADR-0031 canonical behavior boundaries', () => {
       'ZonePhaseChanged',
       'MatchPhaseChanged',
     ]) {
-      expect(gameplayEvent).toContain(`"${tag}"`);
+      expect(gameplayEvent).toMatch(new RegExp(`["']${tag}["']`, 'u'));
     }
     expect(playtest).toContain('gameplayEvents: Schema.Array(GameplayEvent)');
     expect(playtest).not.toMatch(/PlaytestRuntimeHudEvent|recentEvents/u);

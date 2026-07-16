@@ -1,8 +1,25 @@
 node_modules
+.agent-sources
+.planr
+.refs
 dist
 build
 out
 coverage
 .turbo
+.astro
 *.tsbuildinfo
 pnpm-lock.yaml
+# Tiled tileset XML uses the upstream `.tsx` extension; it is fixture data,
+# not TypeScript/JSX source and must not be parsed by Prettier's TSX parser.
+packages/test-fixtures/fixtures/tiled-sources/**/*.tsx
+# The docs prebuild owns these generated projections. Formatting their source
+# inputs is sufficient; checking regenerated output would create a second owner.
+apps/docs/src/generated
+apps/docs/src/content/docs/adrs
+apps/docs/src/content/docs/cli
+apps/docs/src/content/docs/reference
+apps/docs/src/content/docs/runtime
+apps/docs/src/content/docs/follow-ups
+apps/docs/src/content/docs/editor-ux
+apps/docs/src/content/docs/battle-royale/creator-guide

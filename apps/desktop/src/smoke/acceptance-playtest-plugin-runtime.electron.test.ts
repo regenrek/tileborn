@@ -69,9 +69,24 @@ describe('acceptance: playtest plugin runtime', () => {
 
     await navigateToRoute(page, `/projects/${projectId}/maps/${mapId}`);
     await expect(page.getByText('Loading map…')).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByTestId('readiness-status')).toContainText(/Ready|warnings/, {
+      timeout: 15_000,
+    });
 
     await page.getByRole('button', { name: /Playtest menu/i }).click();
     await page.getByRole('menuitem', { name: /Single \(local-only\)/i }).click();
+    await expect
+      .poll(
+        async () => {
+          if (await page.getByTestId('playtest-viewport').isVisible()) {
+            return 'running';
+          }
+          const alert = page.getByRole('alert');
+          return (await alert.isVisible()) ? `error: ${await alert.textContent()}` : 'starting';
+        },
+        { timeout: 15_000 },
+      )
+      .toBe('running');
     await expect(page.getByTestId('playtest-viewport')).toBeVisible({ timeout: 15_000 });
 
     const runtimeStatus = page.getByTestId('playtest-runtime-status');

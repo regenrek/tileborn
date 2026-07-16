@@ -29,7 +29,7 @@ coverage/
 !.env.example
 
 # Logs and diagnostics
-logs/
+/logs/
 *.log
 *.err
 npm-debug.log*
@@ -39,11 +39,16 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 test-results/
 
 # Internal agent documentation, not for the OSS repo. Keep the directory
-# traversable so the three public creator/release contracts can ship.
+# traversable so the public creator/release contracts and the canonical
+# docs-build inputs can ship from a clean checkout.
 /docs/*
 !/docs/battle-royale-creator-guide.md
 !/docs/battle-royale-release-evidence.md
 !/docs/game-mode-extension.md
+!/docs/03-runtime-game-host.md
+!/docs/follow-ups.md
+!/docs/adrs/
+!/docs/adrs/**
 
 # Package artifacts and caches
 *.tgz

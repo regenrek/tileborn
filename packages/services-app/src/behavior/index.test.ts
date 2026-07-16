@@ -28,9 +28,8 @@ import {
 
 const appLayer = ServicesAppLayer;
 
-const runApp = <A, E>(
-  effect: Effect.Effect<A, E, ProjectService | ProjectBehaviorService>,
-) => Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
+const runApp = <A, E>(effect: Effect.Effect<A, E, ProjectService | ProjectBehaviorService>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
 
 const writeTextForTest = async (filePath: string, contents: string): Promise<void> => {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -100,70 +99,87 @@ const makePendingSaveJournal = async (
     },
     removeFile: (filePath) => rm(filePath, { force: true }),
   };
-  const layer = Layer.mergeAll(
-    ProjectServiceLive,
-    makeProjectBehaviorServiceLive(operations),
-  ).pipe(Layer.provideMerge(FoundationLayer));
-  const result = await Effect.runPromise(Effect.gen(function* () {
-    const behaviors = yield* ProjectBehaviorService;
-    return yield* Effect.result(behaviors.saveTypeScript({
-      projectId,
-      behaviorId,
-      expectedRevision,
-      label: 'Pending recovery',
-      source: `export default ${JSON.stringify(marker)};\n`,
-    }));
-  }).pipe(Effect.provide(layer)));
+  const layer = Layer.mergeAll(ProjectServiceLive, makeProjectBehaviorServiceLive(operations)).pipe(
+    Layer.provideMerge(FoundationLayer),
+  );
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const behaviors = yield* ProjectBehaviorService;
+      return yield* Effect.result(
+        behaviors.saveTypeScript({
+          projectId,
+          behaviorId,
+          expectedRevision,
+          label: 'Pending recovery',
+          source: `export default ${JSON.stringify(marker)};\n`,
+        }),
+      );
+    }).pipe(Effect.provide(layer)),
+  );
   expect(result).toMatchObject({
     _tag: 'Failure',
     failure: { _tag: 'ProjectBehaviorTransactionError' },
   });
-  return JSON.parse(await readFile(transactionPathFor(home, projectId), 'utf8')) as Record<string, unknown>;
+  return JSON.parse(await readFile(transactionPathFor(home, projectId), 'utf8')) as Record<
+    string,
+    unknown
+  >;
 };
 
 describe('ProjectBehaviorService', () => {
   it('serializes concurrent same-revision saves with exactly one winner', () =>
     withTempHome(async () => {
-      const result = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Concurrent Behaviors' });
-        const created = yield* behaviors.createTypeScript(projectId, {
-          label: 'Counter',
-          source: 'export default "initial";\n',
-        });
-        const behavior = created.resources[0];
-        if (behavior === undefined) throw new Error('behavior was not created');
-        const saves = yield* Effect.all([
-          Effect.result(behaviors.saveTypeScript({
-            projectId,
-            behaviorId: behavior.manifest.id,
-            expectedRevision: created.revision,
-            label: 'Winner A',
-            source: 'export default "winner-a";\n',
-          })),
-          Effect.result(behaviors.saveTypeScript({
-            projectId,
-            behaviorId: behavior.manifest.id,
-            expectedRevision: created.revision,
-            label: 'Winner B',
-            source: 'export default "winner-b";\n',
-          })),
-        ], { concurrency: 2 });
-        return { saves, reopened: yield* behaviors.open(projectId) };
-      }));
+      const result = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Concurrent Behaviors' });
+          const created = yield* behaviors.createTypeScript(projectId, {
+            label: 'Counter',
+            source: 'export default "initial";\n',
+          });
+          const behavior = created.resources[0];
+          if (behavior === undefined) throw new Error('behavior was not created');
+          const saves = yield* Effect.all(
+            [
+              Effect.result(
+                behaviors.saveTypeScript({
+                  projectId,
+                  behaviorId: behavior.manifest.id,
+                  expectedRevision: created.revision,
+                  label: 'Winner A',
+                  source: 'export default "winner-a";\n',
+                }),
+              ),
+              Effect.result(
+                behaviors.saveTypeScript({
+                  projectId,
+                  behaviorId: behavior.manifest.id,
+                  expectedRevision: created.revision,
+                  label: 'Winner B',
+                  source: 'export default "winner-b";\n',
+                }),
+              ),
+            ],
+            { concurrency: 2 },
+          );
+          return { saves, reopened: yield* behaviors.open(projectId) };
+        }),
+      );
 
       expect(result.saves.filter((save) => save._tag === 'Success')).toHaveLength(1);
       const failures = result.saves.filter((save) => save._tag === 'Failure');
       expect(failures).toHaveLength(1);
-      expect(failures[0]?._tag === 'Failure' ? failures[0].failure : undefined)
-        .toBeInstanceOf(ProjectBehaviorRevisionConflictError);
+      expect(failures[0]?._tag === 'Failure' ? failures[0].failure : undefined).toBeInstanceOf(
+        ProjectBehaviorRevisionConflictError,
+      );
       expect(result.reopened.revision).toBe(2);
       const reopened = result.reopened.resources[0];
       expect(reopened?.kind).toBe('typescript');
       if (reopened?.kind === 'typescript') {
-        expect(['export default "winner-a";\n', 'export default "winner-b";\n'])
-          .toContain(reopened.source);
+        expect(['export default "winner-a";\n', 'export default "winner-b";\n']).toContain(
+          reopened.source,
+        );
       }
     }));
 
@@ -171,12 +187,19 @@ describe('ProjectBehaviorService', () => {
     withTempHome(async () => {
       let releaseBlockedWrite: (() => void) | undefined;
       let signalBlockedWrite: (() => void) | undefined;
-      const blockedWriteEntered = new Promise<void>((resolve) => { signalBlockedWrite = resolve; });
-      const blockedWriteReleased = new Promise<void>((resolve) => { releaseBlockedWrite = resolve; });
+      const blockedWriteEntered = new Promise<void>((resolve) => {
+        signalBlockedWrite = resolve;
+      });
+      const blockedWriteReleased = new Promise<void>((resolve) => {
+        releaseBlockedWrite = resolve;
+      });
       const gateCounts: number[] = [];
       const operations: ProjectBehaviorPersistenceOperations = {
         writeTextAtomic: async (filePath, contents) => {
-          if (filePath.includes(path.join('behaviors', 'sources')) && contents.includes('blocked-writer')) {
+          if (
+            filePath.includes(path.join('behaviors', 'sources')) &&
+            contents.includes('blocked-writer')
+          ) {
             signalBlockedWrite?.();
             await blockedWriteReleased;
           }
@@ -192,38 +215,46 @@ describe('ProjectBehaviorService', () => {
         ProjectServiceLive,
         makeProjectBehaviorServiceLive(operations),
       ).pipe(Layer.provideMerge(FoundationLayer));
-      const reopened = await Effect.runPromise(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Gate Lifecycle' });
-        const created = yield* behaviors.createTypeScript(projectId, {
-          label: 'Gate', source: 'export default "initial";\n',
-        });
-        const behavior = created.resources[0];
-        if (behavior === undefined) throw new Error('behavior was not created');
-        const first = yield* behaviors.saveTypeScript({
-          projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: created.revision,
-          label: 'First',
-          source: 'export default "blocked-writer";\n',
-        }).pipe(Effect.forkChild);
-        yield* Effect.promise(() => blockedWriteEntered);
-        const waiter = yield* behaviors.saveTypeScript({
-          projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: created.revision,
-          label: 'Interrupted waiter',
-          source: 'export default "waiter";\n',
-        }).pipe(Effect.forkChild);
-        yield* Fiber.interrupt(waiter);
-        releaseBlockedWrite?.();
-        yield* Fiber.join(first);
-        return yield* behaviors.open(projectId);
-      }).pipe(Effect.provide(layer)));
+      const reopened = await Effect.runPromise(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Gate Lifecycle' });
+          const created = yield* behaviors.createTypeScript(projectId, {
+            label: 'Gate',
+            source: 'export default "initial";\n',
+          });
+          const behavior = created.resources[0];
+          if (behavior === undefined) throw new Error('behavior was not created');
+          const first = yield* behaviors
+            .saveTypeScript({
+              projectId,
+              behaviorId: behavior.manifest.id,
+              expectedRevision: created.revision,
+              label: 'First',
+              source: 'export default "blocked-writer";\n',
+            })
+            .pipe(Effect.forkChild);
+          yield* Effect.promise(() => blockedWriteEntered);
+          const waiter = yield* behaviors
+            .saveTypeScript({
+              projectId,
+              behaviorId: behavior.manifest.id,
+              expectedRevision: created.revision,
+              label: 'Interrupted waiter',
+              source: 'export default "waiter";\n',
+            })
+            .pipe(Effect.forkChild);
+          yield* Fiber.interrupt(waiter);
+          releaseBlockedWrite?.();
+          yield* Fiber.join(first);
+          return yield* behaviors.open(projectId);
+        }).pipe(Effect.provide(layer)),
+      );
 
       expect(reopened.resources[0]).toMatchObject({
-        kind: 'typescript', source: 'export default "blocked-writer";\n',
+        kind: 'typescript',
+        source: 'export default "blocked-writer";\n',
       });
       expect(gateCounts.at(-1)).toBe(0);
       expect(Math.max(...gateCounts)).toBe(1);
@@ -237,7 +268,11 @@ describe('ProjectBehaviorService', () => {
       const gateCounts: number[] = [];
       const operations: ProjectBehaviorPersistenceOperations = {
         writeTextAtomic: async (filePath, contents) => {
-          if (filePath.endsWith(path.join('behaviors', 'registry.json')) && mode !== undefined && !primaryFailed) {
+          if (
+            filePath.endsWith(path.join('behaviors', 'registry.json')) &&
+            mode !== undefined &&
+            !primaryFailed
+          ) {
             primaryFailed = true;
             throw new Error(`primary ${mode} registry failure`);
           }
@@ -264,12 +299,15 @@ describe('ProjectBehaviorService', () => {
         ProjectServiceLive,
         makeProjectBehaviorServiceLive(operations),
       ).pipe(Layer.provideMerge(FoundationLayer));
-      const runFault = <A, E>(effect: Effect.Effect<A, E, ProjectService | ProjectBehaviorService>) =>
-        Effect.runPromise(effect.pipe(Effect.provide(layer)));
-      const projectId = await runFault(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        return yield* projects.create({ name: 'Durable Behaviors' });
-      }));
+      const runFault = <A, E>(
+        effect: Effect.Effect<A, E, ProjectService | ProjectBehaviorService>,
+      ) => Effect.runPromise(effect.pipe(Effect.provide(layer)));
+      const projectId = await runFault(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          return yield* projects.create({ name: 'Durable Behaviors' });
+        }),
+      );
 
       const expectDoubleFailure = (result: Result.Result<unknown, ProjectBehaviorServiceError>) => {
         expect(result).toMatchObject({
@@ -286,18 +324,25 @@ describe('ProjectBehaviorService', () => {
       mode = 'create';
       primaryFailed = false;
       recoveryFailed = false;
-      const failedCreate = await runFault(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.createTypeScript(projectId, {
-          label: 'Created durably', source: 'export default "created";\n',
-        }));
-      }));
+      const failedCreate = await runFault(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.createTypeScript(projectId, {
+              label: 'Created durably',
+              source: 'export default "created";\n',
+            }),
+          );
+        }),
+      );
       expectDoubleFailure(failedCreate);
       mode = undefined;
-      const afterCreate = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(projectId);
-      }));
+      const afterCreate = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(projectId);
+        }),
+      );
       expect(afterCreate.resources).toHaveLength(1);
       const behavior = afterCreate.resources[0];
       if (behavior === undefined) throw new Error('create recovery lost behavior');
@@ -305,63 +350,80 @@ describe('ProjectBehaviorService', () => {
       mode = 'save';
       primaryFailed = false;
       recoveryFailed = false;
-      const failedSave = await runFault(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.saveTypeScript({
-          projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: afterCreate.revision,
-          label: 'Saved durably',
-          source: 'export default "saved";\n',
-        }));
-      }));
+      const failedSave = await runFault(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.saveTypeScript({
+              projectId,
+              behaviorId: behavior.manifest.id,
+              expectedRevision: afterCreate.revision,
+              label: 'Saved durably',
+              source: 'export default "saved";\n',
+            }),
+          );
+        }),
+      );
       expectDoubleFailure(failedSave);
       mode = undefined;
-      const afterSave = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(projectId);
-      }));
-      expect(afterSave.resources[0]).toMatchObject({ kind: 'typescript', source: 'export default "saved";\n' });
+      const afterSave = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(projectId);
+        }),
+      );
+      expect(afterSave.resources[0]).toMatchObject({
+        kind: 'typescript',
+        source: 'export default "saved";\n',
+      });
 
       mode = 'remove';
       primaryFailed = false;
       recoveryFailed = false;
-      const failedRemove = await runFault(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.remove(
-          projectId,
-          behavior.manifest.id,
-          afterSave.revision,
-        ));
-      }));
+      const failedRemove = await runFault(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.remove(projectId, behavior.manifest.id, afterSave.revision),
+          );
+        }),
+      );
       expectDoubleFailure(failedRemove);
       mode = undefined;
-      const afterRemove = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(projectId);
-      }));
+      const afterRemove = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(projectId);
+        }),
+      );
       expect(afterRemove.resources).toHaveLength(0);
-      expect(await readdir(path.join(home, 'projects', projectId, 'behaviors', 'sources'))).toHaveLength(0);
+      expect(
+        await readdir(path.join(home, 'projects', projectId, 'behaviors', 'sources')),
+      ).toHaveLength(0);
       expect(gateCounts.at(-1)).toBe(0);
       expect(Math.max(...gateCounts)).toBe(1);
     }));
 
   it('quarantines traversal and malformed journals before source or registry mutation', () =>
     withTempHome(async (home) => {
-      const created = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Adversarial Recovery' });
-        const snapshot = yield* behaviors.createTypeScript(projectId, {
-          label: 'Safe', source: 'export default "safe";\n',
-        });
-        return { projectId, snapshot };
-      }));
+      const created = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Adversarial Recovery' });
+          const snapshot = yield* behaviors.createTypeScript(projectId, {
+            label: 'Safe',
+            source: 'export default "safe";\n',
+          });
+          return { projectId, snapshot };
+        }),
+      );
       const behavior = created.snapshot.resources[0];
       if (behavior === undefined) throw new Error('missing behavior');
-      const sourcePath = behavior.manifest.source._tag === 'typescript'
-        ? behavior.manifest.source.sourcePath
-        : 'unexpected';
+      const sourcePath =
+        behavior.manifest.source._tag === 'typescript'
+          ? behavior.manifest.source.sourcePath
+          : 'unexpected';
       const sourceFile = path.join(home, 'projects', created.projectId, sourcePath);
       const projectFile = path.join(home, 'projects', created.projectId, 'project.json');
       const registryFile = registryPathFor(home, created.projectId);
@@ -377,14 +439,23 @@ describe('ProjectBehaviorService', () => {
         'pending-traversal',
       );
 
-      await writeFile(journalFile, `${JSON.stringify({
-        ...valid,
-        sourcePath: 'behaviors/sources/../../project.json',
-      }, null, 2)}\n`);
-      const traversal = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.open(created.projectId));
-      }));
+      await writeFile(
+        journalFile,
+        `${JSON.stringify(
+          {
+            ...valid,
+            sourcePath: 'behaviors/sources/../../project.json',
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const traversal = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(behaviors.open(created.projectId));
+        }),
+      );
       expect(traversal).toMatchObject({
         _tag: 'Failure',
         failure: { message: expect.stringContaining('quarantined') },
@@ -393,56 +464,70 @@ describe('ProjectBehaviorService', () => {
       expect(await readFile(sourceFile, 'utf8')).toBe(originalSource);
       expect(await readFile(registryFile, 'utf8')).toBe(originalRegistry);
 
-      await writeFile(journalFile, `${JSON.stringify({
-        ...valid,
-        nextRegistry: { schemaVersion: 1, projectId: created.projectId },
-      }, null, 2)}\n`);
-      const malformed = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.open(created.projectId));
-      }));
+      await writeFile(
+        journalFile,
+        `${JSON.stringify(
+          {
+            ...valid,
+            nextRegistry: { schemaVersion: 1, projectId: created.projectId },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const malformed = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(behaviors.open(created.projectId));
+        }),
+      );
       expect(malformed).toMatchObject({
         _tag: 'Failure',
         failure: { message: expect.stringContaining('quarantined') },
       });
       expect(await readFile(sourceFile, 'utf8')).toBe(originalSource);
       expect(await readFile(registryFile, 'utf8')).toBe(originalRegistry);
-      const quarantines = (await readdir(path.dirname(journalFile)))
-        .filter((name) => name.includes('.quarantine-'));
+      const quarantines = (await readdir(path.dirname(journalFile))).filter((name) =>
+        name.includes('.quarantine-'),
+      );
       expect(quarantines).toHaveLength(2);
     }));
 
   it('prevalidates the complete adversarial journal matrix before any project mutation', () =>
     withTempHome(async (home) => {
-      const setup = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Journal Validation Matrix' });
-        const withScript = yield* behaviors.createTypeScript(projectId, {
-          label: 'Script matrix', source: 'export default "matrix-base";\n',
-        });
-        const script = withScript.resources[0];
-        if (script === undefined || script.kind !== 'typescript') throw new Error('missing script');
-        const withVisual = yield* behaviors.createVisual(projectId, {
-          label: 'Visual matrix',
-          definition: {
-            state: [],
-            when: new BehaviorInvocation({ entryId: 'world.interacted', arguments: {} }),
-            do: [],
-          },
-        });
-        const visual = withVisual.resources.find((resource) => resource.kind === 'visual');
-        if (visual === undefined) throw new Error('missing visual behavior');
-        return { projectId, snapshot: withVisual, script, visual };
-      }));
+      const setup = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Journal Validation Matrix' });
+          const withScript = yield* behaviors.createTypeScript(projectId, {
+            label: 'Script matrix',
+            source: 'export default "matrix-base";\n',
+          });
+          const script = withScript.resources[0];
+          if (script === undefined || script.kind !== 'typescript')
+            throw new Error('missing script');
+          const withVisual = yield* behaviors.createVisual(projectId, {
+            label: 'Visual matrix',
+            definition: {
+              state: [],
+              when: new BehaviorInvocation({ entryId: 'world.interacted', arguments: {} }),
+              do: [],
+            },
+          });
+          const visual = withVisual.resources.find((resource) => resource.kind === 'visual');
+          if (visual === undefined) throw new Error('missing visual behavior');
+          return { projectId, snapshot: withVisual, script, visual };
+        }),
+      );
       const journalFile = transactionPathFor(home, setup.projectId);
-      const typeScriptTemplate = await makePendingSaveJournal(
+      const typeScriptTemplate = (await makePendingSaveJournal(
         home,
         setup.projectId,
         setup.script.manifest.id,
         setup.snapshot.revision,
         'matrix-typescript-pending',
-      ) as unknown as TestTransactionJournal;
+      )) as unknown as TestTransactionJournal;
       await rm(journalFile, { force: true });
 
       const visualMarker = 'matrix-visual-pending';
@@ -462,18 +547,23 @@ describe('ProjectBehaviorService', () => {
         ProjectServiceLive,
         makeProjectBehaviorServiceLive(visualOperations),
       ).pipe(Layer.provideMerge(FoundationLayer));
-      const visualPending = await Effect.runPromise(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.saveVisual({
-          projectId: setup.projectId,
-          behaviorId: setup.visual.manifest.id,
-          expectedRevision: setup.snapshot.revision,
-          label: visualMarker,
-          definition: setup.visual.definition,
-        }));
-      }).pipe(Effect.provide(visualLayer)));
+      const visualPending = await Effect.runPromise(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.saveVisual({
+              projectId: setup.projectId,
+              behaviorId: setup.visual.manifest.id,
+              expectedRevision: setup.snapshot.revision,
+              label: visualMarker,
+              definition: setup.visual.definition,
+            }),
+          );
+        }).pipe(Effect.provide(visualLayer)),
+      );
       expect(visualPending).toMatchObject({
-        _tag: 'Failure', failure: { _tag: 'ProjectBehaviorTransactionError' },
+        _tag: 'Failure',
+        failure: { _tag: 'ProjectBehaviorTransactionError' },
       });
       const visualTemplate = JSON.parse(
         await readFile(journalFile, 'utf8'),
@@ -495,17 +585,23 @@ describe('ProjectBehaviorService', () => {
         },
         {
           name: 'unsupported journal schema version',
-          mutate: (journal) => { journal.schemaVersion = 99; },
+          mutate: (journal) => {
+            journal.schemaVersion = 99;
+          },
           expected: 'invalid behavior transaction journal payload',
         },
         {
           name: 'wrong journal project id',
-          mutate: (journal) => { journal.projectId = `project:${randomUUID()}`; },
+          mutate: (journal) => {
+            journal.projectId = `project:${randomUUID()}`;
+          },
           expected: 'invalid behavior transaction journal payload',
         },
         {
           name: 'traversal source path',
-          mutate: (journal) => { journal.sourcePath = 'behaviors/sources/../../project.json'; },
+          mutate: (journal) => {
+            journal.sourcePath = 'behaviors/sources/../../project.json';
+          },
           expected: 'source path is not canonical',
         },
         {
@@ -519,7 +615,9 @@ describe('ProjectBehaviorService', () => {
         },
         {
           name: 'operation-to-manifest mismatch',
-          mutate: (journal) => { journal.operation = 'create'; },
+          mutate: (journal) => {
+            journal.operation = 'create';
+          },
           expected: 'operation does not match registry transition',
         },
         {
@@ -540,7 +638,9 @@ describe('ProjectBehaviorService', () => {
         },
         {
           name: 'source content hash mismatch',
-          mutate: (journal) => { journal.nextSourceHash = `sha256:${'0'.repeat(64)}`; },
+          mutate: (journal) => {
+            journal.nextSourceHash = `sha256:${'0'.repeat(64)}`;
+          },
           expected: 'content hash mismatch',
         },
         {
@@ -606,8 +706,9 @@ describe('ProjectBehaviorService', () => {
       };
 
       for (const scenario of cases) {
-        const beforeQuarantines = (await readdir(path.dirname(journalFile)))
-          .filter((name) => name.includes('.quarantine-')).length;
+        const beforeQuarantines = (await readdir(path.dirname(journalFile))).filter((name) =>
+          name.includes('.quarantine-'),
+        ).length;
         let raw = scenario.raw;
         if (raw === undefined) {
           const template = scenario.template === 'visual' ? visualTemplate : typeScriptTemplate;
@@ -617,10 +718,12 @@ describe('ProjectBehaviorService', () => {
           raw = `${JSON.stringify(journal, null, 2)}\n`;
         }
         await writeFile(journalFile, raw);
-        const recovery = await runApp(Effect.gen(function* () {
-          const behaviors = yield* ProjectBehaviorService;
-          return yield* Effect.result(behaviors.open(setup.projectId));
-        }));
+        const recovery = await runApp(
+          Effect.gen(function* () {
+            const behaviors = yield* ProjectBehaviorService;
+            return yield* Effect.result(behaviors.open(setup.projectId));
+          }),
+        );
         expect(recovery._tag, scenario.name).toBe('Failure');
         if (recovery._tag === 'Failure') {
           expect(recovery.failure.message, scenario.name).toContain(scenario.expected);
@@ -640,125 +743,151 @@ describe('ProjectBehaviorService', () => {
 
   it.each(['create', 'update', 'remove'] as const)(
     'quarantines a %s journal when the base source changed independently',
-    (operation) => withTempHome(async (home) => {
-      const setup = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: `Base Source ${operation}` });
-        if (operation === 'create') {
-          return { projectId, snapshot: yield* behaviors.open(projectId) };
-        }
-        return {
-          projectId,
-          snapshot: yield* behaviors.createTypeScript(projectId, {
-            label: 'Existing', source: 'export default "base-source";\n',
+    (operation) =>
+      withTempHome(async (home) => {
+        const setup = await runApp(
+          Effect.gen(function* () {
+            const projects = yield* ProjectService;
+            const behaviors = yield* ProjectBehaviorService;
+            const projectId = yield* projects.create({ name: `Base Source ${operation}` });
+            if (operation === 'create') {
+              return { projectId, snapshot: yield* behaviors.open(projectId) };
+            }
+            return {
+              projectId,
+              snapshot: yield* behaviors.createTypeScript(projectId, {
+                label: 'Existing',
+                source: 'export default "base-source";\n',
+              }),
+            };
           }),
-        };
-      }));
-      const existing = setup.snapshot.resources[0];
-      if (operation !== 'create' && (existing === undefined || existing.kind !== 'typescript')) {
-        throw new Error('missing existing TypeScript behavior');
-      }
-      if (operation === 'create') {
-        await writeTextForTest(
-          registryPathFor(home, setup.projectId),
-          `${JSON.stringify({
-            schemaVersion: 1,
-            projectId: setup.projectId,
-            revision: 0,
-            trust: 'trusted',
-            entries: [],
-          }, null, 2)}\n`,
         );
-      }
-      const marker = `pending-base-${operation}`;
-      const operations: ProjectBehaviorPersistenceOperations = {
-        writeTextAtomic: async (filePath, contents) => {
-          if (
-            operation !== 'remove' &&
-            filePath.includes(path.join('behaviors', 'sources')) &&
-            contents.includes(marker)
-          ) {
-            throw new Error(`leave ${operation} transaction pending`);
-          }
-          await writeTextForTest(filePath, contents);
-        },
-        removeFile: async (filePath) => {
-          if (operation === 'remove' && filePath.includes(path.join('behaviors', 'sources'))) {
-            throw new Error('leave remove transaction pending');
-          }
-          await rm(filePath, { force: true });
-        },
-      };
-      const layer = Layer.mergeAll(
-        ProjectServiceLive,
-        makeProjectBehaviorServiceLive(operations),
-      ).pipe(Layer.provideMerge(FoundationLayer));
-      const pending = await Effect.runPromise(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
+        const existing = setup.snapshot.resources[0];
+        if (operation !== 'create' && (existing === undefined || existing.kind !== 'typescript')) {
+          throw new Error('missing existing TypeScript behavior');
+        }
         if (operation === 'create') {
-          return yield* Effect.result(behaviors.createTypeScript(setup.projectId, {
-            label: 'Pending create', source: `export default "${marker}";\n`,
-          }));
+          await writeTextForTest(
+            registryPathFor(home, setup.projectId),
+            `${JSON.stringify(
+              {
+                schemaVersion: 1,
+                projectId: setup.projectId,
+                revision: 0,
+                trust: 'trusted',
+                entries: [],
+              },
+              null,
+              2,
+            )}\n`,
+          );
         }
-        if (existing === undefined) throw new Error('missing existing behavior');
-        if (operation === 'update') {
-          return yield* Effect.result(behaviors.saveTypeScript({
-            projectId: setup.projectId,
-            behaviorId: existing.manifest.id,
-            expectedRevision: setup.snapshot.revision,
-            label: 'Pending update',
-            source: `export default "${marker}";\n`,
-          }));
-        }
-        return yield* Effect.result(behaviors.remove(
-          setup.projectId,
-          existing.manifest.id,
-          setup.snapshot.revision,
-        ));
-      }).pipe(Effect.provide(layer)));
-      expect(pending).toMatchObject({
-        _tag: 'Failure', failure: { _tag: 'ProjectBehaviorTransactionError' },
-      });
+        const marker = `pending-base-${operation}`;
+        const operations: ProjectBehaviorPersistenceOperations = {
+          writeTextAtomic: async (filePath, contents) => {
+            if (
+              operation !== 'remove' &&
+              filePath.includes(path.join('behaviors', 'sources')) &&
+              contents.includes(marker)
+            ) {
+              throw new Error(`leave ${operation} transaction pending`);
+            }
+            await writeTextForTest(filePath, contents);
+          },
+          removeFile: async (filePath) => {
+            if (operation === 'remove' && filePath.includes(path.join('behaviors', 'sources'))) {
+              throw new Error('leave remove transaction pending');
+            }
+            await rm(filePath, { force: true });
+          },
+        };
+        const layer = Layer.mergeAll(
+          ProjectServiceLive,
+          makeProjectBehaviorServiceLive(operations),
+        ).pipe(Layer.provideMerge(FoundationLayer));
+        const pending = await Effect.runPromise(
+          Effect.gen(function* () {
+            const behaviors = yield* ProjectBehaviorService;
+            if (operation === 'create') {
+              return yield* Effect.result(
+                behaviors.createTypeScript(setup.projectId, {
+                  label: 'Pending create',
+                  source: `export default "${marker}";\n`,
+                }),
+              );
+            }
+            if (existing === undefined) throw new Error('missing existing behavior');
+            if (operation === 'update') {
+              return yield* Effect.result(
+                behaviors.saveTypeScript({
+                  projectId: setup.projectId,
+                  behaviorId: existing.manifest.id,
+                  expectedRevision: setup.snapshot.revision,
+                  label: 'Pending update',
+                  source: `export default "${marker}";\n`,
+                }),
+              );
+            }
+            return yield* Effect.result(
+              behaviors.remove(setup.projectId, existing.manifest.id, setup.snapshot.revision),
+            );
+          }).pipe(Effect.provide(layer)),
+        );
+        expect(pending).toMatchObject({
+          _tag: 'Failure',
+          failure: { _tag: 'ProjectBehaviorTransactionError' },
+        });
 
-      const journalFile = transactionPathFor(home, setup.projectId);
-      const journal = JSON.parse(await readFile(journalFile, 'utf8')) as { sourcePath: string };
-      const sourceFile = path.join(home, 'projects', setup.projectId, journal.sourcePath);
-      await writeTextForTest(sourceFile, `export default "external-${operation}-conflict";\n`);
-      const sourceBeforeRecovery = await readFile(sourceFile, 'utf8');
-      const registryFile = registryPathFor(home, setup.projectId);
-      const registryBeforeRecovery = await readFile(registryFile, 'utf8');
+        const journalFile = transactionPathFor(home, setup.projectId);
+        const journal = JSON.parse(await readFile(journalFile, 'utf8')) as { sourcePath: string };
+        const sourceFile = path.join(home, 'projects', setup.projectId, journal.sourcePath);
+        await writeTextForTest(sourceFile, `export default "external-${operation}-conflict";\n`);
+        const sourceBeforeRecovery = await readFile(sourceFile, 'utf8');
+        const registryFile = registryPathFor(home, setup.projectId);
+        const registryBeforeRecovery = await readFile(registryFile, 'utf8');
 
-      const recovery = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.open(setup.projectId));
-      }));
-      expect(recovery).toMatchObject({
-        _tag: 'Failure',
-        failure: { message: expect.stringContaining('base source mismatch') },
-      });
-      expect(await readFile(sourceFile, 'utf8')).toBe(sourceBeforeRecovery);
-      expect(await readFile(registryFile, 'utf8')).toBe(registryBeforeRecovery);
-      expect((await readdir(path.dirname(journalFile))).some((name) => name.includes('.quarantine-')))
-        .toBe(true);
-    }),
+        const recovery = await runApp(
+          Effect.gen(function* () {
+            const behaviors = yield* ProjectBehaviorService;
+            return yield* Effect.result(behaviors.open(setup.projectId));
+          }),
+        );
+        expect(recovery).toMatchObject({
+          _tag: 'Failure',
+          failure: { message: expect.stringContaining('base source mismatch') },
+        });
+        expect(await readFile(sourceFile, 'utf8')).toBe(sourceBeforeRecovery);
+        expect(await readFile(registryFile, 'utf8')).toBe(registryBeforeRecovery);
+        expect(
+          (await readdir(path.dirname(journalFile))).some((name) => name.includes('.quarantine-')),
+        ).toBe(true);
+      }),
   );
 
   it('uses authenticated base/next/newer recovery states without stale rollback', () =>
     withTempHome(async (home) => {
-      const created = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'State Recovery' });
-        const snapshot = yield* behaviors.createTypeScript(projectId, {
-          label: 'Stateful', source: 'export default "base";\n',
-        });
-        return { projectId, snapshot };
-      }));
+      const created = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'State Recovery' });
+          const snapshot = yield* behaviors.createTypeScript(projectId, {
+            label: 'Stateful',
+            source: 'export default "base";\n',
+          });
+          return { projectId, snapshot };
+        }),
+      );
       const behavior = created.snapshot.resources[0];
-      if (behavior === undefined || behavior.kind !== 'typescript') throw new Error('missing TypeScript behavior');
+      if (behavior === undefined || behavior.kind !== 'typescript')
+        throw new Error('missing TypeScript behavior');
       const journalFile = transactionPathFor(home, created.projectId);
-      const sourceFile = path.join(home, 'projects', created.projectId, behavior.manifest.source.sourcePath);
+      const sourceFile = path.join(
+        home,
+        'projects',
+        created.projectId,
+        behavior.manifest.source.sourcePath,
+      );
       const registryFile = registryPathFor(home, created.projectId);
       const pending = await makePendingSaveJournal(
         home,
@@ -772,53 +901,68 @@ describe('ProjectBehaviorService', () => {
       // Registry already at next + matching source means only idempotent journal cleanup remains.
       await writeFile(sourceFile, pending.nextSource as string);
       await writeFile(registryFile, `${JSON.stringify(pending.nextRegistry, null, 2)}\n`);
-      const nextState = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(created.projectId);
-      }));
+      const nextState = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(created.projectId);
+        }),
+      );
       expect(nextState.revision).toBe(created.snapshot.revision + 1);
-      expect(nextState.resources[0]).toMatchObject({ source: expect.stringContaining('pending-state') });
+      expect(nextState.resources[0]).toMatchObject({
+        source: expect.stringContaining('pending-state'),
+      });
       expect(await readdir(path.dirname(journalFile))).not.toContain(path.basename(journalFile));
 
-      const newer = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.saveTypeScript({
-          projectId: created.projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: nextState.revision,
-          label: 'Newer',
-          source: 'export default "newer";\n',
-        });
-      }));
+      const newer = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.saveTypeScript({
+            projectId: created.projectId,
+            behaviorId: behavior.manifest.id,
+            expectedRevision: nextState.revision,
+            label: 'Newer',
+            source: 'export default "newer";\n',
+          });
+        }),
+      );
       await writeFile(journalFile, pendingText);
-      const stale = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.open(created.projectId));
-      }));
+      const stale = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(behaviors.open(created.projectId));
+        }),
+      );
       expect(stale).toMatchObject({
         _tag: 'Failure',
         failure: { message: expect.stringContaining('stale behavior transaction quarantined') },
       });
-      expect(JSON.parse(await readFile(registryFile, 'utf8'))).toMatchObject({ revision: newer.revision });
+      expect(JSON.parse(await readFile(registryFile, 'utf8'))).toMatchObject({
+        revision: newer.revision,
+      });
       expect(await readFile(sourceFile, 'utf8')).toBe('export default "newer";\n');
-      const afterQuarantine = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(created.projectId);
-      }));
+      const afterQuarantine = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(created.projectId);
+        }),
+      );
       expect(afterQuarantine.revision).toBe(newer.revision);
     }));
 
   it('serializes recovery across fresh service layers and durably syncs removals', () =>
     withTempHome(async (home) => {
-      const created = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Fresh Service Recovery' });
-        const snapshot = yield* behaviors.createTypeScript(projectId, {
-          label: 'Fresh', source: 'export default "base";\n',
-        });
-        return { projectId, snapshot };
-      }));
+      const created = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Fresh Service Recovery' });
+          const snapshot = yield* behaviors.createTypeScript(projectId, {
+            label: 'Fresh',
+            source: 'export default "base";\n',
+          });
+          return { projectId, snapshot };
+        }),
+      );
       const behavior = created.snapshot.resources[0];
       if (behavior === undefined) throw new Error('missing behavior');
       await makePendingSaveJournal(
@@ -833,121 +977,156 @@ describe('ProjectBehaviorService', () => {
       const operations: ProjectBehaviorPersistenceOperations = {
         writeTextAtomic: writeTextForTest,
         removeFile: (filePath) => rm(filePath, { force: true }),
-        syncDirectory: async (directoryPath) => { synced.push(directoryPath); },
+        syncDirectory: async (directoryPath) => {
+          synced.push(directoryPath);
+        },
       };
-      const makeFreshLayer = () => Layer.mergeAll(
-        ProjectServiceLive,
-        makeProjectBehaviorServiceLive(operations),
-      ).pipe(Layer.provideMerge(FoundationLayer));
-      const openWith = (layer: ReturnType<typeof makeFreshLayer>) => Effect.runPromise(
-        Effect.gen(function* () {
-          const behaviors = yield* ProjectBehaviorService;
-          return yield* behaviors.open(created.projectId);
-        }).pipe(Effect.provide(layer)),
-      );
-      const [first, second] = await Promise.all([openWith(makeFreshLayer()), openWith(makeFreshLayer())]);
+      const makeFreshLayer = () =>
+        Layer.mergeAll(ProjectServiceLive, makeProjectBehaviorServiceLive(operations)).pipe(
+          Layer.provideMerge(FoundationLayer),
+        );
+      const openWith = (layer: ReturnType<typeof makeFreshLayer>) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const behaviors = yield* ProjectBehaviorService;
+            return yield* behaviors.open(created.projectId);
+          }).pipe(Effect.provide(layer)),
+        );
+      const [first, second] = await Promise.all([
+        openWith(makeFreshLayer()),
+        openWith(makeFreshLayer()),
+      ]);
       expect(first.revision).toBe(created.snapshot.revision + 1);
       expect(second.revision).toBe(first.revision);
 
-      const removed = await Effect.runPromise(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.remove(created.projectId, behavior.manifest.id, first.revision);
-      }).pipe(Effect.provide(makeFreshLayer())));
+      const removed = await Effect.runPromise(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.remove(created.projectId, behavior.manifest.id, first.revision);
+        }).pipe(Effect.provide(makeFreshLayer())),
+      );
       expect(removed.resources).toHaveLength(0);
-      expect(synced).toEqual(expect.arrayContaining([
-        path.join(home, 'projects', created.projectId, 'behaviors', 'sources'),
-        path.join(home, 'projects', created.projectId, '.tileborne'),
-      ]));
+      expect(synced).toEqual(
+        expect.arrayContaining([
+          path.join(home, 'projects', created.projectId, 'behaviors', 'sources'),
+          path.join(home, 'projects', created.projectId, '.tileborne'),
+        ]),
+      );
     }));
 
   it.each(['journal-write', 'source-mutation', 'registry-commit', 'journal-delete'] as const)(
     'has deterministic recovery at the %s durability boundary',
-    (boundary) => withTempHome(async (home) => {
-      const created = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: `Boundary ${boundary}` });
-        const snapshot = yield* behaviors.createTypeScript(projectId, {
-          label: 'Boundary', source: 'export default "base";\n',
-        });
-        return { projectId, snapshot };
-      }));
-      const behavior = created.snapshot.resources[0];
-      if (behavior === undefined || behavior.kind !== 'typescript') throw new Error('missing behavior');
-      const journalFile = transactionPathFor(home, created.projectId);
-      let injected = false;
-      const operations: ProjectBehaviorPersistenceOperations = {
-        writeTextAtomic: async (filePath, contents) => {
-          const shouldFail =
-            (boundary === 'journal-write' && filePath === journalFile) ||
-            (boundary === 'source-mutation' &&
-              filePath.includes(path.join('behaviors', 'sources')) &&
-              contents.includes(`boundary-${boundary}`)) ||
-            (boundary === 'registry-commit' && filePath === registryPathFor(home, created.projectId));
-          if (!injected && shouldFail) {
-            injected = true;
-            throw new Error(`injected ${boundary} interruption`);
-          }
-          await writeTextForTest(filePath, contents);
-        },
-        removeFile: async (filePath) => {
-          if (!injected && boundary === 'journal-delete' && filePath === journalFile) {
-            injected = true;
-            throw new Error('injected journal-delete interruption');
-          }
-          await rm(filePath, { force: true });
-        },
-        syncDirectory: async () => undefined,
-      };
-      const layer = Layer.mergeAll(
-        ProjectServiceLive,
-        makeProjectBehaviorServiceLive(operations),
-      ).pipe(Layer.provideMerge(FoundationLayer));
-      const result = await Effect.runPromise(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.saveTypeScript({
-          projectId: created.projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: created.snapshot.revision,
-          label: `Boundary ${boundary}`,
-          source: `export default "boundary-${boundary}";\n`,
-        }));
-      }).pipe(Effect.provide(layer)));
+    (boundary) =>
+      withTempHome(async (home) => {
+        const created = await runApp(
+          Effect.gen(function* () {
+            const projects = yield* ProjectService;
+            const behaviors = yield* ProjectBehaviorService;
+            const projectId = yield* projects.create({ name: `Boundary ${boundary}` });
+            const snapshot = yield* behaviors.createTypeScript(projectId, {
+              label: 'Boundary',
+              source: 'export default "base";\n',
+            });
+            return { projectId, snapshot };
+          }),
+        );
+        const behavior = created.snapshot.resources[0];
+        if (behavior === undefined || behavior.kind !== 'typescript')
+          throw new Error('missing behavior');
+        const journalFile = transactionPathFor(home, created.projectId);
+        let injected = false;
+        const operations: ProjectBehaviorPersistenceOperations = {
+          writeTextAtomic: async (filePath, contents) => {
+            const shouldFail =
+              (boundary === 'journal-write' && filePath === journalFile) ||
+              (boundary === 'source-mutation' &&
+                filePath.includes(path.join('behaviors', 'sources')) &&
+                contents.includes(`boundary-${boundary}`)) ||
+              (boundary === 'registry-commit' &&
+                filePath === registryPathFor(home, created.projectId));
+            if (!injected && shouldFail) {
+              injected = true;
+              throw new Error(`injected ${boundary} interruption`);
+            }
+            await writeTextForTest(filePath, contents);
+          },
+          removeFile: async (filePath) => {
+            if (!injected && boundary === 'journal-delete' && filePath === journalFile) {
+              injected = true;
+              throw new Error('injected journal-delete interruption');
+            }
+            await rm(filePath, { force: true });
+          },
+          syncDirectory: async () => undefined,
+        };
+        const layer = Layer.mergeAll(
+          ProjectServiceLive,
+          makeProjectBehaviorServiceLive(operations),
+        ).pipe(Layer.provideMerge(FoundationLayer));
+        const result = await Effect.runPromise(
+          Effect.gen(function* () {
+            const behaviors = yield* ProjectBehaviorService;
+            return yield* Effect.result(
+              behaviors.saveTypeScript({
+                projectId: created.projectId,
+                behaviorId: behavior.manifest.id,
+                expectedRevision: created.snapshot.revision,
+                label: `Boundary ${boundary}`,
+                source: `export default "boundary-${boundary}";\n`,
+              }),
+            );
+          }).pipe(Effect.provide(layer)),
+        );
 
-      expect(injected).toBe(true);
-      if (boundary === 'journal-write') {
-        expect(result).toMatchObject({ _tag: 'Failure', failure: { _tag: 'ProjectBehaviorError' } });
-        expect(await readFile(
-          path.join(home, 'projects', created.projectId, behavior.manifest.source.sourcePath),
-          'utf8',
-        )).toBe('export default "base";\n');
-        expect(JSON.parse(await readFile(registryPathFor(home, created.projectId), 'utf8')))
-          .toMatchObject({ revision: created.snapshot.revision });
-      } else {
-        expect(result).toMatchObject({ _tag: 'Success' });
-        const reopened = await runApp(Effect.gen(function* () {
-          const behaviors = yield* ProjectBehaviorService;
-          return yield* behaviors.open(created.projectId);
-        }));
-        expect(reopened.revision).toBe(created.snapshot.revision + 1);
-        expect(reopened.resources[0]).toMatchObject({
-          source: `export default "boundary-${boundary}";\n`,
-        });
-      }
-      expect(await readdir(path.dirname(journalFile))).not.toContain(path.basename(journalFile));
-    }),
+        expect(injected).toBe(true);
+        if (boundary === 'journal-write') {
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'ProjectBehaviorError' },
+          });
+          expect(
+            await readFile(
+              path.join(home, 'projects', created.projectId, behavior.manifest.source.sourcePath),
+              'utf8',
+            ),
+          ).toBe('export default "base";\n');
+          expect(
+            JSON.parse(await readFile(registryPathFor(home, created.projectId), 'utf8')),
+          ).toMatchObject({ revision: created.snapshot.revision });
+        } else {
+          expect(result).toMatchObject({ _tag: 'Success' });
+          const reopened = await runApp(
+            Effect.gen(function* () {
+              const behaviors = yield* ProjectBehaviorService;
+              return yield* behaviors.open(created.projectId);
+            }),
+          );
+          expect(reopened.revision).toBe(created.snapshot.revision + 1);
+          expect(reopened.resources[0]).toMatchObject({
+            source: `export default "boundary-${boundary}";\n`,
+          });
+        }
+        expect(await readdir(path.dirname(journalFile))).not.toContain(path.basename(journalFile));
+      }),
   );
 
   it('retains the project gate until active uncancellable persistence I/O settles', () =>
     withTempHome(async () => {
       let releaseBlockedWrite: (() => void) | undefined;
       let signalBlockedWrite: (() => void) | undefined;
-      const blockedWriteEntered = new Promise<void>((resolve) => { signalBlockedWrite = resolve; });
-      const blockedWriteReleased = new Promise<void>((resolve) => { releaseBlockedWrite = resolve; });
+      const blockedWriteEntered = new Promise<void>((resolve) => {
+        signalBlockedWrite = resolve;
+      });
+      const blockedWriteReleased = new Promise<void>((resolve) => {
+        releaseBlockedWrite = resolve;
+      });
       const gateCounts: number[] = [];
       const operations: ProjectBehaviorPersistenceOperations = {
         writeTextAtomic: async (filePath, contents) => {
-          if (filePath.includes(path.join('behaviors', 'sources')) && contents.includes('active-block')) {
+          if (
+            filePath.includes(path.join('behaviors', 'sources')) &&
+            contents.includes('active-block')
+          ) {
             signalBlockedWrite?.();
             await blockedWriteReleased;
           }
@@ -960,39 +1139,49 @@ describe('ProjectBehaviorService', () => {
         ProjectServiceLive,
         makeProjectBehaviorServiceLive(operations),
       ).pipe(Layer.provideMerge(FoundationLayer));
-      const result = await Effect.runPromise(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Active Interruption' });
-        const created = yield* behaviors.createTypeScript(projectId, {
-          label: 'Active', source: 'export default "base";\n',
-        });
-        const behavior = created.resources[0];
-        if (behavior === undefined) throw new Error('missing behavior');
-        const active = yield* behaviors.saveTypeScript({
-          projectId,
-          behaviorId: behavior.manifest.id,
-          expectedRevision: created.revision,
-          label: 'Active blocked',
-          source: 'export default "active-block";\n',
-        }).pipe(Effect.forkChild);
-        yield* Effect.promise(() => blockedWriteEntered);
-        let interruptionSettled = false;
-        const interrupt = yield* Fiber.interrupt(active).pipe(
-          Effect.tap(() => Effect.sync(() => { interruptionSettled = true; })),
-          Effect.forkChild,
-        );
-        yield* Effect.sleep('50 millis');
-        const observedWhileBlocked = { interruptionSettled, gateCount: gateCounts.at(-1) };
-        releaseBlockedWrite?.();
-        yield* Fiber.join(interrupt);
-        const reopened = yield* behaviors.open(projectId);
-        return { observedWhileBlocked, reopened };
-      }).pipe(Effect.provide(layer)));
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Active Interruption' });
+          const created = yield* behaviors.createTypeScript(projectId, {
+            label: 'Active',
+            source: 'export default "base";\n',
+          });
+          const behavior = created.resources[0];
+          if (behavior === undefined) throw new Error('missing behavior');
+          const active = yield* behaviors
+            .saveTypeScript({
+              projectId,
+              behaviorId: behavior.manifest.id,
+              expectedRevision: created.revision,
+              label: 'Active blocked',
+              source: 'export default "active-block";\n',
+            })
+            .pipe(Effect.forkChild);
+          yield* Effect.promise(() => blockedWriteEntered);
+          let interruptionSettled = false;
+          const interrupt = yield* Fiber.interrupt(active).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                interruptionSettled = true;
+              }),
+            ),
+            Effect.forkChild,
+          );
+          yield* Effect.sleep('50 millis');
+          const observedWhileBlocked = { interruptionSettled, gateCount: gateCounts.at(-1) };
+          releaseBlockedWrite?.();
+          yield* Fiber.join(interrupt);
+          const reopened = yield* behaviors.open(projectId);
+          return { observedWhileBlocked, reopened };
+        }).pipe(Effect.provide(layer)),
+      );
 
       expect(result.observedWhileBlocked).toEqual({ interruptionSettled: false, gateCount: 1 });
       expect(result.reopened.resources[0]).toMatchObject({
-        kind: 'typescript', source: 'export default "active-block";\n',
+        kind: 'typescript',
+        source: 'export default "active-block";\n',
       });
       expect(gateCounts.at(-1)).toBe(0);
     }));
@@ -1101,33 +1290,38 @@ describe('ProjectBehaviorService', () => {
 
   it('atomically converts the canonical visual source to TypeScript while preserving identity', () =>
     withTempHome(async (home) => {
-      const setup = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Behavior Conversion' });
-        const snapshot = yield* behaviors.createVisual(projectId, {
-          label: 'Door logic',
-          definition: {
-            state: [],
-            when: new BehaviorInvocation({ entryId: 'lifecycle.started', arguments: {} }),
-            do: [],
-          },
-          requiredCapabilities: ['lifecycle.core'],
-        });
-        return { projectId, snapshot };
-      }));
+      const setup = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Behavior Conversion' });
+          const snapshot = yield* behaviors.createVisual(projectId, {
+            label: 'Door logic',
+            definition: {
+              state: [],
+              when: new BehaviorInvocation({ entryId: 'lifecycle.started', arguments: {} }),
+              do: [],
+            },
+            requiredCapabilities: ['lifecycle.core'],
+          });
+          return { projectId, snapshot };
+        }),
+      );
       const visual = setup.snapshot.resources[0];
-      if (visual === undefined || visual.kind !== 'visual') throw new Error('missing visual behavior');
+      if (visual === undefined || visual.kind !== 'visual')
+        throw new Error('missing visual behavior');
       const source = `export default { id: ${JSON.stringify(visual.manifest.id)}, sourceKind: 'typescript', state: {} };\n`;
-      const converted = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.convertVisualToTypeScript({
-          projectId: setup.projectId,
-          behaviorId: visual.manifest.id,
-          expectedRevision: setup.snapshot.revision,
-          source,
-        });
-      }));
+      const converted = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.convertVisualToTypeScript({
+            projectId: setup.projectId,
+            behaviorId: visual.manifest.id,
+            expectedRevision: setup.snapshot.revision,
+            source,
+          });
+        }),
+      );
       const resource = converted.resources[0];
       expect(converted.revision).toBe(setup.snapshot.revision + 1);
       expect(resource).toMatchObject({
@@ -1140,17 +1334,26 @@ describe('ProjectBehaviorService', () => {
         },
         source,
       });
-      const visualFile = path.join(home, 'projects', setup.projectId, visual.manifest.source.definitionPath);
+      const visualFile = path.join(
+        home,
+        'projects',
+        setup.projectId,
+        visual.manifest.source.definitionPath,
+      );
       await expect(readFile(visualFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-      const stale = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.convertVisualToTypeScript({
-          projectId: setup.projectId,
-          behaviorId: visual.manifest.id,
-          expectedRevision: setup.snapshot.revision,
-          source,
-        }));
-      }));
+      const stale = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.convertVisualToTypeScript({
+              projectId: setup.projectId,
+              behaviorId: visual.manifest.id,
+              expectedRevision: setup.snapshot.revision,
+              source,
+            }),
+          );
+        }),
+      );
       expect(stale).toMatchObject({
         _tag: 'Failure',
         failure: { _tag: 'ProjectBehaviorRevisionConflictError' },
@@ -1159,23 +1362,31 @@ describe('ProjectBehaviorService', () => {
 
   it('recovers a conversion interrupted while removing the previous visual source', () =>
     withTempHome(async (home) => {
-      const setup = await runApp(Effect.gen(function* () {
-        const projects = yield* ProjectService;
-        const behaviors = yield* ProjectBehaviorService;
-        const projectId = yield* projects.create({ name: 'Interrupted Conversion' });
-        const snapshot = yield* behaviors.createVisual(projectId, {
-          label: 'Recover conversion',
-          definition: {
-            state: [],
-            when: new BehaviorInvocation({ entryId: 'lifecycle.started', arguments: {} }),
-            do: [],
-          },
-        });
-        return { projectId, snapshot };
-      }));
+      const setup = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const behaviors = yield* ProjectBehaviorService;
+          const projectId = yield* projects.create({ name: 'Interrupted Conversion' });
+          const snapshot = yield* behaviors.createVisual(projectId, {
+            label: 'Recover conversion',
+            definition: {
+              state: [],
+              when: new BehaviorInvocation({ entryId: 'lifecycle.started', arguments: {} }),
+              do: [],
+            },
+          });
+          return { projectId, snapshot };
+        }),
+      );
       const visual = setup.snapshot.resources[0];
-      if (visual === undefined || visual.kind !== 'visual') throw new Error('missing visual behavior');
-      const visualFile = path.join(home, 'projects', setup.projectId, visual.manifest.source.definitionPath);
+      if (visual === undefined || visual.kind !== 'visual')
+        throw new Error('missing visual behavior');
+      const visualFile = path.join(
+        home,
+        'projects',
+        setup.projectId,
+        visual.manifest.source.definitionPath,
+      );
       let failedRemovals = 0;
       const operations: ProjectBehaviorPersistenceOperations = {
         writeTextAtomic: writeTextForTest,
@@ -1192,31 +1403,38 @@ describe('ProjectBehaviorService', () => {
         ProjectServiceLive,
         makeProjectBehaviorServiceLive(operations),
       ).pipe(Layer.provideMerge(FoundationLayer));
-      const result = await Effect.runPromise(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* Effect.result(behaviors.convertVisualToTypeScript({
-          projectId: setup.projectId,
-          behaviorId: visual.manifest.id,
-          expectedRevision: setup.snapshot.revision,
-          source: `export default { id: ${JSON.stringify(visual.manifest.id)}, sourceKind: 'typescript', state: {} };\n`,
-        }));
-      }).pipe(Effect.provide(layer)));
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* Effect.result(
+            behaviors.convertVisualToTypeScript({
+              projectId: setup.projectId,
+              behaviorId: visual.manifest.id,
+              expectedRevision: setup.snapshot.revision,
+              source: `export default { id: ${JSON.stringify(visual.manifest.id)}, sourceKind: 'typescript', state: {} };\n`,
+            }),
+          );
+        }).pipe(Effect.provide(layer)),
+      );
       expect(result).toMatchObject({
         _tag: 'Failure',
         failure: { _tag: 'ProjectBehaviorTransactionError' },
       });
       expect(failedRemovals).toBe(2);
 
-      const reopened = await runApp(Effect.gen(function* () {
-        const behaviors = yield* ProjectBehaviorService;
-        return yield* behaviors.open(setup.projectId);
-      }));
+      const reopened = await runApp(
+        Effect.gen(function* () {
+          const behaviors = yield* ProjectBehaviorService;
+          return yield* behaviors.open(setup.projectId);
+        }),
+      );
       expect(reopened.resources[0]).toMatchObject({
         kind: 'typescript',
         manifest: { id: visual.manifest.id },
       });
       await expect(readFile(visualFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-      await expect(readFile(transactionPathFor(home, setup.projectId), 'utf8'))
-        .rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(
+        readFile(transactionPathFor(home, setup.projectId), 'utf8'),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
     }));
 });

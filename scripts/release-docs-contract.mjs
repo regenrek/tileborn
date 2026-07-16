@@ -187,8 +187,19 @@ const rowContainsValue = (row, value) => {
 const rowIdentifiesSupport = (row, support) =>
   rowContainsValue(row, support.id) || rowContainsValue(row, support.documentationLabel);
 
-const rowContainsDecision = (row, decisions = supportDecisionAliases) =>
-  decisions.some((decision) => rowContainsValue(row, decision));
+const cellStartsWithValue = (cell, value) => {
+  const normalized = normalizeFactValue(value);
+  return new RegExp(`^${escapeRegExp(normalized)}(?=$|[^a-z0-9-])`, 'i').test(cell);
+};
+
+const rowContainsDecision = (row, decisions = supportDecisionAliases) => {
+  if (row.kind === 'table') {
+    return decisions.some((decision) =>
+      row.cells.some((cell) => cellStartsWithValue(cell, decision)),
+    );
+  }
+  return decisions.some((decision) => rowContainsValue(row, decision));
+};
 
 const contradictoryDecisions = (status) => {
   if (status === 'unsupported') return ['supported', 'go', 'released'];

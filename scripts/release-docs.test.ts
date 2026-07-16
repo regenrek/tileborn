@@ -44,6 +44,16 @@ const supportListCases = policy.support.flatMap((support) => [
   },
 ]);
 
+const qualifiedDecisionCases = supportContradictionCases.flatMap((supportCase) =>
+  [
+    `${supportCase.decision}.`,
+    `${supportCase.decision}: approved`,
+    `${supportCase.decision} — approved`,
+    `${supportCase.decision} (approved)`,
+    `  ${supportCase.decision.toLocaleUpperCase()}   :   approved  `,
+  ].map((decision) => ({ ...supportCase, decision })),
+);
+
 const mutated = (relativePath: string, transform: (source: string) => string) => {
   const original = canonicalSurfaces[relativePath]!;
   const changed = transform(original);
@@ -234,6 +244,20 @@ describe('desktop release documentation contract', () => {
     },
   );
 
+  it.each(qualifiedDecisionCases)(
+    'rejects a punctuated or qualified table decision for $name: $decision',
+    ({ identity, decision }) => {
+      assertMutatedContractFails(
+        mutated(
+          'docs/desktop-release-runbook.md',
+          (source) =>
+            `${source}\nPolicy identity | Decision\n--- | ---\n\`${identity}\` | \`${decision}\`\n`,
+        ),
+        'release-docs.unbound-support-table',
+      );
+    },
+  );
+
   it('does not interpret ordinary prose or fenced examples as decision rows', () => {
     const surfaces = mutated(
       'docs/desktop-release-runbook.md',
@@ -244,6 +268,13 @@ The identifier \`platform.macos-arm64\` is discussed here; the word GO alone is 
 | platform.macos-arm64 | go |
 - capability.auto-update: supported
 \`\`\`
+
+Policy identity | Unrelated word
+--- | ---
+\`platform.macos-arm64\` | gopher
+\`capability.auto-update\` | unsupportedness
+\`capability.remote-crash-reporting\` | supportability
+\`capability.publish\` | completeness
 `,
     );
     expect(() =>

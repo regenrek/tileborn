@@ -85,4 +85,5 @@ describe('battle royale weapon catalog contribution', () => {
       );
     }
   });
+
 });

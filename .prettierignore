@@ -13,6 +13,9 @@ pnpm-lock.yaml
 # Tiled tileset XML uses the upstream `.tsx` extension; it is fixture data,
 # not TypeScript/JSX source and must not be parsed by Prettier's TSX parser.
 packages/test-fixtures/fixtures/tiled-sources/**/*.tsx
+# This release-preservation fixture intentionally retains the captured user byte
+# shape; its terminal blank line is protected by the worktree baseline manifest.
+packages/plugin-battle-royale/src/weapon-catalog.test.ts
 # The docs prebuild owns these generated projections. Formatting their source
 # inputs is sufficient; checking regenerated output would create a second owner.
 apps/docs/src/generated

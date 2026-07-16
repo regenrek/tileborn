@@ -1,14 +1,14 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { PlayerModelRef } from "../asset/library.js";
-import { RuntimeBehaviorPackage } from "../behavior/index.js";
-import { GameObjectType } from "../catalog/object-type.js";
-import { ResolvedOverlayVisual } from "../catalog/resolved-overlay-visuals.js";
-import { ResolvedWeaponVisuals } from "../catalog/resolved-weapon-visuals.js";
-import { GameModeId } from "../game-mode/active-mode.js";
-import { ContentHash, GameObjectTypeId, MapId, ObjectId, PluginId, ProjectId } from "../ids.js";
-import { TileborneMap } from "../map/index.js";
-import { JsonObject } from "../project/index.js";
+import { PlayerModelRef } from '../asset/library.js';
+import { RuntimeBehaviorPackage } from '../behavior/index.js';
+import { GameObjectType } from '../catalog/object-type.js';
+import { ResolvedOverlayVisual } from '../catalog/resolved-overlay-visuals.js';
+import { ResolvedWeaponVisuals } from '../catalog/resolved-weapon-visuals.js';
+import { GameModeId } from '../game-mode/active-mode.js';
+import { ContentHash, GameObjectTypeId, MapId, ObjectId, PluginId, ProjectId } from '../ids.js';
+import { TileborneMap } from '../map/index.js';
+import { JsonObject } from '../project/index.js';
 
 /**
  * Neutral runtime map package (ADR-0030).
@@ -31,7 +31,7 @@ import { JsonObject } from "../project/index.js";
 /** Branded id of one assembled runtime map package. */
 export const RuntimeMapPackageId = Schema.String.check(
   Schema.isPattern(/^mappkg:[0-9a-f-]{36}$/),
-).pipe(Schema.brand("RuntimeMapPackageId"));
+).pipe(Schema.brand('RuntimeMapPackageId'));
 export type RuntimeMapPackageId = typeof RuntimeMapPackageId.Type;
 
 /**
@@ -59,7 +59,7 @@ export const RUNTIME_MAP_PACKAGE_SCHEMA_VERSION = 4;
  * re-reading the world.
  */
 export class RuntimeMapPackageManifest extends Schema.Class<RuntimeMapPackageManifest>(
-  "RuntimeMapPackageManifest",
+  'RuntimeMapPackageManifest',
 )({
   packageId: RuntimeMapPackageId,
   schemaVersion: Schema.Int,
@@ -88,7 +88,7 @@ export class RuntimeMapPackageManifest extends Schema.Class<RuntimeMapPackageMan
  * by adding components — never by widening this schema.
  */
 export class RuntimeObjectPlacement extends Schema.Class<RuntimeObjectPlacement>(
-  "RuntimeObjectPlacement",
+  'RuntimeObjectPlacement',
 )({
   objectId: ObjectId,
   typeId: GameObjectTypeId,
@@ -101,8 +101,8 @@ export class RuntimeObjectPlacement extends Schema.Class<RuntimeObjectPlacement>
 
 /** Where a merged catalog entry came from — origin attribution for tooling/diagnostics. */
 export const RuntimeCatalogEntryOrigin = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("project") }),
-  Schema.Struct({ _tag: Schema.Literal("plugin"), pluginId: PluginId }),
+  Schema.Struct({ _tag: Schema.Literal('project') }),
+  Schema.Struct({ _tag: Schema.Literal('plugin'), pluginId: PluginId }),
 ]);
 export type RuntimeCatalogEntryOrigin = typeof RuntimeCatalogEntryOrigin.Type;
 
@@ -112,9 +112,7 @@ export type RuntimeCatalogEntryOrigin = typeof RuntimeCatalogEntryOrigin.Type;
  * a project entry shadowing a plugin id is a merge FAILURE (no-shadowing
  * rule, decided at the M2 review), so every id has exactly one owner.
  */
-export class RuntimeCatalogEntry extends Schema.Class<RuntimeCatalogEntry>(
-  "RuntimeCatalogEntry",
-)({
+export class RuntimeCatalogEntry extends Schema.Class<RuntimeCatalogEntry>('RuntimeCatalogEntry')({
   origin: RuntimeCatalogEntryOrigin,
   objectType: GameObjectType,
 }) {}
@@ -125,7 +123,7 @@ export class RuntimeCatalogEntry extends Schema.Class<RuntimeCatalogEntry>(
  * need these without re-deriving.
  */
 export class RuntimeMapPackageVisuals extends Schema.Class<RuntimeMapPackageVisuals>(
-  "RuntimeMapPackageVisuals",
+  'RuntimeMapPackageVisuals',
 )({
   playerModels: Schema.Array(PlayerModelRef),
   overlayVisuals: Schema.Array(ResolvedOverlayVisual),
@@ -138,7 +136,7 @@ export class RuntimeMapPackageVisuals extends Schema.Class<RuntimeMapPackageVisu
  * directory.
  */
 export class RuntimeMapPackageAssetEntry extends Schema.Class<RuntimeMapPackageAssetEntry>(
-  "RuntimeMapPackageAssetEntry",
+  'RuntimeMapPackageAssetEntry',
 )({
   path: Schema.String,
   hash: ContentHash,
@@ -159,7 +157,7 @@ export class RuntimeMapPackageAssetEntry extends Schema.Class<RuntimeMapPackageA
  *   neutral data (placements, spawn points, visuals) must NOT hide in here
  *   (boundary-tested).
  */
-export class RuntimeMapPackage extends Schema.Class<RuntimeMapPackage>("RuntimeMapPackage")({
+export class RuntimeMapPackage extends Schema.Class<RuntimeMapPackage>('RuntimeMapPackage')({
   manifest: RuntimeMapPackageManifest,
   map: TileborneMap,
   catalog: Schema.Array(RuntimeCatalogEntry),
@@ -176,9 +174,9 @@ export class RuntimeMapPackage extends Schema.Class<RuntimeMapPackage>("RuntimeM
 
 /** A runtime map package failed schema/version/integrity checks. */
 export class RuntimeMapPackageInvalidError extends Schema.TaggedErrorClass<RuntimeMapPackageInvalidError>()(
-  "RuntimeMapPackageInvalidError",
+  'RuntimeMapPackageInvalidError',
   {
-    reason: Schema.Literals(["schema", "version", "integrity"]),
+    reason: Schema.Literals(['schema', 'version', 'integrity']),
     message: Schema.String,
   },
 ) {}

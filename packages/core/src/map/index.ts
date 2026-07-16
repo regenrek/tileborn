@@ -1,4 +1,4 @@
-import { Schema, SchemaGetter } from "effect";
+import { Schema, SchemaGetter } from 'effect';
 
 import {
   AssetId,
@@ -10,17 +10,17 @@ import {
   PackId,
   PlaceableId,
   TileId,
-} from "../ids.js";
-import { JsonObject } from "../project/index.js";
+} from '../ids.js';
+import { JsonObject } from '../project/index.js';
 
 /** Size in tile or pixel units. */
-export class Size2D extends Schema.Class<Size2D>("Size2D")({
+export class Size2D extends Schema.Class<Size2D>('Size2D')({
   width: Schema.Number,
   height: Schema.Number,
 }) {}
 
 /** Canonical per-cell/placeable transform decoded from source tile flags. */
-export class TileTransform extends Schema.Class<TileTransform>("TileTransform")({
+export class TileTransform extends Schema.Class<TileTransform>('TileTransform')({
   flippedHorizontal: Schema.Boolean,
   flippedVertical: Schema.Boolean,
   flippedDiagonal: Schema.Boolean,
@@ -28,7 +28,7 @@ export class TileTransform extends Schema.Class<TileTransform>("TileTransform")(
 }) {}
 
 /** Chunk of dense tile indices for large maps (spec §10). */
-export class TileChunk extends Schema.Class<TileChunk>("TileChunk")({
+export class TileChunk extends Schema.Class<TileChunk>('TileChunk')({
   x: Schema.Int,
   y: Schema.Int,
   width: Schema.Int,
@@ -82,46 +82,49 @@ const collisionLayerFields = {
 } as const;
 
 /** Tile layer with chunked storage. */
-export class TileLayer extends Schema.TaggedClass<TileLayer>()("tile", tileLayerFields) {}
+export class TileLayer extends Schema.TaggedClass<TileLayer>()('tile', tileLayerFields) {}
 
 /** Object layer referencing map objects by id. */
-export class ObjectLayer extends Schema.TaggedClass<ObjectLayer>()("object", objectLayerFields) {}
+export class ObjectLayer extends Schema.TaggedClass<ObjectLayer>()('object', objectLayerFields) {}
 
 /** Image layer referencing a project asset. */
-export class ImageLayer extends Schema.TaggedClass<ImageLayer>()("image", imageLayerFields) {}
+export class ImageLayer extends Schema.TaggedClass<ImageLayer>()('image', imageLayerFields) {}
 
 /** Collision overlay layer (authoritative mask metadata only). */
 export class CollisionLayer extends Schema.TaggedClass<CollisionLayer>()(
-  "collision",
+  'collision',
   collisionLayerFields,
 ) {}
 
-const persistedLayer = <Tag extends "tile" | "object" | "image" | "collision", Layer>(
+const persistedLayer = <Tag extends 'tile' | 'object' | 'image' | 'collision', Layer>(
   kind: Tag,
   layer: Layer,
   fields: Schema.Struct.Fields,
 ) =>
   Schema.Struct({ kind: Schema.Literal(kind), ...fields }).pipe(
-    Schema.decodeTo(layer as Schema.Top, {
-      decode: SchemaGetter.transform((persisted: { kind: Tag } & Record<string, unknown>) => {
-        const { kind: _kind, ...rest } = persisted;
-        void _kind;
-        return { _tag: kind, ...rest };
-      }),
-      encode: SchemaGetter.transform((encoded: { _tag: Tag } & Record<string, unknown>) => {
-        const { _tag, ...rest } = encoded;
-        void _tag;
-        return { kind, ...rest };
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- kind/_tag persistence bridge
-    } as any),
+    Schema.decodeTo(
+      layer as Schema.Top,
+      {
+        decode: SchemaGetter.transform((persisted: { kind: Tag } & Record<string, unknown>) => {
+          const { kind: _kind, ...rest } = persisted;
+          void _kind;
+          return { _tag: kind, ...rest };
+        }),
+        encode: SchemaGetter.transform((encoded: { _tag: Tag } & Record<string, unknown>) => {
+          const { _tag, ...rest } = encoded;
+          void _tag;
+          return { kind, ...rest };
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- kind/_tag persistence bridge
+      } as any,
+    ),
   ) as Layer;
 
-export const TileLayerPersisted = persistedLayer("tile", TileLayer, tileLayerFields);
-export const ObjectLayerPersisted = persistedLayer("object", ObjectLayer, objectLayerFields);
-export const ImageLayerPersisted = persistedLayer("image", ImageLayer, imageLayerFields);
+export const TileLayerPersisted = persistedLayer('tile', TileLayer, tileLayerFields);
+export const ObjectLayerPersisted = persistedLayer('object', ObjectLayer, objectLayerFields);
+export const ImageLayerPersisted = persistedLayer('image', ImageLayer, imageLayerFields);
 export const CollisionLayerPersisted = persistedLayer(
-  "collision",
+  'collision',
   CollisionLayer,
   collisionLayerFields,
 );
@@ -136,10 +139,10 @@ export const MapLayer = Schema.Union([
 export type MapLayer = TileLayer | ObjectLayer | ImageLayer | CollisionLayer;
 
 /** Reference from a map object to an asset-pack placeable. */
-export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObjectPlacement")({
+export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>('MapObjectPlacement')({
   packId: Schema.OptionFromOptionalKey(PackId),
   placeableId: PlaceableId,
-  source: Schema.Union([Schema.Literal("manual"), Schema.Literal("tiled-object")]),
+  source: Schema.Union([Schema.Literal('manual'), Schema.Literal('tiled-object')]),
   assetId: Schema.OptionFromOptionalKey(AssetId),
   tileId: Schema.OptionFromOptionalKey(TileId),
   gid: Schema.OptionFromOptionalKey(Schema.Int),
@@ -155,7 +158,7 @@ export class MapObjectPlacement extends Schema.Class<MapObjectPlacement>("MapObj
 }) {}
 
 /** Placed object instance on a map. */
-export class MapObject extends Schema.Class<MapObject>("MapObject")({
+export class MapObject extends Schema.Class<MapObject>('MapObject')({
   id: ObjectId,
   /**
    * Reference to the catalog {@link GameObjectType} definition this instance is
@@ -177,7 +180,7 @@ export class MapObject extends Schema.Class<MapObject>("MapObject")({
  * Authoritative map model (spec §10).
  * Viewport and renderer adapters consume normalized draw instructions derived from this shape.
  */
-export class TileborneMap extends Schema.Class<TileborneMap>("TileborneMap")({
+export class TileborneMap extends Schema.Class<TileborneMap>('TileborneMap')({
   id: MapId,
   schemaVersion: Schema.Literal(1),
   size: Size2D,

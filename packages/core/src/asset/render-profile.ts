@@ -23,9 +23,7 @@ export class RenderNameplateProfile extends Schema.Class<RenderNameplateProfile>
   ),
 }) {}
 
-export class RenderShadowProfile extends Schema.Class<RenderShadowProfile>(
-  'RenderShadowProfile',
-)({
+export class RenderShadowProfile extends Schema.Class<RenderShadowProfile>('RenderShadowProfile')({
   visible: Schema.Boolean.pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed(true)),
     Schema.withConstructorDefault(Effect.succeed(true)),

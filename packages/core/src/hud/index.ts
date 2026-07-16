@@ -1,1 +1,1 @@
-export * from "./hud-layout.js";
+export * from './hud-layout.js';

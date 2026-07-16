@@ -1,24 +1,24 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import { AssetId, TileId, TileSetId } from "../ids.js";
-import { JsonObject } from "../project/index.js";
+import { AssetId, TileId, TileSetId } from '../ids.js';
+import { JsonObject } from '../project/index.js';
 
 /** Asset library entry referenced by maps and tilesets. */
-export class Asset extends Schema.Class<Asset>("Asset")({
+export class Asset extends Schema.Class<Asset>('Asset')({
   id: AssetId,
   kind: Schema.Union([
-    Schema.Literal("image"),
-    Schema.Literal("tileset"),
-    Schema.Literal("animation"),
-    Schema.Literal("audio"),
-    Schema.Literal("data"),
+    Schema.Literal('image'),
+    Schema.Literal('tileset'),
+    Schema.Literal('animation'),
+    Schema.Literal('audio'),
+    Schema.Literal('data'),
   ]),
   path: Schema.String,
   properties: JsonObject,
 }) {}
 
 /** Tile definition inside a tileset (local index + optional metadata). */
-export class Tile extends Schema.Class<Tile>("Tile")({
+export class Tile extends Schema.Class<Tile>('Tile')({
   id: TileId,
   localId: Schema.Int,
   width: Schema.Number,
@@ -27,10 +27,10 @@ export class Tile extends Schema.Class<Tile>("Tile")({
 }) {}
 
 /** Grid or image-collection tileset surfaced to the editor/runtime. */
-export class TileSet extends Schema.Class<TileSet>("TileSet")({
+export class TileSet extends Schema.Class<TileSet>('TileSet')({
   id: TileSetId,
   name: Schema.String,
-  kind: Schema.Union([Schema.Literal("grid"), Schema.Literal("image-collection")]),
+  kind: Schema.Union([Schema.Literal('grid'), Schema.Literal('image-collection')]),
   tileWidth: Schema.Number,
   tileHeight: Schema.Number,
   tileCount: Schema.Int,
@@ -47,7 +47,7 @@ export const TileSetSchema = TileSet;
 export const makeTileSet = (input: {
   id: TileSetId;
   name: string;
-  kind: "grid" | "image-collection";
+  kind: 'grid' | 'image-collection';
   tileWidth: number;
   tileHeight: number;
   tileCount: number;

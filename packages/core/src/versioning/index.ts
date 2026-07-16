@@ -1,4 +1,4 @@
-import { Result } from "effect";
+import { Result } from 'effect';
 
 /** Single-step schema migrator between two integer versions. */
 export interface SchemaMigrator<From, To> {
@@ -60,11 +60,11 @@ export const defineMigrationChain = <T>(args: {
 
 /** Read `schemaVersion` from unknown persisted JSON. */
 export const readSchemaVersion = (input: unknown): number | undefined => {
-  if (typeof input !== "object" || input === null || !("schemaVersion" in input)) {
+  if (typeof input !== 'object' || input === null || !('schemaVersion' in input)) {
     return undefined;
   }
   const version = (input as { schemaVersion: unknown }).schemaVersion;
-  return typeof version === "number" && Number.isInteger(version) ? version : undefined;
+  return typeof version === 'number' && Number.isInteger(version) ? version : undefined;
 };
 
 /** Current schema versions for core persisted entities. */

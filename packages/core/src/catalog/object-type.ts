@@ -1,19 +1,19 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { CatalogId, GameObjectTypeId, ItemDefinitionId, LootTableId } from "../ids.js";
-import { AuthoringFieldSchema } from "../authoring/field-schema.js";
-import { JsonObject } from "../project/index.js";
-import { GameObjectComponent, GrantRef, OpenTag } from "./components.js";
+import { CatalogId, GameObjectTypeId, ItemDefinitionId, LootTableId } from '../ids.js';
+import { AuthoringFieldSchema } from '../authoring/field-schema.js';
+import { JsonObject } from '../project/index.js';
+import { GameObjectComponent, GrantRef, OpenTag } from './components.js';
 
 /**
  * Open family classification (branded string, NOT a closed enum) so that
  * plugins introduce new families without engine edits. e.g. "obstacle", "loot".
  */
-export const FamilyTag = Schema.String.pipe(Schema.brand("FamilyTag"));
+export const FamilyTag = Schema.String.pipe(Schema.brand('FamilyTag'));
 export type FamilyTag = typeof FamilyTag.Type;
 
 /** Open editor-grouping category (branded string, NOT a closed enum). */
-export const CategoryTag = Schema.String.pipe(Schema.brand("CategoryTag"));
+export const CategoryTag = Schema.String.pipe(Schema.brand('CategoryTag'));
 export type CategoryTag = typeof CategoryTag.Type;
 
 /**
@@ -25,7 +25,7 @@ export type CategoryTag = typeof CategoryTag.Type;
  * so authored types survive JSON persistence (project fragment, exported
  * packs, the entity-editor wire) without requiring placeholder values.
  */
-export class GameObjectType extends Schema.Class<GameObjectType>("GameObjectType")({
+export class GameObjectType extends Schema.Class<GameObjectType>('GameObjectType')({
   id: GameObjectTypeId,
   schemaVersion: Schema.Int,
   label: Schema.String,
@@ -45,7 +45,7 @@ export class GameObjectType extends Schema.Class<GameObjectType>("GameObjectType
  * gameplay balance — that is owned by ADR-0018 / plugin data and referenced by
  * id). The `entries` bag is plugin-defined open data.
  */
-export class LootTable extends Schema.Class<LootTable>("LootTable")({
+export class LootTable extends Schema.Class<LootTable>('LootTable')({
   id: LootTableId,
   label: Schema.String,
   entries: Schema.Array(JsonObject),
@@ -63,7 +63,7 @@ export class LootTable extends Schema.Class<LootTable>("LootTable")({
  * item that grants a weapon). The render identity stays decoupled via the
  * owning object-type's {@link VisualRefComponent}.
  */
-export class ItemDefinition extends Schema.Class<ItemDefinition>("ItemDefinition")({
+export class ItemDefinition extends Schema.Class<ItemDefinition>('ItemDefinition')({
   id: ItemDefinitionId,
   label: Schema.String,
   category: Schema.OptionFromOptional(CategoryTag),
@@ -73,7 +73,7 @@ export class ItemDefinition extends Schema.Class<ItemDefinition>("ItemDefinition
 }) {}
 
 /** A plugin-shipped (or engine-shipped) content pack of catalog definitions. */
-export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>("GameObjectCatalog")({
+export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>('GameObjectCatalog')({
   id: CatalogId,
   schemaVersion: Schema.Int,
   objectTypes: Schema.Array(GameObjectType),
@@ -88,7 +88,7 @@ export class GameObjectCatalog extends Schema.Class<GameObjectCatalog>("GameObje
  * with simulation-owned weapon entries and immutable provenance. The key stays
  * stable so editor, playtest and ship build read the SAME source.
  */
-export const PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY = "tileborne:catalogFragment";
+export const PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY = 'tileborne:catalogFragment';
 
 export const GameObjectTypeSchema = GameObjectType;
 export const GameObjectCatalogSchema = GameObjectCatalog;

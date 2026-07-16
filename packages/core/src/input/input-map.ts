@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { ActionDeclaration, ActionId, BindingSetId } from "./actions.js";
-import { AxisRole, ControlScheme } from "./control-scheme.js";
+import { ActionDeclaration, ActionId, BindingSetId } from './actions.js';
+import { AxisRole, ControlScheme } from './control-scheme.js';
 
 /**
  * One raw input trigger that can be bound to an action (ADR-0024). A tagged
@@ -9,28 +9,31 @@ import { AxisRole, ControlScheme } from "./control-scheme.js";
  * the ONLY place a key/button identity exists — always as decoded DATA inside a
  * binding, never as a baked literal in engine code.
  */
-export class KeyTrigger extends Schema.TaggedClass<KeyTrigger>()("key", {
+export class KeyTrigger extends Schema.TaggedClass<KeyTrigger>()('key', {
   /** A `KeyboardEvent.code`, e.g. `"Space"`, `"KeyW"`, `"Digit1"`. */
   code: Schema.String,
 }) {}
 
-export class MouseButtonTrigger extends Schema.TaggedClass<MouseButtonTrigger>()("mouseButton", {
+export class MouseButtonTrigger extends Schema.TaggedClass<MouseButtonTrigger>()('mouseButton', {
   /** A `MouseEvent.button` index (0 = primary/left). */
   button: Schema.Int,
 }) {}
 
-export class GamepadButtonTrigger extends Schema.TaggedClass<GamepadButtonTrigger>()("gamepadButton", {
-  button: Schema.Int,
-}) {}
+export class GamepadButtonTrigger extends Schema.TaggedClass<GamepadButtonTrigger>()(
+  'gamepadButton',
+  {
+    button: Schema.Int,
+  },
+) {}
 
-export class AxisTrigger extends Schema.TaggedClass<AxisTrigger>()("axis", {
+export class AxisTrigger extends Schema.TaggedClass<AxisTrigger>()('axis', {
   /** Gamepad axis index (stick/trigger). */
   axis: Schema.Int,
   /** Direction of travel that activates this trigger: `+1` or `-1`. */
   sign: Schema.Literals([1, -1]),
 }) {}
 
-export class PointerTrigger extends Schema.TaggedClass<PointerTrigger>()("pointer", {}) {}
+export class PointerTrigger extends Schema.TaggedClass<PointerTrigger>()('pointer', {}) {}
 
 export const RawTrigger = Schema.Union([
   KeyTrigger,
@@ -47,7 +50,7 @@ export type RawTrigger = typeof RawTrigger.Type;
  * scheme is the {@link InputMap.schemeDefaults} key, so the binding itself stays
  * scheme-agnostic data the remap UI can move between schemes.
  */
-export class InputBinding extends Schema.TaggedClass<InputBinding>()("InputBinding", {
+export class InputBinding extends Schema.TaggedClass<InputBinding>()('InputBinding', {
   action: ActionId,
   trigger: RawTrigger,
   // `OptionFromOptional` so a digital binding may OMIT `axisRole` entirely (only
@@ -61,7 +64,7 @@ export class InputBinding extends Schema.TaggedClass<InputBinding>()("InputBindi
  * its default map; a user remap overlay is the same shape, applied on top at
  * resolve time. The engine owns this schema; plugins/users supply the data.
  */
-export class InputMap extends Schema.Class<InputMap>("InputMap")({
+export class InputMap extends Schema.Class<InputMap>('InputMap')({
   id: BindingSetId,
   /** The actions this map satisfies + each action's value kind. */
   actions: Schema.Array(ActionDeclaration),

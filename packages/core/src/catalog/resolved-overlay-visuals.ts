@@ -1,9 +1,9 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { GameObjectTypeId } from "../ids.js";
-import type { OverlayVisualComponent } from "./components.js";
-import type { GameObjectType } from "./object-type.js";
-import { ResolvedEntityVisual, resolveEntityVisual } from "./resolved-weapon-visuals.js";
+import { GameObjectTypeId } from '../ids.js';
+import type { OverlayVisualComponent } from './components.js';
+import type { GameObjectType } from './object-type.js';
+import { ResolvedEntityVisual, resolveEntityVisual } from './resolved-weapon-visuals.js';
 
 /**
  * The render-ready projection of ONE runtime-global overlay slot (shield,
@@ -12,7 +12,7 @@ import { ResolvedEntityVisual, resolveEntityVisual } from "./resolved-weapon-vis
  * into the runtime artifact at export time — never authored directly.
  */
 export class ResolvedOverlayVisual extends Schema.Class<ResolvedOverlayVisual>(
-  "ResolvedOverlayVisual",
+  'ResolvedOverlayVisual',
 )({
   /** The overlay slot this visual fills (open tag named by the game mode). */
   slot: Schema.String,
@@ -45,7 +45,7 @@ export interface DeriveOverlayVisualsOptions {
 
 const overlayVisualOf = (objectType: GameObjectType): OverlayVisualComponent | undefined =>
   objectType.components.find(
-    (component): component is OverlayVisualComponent => component._tag === "overlay-visual",
+    (component): component is OverlayVisualComponent => component._tag === 'overlay-visual',
   );
 
 interface SlotClaimant {
@@ -72,10 +72,10 @@ const pickSlotWinner = (
   if (sorted.length > 1) {
     issues.push({
       objectTypeId: String(winner.id),
-      path: "overlay-visual.slot",
+      path: 'overlay-visual.slot',
       message:
         `overlay slot "${slot}" is claimed by ${sorted.length} entities at equal precedence ` +
-        `(${sorted.map((claimant) => String(claimant.objectType.id)).join(", ")}); ` +
+        `(${sorted.map((claimant) => String(claimant.objectType.id)).join(', ')}); ` +
         `${winner.id} wins deterministically`,
     });
   }

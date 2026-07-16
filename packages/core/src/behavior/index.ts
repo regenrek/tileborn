@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 import {
   AssetId,
@@ -7,8 +7,8 @@ import {
   ContentHash,
   GameObjectTypeId,
   ObjectId,
-} from "../ids.js";
-import { JsonObject, JsonValue } from "../project/index.js";
+} from '../ids.js';
+import { JsonObject, JsonValue } from '../project/index.js';
 
 /** Current persisted visual behavior resource version. */
 export const BEHAVIOR_DEFINITION_SCHEMA_VERSION = 1 as const;
@@ -19,36 +19,35 @@ export const BEHAVIOR_PACKAGE_SCHEMA_VERSION = 1 as const;
 /** Stable open identifier contributed by the engine or a plugin registry. */
 export const BehaviorRegistryEntryId = Schema.String.check(
   Schema.isPattern(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/),
-).pipe(Schema.brand("BehaviorRegistryEntryId"));
+).pipe(Schema.brand('BehaviorRegistryEntryId'));
 export type BehaviorRegistryEntryId = typeof BehaviorRegistryEntryId.Type;
 
 /** Open capability id used for discovery and runtime permission checks. */
 export const BehaviorCapabilityId = Schema.String.check(
   Schema.isPattern(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/),
-).pipe(Schema.brand("BehaviorCapabilityId"));
+).pipe(Schema.brand('BehaviorCapabilityId'));
 export type BehaviorCapabilityId = typeof BehaviorCapabilityId.Type;
 
 /** Native TypeScript and visual resources are the only canonical source kinds. */
-export const BehaviorSourceKind = Schema.Literals(["visual", "typescript"]);
+export const BehaviorSourceKind = Schema.Literals(['visual', 'typescript']);
 export type BehaviorSourceKind = typeof BehaviorSourceKind.Type;
 
 export class EntityBehaviorReference extends Schema.TaggedClass<EntityBehaviorReference>()(
-  "entity",
+  'entity',
   { objectId: ObjectId },
 ) {}
 
-export class AssetBehaviorReference extends Schema.TaggedClass<AssetBehaviorReference>()(
-  "asset",
-  { assetId: AssetId },
-) {}
+export class AssetBehaviorReference extends Schema.TaggedClass<AssetBehaviorReference>()('asset', {
+  assetId: AssetId,
+}) {}
 
 export class CatalogBehaviorReference extends Schema.TaggedClass<CatalogBehaviorReference>()(
-  "catalog",
+  'catalog',
   { objectTypeId: GameObjectTypeId },
 ) {}
 
 export class NestedBehaviorReference extends Schema.TaggedClass<NestedBehaviorReference>()(
-  "behavior",
+  'behavior',
   { behaviorId: BehaviorId },
 ) {}
 
@@ -61,21 +60,21 @@ export const BehaviorReference = Schema.Union([
 ]);
 export type BehaviorReference = typeof BehaviorReference.Type;
 
-export class LiteralBehaviorValue extends Schema.TaggedClass<LiteralBehaviorValue>()("literal", {
+export class LiteralBehaviorValue extends Schema.TaggedClass<LiteralBehaviorValue>()('literal', {
   value: JsonValue,
 }) {}
 
-export class StateBehaviorValue extends Schema.TaggedClass<StateBehaviorValue>()("state", {
+export class StateBehaviorValue extends Schema.TaggedClass<StateBehaviorValue>()('state', {
   key: Schema.String,
 }) {}
 
 export class EventFieldBehaviorValue extends Schema.TaggedClass<EventFieldBehaviorValue>()(
-  "event-field",
+  'event-field',
   { path: Schema.String },
 ) {}
 
 export class ReferenceBehaviorValue extends Schema.TaggedClass<ReferenceBehaviorValue>()(
-  "reference",
+  'reference',
   { reference: BehaviorReference },
 ) {}
 
@@ -88,31 +87,31 @@ export const BehaviorValueExpression = Schema.Union([
 ]);
 export type BehaviorValueExpression = typeof BehaviorValueExpression.Type;
 
-export class BehaviorInvocation extends Schema.Class<BehaviorInvocation>("BehaviorInvocation")({
+export class BehaviorInvocation extends Schema.Class<BehaviorInvocation>('BehaviorInvocation')({
   entryId: BehaviorRegistryEntryId,
   arguments: Schema.Record(Schema.String, BehaviorValueExpression),
 }) {}
 
 export interface BehaviorConditionCall {
-  readonly _tag: "condition";
+  readonly _tag: 'condition';
   readonly nodeId: BehaviorNodeId;
   readonly invocation: BehaviorInvocation;
 }
 
 export interface BehaviorAllCondition {
-  readonly _tag: "all";
+  readonly _tag: 'all';
   readonly nodeId: BehaviorNodeId;
   readonly conditions: ReadonlyArray<BehaviorCondition>;
 }
 
 export interface BehaviorAnyCondition {
-  readonly _tag: "any";
+  readonly _tag: 'any';
   readonly nodeId: BehaviorNodeId;
   readonly conditions: ReadonlyArray<BehaviorCondition>;
 }
 
 export interface BehaviorNotCondition {
-  readonly _tag: "not";
+  readonly _tag: 'not';
   readonly nodeId: BehaviorNodeId;
   readonly condition: BehaviorCondition;
 }
@@ -128,22 +127,22 @@ export const BehaviorCondition: Schema.Codec<BehaviorCondition, unknown> = Schem
   (): Schema.Codec<BehaviorCondition, unknown> =>
     Schema.Union([
       Schema.Struct({
-        _tag: Schema.Literal("condition"),
+        _tag: Schema.Literal('condition'),
         nodeId: BehaviorNodeId,
         invocation: BehaviorInvocation,
       }),
       Schema.Struct({
-        _tag: Schema.Literal("all"),
+        _tag: Schema.Literal('all'),
         nodeId: BehaviorNodeId,
         conditions: Schema.Array(BehaviorCondition),
       }),
       Schema.Struct({
-        _tag: Schema.Literal("any"),
+        _tag: Schema.Literal('any'),
         nodeId: BehaviorNodeId,
         conditions: Schema.Array(BehaviorCondition),
       }),
       Schema.Struct({
-        _tag: Schema.Literal("not"),
+        _tag: Schema.Literal('not'),
         nodeId: BehaviorNodeId,
         condition: BehaviorCondition,
       }),
@@ -151,13 +150,13 @@ export const BehaviorCondition: Schema.Codec<BehaviorCondition, unknown> = Schem
 );
 
 export interface BehaviorActionCall {
-  readonly _tag: "action";
+  readonly _tag: 'action';
   readonly nodeId: BehaviorNodeId;
   readonly invocation: BehaviorInvocation;
 }
 
 export interface BehaviorBranchAction {
-  readonly _tag: "branch";
+  readonly _tag: 'branch';
   readonly nodeId: BehaviorNodeId;
   readonly condition: BehaviorCondition;
   readonly then: ReadonlyArray<BehaviorActionNode>;
@@ -171,12 +170,12 @@ export const BehaviorActionNode: Schema.Codec<BehaviorActionNode, unknown> = Sch
   (): Schema.Codec<BehaviorActionNode, unknown> =>
     Schema.Union([
       Schema.Struct({
-        _tag: Schema.Literal("action"),
+        _tag: Schema.Literal('action'),
         nodeId: BehaviorNodeId,
         invocation: BehaviorInvocation,
       }),
       Schema.Struct({
-        _tag: Schema.Literal("branch"),
+        _tag: Schema.Literal('branch'),
         nodeId: BehaviorNodeId,
         condition: BehaviorCondition,
         then: Schema.Array(BehaviorActionNode),
@@ -185,14 +184,14 @@ export const BehaviorActionNode: Schema.Codec<BehaviorActionNode, unknown> = Sch
     ]),
 );
 
-export class BehaviorStateField extends Schema.Class<BehaviorStateField>("BehaviorStateField")({
+export class BehaviorStateField extends Schema.Class<BehaviorStateField>('BehaviorStateField')({
   key: Schema.String,
   label: Schema.String,
   initialValue: JsonValue,
 }) {}
 
 /** Canonical persisted resource emitted by the visual WHEN/IF/DO editor. */
-export class BehaviorDefinition extends Schema.Class<BehaviorDefinition>("BehaviorDefinition")({
+export class BehaviorDefinition extends Schema.Class<BehaviorDefinition>('BehaviorDefinition')({
   schemaVersion: Schema.Literal(BEHAVIOR_DEFINITION_SCHEMA_VERSION),
   id: BehaviorId,
   label: Schema.String,
@@ -202,12 +201,12 @@ export class BehaviorDefinition extends Schema.Class<BehaviorDefinition>("Behavi
   do: Schema.Array(BehaviorActionNode),
 }) {}
 
-export class VisualBehaviorSource extends Schema.TaggedClass<VisualBehaviorSource>()("visual", {
+export class VisualBehaviorSource extends Schema.TaggedClass<VisualBehaviorSource>()('visual', {
   definitionPath: Schema.String,
 }) {}
 
 export class TypeScriptBehaviorSource extends Schema.TaggedClass<TypeScriptBehaviorSource>()(
-  "typescript",
+  'typescript',
   {
     sourcePath: Schema.String,
     exportName: Schema.String,
@@ -218,7 +217,7 @@ export class TypeScriptBehaviorSource extends Schema.TaggedClass<TypeScriptBehav
 export const BehaviorSource = Schema.Union([VisualBehaviorSource, TypeScriptBehaviorSource]);
 export type BehaviorSource = typeof BehaviorSource.Type;
 
-export class BehaviorManifest extends Schema.Class<BehaviorManifest>("BehaviorManifest")({
+export class BehaviorManifest extends Schema.Class<BehaviorManifest>('BehaviorManifest')({
   schemaVersion: Schema.Literal(1),
   id: BehaviorId,
   label: Schema.String,
@@ -228,7 +227,7 @@ export class BehaviorManifest extends Schema.Class<BehaviorManifest>("BehaviorMa
 
 /** One compiled ESM module consumed by the single runtime scheduler. */
 export class BehaviorModuleArtifact extends Schema.Class<BehaviorModuleArtifact>(
-  "BehaviorModuleArtifact",
+  'BehaviorModuleArtifact',
 )({
   behaviorId: BehaviorId,
   sourceKind: BehaviorSourceKind,
@@ -238,7 +237,7 @@ export class BehaviorModuleArtifact extends Schema.Class<BehaviorModuleArtifact>
 
 /** RuntimeMapPackage behavior section. Source files are never executed directly. */
 export class RuntimeBehaviorPackage extends Schema.Class<RuntimeBehaviorPackage>(
-  "RuntimeBehaviorPackage",
+  'RuntimeBehaviorPackage',
 )({
   schemaVersion: Schema.Literal(BEHAVIOR_PACKAGE_SCHEMA_VERSION),
   manifests: Schema.Array(BehaviorManifest),
@@ -254,19 +253,19 @@ export const EMPTY_RUNTIME_BEHAVIOR_PACKAGE = new RuntimeBehaviorPackage({
 });
 
 export const BehaviorRegistryValueKind = Schema.Literals([
-  "boolean",
-  "number",
-  "string",
-  "json",
-  "entity-reference",
-  "asset-reference",
-  "catalog-reference",
-  "behavior-reference",
+  'boolean',
+  'number',
+  'string',
+  'json',
+  'entity-reference',
+  'asset-reference',
+  'catalog-reference',
+  'behavior-reference',
 ]);
 export type BehaviorRegistryValueKind = typeof BehaviorRegistryValueKind.Type;
 
 export class BehaviorParameterMetadata extends Schema.Class<BehaviorParameterMetadata>(
-  "BehaviorParameterMetadata",
+  'BehaviorParameterMetadata',
 )({
   key: Schema.String,
   label: Schema.String,
@@ -277,12 +276,12 @@ export class BehaviorParameterMetadata extends Schema.Class<BehaviorParameterMet
   defaultValue: Schema.optional(JsonValue),
 }) {}
 
-export const BehaviorRegistryEntryKind = Schema.Literals(["event", "condition", "action"]);
+export const BehaviorRegistryEntryKind = Schema.Literals(['event', 'condition', 'action']);
 export type BehaviorRegistryEntryKind = typeof BehaviorRegistryEntryKind.Type;
 
 /** Genre-neutral registry metadata drives SDK discovery and the visual editor. */
 export class BehaviorRegistryEntry extends Schema.Class<BehaviorRegistryEntry>(
-  "BehaviorRegistryEntry",
+  'BehaviorRegistryEntry',
 )({
   id: BehaviorRegistryEntryId,
   kind: BehaviorRegistryEntryKind,
@@ -297,7 +296,7 @@ export class BehaviorRegistryEntry extends Schema.Class<BehaviorRegistryEntry>(
 }) {}
 
 export class BehaviorRegistryManifest extends Schema.Class<BehaviorRegistryManifest>(
-  "BehaviorRegistryManifest",
+  'BehaviorRegistryManifest',
 )({
   schemaVersion: Schema.Literal(1),
   entries: Schema.Array(BehaviorRegistryEntry),
@@ -305,11 +304,11 @@ export class BehaviorRegistryManifest extends Schema.Class<BehaviorRegistryManif
 
 export const BehaviorTemplateId = Schema.String.check(
   Schema.isPattern(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/),
-).pipe(Schema.brand("BehaviorTemplateId"));
+).pipe(Schema.brand('BehaviorTemplateId'));
 export type BehaviorTemplateId = typeof BehaviorTemplateId.Type;
 
 export class BehaviorTemplateInvocation extends Schema.Class<BehaviorTemplateInvocation>(
-  "BehaviorTemplateInvocation",
+  'BehaviorTemplateInvocation',
 )({
   entryId: BehaviorRegistryEntryId,
   arguments: Schema.Record(Schema.String, JsonValue),
@@ -319,7 +318,7 @@ export class BehaviorTemplateInvocation extends Schema.Class<BehaviorTemplateInv
  * Declarative starter sheet. Node/resource ids are intentionally absent and
  * are allocated by the authoring client when the template is instantiated.
  */
-export class BehaviorTemplate extends Schema.Class<BehaviorTemplate>("BehaviorTemplate")({
+export class BehaviorTemplate extends Schema.Class<BehaviorTemplate>('BehaviorTemplate')({
   id: BehaviorTemplateId,
   label: Schema.String,
   description: Schema.String,
@@ -358,114 +357,114 @@ export const CORE_BEHAVIOR_REGISTRY = new BehaviorRegistryManifest({
   schemaVersion: 1,
   entries: [
     new BehaviorRegistryEntry({
-      id: registryEntryId("runtime.tick"),
-      kind: "event",
-      label: "Simulation tick",
-      category: "Runtime",
-      description: "Runs once for each deterministic simulation tick.",
-      capability: capabilityId("time.deterministic"),
-      icon: "clock-3",
+      id: registryEntryId('runtime.tick'),
+      kind: 'event',
+      label: 'Simulation tick',
+      category: 'Runtime',
+      description: 'Runs once for each deterministic simulation tick.',
+      capability: capabilityId('time.deterministic'),
+      icon: 'clock-3',
       inputs: [],
-      outputs: [parameter("tick", "Tick", "number", true)],
+      outputs: [parameter('tick', 'Tick', 'number', true)],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("lifecycle.started"),
-      kind: "event",
-      label: "Behavior started",
-      category: "Lifecycle",
-      description: "Runs once when this behavior instance starts.",
-      capability: capabilityId("lifecycle.core"),
-      icon: "play",
-      inputs: [],
-      outputs: [],
-    }),
-    new BehaviorRegistryEntry({
-      id: registryEntryId("lifecycle.reloaded"),
-      kind: "event",
-      label: "Behavior reloaded",
-      category: "Lifecycle",
-      description: "Runs after a successful hot reload.",
-      capability: capabilityId("lifecycle.core"),
-      icon: "refresh-cw",
+      id: registryEntryId('lifecycle.started'),
+      kind: 'event',
+      label: 'Behavior started',
+      category: 'Lifecycle',
+      description: 'Runs once when this behavior instance starts.',
+      capability: capabilityId('lifecycle.core'),
+      icon: 'play',
       inputs: [],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("timer.fired"),
-      kind: "event",
-      label: "Timer fired",
-      category: "Time",
-      description: "Runs when a deterministic named timer fires.",
-      capability: capabilityId("time.deterministic"),
-      icon: "timer",
-      inputs: [parameter("timerId", "Timer", "string", true, "timer")],
+      id: registryEntryId('lifecycle.reloaded'),
+      kind: 'event',
+      label: 'Behavior reloaded',
+      category: 'Lifecycle',
+      description: 'Runs after a successful hot reload.',
+      capability: capabilityId('lifecycle.core'),
+      icon: 'refresh-cw',
+      inputs: [],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("state.equals"),
-      kind: "condition",
-      label: "Local state equals",
-      category: "State",
-      description: "Checks a local state field against a literal value.",
-      capability: capabilityId("state.core"),
-      icon: "equal",
+      id: registryEntryId('timer.fired'),
+      kind: 'event',
+      label: 'Timer fired',
+      category: 'Time',
+      description: 'Runs when a deterministic named timer fires.',
+      capability: capabilityId('time.deterministic'),
+      icon: 'timer',
+      inputs: [parameter('timerId', 'Timer', 'string', true, 'timer')],
+      outputs: [],
+    }),
+    new BehaviorRegistryEntry({
+      id: registryEntryId('state.equals'),
+      kind: 'condition',
+      label: 'Local state equals',
+      category: 'State',
+      description: 'Checks a local state field against a literal value.',
+      capability: capabilityId('state.core'),
+      icon: 'equal',
       inputs: [
-        parameter("key", "State field", "string", true, "value"),
-        parameter("value", "Value", "json", true, null),
+        parameter('key', 'State field', 'string', true, 'value'),
+        parameter('value', 'Value', 'json', true, null),
       ],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("state.set"),
-      kind: "action",
-      label: "Set local state",
-      category: "State",
-      description: "Updates a serializable local state field.",
-      capability: capabilityId("state.core"),
-      icon: "variable",
+      id: registryEntryId('state.set'),
+      kind: 'action',
+      label: 'Set local state',
+      category: 'State',
+      description: 'Updates a serializable local state field.',
+      capability: capabilityId('state.core'),
+      icon: 'variable',
       inputs: [
-        parameter("key", "State field", "string", true, "value"),
-        parameter("value", "Value", "json", true, null),
+        parameter('key', 'State field', 'string', true, 'value'),
+        parameter('value', 'Value', 'json', true, null),
       ],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("timer.after"),
-      kind: "action",
-      label: "Start one-shot timer",
-      category: "Time",
-      description: "Fires a named timer once after deterministic simulation ticks.",
-      capability: capabilityId("time.deterministic"),
-      icon: "timer-reset",
+      id: registryEntryId('timer.after'),
+      kind: 'action',
+      label: 'Start one-shot timer',
+      category: 'Time',
+      description: 'Fires a named timer once after deterministic simulation ticks.',
+      capability: capabilityId('time.deterministic'),
+      icon: 'timer-reset',
       inputs: [
-        parameter("ticks", "Ticks", "number", true, 60),
-        parameter("timerId", "Timer", "string", true, "timer"),
+        parameter('ticks', 'Ticks', 'number', true, 60),
+        parameter('timerId', 'Timer', 'string', true, 'timer'),
       ],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("timer.every"),
-      kind: "action",
-      label: "Start repeating timer",
-      category: "Time",
-      description: "Fires a named timer repeatedly on deterministic simulation ticks.",
-      capability: capabilityId("time.deterministic"),
-      icon: "repeat-2",
+      id: registryEntryId('timer.every'),
+      kind: 'action',
+      label: 'Start repeating timer',
+      category: 'Time',
+      description: 'Fires a named timer repeatedly on deterministic simulation ticks.',
+      capability: capabilityId('time.deterministic'),
+      icon: 'repeat-2',
       inputs: [
-        parameter("ticks", "Ticks", "number", true, 60),
-        parameter("timerId", "Timer", "string", true, "timer"),
+        parameter('ticks', 'Ticks', 'number', true, 60),
+        parameter('timerId', 'Timer', 'string', true, 'timer'),
       ],
       outputs: [],
     }),
     new BehaviorRegistryEntry({
-      id: registryEntryId("timer.cancel"),
-      kind: "action",
-      label: "Cancel timer",
-      category: "Time",
-      description: "Cancels a deterministic named timer.",
-      capability: capabilityId("time.deterministic"),
-      icon: "timer-off",
-      inputs: [parameter("timerId", "Timer", "string", true, "timer")],
+      id: registryEntryId('timer.cancel'),
+      kind: 'action',
+      label: 'Cancel timer',
+      category: 'Time',
+      description: 'Cancels a deterministic named timer.',
+      capability: capabilityId('time.deterministic'),
+      icon: 'timer-off',
+      inputs: [parameter('timerId', 'Timer', 'string', true, 'timer')],
       outputs: [],
     }),
   ],
@@ -473,40 +472,46 @@ export const CORE_BEHAVIOR_REGISTRY = new BehaviorRegistryManifest({
 
 export const CORE_BEHAVIOR_TEMPLATES: readonly BehaviorTemplate[] = [
   new BehaviorTemplate({
-    id: templateId("core.on-start"),
-    label: "On start",
-    description: "Start with a WHEN block and add actions in order.",
-    category: "Core",
-    icon: "play",
-    requiredCapabilities: [capabilityId("lifecycle.core")],
-    when: new BehaviorTemplateInvocation({ entryId: registryEntryId("lifecycle.started"), arguments: {} }),
+    id: templateId('core.on-start'),
+    label: 'On start',
+    description: 'Start with a WHEN block and add actions in order.',
+    category: 'Core',
+    icon: 'play',
+    requiredCapabilities: [capabilityId('lifecycle.core')],
+    when: new BehaviorTemplateInvocation({
+      entryId: registryEntryId('lifecycle.started'),
+      arguments: {},
+    }),
     do: [],
   }),
   new BehaviorTemplate({
-    id: templateId("core.repeating-timer"),
-    label: "Repeating timer",
-    description: "Start a deterministic repeating timer when the behavior starts.",
-    category: "Time",
-    icon: "repeat-2",
-    requiredCapabilities: [capabilityId("lifecycle.core"), capabilityId("time.deterministic")],
-    when: new BehaviorTemplateInvocation({ entryId: registryEntryId("lifecycle.started"), arguments: {} }),
+    id: templateId('core.repeating-timer'),
+    label: 'Repeating timer',
+    description: 'Start a deterministic repeating timer when the behavior starts.',
+    category: 'Time',
+    icon: 'repeat-2',
+    requiredCapabilities: [capabilityId('lifecycle.core'), capabilityId('time.deterministic')],
+    when: new BehaviorTemplateInvocation({
+      entryId: registryEntryId('lifecycle.started'),
+      arguments: {},
+    }),
     do: [
       new BehaviorTemplateInvocation({
-        entryId: registryEntryId("timer.every"),
-        arguments: { ticks: 60, timerId: "pulse" },
+        entryId: registryEntryId('timer.every'),
+        arguments: { ticks: 60, timerId: 'pulse' },
       }),
     ],
   }),
 ];
 
-export const BehaviorDiagnosticSeverity = Schema.Literals(["error", "warning", "info"]);
+export const BehaviorDiagnosticSeverity = Schema.Literals(['error', 'warning', 'info']);
 export type BehaviorDiagnosticSeverity = typeof BehaviorDiagnosticSeverity.Type;
 
 /**
  * Core diagnostic data. Desktop maps this into the existing ReadinessDiagnostic
  * contract; core does not own or duplicate the renderer-facing readiness report.
  */
-export class BehaviorDiagnostic extends Schema.Class<BehaviorDiagnostic>("BehaviorDiagnostic")({
+export class BehaviorDiagnostic extends Schema.Class<BehaviorDiagnostic>('BehaviorDiagnostic')({
   id: Schema.String,
   code: Schema.String,
   severity: BehaviorDiagnosticSeverity,
@@ -522,7 +527,7 @@ export class BehaviorDiagnostic extends Schema.Class<BehaviorDiagnostic>("Behavi
 }) {}
 
 export class UnsupportedBehaviorSchemaVersionError extends Schema.TaggedErrorClass<UnsupportedBehaviorSchemaVersionError>()(
-  "UnsupportedBehaviorSchemaVersionError",
+  'UnsupportedBehaviorSchemaVersionError',
   {
     schemaVersion: Schema.Number,
     supportedVersion: Schema.Literal(BEHAVIOR_DEFINITION_SCHEMA_VERSION),
@@ -531,14 +536,14 @@ export class UnsupportedBehaviorSchemaVersionError extends Schema.TaggedErrorCla
 ) {}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Canonical persisted-definition boundary. New versions must add an explicit,
  * sequential migration here; unknown/future versions fail instead of guessing.
  */
 export const migrateBehaviorDefinitionJson = (value: unknown): unknown => {
-  if (!isRecord(value) || typeof value.schemaVersion !== "number") return value;
+  if (!isRecord(value) || typeof value.schemaVersion !== 'number') return value;
   if (value.schemaVersion === BEHAVIOR_DEFINITION_SCHEMA_VERSION) return value;
   throw new UnsupportedBehaviorSchemaVersionError({
     schemaVersion: value.schemaVersion,

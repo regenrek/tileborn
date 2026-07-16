@@ -1,12 +1,12 @@
-import { Option, Result, Schema } from "effect";
+import { Option, Result, Schema } from 'effect';
 
-import type { ItemDefinitionId, LootTableId, WeaponDefinitionId } from "../ids.js";
-import { CatalogId, GameObjectTypeId } from "../ids.js";
-import type { GameObjectCatalog, GameObjectType, ItemDefinition } from "./object-type.js";
+import type { ItemDefinitionId, LootTableId, WeaponDefinitionId } from '../ids.js';
+import { CatalogId, GameObjectTypeId } from '../ids.js';
+import type { GameObjectCatalog, GameObjectType, ItemDefinition } from './object-type.js';
 
 /** Two object types in a catalog share the same id. */
 export class DuplicateObjectTypeError extends Schema.TaggedErrorClass<DuplicateObjectTypeError>()(
-  "DuplicateObjectTypeError",
+  'DuplicateObjectTypeError',
   {
     id: GameObjectTypeId,
     message: Schema.String,
@@ -21,7 +21,7 @@ export class DuplicateObjectTypeError extends Schema.TaggedErrorClass<DuplicateO
  * single error type covers both sources.
  */
 export class UnknownReferenceError extends Schema.TaggedErrorClass<UnknownReferenceError>()(
-  "UnknownReferenceError",
+  'UnknownReferenceError',
   {
     from: Schema.String,
     refKind: Schema.String,
@@ -32,7 +32,7 @@ export class UnknownReferenceError extends Schema.TaggedErrorClass<UnknownRefere
 
 /** Aggregated catalog validation failure. */
 export class CatalogValidationError extends Schema.TaggedErrorClass<CatalogValidationError>()(
-  "CatalogValidationError",
+  'CatalogValidationError',
   {
     catalogId: CatalogId,
     issues: Schema.Array(Schema.String),
@@ -68,20 +68,20 @@ export interface ValidateCatalogDeps {
 
 /** A normalized, typed view of one "pickup grants `<id>`" reference. */
 type GrantReference =
-  | { readonly refKind: string; readonly kind: "item"; readonly id: ItemDefinitionId }
-  | { readonly refKind: string; readonly kind: "weapon"; readonly id: WeaponDefinitionId };
+  | { readonly refKind: string; readonly kind: 'item'; readonly id: ItemDefinitionId }
+  | { readonly refKind: string; readonly kind: 'weapon'; readonly id: WeaponDefinitionId };
 
 const grantRefsFor = (objectType: GameObjectType): readonly GrantReference[] => {
   const refs: GrantReference[] = [];
   for (const component of objectType.components) {
-    if (component._tag !== "loot-source" || component.grantRefs === undefined) {
+    if (component._tag !== 'loot-source' || component.grantRefs === undefined) {
       continue;
     }
     for (const grant of component.grantRefs) {
-      if (grant._tag === "item-grant") {
-        refs.push({ refKind: "loot-source.grantRefs.item", kind: "item", id: grant.itemId });
+      if (grant._tag === 'item-grant') {
+        refs.push({ refKind: 'loot-source.grantRefs.item', kind: 'item', id: grant.itemId });
       } else {
-        refs.push({ refKind: "loot-source.grantRefs.weapon", kind: "weapon", id: grant.weaponId });
+        refs.push({ refKind: 'loot-source.grantRefs.weapon', kind: 'weapon', id: grant.weaponId });
       }
     }
   }
@@ -92,10 +92,10 @@ const itemGrantRefFor = (item: ItemDefinition): GrantReference | undefined => {
   if (item.grants === undefined) {
     return undefined;
   }
-  if (item.grants._tag === "item-grant") {
-    return { refKind: "item.grants.item", kind: "item", id: item.grants.itemId };
+  if (item.grants._tag === 'item-grant') {
+    return { refKind: 'item.grants.item', kind: 'item', id: item.grants.itemId };
   }
-  return { refKind: "item.grants.weapon", kind: "weapon", id: item.grants.weaponId };
+  return { refKind: 'item.grants.weapon', kind: 'weapon', id: item.grants.weaponId };
 };
 
 const lootTableRefsFor = (
@@ -103,11 +103,11 @@ const lootTableRefsFor = (
 ): readonly { readonly refKind: string; readonly id: LootTableId }[] => {
   const refs: { readonly refKind: string; readonly id: LootTableId }[] = [];
   for (const component of objectType.components) {
-    if (component._tag === "loot-source" && Option.isSome(component.lootTableId)) {
-      refs.push({ refKind: "loot-source.lootTableId", id: component.lootTableId.value });
+    if (component._tag === 'loot-source' && Option.isSome(component.lootTableId)) {
+      refs.push({ refKind: 'loot-source.lootTableId', id: component.lootTableId.value });
     }
-    if (component._tag === "breakable" && Option.isSome(component.dropTableId)) {
-      refs.push({ refKind: "breakable.dropTableId", id: component.dropTableId.value });
+    if (component._tag === 'breakable' && Option.isSome(component.dropTableId)) {
+      refs.push({ refKind: 'breakable.dropTableId', id: component.dropTableId.value });
     }
   }
   return refs;
@@ -118,8 +118,8 @@ const assetRefsFor = (
 ): readonly { readonly refKind: string; readonly id: string }[] => {
   const refs: { readonly refKind: string; readonly id: string }[] = [];
   for (const component of objectType.components) {
-    if (component._tag === "visual-ref" && Option.isSome(component.assetId)) {
-      refs.push({ refKind: "visual-ref.assetId", id: component.assetId.value });
+    if (component._tag === 'visual-ref' && Option.isSome(component.assetId)) {
+      refs.push({ refKind: 'visual-ref.assetId', id: component.assetId.value });
     }
   }
   return refs;
@@ -161,17 +161,17 @@ export const validateCatalog = (
     Option.getOrElse(catalog.lootTables, () => []).map((table) => table.id),
   );
   if (localLootTableIds.size !== Option.getOrElse(catalog.lootTables, () => []).length) {
-    issues.push("catalog contains duplicate loot table ids");
+    issues.push('catalog contains duplicate loot table ids');
   }
 
   const items = Option.getOrElse(catalog.items, () => []);
   const localItemIds = new Set<string>(items.map((item) => item.id));
   if (localItemIds.size !== items.length) {
-    issues.push("catalog contains duplicate item ids");
+    issues.push('catalog contains duplicate item ids');
   }
 
   const grantUnresolved = (from: string, ref: GrantReference): string | undefined => {
-    if (ref.kind === "item") {
+    if (ref.kind === 'item') {
       const resolved = localItemIds.has(ref.id) || (deps.resolveItem?.(ref.id) ?? false);
       if (resolved) {
         return undefined;
@@ -200,19 +200,15 @@ export const validateCatalog = (
     const tags = new Set<string>();
     for (const component of objectType.components) {
       if (tags.has(component._tag)) {
-        issues.push(
-          `object type ${objectType.id} has duplicate component "${component._tag}"`,
-        );
+        issues.push(`object type ${objectType.id} has duplicate component "${component._tag}"`);
       }
       tags.add(component._tag);
     }
 
     // Anchor units (ADR-0028 §1): catalog anchors are normalized 0..1
     // sprite-local points — pixel-space values are authoring bugs.
-    const visualRef = objectType.components.find(
-      (component) => component._tag === "visual-ref",
-    );
-    if (visualRef !== undefined && visualRef._tag === "visual-ref") {
+    const visualRef = objectType.components.find((component) => component._tag === 'visual-ref');
+    if (visualRef !== undefined && visualRef._tag === 'visual-ref') {
       for (const [name, anchor] of Object.entries(visualRef.anchors)) {
         const { x, y } = anchor.point;
         if (!Number.isFinite(x) || x < 0 || x > 1 || !Number.isFinite(y) || y < 0 || y > 1) {
@@ -231,9 +227,9 @@ export const validateCatalog = (
     // equippable.attachAnchor NAMES an entry in visual-ref.anchors (§1).
     for (const component of objectType.components) {
       if (
-        component._tag === "equippable" &&
+        component._tag === 'equippable' &&
         visualRef !== undefined &&
-        visualRef._tag === "visual-ref" &&
+        visualRef._tag === 'visual-ref' &&
         visualRef.anchors[component.attachAnchor] === undefined
       ) {
         issues.push(
@@ -243,8 +239,7 @@ export const validateCatalog = (
     }
 
     for (const ref of lootTableRefsFor(objectType)) {
-      const resolved =
-        localLootTableIds.has(ref.id) || (deps.resolveLootTable?.(ref.id) ?? false);
+      const resolved = localLootTableIds.has(ref.id) || (deps.resolveLootTable?.(ref.id) ?? false);
       if (!resolved) {
         issues.push(
           new UnknownReferenceError({
@@ -280,7 +275,7 @@ export const validateCatalog = (
     }
 
     for (const component of objectType.components) {
-      if (component._tag !== "weapon-ref") {
+      if (component._tag !== 'weapon-ref') {
         continue;
       }
       const claimedBy = seenWeaponIds.get(component.weaponId);
@@ -299,24 +294,23 @@ export const validateCatalog = (
         issues.push(
           new UnknownReferenceError({
             from: objectType.id,
-            refKind: "weapon-ref.weaponId",
+            refKind: 'weapon-ref.weaponId',
             missingId: component.weaponId,
             message: `${objectType.id}: weapon-ref.weaponId references unknown weapon ${component.weaponId}`,
           }).message,
         );
       }
       const companions = [
-        ["weapon-ref.projectileEntityId", component.projectileEntityId],
-        ["weapon-ref.muzzleFlashEntityId", component.muzzleFlashEntityId],
-        ["weapon-ref.impactVfxEntityId", component.impactVfxEntityId],
-        ["weapon-ref.pickupEntityId", component.pickupEntityId],
+        ['weapon-ref.projectileEntityId', component.projectileEntityId],
+        ['weapon-ref.muzzleFlashEntityId', component.muzzleFlashEntityId],
+        ['weapon-ref.impactVfxEntityId', component.impactVfxEntityId],
+        ['weapon-ref.pickupEntityId', component.pickupEntityId],
       ] as const;
       for (const [refKind, companionId] of companions) {
         if (companionId === undefined) {
           continue;
         }
-        const resolved =
-          seen.has(companionId) || (deps.resolveObjectType?.(companionId) ?? false);
+        const resolved = seen.has(companionId) || (deps.resolveObjectType?.(companionId) ?? false);
         if (!resolved) {
           issues.push(
             new UnknownReferenceError({
@@ -336,11 +330,11 @@ export const validateCatalog = (
           pickup === undefined
             ? []
             : grantRefsFor(pickup)
-                .filter((ref) => ref.kind === "weapon")
+                .filter((ref) => ref.kind === 'weapon')
                 .map((ref) => ref.id);
         if (grantedWeaponIds.length > 0 && !grantedWeaponIds.includes(component.weaponId)) {
           issues.push(
-            `${objectType.id}: weapon-ref.pickupEntityId ${component.pickupEntityId} grants a different weapon (${grantedWeaponIds.join(", ")}) than weapon-ref.weaponId ${component.weaponId}`,
+            `${objectType.id}: weapon-ref.pickupEntityId ${component.pickupEntityId} grants a different weapon (${grantedWeaponIds.join(', ')}) than weapon-ref.weaponId ${component.weaponId}`,
           );
         }
       }

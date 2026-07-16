@@ -1,10 +1,10 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema } from 'effect';
 
-import { AttachmentAnchorMap } from "../asset/anchors.js";
-import { RenderProfile } from "../asset/render-profile.js";
-import { AssetId, PlaceableId, WeaponDefinitionId } from "../ids.js";
-import type { EquippableComponent, VisualRefComponent, WeaponRefComponent } from "./components.js";
-import type { GameObjectType } from "./object-type.js";
+import { AttachmentAnchorMap } from '../asset/anchors.js';
+import { RenderProfile } from '../asset/render-profile.js';
+import { AssetId, PlaceableId, WeaponDefinitionId } from '../ids.js';
+import type { EquippableComponent, VisualRefComponent, WeaponRefComponent } from './components.js';
+import type { GameObjectType } from './object-type.js';
 
 /**
  * The render-ready projection of one entity's `visual-ref` (ADR-0028 §4c):
@@ -14,7 +14,7 @@ import type { GameObjectType } from "./object-type.js";
  * placeableId/assetId is present (enforced by the derivation).
  */
 export class ResolvedEntityVisual extends Schema.Class<ResolvedEntityVisual>(
-  "ResolvedEntityVisual",
+  'ResolvedEntityVisual',
 )({
   placeableId: Schema.optional(PlaceableId),
   assetId: Schema.optional(AssetId),
@@ -26,7 +26,7 @@ export class ResolvedEntityVisual extends Schema.Class<ResolvedEntityVisual>(
 }) {}
 
 /** A resolved VFX visual: an entity visual plus playback duration. */
-export class ResolvedVfxVisual extends Schema.Class<ResolvedVfxVisual>("ResolvedVfxVisual")({
+export class ResolvedVfxVisual extends Schema.Class<ResolvedVfxVisual>('ResolvedVfxVisual')({
   visual: ResolvedEntityVisual,
   durationMs: Schema.Number,
 }) {}
@@ -38,7 +38,7 @@ export class ResolvedVfxVisual extends Schema.Class<ResolvedVfxVisual>("Resolved
  * never travels to the game-host.
  */
 export class ResolvedWeaponVisuals extends Schema.Class<ResolvedWeaponVisuals>(
-  "ResolvedWeaponVisuals",
+  'ResolvedWeaponVisuals',
 )({
   weaponId: WeaponDefinitionId,
   /**
@@ -46,8 +46,8 @@ export class ResolvedWeaponVisuals extends Schema.Class<ResolvedWeaponVisuals>(
    * its holder — the `equippable.attachAnchor` reference (defaults to "grip").
    */
   attachAnchor: Schema.String.pipe(
-    Schema.withDecodingDefaultTypeKey(Effect.succeed("grip")),
-    Schema.withConstructorDefault(Effect.succeed("grip")),
+    Schema.withDecodingDefaultTypeKey(Effect.succeed('grip')),
+    Schema.withConstructorDefault(Effect.succeed('grip')),
   ),
   equipped: ResolvedEntityVisual,
   projectile: Schema.optional(ResolvedEntityVisual),
@@ -71,17 +71,17 @@ const DEFAULT_VFX_DURATION_MS = 180;
 
 const visualRefOf = (objectType: GameObjectType): VisualRefComponent | undefined =>
   objectType.components.find(
-    (component): component is VisualRefComponent => component._tag === "visual-ref",
+    (component): component is VisualRefComponent => component._tag === 'visual-ref',
   );
 
 const weaponRefOf = (objectType: GameObjectType): WeaponRefComponent | undefined =>
   objectType.components.find(
-    (component): component is WeaponRefComponent => component._tag === "weapon-ref",
+    (component): component is WeaponRefComponent => component._tag === 'weapon-ref',
   );
 
 const equippableOf = (objectType: GameObjectType): EquippableComponent | undefined =>
   objectType.components.find(
-    (component): component is EquippableComponent => component._tag === "equippable",
+    (component): component is EquippableComponent => component._tag === 'equippable',
   );
 
 /**
@@ -99,7 +99,7 @@ export const resolveEntityVisual = (
     return {
       issue: {
         objectTypeId: objectType.id,
-        path: "components",
+        path: 'components',
         message: `entity ${objectType.id} has no visual-ref component`,
       },
     };
@@ -110,7 +110,7 @@ export const resolveEntityVisual = (
     return {
       issue: {
         objectTypeId: objectType.id,
-        path: "visual-ref",
+        path: 'visual-ref',
         message: `entity ${objectType.id} visual-ref carries neither placeableId nor assetId`,
       },
     };
@@ -121,9 +121,7 @@ export const resolveEntityVisual = (
       ...(assetId === undefined ? {} : { assetId }),
       width: visualRef.width,
       height: visualRef.height,
-      ...(visualRef.renderProfile === undefined
-        ? {}
-        : { renderProfile: visualRef.renderProfile }),
+      ...(visualRef.renderProfile === undefined ? {} : { renderProfile: visualRef.renderProfile }),
       anchors: visualRef.anchors,
       rotationOffsetDeg: visualRef.rotationOffsetDeg ?? 0,
     }),
@@ -182,22 +180,22 @@ export const deriveWeaponVisuals = (
     // entity itself is render-incomplete, so authors see every problem at once.
     const projectile = companionVisual(
       objectType.id,
-      "weapon-ref.projectileEntityId",
+      'weapon-ref.projectileEntityId',
       weaponRef.projectileEntityId,
     );
     const muzzleFlash = companionVisual(
       objectType.id,
-      "weapon-ref.muzzleFlashEntityId",
+      'weapon-ref.muzzleFlashEntityId',
       weaponRef.muzzleFlashEntityId,
     );
     const impactVfx = companionVisual(
       objectType.id,
-      "weapon-ref.impactVfxEntityId",
+      'weapon-ref.impactVfxEntityId',
       weaponRef.impactVfxEntityId,
     );
     const pickup = companionVisual(
       objectType.id,
-      "weapon-ref.pickupEntityId",
+      'weapon-ref.pickupEntityId',
       weaponRef.pickupEntityId,
     );
 

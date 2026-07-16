@@ -1,11 +1,11 @@
-import { Effect, Schema } from "effect";
+import { Effect, Schema } from 'effect';
 
 import {
   AttachmentAnchorMap,
   AttachmentAnchorName,
   WELL_KNOWN_ATTACHMENT_ANCHORS,
-} from "../asset/anchors.js";
-import { RenderProfile } from "../asset/render-profile.js";
+} from '../asset/anchors.js';
+import { RenderProfile } from '../asset/render-profile.js';
 import {
   AssetId,
   GameObjectTypeId,
@@ -13,14 +13,14 @@ import {
   LootTableId,
   PlaceableId,
   WeaponDefinitionId,
-} from "../ids.js";
-import { JsonObject } from "../project/index.js";
+} from '../ids.js';
+import { JsonObject } from '../project/index.js';
 
 /**
  * Open classification tag (branded string, NOT a closed literal union) so that
  * plugins extend object semantics without engine edits.
  */
-export const OpenTag = Schema.String.pipe(Schema.brand("CatalogOpenTag"));
+export const OpenTag = Schema.String.pipe(Schema.brand('CatalogOpenTag'));
 export type OpenTag = typeof OpenTag.Type;
 
 /**
@@ -28,7 +28,7 @@ export type OpenTag = typeof OpenTag.Type;
  * units. Pure geometry + neutral blocking flags; carries no numeric balance.
  */
 export class CollisionFootprintPart extends Schema.Class<CollisionFootprintPart>(
-  "CollisionFootprintPart",
+  'CollisionFootprintPart',
 )({
   x: Schema.Number,
   y: Schema.Number,
@@ -40,12 +40,12 @@ export class CollisionFootprintPart extends Schema.Class<CollisionFootprintPart>
 }) {}
 
 /** How the footprint was authored. */
-export const CollisionFootprintSource = Schema.Literals(["manual", "tiled", "generated"]);
+export const CollisionFootprintSource = Schema.Literals(['manual', 'tiled', 'generated']);
 export type CollisionFootprintSource = typeof CollisionFootprintSource.Type;
 
 /** Where the object sits in the collision/physics world. */
 export class CollisionFootprintComponent extends Schema.TaggedClass<CollisionFootprintComponent>()(
-  "collision-footprint",
+  'collision-footprint',
   {
     source: CollisionFootprintSource,
     reviewed: Schema.Boolean,
@@ -61,7 +61,7 @@ export class CollisionFootprintComponent extends Schema.TaggedClass<CollisionFoo
  * normalized 0..1 sprite-local `AttachmentAnchor`s, e.g. "grip", "muzzle").
  * `renderProfile` + `rotationOffsetDeg` make the entity render-complete.
  */
-export class VisualRefComponent extends Schema.TaggedClass<VisualRefComponent>()("visual-ref", {
+export class VisualRefComponent extends Schema.TaggedClass<VisualRefComponent>()('visual-ref', {
   placeableId: Schema.OptionFromOptional(PlaceableId),
   assetId: Schema.OptionFromOptional(AssetId),
   width: Schema.Number,
@@ -76,7 +76,7 @@ export class VisualRefComponent extends Schema.TaggedClass<VisualRefComponent>()
 }) {}
 
 /** A spawn location marker (player start, POI, …). */
-export class SpawnPointComponent extends Schema.TaggedClass<SpawnPointComponent>()("spawn-point", {
+export class SpawnPointComponent extends Schema.TaggedClass<SpawnPointComponent>()('spawn-point', {
   data: JsonObject,
 }) {}
 
@@ -85,7 +85,7 @@ export class SpawnPointComponent extends Schema.TaggedClass<SpawnPointComponent>
  * embedded item. The referenced definition is a `catalog.items` entry (or
  * resolves via an injected cross-pack resolver at validation time).
  */
-export class ItemGrant extends Schema.TaggedClass<ItemGrant>()("item-grant", {
+export class ItemGrant extends Schema.TaggedClass<ItemGrant>()('item-grant', {
   itemId: ItemDefinitionId,
 }) {}
 
@@ -95,7 +95,7 @@ export class ItemGrant extends Schema.TaggedClass<ItemGrant>()("item-grant", {
  * balance data) is owned by ADR-0018 weapon content and resolved by id at
  * validation time; the catalog only carries the reference.
  */
-export class WeaponGrant extends Schema.TaggedClass<WeaponGrant>()("weapon-grant", {
+export class WeaponGrant extends Schema.TaggedClass<WeaponGrant>()('weapon-grant', {
   weaponId: WeaponDefinitionId,
 }) {}
 
@@ -112,7 +112,7 @@ export const GrantRef = Schema.Union([ItemGrant, WeaponGrant]);
 export type GrantRef = ItemGrant | WeaponGrant;
 
 /** How a loot source is collected. */
-export const LootInteractionMode = Schema.Literals(["auto", "tap", "hold"]);
+export const LootInteractionMode = Schema.Literals(['auto', 'tap', 'hold']);
 export type LootInteractionMode = typeof LootInteractionMode.Type;
 
 /**
@@ -122,7 +122,7 @@ export type LootInteractionMode = typeof LootInteractionMode.Type;
  * each entry references what collecting the pickup grants, *by id*. `grants`
  * remains the open per-instance authoring toggle bag and carries no id refs.
  */
-export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>()("loot-source", {
+export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>()('loot-source', {
   lootTableId: Schema.OptionFromOptional(LootTableId),
   interactionMode: LootInteractionMode,
   grants: Schema.Record(Schema.String, Schema.Boolean),
@@ -130,19 +130,19 @@ export class LootSourceComponent extends Schema.TaggedClass<LootSourceComponent>
 }) {}
 
 /** An object that can be destroyed, optionally dropping a loot table. */
-export class BreakableComponent extends Schema.TaggedClass<BreakableComponent>()("breakable", {
+export class BreakableComponent extends Schema.TaggedClass<BreakableComponent>()('breakable', {
   hp: Schema.Number,
   dropTableId: Schema.OptionFromOptional(LootTableId),
 }) {}
 
 /** A world hazard (harm zone, trap, …); shape is mode-defined. */
-export class HazardComponent extends Schema.TaggedClass<HazardComponent>()("hazard", {
+export class HazardComponent extends Schema.TaggedClass<HazardComponent>()('hazard', {
   data: JsonObject,
 }) {}
 
 /** An interactable object (door, switch, terminal, …). */
 export class InteractableComponent extends Schema.TaggedClass<InteractableComponent>()(
-  "interactable",
+  'interactable',
   {
     kind: OpenTag,
     radiusPx: Schema.Number,
@@ -155,7 +155,7 @@ export class InteractableComponent extends Schema.TaggedClass<InteractableCompon
  * (in the entity's `visual-ref.anchors` map) by which the object attaches to
  * its holder — it is a reference, not a second anchor map (ADR-0028 §1).
  */
-export class EquippableComponent extends Schema.TaggedClass<EquippableComponent>()("equippable", {
+export class EquippableComponent extends Schema.TaggedClass<EquippableComponent>()('equippable', {
   slot: OpenTag,
   attachAnchor: AttachmentAnchorName.pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed(WELL_KNOWN_ATTACHMENT_ANCHORS.grip)),
@@ -172,7 +172,7 @@ export class EquippableComponent extends Schema.TaggedClass<EquippableComponent>
  * and editing it is how users reskin a mode's default overlays.
  */
 export class OverlayVisualComponent extends Schema.TaggedClass<OverlayVisualComponent>()(
-  "overlay-visual",
+  'overlay-visual',
   {
     slot: OpenTag,
   },
@@ -185,7 +185,7 @@ export class OverlayVisualComponent extends Schema.TaggedClass<OverlayVisualComp
  * the weapon's projectile, muzzle flash, impact VFX, and world pickup. VFX
  * timing lives on the referencing side. No numeric gameplay balance here.
  */
-export class WeaponRefComponent extends Schema.TaggedClass<WeaponRefComponent>()("weapon-ref", {
+export class WeaponRefComponent extends Schema.TaggedClass<WeaponRefComponent>()('weapon-ref', {
   weaponId: WeaponDefinitionId,
   projectileEntityId: Schema.optional(GameObjectTypeId),
   muzzleFlashEntityId: Schema.optional(GameObjectTypeId),
@@ -226,14 +226,14 @@ export type GameObjectComponent =
 
 /** All component tags as a readonly tuple (for iteration / validation). */
 export const GAME_OBJECT_COMPONENT_TAGS = [
-  "collision-footprint",
-  "visual-ref",
-  "spawn-point",
-  "loot-source",
-  "breakable",
-  "hazard",
-  "interactable",
-  "equippable",
-  "overlay-visual",
-  "weapon-ref",
+  'collision-footprint',
+  'visual-ref',
+  'spawn-point',
+  'loot-source',
+  'breakable',
+  'hazard',
+  'interactable',
+  'equippable',
+  'overlay-visual',
+  'weapon-ref',
 ] as const;

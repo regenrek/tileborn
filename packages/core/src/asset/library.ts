@@ -182,10 +182,16 @@ const normalizedHitboxIssues = (
   const issues: PlayerModelValidationIssue[] = [];
   issues.push(...normalizedPointIssues(path, hitbox));
   if (!isFiniteNumber(hitbox.width) || hitbox.width <= 0 || hitbox.width > 1) {
-    issues.push({ path: `${path}.width`, message: 'must be a finite number greater than 0 and at most 1' });
+    issues.push({
+      path: `${path}.width`,
+      message: 'must be a finite number greater than 0 and at most 1',
+    });
   }
   if (!isFiniteNumber(hitbox.height) || hitbox.height <= 0 || hitbox.height > 1) {
-    issues.push({ path: `${path}.height`, message: 'must be a finite number greater than 0 and at most 1' });
+    issues.push({
+      path: `${path}.height`,
+      message: 'must be a finite number greater than 0 and at most 1',
+    });
   }
   if (isFiniteNumber(hitbox.x) && isFiniteNumber(hitbox.width) && hitbox.x + hitbox.width > 1) {
     issues.push({ path, message: 'x + width must not exceed 1' });

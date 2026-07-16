@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /**
  * Neutral, designable in-match HUD layout (sibling of the ADR-0024 `InputMap`
@@ -14,7 +14,7 @@ import { Schema } from "effect";
  */
 
 /** Durable identity of a saved HUD layout (a plugin default or a user overlay). */
-export const HudLayoutId = Schema.String.pipe(Schema.brand("HudLayoutId"));
+export const HudLayoutId = Schema.String.pipe(Schema.brand('HudLayoutId'));
 export type HudLayoutId = typeof HudLayoutId.Type;
 
 export const makeHudLayoutId = (id: string): HudLayoutId =>
@@ -25,7 +25,7 @@ export const makeHudLayoutId = (id: string): HudLayoutId =>
  * kind-scoped) so a layout may place the same widget kind more than once and a
  * user overlay can address exactly one placement.
  */
-export const HudWidgetInstanceId = Schema.String.pipe(Schema.brand("HudWidgetInstanceId"));
+export const HudWidgetInstanceId = Schema.String.pipe(Schema.brand('HudWidgetInstanceId'));
 export type HudWidgetInstanceId = typeof HudWidgetInstanceId.Type;
 
 export const makeHudWidgetInstanceId = (id: string): HudWidgetInstanceId =>
@@ -37,7 +37,7 @@ export const makeHudWidgetInstanceId = (id: string): HudWidgetInstanceId =>
  * reference those and/or declare its own (`"myMode.ManaBar"`) with zero engine
  * edits. Renderers skip kinds they do not know.
  */
-export const HudWidgetKind = Schema.String.pipe(Schema.brand("HudWidgetKind"));
+export const HudWidgetKind = Schema.String.pipe(Schema.brand('HudWidgetKind'));
 export type HudWidgetKind = typeof HudWidgetKind.Type;
 
 export const makeHudWidgetKind = (kind: string): HudWidgetKind =>
@@ -50,20 +50,20 @@ export const makeHudWidgetKind = (kind: string): HudWidgetKind =>
  * stay exactly centered.
  */
 export const HudAnchor = Schema.Literals([
-  "top-left",
-  "top-center",
-  "top-right",
-  "center-left",
-  "center",
-  "center-right",
-  "bottom-left",
-  "bottom-center",
-  "bottom-right",
+  'top-left',
+  'top-center',
+  'top-right',
+  'center-left',
+  'center',
+  'center-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
 ]);
 export type HudAnchor = typeof HudAnchor.Type;
 
 /** Optional pixel offset applied to one placement relative to its anchor slot. */
-export class HudWidgetOffset extends Schema.Class<HudWidgetOffset>("HudWidgetOffset")({
+export class HudWidgetOffset extends Schema.Class<HudWidgetOffset>('HudWidgetOffset')({
   x: Schema.Number,
   y: Schema.Number,
 }) {}
@@ -73,7 +73,7 @@ export class HudWidgetOffset extends Schema.Class<HudWidgetOffset>("HudWidgetOff
  * widget: which kind, which anchor, stacking order, visibility, and an
  * optional pixel offset.
  */
-export class HudWidgetPlacement extends Schema.Class<HudWidgetPlacement>("HudWidgetPlacement")({
+export class HudWidgetPlacement extends Schema.Class<HudWidgetPlacement>('HudWidgetPlacement')({
   id: HudWidgetInstanceId,
   kind: HudWidgetKind,
   anchor: HudAnchor,
@@ -88,7 +88,7 @@ export class HudWidgetPlacement extends Schema.Class<HudWidgetPlacement>("HudWid
  * contributes one as its default HUD; a user overlay is the same shape,
  * merged per widget-instance id on top at resolve time.
  */
-export class HudLayout extends Schema.Class<HudLayout>("HudLayout")({
+export class HudLayout extends Schema.Class<HudLayout>('HudLayout')({
   id: HudLayoutId,
   widgets: Schema.Array(HudWidgetPlacement),
 }) {}
@@ -100,27 +100,27 @@ export class HudLayout extends Schema.Class<HudLayout>("HudLayout")({
  */
 export const CORE_HUD_WIDGETS = {
   /** Local player card: name, health bar, shield/armor, status effects, cooldowns. */
-  LocalPlayerStatus: "core.LocalPlayerStatus",
+  LocalPlayerStatus: 'core.LocalPlayerStatus',
   /** Teammate roster (or solo self-row). */
-  TeamRoster: "core.TeamRoster",
+  TeamRoster: 'core.TeamRoster',
   /** Alive / total players counter. */
-  AliveCount: "core.AliveCount",
+  AliveCount: 'core.AliveCount',
   /** Minimap with zone, players, and objects. */
-  Minimap: "core.Minimap",
+  Minimap: 'core.Minimap',
   /** Match scoreboard (top entries). */
-  Scoreboard: "core.Scoreboard",
+  Scoreboard: 'core.Scoreboard',
   /** Zone phase / countdown status. */
-  ZoneStatus: "core.ZoneStatus",
+  ZoneStatus: 'core.ZoneStatus',
   /** Contextual pickup prompt. */
-  PickupPrompt: "core.PickupPrompt",
+  PickupPrompt: 'core.PickupPrompt',
   /** Equipped weapon, ammo, reload progress, and inventory slots. */
-  WeaponPanel: "core.WeaponPanel",
+  WeaponPanel: 'core.WeaponPanel',
   /** Recent eliminations feed. */
-  KillFeed: "core.KillFeed",
+  KillFeed: 'core.KillFeed',
   /** Transient event toasts (eliminations, pickups). */
-  EventToast: "core.EventToast",
+  EventToast: 'core.EventToast',
   /** Directional incoming-damage indicator. */
-  DamageIndicator: "core.DamageIndicator",
+  DamageIndicator: 'core.DamageIndicator',
 } as const;
 
 /** All baseline widget kind strings (for iteration / validation). */
@@ -132,19 +132,79 @@ export const coreHudWidgetKind = (
 ): HudWidgetKind => kind as string as HudWidgetKind;
 
 const STANDARD_HUD_LAYOUT_DATA = {
-  id: "core-standard-hud",
+  id: 'core-standard-hud',
   widgets: [
-    { id: "local-player", kind: CORE_HUD_WIDGETS.LocalPlayerStatus, anchor: "top-left", order: 0, enabled: true },
-    { id: "team-roster", kind: CORE_HUD_WIDGETS.TeamRoster, anchor: "top-left", order: 1, enabled: true },
-    { id: "alive-count", kind: CORE_HUD_WIDGETS.AliveCount, anchor: "top-right", order: 0, enabled: true },
-    { id: "minimap", kind: CORE_HUD_WIDGETS.Minimap, anchor: "top-right", order: 1, enabled: true },
-    { id: "scoreboard", kind: CORE_HUD_WIDGETS.Scoreboard, anchor: "top-right", order: 2, enabled: true },
-    { id: "zone-status", kind: CORE_HUD_WIDGETS.ZoneStatus, anchor: "bottom-center", order: 0, enabled: true },
-    { id: "pickup-prompt", kind: CORE_HUD_WIDGETS.PickupPrompt, anchor: "bottom-center", order: 1, enabled: true },
-    { id: "weapon-panel", kind: CORE_HUD_WIDGETS.WeaponPanel, anchor: "bottom-center", order: 2, enabled: true },
-    { id: "kill-feed", kind: CORE_HUD_WIDGETS.KillFeed, anchor: "bottom-left", order: 0, enabled: true },
-    { id: "event-toast", kind: CORE_HUD_WIDGETS.EventToast, anchor: "center", order: 0, enabled: true },
-    { id: "damage-indicator", kind: CORE_HUD_WIDGETS.DamageIndicator, anchor: "center", order: 1, enabled: true },
+    {
+      id: 'local-player',
+      kind: CORE_HUD_WIDGETS.LocalPlayerStatus,
+      anchor: 'top-left',
+      order: 0,
+      enabled: true,
+    },
+    {
+      id: 'team-roster',
+      kind: CORE_HUD_WIDGETS.TeamRoster,
+      anchor: 'top-left',
+      order: 1,
+      enabled: true,
+    },
+    {
+      id: 'alive-count',
+      kind: CORE_HUD_WIDGETS.AliveCount,
+      anchor: 'top-right',
+      order: 0,
+      enabled: true,
+    },
+    { id: 'minimap', kind: CORE_HUD_WIDGETS.Minimap, anchor: 'top-right', order: 1, enabled: true },
+    {
+      id: 'scoreboard',
+      kind: CORE_HUD_WIDGETS.Scoreboard,
+      anchor: 'top-right',
+      order: 2,
+      enabled: true,
+    },
+    {
+      id: 'zone-status',
+      kind: CORE_HUD_WIDGETS.ZoneStatus,
+      anchor: 'bottom-center',
+      order: 0,
+      enabled: true,
+    },
+    {
+      id: 'pickup-prompt',
+      kind: CORE_HUD_WIDGETS.PickupPrompt,
+      anchor: 'bottom-center',
+      order: 1,
+      enabled: true,
+    },
+    {
+      id: 'weapon-panel',
+      kind: CORE_HUD_WIDGETS.WeaponPanel,
+      anchor: 'bottom-center',
+      order: 2,
+      enabled: true,
+    },
+    {
+      id: 'kill-feed',
+      kind: CORE_HUD_WIDGETS.KillFeed,
+      anchor: 'bottom-left',
+      order: 0,
+      enabled: true,
+    },
+    {
+      id: 'event-toast',
+      kind: CORE_HUD_WIDGETS.EventToast,
+      anchor: 'center',
+      order: 0,
+      enabled: true,
+    },
+    {
+      id: 'damage-indicator',
+      kind: CORE_HUD_WIDGETS.DamageIndicator,
+      anchor: 'center',
+      order: 1,
+      enabled: true,
+    },
   ],
 } as const;
 

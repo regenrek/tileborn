@@ -1,5 +1,5 @@
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   makeAssetId,
@@ -11,16 +11,16 @@ import {
   makeProjectId,
   makeTileId,
   makeTileSetId,
-} from "./ids.js";
-import { gameObjectTypeIdForKey } from "./catalog/well-known.js";
-import { PackCapability } from "./asset/index.js";
+} from './ids.js';
+import { gameObjectTypeIdForKey } from './catalog/well-known.js';
+import { PackCapability } from './asset/index.js';
 import {
   BrandConfigSummary,
   ProjectManifest,
   AssetPackManifestSummary,
   makeAssetPackManifestSummary,
   makeProjectManifest,
-} from "./project/index.js";
+} from './project/index.js';
 import {
   CollisionLayerPersisted,
   ImageLayerPersisted,
@@ -32,12 +32,12 @@ import {
   TileborneMap,
   TileChunk,
   TileTransform,
-} from "./map/index.js";
-import { Asset, Tile, TileSet } from "./tileset/index.js";
-import { hashJsonStable } from "./hashing/index.js";
-import { CORE_BEHAVIOR_REGISTRY } from "./behavior/index.js";
+} from './map/index.js';
+import { Asset, Tile, TileSet } from './tileset/index.js';
+import { hashJsonStable } from './hashing/index.js';
+import { CORE_BEHAVIOR_REGISTRY } from './behavior/index.js';
 
-const UUID = "550e8400-e29b-41d4-a716-446655440000";
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
 
 const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
   const codec = schema as Schema.Codec<A, I, never, never>;
@@ -46,33 +46,33 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
   expect(encoded).toEqual(value);
 };
 
-describe("schema round-trips", () => {
-  it("ProjectManifest", () => {
+describe('schema round-trips', () => {
+  it('ProjectManifest', () => {
     roundTrip(ProjectManifest, {
       id: makeProjectId(UUID),
-      name: "Example",
+      name: 'Example',
       schemaVersion: 1,
-      engineVersion: "0.1.0",
-      plugins: [{ id: "@tileborne-plugins/battle-royale", version: "0.1.0" }],
-      assetPacks: [{ id: "kenney.tiny-dungeon", version: "1.0.0" }],
-      maps: [{ id: "map_01", path: "maps/map_01.tileborne-map.json" }],
+      engineVersion: '0.1.0',
+      plugins: [{ id: '@tileborne-plugins/battle-royale', version: '0.1.0' }],
+      assetPacks: [{ id: 'kenney.tiny-dungeon', version: '1.0.0' }],
+      maps: [{ id: 'map_01', path: 'maps/map_01.tileborne-map.json' }],
     });
   });
 
-  it("AssetPackManifestSummary", () => {
-    const hash = hashJsonStable({ id: "kenney.tiny-dungeon" });
+  it('AssetPackManifestSummary', () => {
+    const hash = hashJsonStable({ id: 'kenney.tiny-dungeon' });
     roundTrip(
       AssetPackManifestSummary,
       makeAssetPackManifestSummary({
-        id: "kenney.tiny-dungeon",
-        version: "1.0.0",
-        displayName: "Tiny Dungeon",
+        id: 'kenney.tiny-dungeon',
+        version: '1.0.0',
+        displayName: 'Tiny Dungeon',
         contentHash: hash,
       }),
     );
   });
 
-  it("PackCapability", () => {
+  it('PackCapability', () => {
     roundTrip(PackCapability, {
       packId: makePackId(UUID),
       paintable: false,
@@ -83,29 +83,29 @@ describe("schema round-trips", () => {
       terrainClassCount: 0,
       hasAnimations: false,
       hasCollisionMasks: false,
-      source: "asset-only",
+      source: 'asset-only',
       diagnostics: [
         {
-          _tag: "PACK.missing-asset",
-          severity: "error",
-          assetId: "asset:550e8400-e29b-41d4-a716-446655440001",
-          path: "/tilesets/0/atlasAssetId",
-          message: "Tileset atlas asset is missing or not an image.",
+          _tag: 'PACK.missing-asset',
+          severity: 'error',
+          assetId: 'asset:550e8400-e29b-41d4-a716-446655440001',
+          path: '/tilesets/0/atlasAssetId',
+          message: 'Tileset atlas asset is missing or not an image.',
         },
       ],
     });
   });
 
-  it("BrandConfigSummary", () => {
+  it('BrandConfigSummary', () => {
     roundTrip(BrandConfigSummary, {
-      title: "Tileborne",
+      title: 'Tileborne',
       schemaVersion: 1,
-      palette: { primary: "#336699" },
-      lobbyCopy: { tagline: "Build worlds", cta: "Play" },
+      palette: { primary: '#336699' },
+      lobbyCopy: { tagline: 'Build worlds', cta: 'Play' },
     });
   });
 
-  it("TileborneMap and layer union", () => {
+  it('TileborneMap and layer union', () => {
     const layerId = makeLayerId(UUID);
     const objectId = makeObjectId(UUID);
 
@@ -140,27 +140,27 @@ describe("schema round-trips", () => {
     });
 
     roundTrip(TileLayerPersisted, {
-      kind: "tile",
+      kind: 'tile',
       id: layerId,
-      name: "Ground",
+      name: 'Ground',
       visible: true,
       opacity: 1,
       chunks: [],
     });
 
     roundTrip(ObjectLayerPersisted, {
-      kind: "object",
+      kind: 'object',
       id: layerId,
-      name: "Objects",
+      name: 'Objects',
       visible: true,
       opacity: 1,
       objectIds: [objectId],
     });
 
     roundTrip(ImageLayerPersisted, {
-      kind: "image",
+      kind: 'image',
       id: layerId,
-      name: "Backdrop",
+      name: 'Backdrop',
       visible: true,
       opacity: 0.5,
       assetId: makeAssetId(UUID),
@@ -169,9 +169,9 @@ describe("schema round-trips", () => {
     });
 
     roundTrip(CollisionLayerPersisted, {
-      kind: "collision",
+      kind: 'collision',
       id: layerId,
-      name: "Collision",
+      name: 'Collision',
       visible: false,
       opacity: 1,
       chunks: [],
@@ -180,7 +180,7 @@ describe("schema round-trips", () => {
     // Omitted width/height (Option.none) stay ABSENT keys across the round-trip.
     roundTrip(MapObject, {
       id: objectId,
-      kind: gameObjectTypeIdForKey("spawn"),
+      kind: gameObjectTypeIdForKey('spawn'),
       x: 32,
       y: 64,
       layerId,
@@ -190,7 +190,7 @@ describe("schema round-trips", () => {
     roundTrip(MapObjectPlacement, {
       packId: makePackId(UUID),
       placeableId: makePlaceableId(UUID),
-      source: "tiled-object",
+      source: 'tiled-object',
       assetId: makeAssetId(UUID),
       tileId: makeTileId(UUID),
       gid: 1,
@@ -204,7 +204,7 @@ describe("schema round-trips", () => {
 
     roundTrip(MapObject, {
       id: objectId,
-      kind: gameObjectTypeIdForKey("statue"),
+      kind: gameObjectTypeIdForKey('statue'),
       x: 32,
       y: 96,
       width: 96,
@@ -214,7 +214,7 @@ describe("schema round-trips", () => {
       placement: {
         packId: makePackId(UUID),
         placeableId: makePlaceableId(UUID),
-        source: "tiled-object",
+        source: 'tiled-object',
         assetId: makeAssetId(UUID),
         tileId: makeTileId(UUID),
         gid: 1,
@@ -234,12 +234,20 @@ describe("schema round-trips", () => {
       tileSize: { width: 16, height: 16 },
       layers: [
         {
-          kind: "tile",
+          kind: 'tile',
           id: layerId,
-          name: "Ground",
+          name: 'Ground',
           visible: true,
           opacity: 1,
-          chunks: [{ x: 0, y: 0, width: 4, height: 4, tiles: [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }],
+          chunks: [
+            {
+              x: 0,
+              y: 0,
+              width: 4,
+              height: 4,
+              tiles: [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            },
+          ],
         },
       ],
       objects: [],
@@ -253,9 +261,9 @@ describe("schema round-trips", () => {
       tileSize: { width: 16, height: 16 },
       layers: [
         {
-          kind: "tile",
+          kind: 'tile',
           id: layerId,
-          name: "Ground",
+          name: 'Ground',
           visible: true,
           opacity: 1,
           chunks: [],
@@ -267,21 +275,21 @@ describe("schema round-trips", () => {
 
     roundTrip(MapLayer, {
       id: layerId,
-      kind: "tile",
-      name: "Ground",
+      kind: 'tile',
+      name: 'Ground',
       visible: true,
       opacity: 1,
       chunks: [],
     });
   });
 
-  it("tileset entities", () => {
+  it('tileset entities', () => {
     roundTrip(
       Asset,
       new Asset({
         id: makeAssetId(UUID),
-        kind: "image",
-        path: "tiles/terrain.png",
+        kind: 'image',
+        path: 'tiles/terrain.png',
         properties: {},
       }),
     );
@@ -299,8 +307,8 @@ describe("schema round-trips", () => {
 
     roundTrip(TileSet, {
       id: makeTileSetId(UUID),
-      name: "Terrain",
-      kind: "grid",
+      name: 'Terrain',
+      kind: 'grid',
       tileWidth: 16,
       tileHeight: 16,
       tileCount: 4,
@@ -312,24 +320,24 @@ describe("schema round-trips", () => {
   });
 });
 
-describe("factories", () => {
-  it("publishes the deterministic simulation tick to visual behavior authors", () => {
+describe('factories', () => {
+  it('publishes the deterministic simulation tick to visual behavior authors', () => {
     expect(CORE_BEHAVIOR_REGISTRY.entries).toContainEqual(
       expect.objectContaining({
-        id: "runtime.tick",
-        kind: "event",
-        capability: "time.deterministic",
-        outputs: [expect.objectContaining({ key: "tick", valueKind: "number" })],
+        id: 'runtime.tick',
+        kind: 'event',
+        capability: 'time.deterministic',
+        outputs: [expect.objectContaining({ key: 'tick', valueKind: 'number' })],
       }),
     );
   });
 
-  it("builds a project manifest with defaults", () => {
+  it('builds a project manifest with defaults', () => {
     const manifest = makeProjectManifest({
       id: makeProjectId(UUID),
-      name: "Example",
+      name: 'Example',
     });
     expect(manifest.schemaVersion).toBe(1);
-    expect(manifest.engineVersion).toBe("0.1.0");
+    expect(manifest.engineVersion).toBe('0.1.0');
   });
 });

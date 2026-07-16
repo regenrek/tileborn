@@ -1,5 +1,5 @@
-import { Result } from "effect";
-import { describe, expect, it } from "vitest";
+import { Result } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   AssetId,
@@ -17,26 +17,26 @@ import {
   parsePluginId,
   parsePrefixedId,
   ProjectId,
-} from "./ids.js";
+} from './ids.js';
 
-const SAMPLE_UUID = "550e8400-e29b-41d4-a716-446655440000";
+const SAMPLE_UUID = '550e8400-e29b-41d4-a716-446655440000';
 
-describe("ids", () => {
-  it("accepts valid prefixed ids", () => {
+describe('ids', () => {
+  it('accepts valid prefixed ids', () => {
     const assetId = makeAssetId(SAMPLE_UUID);
     expect(assetId).toBe(`asset:${SAMPLE_UUID}`);
     expect(isPrefixedId(AssetId, assetId)).toBe(true);
   });
 
-  it("rejects invalid prefixes and uuid shapes", () => {
-    expect(Result.isFailure(parsePrefixedId(AssetId, "tile:550e8400-e29b-41d4-a716-446655440000"))).toBe(
-      true,
-    );
-    expect(Result.isFailure(parsePrefixedId(AssetId, "asset:not-a-uuid"))).toBe(true);
+  it('rejects invalid prefixes and uuid shapes', () => {
+    expect(
+      Result.isFailure(parsePrefixedId(AssetId, 'tile:550e8400-e29b-41d4-a716-446655440000')),
+    ).toBe(true);
+    expect(Result.isFailure(parsePrefixedId(AssetId, 'asset:not-a-uuid'))).toBe(true);
     expect(Result.isFailure(parsePrefixedId(AssetId, 42))).toBe(true);
   });
 
-  it("parses every branded prefixed id schema", () => {
+  it('parses every branded prefixed id schema', () => {
     const cases = [
       [AssetId, `asset:${SAMPLE_UUID}`],
       [TileId, `tile:${SAMPLE_UUID}`],
@@ -56,8 +56,8 @@ describe("ids", () => {
     }
   });
 
-  it("validates scoped plugin ids", () => {
-    expect(Result.isSuccess(parsePluginId("@tileborne-plugins/battle-royale"))).toBe(true);
-    expect(Result.isFailure(parsePluginId("battle-royale"))).toBe(true);
+  it('validates scoped plugin ids', () => {
+    expect(Result.isSuccess(parsePluginId('@tileborne-plugins/battle-royale'))).toBe(true);
+    expect(Result.isFailure(parsePluginId('battle-royale'))).toBe(true);
   });
 });

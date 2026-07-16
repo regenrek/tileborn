@@ -1,4 +1,4 @@
-import type { ActionId } from "./actions.js";
+import type { ActionId } from './actions.js';
 
 /**
  * The neutral, per-tick output of the engine input resolver (ADR-0024). A pure,

@@ -1,8 +1,8 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Raised when a domain id or hash fails validation. */
 export class InvalidDomainIdError extends Schema.TaggedErrorClass<InvalidDomainIdError>()(
-  "InvalidDomainIdError",
+  'InvalidDomainIdError',
   {
     input: Schema.Unknown,
     message: Schema.String,
@@ -11,7 +11,7 @@ export class InvalidDomainIdError extends Schema.TaggedErrorClass<InvalidDomainI
 
 /** Raised when canonical JSON serialization rejects input. */
 export class CanonicalJsonError extends Schema.TaggedErrorClass<CanonicalJsonError>()(
-  "CanonicalJsonError",
+  'CanonicalJsonError',
   {
     message: Schema.String,
   },
@@ -19,7 +19,7 @@ export class CanonicalJsonError extends Schema.TaggedErrorClass<CanonicalJsonErr
 
 /** Raised when schema migration cannot proceed. */
 export class SchemaMigrationError extends Schema.TaggedErrorClass<SchemaMigrationError>()(
-  "SchemaMigrationError",
+  'SchemaMigrationError',
   {
     entity: Schema.String,
     fromVersion: Schema.Number,
@@ -30,7 +30,7 @@ export class SchemaMigrationError extends Schema.TaggedErrorClass<SchemaMigratio
 
 /** Raised when decoding a persisted entity fails validation. */
 export class SchemaDecodeError extends Schema.TaggedErrorClass<SchemaDecodeError>()(
-  "SchemaDecodeError",
+  'SchemaDecodeError',
   {
     entity: Schema.String,
     message: Schema.String,

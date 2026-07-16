@@ -1,6 +1,6 @@
-import { ProjectManifest } from "../project/index.js";
-import type { JsonObject, JsonValue } from "../project/index.js";
-import { TileborneMap } from "../map/index.js";
+import { ProjectManifest } from '../project/index.js';
+import type { JsonObject, JsonValue } from '../project/index.js';
+import { TileborneMap } from '../map/index.js';
 
 /**
  * Neutral, brand-free per-plugin settings namespace (ADR-0023 section A).
@@ -18,7 +18,7 @@ import { TileborneMap } from "../map/index.js";
  */
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Read the namespaced settings object out of a `properties`/`settings` bag.
@@ -70,10 +70,8 @@ export const writePluginMapSettings = (
   });
 
 /** Read a project's per-plugin settings from `project.settings.<pluginId>`. */
-export const readPluginProjectSettings = (
-  project: ProjectManifest,
-  pluginId: string,
-): JsonObject => readPluginSettingsNamespace(project.settings, pluginId);
+export const readPluginProjectSettings = (project: ProjectManifest, pluginId: string): JsonObject =>
+  readPluginSettingsNamespace(project.settings, pluginId);
 
 /**
  * Persist a project's per-plugin settings under `project.settings.<pluginId>`,

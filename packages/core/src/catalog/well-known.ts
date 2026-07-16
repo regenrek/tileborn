@@ -1,5 +1,5 @@
-import { sha256Hex } from "../hashing/hash.js";
-import { GameObjectTypeId, makeGameObjectTypeId, type Uuid } from "../ids.js";
+import { sha256Hex } from '../hashing/hash.js';
+import { GameObjectTypeId, makeGameObjectTypeId, type Uuid } from '../ids.js';
 
 /**
  * Stable namespace used to derive deterministic catalog type ids from a short
@@ -9,7 +9,7 @@ import { GameObjectTypeId, makeGameObjectTypeId, type Uuid } from "../ids.js";
  * plugins, and the legacy `MapObject.kind` load migration — without any package
  * importing another's literals.
  */
-const NAMESPACE = "tileborne:catalog:game-object-type";
+const NAMESPACE = 'tileborne:catalog:game-object-type';
 
 /**
  * Derive a deterministic, worker-safe UUID (version 8, RFC-variant) from a key.
@@ -49,11 +49,11 @@ export const gameObjectTypeIdForKey = (key: string): GameObjectTypeId => {
  */
 export const ENGINE_GAME_OBJECT_TYPE_KEYS = {
   /** A sprite/placeable placed on the map via a `visual-ref` binding. */
-  placeable: "placeable",
+  placeable: 'placeable',
   /** A generic placed object (e.g. imported from a Tiled object layer). */
-  object: "object",
+  object: 'object',
   /** An editor-authored rectangular trigger region. */
-  triggerRegion: "trigger-region",
+  triggerRegion: 'trigger-region',
 } as const;
 
 /** Built-in engine-neutral catalog type id for placed sprite/placeable objects. */

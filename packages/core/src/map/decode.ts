@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { TileborneMap } from "./index.js";
-import { migrateLegacyMapJson } from "./migrate.js";
+import { TileborneMap } from './index.js';
+import { migrateLegacyMapJson } from './migrate.js';
 
 /**
  * THE canonical persisted-map decode boundary (ADR-0019). Every raw decode of a

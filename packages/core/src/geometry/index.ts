@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Immutable 2D vector. */
-export class Vec2 extends Schema.Class<Vec2>("Vec2")({
+export class Vec2 extends Schema.Class<Vec2>('Vec2')({
   x: Schema.Number,
   y: Schema.Number,
 }) {
@@ -25,7 +25,7 @@ export class Vec2 extends Schema.Class<Vec2>("Vec2")({
 export const createVec2 = (x: number, y: number): Vec2 => new Vec2({ x, y });
 
 /** Axis-aligned rectangle in tile or pixel space. */
-export class Rect extends Schema.Class<Rect>("Rect")({
+export class Rect extends Schema.Class<Rect>('Rect')({
   x: Schema.Number,
   y: Schema.Number,
   width: Schema.Number,
@@ -49,10 +49,7 @@ export class Rect extends Schema.Class<Rect>("Rect")({
   /** Whether this rectangle intersects another (edge-touch counts). */
   intersects(other: Rect): boolean {
     return (
-      this.x < other.right &&
-      this.right > other.x &&
-      this.y < other.bottom &&
-      this.bottom > other.y
+      this.x < other.right && this.right > other.x && this.y < other.bottom && this.bottom > other.y
     );
   }
 
@@ -72,7 +69,7 @@ export const createRect = (x: number, y: number, width: number, height: number):
   new Rect({ x, y, width, height });
 
 /** Integer tile coordinate in map space. */
-export class TileCoord extends Schema.Class<TileCoord>("TileCoord")({
+export class TileCoord extends Schema.Class<TileCoord>('TileCoord')({
   x: Schema.Int,
   y: Schema.Int,
 }) {
@@ -88,7 +85,7 @@ export class TileCoord extends Schema.Class<TileCoord>("TileCoord")({
 export const createTileCoord = (x: number, y: number): TileCoord => new TileCoord({ x, y });
 
 /** Chunk coordinate for chunked tile layers. */
-export class ChunkCoord extends Schema.Class<ChunkCoord>("ChunkCoord")({
+export class ChunkCoord extends Schema.Class<ChunkCoord>('ChunkCoord')({
   x: Schema.Int,
   y: Schema.Int,
 }) {

@@ -1,20 +1,18 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import type { JsonObject, JsonValue } from "../project/index.js";
+import type { JsonObject, JsonValue } from '../project/index.js';
 
 /** Discoverable registries a reference field may target. Kept genre-neutral. */
 export const AuthoringReferenceTarget = Schema.Literals([
-  "asset",
-  "entity",
-  "weapon",
-  "item",
-  "loot-table",
+  'asset',
+  'entity',
+  'weapon',
+  'item',
+  'loot-table',
 ]);
 export type AuthoringReferenceTarget = typeof AuthoringReferenceTarget.Type;
 
-export class AuthoringEnumOption extends Schema.Class<AuthoringEnumOption>(
-  "AuthoringEnumOption",
-)({
+export class AuthoringEnumOption extends Schema.Class<AuthoringEnumOption>('AuthoringEnumOption')({
   value: Schema.String,
   label: Schema.String,
 }) {}
@@ -26,7 +24,7 @@ interface AuthoringFieldBase {
 }
 
 export interface NumberAuthoringField extends AuthoringFieldBase {
-  readonly kind: "number";
+  readonly kind: 'number';
   readonly default: number;
   readonly min?: number;
   readonly max?: number;
@@ -35,7 +33,7 @@ export interface NumberAuthoringField extends AuthoringFieldBase {
 }
 
 export interface TextAuthoringField extends AuthoringFieldBase {
-  readonly kind: "text";
+  readonly kind: 'text';
   readonly default: string;
   readonly minLength?: number;
   readonly maxLength?: number;
@@ -44,30 +42,30 @@ export interface TextAuthoringField extends AuthoringFieldBase {
 }
 
 export interface BooleanAuthoringField extends AuthoringFieldBase {
-  readonly kind: "boolean";
+  readonly kind: 'boolean';
   readonly default: boolean;
 }
 
 export interface EnumAuthoringField extends AuthoringFieldBase {
-  readonly kind: "enum";
+  readonly kind: 'enum';
   readonly default: string;
   readonly options: readonly AuthoringEnumOption[];
 }
 
 export interface ReferenceAuthoringField extends AuthoringFieldBase {
-  readonly kind: "reference";
+  readonly kind: 'reference';
   readonly target: AuthoringReferenceTarget;
   readonly default?: string;
   readonly allowNone?: boolean;
 }
 
 export interface OptionalAuthoringField extends AuthoringFieldBase {
-  readonly kind: "optional";
+  readonly kind: 'optional';
   readonly field: AuthoringFieldSchema;
 }
 
 export interface GroupAuthoringField extends AuthoringFieldBase {
-  readonly kind: "group";
+  readonly kind: 'group';
   readonly fields: readonly AuthoringFieldSchema[];
 }
 
@@ -93,7 +91,7 @@ const base = {
 
 const NumberField = Schema.Struct({
   ...base,
-  kind: Schema.Literal("number"),
+  kind: Schema.Literal('number'),
   default: Schema.Number,
   min: Schema.optional(Schema.Number),
   max: Schema.optional(Schema.Number),
@@ -103,7 +101,7 @@ const NumberField = Schema.Struct({
 
 const TextField = Schema.Struct({
   ...base,
-  kind: Schema.Literal("text"),
+  kind: Schema.Literal('text'),
   default: Schema.String,
   minLength: Schema.optional(Schema.Int),
   maxLength: Schema.optional(Schema.Int),
@@ -113,20 +111,20 @@ const TextField = Schema.Struct({
 
 const BooleanField = Schema.Struct({
   ...base,
-  kind: Schema.Literal("boolean"),
+  kind: Schema.Literal('boolean'),
   default: Schema.Boolean,
 });
 
 const EnumField = Schema.Struct({
   ...base,
-  kind: Schema.Literal("enum"),
+  kind: Schema.Literal('enum'),
   default: Schema.String,
   options: Schema.Array(AuthoringEnumOption),
 });
 
 const ReferenceField = Schema.Struct({
   ...base,
-  kind: Schema.Literal("reference"),
+  kind: Schema.Literal('reference'),
   target: AuthoringReferenceTarget,
   default: Schema.optional(Schema.String),
   allowNone: Schema.optional(Schema.Boolean),
@@ -142,12 +140,12 @@ export const AuthoringFieldSchema: Schema.Codec<AuthoringFieldSchema> = Schema.s
       ReferenceField,
       Schema.Struct({
         ...base,
-        kind: Schema.Literal("optional"),
+        kind: Schema.Literal('optional'),
         field: AuthoringFieldSchema,
       }),
       Schema.Struct({
         ...base,
-        kind: Schema.Literal("group"),
+        kind: Schema.Literal('group'),
         fields: Schema.Array(AuthoringFieldSchema),
       }),
     ]) as Schema.Codec<AuthoringFieldSchema>,
@@ -158,7 +156,7 @@ export interface AuthoringReferenceIndex {
   readonly entity?: ReadonlySet<string>;
   readonly weapon?: ReadonlySet<string>;
   readonly item?: ReadonlySet<string>;
-  readonly "loot-table"?: ReadonlySet<string>;
+  readonly 'loot-table'?: ReadonlySet<string>;
 }
 
 export interface AuthoringValidationIssue {
@@ -174,7 +172,7 @@ export interface AuthoringValidationResult {
 const valueAt = (values: JsonObject, key: string): JsonValue | undefined => values[key];
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const validateField = (
   field: AuthoringFieldSchema,
@@ -183,12 +181,12 @@ const validateField = (
   references: AuthoringReferenceIndex,
   issues: AuthoringValidationIssue[],
 ): void => {
-  if (field.kind === "optional") {
+  if (field.kind === 'optional') {
     if (value === undefined || value === null) return;
     validateField(field.field, value, path, references, issues);
     return;
   }
-  if (field.kind === "group") {
+  if (field.kind === 'group') {
     if (!isJsonObject(value)) {
       issues.push({ path, message: `${field.label} must be a group` });
       return;
@@ -198,8 +196,8 @@ const validateField = (
     }
     return;
   }
-  if (field.kind === "number") {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (field.kind === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
       issues.push({ path, message: `${field.label} must be a finite number` });
       return;
     }
@@ -214,8 +212,8 @@ const validateField = (
     }
     return;
   }
-  if (field.kind === "text") {
-    if (typeof value !== "string") {
+  if (field.kind === 'text') {
+    if (typeof value !== 'string') {
       issues.push({ path, message: `${field.label} must be text` });
       return;
     }
@@ -236,25 +234,25 @@ const validateField = (
     }
     return;
   }
-  if (field.kind === "boolean") {
-    if (typeof value !== "boolean") {
+  if (field.kind === 'boolean') {
+    if (typeof value !== 'boolean') {
       issues.push({ path, message: `${field.label} must be true or false` });
     }
     return;
   }
-  if (field.kind === "enum") {
-    if (typeof value !== "string" || !field.options.some((option) => option.value === value)) {
+  if (field.kind === 'enum') {
+    if (typeof value !== 'string' || !field.options.some((option) => option.value === value)) {
       issues.push({ path, message: `${field.label} must use a declared option` });
     }
     return;
   }
-  if (value === undefined || value === null || value === "") {
+  if (value === undefined || value === null || value === '') {
     if (field.allowNone !== true) {
       issues.push({ path, message: `${field.label} requires a selection` });
     }
     return;
   }
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     issues.push({ path, message: `${field.label} must be a reference` });
     return;
   }
@@ -278,11 +276,11 @@ export const validateAuthoringValues = (
 };
 
 const fieldDefault = (field: AuthoringFieldSchema): JsonValue => {
-  if (field.kind === "optional") return null;
-  if (field.kind === "group") {
+  if (field.kind === 'optional') return null;
+  if (field.kind === 'group') {
     return Object.fromEntries(field.fields.map((child) => [child.key, fieldDefault(child)]));
   }
-  if (field.kind === "reference") return field.default ?? null;
+  if (field.kind === 'reference') return field.default ?? null;
   return field.default;
 };
 

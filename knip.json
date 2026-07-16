@@ -25,15 +25,8 @@
       ]
     },
     "packages/ui": {
-      "entry": [
-        "src/index.ts",
-        "src/**/*.test.{ts,tsx}",
-        "vitest.config.ts"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}",
-        "vitest.config.ts"
-      ]
+      "entry": ["src/index.ts", "src/**/*.test.{ts,tsx}", "vitest.config.ts"],
+      "project": ["src/**/*.{ts,tsx}", "vitest.config.ts"]
     }
   }
 }

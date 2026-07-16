@@ -45,7 +45,7 @@ export const releaseGates = Object.freeze([
     ['pnpm', 'test:services-build-hermetic'],
   ]),
   gate('creator-performance', 'Creator deterministic performance budgets', [
-    ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/services-build...'],
+    ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
     ['pnpm', 'test:creator-performance'],
   ]),
   gate('docs', 'Docs build', [
@@ -81,7 +81,7 @@ export const releaseGates = Object.freeze([
     'creator-performance-native',
     'Creator native performance calibration',
     [
-      ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/services-build...'],
+      ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
       ['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native'],
     ],
     { required: false, xvfb: true },

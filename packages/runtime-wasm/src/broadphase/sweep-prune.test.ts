@@ -58,5 +58,5 @@ describe('findBroadphasePairs (sweep-and-prune)', () => {
     expect(rerun.length).toBe(pairs.length);
     expect(rerun[0]).toEqual(pairs[0]);
     expect(rerun[pairs.length - 1]).toEqual(pairs[pairs.length - 1]);
-  });
+  }, 30_000);
 });

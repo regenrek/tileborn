@@ -35,12 +35,17 @@ pnpm-debug.log*
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 test-results/
 
-# Internal agent documentation, not for the OSS repo
-/docs/
+# Internal agent documentation, not for the OSS repo. Keep the directory
+# traversable so the three public creator/release contracts can ship.
+/docs/*
+!/docs/battle-royale-creator-guide.md
+!/docs/battle-royale-release-evidence.md
+!/docs/game-mode-extension.md
 
 # Package artifacts and caches
 *.tgz
 .npm/
+/.pnpm-store/
 .parcel-cache/
 .eslintcache
 .stylelintcache

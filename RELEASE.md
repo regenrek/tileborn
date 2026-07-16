@@ -50,6 +50,41 @@ wrangler deploy
 Cloudflare deploy also requires out-of-band `CLOUDFLARE_API_TOKEN`,
 `HANDOFF_SIGNING_KEY`, and any Alchemy production secrets.
 
+## Worktree preservation and classification
+
+The production-hardening integration started from an intentionally dirty tree.
+Its immutable pre-mutation receipt is Planr context `ctx-118489a3` at commit
+`6d554778d2ecb370373f080f6624f9ffaee32d79`. The receipt records the complete
+sorted path and content fingerprints; later cleanup and integration work must
+prove equivalence against it instead of assuming that an untracked path is
+disposable.
+
+The 588 baseline worktree entries have this deterministic disposition:
+
+| Classification                                        | Tracked | Untracked | Policy                                                                                                                                                                                         |
+| ----------------------------------------------------- | ------: | --------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intentional source, tests, docs, or repository config |     229 |       145 | Preserve as release-candidate input. Inclusion in a commit still requires the later integration review and owning verification.                                                                |
+| Required generated input                              |       1 |         2 | Preserve `pnpm-lock.yaml` plus the generated Game SDK capability source and documentation. Regenerate the SDK outputs only from `capabilities.registry.json`.                                  |
+| Planr evidence and orchestration                      |       0 |       210 | Preserve the 206 `.planr` paths and four Planr worker/reviewer configs under `.claude` and `.codex`. Keep them separate from product-source decisions until Planr provenance is canonicalized. |
+| Reproducible disposable output                        |       0 |         1 | `.pnpm-store/v11/index.db` is a local package-manager cache. It is ignored, but not deleted, by this integration.                                                                              |
+| Unrelated user work                                   |       0 |         0 | None was identified in the captured baseline. Any newly discovered or ambiguous path defaults to preservation and requires an explicit owner decision.                                         |
+
+The source/test/docs class is path-bounded to the captured changes under
+`apps/`, `packages/`, and the three public root `docs/` contracts, together
+with `.gitignore`, `package.json`, and `tsconfig.base.json`. The generated class
+is limited to `pnpm-lock.yaml`, `packages/game-sdk/CAPABILITIES.md`, and
+`packages/game-sdk/src/generated/capabilities.ts`; the latter two declare their
+generator in `packages/game-sdk/scripts/generate-capabilities.mjs`. This is a
+classification and preservation policy, not blanket approval to commit every
+candidate file.
+
+Ignored dependency/build trees (`node_modules`, `.turbo`, `dist`, `out`,
+`.vite`, and `.refs`) remain reproducible local output and are outside the 588
+dirty entries. The only ignore-policy addition made by this classification is
+`/.pnpm-store/`; no cache or user-owned file is removed. Destructive cleanup,
+reset, checkout, implicit staging, and broad `git add` remain prohibited for
+the integration.
+
 ## Release Notes
 
 Tileborne `1.0.0-rc.0` packages the BR vertical as a production release

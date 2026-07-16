@@ -1,0 +1,3558 @@
+{
+  "schemaVersion": 1,
+  "anchorHead": "6d554778d2ecb370373f080f6624f9ffaee32d79",
+  "sourceContext": "ctx-118489a3",
+  "classificationContext": "ctx-97013a6e",
+  "baselinePathFingerprints": {
+    "trackedStatusSha256": "19b0738553461feeecfc32ea89c3204700cf2c101ccf1e27f3fa57530cb65717",
+    "untrackedPathsSha256": "ec0852adda97e1c1306d505242d79c34e789d75e4daa3727865bf0f62a78a067"
+  },
+  "expectedTotal": 588,
+  "expectedCounts": {
+    "intentional-source-test-docs": 374,
+    "planr-evidence": 210,
+    "reproducible-disposable-output": 1,
+    "required-generated-input": 3
+  },
+  "policy": {
+    "exactContent": [
+      "intentional-source-test-docs",
+      "required-generated-input",
+      "unrelated-user-work"
+    ],
+    "pathPresence": ["planr-evidence"],
+    "optional": ["reproducible-disposable-output"],
+    "missingDisposition": "fail",
+    "changedDisposition": "allow only when committed after anchor and cleanly matching HEAD"
+  },
+  "entries": [
+    {
+      "path": ".claude/agents/planr-reviewer.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".claude/agents/planr-worker.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".codex/agents/planr-reviewer.toml",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".codex/agents/planr-worker.toml",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".gitignore",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1d12595954ee9ccaa0ddd0841a6935004aa7a2943bd1d4be4f8965969662bd2e"
+    },
+    {
+      "path": ".planr/planr.sqlite",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/ADRS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/AI_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/ANALYTICS_OBSERVABILITY_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/API_AND_DATA_MODEL.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/BACKEND_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/CLIENT_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/DESIGN_SYSTEM_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/PLANR_MANIFEST.json",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/PRODUCT_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/QA_ACCEPTANCE_TESTS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/README.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/REFERENCES.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/RELEASE_READINESS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/SAFETY_PRIVACY_SECURITY.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/TASKS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/TECH_ARCHITECTURE.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/battle-royale-creator-vertical-1-0-production-ready-game-authoring-and-shipping/UX_FLOWS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/ADRS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/AI_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/ANALYTICS_OBSERVABILITY_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/API_AND_DATA_MODEL.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/BACKEND_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/CLIENT_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/DESIGN_SYSTEM_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/PLANR_MANIFEST.json",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/PRODUCT_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/QA_ACCEPTANCE_TESTS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/README.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/REFERENCES.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/RELEASE_READINESS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/SAFETY_PRIVACY_SECURITY.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/TASKS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/TECH_ARCHITECTURE.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/creator-production-hardening-release-1-0/UX_FLOWS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/ADRS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/AI_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/ANALYTICS_OBSERVABILITY_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/API_AND_DATA_MODEL.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/BACKEND_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/CLIENT_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/DESIGN_SYSTEM_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/PLANR_MANIFEST.json",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/PRODUCT_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/QA_ACCEPTANCE_TESTS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/README.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/REFERENCES.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/RELEASE_READINESS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/SAFETY_PRIVACY_SECURITY.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/TASKS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/TECH_ARCHITECTURE.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/deferred-working-palette-preview-loading/UX_FLOWS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/ADRS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/AI_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/ANALYTICS_OBSERVABILITY_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/API_AND_DATA_MODEL.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/BACKEND_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/CLIENT_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/DESIGN_SYSTEM_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/PLANR_MANIFEST.json",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/PRODUCT_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/QA_ACCEPTANCE_TESTS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/README.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/REFERENCES.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/RELEASE_READINESS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/SAFETY_PRIVACY_SECURITY.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/TASKS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/TECH_ARCHITECTURE.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/first-class-typescript-gameplay-sdk-and-visual-event-editor-on-one-deterministic-behavior-runtime/UX_FLOWS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/ADRS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/AI_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/ANALYTICS_OBSERVABILITY_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/API_AND_DATA_MODEL.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/BACKEND_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/CLIENT_IMPLEMENTATION_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/DESIGN_SYSTEM_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/PLANR_MANIFEST.json",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/PRODUCT_SPEC.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/QA_ACCEPTANCE_TESTS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/README.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/REFERENCES.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/RELEASE_READINESS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/SAFETY_PRIVACY_SECURITY.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/TASKS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/TECH_ARCHITECTURE.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/plans/product/working-palette-performance/UX_FLOWS.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/constraints.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/flows.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/ownership.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/product.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/quality-gates.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/project/state-ssot.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-1caa.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-4161.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-4483.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-82e0.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-c84c.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-da54.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-e852.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-follow-up-r-f48b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-independent-0ae8.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-add-7696.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-add-f513.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-buil-cdc5.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-buil-ec23.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-deli-1236.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-deli-5247.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-deli-c0d1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-0424.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-08e3.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-0cd6.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-0efa.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-2642.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-3601.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-396a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-4e3a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-680e.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-7860.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-78a1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-7bec.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-873a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-89a6.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-8cc7.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-8f1b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-8f87.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-936c.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-9778.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-9a91.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-a034.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-a2d4.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-bce1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-fix-cabf.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-hard-a26b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-inte-63fa.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-lock-83c5.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-prod-a469.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-prov-9ff3.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-prov-ba5a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-run-c654.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-ship-37e8.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-follow-up-review-for-review-unif-d126.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-independent-post-fix-audit-for-r-a631.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-add-regression-and-live-v-0002.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-add-schema-driven-propert-b37c.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-add-the-new-battle-royale-092a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-build-isolated-determinis-7c5f.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-build-the-guided-ship-gam-def8.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-deliver-debugging-hot-rel-e649.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-deliver-first-class-battl-f124.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-deliver-the-visual-when-i-7ef1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-364b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-73ce.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-7b57.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-8b70.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-a737.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-d014.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-follow-u-e03e.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-independ-9ebd.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-a-b13a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-a-db82.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-b-d966.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-b-e423.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-d-3376.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-d-579e.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-d-cda2.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-10c6.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-12e1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-210b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-2551.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-3003.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-35ef.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-3b89.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-45a9.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-5ab6.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-78a4.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-7c2d.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-872d.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-8777.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-89a9.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-9216.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-a111.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-aa6a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-c29d.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-cf6a.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-d9d1.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-db09.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-ea8b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-fc85.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-f-fd61.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-h-0a4b.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-i-25c9.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-l-302d.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-p-aafd.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-p-c8b9.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-r-8386.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-s-fe09.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-fix-findings-for-review-u-81f3.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-harden-game-mode-extensio-7bf5.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-integrate-behavior-author-ae67.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-lock-canonical-behavior-a-7abb.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-productionize-asset-sprit-8bd3.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-prove-plugin-extensibilit-e562.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-prove-the-production-rele-86f6.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-run-the-complete-live-goa-45b3.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-ship-the-first-class-nati-0337.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".planr/reviews/i-review-unify-readiness-diagnosti-f193.review.md",
+      "state": "untracked",
+      "classification": "planr-evidence",
+      "sha256": null
+    },
+    {
+      "path": ".pnpm-store/v11/index.db",
+      "state": "untracked",
+      "classification": "reproducible-disposable-output",
+      "sha256": "7e697069f1849ad63a010b614cfb873712945e95fbbd3e516dc7f2d149ead371"
+    },
+    {
+      "path": "apps/desktop-runtime-closure/package.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1e07ddd900db806ea7bbffb22e5d8ee13c09f3fe5de2bb32963b7797cd2e32a1"
+    },
+    {
+      "path": "apps/desktop/electron-forge.config.cjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6a595a80e0e697ce30fd397b393036bbc6013322a3e439c80699b830ae7c3c42"
+    },
+    {
+      "path": "apps/desktop/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7af124a37c47022a57834e4afa285aac0bdd4ae66327cac2fcdc6691f861759d"
+    },
+    {
+      "path": "apps/desktop/scripts/verify-electron-main-local-behavior.mjs",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "58a20a7a9f3cf3d81108ccd6c530933ca5aabf9e56ff0d34cd59dd0451c3df0f"
+    },
+    {
+      "path": "apps/desktop/src/main/__tests__/playtest-runtime-host.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6f376fd34121b369ad23e9f0debee748407c6e1f72d42793661d7e191099120b"
+    },
+    {
+      "path": "apps/desktop/src/main/app-layer.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a765a24f768a0e1a52e1e46d0e9598159a582c966676602606cb31f193b436cb"
+    },
+    {
+      "path": "apps/desktop/src/main/asset-use-sites.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "616bf30609f7492473a391aa0ca85e44b8f866e13c22064fc368c9023de6fb17"
+    },
+    {
+      "path": "apps/desktop/src/main/asset-use-sites.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c160a9cf90aaab7a286878b92042ac96fed5fd88da087acbf71e93ccc51dd997"
+    },
+    {
+      "path": "apps/desktop/src/main/battle-royale-readiness.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "49b614fe59b0161441f36d110930dcfa798c8b8d351848c267946f74a27d3344"
+    },
+    {
+      "path": "apps/desktop/src/main/battle-royale-readiness.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "cbddc5a5a868563a30db5492790ce987727c4c93d23d857998eae0af61b2203a"
+    },
+    {
+      "path": "apps/desktop/src/main/behavior-reference-index.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5836abda1d62b62c4d84b1879002195fb8f41856a99f9d3152d7b401e98b19c9"
+    },
+    {
+      "path": "apps/desktop/src/main/behavior-reference-index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8b4da217565083e79f68646b4e93efccc38c1508d88d4b8ec1e39b6b7e44af4f"
+    },
+    {
+      "path": "apps/desktop/src/main/behavior-reference-pagination.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "28272b54e9f354b8410c798bbcf983e1e5d020ee6f10501e5efd1712e6e6bfd1"
+    },
+    {
+      "path": "apps/desktop/src/main/behavior-reference-pagination.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "db8863c03cabf4487ac43f5aa3cd6f344720ccbeb164a43602e70f41b5bc5a67"
+    },
+    {
+      "path": "apps/desktop/src/main/bundled-plugins.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2a0a072fe3e501a858661341df40149718634f28643cda905d40df07dc62eb30"
+    },
+    {
+      "path": "apps/desktop/src/main/catalog/catalog-projection.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d133c14986109d312e2ec1025b536e5ff3e1358429351496054d2e3e5d52efa4"
+    },
+    {
+      "path": "apps/desktop/src/main/catalog/catalog-projection.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "525b759addff04ffbbd2e2ae0ead45173f2fe5c914d2f7b137203622892d5108"
+    },
+    {
+      "path": "apps/desktop/src/main/catalog/catalog-service.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b7e5b9bd20dc5bba6d0e18a2274fdab1f295ca14dfac69e5d7ee4fed8961e22e"
+    },
+    {
+      "path": "apps/desktop/src/main/catalog/catalog-service.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c4302155404d490f95cf117cd796910c9b5bf25ca12996c70f71fab12195bdd3"
+    },
+    {
+      "path": "apps/desktop/src/main/game-mode-host-registrations.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f5238bfb0a4301a86784722cda169f72352a7372496b348ed9555de441b9bd5a"
+    },
+    {
+      "path": "apps/desktop/src/main/game-mode-starter-registrations.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "aab79ef8fcf9f3e29802a067ce36182cecbba2f01479eec04bb0caf079a63633"
+    },
+    {
+      "path": "apps/desktop/src/main/game-mode-starter-registrations.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5a0b13f1f8aaecdbdde0c1118dec05d49701caf2f89f6fda99b87750de5a6cf8"
+    },
+    {
+      "path": "apps/desktop/src/main/ipc/handlers.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5181f7975961130f655eeb9d21fea24d99568584b97f4c7d8f113bd45d2eae13"
+    },
+    {
+      "path": "apps/desktop/src/main/local-game-host-manager.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4f76c68e2a54de704401bf428106f7c6b247b4d0d406efe12ac181a9cb41be99"
+    },
+    {
+      "path": "apps/desktop/src/main/main.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2cd16a1b9567139b0235f56dbeb65084f1e52e5c1fa4e29a79fe0fccf58ef334"
+    },
+    {
+      "path": "apps/desktop/src/main/playtest-runtime-host.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5ef7f801d593d2604b59955cbc1b7774f727957ae642c03828643fe0dd719280"
+    },
+    {
+      "path": "apps/desktop/src/main/playtest-runtime-hud.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d9c0096486fa87f9ff564aeebe5b46007917976db38728a274209512ce85f6e4"
+    },
+    {
+      "path": "apps/desktop/src/main/readiness.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2859ca6c895480909c220de6a68f546696f935940cc7003b91a62954cd22ca2f"
+    },
+    {
+      "path": "apps/desktop/src/main/readiness.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "cc0804b146e7e51597ddfcdc844cd34386693943684d21f0dc5c505598d0591c"
+    },
+    {
+      "path": "apps/desktop/src/main/window.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6c9e70fa75e3a8e1e7a0d0a7444b8a16149547861b2abf5474f6a4a17073d0c4"
+    },
+    {
+      "path": "apps/desktop/src/preload/preload.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "289fff865694bc00f9d78f382f348a3784407873c96d3b90b15ca2b12d1fee99"
+    },
+    {
+      "path": "apps/desktop/src/renderer/__tests__/playtest-hud.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7114a3f1abe27283e70843c72135a9d567d1adbb686b978428a1b640f1290261"
+    },
+    {
+      "path": "apps/desktop/src/renderer/__tests__/playtest-multiplayer-flow.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ce9662f0ab4eb0e41916295b92e5f1276b4c438c4cf02840b5080990829935ae"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/asset-library/asset-pack-details-pane.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1507ec9aeaf010cbca2129af486f15f6bf2b44864a80da33b11d4f93f811ea0b"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/asset-library/asset-pack-details-pane.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "696855347b7d8d45b7f52fd4e66eb9d6e13e0a0e8e0ffdb57cec73d0345dc9e9"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/authoring/schema-field-controls.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "def3a9ccee85a13f502270cb09bb0a666a985426afbb6f5eb55c481a7167e6ee"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/authoring/schema-field-controls.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "66b315be10fea6c382582282669059afcd746f27cab8f191c8e9213de88dca11"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/behavior-editor-page.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8a11ac1a3a9f4c171a5d49ea5df8edf03266b0433a5b4b9ff4c8ee21db394cfd"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/block-icon.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "17d2320d92b5f50c8c7f61ef1d581780adef3d8cbf3c955373fd219bdac23b4f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/block-picker.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "805b748717859ff9e04d7c9ef2534601e98972d6c89a9b81dc12ec92c0466c99"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/event-sheet.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a0ebd15b552ce5f5e2617c8f97f8d790751ba051f6e13ad087d6548814b730b9"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/event-sheet.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "551644ef0c7e76eb21da9800a76b0a4284c82f514270bec0dd7badbb9a6a3b7f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/history.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "854f114870937b9375a7a79935f77689cf5eb13fab1f4d9e5ce740519f18a081"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/invocation-editor.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6eb224754797bfcc281a06b93a0b2c23dc261297ca45c21d1359cdb1aac66014"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/model.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c132741e8f36ac8dfdc9d0919361824aa7dbabdfe0dfdf4760096b4985d70cb8"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/model.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "02f1c192132bfd7f5a52f0b080ce419588b5800bbacb2e85248289613b72c3c9"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/behavior-editor/reference-picker.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fb5b762583d34d8999a8875370ad04192817d81a9b6e27d835c4fe51bd05886d"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/bottom-drawer/bottom-drawer.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5b21767c986a485c6c14bfe85731d3baf232826ad1af768e049ec8636650099e"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/bottom-drawer/problems-tab.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "61e5f6bb23a09f91cc641a370a392f93c5254a8fc04ce7b9c329433cf0c93ec4"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/bottom-drawer/problems-tab.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d8765fca531b05e1a13a3480bd0b3edc9a443f15411990e12edfb62bbce9020f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/bottom-drawer/runtime-tab.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fef9e0330e0e49bbbe28f913fee424a5d5d6167ed2eab96f9258fadedeb0833c"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/bottom-drawer/runtime-tab.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1c190d13ee0b72aa6ebaf6a5605bbedb3360db6ed7365ef9ded265954f66f131"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/create-project-dialog.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e3f1b91da4bd8ec6fc72127e3c7f869741a1227be6ff28995a480f16e76b343a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/entity-editor/entity-capability-panel.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1bf36a92e75fb99d31b739f683c2dc036724c83cd2ec6fb62e7af4bc2ec5fb21"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/entity-editor/sprite-picker-dialog.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f3127329db4d022fd088984dcf83e7c7fbec5a58699407cd992a3fa19c505db9"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/entity-editor/sprite-picker-dialog.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b4bfd33064e868a82d2935abe5b68782a5440683224cdfb711438da5405189d1"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/home/home-empty-state.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8d646ba1f74e1fed5d2cf6620c05411c513d619bfbf7e9a5cc033b441f797944"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/map-editor-viewport.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0d6053a0d4bb3b10b8fb187c2a6b79f15f00974ab5525b0c457a56f43e3d5398"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/map-editor-viewport.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "bcdb80e3cd8a030d6fb288933440483e6f251231260b1f888b0fcc82ccb08b0b"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/playtest-hud-overlay.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2a72ec4ed82b1ff48d30dd922aea6c0b3a9f721f0342b162d3ee340644bad0dd"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/playtest-multiplayer-viewport.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9aa0c8aea9fde182ce8fb6ed627d9dd05a943cea9854e652f11a1c834db6c461"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/playtest-multiplayer-viewport.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "567ed72291e03537db64a274b50f6020a87d8ea59134cda20ea44798bce5fd58"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/playtest-viewport.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "98cebd29c86dbb2d5c7a1921718c85829b8561a46d1e13a16d732dbdc8be002f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/playtest-viewport.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1a4ce29b0e0d53e13b3dc5f258202f0865da51be01b3d6543ce6d20101c22acd"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/battle-royale-authoring-panel.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "bb2065d3b1880cc12850d4c4e10e103ea57b965e9bffc05022dce83be986180c"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/battle-royale-authoring-panel.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f595532f1d3072b827cde368a73fe200fabfc0b43703e315ae91f7691f565d6e"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/game-settings-form.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7dcc824af30d8a392d368ef150ed1ccc14a4b2b5b59c66e2ff042651c6ce9de2"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/game-settings-form.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e4892b2b3633d3138bf57193e8a7da3e0572325fcaedf7b17d920a7ae27c5d8f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/generic-mode-settings-panel.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "14f8a305f67b63d30f68515a913962e441813191d4c79f4fa71eef1fd1cffca7"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/plugins/mode-authoring-panels.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0e8f63e7b4c7b80a9261b4ac296af379f7578897594a6a8c6359f95688e7079a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/app-shell.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "eee7dd1c4be2e4c7c3a87b48660dc3967aeb34eceb7029e56a6e26ded6eedf8a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/command-palette.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "60f082f6943a1cb9a62e973756ddb8f32d6eeaa215d67871c154fc602bc0cca3"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/right-inspector.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "557775673a507e2ecc88580fdd3b04be593d56828523f4be980bff6603bf1d43"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/right-inspector.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9d9ffb24e55c8a2c1e3db5ed3e589dacb892ddf1bfe20fdc06592690d841e2e0"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/top-bar.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e9ac1bdb697c9e24ce781d32b07e081a72bf29270afa85142a5460283edb1295"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/shell/workspace-tab-bar.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5f6a5ed931d195f575e1e74714848e36f7923708a150b348f2bc5fafdbb6610a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/ship-game-dialog.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5fa775f087cb88f68db9f82b6a747673cd82b13d985d199f464f124e16e1d4ec"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/sidebar/working-palette-sidebar.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "736868c8ed14344b5f797819796bc154d946fe6be8d28d70ea0d3a8cb52b85d0"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/sidebar/working-palette-sidebar.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7c2852af355d68bdaf313cded4a7bd28298c5f135aa7d07375ee9a965a3c9d52"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/sprite-studio/sprite-animation-drafts.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c770b99d0d4dc920ad8acd2d932c800c54aa7955cb8b614ca1474afcb0c95fc9"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/sprite-studio/sprite-animation-studio.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ab8c6301d5b0a135a5dac8323a64ca180660e701f9011f48192ce4ec759de90f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/sprite-studio/sprite-animation-studio.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "aab5c9967273abd250e46e58844865f54e3bce6c99bfd52b82657f57703e5374"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/visual-editor/sprite-geometry-canvas.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "86113642b24e0e67e7c12893188f634053ffe5499e9c687dcdb0875b5156adda"
+    },
+    {
+      "path": "apps/desktop/src/renderer/components/visual-editor/sprite-geometry-canvas.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b33a1af33ac81eac393acca8ccb5f3f00e4828e44441efebd0a62aba091773cc"
+    },
+    {
+      "path": "apps/desktop/src/renderer/editor/use-editor-commands.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ada8f57a0bd9623ea9874b6ce1f9451b33d06e8bc227a27c1065dea35c07f88f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/editor/viewport/editor-viewport-controller.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e7ca088f8d7146db0f3d70648e0a7af6f8c834c7c69099fdb4b34deb1e2fa2be"
+    },
+    {
+      "path": "apps/desktop/src/renderer/editor/viewport/editor-viewport-controller.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a7a90c59bb820ced146dafcdb58e2487a19b71c52053c3fe9cf5e9c031c51a5d"
+    },
+    {
+      "path": "apps/desktop/src/renderer/editor/viewport/viewport-asset-manifest.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b02a90e6c6b5759d6911efc42051609169beb55bd8fcaa49d3473ba4500a7279"
+    },
+    {
+      "path": "apps/desktop/src/renderer/editor/viewport/viewport-asset-manifest.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "78454bfd695c42e91291517f2f3e1ca49d16b1d4971bcdc0947de22617781ae3"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/asset-library-queries.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "708d795ab7a412f41d6bc23ffd0984eabef37caf7f39792e94974f80d75ef431"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/behavior-reference-queries.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "48177c2d604cc1421f2cc75fe2b0e939ce4b9c0303b04ba50719a07109893d28"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/catalog-validation-queries.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7e2b0ee419da37af658c7341d6b350fc70d21734e9a5c14fda8b0c9e29a8f2a7"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/mutations.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8116b51446ff9fb04b1c98fa5e9cf345e40829fcf37842f00d2285126c1c6a3f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/mutations.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c977b941fe6f689dc195d734d0353dbdb19c32c03a4a1c1915def7c58ed5da17"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/queries.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3eff50213895dc7966eb2f71f107d2e5d09b8bcda85d3cbf652de00c21deb77e"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/use-event-invalidations.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e33df09c09fe57fd4802629c36b60dc8e3dc9ccbf5494158f08002b4e492f664"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/use-event-invalidations.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "cce8242162482a308781dc56a5b7e53693e57cbf73123c38b2f5692bfa3462a2"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/use-hud-editing.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "271173fdfb605638bc2fd11d232286c39375bb426f23437437f0b39f8910c22e"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/use-readiness-problems-owner.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0623cae9b1c15385355ce825d08c315cff589d3dbbb3aa1014b87e1271262ab0"
+    },
+    {
+      "path": "apps/desktop/src/renderer/hooks/use-readiness-problems-owner.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6300102c68f6675e66c38dc017adeffa20691bb556c4e38bfeed1fc97a886fa0"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/behavior-source-navigation.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8ae7b0535f6001dfbbb434a16e7297a7a8a4cd80acf73f88a652f60d486ff429"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/behavior-source-navigation.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "97564580504bd29ed2c0526a563c5392d309ed319404d180a452e214ba3ad1ae"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/bridge-types.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "258db159a7baa99e18a151239818886d53e298eb6b09ea589486ce43af579bbe"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/creator-readiness-checklist.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b66b9ddf5b020506f671871e29de29efee3f7dcb3dc98b917fa8b8b14f5cc545"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/creator-readiness-checklist.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "70565510a2268b4b050be68d58a9b3391b5059f975cff64689db82486fa27434"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/document-lifecycle.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "331e1f9d6869ff036845b70cc7d68d3ca8533522c0f87760d60e2be8a62a785a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/document-lifecycle.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "505884a47dcbc784b786a64e3e487f290795b950e50fe6a2a15046f9102db2b5"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/entity-authoring.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5eae1f0a53bdccdd40a783da37f410ea90b07d011785cb2ce824bc063166093d"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/player-model-relink.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "03030200f2cf74b439de53639510365dae37b09bc9b8d7ec8dce3ce37fe7ae57"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/player-model-relink.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1618028b6177250784db513c42ce63772e346c112bde421acb379dcfeb0cda62"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-input.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "aeaba8cc41a1f9f8c3d22aea70c1f357bf9a382a396786a43d65e263f1ebcc5f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-multiplayer-client.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6a3f5ad18aaaf5b551a919b152db5c7bc83f3b769196665e2bbe14494503d857"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-multiplayer-client.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "44f3baaf22fc20d4b846f3447606dec85397b9491745f1435ad8f2104549e70c"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-plugin-bridge.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d4f477a9a3501bbf6bbcbc513aa3e4061dd658865181726018667ada7f8f2afc"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-plugin-bridge.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b0e731c8fb0d7da4fa906a09e087289691d48eb2bdad16a58137125f2556327a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-room-url.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3ead1bb411042c335b14c765059539ba9a832b9466517d3c638d5006420b57ec"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/playtest-room-url.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "486620d2a550d007db11e7c14e5829c752ac4c2d77c7a52dcb8cdb8ef43324b4"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/query-client.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5b2ed8a044f77779f1d0d20ce855184d431fb26bf9b8ee5bcf06a5f852fe67eb"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/readiness-gate.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "81fade8d97d1f5b3bf521953d8f4deadb8d090868c4051cef02a4d5b52ba5474"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/readiness-gate.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2ec84b133bec029710b82ebe336620679334392abc639b3e29f7b6071f103e31"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/shell-command-registry.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "063b9abf308ea5acad11de0d82e943f8265f341ae1175324657473e12af7f4bf"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/ship-game-parity.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "20cb647c0068fcc538741341655a55d1c73b219f7e8223798ae82eb6cbd69e58"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/sprite-picker-model.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a78a5bd8d7298beeb46628a2b1f5ec8113f7145289fa1915205e68b22bad65fa"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/tileborne-bridge.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ad19e4c7184a365e51e03251d9394679053a681b3fca6d645274e7bc0d220731"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/visual-model-diagnostics.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c16ada73d252c2c535572534be072e31a154f674c7ca707a9134fb428b6a0f28"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/workspace-views.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5cf47fa0508ab50524f5b9fdcfe430ab5d18294ac4465946b6d73d7b685a61bf"
+    },
+    {
+      "path": "apps/desktop/src/renderer/lib/workspace-views.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "822feda857c229035827ce26d337331e6c98454a6fe9acf24bd216c22349759c"
+    },
+    {
+      "path": "apps/desktop/src/renderer/main.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "717af6f430567ac359fbe84a92e5ed8790b9e9c900c695cc272ce742e95a1a4a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/router.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2bd6b3a9042a4a111fbaa9701dc223215534d897a5edf925b16d1ce1c10e6577"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/behavior-editor-page.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "81a7acab92aac31661d6af9c5dce0501bd0d796024e4d6ef3cf7e81ee8c9334f"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/entity-editor-page.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "216945bc428d6d823224195f87c5408184c20a7782590b46da1356b1406052bf"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/entity-editor-page.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "20c49243e9456cda8104f6f55e0be6ca983941cde17c1184e027772a6fb8a48a"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/game-content-page.test.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7e1c42d25c0eb439e87c3f2517a6ed6a83747243e491bb126a9ed24f60b1c235"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/game-content-page.tsx",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "255644b4f8c21dc3c809ef08133dcd08bb652f61dfd22b6258ecaf957f4f0b3e"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/home-page.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e1e059b2e587994d75a979e551e5bbd9f6a5e3f27275f2d721e5c5e77d1bb534"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/map-editor-page.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "36966878d598bc8edb4f9a6e4738955c8afba2d3509ee2923a7bf6ea4f60f06b"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/player-model-editor-page.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ed9b0638c3f55aa35f8ddbe44b2ab4723a3b29fe6c225ead4a81174aec332052"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/player-model-editor-page.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6d579912416095b18fe5630838761e00b54f19e64e23f5d74162fc6a033f38f5"
+    },
+    {
+      "path": "apps/desktop/src/renderer/routes/project-overview-page.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "44ab714f006449ed05b4b40ef2cacd12b7c262bee2f556d54f5aa49acfcf9b00"
+    },
+    {
+      "path": "apps/desktop/src/renderer/stores/editor-ui-store.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8368a599bddde952c043df91c8169d0f1cf783bfd863291781022961304831a6"
+    },
+    {
+      "path": "apps/desktop/src/renderer/stores/playtest-multiplayer-store.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f00a8f78777a281b806d7b998889271451d8f54b93350c240e900c156d1fcc51"
+    },
+    {
+      "path": "apps/desktop/src/renderer/stores/playtest-multiplayer-store.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "106ff6dcede59cae43db00528367b48e9f9137ce17547695e24f848e48a616bd"
+    },
+    {
+      "path": "apps/desktop/src/renderer/tileborne.d.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1aefbde02809496392afc5a3bf87d4cc16535499574b17d596df43a9892e59c3"
+    },
+    {
+      "path": "apps/desktop/src/shared/app-lifecycle.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "975470cf346d0fdcaec9d9f96119d40d500642f526d5c982a7269d920dd400cf"
+    },
+    {
+      "path": "apps/desktop/src/shared/visual-model-diagnostics.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b42ee998d485fe3a3f60df38aa5f9e0ae60bbe406538eace0049651e73c0b79c"
+    },
+    {
+      "path": "apps/desktop/src/smoke/acceptance-playtest.electron.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "521719e52b70183a52774a5b7045322f501e1429085f1d10f0cc1e6a432d76fc"
+    },
+    {
+      "path": "apps/desktop/src/smoke/behavior-goal-oracle.electron.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f1c81f2be67900f6575b95c908093ed53f2bccdf870c36e4fba1cfa5d9a98f3b"
+    },
+    {
+      "path": "apps/desktop/src/smoke/game-mode-example-arena.electron.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1335d5c02642d6b9dc1126d69afe7309e4214394c273ed8c3f3f7aa1a130eb2c"
+    },
+    {
+      "path": "apps/desktop/src/smoke/helpers.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b93ab1b0a64472351464a6a730b043c29ef733852bfbaccb72199b33b8991142"
+    },
+    {
+      "path": "apps/desktop/src/smoke/packaged-runtime-closure.smoke.spec.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "71d0e2b6767f59e0d6052a77e97f05098b3ec00b6a411d1155ff0fc3c2f12dfa"
+    },
+    {
+      "path": "apps/desktop/src/smoke/project-creation.electron.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ec93a56a906c62e7d3dbaed9cdd589a0c278daaecbe800bd10f9399078ff0644"
+    },
+    {
+      "path": "apps/desktop/src/smoke/project-creation.smoke.spec.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "98811234ef975270cafcad5cda6c8444872b40469f5904a777c83dc3ce733f7d"
+    },
+    {
+      "path": "apps/desktop/src/smoke/ship-game.electron.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d0a953d205ba9871afefeefa4ba10511d1cc51ce5007ea049646125834abf0d3"
+    },
+    {
+      "path": "apps/desktop/vite.main.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "90c3df631cd1f6db9c15ecb7e837bc8c842ecd2e61ba139a22e1baadde3ff5fa"
+    },
+    {
+      "path": "apps/desktop/vitest.electron.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "34f7475ad85aaba99bc7d875e41c87cd6f7033b4d59a082908d339ecb5e2a0fb"
+    },
+    {
+      "path": "apps/docs/astro.config.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ba5d72c21e7925b433e13e69a037b6e823d4cea7a0be262b956efcfcc225b6f7"
+    },
+    {
+      "path": "apps/docs/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "27692aefd8021042d4d3a5d26421768626358896f18d4a298a57f11c49962686"
+    },
+    {
+      "path": "apps/docs/scripts/generate-api-reference.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "869b55bd81d22e7769f2abdcdf61a507eb157e814e30d85cf9b3da88fdea92a1"
+    },
+    {
+      "path": "apps/docs/scripts/prebuild.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "47601352714a5233ed0653ca5d3105b273f0f2ab4059df6099d733cfab21744c"
+    },
+    {
+      "path": "apps/docs/scripts/sync-content.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8a30fa4fdfde7be789389e4940204eeb9a66e570ae721ed4bda6a524b95a6826"
+    },
+    {
+      "path": "apps/docs/src/__tests__/build.smoke.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7bce0d7f34c6193c82559d703136508f49fcf3b54acf76bbed207d8c5d9bbef8"
+    },
+    {
+      "path": "apps/docs/src/content/docs/battle-royale/creator-guide/index.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "82421eda388ac88942162713511584002e52f9a2781132979bf9e891aef69b37"
+    },
+    {
+      "path": "apps/docs/src/content/docs/deploy/cloudflare/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6db7c29f62c115354801302118fbb05398ecfcb93eb4bbdd47a482919c7c46d7"
+    },
+    {
+      "path": "apps/docs/src/content/docs/deploy/ship-pipeline/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "746dbfcc2ef6fa47059b8d3f7dce1a7d0ecd59a96e81b232bff5e958362f8390"
+    },
+    {
+      "path": "apps/docs/src/content/docs/gameplay-behaviors/index.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "73cf85d1ef80a0ab9b1160f621fbfe5c178b47b61c2347506955fb1b76429d9c"
+    },
+    {
+      "path": "apps/docs/src/content/docs/plugins/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "48dcd157629d3ce0c4d448b6db21a5bbad9f6ecf6187c96662a8bd61e20631f6"
+    },
+    {
+      "path": "apps/docs/src/content/docs/plugins/sdk/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "75cb262ea4e5318082253f9f1e08273ac2a5431e817a0e141f26176c7ffbceaf"
+    },
+    {
+      "path": "apps/docs/src/content/docs/release-readiness/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "916d49c5dcb14b2657a7d756df810998d464de39fec78a095f54ed44749cc43c"
+    },
+    {
+      "path": "apps/docs/src/content/docs/security/index.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "69c74474871cee7efbb93dc49c070a952265af36dab6303b35cb89f0075bade8"
+    },
+    {
+      "path": "apps/game-client/vite.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c5edee5acf85bb9ff4cd2288a9527db8f55178ad56c81638eb68ca63d60a6810"
+    },
+    {
+      "path": "apps/game-client/vitest.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2873311c1758106ecd269937ab846cc0b96fb0a17d6375602834e9f42e26267e"
+    },
+    {
+      "path": "apps/game-host/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3c38f65cce36a8fe12d17d687ddcdf516c33e3e0ea1cf0e7446e0ef22993e2e3"
+    },
+    {
+      "path": "apps/game-host/scripts/bundle-worker.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5e78b2b9ec921ed4749933531bc0e9b1717b59feb3c9919683ab1337bfd7fe96"
+    },
+    {
+      "path": "apps/game-host/scripts/generate-bundled-map-packages.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "164f8e27347f0586572c95dd33cf7b4f5a997cc87daf9b01f55b42306612d3ba"
+    },
+    {
+      "path": "apps/game-host/scripts/generate-bundled-modules.mjs",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2f758b9f26e3215b71862768759cc3f5ebdd1dfc828356f8a84f03243b0f27b1"
+    },
+    {
+      "path": "apps/game-host/scripts/verify-bundled-worker.mjs",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b613c911a442bdee3038234bb514e155d520b216c65529f2c29bfcafefaea425"
+    },
+    {
+      "path": "apps/game-host/src/__tests__/alchemy-example.compile.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "507d967427a38c15cbc54c963c24b8537532b8e4250e1373db34fa8fac7a918c"
+    },
+    {
+      "path": "apps/game-host/src/behavior-runtime.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "66b777c062cc8070a55cbf7a17cc3e03000870786a068cbd5a5d0e115273dc26"
+    },
+    {
+      "path": "apps/game-host/src/behavior-runtime.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "97f5152d76ba832e00b6d19ef0b1598bad5376dcca2e4b897e48a0ee3f7a482a"
+    },
+    {
+      "path": "apps/game-host/src/behavior/node/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8f861ea16f2762ede3afe9ef1aad6c71dc3e3ad65852a359c1b89760c672db6a"
+    },
+    {
+      "path": "apps/game-host/src/behavior/node/isolated-runtime-host.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "06a9e46897a77c7e643648d71ccda114eb7e22e89f2019018f51a92c6a7d112a"
+    },
+    {
+      "path": "apps/game-host/src/behavior/node/isolated-runtime-host.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "169d819aa480e7232f476563f6dacaa1acf666529555bb0da12cfb63a8b2bc83"
+    },
+    {
+      "path": "apps/game-host/src/behavior/node/node-worker-entry.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b7dddf5fd9d36341b095210ce395e9454ff18699ba81c4bf68b6bf8ae1834889"
+    },
+    {
+      "path": "apps/game-host/src/behavior/workerd/protocol.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f91936047d64273ff14be569bf1765179ec0b78646246f6a6200de50b1f8cce8"
+    },
+    {
+      "path": "apps/game-host/src/behavior/workerd/service-worker.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0cc0a5b56db90a3df6a0ed996178c91fc34af9557ba681db712955ceec34dd7d"
+    },
+    {
+      "path": "apps/game-host/src/build-manifest.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "74d604573d5e8bfee5100d6374a9973e92adaa8015cd48ffb384f5ae793cc431"
+    },
+    {
+      "path": "apps/game-host/src/build/cloudflare.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5efa382a1c7362328b7ae1df3f438be7faa95bde6536095be8131e03ddf42401"
+    },
+    {
+      "path": "apps/game-host/src/bundled-plugin-loader.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d0863e7ff23a5d16682dcaac2256508650845bf03816c3b213555a58dfa75623"
+    },
+    {
+      "path": "apps/game-host/src/bundled-worker.boundary.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0891433438e720794af802895bbbd39c1b247bb7d10a9abde1b14beeffc381f3"
+    },
+    {
+      "path": "apps/game-host/src/local/behavior-workerd-supervisor.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fc67f14d6642eaa3753df33d8eff426f3f91140374c933c60377cd181c2e4c97"
+    },
+    {
+      "path": "apps/game-host/src/local/behavior-workerd-supervisor.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3aca95bba2354bc1b098c2258e5902a5428ac6274002e1cdac135f92496ca973"
+    },
+    {
+      "path": "apps/game-host/src/local/launcher.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0e57a219b71fbdbbe71dff2ed4168ccb555a24a58a8cb46c2c2b822fe95df2e9"
+    },
+    {
+      "path": "apps/game-host/src/local/process-tree.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2d2e363fa3a67e473ffabe2b0d7bff0eef046c1887e1ac2006c2a50ea842993c"
+    },
+    {
+      "path": "apps/game-host/src/local/process-tree.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9214fb1920c0f6d6d95ef59ba87ba3f07fabde59a04db44795bc64961ab012a8"
+    },
+    {
+      "path": "apps/game-host/src/rooms/room-lifecycle.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0909f164bff794813920d3d5b9d2229915160c7ada4ac2dec32062c59c9cbc51"
+    },
+    {
+      "path": "apps/game-host/src/rooms/room-lifecycle.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3ae7a7f456dc669f7c6dc7b7d46e5873c86499ed8d024b6fc82b3ecd6696582e"
+    },
+    {
+      "path": "apps/game-host/src/rooms/room-object.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e20d858b2de058249a824763985f7963295de41171459199c5e29d147abdc3e5"
+    },
+    {
+      "path": "apps/game-host/src/rooms/room-object.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "15b540209c3087fa1d0d1d570bed0d43aeed818952922cee252f656af292a1fc"
+    },
+    {
+      "path": "apps/game-host/src/smoke/behavior-isolation.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b96fece1ad96f22a70cc560f28d2b4c31737b50b8eaaaa2fac2a3379834cc2f9"
+    },
+    {
+      "path": "apps/game-host/src/smoke/build-worker.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "26b67b8ac382a8afa2d013ee52b9adfc1be3ea0066f01dcac3f790ba92cebc6d"
+    },
+    {
+      "path": "apps/game-host/src/smoke/cli-build-smoke.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3bc70cbbf4cc63881d42057cbe0e4467b4e73750c5755a6f5738a324d5ca2ede"
+    },
+    {
+      "path": "apps/game-host/src/types.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6c5b3289f4938667174e338825340812e5c3b4149f923119e5ba7f0dfe8d988f"
+    },
+    {
+      "path": "apps/game-host/wrangler.template.toml",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a8f39253d329233029f25d7390a376dbe87ea36502ca54d8de25a43fa62594a0"
+    },
+    {
+      "path": "docs/battle-royale-creator-guide.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "68c37d621e0996bf13f2607abad75e2084f96b2c766d15b780410c64e68fc31d"
+    },
+    {
+      "path": "docs/battle-royale-release-evidence.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c391a90fb2dda6e3220405238b4dc5b3329988163a3389ccbccaf8c8dd86e500"
+    },
+    {
+      "path": "docs/game-mode-extension.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b3bd0468b89d7d78317a85e5aae464fa1cb7e5d8c471f896ea65358b1c6221c6"
+    },
+    {
+      "path": "package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "95a8c7242ce608a42bf7aff450b0b78e2016d61f7de4086b480fd6094b351108"
+    },
+    {
+      "path": "packages/boundary-tests/src/tests/behavior-boundary.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "003562644988dcc610da99da50a6c67154deb60fa4e17e3a66813a3b0a8db683"
+    },
+    {
+      "path": "packages/boundary-tests/src/tests/game-mode-boundary.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0e0597b3f38aacff1764e8e5261f2bef9d4b749183651f88462d546017b8c007"
+    },
+    {
+      "path": "packages/boundary-tests/src/tests/ship-pipeline-boundary.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ed8032b5385dbf91c8e8f59d84d904334a1b21b4700920a5454ef33a7319fac3"
+    },
+    {
+      "path": "packages/cli/src/commands/game/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c4542f6032d9cf3abc08ae3bd4fc5c7035c2d564bd07e754d6ad6694f25297fe"
+    },
+    {
+      "path": "packages/cli/src/commands/game/init-templates.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "28d864bda44de31ae12b3c8aab9f7c262834af9c22fc66d523fa90043889fc80"
+    },
+    {
+      "path": "packages/cli/src/game-cli.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "14db4972d56af6c5fef3dfffff916078509277c1a9ea9cffc168b0c0408dc7d3"
+    },
+    {
+      "path": "packages/cli/src/game-init.integration.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "62acde9a0c01ee767a64769858b2e8fa40b792f1fb0c5d7df06523d0e9ae15e2"
+    },
+    {
+      "path": "packages/cli/src/ship-pipeline.integration.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b97808951b0c5fa61343585dc2e7968bcafcc5a632f60fda4a3fa6986dcb2d81"
+    },
+    {
+      "path": "packages/core/src/asset/pack-capability.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "bbf6d3be82e32731bbe348e26dc49444453eb0d30c8603f9e629da9b07a5f0bd"
+    },
+    {
+      "path": "packages/core/src/authoring/field-schema.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7cf2170c786e2f33c8d20b41dbab53a31fdc0197de61cb12e445df992ad27588"
+    },
+    {
+      "path": "packages/core/src/authoring/field-schema.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0150c5abd6aad3fbdba906980779ead2d08a40b1b08d0072fe4b769f08d639af"
+    },
+    {
+      "path": "packages/core/src/authoring/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "73229b6dc3382b10de0bee7aad1bd5a3d6768984a8d41bd2009103130135211c"
+    },
+    {
+      "path": "packages/core/src/behavior/index.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3736af185ee59666740bee1e94f9815e1e656e6ad060566682d23cfd00cf3c6b"
+    },
+    {
+      "path": "packages/core/src/behavior/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "968f049322abf247e07005217c5721fd907df854c3f5ab33cae3301a81c551d9"
+    },
+    {
+      "path": "packages/core/src/catalog/object-type.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "14cce6465a7f98082b291164ed8d611b705ca98697dbed0aa723416e239dc7b1"
+    },
+    {
+      "path": "packages/core/src/catalog/validate.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1d93f981e073242eb74648c7c57473dde4a8c7923daf42022730c5a99762e8e1"
+    },
+    {
+      "path": "packages/core/src/ids.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2a0e38ba324d6f98dbf38ae1827d1894db3144ca013ee19d3b3060d32b03c3a1"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9e67e04e8f97079017e8855c5e6d6ebda0e1d91fb96f61709bdb2ba4e60848ac"
+    },
+    {
+      "path": "packages/core/src/map-package/index.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "82ffc0499f413d6bfebf68031a51d655fc0244d210554fde3310960883139a24"
+    },
+    {
+      "path": "packages/core/src/map-package/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ea01476bcdf6f6421c3073a40d238d3d23dcefe28298b9cb624449e0b5973784"
+    },
+    {
+      "path": "packages/core/src/project/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9c7b45236d0e9e5af19afbdb733d0bfef1f200764082f59ca6195b7bad84d963"
+    },
+    {
+      "path": "packages/core/src/schemas.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b56f9c96498a633d174647228fd7ba2a57d79b747aeb6913d8f172ca312068a7"
+    },
+    {
+      "path": "packages/game-client/src/components/runtime-root.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0d9448d94421b337f911f4189aea56e7188b7bdc814c0289ca4ac0b94914af89"
+    },
+    {
+      "path": "packages/game-client/src/hud/hud-overlay.test.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fb285344986e846493403b7797e0a590eca7b9edc6c0d71c607682d58c418ca9"
+    },
+    {
+      "path": "packages/game-client/src/hud/hud-overlay.tsx",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "dfdc81d481a158a66e76afc306a71b58e2d830bd307747dfdb4579e7f2c366a3"
+    },
+    {
+      "path": "packages/game-client/src/hud/hud-state.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ef2a93ffe285e8c260159d7416fb39e4644a343908997d5e954644c3f63e91ef"
+    },
+    {
+      "path": "packages/game-client/vitest.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fda12d5b723ad95bb18250ea06ffc1ef7d597041a7a46035d53910822f04ed5d"
+    },
+    {
+      "path": "packages/game-sdk/CAPABILITIES.md",
+      "state": "untracked",
+      "classification": "required-generated-input",
+      "sha256": "4805a9843320db65f7179d275b1c3b211ee230282db31fe67d5948294b2ee8cd"
+    },
+    {
+      "path": "packages/game-sdk/capabilities.registry.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4175cfcfae0b1e7fe4eac36a4d3153853886928fd96f8bb5cb4f02959cd09167"
+    },
+    {
+      "path": "packages/game-sdk/examples/open-exit.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "33b9f7cd4b725f58a9b11d9e4970327a60412c5f22bc9ef5fadfcc57a03b565d"
+    },
+    {
+      "path": "packages/game-sdk/examples/plugin-event.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2319b7ed81929b92865694bb66e6d9876bc3f7351e91d72e887601f414062f4e"
+    },
+    {
+      "path": "packages/game-sdk/package.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c13fbb84934a0456231535708600ae4ffafedac2829952c0cc4657720fb4305d"
+    },
+    {
+      "path": "packages/game-sdk/README.md",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0b14a967f339db2cfebb4c710c443bb50c1051d7bb733835251af7467746a8b5"
+    },
+    {
+      "path": "packages/game-sdk/scripts/generate-capabilities.mjs",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8298046109f7f9209057912cdcc61551b8effd4daac20b4faef62f69117d84e5"
+    },
+    {
+      "path": "packages/game-sdk/src/authoring/index.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c32b463fc560d72e4e718711f0072f75ca125d9e65a216bc47671d39addb21d6"
+    },
+    {
+      "path": "packages/game-sdk/src/authoring/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "423ce724a4f7a60c49f6d17048f649fe9f5980fb035c11672700d56fc57e9649"
+    },
+    {
+      "path": "packages/game-sdk/src/generated/capabilities.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c860220d8fcbca0245982ad8d7f6afd6fd7855adc0d4c4139308e897718b23df"
+    },
+    {
+      "path": "packages/game-sdk/src/generated/capabilities.ts",
+      "state": "untracked",
+      "classification": "required-generated-input",
+      "sha256": "6ac4824e31e6775c974943835b665a53c653e6dab086a2e71823c2fc8d793647"
+    },
+    {
+      "path": "packages/game-sdk/src/harness.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "041752d522c4b9c41ee5e7bc6be56170ea1e9bfdf28c9f67cc47d51de87c6894"
+    },
+    {
+      "path": "packages/game-sdk/src/index.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6c84f4808445ffcbac1a6c71b1ceb2d6894a37e65aec07c4206ec4ac11f414a3"
+    },
+    {
+      "path": "packages/game-sdk/src/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "affd9d2b5c622d5b5bd6956f3651cecfd5a5f3ad93a136d6e50215efadd1479d"
+    },
+    {
+      "path": "packages/game-sdk/src/types.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "02e92a7aa77fdc32bb2c949537ed20454213e4d59599cae19b44585e520215b4"
+    },
+    {
+      "path": "packages/game-sdk/tests/built-authoring-validator.test.mjs",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "69401ab569abd2f298fbf077f4c32663a3100bac9e6374e1571e8a36f8e3f1a0"
+    },
+    {
+      "path": "packages/game-sdk/tsconfig.examples.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6d427f1f33cb4252a20495afbdf17586890038167f001aaa596d9fd898c02825"
+    },
+    {
+      "path": "packages/game-sdk/tsconfig.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "91984995ad8671ef53c5362cfc5a465de612b8b3b9e452f6cc2d478bb5351a13"
+    },
+    {
+      "path": "packages/game-sdk/vitest.config.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c461e77d47dc8f7e3dcaf070cbbdb5a1ba0e706e287eab97aceae245c1249e34"
+    },
+    {
+      "path": "packages/ipc-contracts/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5d86a72d98c967ac71207dabcc1d30cf778a252144db6b5a5612d8fe36ad4555"
+    },
+    {
+      "path": "packages/ipc-contracts/src/codegen-shape.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "dd3ea53c1ec7cfdd37eb36a8c293127a3a70d7706eed63a7fff0e4fbb0c43f03"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1c9a1864f22da371bcba16f4c3259fec64092002c1483374aff2d348153c47e4"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/asset-library.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "15c47aa3389d493c10516dbe23c6f0da0fc7798b6afd19a1795281f01864b4b3"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/asset-library.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e8d0133e6afdc7a5469e1783cac761b3914fe3e4d135a418c25a2f24541600ce"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/assets.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5c3a81afd1bc69e93c43d170ee5ed3d849ea6edde1e0ddfa8e01a6d1f89027a7"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/behaviors.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "11a2798698de212f0c690bb7beaa925cac3c766466d1dfe3fa25581121dd51a4"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/behaviors.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a632ed4ed9357096fd7a8668e54987fbb894ad382048947acf95aa7973e7bb38"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/catalog.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "af1a313855381fb99a7af12cd829ce1fab8e2364f99b7180014a45409dd77935"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/catalog.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7f0035d35361a5e4bc8cab6c21db8cea836a324bf67f1ff46c54cc8cb2bbe27a"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/gameplay-event.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "02b4b6288f1e5931bc0dc04d752a6f614124a8de832a4be177356dcabdedf530"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/gameplay-event.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0406f6d78f468afcd7c26e707df8fe248cdb35b1b9f46dc063519438dc52a156"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f4614974f603e57c90da748f43383b981949faf5907712c7509e61f89d15e3ad"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/jobs.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "aabe43c80371accd6e5db5b40236bf8b9e26db6ede8c4f2cc3a4a3109cf1695a"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/main-registry.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b570a14d8a9637931bdec362a9abb7a863ca5fdb858d4d4545775ae33d1fb649"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/maps.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b341663fa2440d8ae9c0dd5f15f53a2bc6b000188398c92d12e4f8ec43853ecd"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/playtest.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3cc5fda2db998bb62e2fd8653fe5fba70b60fbb8d535253f940cdb92f1ee156b"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/playtest.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0cb11a74feacf4a519f60b001b5e5b9fbd3b59cd935d5ee9e96cecf749230685"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/plugins.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8ebfb9791f9789e7c2303ce1f437713b1b78132c832c74dfeb816361e9dd09a9"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/projects.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0b48828bbe40eee25ee69f4cbfbe8919c5a8182fbab5f852c5750ff86b6710d9"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/readiness.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c8f6bea5d6f6ab04474a6d99f669ee42a6a9d54d73df8fb010cae6c2be8e5afa"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/readiness.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9ce775e10c73f135e9958dfe8f86af56c3fdb2083a5920deb165a80d0c1f12b3"
+    },
+    {
+      "path": "packages/ipc-contracts/src/contracts/ship.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4d37eee2a9456c3e0723c4a64b7f5cd7653a5de2f19a590772fa2ef35af371d4"
+    },
+    {
+      "path": "packages/plugin-api/examples/runtime-adapter.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "30bbde41864989ea0109a6a47765516cbd9bcc8191da615cf339e3889617d0f2"
+    },
+    {
+      "path": "packages/plugin-api/examples/tileborne-plugin.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1562d4eefecac877cdf0c13956700beab69aec852b63793170772da4ec09db01"
+    },
+    {
+      "path": "packages/plugin-api/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5c3f07873bb1f45df9e3f333db99c3b77a61ae20432668279873a27b66be4b9e"
+    },
+    {
+      "path": "packages/plugin-api/README.md",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2b029fdeb8977c90991c1abae24a1efafa397805a4026cffe6aad92c0f5f866f"
+    },
+    {
+      "path": "packages/plugin-api/src/behavior-registry.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c46e3a30e8eedd9d2f4df4d229c1b28808e88381b3bea5b5ba54158aa032c8ad"
+    },
+    {
+      "path": "packages/plugin-api/src/behavior-registry.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b2ad157363da79e263862e50ab8daf23ff138ce3022f4d641284bc710506d6c5"
+    },
+    {
+      "path": "packages/plugin-api/src/catalog-registry.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ebf3ee401d7e5339f7e11bccc7636cf29c2bcea26c1043d4b31060ff21762f03"
+    },
+    {
+      "path": "packages/plugin-api/src/catalog-registry.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "04129299757bd5e471910a9fdf1af9cd97abf9d69ebfe8c83d0a60e1a0250ff1"
+    },
+    {
+      "path": "packages/plugin-api/src/contributions.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3c005ef79f8ae382d37f58bf38d632c3c92820d2ecd49010da72c6f735349940"
+    },
+    {
+      "path": "packages/plugin-api/src/contributions.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f3d0be6566602615fb0d424b61a0048dad704913b37dc15c126d93cc20e11f19"
+    },
+    {
+      "path": "packages/plugin-api/src/game-mode.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "722421466b53170e38817016e025a3c2b3f0412025645894e385a9fa6f69cf5f"
+    },
+    {
+      "path": "packages/plugin-api/src/game-mode.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "22c16700746f32b0ee43a43570c2ea4a4df86c811849d122efd88be940315221"
+    },
+    {
+      "path": "packages/plugin-api/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f52e5a0f0f653dd2b543cc57d59dc62aef30e238555b799379456745eb251477"
+    },
+    {
+      "path": "packages/plugin-api/src/project-content.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c2a901e1f4f764e7e6ae73f91dbc86f4044ec63fbad8266767a080f943187fdb"
+    },
+    {
+      "path": "packages/plugin-api/src/project-content.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b28fe25ccc0e0ffa995fac1fc749b96bf41b543a3cd961abae19fae296a46123"
+    },
+    {
+      "path": "packages/plugin-api/src/runtime-adapter.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "cfd3c33cd3bbe450d0e005a2fd06d493eece7d93cd92bd0249a06bd407ba4678"
+    },
+    {
+      "path": "packages/plugin-api/src/runtime-adapter.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6cdff4e14e3f6fddf774b35296d9b1ad001d4776fd2e12f0ad862ba7b8064238"
+    },
+    {
+      "path": "packages/plugin-api/tsconfig.examples.json",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b01d953ead54c398c76fad90fb7143b4d13eb073ff850ad6a4c1cb96c2c28aaa"
+    },
+    {
+      "path": "packages/plugin-battle-royale/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "266a99dd66c134a8a41dea07ae97061e5ec8b6ff7a6e27ed5466580aebe131f9"
+    },
+    {
+      "path": "packages/plugin-battle-royale/schemas/game-object-catalog.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8070b9318aadc605de23ccf31b3372b4fb58ec1f46cc6dd805c4430f11d6ad26"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/authoring/__tests__/map-settings.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "79235feb79c72b48bb43b0f55cbf916de7ca9bed52af00704cc403df1c7a2cb1"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/authoring/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d5df55fc0deca696aaebfa16d84aab66481347fcc04a33913846ef851d2bdf33"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/authoring/map-settings.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c26f73d5673d6eed56280ac13c1a155db047c4fe33a589e1fbda58a075128227"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/battle-royale-config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c1c4250c720ffb76c7e0f120b72e5003ee34dda051950a1afde95503ef99ec09"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/ecs/damage-system.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e2c41bc5b9428c6b361228a0d73db82ba20e2e632edccec81cbe9ee786cd8a60"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/ecs/damage-system.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "310e2fa7564fa23c6522f55beaf57a833e9808e16c2173a122114947c70cb87f"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/ecs/spawn-players.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2089f4011882e496d65d00fcae64d755f100931a31c98bd1a3f0e3059cd688db"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/host-protocol-bridge.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4812b16ad93133879c8e60add4930db0a37db287493870c2a6f3e23d1ed19611"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/host-protocol-bridge.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "27f9cf0b4dc884c4d50c38db0a34476814fa4997db303e8596cab5e66482409e"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0e1ff0f359eb8f2cce7be5e91f501bb75f81a2b7570ec07020cb1b2d50d70395"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/policy.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ecb6bf88e8bf099b533e218b433f41848d4053039e7751a1b26a909703c22784"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-adapter.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d404aba9db6088ba439f2186738ecd4b8191db660b789ce553ae51e1f7b94bb9"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-bundle.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9d30c504d10667235ede2d98692132f910632859e3a1fe5bfbe39d52ac34e9f9"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-ecs.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "fb17a679525f4bdafa1dd89ee4872450f63559444dcb2250e23a13be7a34931f"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-spawn.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "36cd2d13ece3e02a24ae3b646597da440175b9d8840aff5f84f747f09b17b9d3"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-state-from-package.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9a7884020f6377374cc771b73230913aa01dc5bc8d3be46e5f7782c46d247115"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/runtime-state-from-package.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "33fe6377f686aee8e52e3744029c65abb9b956d5bf07b5a638e8e54d60bddb5e"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/starter.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c6fd833a58ee85d572f86571ef18b4dce532446d45b18de657db07eb4c331920"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/starter.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "627e69b2a9ef3b3017268fd7e57318b2524af04e5ae80ccfd2c1cc01b4c2e909"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/team-topology.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d1dea0f37c13fd72ca57348a44f4a5a5847a31d90fc7ae3e99429e8f11ac2389"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/team-topology.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8e9dab06fc75d3c0dfa891761c61dd1d654fea3f43d5fd33a52751925ef7b301"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/test-map-package.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "89b867d100c8b576bebfb275e3700eae3ef00bc1e5f17e1dbcaf4aa12cf44492"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/types/runtime-plugin.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3a6b4a1d7352e5467dcaa47d2f2d6378e3c47172d5776048a3289a6cc4140500"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/weapon-catalog.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "8294abd3af8c7d3d6ca78d520ad831985e637e72624736c4ee3609655d5c426a"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/weapon-catalog.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "dc65c645eb2324db12ba66794e03481318442af65f6b9a5b7e535aeb07cbe0fa"
+    },
+    {
+      "path": "packages/plugin-battle-royale/src/weapon-compatibility.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a283f77e05a9d87d2109fd82ee264848f943fc022b89a453e722757c2820d230"
+    },
+    {
+      "path": "packages/plugin-battle-royale/tileborne-plugin.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a6372c470a441e340971d6ad0a1935b5c62759ff9a9ff0f5dad0ce05dff692bc"
+    },
+    {
+      "path": "packages/plugin-battle-royale/tsup.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "302a247e0a3255bd8dd7811906dbf8229a9023d3440a4482f7473924a1d7ada4"
+    },
+    {
+      "path": "packages/plugin-example-arena/src/discovery-decode.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b697508594a4fa6f3f6db9ee1997a7b24a2f2c653c923d9c4f4484329af4e8a3"
+    },
+    {
+      "path": "packages/plugin-example-arena/src/server-entry.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "faf61f27995536fce2a23786e0bce78a6cdad1403032ac6082c0d6516645ddd6"
+    },
+    {
+      "path": "packages/plugin-example-arena/src/server-entry.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "01120e37e1d71fa19d1eff7c81f7ce5546060196948d046bb01a297c08badb99"
+    },
+    {
+      "path": "packages/plugin-example-arena/tileborne-plugin.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "f01f0f1049cd2524e96c929ea9ff2598418c7d1f8ca4e1b3d8f32d12bc39a1bf"
+    },
+    {
+      "path": "packages/plugin-example-arena/tsup.config.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "821a61f8d0d146d949d11fcdb493a0f4e0f724c458e91fbf571679f0ff4c4e8e"
+    },
+    {
+      "path": "packages/runtime/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c9d2f042417cf62847bc9677ab1ea83ca4504c89a411ce021292d676590c3d0b"
+    },
+    {
+      "path": "packages/runtime/src/behavior/authoritative-host.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "41c72e5266ef147215e9ae03f0d8e6d35452d0001fb7c0014e55484243505d74"
+    },
+    {
+      "path": "packages/runtime/src/behavior/authoritative-host.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "b2e3fb1061728223d37a348618e453250ad1925745dd7b9c7ed2abe8aa4aae07"
+    },
+    {
+      "path": "packages/runtime/src/behavior/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "0e66464d1b52949b3262ed2eb5d52137317fb7c65790f4a3be479fb473d3bf84"
+    },
+    {
+      "path": "packages/runtime/src/behavior/loader.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a645a854a8617dff8f64f9ff3622107b8b6701294bd42300bd87afd6b2cc5657"
+    },
+    {
+      "path": "packages/runtime/src/behavior/scheduler.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "eb4f3eef774ee79fcb4bbd66c925cb0559f27a319a14ca0808ab692715767ad9"
+    },
+    {
+      "path": "packages/runtime/src/behavior/scheduler.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "58e2e2cf321f7a0c2adbb1ba428eb42ea28e93b2a6812139469be232cc2a6bc9"
+    },
+    {
+      "path": "packages/runtime/src/behavior/types.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5fc5b55a5e04761abbd2499311b8854edf866258ee46caadad93e4d9912872e2"
+    },
+    {
+      "path": "packages/runtime/src/behavior/worker-supervisor.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "281555599da7e06945caab56975bf4d15e373400cf9f1a7235b7a5e8a3a1e18d"
+    },
+    {
+      "path": "packages/runtime/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "3af52020353c55068f011a3084bf7454ff29cc0bbc105f1cb924cf8439097a7f"
+    },
+    {
+      "path": "packages/runtime/src/map-package/loader.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "83333dbcdfc5e2d467a972fdc2dea064f1661921332ff2eb9d224b10c4bf4589"
+    },
+    {
+      "path": "packages/runtime/src/map-package/loader.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "875a5ff5fae1a408ccf93b2f3fe798dcf9c504499e05487f982c1dedb9d1e948"
+    },
+    {
+      "path": "packages/runtime/src/version.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6685beb8da583a050eb3eb6ea0acf8ebfbf952abbe0c18db13b1bcea575d2b5c"
+    },
+    {
+      "path": "packages/services-app/src/asset-capability.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "1204630ce75a4290bf26f5c8196be044a0e4a4580b6563ca97c20df1f23d88e7"
+    },
+    {
+      "path": "packages/services-app/src/asset-library/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5ecaa9a20c52ec75be7b2fc3feb135f26a115a038e99c3eb16d8811f2300688c"
+    },
+    {
+      "path": "packages/services-app/src/asset/capability.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "64d630929cdbf73bd4cac17a56fd3b87f84a89dfb6d6bdd3da29b4e491d79fc8"
+    },
+    {
+      "path": "packages/services-app/src/asset/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "9362694bd155ba61df3f13ea86c41534c8da297286a8092f88c0df35b15334a9"
+    },
+    {
+      "path": "packages/services-app/src/behavior/index.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "c9a9cd4500d66150342f7866916602adcb5ee7d71c902c0e788863a9e0aa1d61"
+    },
+    {
+      "path": "packages/services-app/src/behavior/index.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2eb346a08e6f0dc56e85859bf3b88ad675cb28ba1b4aa3bb0e0d3c401657df32"
+    },
+    {
+      "path": "packages/services-app/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a5a5143b7d70b86352612b5d3262ea317965b5566439cf83a6e4e6f94469c29f"
+    },
+    {
+      "path": "packages/services-app/src/internal/project-revision-transaction.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a2681615451336b009f7354b550683b219dec09fb1b4008020eb2db25c35e911"
+    },
+    {
+      "path": "packages/services-app/src/internal/project-revision-transaction.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4832abd06724529816bd0d88c4159d0cab89e7fe026aae2e804194c0421ff560"
+    },
+    {
+      "path": "packages/services-app/src/map/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "21ae23b101b99a6d767093c0811388140f81c2d6d0da679aaecccc44d27b64cf"
+    },
+    {
+      "path": "packages/services-app/src/project/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "5cd463e54a365cb93b65e5a9a6e8433426187102d24955ec2f312bf13cf6cdf7"
+    },
+    {
+      "path": "packages/services-app/src/services-app.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e7028d189cb0448133a1a4f0498ca120fb104a98beca23f03b8c61aeebdfcf99"
+    },
+    {
+      "path": "packages/services-build/package.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "29306bf169ca99d58498f332b63d03131f1e901f82cd4a44b3dfee95f3c19cc4"
+    },
+    {
+      "path": "packages/services-build/src/behavior/compiler.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "ccc32d1d02cb7482279ce12aac08b5544e01788c9caaff61b35ebdc2723ef8e2"
+    },
+    {
+      "path": "packages/services-build/src/behavior/compiler.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "52eb761683ecfa6b842615b2bed194d69bd44fdc4f8ab3d7c659797de78e86da"
+    },
+    {
+      "path": "packages/services-build/src/behavior/conversion.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "38db5a2c0949ec67d44a287e274a0893e742b7b1dc5672787ad6a6968d2df923"
+    },
+    {
+      "path": "packages/services-build/src/behavior/conversion.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "2b7afdc2d7f0c39fdaef732691ef490c482a2037829be7919f6fa9f3704c7307"
+    },
+    {
+      "path": "packages/services-build/src/behavior/project-package.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "7ec75abd3f20683fce8a72c0769e00ad36d800a876479a2002516e2e1cf574ed"
+    },
+    {
+      "path": "packages/services-build/src/behavior/project-package.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "d650469b7762f52528da9e1c8982a1ed9921b1c29c487d5139fcaf6dda827c25"
+    },
+    {
+      "path": "packages/services-build/src/build/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "6d4250497e36588b2a0dc82aab47d239024cee3086db33c1056f14e244e253b3"
+    },
+    {
+      "path": "packages/services-build/src/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "57d42d5a80a9bd9c33bc4391e2df179c99b54b6dacb5509d66681c8ff6914cc6"
+    },
+    {
+      "path": "packages/services-build/src/map-package/assemble.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4b1413bfb0a9b92b7ac429eca7c1d97173975777f44b2d9b35bdf4984aef6ca3"
+    },
+    {
+      "path": "packages/services-build/src/map-package/assemble.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "a6818022875ab5f33637b9d1a53a5a48a6235b242e260a8c42740fc2cefa0ebd"
+    },
+    {
+      "path": "packages/services-build/src/map-package/ship.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "025f1a25dc8d0acf5be16ee2774e0ba59262e59fa743c2add6550ef670b0f082"
+    },
+    {
+      "path": "packages/services-build/src/model.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "844bb820e37d9aeedd714c33238a27b80dd3f9074cbffe0f2022ee17ffe08be2"
+    },
+    {
+      "path": "packages/services-build/src/playtest/index.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "61276b21445d89efdfe9ec7bf89ad8a0172a94d1acd94a8eb5d3563ab80834cb"
+    },
+    {
+      "path": "packages/services-build/src/playtest/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "456fff4371e84abfcb6f846d276515f8c9c1a5fe0110ffa67dfee43fd67610fb"
+    },
+    {
+      "path": "packages/services-build/src/runtime-version.test.ts",
+      "state": "untracked",
+      "classification": "intentional-source-test-docs",
+      "sha256": "108d998f7c4ef18ddf9a3d6312e633069dee1e3602d24a5879d5f87d855b5ba8"
+    },
+    {
+      "path": "packages/services-build/src/services-build.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "84d9e0dcce5cf66e9d96567eca8fa0dc6e56cccb0dcd262c11a7706c55085878"
+    },
+    {
+      "path": "packages/services-build/tsconfig.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "757866f92edaa5a63a15b3bbaeceb9d9905e98be412f44e2f5add15aceed438e"
+    },
+    {
+      "path": "packages/services-foundation/src/job/index.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "e7828d3d8372751d077c1df2b352dd3ebbe8c3dada700a422aea5adb34b0fc24"
+    },
+    {
+      "path": "packages/services-foundation/src/job/job.test.ts",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "078fef005d1cc5f4af6445421de7721524b083cb3b6a6b4f479e5c78b18c5ac6"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "state": "tracked-modified",
+      "classification": "required-generated-input",
+      "sha256": "21e407de2e92059e4b2a3f661a8447a9216c2e450d4779772789189d3143a770"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "state": "tracked-modified",
+      "classification": "intentional-source-test-docs",
+      "sha256": "4a6ef72913c1ac953e157db4cdf27dbcbde208d9a16f9c2402499884abf47bd6"
+    }
+  ]
+}

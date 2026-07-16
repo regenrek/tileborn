@@ -418,6 +418,13 @@ export const behaviorReferencesForDraft = (
 
 export type BehaviorExpressionMode = BehaviorValueExpression['_tag'];
 
+/** Keep an editor-owned mutation snapshot visible while query invalidation refetches in background. */
+export const shouldShowBehaviorEditorLoading = (
+  behaviorsLoading: boolean,
+  registryLoading: boolean,
+  hasSnapshot: boolean,
+): boolean => registryLoading || (behaviorsLoading && !hasSnapshot);
+
 export const convertExpression = (
   mode: BehaviorExpressionMode,
   parameter: BehaviorParameterMetadata,

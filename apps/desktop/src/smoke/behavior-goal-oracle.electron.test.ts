@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createLocalGameHost } from '@tileborne/game-host/local';
-import { expect } from '@playwright/test';
+import { expect, type Dialog, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {
@@ -18,11 +18,9 @@ import {
   type SmokeContext,
 } from './helpers.js';
 
-const VISUAL_NODE = 'behavior-node:00000000-0000-4000-8000-000000000801';
-const MISSING_NODE = 'behavior-node:00000000-0000-4000-8000-000000000802';
-const MISSING_BEHAVIOR = 'behavior:00000000-0000-4000-8000-000000000899';
 const ORACLE_RUN_ID = process.env.TILEBORNE_CREATOR_ORACLE_RUN_ID ?? `local-${Date.now()}`;
 const ORACLE_ARTIFACTS = process.env.TILEBORNE_CREATOR_ORACLE_ARTIFACTS;
+const ORACLE_PREFLIGHT = process.env.TILEBORNE_CREATOR_ORACLE_PREFLIGHT;
 
 const artifactPath = (name: string): string | undefined =>
   ORACLE_ARTIFACTS === undefined ? undefined : path.join(ORACLE_ARTIFACTS, name);
@@ -54,6 +52,200 @@ export default defineBehavior({
   },
 });
 `;
+
+const createVisualTickProof = async (
+  page: Page,
+  projectId: string,
+  label: string,
+): Promise<string> => {
+  const beforeIds = await page.evaluate(async (owner) => {
+    const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+    return snapshot.resources.map(({ manifest }) => String(manifest.id));
+  }, projectId);
+  await page.getByLabel('Create behavior', { exact: true }).click();
+  await expect(page.getByTestId('behavior-template-dialog')).toBeVisible();
+  await page.getByText('Blank event sheet', { exact: true }).click();
+  let behaviorId: string | undefined;
+  await expect
+    .poll(async () => {
+      const createdId = await page.evaluate(
+        async ({ owner, existingIds }) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          return snapshot.resources.find(
+            ({ manifest }) => !existingIds.includes(String(manifest.id)),
+          )?.manifest.id;
+        },
+        { owner: projectId, existingIds: beforeIds },
+      );
+      behaviorId = createdId === undefined ? undefined : String(createdId);
+      return behaviorId;
+    })
+    .toMatch(/^behavior:/);
+  const createdOption = page.locator(`[data-behavior-id="${behaviorId}"]`);
+  await expect(createdOption).toBeVisible();
+  if ((await createdOption.getAttribute('aria-selected')) !== 'true') await createdOption.click();
+  await expect(createdOption).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('behavior-event-sheet')).toBeVisible();
+  await page.locator('#behavior-label').fill(label);
+  await page.getByRole('button', { name: 'Add state' }).click();
+  await page.getByLabel('State key').fill('proof');
+  await page.getByLabel('State label').fill('Proof');
+  await page.getByLabel('Initial state value').fill('false');
+  await page.getByLabel('Initial state value').blur();
+  await page.getByRole('button', { name: 'Choose event block' }).click();
+  await page.getByRole('option', { name: /Simulation tick/ }).click();
+  await page.getByRole('button', { name: 'Add action' }).click();
+  await page.getByRole('option', { name: /Set local state/ }).click();
+  await page.getByRole('textbox', { name: 'State field', exact: true }).fill('proof');
+  await page.getByLabel('JSON value').fill('true');
+  await page.getByLabel('JSON value').blur();
+  const save = page.getByRole('button', { name: /^Save$/ });
+  await save.click();
+  await expect(page.getByText(`Saved ${label}`, { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => {
+      return page.evaluate(
+        async ({ owner, id }) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          return snapshot.resources.find(({ manifest }) => String(manifest.id) === id)?.manifest
+            .label;
+        },
+        { owner: projectId, id: behaviorId! },
+      );
+    })
+    .toBe(label);
+  await expect(page.getByRole('option', { name: new RegExp(label) })).toBeVisible({
+    timeout: 15_000,
+  });
+  return behaviorId!;
+};
+
+const saveTypeScriptThroughEditor = async (
+  page: Page,
+  projectId: string,
+  label: string,
+  source: string,
+): Promise<void> => {
+  await expect(page.locator('[role="option"][aria-selected="true"]')).toBeVisible();
+  const option = page.getByRole('option', { name: new RegExp(label) });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await option.click();
+    await expect(option).toHaveAttribute('aria-selected', 'true');
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    if ((await option.getAttribute('aria-selected')) === 'true') break;
+  }
+  await expect(option).toHaveAttribute('aria-selected', 'true');
+  const editor = page.getByLabel('TypeScript behavior source');
+  await expect(editor).toBeVisible();
+  await editor.click();
+  await editor.selectText();
+  await page.keyboard.insertText(source);
+  const save = page
+    .getByTestId('typescript-behavior-document')
+    .getByRole('button', { name: 'Save' });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const selected = document.querySelector('[role="option"][aria-selected="true"]');
+        const sourceEditor = document.querySelector<HTMLTextAreaElement>(
+          '[aria-label="TypeScript behavior source"]',
+        );
+        const documentRoot = document.querySelector('[data-testid="typescript-behavior-document"]');
+        const saveButton = documentRoot?.querySelector<HTMLButtonElement>('button');
+        return {
+          hash: window.location.hash,
+          selected: selected?.textContent ?? null,
+          source: sourceEditor?.value ?? null,
+          documentVisible: documentRoot !== null,
+          saveDisabled: saveButton?.disabled ?? null,
+        };
+      }),
+    )
+    .toMatchObject({
+      selected: expect.stringContaining(label),
+      hash: expect.stringContaining('/behaviors'),
+      source,
+      documentVisible: true,
+      saveDisabled: false,
+    });
+  await save.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        async ({ owner, expectedLabel }) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          const resource = snapshot.resources.find(
+            ({ manifest }) => manifest.label === expectedLabel,
+          );
+          return resource?.kind === 'typescript' ? resource.source : undefined;
+        },
+        { owner: projectId, expectedLabel: label },
+      ),
+    )
+    .toBe(source);
+  await expect(editor).toHaveValue(source);
+  await expect(save).toBeDisabled();
+};
+
+const reopenBehaviorEditor = async (
+  page: Page,
+  projectId: string,
+  mapId: string,
+): Promise<void> => {
+  await navigateToRoute(page, `/projects/${projectId}/maps/${mapId}`);
+  await expect(page.getByTestId('battle-royale-authoring-panel')).toBeVisible();
+  await navigateToRoute(page, `/projects/${projectId}/behaviors`);
+  await expect(page.getByTestId('behavior-editor-page')).toBeVisible();
+};
+
+const addBehaviorReferenceThroughEditor = async (
+  page: Page,
+  projectId: string,
+  behaviorLabel: string,
+  referencedBehaviorLabel: string,
+): Promise<string> => {
+  const option = page.getByRole('option', { name: new RegExp(behaviorLabel) });
+  await option.click();
+  await expect(option).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('behavior-event-sheet')).toBeVisible();
+  await page.getByRole('button', { name: 'Add action' }).click();
+  await page.getByRole('option', { name: /Run behavior/ }).click();
+  await page.getByLabel('Behavior source').selectOption('reference');
+  const picker = page.getByTestId('behavior-reference-picker');
+  await expect(picker).toBeVisible();
+  await picker.getByRole('option', { name: new RegExp(referencedBehaviorLabel) }).click();
+  await expect(page.getByRole('button', { name: 'Behavior', exact: true })).toContainText(
+    referencedBehaviorLabel,
+  );
+  await page.getByRole('button', { name: /^Save$/ }).click();
+  await expect(page.getByText(`Saved ${behaviorLabel}`, { exact: true })).toBeVisible();
+  let nodeId: string | undefined;
+  await expect
+    .poll(async () => {
+      const result = await page.evaluate(
+        async ({ owner, label }) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          const resource = snapshot.resources.find(({ manifest }) => manifest.label === label);
+          if (resource?.kind !== 'visual') return undefined;
+          const action = resource.definition.do.find(
+            (candidate) =>
+              candidate._tag === 'action' && candidate.invocation.entryId === 'behavior.invoke',
+          );
+          return action?.nodeId === undefined ? undefined : String(action.nodeId);
+        },
+        { owner: projectId, label: behaviorLabel },
+      );
+      nodeId = result;
+      return result;
+    })
+    .toMatch(/^behavior-node:/);
+  return nodeId!;
+};
 
 describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
   let context: SmokeContext | undefined;
@@ -117,187 +309,136 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
       return { projectId: String(project.id), mapId: String(map.id) };
     }, projectName);
 
-    const authored = await page.evaluate(
-      async ({ projectId, visualNode, missingNode, missingBehavior }) => {
-        const visualDraft = (value: unknown, nodeId: string) => ({
-          state: [{ key: 'proof', label: 'Proof', initialValue: false }],
-          when: { entryId: 'runtime.tick', arguments: {} },
-          do: [
-            {
-              _tag: 'action' as const,
-              nodeId,
-              invocation: {
-                entryId: 'state.set',
-                arguments: {
-                  key: { _tag: 'literal' as const, value: 'proof' },
-                  value,
-                },
-              },
-            },
-          ],
-        });
-        const createVisual = async (label: string, definition: ReturnType<typeof visualDraft>) => {
-          const before = await window.tileborne.behaviors.open({ projectId });
-          const beforeIds = new Set(
-            before.snapshot.resources.map(({ manifest }) => String(manifest.id)),
-          );
-          const result = await window.tileborne.behaviors.createVisual({
-            projectId,
-            label,
-            definition,
-            requiredCapabilities: ['time.deterministic', 'state.core'],
-          });
-          const resource = result.snapshot.resources.find(
-            ({ manifest }) => !beforeIds.has(String(manifest.id)),
-          );
-          if (resource === undefined)
-            throw new Error(`Could not identify created behavior ${label}`);
-          return { resource, snapshot: result.snapshot };
-        };
-
-        const visual = await createVisual(
-          'Visual Tick Proof',
-          visualDraft({ _tag: 'literal', value: true }, visualNode),
-        );
-        const nativeSeed = await createVisual(
-          'Native Tick Proof',
-          visualDraft({ _tag: 'literal', value: true }, `${visualNode.slice(0, -1)}2`),
-        );
-        const converted = await window.tileborne.behaviors.convertToTypeScript({
-          projectId,
-          behaviorId: nativeSeed.resource.manifest.id,
-          expectedRevision: nativeSeed.snapshot.revision,
-        });
-        const nativeResource = converted.snapshot.resources.find(
-          ({ manifest }) => manifest.id === nativeSeed.resource.manifest.id,
-        );
-        if (nativeResource?.kind !== 'typescript')
-          throw new Error('Native proof conversion failed');
-        const nativeSaved = await window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: nativeResource.manifest.id,
-          expectedRevision: converted.snapshot.revision,
-          label: 'Native Tick Proof',
-          source: `
-import { defineBehavior } from '@tileborne/game-sdk';
-export default defineBehavior({
-  id: 'goal-oracle.native-proof',
-  state: { proof: false },
-  on: { 'runtime.tick': ({ state }) => state.set('proof', true) },
-});`,
-          exportName: 'default',
-          requiredCapabilities: ['time.deterministic', 'state.core'],
-        });
-
-        const runawaySeed = await createVisual(
-          'Runaway Isolation Proof',
-          visualDraft({ _tag: 'literal', value: true }, `${visualNode.slice(0, -1)}3`),
-        );
-        const runawayConverted = await window.tileborne.behaviors.convertToTypeScript({
-          projectId,
-          behaviorId: runawaySeed.resource.manifest.id,
-          expectedRevision: runawaySeed.snapshot.revision,
-        });
-        const runawayResource = runawayConverted.snapshot.resources.find(
-          ({ manifest }) => manifest.id === runawaySeed.resource.manifest.id,
-        );
-        if (runawayResource?.kind !== 'typescript')
-          throw new Error('Runaway proof conversion failed');
-        const runawaySaved = await window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: runawayResource.manifest.id,
-          expectedRevision: runawayConverted.snapshot.revision,
-          label: 'Runaway Isolation Proof',
-          source: `
-import { defineBehavior } from '@tileborne/game-sdk';
-export default defineBehavior({
-  id: 'goal-oracle.runaway-proof',
-  state: { proof: false },
-  on: { 'runtime.tick': ({ state }) => state.set('proof', true) },
-});`,
-          exportName: 'default',
-          requiredCapabilities: ['time.deterministic', 'state.core'],
-        });
-
-        const missing = await createVisual(
-          'Missing Reference Proof',
-          visualDraft(
-            {
-              _tag: 'reference',
-              reference: { _tag: 'behavior', behaviorId: missingBehavior },
-            },
-            missingNode,
-          ),
-        );
-        const broken = await window.tileborne.readiness.check({
-          projectId,
-          mapId: undefined,
-          purpose: 'build',
-        });
-        const missingDiagnostic = broken.report.diagnostics.find(
-          ({ code, behaviorId }) =>
-            code === 'behavior.reference-missing' && behaviorId === missing.resource.manifest.id,
-        );
-        if (missingDiagnostic?.navigation?.kind !== 'behavior') {
-          throw new Error(
-            `Missing reference was not actionable: ${JSON.stringify(broken.report.diagnostics)}`,
-          );
-        }
-        const missingResource = missing.snapshot.resources.find(
-          ({ manifest }) => manifest.id === missing.resource.manifest.id,
-        );
-        if (missingResource?.kind !== 'visual')
-          throw new Error('Missing reference visual resource disappeared');
-        const repairedDefinition = {
-          ...missingResource.definition,
-          do: missingResource.definition.do.map((node) =>
-            node.nodeId === missingNode && node._tag === 'action'
-              ? {
-                  ...node,
-                  invocation: {
-                    ...node.invocation,
-                    arguments: {
-                      ...node.invocation.arguments,
-                      value: { _tag: 'literal' as const, value: true },
-                    },
-                  },
-                }
-              : node,
-          ),
-        };
-        const repaired = await window.tileborne.behaviors.saveVisual({
-          projectId,
-          behaviorId: missingResource.manifest.id,
-          expectedRevision: missing.snapshot.revision,
-          label: missingResource.manifest.label,
-          definition: repairedDefinition,
-          requiredCapabilities: [...missingResource.manifest.requiredCapabilities],
-        });
-        const ready = await window.tileborne.readiness.check({ projectId, purpose: 'build' });
-        if (!ready.report.ok)
-          throw new Error(
-            `Reference repair did not restore readiness: ${JSON.stringify(ready.report.diagnostics)}`,
-          );
-
-        return {
-          visualId: String(visual.resource.manifest.id),
-          nativeId: String(nativeResource.manifest.id),
-          runawayId: String(runawayResource.manifest.id),
-          missingId: String(missingResource.manifest.id),
-          missingNode: String(missingDiagnostic.behaviorNodeId),
-          missingPath: missingDiagnostic.path,
-          finalRevision: repaired.snapshot.revision,
-          nativeRevision: nativeSaved.snapshot.revision,
-          runawayRevision: runawaySaved.snapshot.revision,
-        };
-      },
-      {
-        projectId: created.projectId,
-        visualNode: VISUAL_NODE,
-        missingNode: MISSING_NODE,
-        missingBehavior: MISSING_BEHAVIOR,
-      },
+    await navigateToRoute(page, `/projects/${created.projectId}/behaviors`);
+    await expect(page.getByTestId('behavior-editor-page')).toBeVisible();
+    const visualId = await createVisualTickProof(page, created.projectId, 'Visual Tick Proof');
+    const nativeId = await createVisualTickProof(page, created.projectId, 'Native Tick Proof');
+    const referenceTargetId = await createVisualTickProof(
+      page,
+      created.projectId,
+      'Reference Target',
     );
+    const missingReferenceId = await createVisualTickProof(
+      page,
+      created.projectId,
+      'Missing Reference Proof',
+    );
+    const missingReferenceNodeId = await addBehaviorReferenceThroughEditor(
+      page,
+      created.projectId,
+      'Missing Reference Proof',
+      'Reference Target',
+    );
+    await reopenBehaviorEditor(page, created.projectId, created.mapId);
+    const referenceTargetOption = page.getByRole('option', { name: /Reference Target/ });
+    await referenceTargetOption.click();
+    await expect(referenceTargetOption).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#behavior-label')).toHaveValue('Reference Target');
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          async ({ owner, targetId }) => {
+            const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+            return snapshot.useSites.filter(({ behaviorId }) => String(behaviorId) === targetId)
+              .length;
+          },
+          { owner: created.projectId, targetId: referenceTargetId },
+        ),
+      )
+      .toBe(1);
+    const deletePrompts: string[] = [];
+    const acceptDelete = (dialog: Dialog) => {
+      deletePrompts.push(dialog.message());
+      return dialog.accept();
+    };
+    page.on('dialog', acceptDelete);
+    await page.getByRole('button', { name: 'Delete behavior' }).click();
+    await expect
+      .poll(() => deletePrompts, { message: 'force-delete confirmation prompts' })
+      .toContainEqual(expect.stringContaining('missing references'));
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          async ({ owner, targetId }) => {
+            const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+            return snapshot.resources.some(({ manifest }) => String(manifest.id) === targetId);
+          },
+          { owner: created.projectId, targetId: referenceTargetId },
+        ),
+      )
+      .toBe(false);
+    page.off('dialog', acceptDelete);
+    await expect(referenceTargetOption).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        page.evaluate(async (owner) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          return snapshot.diagnostics.some(({ code }) => code === 'behavior.reference-missing');
+        }, created.projectId),
+      )
+      .toBe(true);
+    await expect
+      .poll(async () =>
+        page.evaluate(async ({ projectId, mapId }) => {
+          const { report } = await window.tileborne.readiness.check({
+            projectId,
+            mapId,
+            purpose: 'authoring',
+          });
+          return report.diagnostics.some(({ code }) => code === 'behavior.reference-missing');
+        }, created),
+      )
+      .toBe(true);
+
+    await navigateToRoute(page, `/projects/${created.projectId}/maps/${created.mapId}`);
+    await expect(page.getByTestId('readiness-status')).toContainText(/blocked/, {
+      timeout: 15_000,
+    });
+    await page.getByTestId('readiness-status').click();
+    await expect(page.getByTestId('readiness-problems')).toBeVisible();
+    const missingProblem = page.locator(
+      '[data-testid="readiness-problem"][data-source="behavior"]',
+    );
+    await expect(missingProblem).toContainText('Behavior reference is missing');
+    await missingProblem.click();
+    await expect(page.getByTestId('behavior-event-sheet')).toBeVisible();
+    const missingReferenceNode = page.locator(`[data-node-id="${missingReferenceNodeId}"]`);
+    await expect(missingReferenceNode).toBeFocused();
+    await page.getByRole('button', { name: 'Behavior', exact: true }).click();
+    const repairPicker = page.getByTestId('behavior-reference-picker');
+    await expect(repairPicker).toBeVisible();
+    await repairPicker.getByRole('option', { name: /Visual Tick Proof/ }).click();
+    await page.getByRole('button', { name: /^Save$/ }).click();
+    await expect(page.getByText('Saved Missing Reference Proof', { exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.evaluate(async (owner) => {
+          const { snapshot } = await window.tileborne.behaviors.open({ projectId: owner });
+          return snapshot.diagnostics.some(({ code }) => code === 'behavior.reference-missing');
+        }, created.projectId),
+      )
+      .toBe(false);
+    await navigateToRoute(page, `/projects/${created.projectId}/maps/${created.mapId}`);
+    await expect(page.getByTestId('readiness-status')).toContainText(/Ready|warnings/, {
+      timeout: 15_000,
+    });
+
+    await navigateToRoute(page, `/projects/${created.projectId}/behaviors`);
+    const nativeOption = page.getByRole('option', { name: /Native Tick Proof/ });
+    await nativeOption.click();
+    await expect(nativeOption).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('button', { name: 'Convert to TypeScript' }).click();
+    await expect(page.getByTestId('behavior-convert-dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Convert permanently' }).click();
+    await expect(page.getByTestId('typescript-behavior-document')).toBeVisible();
+    await saveTypeScriptThroughEditor(
+      page,
+      created.projectId,
+      'Native Tick Proof',
+      nativeSource('goal-oracle.native-proof', "state.set('proof', true)"),
+    );
+    const runawayId = nativeId;
+    const authored = { visualId, nativeId, runawayId, missingReferenceId };
 
     await navigateToRoute(page, `/projects/${created.projectId}/game-content`);
     await page.getByTestId('content-tab-items').click();
@@ -475,26 +616,13 @@ export default defineBehavior({
     );
     expect(continued.status).toBe('running');
 
-    const invalidReload = await page.evaluate(
-      async ({ projectId, nativeId }) => {
-        const opened = await window.tileborne.behaviors.open({ projectId });
-        const resource = opened.snapshot.resources.find(
-          ({ manifest }) => String(manifest.id) === nativeId,
-        );
-        if (resource?.kind !== 'typescript') throw new Error('Native proof resource missing');
-        return window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: resource.manifest.id,
-          expectedRevision: opened.snapshot.revision,
-          label: resource.manifest.label,
-          source: `import { defineBehavior } from '@tileborne/game-sdk';\nexport default defineBehavior({`,
-          exportName: 'default',
-          requiredCapabilities: [...resource.manifest.requiredCapabilities],
-        });
-      },
-      { projectId: created.projectId, nativeId: authored.nativeId },
+    await navigateToRoute(page, `/projects/${created.projectId}/behaviors`);
+    await saveTypeScriptThroughEditor(
+      page,
+      created.projectId,
+      'Native Tick Proof',
+      `import { defineBehavior } from '@tileborne/game-sdk';\nexport default defineBehavior({`,
     );
-    expect(invalidReload.snapshot.resources).toHaveLength(4);
     await expect
       .poll(
         async () =>
@@ -516,28 +644,12 @@ export default defineBehavior({
         },
       });
 
-    await page.evaluate(
-      async ({ projectId, nativeId, source }) => {
-        const opened = await window.tileborne.behaviors.open({ projectId });
-        const resource = opened.snapshot.resources.find(
-          ({ manifest }) => String(manifest.id) === nativeId,
-        );
-        if (resource?.kind !== 'typescript') throw new Error('Native proof resource missing');
-        await window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: resource.manifest.id,
-          expectedRevision: opened.snapshot.revision,
-          label: resource.manifest.label,
-          source,
-          exportName: 'default',
-          requiredCapabilities: [...resource.manifest.requiredCapabilities],
-        });
-      },
-      {
-        projectId: created.projectId,
-        nativeId: authored.nativeId,
-        source: nativeSource('goal-oracle.native-proof', "state.set('proof', true)"),
-      },
+    await reopenBehaviorEditor(page, created.projectId, created.mapId);
+    await saveTypeScriptThroughEditor(
+      page,
+      created.projectId,
+      'Native Tick Proof',
+      nativeSource('goal-oracle.native-proof', "state.set('proof', true)"),
     );
     await expect
       .poll(
@@ -552,28 +664,12 @@ export default defineBehavior({
       )
       .toBe('applied');
 
-    await page.evaluate(
-      async ({ projectId, runawayId, source }) => {
-        const opened = await window.tileborne.behaviors.open({ projectId });
-        const resource = opened.snapshot.resources.find(
-          ({ manifest }) => String(manifest.id) === runawayId,
-        );
-        if (resource?.kind !== 'typescript') throw new Error('Runaway proof resource missing');
-        await window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: resource.manifest.id,
-          expectedRevision: opened.snapshot.revision,
-          label: resource.manifest.label,
-          source,
-          exportName: 'default',
-          requiredCapabilities: [...resource.manifest.requiredCapabilities],
-        });
-      },
-      {
-        projectId: created.projectId,
-        runawayId: authored.runawayId,
-        source: nativeSource('goal-oracle.runaway-proof', '(() => { while (true) {} })()'),
-      },
+    await reopenBehaviorEditor(page, created.projectId, created.mapId);
+    await saveTypeScriptThroughEditor(
+      page,
+      created.projectId,
+      'Native Tick Proof',
+      nativeSource('goal-oracle.runaway-proof', '(() => { while (true) {} })()'),
     );
     await expect
       .poll(
@@ -585,30 +681,14 @@ export default defineBehavior({
         { timeout: 30_000, intervals: [100, 250, 500] },
       )
       .toContain('Behavior worker exceeded');
-    await expect(page.getByTestId('playtest-menu-trigger')).toBeVisible();
+    await expect(page.getByTestId('behavior-editor-page')).toBeVisible();
 
-    await page.evaluate(
-      async ({ projectId, runawayId, source }) => {
-        const opened = await window.tileborne.behaviors.open({ projectId });
-        const resource = opened.snapshot.resources.find(
-          ({ manifest }) => String(manifest.id) === runawayId,
-        );
-        if (resource?.kind !== 'typescript') throw new Error('Runaway proof resource missing');
-        await window.tileborne.behaviors.saveTypeScript({
-          projectId,
-          behaviorId: resource.manifest.id,
-          expectedRevision: opened.snapshot.revision,
-          label: resource.manifest.label,
-          source,
-          exportName: 'default',
-          requiredCapabilities: [...resource.manifest.requiredCapabilities],
-        });
-      },
-      {
-        projectId: created.projectId,
-        runawayId: authored.runawayId,
-        source: nativeSource('goal-oracle.runaway-proof', "state.set('proof', true)"),
-      },
+    await reopenBehaviorEditor(page, created.projectId, created.mapId);
+    await saveTypeScriptThroughEditor(
+      page,
+      created.projectId,
+      'Native Tick Proof',
+      nativeSource('goal-oracle.runaway-proof', "state.set('proof', true)"),
     );
 
     await page.getByTestId('bottom-drawer-open').click();
@@ -641,12 +721,16 @@ export default defineBehavior({
       },
       {
         projectId: created.projectId,
-        ids: [authored.visualId, authored.nativeId, authored.runawayId, authored.missingId],
+        ids: [
+          authored.visualId,
+          authored.nativeId,
+          authored.runawayId,
+          authored.missingReferenceId,
+        ],
       },
     );
-    expect(reopened.resources).toHaveLength(4);
+    expect(reopened.resources).toHaveLength(3);
     expect(reopened.resources.map(({ kind }) => kind).sort()).toEqual([
-      'typescript',
       'typescript',
       'visual',
       'visual',
@@ -838,6 +922,34 @@ export default defineBehavior({
 
     const receiptTarget = artifactPath('receipt.json');
     if (receiptTarget !== undefined) {
+      if (ORACLE_PREFLIGHT === undefined) {
+        throw new Error('Artifact-producing creator Oracle requires runner preflight evidence.');
+      }
+      const preflightBytes = await readFile(ORACLE_PREFLIGHT);
+      const preflight = JSON.parse(preflightBytes.toString('utf8')) as {
+        readonly schemaVersion: number;
+        readonly checkout: {
+          readonly cwd: string;
+          readonly cwdRealpath: string;
+          readonly repositoryRoot: string;
+          readonly gitHead: string;
+          readonly state: string;
+          readonly initialStatus: string;
+          readonly postBuildStatus: string;
+        };
+      };
+      const currentRoot = await realpath(process.cwd());
+      if (
+        preflight.schemaVersion !== 1 ||
+        preflight.checkout.cwdRealpath !== currentRoot ||
+        preflight.checkout.repositoryRoot !== currentRoot ||
+        preflight.checkout.state !== 'detached' ||
+        preflight.checkout.initialStatus !== '' ||
+        preflight.checkout.postBuildStatus !== ''
+      ) {
+        throw new Error(`Creator Oracle runner preflight mismatch: ${JSON.stringify(preflight)}`);
+      }
+      const preflightSha256 = createHash('sha256').update(preflightBytes).digest('hex');
       const evidence = await Promise.all(
         [
           '01-authoring-and-durable-draft.zip',
@@ -865,9 +977,12 @@ export default defineBehavior({
           {
             schemaVersion: 1,
             runId: ORACLE_RUN_ID,
-            gitHead: process.env.TILEBORNE_CREATOR_ORACLE_GIT_HEAD ?? null,
-            checkoutRoot: process.env.TILEBORNE_CREATOR_ORACLE_CHECKOUT ?? process.cwd(),
-            checkoutStatus: process.env.TILEBORNE_CREATOR_ORACLE_GIT_STATUS ?? null,
+            runnerPreflight: {
+              sha256: preflightSha256,
+              gitHead: preflight.checkout.gitHead,
+              checkoutRoot: preflight.checkout.repositoryRoot,
+              state: preflight.checkout.state,
+            },
             profileRoot: tileborneHome,
             projectId: created.projectId,
             mapId: created.mapId,
@@ -876,7 +991,7 @@ export default defineBehavior({
               freshProfileUiStarter: 'passed',
               visualBehavior: authored.visualId,
               typescriptBehavior: authored.nativeId,
-              readinessRepair: authored.missingId,
+              readinessRepair: 'problems-ui-passed',
               durableInterruptionRecovery: 'passed',
               saveReopen: 'passed',
               behaviorDiagnostics: 'passed',

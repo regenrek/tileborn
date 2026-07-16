@@ -53,6 +53,7 @@ import {
   fromBehaviorDefinition,
   instantiateBehaviorTemplate,
   requiredCapabilitiesForDraft,
+  shouldShowBehaviorEditorLoading,
   toBehaviorDefinition,
   validateBehaviorDraft,
   type VisualBehaviorDraft,
@@ -366,6 +367,7 @@ function VisualBehaviorDocument({
   projectId,
   revision,
   resource,
+  useSiteCount,
   entries,
   onSaved,
   onRemoved,
@@ -374,6 +376,7 @@ function VisualBehaviorDocument({
   readonly projectId: ProjectId;
   readonly revision: number;
   readonly resource: VisualBehaviorResource;
+  readonly useSiteCount: number;
   readonly entries: Parameters<typeof BehaviorEventSheet>[0]['entries'];
   readonly onSaved: (snapshot: BehaviorSnapshot) => void;
   readonly onRemoved: (snapshot: BehaviorSnapshot) => void;
@@ -595,16 +598,45 @@ function VisualBehaviorDocument({
             aria-label="Delete behavior"
             disabled={removeMutation.isPending}
             onClick={async () => {
-              if (!confirm(`Delete ${history.present.label}?`)) return;
-              try {
-                const result = await removeMutation.mutateAsync({
+              const knownInUse = useSiteCount > 0;
+              const prompt = knownInUse
+                ? `Delete ${history.present.label}? It is referenced by ${useSiteCount} behavior resource(s). Deleting it will leave missing references that must be repaired before the game is ready.`
+                : `Delete ${history.present.label}?`;
+              if (!confirm(prompt)) return;
+              const remove = (force: boolean) =>
+                removeMutation.mutateAsync({
                   projectId,
                   behaviorId: resource.manifest.id,
                   expectedRevision: revision,
+                  ...(force ? { force: true } : {}),
                 });
+              try {
+                const result = await remove(knownInUse);
                 onRemoved(result.snapshot);
               } catch (error) {
-                notifyError(error instanceof Error ? error.message : 'Could not delete behavior');
+                const message =
+                  error instanceof Error ? error.message : 'Could not delete behavior';
+                if (
+                  !knownInUse &&
+                  message.toLowerCase().includes('referenc') &&
+                  confirm(
+                    `Delete ${history.present.label} anyway? It is referenced by another behavior. Deleting it will leave missing references that must be repaired before the game is ready.`,
+                  )
+                ) {
+                  try {
+                    const result = await remove(true);
+                    onRemoved(result.snapshot);
+                    return;
+                  } catch (forceError) {
+                    notifyError(
+                      forceError instanceof Error
+                        ? forceError.message
+                        : 'Could not delete behavior',
+                    );
+                    return;
+                  }
+                }
+                notifyError(message);
               }
             }}
           >
@@ -808,18 +840,20 @@ export function TypeScriptBehaviorDocument({
             Behavior name
             <Input
               value={draft.label}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, label: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const label = event.currentTarget.value;
+                setDraft((current) => ({ ...current, label }));
+              }}
             />
           </label>
           <label className="grid gap-1 text-xs font-medium">
             Export name
             <Input
               value={draft.exportName}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, exportName: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const exportName = event.currentTarget.value;
+                setDraft((current) => ({ ...current, exportName }));
+              }}
             />
           </label>
         </div>
@@ -828,9 +862,10 @@ export function TypeScriptBehaviorDocument({
           aria-label="TypeScript behavior source"
           spellCheck={false}
           value={draft.source}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, source: event.currentTarget.value }))
-          }
+          onChange={(event) => {
+            const source = event.currentTarget.value;
+            setDraft((current) => ({ ...current, source }));
+          }}
         />
       </div>
     </div>
@@ -918,7 +953,13 @@ export function BehaviorEditorPage() {
     }
   };
 
-  if (behaviorsQuery.isLoading || registryQuery.isLoading)
+  if (
+    shouldShowBehaviorEditorLoading(
+      behaviorsQuery.isLoading,
+      registryQuery.isLoading,
+      snapshot !== undefined,
+    )
+  )
     return <div className="p-6 text-sm text-muted-foreground">Loading behaviors…</div>;
   if (
     behaviorsQuery.isError ||
@@ -970,6 +1011,11 @@ export function BehaviorEditorPage() {
             projectId={projectId}
             revision={snapshot.revision}
             resource={selected}
+            useSiteCount={
+              snapshot.useSites.filter(
+                (site) => String(site.behaviorId) === String(selected.manifest.id),
+              ).length
+            }
             entries={registryQuery.data.registry.entries}
             onSaved={setSnapshotOverride}
             onConverted={setSnapshotOverride}

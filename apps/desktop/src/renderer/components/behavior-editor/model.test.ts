@@ -34,6 +34,7 @@ import {
   fromBehaviorDefinition,
   instantiateBehaviorTemplate,
   requiredCapabilitiesForDraft,
+  shouldShowBehaviorEditorLoading,
   toBehaviorDefinition,
   validateBehaviorDraft,
 } from './model';
@@ -41,6 +42,12 @@ import {
 const uuid = (tail: string): Uuid => `00000000-0000-4000-8000-${tail.padStart(12, '0')}` as Uuid;
 
 describe('visual behavior editor model', () => {
+  it('keeps a mutation-owned snapshot visible during background query refetch', () => {
+    expect(shouldShowBehaviorEditorLoading(true, false, true)).toBe(false);
+    expect(shouldShowBehaviorEditorLoading(true, false, false)).toBe(true);
+    expect(shouldShowBehaviorEditorLoading(false, true, true)).toBe(true);
+  });
+
   const fixture = async (name: 'plugin-battle-royale' | 'plugin-example-arena') =>
     JSON.parse(
       await readFile(

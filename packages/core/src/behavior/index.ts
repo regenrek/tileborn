@@ -430,6 +430,17 @@ export const CORE_BEHAVIOR_REGISTRY = new BehaviorRegistryManifest({
       outputs: [],
     }),
     new BehaviorRegistryEntry({
+      id: registryEntryId('behavior.invoke'),
+      kind: 'action',
+      label: 'Run behavior',
+      category: 'Behavior',
+      description: 'Invokes another project behavior through a durable reference.',
+      capability: capabilityId('lifecycle.core'),
+      icon: 'workflow',
+      inputs: [parameter('behavior', 'Behavior', 'behavior-reference', true)],
+      outputs: [],
+    }),
+    new BehaviorRegistryEntry({
       id: registryEntryId('timer.after'),
       kind: 'action',
       label: 'Start one-shot timer',

@@ -157,14 +157,18 @@ export function useCreateMap() {
   });
 }
 
-const invalidateBehaviors = (queryClient: ReturnType<typeof useQueryClient>, projectId: string) => {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.documents(projectId) });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
-  void invalidateBehaviorReferences(queryClient, projectId, 'behavior');
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.behaviorReferences.resolveAll(projectId),
-  });
-};
+const invalidateBehaviors = (
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): Promise<unknown> =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.documents(projectId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all }),
+    invalidateBehaviorReferences(queryClient, projectId, 'behavior'),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.behaviorReferences.resolveAll(projectId),
+    }),
+  ]);
 
 export function useCreateVisualBehavior() {
   const queryClient = useQueryClient();

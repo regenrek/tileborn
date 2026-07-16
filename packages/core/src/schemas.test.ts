@@ -332,6 +332,16 @@ describe('factories', () => {
     );
   });
 
+  it('publishes durable behavior references to visual behavior authors', () => {
+    expect(CORE_BEHAVIOR_REGISTRY.entries).toContainEqual(
+      expect.objectContaining({
+        id: 'behavior.invoke',
+        kind: 'action',
+        inputs: [expect.objectContaining({ key: 'behavior', valueKind: 'behavior-reference' })],
+      }),
+    );
+  });
+
   it('builds a project manifest with defaults', () => {
     const manifest = makeProjectManifest({
       id: makeProjectId(UUID),

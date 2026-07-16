@@ -33,15 +33,19 @@ export const releaseGates = Object.freeze([
     ['pnpm', 'build'],
     ['pnpm', 'test:cli-e2e'],
   ]),
-  gate('game-host', 'Game host smoke', [['pnpm', 'test:game-host']]),
+  gate('game-host', 'Game host smoke', [
+    ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/game-host...'],
+    ['pnpm', 'test:game-host'],
+  ]),
   gate('bundled-worker', 'Bundled worker', [
-    ['pnpm', '--filter', '@tileborne/game-host', 'build'],
+    ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/game-host...'],
     ['pnpm', '--filter', '@tileborne/game-host', 'verify:bundled-worker'],
   ]),
   gate('services-build-hermetic', 'Hermetic services build', [
     ['pnpm', 'test:services-build-hermetic'],
   ]),
   gate('creator-performance', 'Creator deterministic performance budgets', [
+    ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/services-build...'],
     ['pnpm', 'test:creator-performance'],
   ]),
   gate('docs', 'Docs build', [
@@ -76,7 +80,10 @@ export const releaseGates = Object.freeze([
   gate(
     'creator-performance-native',
     'Creator native performance calibration',
-    [['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native']],
+    [
+      ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/services-build...'],
+      ['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native'],
+    ],
     { required: false, xvfb: true },
   ),
   gate(

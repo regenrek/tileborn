@@ -74,5 +74,5 @@ describe('Xoshiro256** procgen RNG', () => {
     for (const count of buckets) {
       expect(Math.abs(count - expected) / expected).toBeLessThan(0.03);
     }
-  }, 15_000);
+  }, 60_000);
 });

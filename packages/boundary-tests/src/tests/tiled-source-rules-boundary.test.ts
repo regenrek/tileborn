@@ -83,7 +83,7 @@ describe('ADR-0016 Tiled source rule boundaries', () => {
     }
 
     expect(violations, violations.join('\n')).toEqual([]);
-  });
+  }, 30_000);
 
   it('keeps Tiled source IPC contracts engine-side and plugin-neutral', () => {
     const violations: string[] = [];

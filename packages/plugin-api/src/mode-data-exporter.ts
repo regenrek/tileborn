@@ -3,8 +3,8 @@ import {
   type RuntimeCatalogEntry,
   type RuntimeObjectPlacement,
   type TileborneMap,
-} from "@tileborne/core";
-import { Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Result, Schema } from 'effect';
 
 /**
  * The narrowed game-mode exporter contract (ADR-0030 step 1).
@@ -30,7 +30,7 @@ export interface ModeDataExportContext {
 
 /** The active mode's exporter rejected the map/settings it was asked to package. */
 export class ModeDataExportError extends Schema.TaggedErrorClass<ModeDataExportError>()(
-  "ModeDataExportError",
+  'ModeDataExportError',
   {
     pluginId: Schema.String,
     message: Schema.String,

@@ -5,13 +5,8 @@
     "rootDir": "src",
     "composite": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "dist",
-    "**/*.test.ts"
-  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "**/*.test.ts"],
   "references": [
     {
       "path": "../asset-pipeline"

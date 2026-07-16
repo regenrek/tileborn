@@ -6,26 +6,26 @@ import {
   type GameObjectType,
   type TileborneMap,
   type WeaponDefinitionId,
-} from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 import {
   mergeWeaponCatalogs,
   WeaponCatalog,
   WeaponCatalogEntry,
   type WeaponCatalogRegistryError,
-} from "./weapon-catalog-registry.js";
+} from './weapon-catalog-registry.js';
 
 export const PROJECT_CONTENT_SCHEMA_VERSION = 1;
 export const RUNTIME_PROJECT_CONTENT_SCHEMA_VERSION = 1;
 
 export class ProjectAuthoredProvenance extends Schema.TaggedClass<ProjectAuthoredProvenance>()(
-  "project",
+  'project',
   {},
 ) {}
 
 export class PluginTemplateProvenance extends Schema.TaggedClass<PluginTemplateProvenance>()(
-  "plugin-template",
+  'plugin-template',
   {
     pluginId: PluginId,
     templateId: Schema.String,
@@ -46,7 +46,7 @@ export type ProjectDefinitionProvenance = typeof ProjectDefinitionProvenance.Typ
  * immutable provenance instead of introducing parallel definition schemas.
  */
 export class ProjectContentDocument extends Schema.Class<ProjectContentDocument>(
-  "ProjectContentDocument",
+  'ProjectContentDocument',
 )({
   schemaVersion: Schema.Literal(PROJECT_CONTENT_SCHEMA_VERSION),
   catalog: GameObjectCatalog,
@@ -56,7 +56,7 @@ export class ProjectContentDocument extends Schema.Class<ProjectContentDocument>
 }) {}
 
 export class InvalidProjectContentDocumentError extends Schema.TaggedErrorClass<InvalidProjectContentDocumentError>()(
-  "InvalidProjectContentDocumentError",
+  'InvalidProjectContentDocumentError',
   { message: Schema.String },
 ) {}
 
@@ -68,7 +68,7 @@ export class InvalidProjectContentDocumentError extends Schema.TaggedErrorClass<
  * game-mode payload.
  */
 export class RuntimeProjectContent extends Schema.Class<RuntimeProjectContent>(
-  "RuntimeProjectContent",
+  'RuntimeProjectContent',
 )({
   schemaVersion: Schema.Literal(RUNTIME_PROJECT_CONTENT_SCHEMA_VERSION),
   items: Schema.Array(ItemDefinition),
@@ -80,7 +80,9 @@ export class RuntimeProjectContent extends Schema.Class<RuntimeProjectContent>(
 const projectDefinitionIds = (document: ProjectContentDocument): readonly string[] => [
   ...document.catalog.objectTypes.map((definition) => String(definition.id)),
   ...Option.getOrElse(document.catalog.items, () => []).map((definition) => String(definition.id)),
-  ...Option.getOrElse(document.catalog.lootTables, () => []).map((definition) => String(definition.id)),
+  ...Option.getOrElse(document.catalog.lootTables, () => []).map((definition) =>
+    String(definition.id),
+  ),
   ...document.weapons.weapons.map((definition) => String(definition.weapon.id)),
 ];
 
@@ -100,11 +102,11 @@ export const validateProjectContentProvenance = (
   return Result.fail(
     new InvalidProjectContentDocumentError({
       message: [
-        missing.length === 0 ? undefined : `missing provenance for ${missing.join(", ")}`,
-        stale.length === 0 ? undefined : `stale provenance for ${stale.join(", ")}`,
+        missing.length === 0 ? undefined : `missing provenance for ${missing.join(', ')}`,
+        stale.length === 0 ? undefined : `stale provenance for ${stale.join(', ')}`,
       ]
         .filter((part): part is string => part !== undefined)
-        .join("; "),
+        .join('; '),
     }),
   );
 };
@@ -142,7 +144,9 @@ export const decodeProjectContentDocument = (
           [
             ...legacy.value.objectTypes.map((definition) => definition.id),
             ...Option.getOrElse(legacy.value.items, () => []).map((definition) => definition.id),
-            ...Option.getOrElse(legacy.value.lootTables, () => []).map((definition) => definition.id),
+            ...Option.getOrElse(legacy.value.lootTables, () => []).map(
+              (definition) => definition.id,
+            ),
           ].map((id) => [id, new ProjectAuthoredProvenance({})]),
         ),
       }),
@@ -150,7 +154,7 @@ export const decodeProjectContentDocument = (
   }
   return Result.fail(
     new InvalidProjectContentDocumentError({
-      message: "project content is neither a ProjectContentDocument nor a legacy GameObjectCatalog",
+      message: 'project content is neither a ProjectContentDocument nor a legacy GameObjectCatalog',
     }),
   );
 };
@@ -170,7 +174,7 @@ export interface EffectivePluginContentSource {
 export interface EffectiveWeaponEntry {
   readonly entry: WeaponCatalogEntry;
   readonly label: string;
-  readonly origin: "plugin" | "project";
+  readonly origin: 'plugin' | 'project';
   readonly sourcePluginId?: PluginId;
   readonly provenance?: ProjectDefinitionProvenance;
 }
@@ -185,14 +189,14 @@ export interface EffectiveProjectContentRegistry {
   readonly weapons: readonly EffectiveWeaponEntry[];
 }
 
-export type ProjectContentDefinitionKind = "object-type" | "weapon" | "item" | "loot-table";
+export type ProjectContentDefinitionKind = 'object-type' | 'weapon' | 'item' | 'loot-table';
 
 export interface ProjectContentReference {
   readonly targetKind: ProjectContentDefinitionKind;
   readonly targetId: string;
   /** Stable definition id or placed-object id suitable for delete diagnostics. */
   readonly sourceId: string;
-  readonly sourceKind: "definition" | "map-object";
+  readonly sourceKind: 'definition' | 'map-object';
 }
 
 export interface ProjectContentReferenceGraph {
@@ -207,16 +211,14 @@ const definitionTargets = (
   document: ProjectContentDocument,
 ): ReadonlyMap<string, ProjectContentDefinitionKind> =>
   new Map([
-    ...document.catalog.objectTypes.map((entry) => [String(entry.id), "object-type"] as const),
+    ...document.catalog.objectTypes.map((entry) => [String(entry.id), 'object-type'] as const),
     ...Option.getOrElse(document.catalog.items, () => []).map(
-      (entry) => [String(entry.id), "item"] as const,
+      (entry) => [String(entry.id), 'item'] as const,
     ),
     ...Option.getOrElse(document.catalog.lootTables, () => []).map(
-      (entry) => [String(entry.id), "loot-table"] as const,
+      (entry) => [String(entry.id), 'loot-table'] as const,
     ),
-    ...document.weapons.weapons.map(
-      (entry) => [String(entry.weapon.id), "weapon"] as const,
-    ),
+    ...document.weapons.weapons.map((entry) => [String(entry.weapon.id), 'weapon'] as const),
   ]);
 
 const collectKnownReferences = (
@@ -224,7 +226,7 @@ const collectKnownReferences = (
   targets: ReadonlyMap<string, ProjectContentDefinitionKind>,
   add: (kind: ProjectContentDefinitionKind, id: string) => void,
 ): void => {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const kind = targets.get(value);
     if (kind !== undefined) add(kind, value);
     return;
@@ -233,7 +235,7 @@ const collectKnownReferences = (
     for (const entry of value) collectKnownReferences(entry, targets, add);
     return;
   }
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === 'object' && value !== null) {
     for (const entry of Object.values(value)) collectKnownReferences(entry, targets, add);
   }
 };
@@ -254,7 +256,7 @@ export const buildProjectContentReferenceGraph = (
     targetKind: ProjectContentDefinitionKind,
     targetId: string,
     sourceId: string,
-    sourceKind: ProjectContentReference["sourceKind"],
+    sourceKind: ProjectContentReference['sourceKind'],
   ) => {
     const key = `${targetKind}\u0000${targetId}\u0000${sourceKind}\u0000${sourceId}`;
     if (seen.has(key)) return;
@@ -264,24 +266,30 @@ export const buildProjectContentReferenceGraph = (
 
   const definitions: readonly { readonly id: string; readonly value: unknown }[] = [
     ...document.catalog.objectTypes.map((value) => ({ id: String(value.id), value })),
-    ...Option.getOrElse(document.catalog.items, () => []).map((value) => ({ id: String(value.id), value })),
-    ...Option.getOrElse(document.catalog.lootTables, () => []).map((value) => ({ id: String(value.id), value })),
+    ...Option.getOrElse(document.catalog.items, () => []).map((value) => ({
+      id: String(value.id),
+      value,
+    })),
+    ...Option.getOrElse(document.catalog.lootTables, () => []).map((value) => ({
+      id: String(value.id),
+      value,
+    })),
     ...document.weapons.weapons.map((value) => ({ id: String(value.weapon.id), value })),
   ];
   for (const definition of definitions) {
     collectKnownReferences(definition.value, targets, (kind, id) => {
-      if (id !== definition.id) add(kind, id, definition.id, "definition");
+      if (id !== definition.id) add(kind, id, definition.id, 'definition');
     });
   }
   for (const map of maps) {
     for (const object of map.objects) {
       const sourceId = String(object.id);
       const objectTypeId = String(object.kind);
-      if (targets.get(objectTypeId) === "object-type") {
-        add("object-type", objectTypeId, sourceId, "map-object");
+      if (targets.get(objectTypeId) === 'object-type') {
+        add('object-type', objectTypeId, sourceId, 'map-object');
       }
       collectKnownReferences(object.properties, targets, (kind, id) =>
-        add(kind, id, sourceId, "map-object"),
+        add(kind, id, sourceId, 'map-object'),
       );
     }
   }
@@ -301,7 +309,7 @@ const weaponLabelFromCatalogs = (
     for (const contribution of source.gameObjectCatalogs) {
       const owner = contribution.catalog.objectTypes.find((objectType) =>
         objectType.components.some(
-          (component) => component._tag === "weapon-ref" && component.weaponId === weaponId,
+          (component) => component._tag === 'weapon-ref' && component.weaponId === weaponId,
         ),
       );
       if (owner !== undefined) return owner.label;
@@ -325,7 +333,7 @@ export const resolveEffectiveProjectContent = (
       catalog,
     })),
   );
-  contributions.push({ contributionId: "project-content", catalog: project.weapons });
+  contributions.push({ contributionId: 'project-content', catalog: project.weapons });
   const merged = mergeWeaponCatalogs(contributions);
   if (Result.isFailure(merged)) return Result.fail(merged.failure);
 
@@ -343,7 +351,7 @@ export const resolveEffectiveProjectContent = (
       return {
         entry,
         label: weaponLabelFromCatalogs(plugins, entry.weapon.id),
-        origin: "plugin",
+        origin: 'plugin',
         sourcePluginId,
       };
     }
@@ -351,7 +359,7 @@ export const resolveEffectiveProjectContent = (
     return {
       entry,
       label: project.weaponLabels[entry.weapon.id] ?? String(entry.weapon.id),
-      origin: "project",
+      origin: 'project',
       ...(provenance === undefined ? {} : { provenance }),
     };
   });

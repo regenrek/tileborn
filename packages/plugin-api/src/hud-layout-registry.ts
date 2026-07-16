@@ -1,5 +1,5 @@
-import { HudLayout, type HudWidgetPlacement } from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+import { HudLayout, type HudWidgetPlacement } from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * Consumption of the typed `RuntimeHudLayout` contribution slot.
@@ -13,7 +13,7 @@ import { Option, Result, Schema } from "effect";
 
 /** A contributed HUD layout failed to decode against the `@tileborne/core` schema. */
 export class InvalidHudLayoutContributionError extends Schema.TaggedErrorClass<InvalidHudLayoutContributionError>()(
-  "InvalidHudLayoutContributionError",
+  'InvalidHudLayoutContributionError',
   {
     contributionId: Schema.String,
     message: Schema.String,
@@ -62,9 +62,7 @@ export const resolveEffectiveHudLayout = (
   const baseIds = new Set(pluginDefault.widgets.map((widget) => widget.id as string));
 
   const merged = [
-    ...pluginDefault.widgets.map(
-      (widget) => overlayById.get(widget.id as string) ?? widget,
-    ),
+    ...pluginDefault.widgets.map((widget) => overlayById.get(widget.id as string) ?? widget),
     ...userOverlay.widgets.filter((widget) => !baseIds.has(widget.id as string)),
   ];
 

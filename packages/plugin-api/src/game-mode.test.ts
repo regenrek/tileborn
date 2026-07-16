@@ -1,9 +1,9 @@
-import { GameModeId, PluginId } from "@tileborne/core";
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { GameModeId, PluginId } from '@tileborne/core';
+import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { PluginContributions } from "./contributions.js";
-import { describeGameMode, discoverGameModes, resolveActiveGameMode } from "./game-mode.js";
+import { PluginContributions } from './contributions.js';
+import { describeGameMode, discoverGameModes, resolveActiveGameMode } from './game-mode.js';
 
 const pluginId = (value: string): PluginId => Schema.decodeUnknownSync(PluginId)(value);
 
@@ -79,45 +79,62 @@ const CONTRIBUTIONS_DEFAULTS = {
   server: undefined,
 } as const;
 
-const display = (label: string) => ({ label, description: undefined, icon: undefined, order: undefined });
+const display = (label: string) => ({
+  label,
+  description: undefined,
+  icon: undefined,
+  order: undefined,
+});
 
 const panel = (input: {
   readonly id: string;
   readonly zone: string;
   readonly title: string;
   readonly capabilities?: readonly string[];
-}) => ({ ...PANEL_DEFAULTS, id: input.id, zone: input.zone, title: input.title, capabilities: input.capabilities });
+}) => ({
+  ...PANEL_DEFAULTS,
+  id: input.id,
+  zone: input.zone,
+  title: input.title,
+  capabilities: input.capabilities,
+});
 
 const runtimeSystem = (id: string, label: string) => ({
-  _tag: "ExecutableRuntimeSystemContribution" as const,
+  _tag: 'ExecutableRuntimeSystemContribution' as const,
   id,
-  kind: "executable" as const,
+  kind: 'executable' as const,
   display: display(label),
-  entry: "./dist/runtime.js",
+  entry: './dist/runtime.js',
 });
 
 const gameSettingsForm = (id: string) => ({
-  _tag: "DeclarativeEditorGameSettingsFormContribution" as const,
+  _tag: 'DeclarativeEditorGameSettingsFormContribution' as const,
   id,
-  kind: "declarative" as const,
-  display: display("Mode Settings"),
+  kind: 'declarative' as const,
+  display: display('Mode Settings'),
   data: {
-    scope: "map",
-    invalidMessage: "Settings must be valid.",
-    fields: [{ key: "maxPlayers", label: "Max players", min: 1, step: 1, default: 32 }],
+    scope: 'map',
+    invalidMessage: 'Settings must be valid.',
+    fields: [{ key: 'maxPlayers', label: 'Max players', min: 1, step: 1, default: 32 }],
   },
 });
 
 const hudLayoutContribution = (id: string) => ({
-  _tag: "DeclarativeRuntimeHudLayoutContribution" as const,
+  _tag: 'DeclarativeRuntimeHudLayoutContribution' as const,
   id,
-  kind: "declarative" as const,
-  display: display("Mode HUD"),
+  kind: 'declarative' as const,
+  display: display('Mode HUD'),
   data: {
-    id: "mode-default-hud",
+    id: 'mode-default-hud',
     widgets: [
-      { id: "minimap", kind: "core.Minimap", anchor: "top-right", order: 0, enabled: true },
-      { id: "weapon-panel", kind: "core.WeaponPanel", anchor: "bottom-center", order: 0, enabled: true },
+      { id: 'minimap', kind: 'core.Minimap', anchor: 'top-right', order: 0, enabled: true },
+      {
+        id: 'weapon-panel',
+        kind: 'core.WeaponPanel',
+        anchor: 'bottom-center',
+        order: 0,
+        enabled: true,
+      },
     ],
   },
 });
@@ -143,7 +160,7 @@ const contributions = (parts: {
         : { ...RUNTIME_DEFAULTS, systems: parts.systems, hudLayouts: parts.hudLayouts },
   });
 
-const BR_PLUGIN_ID = pluginId("@tileborne-plugins/battle-royale");
+const BR_PLUGIN_ID = pluginId('@tileborne-plugins/battle-royale');
 
 const gameMode = (input: {
   readonly runtimeSystemId: string;
@@ -152,10 +169,10 @@ const gameMode = (input: {
   readonly hudLayoutId?: string;
   readonly capabilities?: Record<string, string>;
 }) => ({
-  _tag: "GameModeContribution" as const,
-  id: "mode",
-  kind: "declarative" as const,
-  display: display("Mode"),
+  _tag: 'GameModeContribution' as const,
+  id: 'mode',
+  kind: 'declarative' as const,
+  display: display('Mode'),
   runtimeSystemId: input.runtimeSystemId,
   settingsPanelId: input.settingsPanelId,
   settingsFormId: input.settingsFormId,
@@ -179,151 +196,178 @@ const gameMode = (input: {
 const brContributions = contributions({
   gameModes: [
     gameMode({
-      runtimeSystemId: "battle-royale-runtime",
-      settingsPanelId: "battle-royale-settings",
-      settingsFormId: "battle-royale-settings-form",
-      capabilities: { authoring: "battle-royale.authoring", renderer: "battle-royale.renderer" },
+      runtimeSystemId: 'battle-royale-runtime',
+      settingsPanelId: 'battle-royale-settings',
+      settingsFormId: 'battle-royale-settings-form',
+      capabilities: { authoring: 'battle-royale.authoring', renderer: 'battle-royale.renderer' },
     }),
   ],
-  panels: [panel({ id: "battle-royale-settings", zone: "plugins", title: "Battle Royale Settings", capabilities: ["settings"] })],
-  systems: [runtimeSystem("battle-royale-runtime", "Battle Royale Runtime Adapter")],
-  gameSettingsForms: [gameSettingsForm("battle-royale-settings-form")],
+  panels: [
+    panel({
+      id: 'battle-royale-settings',
+      zone: 'plugins',
+      title: 'Battle Royale Settings',
+      capabilities: ['settings'],
+    }),
+  ],
+  systems: [runtimeSystem('battle-royale-runtime', 'Battle Royale Runtime Adapter')],
+  gameSettingsForms: [gameSettingsForm('battle-royale-settings-form')],
 });
 
-describe("game-mode discovery", () => {
-  it("discovers battle royale as a game mode with its authoring panel", () => {
+describe('game-mode discovery', () => {
+  it('discovers battle royale as a game mode with its authoring panel', () => {
     const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: brContributions });
     expect(descriptor).toBeDefined();
-    expect(descriptor?.modeId).toBe("@tileborne-plugins/battle-royale");
+    expect(descriptor?.modeId).toBe('@tileborne-plugins/battle-royale');
     expect(descriptor?.pluginId).toBe(BR_PLUGIN_ID);
-    expect(descriptor?.runtimeSystemId).toBe("battle-royale-runtime");
+    expect(descriptor?.runtimeSystemId).toBe('battle-royale-runtime');
     expect(descriptor?.hasAuthoringPanel).toBe(true);
-    expect(descriptor?.authoringSettingsPanelId).toBe("battle-royale-settings");
-    expect(descriptor?.gameSettingsFormId).toBe("battle-royale-settings-form");
-    expect(descriptor?.gameSettingsForm?.fields.map((field) => field.key)).toEqual(["maxPlayers"]);
-    expect(descriptor?.label).toBe("Mode");
-    expect(descriptor?.authoringCapabilityId).toBe("battle-royale.authoring");
-    expect(descriptor?.rendererCapabilityId).toBe("battle-royale.renderer");
+    expect(descriptor?.authoringSettingsPanelId).toBe('battle-royale-settings');
+    expect(descriptor?.gameSettingsFormId).toBe('battle-royale-settings-form');
+    expect(descriptor?.gameSettingsForm?.fields.map((field) => field.key)).toEqual(['maxPlayers']);
+    expect(descriptor?.label).toBe('Mode');
+    expect(descriptor?.authoringCapabilityId).toBe('battle-royale.authoring');
+    expect(descriptor?.rendererCapabilityId).toBe('battle-royale.renderer');
   });
 
-  it("does not infer a game mode without an explicit registration", () => {
+  it('does not infer a game mode without an explicit registration', () => {
     const editorOnly = contributions({
-      panels: [panel({ id: "some-panel", zone: "plugins", title: "Some Panel", capabilities: ["settings"] })],
+      panels: [
+        panel({
+          id: 'some-panel',
+          zone: 'plugins',
+          title: 'Some Panel',
+          capabilities: ['settings'],
+        }),
+      ],
     });
     expect(
-      describeGameMode({ pluginId: pluginId("@tileborne-plugins/editor-only"), contributions: editorOnly }),
+      describeGameMode({
+        pluginId: pluginId('@tileborne-plugins/editor-only'),
+        contributions: editorOnly,
+      }),
     ).toBeUndefined();
   });
 
-  it("rejects multiple gameModes registrations instead of selecting index zero", () => {
+  it('rejects multiple gameModes registrations instead of selecting index zero', () => {
     const duplicated = contributions({
       gameModes: [
-        gameMode({ runtimeSystemId: "first-runtime" }),
-        { ...gameMode({ runtimeSystemId: "second-runtime" }), id: "second-mode" },
+        gameMode({ runtimeSystemId: 'first-runtime' }),
+        { ...gameMode({ runtimeSystemId: 'second-runtime' }), id: 'second-mode' },
       ],
-      systems: [
-        runtimeSystem("first-runtime", "First"),
-        runtimeSystem("second-runtime", "Second"),
-      ],
+      systems: [runtimeSystem('first-runtime', 'First'), runtimeSystem('second-runtime', 'Second')],
     });
     expect(() =>
       describeGameMode({
-        pluginId: pluginId("@tileborne-plugins/ambiguous"),
+        pluginId: pluginId('@tileborne-plugins/ambiguous'),
         contributions: duplicated,
       }),
     ).toThrow(/exactly one gameModes registration/);
   });
 
-  it("discovers a registered mode with a runtime system but no settings panel", () => {
+  it('discovers a registered mode with a runtime system but no settings panel', () => {
     const noPanel = contributions({
-      gameModes: [gameMode({ runtimeSystemId: "shooter-runtime" })],
-      systems: [runtimeSystem("shooter-runtime", "Top-Down Shooter")],
+      gameModes: [gameMode({ runtimeSystemId: 'shooter-runtime' })],
+      systems: [runtimeSystem('shooter-runtime', 'Top-Down Shooter')],
     });
     const descriptor = describeGameMode({
-      pluginId: pluginId("@tileborne-plugins/top-down-shooter"),
+      pluginId: pluginId('@tileborne-plugins/top-down-shooter'),
       contributions: noPanel,
     });
     expect(descriptor?.hasAuthoringPanel).toBe(false);
     expect(descriptor?.authoringSettingsPanelId).toBeUndefined();
-    expect(descriptor?.label).toBe("Mode");
+    expect(descriptor?.label).toBe('Mode');
   });
 
-  it("discovers a first-class settings form without reading panel data", () => {
+  it('discovers a first-class settings form without reading panel data', () => {
     const formOnly = contributions({
-      gameModes: [gameMode({ runtimeSystemId: "arena-runtime", settingsFormId: "arena-settings-form" })],
-      systems: [runtimeSystem("arena-runtime", "Arena Runtime")],
-      gameSettingsForms: [gameSettingsForm("arena-settings-form")],
+      gameModes: [
+        gameMode({ runtimeSystemId: 'arena-runtime', settingsFormId: 'arena-settings-form' }),
+      ],
+      systems: [runtimeSystem('arena-runtime', 'Arena Runtime')],
+      gameSettingsForms: [gameSettingsForm('arena-settings-form')],
     });
     const descriptor = describeGameMode({
-      pluginId: pluginId("@tileborne-plugins/example-arena"),
+      pluginId: pluginId('@tileborne-plugins/example-arena'),
       contributions: formOnly,
     });
     expect(descriptor?.hasAuthoringPanel).toBe(true);
     expect(descriptor?.authoringSettingsPanelId).toBeUndefined();
-    expect(descriptor?.gameSettingsFormId).toBe("arena-settings-form");
-    expect(descriptor?.gameSettingsForm?.fields[0]?.label).toBe("Max players");
+    expect(descriptor?.gameSettingsFormId).toBe('arena-settings-form');
+    expect(descriptor?.gameSettingsForm?.fields[0]?.label).toBe('Max players');
   });
 
   it("discovers the mode's default HUD layout from the runtime.hudLayouts slot", () => {
     const withHud = contributions({
-      gameModes: [gameMode({ runtimeSystemId: "br-runtime", hudLayoutId: "br-hud-layout" })],
-      systems: [runtimeSystem("br-runtime", "BR")],
-      hudLayouts: [hudLayoutContribution("br-hud-layout")],
+      gameModes: [gameMode({ runtimeSystemId: 'br-runtime', hudLayoutId: 'br-hud-layout' })],
+      systems: [runtimeSystem('br-runtime', 'BR')],
+      hudLayouts: [hudLayoutContribution('br-hud-layout')],
     });
     const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: withHud });
-    expect(descriptor?.hudLayoutContributionId).toBe("br-hud-layout");
-    expect(descriptor?.hudLayout?.id).toBe("mode-default-hud");
+    expect(descriptor?.hudLayoutContributionId).toBe('br-hud-layout');
+    expect(descriptor?.hudLayout?.id).toBe('mode-default-hud');
     expect(descriptor?.hudLayout?.widgets.map((widget) => widget.kind as string)).toEqual([
-      "core.Minimap",
-      "core.WeaponPanel",
+      'core.Minimap',
+      'core.WeaponPanel',
     ]);
   });
 
-  it("leaves hudLayout undefined when no hudLayouts contribution is declared", () => {
+  it('leaves hudLayout undefined when no hudLayouts contribution is declared', () => {
     const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: brContributions });
     expect(descriptor?.hudLayoutContributionId).toBeUndefined();
     expect(descriptor?.hudLayout).toBeUndefined();
   });
 
-  it("ignores a settings panel outside the plugins zone", () => {
+  it('ignores a settings panel outside the plugins zone', () => {
     const projectScoped = contributions({
-      gameModes: [gameMode({ runtimeSystemId: "br-runtime" })],
-      panels: [panel({ id: "match-rules", zone: "project", title: "Match Rules", capabilities: ["settings"] })],
-      systems: [runtimeSystem("br-runtime", "BR")],
+      gameModes: [gameMode({ runtimeSystemId: 'br-runtime' })],
+      panels: [
+        panel({
+          id: 'match-rules',
+          zone: 'project',
+          title: 'Match Rules',
+          capabilities: ['settings'],
+        }),
+      ],
+      systems: [runtimeSystem('br-runtime', 'BR')],
     });
     const descriptor = describeGameMode({ pluginId: BR_PLUGIN_ID, contributions: projectScoped });
     expect(descriptor?.hasAuthoringPanel).toBe(false);
   });
 
-  it("discovers only the plugins that provide modes", () => {
-    const editorOnly = contributions({ panels: [panel({ id: "p", zone: "project", title: "Project Panel" })] });
+  it('discovers only the plugins that provide modes', () => {
+    const editorOnly = contributions({
+      panels: [panel({ id: 'p', zone: 'project', title: 'Project Panel' })],
+    });
     const modes = discoverGameModes([
-      { pluginId: pluginId("@tileborne-plugins/editor-only"), contributions: editorOnly },
+      { pluginId: pluginId('@tileborne-plugins/editor-only'), contributions: editorOnly },
       { pluginId: BR_PLUGIN_ID, contributions: brContributions },
     ]);
     expect(modes).toHaveLength(1);
     expect(modes[0]?.pluginId).toBe(BR_PLUGIN_ID);
   });
 
-  it("resolves the active mode only when selection is unambiguous", () => {
-    const arenaPluginId = pluginId("@tileborne-plugins/example-arena");
+  it('resolves the active mode only when selection is unambiguous', () => {
+    const arenaPluginId = pluginId('@tileborne-plugins/example-arena');
     const modes = discoverGameModes([
       { pluginId: BR_PLUGIN_ID, contributions: brContributions },
       {
         pluginId: arenaPluginId,
         contributions: contributions({
-          gameModes: [gameMode({ runtimeSystemId: "arena-runtime" })],
-          systems: [runtimeSystem("arena-runtime", "Example Arena")],
+          gameModes: [gameMode({ runtimeSystemId: 'arena-runtime' })],
+          systems: [runtimeSystem('arena-runtime', 'Example Arena')],
         }),
       },
     ]);
-    const singleMode = discoverGameModes([{ pluginId: BR_PLUGIN_ID, contributions: brContributions }]);
+    const singleMode = discoverGameModes([
+      { pluginId: BR_PLUGIN_ID, contributions: brContributions },
+    ]);
 
     expect(resolveActiveGameMode(singleMode)?.pluginId).toBe(BR_PLUGIN_ID);
     expect(resolveActiveGameMode(modes)).toBeUndefined();
     expect(resolveActiveGameMode(modes, modes[0]?.modeId)?.pluginId).toBe(BR_PLUGIN_ID);
     expect(resolveActiveGameMode(modes, modes[1]?.modeId)?.pluginId).toBe(arenaPluginId);
-    const unknown = Schema.decodeUnknownSync(GameModeId)("@tileborne-plugins/missing");
+    const unknown = Schema.decodeUnknownSync(GameModeId)('@tileborne-plugins/missing');
     expect(resolveActiveGameMode(modes, unknown)).toBeUndefined();
     expect(resolveActiveGameMode([])).toBeUndefined();
   });

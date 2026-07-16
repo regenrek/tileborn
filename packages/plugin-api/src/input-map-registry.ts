@@ -4,8 +4,8 @@ import {
   InputMap,
   type ActionDeclaration,
   type ActionId,
-} from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * Consumption of the typed `RuntimeInputMapContribution` slot (ADR-0024 Slice 3).
@@ -20,7 +20,7 @@ import { Option, Result, Schema } from "effect";
 
 /** A contributed input map failed to decode against the `@tileborne/core` schema. */
 export class InvalidInputMapContributionError extends Schema.TaggedErrorClass<InvalidInputMapContributionError>()(
-  "InvalidInputMapContributionError",
+  'InvalidInputMapContributionError',
   {
     contributionId: Schema.String,
     message: Schema.String,

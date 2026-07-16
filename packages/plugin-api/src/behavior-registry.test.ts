@@ -95,10 +95,12 @@ describe('resolveBehaviorAuthoringRegistry', () => {
         {
           pluginId,
           contributions: {
-            behaviorEntries: [{
-              ...CORE_BEHAVIOR_REGISTRY.entries[0]!,
-              id: 'test.started-alias',
-            }],
+            behaviorEntries: [
+              {
+                ...CORE_BEHAVIOR_REGISTRY.entries[0]!,
+                id: 'test.started-alias',
+              },
+            ],
           } as never,
         },
       ]),
@@ -112,25 +114,29 @@ describe('resolveBehaviorAuthoringRegistry', () => {
         {
           pluginId,
           contributions: {
-            behaviorEntries: [{
-              id: 'test.triggered',
-              kind: 'event',
-              label: 'Triggered',
-              category: 'Test',
-              description: 'Test event.',
-              capability: 'test.events',
-              inputs: [],
-              outputs: [],
-            }],
-            behaviorTemplates: [{
-              id: 'test.invalid-template',
-              label: 'Invalid template',
-              description: 'Missing its event capability.',
-              category: 'Test',
-              requiredCapabilities: [],
-              when: { entryId: 'test.triggered', arguments: {} },
-              do: [],
-            }],
+            behaviorEntries: [
+              {
+                id: 'test.triggered',
+                kind: 'event',
+                label: 'Triggered',
+                category: 'Test',
+                description: 'Test event.',
+                capability: 'test.events',
+                inputs: [],
+                outputs: [],
+              },
+            ],
+            behaviorTemplates: [
+              {
+                id: 'test.invalid-template',
+                label: 'Invalid template',
+                description: 'Missing its event capability.',
+                category: 'Test',
+                requiredCapabilities: [],
+                when: { entryId: 'test.triggered', arguments: {} },
+                do: [],
+              },
+            ],
           } as never,
         },
       ]),

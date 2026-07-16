@@ -1,17 +1,17 @@
-import { PluginId } from "@tileborne/core";
-import { Schema } from "effect";
+import { PluginId } from '@tileborne/core';
+import { Schema } from 'effect';
 
-import { MigrationsTable, PluginContributions } from "./contributions.js";
-import { PluginPermission } from "./permissions.js";
-import { EntryPoints, PluginRef, SemverRangeString, SemverString } from "./primitives.js";
+import { MigrationsTable, PluginContributions } from './contributions.js';
+import { PluginPermission } from './permissions.js';
+import { EntryPoints, PluginRef, SemverRangeString, SemverString } from './primitives.js';
 
-export class PluginEngines extends Schema.Class<PluginEngines>("PluginEngines")({
+export class PluginEngines extends Schema.Class<PluginEngines>('PluginEngines')({
   tileborne: SemverRangeString,
 }) {}
 
 export const PLUGIN_MANIFEST_SCHEMA_VERSION = 1 as const;
 
-export class PluginManifest extends Schema.Class<PluginManifest>("PluginManifest")({
+export class PluginManifest extends Schema.Class<PluginManifest>('PluginManifest')({
   schemaVersion: Schema.Literal(PLUGIN_MANIFEST_SCHEMA_VERSION),
   id: PluginId,
   name: Schema.String,
@@ -32,4 +32,3 @@ export class PluginManifest extends Schema.Class<PluginManifest>("PluginManifest
 }) {}
 
 export const PluginManifestSchema = PluginManifest;
-

@@ -1,13 +1,18 @@
-import { type GameModeId, gameModeIdFromPluginId, type HudLayout, type PluginId } from "@tileborne/core";
-import { Option, Result } from "effect";
+import {
+  type GameModeId,
+  gameModeIdFromPluginId,
+  type HudLayout,
+  type PluginId,
+} from '@tileborne/core';
+import { Option, Result } from 'effect';
 
-import type { GameModeCapabilityId, PluginContributions } from "./contributions.js";
+import type { GameModeCapabilityId, PluginContributions } from './contributions.js';
 import {
   decodeGameSettingsForm,
   materializeGameSettingsForm,
   type MaterializedGameSettingsForm,
-} from "./game-settings-form.js";
-import { decodeHudLayout } from "./hud-layout-registry.js";
+} from './game-settings-form.js';
+import { decodeHudLayout } from './hud-layout-registry.js';
 
 /**
  * Manifest-driven game-mode discovery (ADR-0023 section B).
@@ -64,22 +69,26 @@ export interface GameModeDescriptor {
   /** The decoded default in-match HUD layout declared by `runtime.hudLayouts`. */
   readonly hudLayout: HudLayout | undefined;
   readonly mapValidatorId: string | undefined;
-  readonly starter: {
-    readonly templateId: string;
-    readonly label: string;
-    readonly description: string | undefined;
-  } | undefined;
+  readonly starter:
+    | {
+        readonly templateId: string;
+        readonly label: string;
+        readonly description: string | undefined;
+      }
+    | undefined;
   readonly creatorChecklistFacts: readonly {
     readonly id: string;
     readonly label: string;
     readonly description: string | undefined;
-    readonly sources: readonly ("game-mode" | "map" | "catalog" | "asset" | "visual-model")[];
+    readonly sources: readonly ('game-mode' | 'map' | 'catalog' | 'asset' | 'visual-model')[];
   }[];
   /** Whether the mode declares authoring UI the inspector mounts. */
   readonly hasAuthoringPanel: boolean;
 }
 
-const optionalArray = <A>(value: Option.Option<readonly A[]> | readonly A[] | undefined): readonly A[] => {
+const optionalArray = <A>(
+  value: Option.Option<readonly A[]> | readonly A[] | undefined,
+): readonly A[] => {
   if (Array.isArray(value)) {
     return value;
   }
@@ -149,15 +158,11 @@ export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor
     return undefined;
   }
   const settingsPanelId = registration.settingsPanelId;
-  const settingsPanel = optionalArray(contributions.panels).find(({ id }) => id === settingsPanelId);
-  const gameSettingsForm = discoverGameSettingsForm(
-    contributions,
-    registration.settingsFormId,
+  const settingsPanel = optionalArray(contributions.panels).find(
+    ({ id }) => id === settingsPanelId,
   );
-  const hudLayout = discoverHudLayout(
-    contributions,
-    registration.hudLayoutId,
-  );
+  const gameSettingsForm = discoverGameSettingsForm(contributions, registration.settingsFormId);
+  const hudLayout = discoverHudLayout(contributions, registration.hudLayoutId);
   const capabilities = registration.capabilities;
   const starter = registration.starter;
   const facts = registration.checklistFacts ?? [];
@@ -167,14 +172,10 @@ export const describeGameMode = (manifest: GameModeManifest): GameModeDescriptor
     label: registration.display.label,
     runtimeSystemId: registration.runtimeSystemId,
     authoringSettingsPanelId: settingsPanel?.id,
-    authoringCapabilityId:
-      capabilities?.authoring,
-    rendererCapabilityId:
-      capabilities?.renderer,
-    readinessCapabilityId:
-      capabilities?.readiness,
-    starterCapabilityId:
-      capabilities?.starter,
+    authoringCapabilityId: capabilities?.authoring,
+    rendererCapabilityId: capabilities?.renderer,
+    readinessCapabilityId: capabilities?.readiness,
+    starterCapabilityId: capabilities?.starter,
     gameSettingsFormId: gameSettingsForm.id,
     gameSettingsForm: gameSettingsForm.form,
     hudLayoutContributionId: hudLayout.id,

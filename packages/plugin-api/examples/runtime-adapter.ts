@@ -1,7 +1,4 @@
-import type {
-  CreateRuntimeAdapter,
-  RuntimeAdapterHost,
-} from '@tileborne/plugin-api';
+import type { CreateRuntimeAdapter, RuntimeAdapterHost } from '@tileborne/plugin-api';
 
 export interface ExampleRuntimeHost extends RuntimeAdapterHost {
   readonly emit: (event: { readonly kind: string; readonly tick: number }) => void;

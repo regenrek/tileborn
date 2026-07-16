@@ -1,9 +1,9 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 export const PluginContributionZone = Schema.Literals([
-  "project",
-  "working-palette",
-  "assets",
-  "plugins",
+  'project',
+  'working-palette',
+  'assets',
+  'plugins',
 ]);
 export type PluginContributionZone = typeof PluginContributionZone.Type;

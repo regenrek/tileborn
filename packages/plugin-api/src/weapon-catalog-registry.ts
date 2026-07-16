@@ -5,8 +5,8 @@ import {
   validateDamageDelivery,
   WeaponDefinition,
   type WeaponDefinitionId,
-} from "@tileborne/simulation";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/simulation';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * One neutral weapon entry of a contributed weapon-content pack (ADR-0018
@@ -17,21 +17,21 @@ import { Option, Result, Schema } from "effect";
  * `@tileborne/simulation` schema: the engine owns the shape, the plugin supplies
  * the balance numbers.
  */
-export class WeaponCatalogEntry extends Schema.Class<WeaponCatalogEntry>("WeaponCatalogEntry")({
+export class WeaponCatalogEntry extends Schema.Class<WeaponCatalogEntry>('WeaponCatalogEntry')({
   weapon: WeaponDefinition,
   delivery: DamageDelivery,
   appliesStatus: Schema.OptionFromUndefinedOr(Schema.Array(StatusEffectId)),
 }) {}
 
 /** A contributed weapon-content pack: a versioned list of weapon entries. */
-export class WeaponCatalog extends Schema.Class<WeaponCatalog>("WeaponCatalog")({
+export class WeaponCatalog extends Schema.Class<WeaponCatalog>('WeaponCatalog')({
   schemaVersion: Schema.Int,
   weapons: Schema.Array(WeaponCatalogEntry),
 }) {}
 
 /** A contributed weapon catalog failed to decode against the simulation schemas. */
 export class InvalidWeaponCatalogContributionError extends Schema.TaggedErrorClass<InvalidWeaponCatalogContributionError>()(
-  "InvalidWeaponCatalogContributionError",
+  'InvalidWeaponCatalogContributionError',
   {
     contributionId: Schema.String,
     message: Schema.String,
@@ -40,7 +40,7 @@ export class InvalidWeaponCatalogContributionError extends Schema.TaggedErrorCla
 
 /** Two contributed weapon catalogs registered the same weapon-definition id. */
 export class DuplicateWeaponDefinitionError extends Schema.TaggedErrorClass<DuplicateWeaponDefinitionError>()(
-  "DuplicateWeaponDefinitionError",
+  'DuplicateWeaponDefinitionError',
   {
     id: Schema.String,
     message: Schema.String,
@@ -49,7 +49,7 @@ export class DuplicateWeaponDefinitionError extends Schema.TaggedErrorClass<Dupl
 
 /** A contributed weapon catalog failed structural delivery validation. */
 export class WeaponCatalogContributionValidationError extends Schema.TaggedErrorClass<WeaponCatalogContributionValidationError>()(
-  "WeaponCatalogContributionValidationError",
+  'WeaponCatalogContributionValidationError',
   {
     contributionId: Schema.String,
     issues: Schema.Array(Schema.String),
@@ -118,9 +118,7 @@ export const mergeWeaponCatalogs = (
       }
     }
     if (issues.length > 0) {
-      return Result.fail(
-        new WeaponCatalogContributionValidationError({ contributionId, issues }),
-      );
+      return Result.fail(new WeaponCatalogContributionValidationError({ contributionId, issues }));
     }
 
     for (const entry of catalog.weapons) {

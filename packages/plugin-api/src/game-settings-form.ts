@@ -1,5 +1,5 @@
-import { JsonObject } from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+import { JsonObject } from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 /**
  * Consumption of the manifest-discovered `EditorGameSettingsForm` contribution
@@ -17,14 +17,14 @@ import { Option, Result, Schema } from "effect";
  */
 
 /** Where a settings form's values persist: per-map or per-project. */
-export const GameSettingsScope = Schema.Literals(["map", "project"]);
+export const GameSettingsScope = Schema.Literals(['map', 'project']);
 export type GameSettingsScope = typeof GameSettingsScope.Type;
 
 /**
  * Value kind a field edits. Numeric is the only kind today (BR's field set);
  * the union grows as new kinds are needed (kept narrow per ADR-0023 risk 1).
  */
-export const GameSettingsFieldKind = Schema.Literals(["number"]);
+export const GameSettingsFieldKind = Schema.Literals(['number']);
 export type GameSettingsFieldKind = typeof GameSettingsFieldKind.Type;
 
 /**
@@ -34,7 +34,7 @@ export type GameSettingsFieldKind = typeof GameSettingsFieldKind.Type;
  * visibility / nested groups are deferred until a genre needs them.
  */
 export class GameSettingsFieldDescriptor extends Schema.Class<GameSettingsFieldDescriptor>(
-  "GameSettingsFieldDescriptor",
+  'GameSettingsFieldDescriptor',
 )({
   key: Schema.String,
   label: Schema.String,
@@ -51,7 +51,7 @@ export class GameSettingsFieldDescriptor extends Schema.Class<GameSettingsFieldD
  * and renders + validates the form generically.
  */
 export class GameSettingsFormDeclaration extends Schema.Class<GameSettingsFormDeclaration>(
-  "GameSettingsFormDeclaration",
+  'GameSettingsFormDeclaration',
 )({
   scope: GameSettingsScope,
   fields: Schema.Array(GameSettingsFieldDescriptor),
@@ -60,7 +60,7 @@ export class GameSettingsFormDeclaration extends Schema.Class<GameSettingsFormDe
 
 /** A contributed settings form failed to decode against the engine schema. */
 export class InvalidGameSettingsFormError extends Schema.TaggedErrorClass<InvalidGameSettingsFormError>()(
-  "InvalidGameSettingsFormError",
+  'InvalidGameSettingsFormError',
   {
     contributionId: Schema.String,
     message: Schema.String,
@@ -85,7 +85,7 @@ export const decodeGameSettingsForm = (
   });
 };
 
-const DEFAULT_INVALID_MESSAGE = "Settings must be valid numbers within range.";
+const DEFAULT_INVALID_MESSAGE = 'Settings must be valid numbers within range.';
 
 /** A field flattened from {@link GameSettingsFieldDescriptor} for generic rendering. */
 export interface MaterializedGameSettingsField {
@@ -126,9 +126,7 @@ export const materializeGameSettingsForm = (
 });
 
 /** The default value for every field, as a typed values record. */
-export const gameSettingsDefaults = (
-  form: MaterializedGameSettingsForm,
-): Record<string, number> =>
+export const gameSettingsDefaults = (form: MaterializedGameSettingsForm): Record<string, number> =>
   Object.fromEntries(form.fields.map((field) => [field.key, field.default]));
 
 /**
@@ -143,7 +141,7 @@ export const gameSettingsToDraft = (
   Object.fromEntries(
     form.fields.map((field) => {
       const raw = values[field.key];
-      const value = typeof raw === "number" && Number.isFinite(raw) ? raw : field.default;
+      const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : field.default;
       return [field.key, String(value)];
     }),
   );

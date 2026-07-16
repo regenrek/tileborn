@@ -5,12 +5,12 @@ import {
   type GameObjectTypeId,
   type ItemDefinition,
   type LootTable,
-} from "@tileborne/core";
-import { Option, Result, Schema } from "effect";
+} from '@tileborne/core';
+import { Option, Result, Schema } from 'effect';
 
 /** A contributed catalog failed to decode against the core schema. */
 export class InvalidCatalogContributionError extends Schema.TaggedErrorClass<InvalidCatalogContributionError>()(
-  "InvalidCatalogContributionError",
+  'InvalidCatalogContributionError',
   {
     contributionId: Schema.String,
     message: Schema.String,
@@ -19,7 +19,7 @@ export class InvalidCatalogContributionError extends Schema.TaggedErrorClass<Inv
 
 /** Two contributed catalogs registered the same object-type id. */
 export class DuplicateCatalogObjectTypeError extends Schema.TaggedErrorClass<DuplicateCatalogObjectTypeError>()(
-  "DuplicateCatalogObjectTypeError",
+  'DuplicateCatalogObjectTypeError',
   {
     id: Schema.String,
     message: Schema.String,
@@ -27,9 +27,9 @@ export class DuplicateCatalogObjectTypeError extends Schema.TaggedErrorClass<Dup
 ) {}
 
 export class DuplicateCatalogDefinitionError extends Schema.TaggedErrorClass<DuplicateCatalogDefinitionError>()(
-  "DuplicateCatalogDefinitionError",
+  'DuplicateCatalogDefinitionError',
   {
-    kind: Schema.Literals(["item", "loot-table"]),
+    kind: Schema.Literals(['item', 'loot-table']),
     id: Schema.String,
     message: Schema.String,
   },
@@ -37,7 +37,7 @@ export class DuplicateCatalogDefinitionError extends Schema.TaggedErrorClass<Dup
 
 /** A contributed catalog failed catalog-level validation. */
 export class CatalogContributionValidationError extends Schema.TaggedErrorClass<CatalogContributionValidationError>()(
-  "CatalogContributionValidationError",
+  'CatalogContributionValidationError',
   {
     contributionId: Schema.String,
     issues: Schema.Array(Schema.String),
@@ -155,22 +155,26 @@ export const mergeGameObjectCatalogs = (
     }
     for (const table of Option.getOrElse(catalog.lootTables, () => [])) {
       if (seenLootTables.has(table.id)) {
-        return Result.fail(new DuplicateCatalogDefinitionError({
-          kind: "loot-table",
-          id: table.id,
-          message: `loot table ${table.id} is registered by more than one catalog`,
-        }));
+        return Result.fail(
+          new DuplicateCatalogDefinitionError({
+            kind: 'loot-table',
+            id: table.id,
+            message: `loot table ${table.id} is registered by more than one catalog`,
+          }),
+        );
       }
       seenLootTables.add(table.id);
       lootTables.push(table);
     }
     for (const item of Option.getOrElse(catalog.items, () => [])) {
       if (seenItems.has(item.id)) {
-        return Result.fail(new DuplicateCatalogDefinitionError({
-          kind: "item",
-          id: item.id,
-          message: `item ${item.id} is registered by more than one catalog`,
-        }));
+        return Result.fail(
+          new DuplicateCatalogDefinitionError({
+            kind: 'item',
+            id: item.id,
+            message: `item ${item.id} is registered by more than one catalog`,
+          }),
+        );
       }
       seenItems.add(item.id);
       items.push(item);

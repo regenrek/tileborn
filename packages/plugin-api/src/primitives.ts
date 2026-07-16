@@ -1,9 +1,9 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Scoped npm-style plugin dependency reference. */
 export const PluginRef = Schema.String.check(
   Schema.isPattern(/^@[a-z0-9-][a-z0-9-._~]*\/[a-z0-9-][a-z0-9-._~]*$/i),
-).pipe(Schema.brand("PluginRef"));
+).pipe(Schema.brand('PluginRef'));
 
 export type PluginRef = typeof PluginRef.Type;
 
@@ -23,7 +23,7 @@ export const SemverRangeString = Schema.String.check(
 
 export type SemverRangeString = typeof SemverRangeString.Type;
 
-export class EntryPoints extends Schema.Class<EntryPoints>("EntryPoints")({
+export class EntryPoints extends Schema.Class<EntryPoints>('EntryPoints')({
   editor: Schema.OptionFromUndefinedOr(Schema.String),
   runtime: Schema.OptionFromUndefinedOr(Schema.String),
   server: Schema.OptionFromUndefinedOr(Schema.String),
@@ -31,4 +31,3 @@ export class EntryPoints extends Schema.Class<EntryPoints>("EntryPoints")({
 
 export const ContributionId = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9.-]*$/i));
 export type ContributionId = typeof ContributionId.Type;
-

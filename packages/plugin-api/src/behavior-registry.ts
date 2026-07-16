@@ -121,10 +121,7 @@ export const resolveBehaviorAuthoringRegistry = (
       }
     }
 
-    const assertInvocation = (
-      entryId: string,
-      expected: BehaviorRegistryEntryKind,
-    ): void => {
+    const assertInvocation = (entryId: string, expected: BehaviorRegistryEntryKind): void => {
       invocationKind(String(template.id), entryId, expected, entries);
       const entry = entries.get(entryId)!;
       if (!requiredCapabilities.has(String(entry.capability))) {

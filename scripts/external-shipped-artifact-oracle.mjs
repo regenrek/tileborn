@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import console from 'node:console';
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -35,6 +35,273 @@ const canonicalJson = (value) => {
     .join(',')}}`;
 };
 const stableHash = (value) => `sha256:${sha256(canonicalJson(value))}`;
+
+const within = (root, candidate) =>
+  candidate === root || candidate.startsWith(`${root}${path.sep}`);
+
+const assertWithin = (root, candidate, label) => {
+  if (!within(root, candidate)) throw new Error(`${label} escapes required root: ${candidate}`);
+};
+
+const readBoundFile = async (root, relativePath, expected) => {
+  if (typeof relativePath !== 'string' || relativePath.length === 0 || path.isAbsolute(relativePath))
+    throw new Error('bound evidence path must be a non-empty relative path');
+  const candidate = path.resolve(root, relativePath);
+  assertWithin(root, candidate, 'bound evidence path');
+  const resolved = await realpath(candidate);
+  assertWithin(root, resolved, 'bound evidence realpath');
+  const bytes = await readFile(resolved);
+  if (expected?.bytes !== undefined && bytes.byteLength !== expected.bytes)
+    throw new Error(`bound evidence byte count mismatch: ${relativePath}`);
+  if (expected?.sha256 !== undefined && sha256(bytes) !== expected.sha256)
+    throw new Error(`bound evidence sha256 mismatch: ${relativePath}`);
+  return { path: resolved, bytes, bytesLength: bytes.byteLength, sha256: sha256(bytes) };
+};
+
+const validateRecordedCommand = async (evidenceRoot, command, label) => {
+  if (
+    typeof command !== 'object' ||
+    command === null ||
+    !Array.isArray(command.command) ||
+    command.command.length === 0 ||
+    command.exitCode !== 0 ||
+    command.signal !== null
+  )
+    throw new Error(`${label} command did not complete cleanly`);
+  const stdout = await readBoundFile(evidenceRoot, command.stdout?.file, command.stdout);
+  const stderr = await readBoundFile(evidenceRoot, command.stderr?.file, command.stderr);
+  return {
+    command: command.command,
+    exitCode: command.exitCode,
+    signal: command.signal,
+    stdout: { file: command.stdout.file, bytes: stdout.bytesLength, sha256: stdout.sha256 },
+    stderr: { file: command.stderr.file, bytes: stderr.bytesLength, sha256: stderr.sha256 },
+  };
+};
+
+export const validateCleanCheckoutEvidence = async (runnerReceiptPath) => {
+  const resolvedRunnerReceiptPath = await realpath(runnerReceiptPath);
+  const evidenceRoot = path.dirname(resolvedRunnerReceiptPath);
+  const runnerReceiptBytes = await readFile(resolvedRunnerReceiptPath);
+  const runner = JSON.parse(runnerReceiptBytes.toString('utf8'));
+  if (
+    runner.schemaVersion !== 1 ||
+    runner.state !== 'detached' ||
+    typeof runner.gitHead !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(runner.gitHead) ||
+    typeof runner.checkoutRoot !== 'string' ||
+    runner.postOracleStatus !== '' ||
+    typeof runner.preflight !== 'object' ||
+    typeof runner.oracleReceipt !== 'object'
+  )
+    throw new Error('invalid clean-checkout runner receipt');
+  const checkoutRoot = await realpath(runner.checkoutRoot);
+  if (checkoutRoot !== runner.checkoutRoot) throw new Error('runner checkoutRoot is not canonical');
+  const preflightFile = await readBoundFile(evidenceRoot, runner.preflight.file, {
+    sha256: runner.preflight.sha256,
+  });
+  const preflight = JSON.parse(preflightFile.bytes.toString('utf8'));
+  if (
+    preflight.schemaVersion !== 1 ||
+    preflight.checkout?.cwdRealpath !== checkoutRoot ||
+    preflight.checkout?.repositoryRoot !== checkoutRoot ||
+    preflight.checkout?.gitHead !== runner.gitHead ||
+    preflight.checkout?.state !== 'detached' ||
+    preflight.checkout?.symbolicRef !== null ||
+    preflight.checkout?.initialStatus !== '' ||
+    preflight.checkout?.postBuildStatus !== '' ||
+    !Array.isArray(preflight.checkout?.preexistingOutputs) ||
+    preflight.checkout.preexistingOutputs.length !== 0
+  )
+    throw new Error('clean-checkout preflight does not prove a detached clean null-build checkout');
+  const install = await validateRecordedCommand(evidenceRoot, preflight.commands?.install, 'install');
+  const predev = await validateRecordedCommand(evidenceRoot, preflight.commands?.predev, 'predev');
+  const oracle = await validateRecordedCommand(evidenceRoot, runner.oracle, 'creator oracle');
+  const oracleReceiptFile = await readBoundFile(
+    evidenceRoot,
+    runner.oracleReceipt.file,
+    runner.oracleReceipt,
+  );
+  const oracleReceipt = JSON.parse(oracleReceiptFile.bytes.toString('utf8'));
+  if (
+    oracleReceipt.schemaVersion !== 1 ||
+    oracleReceipt.runnerPreflight?.sha256 !== preflightFile.sha256 ||
+    oracleReceipt.runnerPreflight?.gitHead !== runner.gitHead ||
+    oracleReceipt.runnerPreflight?.checkoutRoot !== checkoutRoot ||
+    oracleReceipt.runnerPreflight?.state !== 'detached' ||
+    typeof oracleReceipt.shippedArtifact?.directory !== 'string' ||
+    !Array.isArray(oracleReceipt.shippedArtifact?.files) ||
+    typeof oracleReceipt.shippedArtifact?.treeSha256 !== 'string'
+  )
+    throw new Error('creator oracle receipt is not bound to the runner preflight');
+  const sourceArtifactRoot = await realpath(
+    path.resolve(path.dirname(oracleReceiptFile.path), oracleReceipt.shippedArtifact.directory),
+  );
+  assertWithin(evidenceRoot, sourceArtifactRoot, 'source shipped artifact');
+  const sourceArtifactInventory = await inventoryArtifact(sourceArtifactRoot);
+  const claimedInventory = {
+    files: oracleReceipt.shippedArtifact.files,
+    treeSha256: oracleReceipt.shippedArtifact.treeSha256,
+  };
+  if (JSON.stringify(sourceArtifactInventory) !== JSON.stringify(claimedInventory))
+    throw new Error('source shipped artifact does not match creator oracle receipt');
+  return {
+    runner,
+    preflight,
+    oracleReceipt,
+    sourceArtifactRoot,
+    sourceArtifactInventory,
+    receipt: {
+      path: resolvedRunnerReceiptPath,
+      bytes: runnerReceiptBytes.byteLength,
+      sha256: sha256(runnerReceiptBytes),
+    },
+    preflightReceipt: {
+      file: runner.preflight.file,
+      bytes: preflightFile.bytesLength,
+      sha256: preflightFile.sha256,
+    },
+    oracleReceiptEvidence: {
+      file: runner.oracleReceipt.file,
+      bytes: oracleReceiptFile.bytesLength,
+      sha256: oracleReceiptFile.sha256,
+    },
+    commands: { install, predev, oracle },
+  };
+};
+
+const dangerousEnvironmentKeys = new Set([
+  'NODE_PATH',
+  'NODE_OPTIONS',
+  'NODE_REPL_EXTERNAL_MODULE',
+  'NODE_REPL_HISTORY',
+  'TS_NODE_PROJECT',
+  'TS_NODE_TRANSPILE_ONLY',
+  'BABEL_ENV',
+]);
+
+const dangerousExecArg = (value) =>
+  value === '-r' ||
+  value === '--require' ||
+  value.startsWith('--require=') ||
+  value === '--import' ||
+  value.startsWith('--import=') ||
+  value === '--loader' ||
+  value.startsWith('--loader=') ||
+  value === '--experimental-loader' ||
+  value.startsWith('--experimental-loader=');
+
+export const buildSanitizedChildEnvironment = async ({
+  runRoot,
+  runtimeRoot,
+  inputEnvironment,
+  execArgv = [],
+}) => {
+  const injectedKeys = Object.keys(inputEnvironment).filter((key) => dangerousEnvironmentKeys.has(key));
+  if (injectedKeys.length !== 0)
+    throw new Error(`dangerous Node environment injection rejected: ${injectedKeys.sort().join(',')}`);
+  if (execArgv.some(dangerousExecArg))
+    throw new Error(`dangerous Node loader argument rejected: ${execArgv.join(' ')}`);
+  const home = path.join(runRoot, 'home');
+  const temporary = path.join(runRoot, 'tmp');
+  await Promise.all([mkdir(home, { recursive: true }), mkdir(temporary, { recursive: true })]);
+  const pathEntries = [
+    path.join(runtimeRoot, 'node_modules', '.bin'),
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ];
+  const environment = {
+    HOME: home,
+    TMPDIR: temporary,
+    TMP: temporary,
+    TEMP: temporary,
+    PATH: pathEntries.join(path.delimiter),
+    LANG: 'C.UTF-8',
+    LC_ALL: 'C.UTF-8',
+    NO_COLOR: '1',
+  };
+  const removedKeys = Object.keys(inputEnvironment).filter((key) => !(key in environment));
+  const removedRepoSpecificKeys = removedKeys
+    .filter((key) => /^(TILEBORNE|VITE|ELECTRON|PNPM|npm_)/i.test(key))
+    .sort();
+  const valueDigests = Object.fromEntries(
+    Object.entries(environment).map(([key, value]) => [key, sha256(value)]),
+  );
+  return {
+    environment,
+    receipt: {
+      policy: 'explicit-allowlist-v1',
+      keys: Object.keys(environment).sort(),
+      valueDigests,
+      digest: stableHash(valueDigests),
+      removedKeyCount: removedKeys.length,
+      removedRepoSpecificKeys,
+      dangerousKeysVerifiedAbsent: [...dangerousEnvironmentKeys].sort(),
+      home,
+      temporary,
+      pathEntries,
+      parentExecArgv: execArgv,
+    },
+  };
+};
+
+export const resolveRuntimeClosure = async ({ runRoot, runtimeMain, forbiddenRoots = [] }) => {
+  const resolvedRunRoot = await realpath(runRoot);
+  const resolvedMain = await realpath(runtimeMain);
+  const runtimeRoot = await realpath(path.resolve(path.dirname(resolvedMain), '..'));
+  assertWithin(resolvedRunRoot, runtimeRoot, 'runtime closure');
+  assertWithin(runtimeRoot, resolvedMain, 'runtime main');
+  for (const forbiddenRoot of forbiddenRoots) {
+    const resolvedForbidden = await realpath(forbiddenRoot);
+    if (within(resolvedForbidden, runtimeRoot) || within(runtimeRoot, resolvedForbidden))
+      throw new Error(`runtime closure overlaps forbidden root: ${resolvedForbidden}`);
+  }
+  const packageJsonPath = await realpath(path.join(runtimeRoot, 'package.json'));
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+  if (packageJson.name !== '@tileborne/cli' || typeof packageJson.bin?.tileborne !== 'string')
+    throw new Error('runtime closure does not contain the canonical Tileborne CLI package');
+  const cliEntry = await realpath(path.resolve(runtimeRoot, packageJson.bin.tileborne));
+  if (cliEntry !== resolvedMain) throw new Error('runtimeMain does not match canonical CLI entry');
+  const runtimeRequire = createRequire(resolvedMain);
+  const specifiers = [
+    'miniflare',
+    'workerd',
+    'workerd/bin/workerd',
+    '@cloudflare/workerd-darwin-arm64/bin/workerd',
+  ];
+  const resolvedDependencies = {};
+  for (const specifier of specifiers) {
+    let resolved;
+    try {
+      resolved = await realpath(runtimeRequire.resolve(specifier));
+    } catch (error) {
+      throw new Error(`runtime closure dependency missing: ${specifier}`, { cause: error });
+    }
+    assertWithin(runtimeRoot, resolved, `runtime dependency ${specifier}`);
+    const metadata = await lstat(resolved);
+    resolvedDependencies[specifier] = {
+      path: resolved,
+      bytes: metadata.size,
+      sha256: sha256(await readFile(resolved)),
+      executable: (metadata.mode & 0o111) !== 0,
+    };
+  }
+  for (const binary of ['workerd/bin/workerd', '@cloudflare/workerd-darwin-arm64/bin/workerd']) {
+    if (!resolvedDependencies[binary].executable)
+      throw new Error(`runtime binary is not executable: ${binary}`);
+  }
+  return {
+    runRoot: resolvedRunRoot,
+    runtimeRoot,
+    runtimeMain: resolvedMain,
+    cliEntry,
+    packageJsonPath,
+    resolvedDependencies,
+    miniflarePath: resolvedDependencies.miniflare.path,
+  };
+};
 
 export const validateBuildArtifact = async (artifactRoot) => {
   const recordBytes = await readFile(path.join(artifactRoot, 'build-artifact.json'));
@@ -159,9 +426,8 @@ const descendantProcesses = (rootPid, table = processTable()) => {
   return selected;
 };
 
-const executeShippedBehaviors = async ({ artifactRoot, runtimeMain, packageId, behaviors }) => {
-  const runtimeRequire = createRequire(runtimeMain);
-  const miniflareUrl = pathToFileURL(runtimeRequire.resolve('miniflare')).href;
+const executeShippedBehaviors = async ({ artifactRoot, miniflarePath, packageId, behaviors }) => {
+  const miniflareUrl = pathToFileURL(miniflarePath).href;
   const { Miniflare } = await import(miniflareUrl);
   const runtime = new Miniflare({
     host: '127.0.0.1',
@@ -207,39 +473,88 @@ const executeShippedBehaviors = async ({ artifactRoot, runtimeMain, packageId, b
 
 export const runExternalShippedArtifactOracle = async ({
   runRoot,
-  sourceReceiptPath,
+  runnerReceiptPath,
   runtimeMain,
   port,
   forbiddenRoots,
+  inputEnvironment = process.env,
+  execArgv = process.execArgv,
 }) => {
-  const artifactRoot = path.join(runRoot, 'artifact');
-  const evidenceRoot = path.join(runRoot, 'evidence');
+  const resolvedRun = await realpath(runRoot);
+  const artifactRoot = await realpath(path.join(resolvedRun, 'artifact'));
+  const evidenceRoot = path.join(resolvedRun, 'evidence');
   await mkdir(evidenceRoot, { recursive: true });
-  const resolvedRun = path.resolve(runRoot);
+  assertWithin(resolvedRun, artifactRoot, 'external artifact');
   for (const root of forbiddenRoots) {
-    const relative = path.relative(path.resolve(root), resolvedRun);
-    if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative)))
-      throw new Error(`run root is inside forbidden checkout/workspace: ${root}`);
+    const resolvedForbidden = await realpath(root);
+    if (within(resolvedForbidden, resolvedRun) || within(resolvedRun, resolvedForbidden))
+      throw new Error(`run root overlaps forbidden checkout/workspace: ${resolvedForbidden}`);
   }
-  const sourceReceiptBytes = await readFile(sourceReceiptPath);
-  const sourceReceipt = JSON.parse(sourceReceiptBytes.toString('utf8'));
-  const sourceInventory = {
-    files: sourceReceipt.shippedArtifact.files,
-    treeSha256: sourceReceipt.shippedArtifact.treeSha256,
-  };
+  const sourceChain = await validateCleanCheckoutEvidence(runnerReceiptPath);
+  const sourceReceipt = sourceChain.oracleReceipt;
+  const sourceInventory = sourceChain.sourceArtifactInventory;
   const preInventory = await inventoryArtifact(artifactRoot);
   if (JSON.stringify(preInventory) !== JSON.stringify(sourceInventory))
     throw new Error('external artifact does not match source receipt');
   const { record, manifest } = await validateBuildArtifact(artifactRoot);
 
-  const runtimeRoot = path.resolve(path.dirname(runtimeMain), '..');
-  const runtimeInventory = await inventoryRuntimeClosure(runtimeRoot);
+  const runtime = await resolveRuntimeClosure({ runRoot: resolvedRun, runtimeMain, forbiddenRoots });
+  const runtimeInventory = await inventoryRuntimeClosure(runtime.runtimeRoot);
+  const sanitized = await buildSanitizedChildEnvironment({
+    runRoot: resolvedRun,
+    runtimeRoot: runtime.runtimeRoot,
+    inputEnvironment,
+    execArgv,
+  });
+  const cliProbeResult = spawnSync(
+    process.execPath,
+    [runtime.runtimeMain, 'game', 'serve', '--help'],
+    {
+      cwd: resolvedRun,
+      env: sanitized.environment,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    },
+  );
+  if (cliProbeResult.status !== 0 || cliProbeResult.signal !== null)
+    throw new Error(
+      `external CLI dependency probe failed: ${JSON.stringify({
+        status: cliProbeResult.status,
+        signal: cliProbeResult.signal,
+        stderr: cliProbeResult.stderr,
+      })}`,
+    );
+  const cliProbe = {
+    argv: [runtime.runtimeMain, 'game', 'serve', '--help'],
+    exitCode: cliProbeResult.status,
+    signal: cliProbeResult.signal,
+    stdout: {
+      bytes: Buffer.byteLength(cliProbeResult.stdout),
+      sha256: sha256(cliProbeResult.stdout),
+    },
+    stderr: {
+      bytes: Buffer.byteLength(cliProbeResult.stderr),
+      sha256: sha256(cliProbeResult.stderr),
+    },
+  };
   const stdout = [];
   const stderr = [];
+  const childArgv = [
+    runtime.runtimeMain,
+    'game',
+    'serve',
+    '--json',
+    `--port=${port}`,
+    `--dir=${artifactRoot}`,
+  ];
   const child = spawn(
     process.execPath,
-    [runtimeMain, 'game', 'serve', '--json', `--port=${port}`, `--dir=${artifactRoot}`],
-    { cwd: runRoot, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] },
+    childArgv,
+    {
+      cwd: resolvedRun,
+      env: sanitized.environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   child.stdout.on('data', (chunk) => stdout.push(Buffer.from(chunk)));
   child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)));
@@ -324,11 +639,22 @@ export const runExternalShippedArtifactOracle = async ({
     });
     observations.behaviors = await executeShippedBehaviors({
       artifactRoot,
-      runtimeMain,
+      miniflarePath: runtime.miniflarePath,
       packageId: mapPackageManifest.packageId,
       behaviors: representative,
     });
     descendantsBeforeShutdown = descendantProcesses(child.pid);
+    for (const descendant of descendantsBeforeShutdown) {
+      if (
+        descendant.command.includes('bin/workerd serve') &&
+        !descendant.command.includes(runtime.runtimeRoot)
+      )
+        throw new Error(`runtime process escaped closure: ${descendant.command}`);
+      for (const forbiddenRoot of forbiddenRoots) {
+        if (descendant.command.includes(forbiddenRoot))
+          throw new Error(`runtime process referenced forbidden root: ${descendant.command}`);
+      }
+    }
   } finally {
     child.kill('SIGTERM');
     exit = await Promise.race([exited, sleep(10_000).then(() => null)]);
@@ -368,13 +694,19 @@ export const runExternalShippedArtifactOracle = async ({
   const receipt = {
     schemaVersion: 1,
     state: 'closed',
-    runId: path.basename(runRoot),
-    runRoot,
+    runId: path.basename(resolvedRun),
+    runRoot: resolvedRun,
     forbiddenRoots,
     source: {
-      receiptPath: sourceReceiptPath,
-      receiptSha256: sha256(sourceReceiptBytes),
-      gitHead: sourceReceipt.runnerPreflight.gitHead,
+      runnerReceipt: sourceChain.receipt,
+      preflightReceipt: sourceChain.preflightReceipt,
+      oracleReceipt: sourceChain.oracleReceiptEvidence,
+      checkout: sourceChain.preflight.checkout,
+      commands: sourceChain.commands,
+      gitHead: sourceChain.runner.gitHead,
+      checkoutRoot: sourceChain.runner.checkoutRoot,
+      postOracleStatus: sourceChain.runner.postOracleStatus,
+      sourceArtifactRoot: sourceChain.sourceArtifactRoot,
       artifactTreeSha256: sourceInventory.treeSha256,
     },
     destination: {
@@ -386,8 +718,12 @@ export const runExternalShippedArtifactOracle = async ({
       manifestBuildId: manifest.buildId,
     },
     runtime: {
-      root: runtimeRoot,
-      main: runtimeMain,
+      root: runtime.runtimeRoot,
+      main: runtime.runtimeMain,
+      cliEntry: runtime.cliEntry,
+      packageJson: runtime.packageJsonPath,
+      resolvedDependencies: runtime.resolvedDependencies,
+      cliProbe,
       treeSha256: runtimeInventory.treeSha256,
       fileCount: runtimeInventory.files.length,
       symlinkCount: runtimeInventory.symlinks.length,
@@ -395,6 +731,10 @@ export const runExternalShippedArtifactOracle = async ({
     },
     process: {
       pid: child.pid,
+      executable: process.execPath,
+      argv: childArgv,
+      cwd: resolvedRun,
+      environment: sanitized.receipt,
       port,
       baseUrl,
       exit,
@@ -414,10 +754,10 @@ export const runExternalShippedArtifactOracle = async ({
   return { receiptPath: target, sha256: sha256(receiptBytes), receipt };
 };
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runExternalShippedArtifactOracle({
     runRoot: required(arg('--run-root'), '--run-root'),
-    sourceReceiptPath: required(arg('--source-receipt'), '--source-receipt'),
+    runnerReceiptPath: required(arg('--runner-receipt'), '--runner-receipt'),
     runtimeMain: required(arg('--runtime-main'), '--runtime-main'),
     port: Number(arg('--port') ?? 19_876),
     forbiddenRoots: process.argv

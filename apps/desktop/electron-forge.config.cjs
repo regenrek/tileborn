@@ -187,13 +187,27 @@ const copyGameHostBuildAssets = (buildPath) => {
 };
 
 const writeDesktopBuildProvenance = (buildPath) => {
-  const sourceCommit = childProcess
-    .execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: workspaceRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    .trim();
+  const sourceCommit = (() => {
+    try {
+      return childProcess
+        .execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: workspaceRoot,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        .trim();
+    } catch (error) {
+      if (desktopRelease.enabled) throw error;
+      const inheritedCommit = process.env.TILEBORNE_SOURCE_COMMIT;
+      if (typeof inheritedCommit === 'string' && /^[a-f0-9]{40}$/.test(inheritedCommit)) {
+        return inheritedCommit;
+      }
+      throw new Error(
+        'desktop-release.source-commit-missing: git metadata or TILEBORNE_SOURCE_COMMIT required',
+        { cause: error },
+      );
+    }
+  })();
   const { version } = require('./package.json');
   const releaseProvenancePath = path.join(
     path.dirname(buildPath),

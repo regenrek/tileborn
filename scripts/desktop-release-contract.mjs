@@ -1,6 +1,6 @@
-/* global console, process */
-import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+/* global Buffer, console, process */
+import { createHash, randomBytes } from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,7 @@ export const desktopReleasePolicyPath = path.join(repoRoot, 'scripts/desktop-rel
 const SHA256 = /^[a-f0-9]{64}$/;
 const SOURCE_COMMIT = /^[a-f0-9]{40}$/;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
-const RECEIPT_KEYS = ['schemaVersion', 'policyId'];
+const nativeVerifierPath = path.join(repoRoot, 'scripts/macos-desktop-release-verifier.mjs');
 
 export class DesktopReleaseContractError extends Error {
   constructor(code, message) {
@@ -47,11 +47,6 @@ const string = (value, at, pattern) => {
   if (typeof value !== 'string' || value.length === 0 || (pattern && !pattern.test(value))) {
     fail('contract.invalid-string', `${at} is invalid`);
   }
-  return value;
-};
-
-const boolean = (value, at) => {
-  if (typeof value !== 'boolean') fail('contract.invalid-boolean', `${at} must be boolean`);
   return value;
 };
 
@@ -212,7 +207,7 @@ export function validateDesktopReleasePolicy(value) {
 export function validateDesktopReleaseManifest(value, policy = loadDesktopReleasePolicy()) {
   const manifest = exactKeys(
     value,
-    [...RECEIPT_KEYS, 'artifact', 'provenance', 'signing', 'notarization'],
+    ['schemaVersion', 'policyId', 'artifact', 'provenance'],
     'manifest',
   );
   validateReceiptHeader(manifest, policy, 'manifest');
@@ -245,112 +240,7 @@ export function validateDesktopReleaseManifest(value, policy = loadDesktopReleas
   literal(provenance.builderArchitecture, 'arm64', 'manifest.provenance.builderArchitecture');
   string(provenance.builtAt, 'manifest.provenance.builtAt', ISO_TIMESTAMP);
 
-  const signing = exactKeys(
-    manifest.signing,
-    ['verified', 'identity', 'teamIdentifier', 'hardenedRuntime', 'verifiedTargets'],
-    'manifest.signing',
-  );
-  boolean(signing.verified, 'manifest.signing.verified');
-  const identity = string(signing.identity, 'manifest.signing.identity');
-  if (!identity.startsWith('Developer ID Application:')) {
-    fail('manifest.invalid-signing-identity', 'Developer ID Application identity required');
-  }
-  string(signing.teamIdentifier, 'manifest.signing.teamIdentifier', /^[A-Z0-9]{10}$/);
-  boolean(signing.hardenedRuntime, 'manifest.signing.hardenedRuntime');
-  const targets = uniqueStrings(signing.verifiedTargets, 'manifest.signing.verifiedTargets');
-  if (JSON.stringify(targets) !== JSON.stringify(['application', 'installer'])) {
-    fail('manifest.signing-target-drift', 'application and installer must both verify');
-  }
-
-  const notarization = exactKeys(
-    manifest.notarization,
-    ['verified', 'status', 'requestId', 'stapledTargets'],
-    'manifest.notarization',
-  );
-  boolean(notarization.verified, 'manifest.notarization.verified');
-  oneOf(notarization.status, ['accepted', 'rejected'], 'manifest.notarization.status');
-  string(notarization.requestId, 'manifest.notarization.requestId');
-  const stapledTargets = uniqueStrings(
-    notarization.stapledTargets,
-    'manifest.notarization.stapledTargets',
-  );
-  if (JSON.stringify(stapledTargets) !== JSON.stringify(['application', 'installer'])) {
-    fail('manifest.stapled-target-drift', 'application and installer must both be stapled');
-  }
   return manifest;
-}
-
-export function validateInstallLaunchReceipt(value, policy = loadDesktopReleasePolicy()) {
-  const receipt = exactKeys(
-    value,
-    [
-      ...RECEIPT_KEYS,
-      'artifactSha256',
-      'platform',
-      'architecture',
-      'gatekeeperAssessment',
-      'mountedDmg',
-      'copiedToApplications',
-      'firstLaunch',
-      'relaunch',
-      'testedAt',
-    ],
-    'installReceipt',
-  );
-  validateReceiptHeader(receipt, policy, 'installReceipt');
-  string(receipt.artifactSha256, 'installReceipt.artifactSha256', SHA256);
-  literal(receipt.platform, 'darwin', 'installReceipt.platform');
-  literal(receipt.architecture, 'arm64', 'installReceipt.architecture');
-  oneOf(
-    receipt.gatekeeperAssessment,
-    ['accepted', 'rejected'],
-    'installReceipt.gatekeeperAssessment',
-  );
-  for (const key of ['mountedDmg', 'copiedToApplications', 'firstLaunch', 'relaunch']) {
-    boolean(receipt[key], `installReceipt.${key}`);
-  }
-  string(receipt.testedAt, 'installReceipt.testedAt', ISO_TIMESTAMP);
-  return receipt;
-}
-
-export function validateRollbackReceipt(value, policy = loadDesktopReleasePolicy()) {
-  const receipt = exactKeys(
-    value,
-    [
-      ...RECEIPT_KEYS,
-      'candidateArtifactSha256',
-      'retainedInstaller',
-      'projectBackup',
-      'reinstallSucceeded',
-      'projectReopenSucceeded',
-      'testedAt',
-    ],
-    'rollbackReceipt',
-  );
-  validateReceiptHeader(receipt, policy, 'rollbackReceipt');
-  string(receipt.candidateArtifactSha256, 'rollbackReceipt.candidateArtifactSha256', SHA256);
-  const retained = exactKeys(
-    receipt.retainedInstaller,
-    ['version', 'sha256', 'checksumVerified', 'developerIdVerified', 'notarizationVerified'],
-    'rollbackReceipt.retainedInstaller',
-  );
-  string(retained.version, 'rollbackReceipt.retainedInstaller.version');
-  string(retained.sha256, 'rollbackReceipt.retainedInstaller.sha256', SHA256);
-  for (const key of ['checksumVerified', 'developerIdVerified', 'notarizationVerified']) {
-    boolean(retained[key], `rollbackReceipt.retainedInstaller.${key}`);
-  }
-  const backup = exactKeys(
-    receipt.projectBackup,
-    ['createdBeforeDowngrade', 'verified', 'projectCount'],
-    'rollbackReceipt.projectBackup',
-  );
-  boolean(backup.createdBeforeDowngrade, 'rollbackReceipt.projectBackup.createdBeforeDowngrade');
-  boolean(backup.verified, 'rollbackReceipt.projectBackup.verified');
-  positiveInteger(backup.projectCount, 'rollbackReceipt.projectBackup.projectCount');
-  boolean(receipt.reinstallSucceeded, 'rollbackReceipt.reinstallSucceeded');
-  boolean(receipt.projectReopenSucceeded, 'rollbackReceipt.projectReopenSucceeded');
-  string(receipt.testedAt, 'rollbackReceipt.testedAt', ISO_TIMESTAMP);
-  return receipt;
 }
 
 function validateReceiptHeader(receipt, policy, at) {
@@ -364,6 +254,19 @@ export function sha256File(filePath) {
   return hash.digest('hex');
 }
 
+export function hasUdifTrailer(filePath) {
+  const bytes = readFileSync(filePath);
+  return (
+    bytes.length >= 512 &&
+    bytes.subarray(bytes.length - 512, bytes.length - 508).equals(Buffer.from('koly'))
+  );
+}
+
+export function hasZipHeader(filePath) {
+  const bytes = readFileSync(filePath);
+  return bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+}
+
 export function currentSourceCommit() {
   return execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: repoRoot,
@@ -374,6 +277,192 @@ export function currentSourceCommit() {
 
 const addBlocker = (blockers, code, message) => blockers.push({ code, message });
 
+const defaultCommandRunner = ({ file, args, env }) =>
+  spawnSync(file, args, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env,
+    maxBuffer: 16 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+function validateNativeEvidence(value, expected) {
+  const evidence = exactKeys(
+    value,
+    ['schemaVersion', 'nonce', 'candidate', 'install', 'rollback'],
+    'nativeEvidence',
+  );
+  literal(evidence.schemaVersion, 1, 'nativeEvidence.schemaVersion');
+  literal(evidence.nonce, expected.nonce, 'nativeEvidence.nonce');
+  const candidate = exactKeys(
+    evidence.candidate,
+    [
+      'candidateArtifactSha256',
+      'retainedArtifactSha256',
+      'format',
+      'candidateArchitecture',
+      'retainedArchitecture',
+      'bundleId',
+      'embeddedSourceCommit',
+      'embeddedVersion',
+      'candidateAuthority',
+      'retainedAuthority',
+      'candidateTeamIdentifier',
+      'retainedTeamIdentifier',
+      'candidateHardenedRuntime',
+      'retainedHardenedRuntime',
+      'candidateStaple',
+      'retainedStaple',
+      'candidateGatekeeper',
+      'retainedGatekeeper',
+    ],
+    'nativeEvidence.candidate',
+  );
+  literal(
+    candidate.candidateArtifactSha256,
+    expected.candidateSha256,
+    'nativeEvidence.candidate.candidateArtifactSha256',
+  );
+  literal(
+    candidate.retainedArtifactSha256,
+    expected.retainedSha256,
+    'nativeEvidence.candidate.retainedArtifactSha256',
+  );
+  literal(candidate.format, 'udif', 'nativeEvidence.candidate.format');
+  literal(
+    candidate.candidateArchitecture,
+    'arm64',
+    'nativeEvidence.candidate.candidateArchitecture',
+  );
+  literal(candidate.retainedArchitecture, 'arm64', 'nativeEvidence.candidate.retainedArchitecture');
+  literal(candidate.bundleId, 'dev.tileborne.app', 'nativeEvidence.candidate.bundleId');
+  literal(
+    candidate.embeddedSourceCommit,
+    expected.sourceCommit,
+    'nativeEvidence.candidate.embeddedSourceCommit',
+  );
+  literal(candidate.embeddedVersion, expected.version, 'nativeEvidence.candidate.embeddedVersion');
+  for (const key of ['candidateAuthority', 'retainedAuthority']) {
+    const authority = string(candidate[key], `nativeEvidence.candidate.${key}`);
+    if (!authority.startsWith('Developer ID Application:')) {
+      fail('native.invalid-signing-authority', `${key} is not Developer ID Application`);
+    }
+  }
+  for (const key of ['candidateTeamIdentifier', 'retainedTeamIdentifier']) {
+    string(candidate[key], `nativeEvidence.candidate.${key}`, /^[A-Z0-9]{10}$/);
+  }
+  literal(
+    candidate.retainedTeamIdentifier,
+    candidate.candidateTeamIdentifier,
+    'nativeEvidence.candidate.retainedTeamIdentifier',
+  );
+  for (const key of ['candidateHardenedRuntime', 'retainedHardenedRuntime']) {
+    literal(candidate[key], 'runtime', `nativeEvidence.candidate.${key}`);
+  }
+  for (const key of ['candidateStaple', 'retainedStaple']) {
+    literal(candidate[key], 'validated', `nativeEvidence.candidate.${key}`);
+  }
+  for (const key of ['candidateGatekeeper', 'retainedGatekeeper']) {
+    literal(candidate[key], 'accepted', `nativeEvidence.candidate.${key}`);
+  }
+
+  const install = exactKeys(
+    evidence.install,
+    ['location', 'firstLaunchProjectId', 'relaunchProjectId'],
+    'nativeEvidence.install',
+  );
+  literal(install.location, 'temporary-applications', 'nativeEvidence.install.location');
+  string(install.firstLaunchProjectId, 'nativeEvidence.install.firstLaunchProjectId');
+  literal(
+    install.relaunchProjectId,
+    install.firstLaunchProjectId,
+    'nativeEvidence.install.relaunchProjectId',
+  );
+
+  const rollback = exactKeys(
+    evidence.rollback,
+    ['action', 'backupSha256', 'backupSizeBytes', 'reopenedProjectId'],
+    'nativeEvidence.rollback',
+  );
+  literal(rollback.action, 'retained-installer-reinstalled', 'nativeEvidence.rollback.action');
+  string(rollback.backupSha256, 'nativeEvidence.rollback.backupSha256', SHA256);
+  positiveInteger(rollback.backupSizeBytes, 'nativeEvidence.rollback.backupSizeBytes');
+  literal(
+    rollback.reopenedProjectId,
+    install.firstLaunchProjectId,
+    'nativeEvidence.rollback.reopenedProjectId',
+  );
+  return evidence;
+}
+
+export function verifyMacOsReleaseEvidence({
+  artifactPath,
+  retainedArtifactPath,
+  backupArtifactPath,
+  candidateSha256,
+  retainedSha256,
+  sourceCommit,
+  version,
+  commandRunner = defaultCommandRunner,
+  hostPlatform = process.platform,
+  hostArchitecture = process.arch,
+}) {
+  if (hostPlatform !== 'darwin' || hostArchitecture !== 'arm64') {
+    fail(
+      'native.unsupported-host',
+      `native release verification requires darwin/arm64, observed ${hostPlatform}/${hostArchitecture}`,
+    );
+  }
+  const nonce = randomBytes(32).toString('hex');
+  const result = commandRunner({
+    file: process.execPath,
+    args: [
+      nativeVerifierPath,
+      '--candidate',
+      artifactPath,
+      '--retained',
+      retainedArtifactPath,
+      '--backup-output',
+      backupArtifactPath,
+      '--nonce',
+      nonce,
+    ],
+    env: process.env,
+  });
+  if (result.error !== undefined || result.status !== 0) {
+    const detail = String(result.stderr ?? '').trim();
+    fail(
+      'native.verification-failed',
+      detail.length > 0 ? detail : (result.error?.message ?? `exit ${String(result.status)}`),
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(String(result.stdout));
+  } catch {
+    fail('native.invalid-output', 'native verifier did not emit one JSON evidence object');
+  }
+  return validateNativeEvidence(parsed, {
+    nonce,
+    candidateSha256,
+    retainedSha256,
+    sourceCommit,
+    version,
+  });
+}
+
+export function verifyPublicationBoundary({ environment, commandRunner = defaultCommandRunner }) {
+  const result = commandRunner({
+    file: 'gh',
+    args: ['auth', 'status', '--hostname', 'github.com', '--active'],
+    env: environment,
+  });
+  if (result.error !== undefined || result.status !== 0) {
+    fail('publish.credential-unverified', 'GitHub credential is not active at operator boundary');
+  }
+  return 'verified';
+}
+
 /**
  * Evaluate an immutable desktop release evidence set. Validation failures are
  * converted into stable blockers so the status receipt always fails closed.
@@ -381,19 +470,23 @@ const addBlocker = (blockers, code, message) => blockers.push({ code, message })
 export function evaluateDesktopRelease({
   artifactPath,
   retainedArtifactPath,
+  backupArtifactPath,
   manifest,
-  installReceipt,
-  rollbackReceipt,
   environment = process.env,
   expectedSourceCommit = currentSourceCommit(),
   requirePublication = true,
   policy = loadDesktopReleasePolicy(),
+  nativeCommandRunner = defaultCommandRunner,
+  publicationCommandRunner = defaultCommandRunner,
+  hostPlatform = process.platform,
+  hostArchitecture = process.arch,
 } = {}) {
   validateDesktopReleasePolicy(policy);
   const blockers = [];
   let validManifest;
-  let validInstall;
-  let validRollback;
+  let candidateSha256;
+  let retainedSha256;
+  let nativeEvidence;
 
   if (manifest === undefined) {
     addBlocker(blockers, 'artifact.manifest-missing', 'Desktop release manifest is required.');
@@ -408,9 +501,9 @@ export function evaluateDesktopRelease({
   if (artifactPath === undefined || !existsSync(artifactPath)) {
     addBlocker(blockers, 'artifact.file-missing', 'Candidate DMG is required.');
   } else if (validManifest !== undefined) {
-    const digest = sha256File(artifactPath);
+    candidateSha256 = sha256File(artifactPath);
     const size = statSync(artifactPath).size;
-    if (digest !== validManifest.artifact.sha256) {
+    if (candidateSha256 !== validManifest.artifact.sha256) {
       addBlocker(blockers, 'artifact.sha256-mismatch', 'Candidate digest does not match manifest.');
     }
     if (size !== validManifest.artifact.sizeBytes) {
@@ -418,6 +511,13 @@ export function evaluateDesktopRelease({
     }
     if (path.basename(artifactPath) !== validManifest.artifact.fileName) {
       addBlocker(blockers, 'artifact.name-mismatch', 'Candidate name does not match manifest.');
+    }
+    if (path.extname(artifactPath).toLowerCase() !== '.dmg' || !hasUdifTrailer(artifactPath)) {
+      addBlocker(
+        blockers,
+        'artifact.format-invalid',
+        'Candidate must be a real UDIF DMG before native verification.',
+      );
     }
   }
 
@@ -432,120 +532,120 @@ export function evaluateDesktopRelease({
     );
   }
 
-  if (validManifest !== undefined) {
-    if (!validManifest.signing.verified) {
-      addBlocker(blockers, 'signing.unverified', 'Developer ID signature receipt is not verified.');
-    }
-    if (!validManifest.signing.hardenedRuntime) {
-      addBlocker(blockers, 'signing.hardened-runtime-missing', 'Hardened runtime is required.');
-    }
-    if (!validManifest.notarization.verified || validManifest.notarization.status !== 'accepted') {
-      addBlocker(blockers, 'notarization.unverified', 'Apple notarization must be accepted.');
-    }
-  }
-
-  if (installReceipt === undefined) {
+  if (retainedArtifactPath === undefined || !existsSync(retainedArtifactPath)) {
     addBlocker(
       blockers,
-      'install.receipt-missing',
-      'Native Gatekeeper install/launch receipt is required.',
+      'rollback.retained-artifact-missing',
+      'A last-known-good retained DMG is required.',
     );
   } else {
-    try {
-      validInstall = validateInstallLaunchReceipt(installReceipt, policy);
-      if (validManifest && validInstall.artifactSha256 !== validManifest.artifact.sha256) {
-        addBlocker(
-          blockers,
-          'install.artifact-mismatch',
-          'Install receipt is for another artifact.',
-        );
-      }
-      if (validInstall.gatekeeperAssessment !== 'accepted') {
-        addBlocker(
-          blockers,
-          'install.gatekeeper-rejected',
-          'Gatekeeper must accept the candidate.',
-        );
-      }
-      for (const key of ['mountedDmg', 'copiedToApplications', 'firstLaunch', 'relaunch']) {
-        if (!validInstall[key]) addBlocker(blockers, `install.${key}-unverified`, `${key} failed.`);
-      }
-    } catch (error) {
-      addBlocker(blockers, error.code ?? 'install.receipt-invalid', String(error.message));
+    retainedSha256 = sha256File(retainedArtifactPath);
+    if (candidateSha256 !== undefined && retainedSha256 === candidateSha256) {
+      addBlocker(
+        blockers,
+        'rollback.retained-artifact-not-prior',
+        'Rollback requires a distinct last-known-good installer.',
+      );
+    }
+    if (
+      path.extname(retainedArtifactPath).toLowerCase() !== '.dmg' ||
+      !hasUdifTrailer(retainedArtifactPath)
+    ) {
+      addBlocker(
+        blockers,
+        'rollback.retained-format-invalid',
+        'Retained installer must be a real UDIF DMG.',
+      );
     }
   }
-
-  if (rollbackReceipt === undefined) {
+  if (backupArtifactPath === undefined) {
     addBlocker(
       blockers,
-      'rollback.receipt-missing',
-      'Manual retained-installer rollback receipt is required.',
+      'rollback.backup-output-missing',
+      'Native rollback verifier requires a backup archive output path.',
     );
-  } else {
+  }
+
+  const preNativeBlockers = blockers.length;
+  if (
+    preNativeBlockers === 0 &&
+    artifactPath !== undefined &&
+    retainedArtifactPath !== undefined &&
+    backupArtifactPath !== undefined &&
+    candidateSha256 !== undefined &&
+    retainedSha256 !== undefined &&
+    validManifest !== undefined
+  ) {
     try {
-      validRollback = validateRollbackReceipt(rollbackReceipt, policy);
-      if (
-        validManifest &&
-        validRollback.candidateArtifactSha256 !== validManifest.artifact.sha256
-      ) {
+      nativeEvidence = verifyMacOsReleaseEvidence({
+        artifactPath,
+        retainedArtifactPath,
+        backupArtifactPath,
+        candidateSha256,
+        retainedSha256,
+        sourceCommit: validManifest.provenance.sourceCommit,
+        version: validManifest.artifact.version,
+        commandRunner: nativeCommandRunner,
+        hostPlatform,
+        hostArchitecture,
+      });
+      if (!existsSync(backupArtifactPath) || !hasZipHeader(backupArtifactPath)) {
         addBlocker(
           blockers,
-          'rollback.artifact-mismatch',
-          'Rollback receipt is for another candidate.',
+          'rollback.backup-format-invalid',
+          'Native verifier did not produce a ZIP project backup.',
         );
-      }
-      for (const [pathName, value] of [
-        ['rollback.retained-digest-unverified', validRollback.retainedInstaller.checksumVerified],
-        [
-          'rollback.retained-signature-unverified',
-          validRollback.retainedInstaller.developerIdVerified,
-        ],
-        [
-          'rollback.retained-notarization-unverified',
-          validRollback.retainedInstaller.notarizationVerified,
-        ],
-        [
-          'rollback.backup-not-before-downgrade',
-          validRollback.projectBackup.createdBeforeDowngrade,
-        ],
-        ['rollback.backup-unverified', validRollback.projectBackup.verified],
-        ['rollback.reinstall-unverified', validRollback.reinstallSucceeded],
-        ['rollback.project-reopen-unverified', validRollback.projectReopenSucceeded],
-      ]) {
-        if (!value) addBlocker(blockers, pathName, 'Required rollback evidence is false.');
-      }
-      if (retainedArtifactPath === undefined || !existsSync(retainedArtifactPath)) {
-        addBlocker(
-          blockers,
-          'rollback.retained-artifact-missing',
-          'The last-known-good retained installer is required.',
-        );
-      } else if (sha256File(retainedArtifactPath) !== validRollback.retainedInstaller.sha256) {
-        addBlocker(
-          blockers,
-          'rollback.retained-artifact-mismatch',
-          'Retained installer digest does not match the rollback receipt.',
-        );
+      } else {
+        const backupSha256 = sha256File(backupArtifactPath);
+        const backupSizeBytes = statSync(backupArtifactPath).size;
+        if (
+          backupSha256 !== nativeEvidence.rollback.backupSha256 ||
+          backupSizeBytes !== nativeEvidence.rollback.backupSizeBytes
+        ) {
+          addBlocker(
+            blockers,
+            'rollback.backup-provenance-mismatch',
+            'Backup archive does not match native rollback evidence.',
+          );
+        }
       }
     } catch (error) {
-      addBlocker(blockers, error.code ?? 'rollback.receipt-invalid', String(error.message));
+      addBlocker(blockers, error.code ?? 'native.verification-failed', String(error.message));
     }
   }
 
-  if (requirePublication) {
-    if (environment[policy.publication.approvalEnvironment] !== policy.publication.approvedValue) {
+  if (!requirePublication) {
+    addBlocker(
+      blockers,
+      'publish.not-requested',
+      'Artifact verification does not authorize publication.',
+    );
+  } else {
+    const approved =
+      environment[policy.publication.approvalEnvironment] === policy.publication.approvedValue;
+    if (!approved) {
       addBlocker(
         blockers,
         'publish.approval-missing',
         'Explicit desktop publication approval is absent.',
       );
     }
-    if (!environment[policy.publication.credentialEnvironment]) {
+    const credential = environment[policy.publication.credentialEnvironment];
+    if (!credential) {
       addBlocker(
         blockers,
         'publish.credential-missing',
         'Scoped publication credential is absent.',
       );
+    } else if (approved) {
+      try {
+        verifyPublicationBoundary({
+          environment,
+          commandRunner: publicationCommandRunner,
+        });
+      } catch (error) {
+        addBlocker(blockers, error.code ?? 'publish.credential-unverified', String(error.message));
+      }
     }
   }
 
@@ -561,14 +661,22 @@ export function evaluateDesktopRelease({
       blockers.filter(({ code }) => !code.startsWith('publish.')).length === 0
         ? 'ready'
         : 'blocked',
-    publicationDecision:
-      requirePublication && blockers.some(({ code }) => code.startsWith('publish.'))
+    publicationDecision: !requirePublication
+      ? 'not-requested'
+      : blockers.some(({ code }) => code.startsWith('publish.'))
         ? 'operator-blocked'
-        : requirePublication
-          ? 'approved'
-          : 'not-requested',
+        : 'approved',
     blockers,
     knownLimitations,
+    ...(nativeEvidence === undefined
+      ? {}
+      : {
+          nativeEvidence: {
+            candidateTeamIdentifier: nativeEvidence.candidate.candidateTeamIdentifier,
+            projectId: nativeEvidence.install.firstLaunchProjectId,
+            backupSha256: nativeEvidence.rollback.backupSha256,
+          },
+        }),
   };
 }
 
@@ -586,9 +694,19 @@ function readJson(filePath, label) {
 
 function parseArgs(args) {
   const values = {};
+  const allowed = new Set([
+    'artifact',
+    'retained-artifact',
+    'backup-output',
+    'manifest',
+    'output',
+    'expect',
+    'skip-publication',
+  ]);
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
     if (!key?.startsWith('--')) fail('cli.invalid-argument', key ?? '<missing>');
+    if (!allowed.has(key.slice(2))) fail('cli.invalid-argument', key);
     const value = args[index + 1];
     if (value === undefined || value.startsWith('--')) fail('cli.missing-value', key);
     values[key.slice(2)] = value;
@@ -599,7 +717,7 @@ function parseArgs(args) {
 
 function usage() {
   console.error(
-    'Usage: node scripts/desktop-release-contract.mjs <policy|status|verify> [--artifact path --retained-artifact path --manifest path --install-receipt path --rollback-receipt path --output path --expect go|no-go --skip-publication 1]',
+    'Usage: node scripts/desktop-release-contract.mjs <policy|status|verify> [--artifact path --retained-artifact path --backup-output path --manifest path --output path --expect go|no-go --skip-publication 1]',
   );
 }
 
@@ -619,9 +737,8 @@ function main(argv) {
   const status = evaluateDesktopRelease({
     artifactPath: args.artifact,
     retainedArtifactPath: args['retained-artifact'],
+    backupArtifactPath: args['backup-output'],
     manifest: readJson(args.manifest, 'manifest'),
-    installReceipt: readJson(args['install-receipt'], 'install receipt'),
-    rollbackReceipt: readJson(args['rollback-receipt'], 'rollback receipt'),
     requirePublication: args['skip-publication'] !== '1',
   });
   const serialized = `${JSON.stringify(status, null, 2)}\n`;

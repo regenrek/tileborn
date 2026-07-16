@@ -5,19 +5,22 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DesktopReleaseContractError,
   evaluateDesktopRelease,
+  hasUdifTrailer,
   loadDesktopReleasePolicy,
+  sha256File,
   validateDesktopReleaseManifest,
   validateDesktopReleasePolicy,
 } from './desktop-release-contract.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const nativeVerifierPath = path.join(repoRoot, 'scripts/macos-desktop-release-verifier.mjs');
 const require = createRequire(import.meta.url);
-const { createDesktopReleaseForgeSettings } =
+const { createDesktopReleaseForgeSettings, createDesktopReleaseProvenance } =
   require('../apps/desktop/scripts/desktop-release-forge.cjs') as {
     readonly createDesktopReleaseForgeSettings: (input?: {
       readonly env?: Readonly<Record<string, string | undefined>>;
@@ -32,37 +35,60 @@ const { createDesktopReleaseForgeSettings } =
       };
       readonly dmgConfig?: Readonly<Record<string, unknown>>;
     };
+    readonly createDesktopReleaseProvenance: (input: {
+      readonly sourceCommit: string;
+      readonly version: string;
+    }) => Readonly<Record<string, unknown>>;
   };
+
+type CommandInput = {
+  readonly file: string;
+  readonly args: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+};
+type CommandResult = {
+  readonly status: number | null;
+  readonly stdout?: string;
+  readonly stderr?: string;
+  readonly error?: Error;
+};
 
 const temporaryDirectories: string[] = [];
 afterEach(() => {
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
+const writeUdifFixture = (filePath: string, marker: string): void => {
+  const bytes = Buffer.alloc(1024, marker);
+  bytes.write('koly', bytes.length - 512, 'ascii');
+  writeFileSync(filePath, bytes);
+};
+
 const createEvidence = () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'tileborne-desktop-release-'));
   temporaryDirectories.push(directory);
   const artifactPath = path.join(directory, 'Tileborne-1.0.0-arm64.dmg');
-  const bytes = Buffer.from('real candidate bytes used by the contract test');
-  writeFileSync(artifactPath, bytes);
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
   const retainedArtifactPath = path.join(directory, 'Tileborne-0.9.0-arm64.dmg');
-  const retainedBytes = Buffer.from('retained last-known-good installer');
-  writeFileSync(retainedArtifactPath, retainedBytes);
-  const retainedSha256 = createHash('sha256').update(retainedBytes).digest('hex');
-  const header = { schemaVersion: 1, policyId: 'tileborne-desktop-1.0' } as const;
+  const backupArtifactPath = path.join(directory, 'project-backup.zip');
+  writeUdifFixture(artifactPath, 'A');
+  writeUdifFixture(retainedArtifactPath, 'B');
+  const candidateSha256 = sha256File(artifactPath);
+  const retainedSha256 = sha256File(retainedArtifactPath);
   const manifest = {
-    ...header,
+    schemaVersion: 1,
+    policyId: 'tileborne-desktop-1.0',
     artifact: {
       fileName: path.basename(artifactPath),
       kind: 'dmg',
       platform: 'darwin',
       architecture: 'arm64',
       version: '1.0.0',
-      sizeBytes: bytes.length,
-      sha256,
+      sizeBytes: 1024,
+      sha256: candidateSha256,
     },
     provenance: {
       sourceCommit: 'a'.repeat(40),
@@ -71,56 +97,109 @@ const createEvidence = () => {
       builderArchitecture: 'arm64',
       builtAt: '2026-07-16T09:00:00.000Z',
     },
-    signing: {
-      verified: true,
-      identity: 'Developer ID Application: Tileborne Test (ABCDEFGHIJ)',
-      teamIdentifier: 'ABCDEFGHIJ',
-      hardenedRuntime: true,
-      verifiedTargets: ['application', 'installer'],
-    },
-    notarization: {
-      verified: true,
-      status: 'accepted',
-      requestId: 'notary-request-id',
-      stapledTargets: ['application', 'installer'],
-    },
   };
-  const installReceipt = {
-    ...header,
-    artifactSha256: sha256,
-    platform: 'darwin',
-    architecture: 'arm64',
-    gatekeeperAssessment: 'accepted',
-    mountedDmg: true,
-    copiedToApplications: true,
-    firstLaunch: true,
-    relaunch: true,
-    testedAt: '2026-07-16T09:15:00.000Z',
+  return {
+    directory,
+    artifactPath,
+    retainedArtifactPath,
+    backupArtifactPath,
+    candidateSha256,
+    retainedSha256,
+    manifest,
   };
-  const rollbackReceipt = {
-    ...header,
-    candidateArtifactSha256: sha256,
-    retainedInstaller: {
-      version: '0.9.0',
-      sha256: retainedSha256,
-      checksumVerified: true,
-      developerIdVerified: true,
-      notarizationVerified: true,
-    },
-    projectBackup: {
-      createdBeforeDowngrade: true,
-      verified: true,
-      projectCount: 2,
-    },
-    reinstallSucceeded: true,
-    projectReopenSucceeded: true,
-    testedAt: '2026-07-16T09:30:00.000Z',
-  };
-  return { artifactPath, retainedArtifactPath, manifest, installReceipt, rollbackReceipt };
 };
 
+const nativeRunnerFor = (evidence: ReturnType<typeof createEvidence>) =>
+  vi.fn((input: CommandInput): CommandResult => {
+    expect(input.file).toBe(process.execPath);
+    expect(input.args[0]).toBe(nativeVerifierPath);
+    const argument = (name: string): string => {
+      const index = input.args.indexOf(name);
+      if (index < 0 || input.args[index + 1] === undefined) throw new Error(`missing ${name}`);
+      return input.args[index + 1]!;
+    };
+    expect(argument('--candidate')).toBe(evidence.artifactPath);
+    expect(argument('--retained')).toBe(evidence.retainedArtifactPath);
+    expect(argument('--backup-output')).toBe(evidence.backupArtifactPath);
+    const nonce = argument('--nonce');
+    const backupBytes = Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      Buffer.from('platform-owned backup archive'),
+    ]);
+    writeFileSync(evidence.backupArtifactPath, backupBytes);
+    const backupSha256 = createHash('sha256').update(backupBytes).digest('hex');
+    return {
+      status: 0,
+      stdout: JSON.stringify({
+        schemaVersion: 1,
+        nonce,
+        candidate: {
+          candidateArtifactSha256: evidence.candidateSha256,
+          retainedArtifactSha256: evidence.retainedSha256,
+          format: 'udif',
+          candidateArchitecture: 'arm64',
+          retainedArchitecture: 'arm64',
+          bundleId: 'dev.tileborne.app',
+          embeddedSourceCommit: 'a'.repeat(40),
+          embeddedVersion: '1.0.0',
+          candidateAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+          retainedAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+          candidateTeamIdentifier: 'ABCDEFGHIJ',
+          retainedTeamIdentifier: 'ABCDEFGHIJ',
+          candidateHardenedRuntime: 'runtime',
+          retainedHardenedRuntime: 'runtime',
+          candidateStaple: 'validated',
+          retainedStaple: 'validated',
+          candidateGatekeeper: 'accepted',
+          retainedGatekeeper: 'accepted',
+        },
+        install: {
+          location: 'temporary-applications',
+          firstLaunchProjectId: 'project:native-oracle',
+          relaunchProjectId: 'project:native-oracle',
+        },
+        rollback: {
+          action: 'retained-installer-reinstalled',
+          backupSha256,
+          backupSizeBytes: backupBytes.length,
+          reopenedProjectId: 'project:native-oracle',
+        },
+      }),
+    };
+  });
+
+const publicationRunner = vi.fn((input: CommandInput): CommandResult => {
+  expect(input.file).toBe('gh');
+  expect(input.args).toEqual(['auth', 'status', '--hostname', 'github.com', '--active']);
+  return { status: 0, stdout: 'active account' };
+});
+
+const evaluateReady = (
+  evidence: ReturnType<typeof createEvidence>,
+  options: {
+    readonly requirePublication?: boolean;
+    readonly nativeRunner?: ReturnType<typeof vi.fn>;
+  } = {},
+) =>
+  evaluateDesktopRelease({
+    artifactPath: evidence.artifactPath,
+    retainedArtifactPath: evidence.retainedArtifactPath,
+    backupArtifactPath: evidence.backupArtifactPath,
+    manifest: evidence.manifest,
+    environment: {
+      TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
+      GH_TOKEN: 'external-token-never-recorded',
+    },
+    expectedSourceCommit: 'a'.repeat(40),
+    requirePublication: options.requirePublication ?? true,
+    nativeCommandRunner: options.nativeRunner ?? nativeRunnerFor(evidence),
+    publicationCommandRunner: publicationRunner,
+    hostPlatform: 'darwin',
+    hostArchitecture: 'arm64',
+  });
+
 describe('desktop 1.0 release contract', () => {
-  it('owns an exact support/limitation and rollback policy', () => {
+  it('owns the exact support limitations and manual rollback policy', () => {
     const policy = loadDesktopReleasePolicy();
     expect(policy.candidate).toEqual({
       platform: 'darwin',
@@ -148,7 +227,7 @@ describe('desktop 1.0 release contract', () => {
     });
   });
 
-  it('rejects schema drift instead of accepting extra or missing fields', () => {
+  it('keeps the manifest closed and rejects self-asserted security evidence', () => {
     const policy = loadDesktopReleasePolicy();
     expect(() => validateDesktopReleasePolicy({ ...policy, inferredMakerSupport: true })).toThrow(
       DesktopReleaseContractError,
@@ -157,12 +236,13 @@ describe('desktop 1.0 release contract', () => {
     expect(() =>
       validateDesktopReleaseManifest({
         ...manifest,
-        artifact: { ...manifest.artifact, sha256: undefined },
+        signing: { verified: true, hardenedRuntime: true },
+        notarization: { verified: true, stapled: true },
       }),
-    ).toThrow(/manifest\.artifact\.sha256/);
+    ).toThrow(/contract\.unknown-field/);
   });
 
-  it('reports the evidence-free tree truthfully as NO-GO with stable limitations', () => {
+  it('reports the evidence-free checkout truthfully as NO-GO', () => {
     const status = evaluateDesktopRelease();
     expect(status).toMatchObject({
       decision: 'no-go',
@@ -172,79 +252,166 @@ describe('desktop 1.0 release contract', () => {
     expect(status.blockers.map(({ code }) => code)).toEqual([
       'artifact.manifest-missing',
       'artifact.file-missing',
-      'install.receipt-missing',
-      'rollback.receipt-missing',
+      'rollback.retained-artifact-missing',
+      'rollback.backup-output-missing',
       'publish.approval-missing',
       'publish.credential-missing',
     ]);
-    expect(status.knownLimitations.map(({ id }) => id)).toContain('platform.windows');
-    expect(status.knownLimitations.map(({ id }) => id)).toContain('capability.auto-update');
   });
 
-  it('only returns GO for a digest-bound signed/notarized native receipt set and approval boundary', () => {
+  it('only returns GO after the fixed native and operator command boundaries verify', () => {
     const evidence = createEvidence();
-    const status = evaluateDesktopRelease({
-      ...evidence,
-      expectedSourceCommit: 'a'.repeat(40),
-      environment: {
-        TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
-        GH_TOKEN: 'present-but-never-recorded',
-      },
-    });
+    const nativeRunner = nativeRunnerFor(evidence);
+    const status = evaluateReady(evidence, { nativeRunner });
     expect(status).toMatchObject({
       decision: 'go',
       artifactDecision: 'ready',
       publicationDecision: 'approved',
       blockers: [],
+      nativeEvidence: {
+        candidateTeamIdentifier: 'ABCDEFGHIJ',
+        projectId: 'project:native-oracle',
+      },
     });
-    expect(JSON.stringify(status)).not.toContain('present-but-never-recorded');
+    expect(nativeRunner).toHaveBeenCalledOnce();
+    expect(publicationRunner).toHaveBeenCalledOnce();
+    expect(JSON.stringify(status)).not.toContain('external-token-never-recorded');
   });
 
-  it('fails closed for artifact tampering and an unverified pre-downgrade backup', () => {
+  it('rejects arbitrary text even when forged true receipts are supplied', () => {
     const evidence = createEvidence();
-    writeFileSync(evidence.artifactPath, 'tampered');
-    const rollbackReceipt = {
-      ...evidence.rollbackReceipt,
-      projectBackup: { ...evidence.rollbackReceipt.projectBackup, verified: false },
+    writeFileSync(evidence.artifactPath, 'not a dmg');
+    writeFileSync(evidence.retainedArtifactPath, 'also not a dmg');
+    const manifest = {
+      ...evidence.manifest,
+      artifact: {
+        ...evidence.manifest.artifact,
+        sizeBytes: statSize(evidence.artifactPath),
+        sha256: sha256File(evidence.artifactPath),
+      },
     };
+    const nativeRunner = nativeRunnerFor(evidence);
     const status = evaluateDesktopRelease({
-      ...evidence,
-      rollbackReceipt,
-      requirePublication: false,
+      artifactPath: evidence.artifactPath,
+      retainedArtifactPath: evidence.retainedArtifactPath,
+      backupArtifactPath: evidence.backupArtifactPath,
+      manifest,
+      installReceipt: { verified: true, mountedDmg: true, firstLaunch: true },
+      rollbackReceipt: { verified: true, backup: true, projectReopen: true },
+      environment: { TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1', GH_TOKEN: 'placeholder' },
       expectedSourceCommit: 'a'.repeat(40),
+      nativeCommandRunner: nativeRunner,
+      publicationCommandRunner: publicationRunner,
+      hostPlatform: 'darwin',
+      hostArchitecture: 'arm64',
     });
     expect(status.decision).toBe('no-go');
     expect(status.blockers.map(({ code }) => code)).toEqual(
-      expect.arrayContaining([
-        'artifact.sha256-mismatch',
-        'artifact.size-mismatch',
-        'rollback.backup-unverified',
-      ]),
+      expect.arrayContaining(['artifact.format-invalid', 'rollback.retained-format-invalid']),
     );
+    expect(nativeRunner).not.toHaveBeenCalled();
+  });
 
-    const wrongCheckout = evaluateDesktopRelease({
-      ...evidence,
-      requirePublication: false,
-      expectedSourceCommit: 'c'.repeat(40),
-    });
-    expect(wrongCheckout.blockers.map(({ code }) => code)).toContain(
-      'provenance.source-commit-mismatch',
-    );
-
-    const missingRetained = evaluateDesktopRelease({
+  it('does not let a trailer-only fake pass the real native verifier boundary', () => {
+    const evidence = createEvidence();
+    const status = evaluateDesktopRelease({
       artifactPath: evidence.artifactPath,
+      retainedArtifactPath: evidence.retainedArtifactPath,
+      backupArtifactPath: evidence.backupArtifactPath,
       manifest: evidence.manifest,
-      installReceipt: evidence.installReceipt,
-      rollbackReceipt: evidence.rollbackReceipt,
-      requirePublication: false,
       expectedSourceCommit: 'a'.repeat(40),
+      requirePublication: false,
     });
-    expect(missingRetained.blockers.map(({ code }) => code)).toContain(
-      'rollback.retained-artifact-missing',
+    expect(status.decision).toBe('no-go');
+    expect(status.blockers.some(({ code }) => code.startsWith('native.'))).toBe(true);
+  });
+
+  it('rejects forged verifier stdout and tampered backup provenance', () => {
+    const evidence = createEvidence();
+    const forgedRunner = vi.fn((input: CommandInput): CommandResult => {
+      const nonce = input.args[input.args.indexOf('--nonce') + 1];
+      writeFileSync(evidence.backupArtifactPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 1]));
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          schemaVersion: 1,
+          nonce,
+          verified: true,
+          signed: true,
+          notarized: true,
+          launched: true,
+          rollback: true,
+        }),
+      };
+    });
+    const forged = evaluateReady(evidence, { nativeRunner: forgedRunner });
+    expect(forged.decision).toBe('no-go');
+    expect(forged.blockers.map(({ code }) => code)).toContain('contract.missing-field');
+
+    const validRunner = nativeRunnerFor(evidence);
+    const wrongProvenanceRunner = vi.fn((input: CommandInput): CommandResult => {
+      const result = validRunner(input);
+      const output = JSON.parse(result.stdout ?? '{}') as {
+        candidate: { embeddedSourceCommit: string };
+      };
+      output.candidate.embeddedSourceCommit = 'c'.repeat(40);
+      return { ...result, stdout: JSON.stringify(output) };
+    });
+    const wrongProvenance = evaluateReady(evidence, { nativeRunner: wrongProvenanceRunner });
+    expect(wrongProvenance.decision).toBe('no-go');
+    expect(wrongProvenance.blockers.map(({ code }) => code)).toContain('contract.invalid-literal');
+
+    const realRunner = nativeRunnerFor(evidence);
+    const tamperingRunner = vi.fn((input: CommandInput): CommandResult => {
+      const result = realRunner(input);
+      writeFileSync(
+        evidence.backupArtifactPath,
+        Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('tampered')]),
+      );
+      return result;
+    });
+    const tampered = evaluateReady(evidence, { nativeRunner: tamperingRunner });
+    expect(tampered.decision).toBe('no-go');
+    expect(tampered.blockers.map(({ code }) => code)).toContain(
+      'rollback.backup-provenance-mismatch',
     );
   });
 
-  it('keeps release signing disabled by default and validates the Apple secret boundary eagerly', () => {
+  it('makes skip-publication artifact-ready but never overall GO', () => {
+    const evidence = createEvidence();
+    const status = evaluateReady(evidence, { requirePublication: false });
+    expect(status).toMatchObject({
+      decision: 'no-go',
+      artifactDecision: 'ready',
+      publicationDecision: 'not-requested',
+      blockers: [
+        {
+          code: 'publish.not-requested',
+          message: 'Artifact verification does not authorize publication.',
+        },
+      ],
+    });
+  });
+
+  it('does not accept a placeholder token when the operator boundary rejects it', () => {
+    const evidence = createEvidence();
+    const status = evaluateDesktopRelease({
+      artifactPath: evidence.artifactPath,
+      retainedArtifactPath: evidence.retainedArtifactPath,
+      backupArtifactPath: evidence.backupArtifactPath,
+      manifest: evidence.manifest,
+      environment: { TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1', GH_TOKEN: 'placeholder' },
+      expectedSourceCommit: 'a'.repeat(40),
+      nativeCommandRunner: nativeRunnerFor(evidence),
+      publicationCommandRunner: () => ({ status: 1, stderr: 'unauthorized' }),
+      hostPlatform: 'darwin',
+      hostArchitecture: 'arm64',
+    });
+    expect(status.decision).toBe('no-go');
+    expect(status.blockers.map(({ code }) => code)).toContain('publish.credential-unverified');
+  });
+
+  it('keeps release signing disabled by default and Apple credentials external', () => {
     expect(createDesktopReleaseForgeSettings({ env: {} })).toEqual({ enabled: false });
     expect(() =>
       createDesktopReleaseForgeSettings({
@@ -253,7 +420,6 @@ describe('desktop 1.0 release contract', () => {
         architecture: 'arm64',
       }),
     ).toThrow(/TILEBORNE_APPLE_SIGNING_IDENTITY/);
-
     const settings = createDesktopReleaseForgeSettings({
       env: {
         TILEBORNE_DESKTOP_RELEASE: '1',
@@ -278,25 +444,24 @@ describe('desktop 1.0 release contract', () => {
       appleApiKeyId: 'KLMNOPQRST',
       appleApiIssuer: '12345678-1234-1234-1234-123456789abc',
     });
-    expect(settings.dmgConfig).toMatchObject({
-      additionalDMGOptions: {
-        'code-sign': { 'signing-identity': expect.stringContaining('Developer ID Application:') },
-      },
+    expect(
+      createDesktopReleaseProvenance({ sourceCommit: 'a'.repeat(40), version: '1.0.0' }),
+    ).toEqual({
+      schemaVersion: 1,
+      policyId: 'tileborne-desktop-1.0',
+      sourceCommit: 'a'.repeat(40),
+      version: '1.0.0',
+      buildCommand: 'pnpm --filter @tileborne/desktop package',
     });
   });
 
-  it('exposes a passing policy gate and a non-zero verifier for the current NO-GO state', () => {
+  it('exposes a passing policy gate and rejects legacy editable receipt flags', () => {
     const policy = spawnSync(
       process.execPath,
       [path.join(repoRoot, 'scripts/desktop-release-contract.mjs'), 'policy'],
       { encoding: 'utf8' },
     );
     expect(policy.status, policy.stderr).toBe(0);
-    expect(JSON.parse(policy.stdout)).toEqual({
-      policyId: 'tileborne-desktop-1.0',
-      status: 'valid',
-    });
-
     const verify = spawnSync(
       process.execPath,
       [path.join(repoRoot, 'scripts/desktop-release-contract.mjs'), 'verify'],
@@ -304,14 +469,36 @@ describe('desktop 1.0 release contract', () => {
     );
     expect(verify.status).toBe(1);
     expect(JSON.parse(verify.stdout).decision).toBe('no-go');
+    const legacy = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'scripts/desktop-release-contract.mjs'),
+        'status',
+        '--install-receipt',
+        'forged.json',
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(legacy.status).toBe(1);
+    expect(legacy.stderr).toContain('cli.invalid-argument');
   });
 
-  it('contains no credential values in the versioned policy', () => {
-    const rawPolicy = readFileSync(
-      path.join(repoRoot, 'scripts/desktop-release-policy.json'),
-      'utf8',
-    );
-    expect(rawPolicy).toContain('GH_TOKEN');
-    expect(rawPolicy).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/);
+  it('recognizes only a UDIF trailer, not a DMG extension or arbitrary prefix', () => {
+    const evidence = createEvidence();
+    expect(hasUdifTrailer(evidence.artifactPath)).toBe(true);
+    writeFileSync(evidence.artifactPath, Buffer.from('koly arbitrary bytes'));
+    expect(hasUdifTrailer(evidence.artifactPath)).toBe(false);
+  });
+
+  it('contains no credential values in the versioned policy or native verifier', () => {
+    const sources = [
+      'scripts/desktop-release-policy.json',
+      'scripts/macos-desktop-release-verifier.mjs',
+    ].map((relativePath) => readFileSync(path.join(repoRoot, relativePath), 'utf8'));
+    expect(sources.join('\n')).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/);
   });
 });
+
+function statSize(filePath: string): number {
+  return readFileSync(filePath).byteLength;
+}

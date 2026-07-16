@@ -18,6 +18,22 @@ const requireValue = (env, name) => {
   return value;
 };
 
+const createDesktopReleaseProvenance = ({ sourceCommit, version }) => {
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit)) {
+    throw new Error('desktop-release.invalid-source-commit: git rev-parse HEAD');
+  }
+  if (typeof version !== 'string' || version.length === 0) {
+    throw new Error('desktop-release.invalid-version: package version required');
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    policyId: 'tileborne-desktop-1.0',
+    sourceCommit,
+    version,
+    buildCommand: 'pnpm --filter @tileborne/desktop package',
+  });
+};
+
 const createDesktopReleaseForgeSettings = ({
   env = process.env,
   platform = process.platform,
@@ -89,5 +105,6 @@ const createDesktopReleaseForgeSettings = ({
 module.exports = {
   RELEASE_FLAG,
   REQUIRED_ENVIRONMENT,
+  createDesktopReleaseProvenance,
   createDesktopReleaseForgeSettings,
 };

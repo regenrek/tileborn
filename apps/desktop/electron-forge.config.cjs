@@ -5,7 +5,10 @@ const moduleApi = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 
-const { createDesktopReleaseForgeSettings } = require('./scripts/desktop-release-forge.cjs');
+const {
+  createDesktopReleaseForgeSettings,
+  createDesktopReleaseProvenance,
+} = require('./scripts/desktop-release-forge.cjs');
 
 const desktopRelease = createDesktopReleaseForgeSettings();
 
@@ -180,6 +183,27 @@ const copyGameHostBuildAssets = (buildPath) => {
   fs.cpSync(sourceRoot, destinationRoot, { recursive: true, dereference: true });
 };
 
+const writeSignedDesktopReleaseProvenance = (buildPath) => {
+  if (!desktopRelease.enabled) return;
+  const sourceCommit = childProcess
+    .execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    .trim();
+  const { version } = require('./package.json');
+  const releaseProvenancePath = path.join(
+    path.dirname(buildPath),
+    'tileborne-desktop-provenance.json',
+  );
+  fs.writeFileSync(
+    releaseProvenancePath,
+    `${JSON.stringify(createDesktopReleaseProvenance({ sourceCommit, version }))}\n`,
+    { encoding: 'utf8', mode: 0o444 },
+  );
+};
+
 const dmgMaker = {
   name: '@electron-forge/maker-dmg',
   config: desktopRelease.enabled ? desktopRelease.dmgConfig : {},
@@ -235,6 +259,7 @@ module.exports = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyBundledPlugins(buildPath);
       copyGameHostBuildAssets(buildPath);
+      writeSignedDesktopReleaseProvenance(buildPath);
     },
     // Packager pruning has finished here. Install a lockfile-derived, portable
     // production closure for the two binary-backed Vite externals; everything

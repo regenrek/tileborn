@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 
 import { MapId, PackId, PluginId } from '../ids.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 /**
  * Brand-injected configuration for the shipped game client. The shape mirrors
@@ -75,7 +76,7 @@ export class BrandMenuExtension extends Schema.Class<BrandMenuExtension>('BrandM
 }) {}
 
 export class BrandConfig extends Schema.Class<BrandConfig>('BrandConfig')({
-  schemaVersion: Schema.optional(Schema.Int),
+  schemaVersion: Schema.optional(Schema.Literal(PERSISTED_SCHEMA_VERSIONS.brandConfig)),
   title: NonEmptyString,
   logo: Schema.optional(BrandLogo),
   palette: BrandPalette,

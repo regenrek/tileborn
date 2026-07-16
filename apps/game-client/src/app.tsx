@@ -1,4 +1,4 @@
-import { CONTROL_SCHEMES, controlScheme } from '@tileborne/core';
+import { CONTROL_SCHEMES, PERSISTED_SCHEMA_VERSIONS, controlScheme } from '@tileborne/core';
 import {
   createLocalStorageBindingsStore,
   createGameHostLobbyClient,
@@ -24,7 +24,7 @@ import { battleRoyaleMenuSections } from '@tileborne/plugin-battle-royale/menu';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 
 const DEFAULT_LOBBY_MAP_ID = 'map:fixture';
-const LOBBY_RECONNECT_STORAGE_KEY = 'tileborne.game-client.lobby-reconnect.v1';
+const LOBBY_RECONNECT_STORAGE_KEY = `tileborne.game-client.lobby-reconnect.v${PERSISTED_SCHEMA_VERSIONS.lobbyReconnect}`;
 
 interface StoredLobbyReconnect {
   readonly roomId: string;

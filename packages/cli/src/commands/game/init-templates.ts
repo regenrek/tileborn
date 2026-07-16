@@ -12,6 +12,8 @@
  * asset-copy step.
  */
 
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
+
 export interface GameTemplateOptions {
   /**
    * Project / package name (also used as the brand title and as the default
@@ -78,7 +80,7 @@ export const renderTileborneConfig = ({ name }: GameTemplateOptions): string =>
  */
 export const renderBrandingTokens = ({ name, pluginId }: GameTemplateOptions): string =>
   json({
-    schemaVersion: 1,
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.brandConfig,
     title: name,
     palette: {
       background: '#0b0d12',

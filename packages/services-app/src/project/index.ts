@@ -469,6 +469,41 @@ export const updateProjectMaps = (
 const importRecordsPath = (projectDir: string): string =>
   path.join(projectDir, PROJECT_IMPORT_RECORDS_PATH);
 
+interface ProjectImportRecordsDocument {
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectImportRecords;
+  readonly records: readonly ImportRecord[];
+}
+
+const isObjectRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isImportRecord = (value: unknown): value is ImportRecord =>
+  isObjectRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.projectId === 'string' &&
+  typeof value.createdAt === 'string' &&
+  isObjectRecord(value.sourceIdentity) &&
+  isObjectRecord(value.appliedPlan) &&
+  isObjectRecord(value.report);
+
+const decodeProjectImportRecordsDocument = (raw: string): ProjectImportRecordsDocument => {
+  const parsed: unknown = JSON.parse(raw);
+  if (
+    !isObjectRecord(parsed) ||
+    parsed.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.projectImportRecords ||
+    !Array.isArray(parsed.records) ||
+    !parsed.records.every(isImportRecord)
+  ) {
+    throw new Error(
+      `Unsupported or invalid project import records; expected schemaVersion ${PERSISTED_SCHEMA_VERSIONS.projectImportRecords}`,
+    );
+  }
+  return {
+    schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectImportRecords,
+    records: parsed.records,
+  };
+};
+
 export const appendProjectImportRecord = (
   projectDir: string,
   record: ImportRecord,
@@ -495,11 +530,7 @@ export const appendProjectImportRecord = (
             records: [] as ImportRecord[],
           }
         : yield* Effect.try({
-            try: () =>
-              JSON.parse(existing) as {
-                readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.projectImportRecords;
-                readonly records: readonly ImportRecord[];
-              },
+            try: () => decodeProjectImportRecordsDocument(existing),
             catch: (cause) =>
               new ProjectSaveError({ path: filePath, message: errorMessage(cause) }),
           });

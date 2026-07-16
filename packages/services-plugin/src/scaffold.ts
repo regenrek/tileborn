@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { PluginId } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, PluginId } from '@tileborne/core';
 import { PluginManifest } from '@tileborne/plugin-api';
 import { writeJsonAtomic } from '@tileborne/services-foundation';
 import { Effect, Schema } from 'effect';
@@ -172,7 +172,7 @@ export const packPluginDirectory = (
     });
     const metadataPath = `${archivePath}.meta.json`;
     yield* writeJsonAtomic(metadataPath, {
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.pluginArchiveSidecar,
       kind: 'plugin',
       pluginId: manifest.id,
       version: manifest.version,

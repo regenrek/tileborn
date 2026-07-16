@@ -1,5 +1,10 @@
-import { InputMap, PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
-import { Option, Schema } from 'effect';
+import type { InputMap } from '@tileborne/core';
+import {
+  createLocalStorageBindingsStore,
+  USER_INPUT_OVERLAY_STORAGE_KEY,
+} from '@tileborne/game-client';
+
+export { USER_INPUT_OVERLAY_STORAGE_KEY };
 
 /**
  * Renderer-side persistence of the user's keybind remap overlay (ADR-0024
@@ -22,50 +27,21 @@ import { Option, Schema } from 'effect';
  */
 
 /**
- * `localStorage` key for the user input overlay. Versioned so a future schema
- * change can migrate rather than mis-decode. MUST stay in sync with the
- * `@tileborne/game-client` Controls store key (same durable contract).
- */
-export const USER_INPUT_OVERLAY_STORAGE_KEY = `tileborne:input:user-overlay:v${PERSISTED_SCHEMA_VERSIONS.userInputOverlay}`;
-
-const resolveStorage = (storage?: Storage): Storage | undefined =>
-  storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
-
-/**
  * Load the persisted user remap overlay, or `undefined` when none is stored,
  * the storage is unavailable (e.g. a non-DOM test/worker), or the stored value
  * does not decode against the current `InputMap` schema (treated as absent
  * rather than throwing — a corrupt overlay must never block playtest input).
  */
 export const loadUserInputOverlay = (storage?: Storage): InputMap | undefined => {
-  const store = resolveStorage(storage);
-  if (store === undefined) {
-    return undefined;
-  }
-  const raw = store.getItem(USER_INPUT_OVERLAY_STORAGE_KEY);
-  if (raw === null) {
-    return undefined;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
-  return Option.getOrUndefined(Schema.decodeUnknownOption(InputMap)(parsed));
+  return createLocalStorageBindingsStore(storage === undefined ? undefined : { storage }).load();
 };
 
 /** Persist the user remap overlay as its canonical `InputMap` Schema encoding. */
 export const saveUserInputOverlay = (overlay: InputMap, storage?: Storage): void => {
-  const store = resolveStorage(storage);
-  if (store === undefined) {
-    return;
-  }
-  const encoded = Schema.encodeUnknownSync(InputMap)(overlay);
-  store.setItem(USER_INPUT_OVERLAY_STORAGE_KEY, JSON.stringify(encoded));
+  createLocalStorageBindingsStore(storage === undefined ? undefined : { storage }).save(overlay);
 };
 
 /** Drop the persisted overlay (reset-to-defaults: resolver falls back to plugin defaults). */
 export const clearUserInputOverlay = (storage?: Storage): void => {
-  resolveStorage(storage)?.removeItem(USER_INPUT_OVERLAY_STORAGE_KEY);
+  createLocalStorageBindingsStore(storage === undefined ? undefined : { storage }).clear();
 };

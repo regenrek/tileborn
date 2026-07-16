@@ -80,6 +80,10 @@ describe('BrandConfig', () => {
     ).toThrow();
   });
 
+  it('refuses an explicit future schema version', () => {
+    expect(() => decodeBrandConfig({ ...tokens, schemaVersion: 2 })).toThrow();
+  });
+
   it('rejects a malformed plugin id in servers', () => {
     expect(() =>
       Schema.decodeUnknownSync(BrandConfig)({

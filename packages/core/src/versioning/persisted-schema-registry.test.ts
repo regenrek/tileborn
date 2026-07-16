@@ -4,8 +4,18 @@ import {
   PERSISTED_SCHEMA_REGISTRY,
   PERSISTED_SCHEMA_VERSIONS,
 } from './persisted-schema-registry.js';
+import { CORE_SCHEMA_VERSIONS } from './index.js';
 
 describe('persisted schema registry', () => {
+  it('preserves the deprecated public core version surface', () => {
+    expect(CORE_SCHEMA_VERSIONS).toEqual({
+      project: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+      map: PERSISTED_SCHEMA_VERSIONS.tileborneMap,
+      assetPackManifest: 1,
+      brandConfig: PERSISTED_SCHEMA_VERSIONS.brandConfig,
+    });
+  });
+
   it('registers every current-version constant exactly once', () => {
     const ids = PERSISTED_SCHEMA_REGISTRY.map((registration) => registration.id);
     expect(new Set(ids).size).toBe(ids.length);

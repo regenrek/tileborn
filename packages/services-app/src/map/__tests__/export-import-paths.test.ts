@@ -11,7 +11,11 @@ import { ServicesAppLayer } from '../../index.js';
 import { MapService } from '../index.js';
 import { AssetService } from '../../asset/index.js';
 import { WorkingPaletteService } from '../../asset-library/index.js';
-import { ProjectService } from '../../project/index.js';
+import {
+  appendProjectImportRecord,
+  ProjectService,
+  type ImportRecord,
+} from '../../project/index.js';
 import { withTempHome } from '../../test-utils.js';
 
 const appLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
@@ -270,6 +274,26 @@ describe('MapService export/import path security', () => {
       expect(store.records[0]?.sourceIdentity.path).toBe(
         path.join(projectDir(home, result.projectId), 'imports/tiled-ground.tmj'),
       );
+
+      const validDocument = JSON.parse(await readFile(recordsPath, 'utf8')) as {
+        readonly records: readonly ImportRecord[];
+      };
+      const record = validDocument.records[0];
+      if (record === undefined) {
+        throw new Error('expected persisted import record');
+      }
+      for (const raw of [
+        '{"schemaVersion":0,"records":[]}',
+        '{"schemaVersion":2,"records":[],"future":"preserve"}',
+        '{not-json',
+      ]) {
+        await writeFile(recordsPath, raw);
+        const attempted = await Effect.runPromiseExit(
+          appendProjectImportRecord(projectDir(home, result.projectId), record),
+        );
+        expect(attempted._tag).toBe('Failure');
+        expect(await readFile(recordsPath, 'utf8')).toBe(raw);
+      }
     }));
 
   it('planTiledImport defaults to the SDK recommended profile and carries source roles', () =>

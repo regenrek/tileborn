@@ -8,8 +8,11 @@ import { writeJsonAtomic } from '../internal/atomic-json.js';
 export const LoggerLevel = Schema.Literals(['trace', 'debug', 'info', 'warn', 'error', 'silent']);
 export type LoggerLevel = Schema.Schema.Type<typeof LoggerLevel>;
 
+/** Dependency-local config codec version, drift-checked against the release registry. */
+export const TILEBORNE_CONFIG_SCHEMA_VERSION = 1;
+
 export const TileborneConfig = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(TILEBORNE_CONFIG_SCHEMA_VERSION),
   homePath: Schema.OptionFromOptional(Schema.String),
   lastOpenedProject: Schema.OptionFromOptional(Schema.String),
   pluginPreferences: Schema.Record(Schema.String, Schema.Boolean),
@@ -65,7 +68,7 @@ export class ConfigService extends Context.Service<
 >()('@tileborne/services-foundation/ConfigService') {}
 
 export const defaultConfig: TileborneConfig = {
-  schemaVersion: 1,
+  schemaVersion: TILEBORNE_CONFIG_SCHEMA_VERSION,
   homePath: Option.none(),
   lastOpenedProject: Option.none(),
   pluginPreferences: {},
@@ -145,7 +148,7 @@ const writeConfigFile = (
   });
 
 const mergeConfig = (current: TileborneConfig, patch: TileborneConfigPatch): TileborneConfig => ({
-  schemaVersion: 1,
+  schemaVersion: TILEBORNE_CONFIG_SCHEMA_VERSION,
   homePath: patch.homePath ?? current.homePath,
   lastOpenedProject: patch.lastOpenedProject ?? current.lastOpenedProject,
   pluginPreferences: patch.pluginPreferences

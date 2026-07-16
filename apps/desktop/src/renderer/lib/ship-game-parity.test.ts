@@ -61,7 +61,9 @@ describe('Ship Game entry-point parity', () => {
     expect(viteMain).not.toContain("'@tileborne/game-host/build'");
     expect(viteMain).toContain("'esbuild'");
     expect(viteMain).toContain("'miniflare'");
-    expect(forgeConfig).toContain('"@tileborne/desktop-runtime-closure"');
+    expect(forgeConfig).toContain(
+      "const runtimeClosurePackage = '@tileborne/desktop-runtime-closure'",
+    );
     expect(forgeConfig).toContain('packageAfterPrune');
     expect(forgeConfig).toContain('deployPackagedRuntimeClosure(buildPath)');
     expect(forgeConfig).toContain('assertPackagedRuntimeClosure(buildPath)');

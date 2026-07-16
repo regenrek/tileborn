@@ -98,8 +98,8 @@ export function GenericModeSettingsPanel({
         onSave={save}
         onInvalid={notifyError}
         document={{
-          id: `game-settings:${projectId}:${map.id}:${pluginId}`,
-          scopeId: `map:${projectId}:${map.id}`,
+          id: `game-settings:${form.scope}:${projectId}:${map.id}:${pluginId}`,
+          scopeId: isProjectScope ? `project:${projectId}` : `map:${projectId}:${map.id}`,
           label: `${label} settings`,
         }}
       />

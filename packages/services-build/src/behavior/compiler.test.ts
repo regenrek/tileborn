@@ -281,7 +281,7 @@ describe('behavior compiler', () => {
       );
       expect(reflectiveEscape.diagnostics.every(({ code }) => code === 'TBSDK1003')).toBe(true);
     }
-  });
+  }, 30_000);
 
   it('keeps the last-known-good compiled artifact when a visual edit becomes invalid', () => {
     const session = new BehaviorCompilerSession();

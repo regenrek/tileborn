@@ -16,6 +16,7 @@ export const FIXTURE_PLUGIN_ID = '@tileborne-plugins/smoke-fixture';
 export const FIXTURE_PACK_ID = 'pack:550e8400-e29b-41d4-a716-446655440001';
 export const SAMPLE_ASSET_PACK_ID = 'pack:550e8400-e29b-41d4-a716-446655440099';
 export const BATTLE_ROYALE_PLUGIN_ID = PLUGIN_ID;
+export const EXAMPLE_ARENA_PLUGIN_ID = '@tileborne-plugins/example-arena';
 export const SMOKE_PROJECT_NAME = 'Smoke Test Project';
 
 export interface SmokeContext {
@@ -63,6 +64,10 @@ export function resolveBattleRoyaleInstallPath(): string {
   return battleRoyalePluginPath();
 }
 
+export function resolveExampleArenaInstallPath(): string {
+  return path.resolve(desktopRoot, '../../packages/plugin-example-arena');
+}
+
 let smokeBundlesBuilt = false;
 
 function buildSmokeBundles(): void {
@@ -93,12 +98,16 @@ export async function createTileborneHome(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), 'tileborne-smoke-home-'));
 }
 
-export async function launchElectron(tileborneHome: string): Promise<SmokeContext> {
+export async function launchElectron(
+  tileborneHome: string,
+  extraEnv: Readonly<Record<string, string>> = {},
+): Promise<SmokeContext> {
   const userDataDir = path.join(tileborneHome, 'electron-user-data');
   const env = {
     ...process.env,
     TILEBORNE_HOME: tileborneHome,
     ...SMOKE_ELECTRON_ENV,
+    ...extraEnv,
   };
   delete env.TILEBORNE_REMOTE_DEBUGGING_PORT;
 
@@ -114,11 +123,17 @@ export async function launchElectron(tileborneHome: string): Promise<SmokeContex
   return { app, page, tileborneHome };
 }
 
+export async function closeSmokeApp(context: SmokeContext): Promise<void> {
+  const closed = context.app.waitForEvent('close', { timeout: 10_000 });
+  await context.app.evaluate(({ app }) => app.quit()).catch(() => undefined);
+  await closed;
+}
+
 export async function disposeSmokeContext(context: SmokeContext | undefined): Promise<void> {
   if (!context) {
     return;
   }
-  await context.app.close().catch(() => undefined);
+  await closeSmokeApp(context);
   await rm(context.tileborneHome, { recursive: true, force: true }).catch(() => undefined);
 }
 
@@ -168,11 +183,13 @@ export async function addBattleRoyaleSpawnAnchors(
   count = 4,
 ): Promise<void> {
   const spawnKind = gameObjectTypeIdForKey('spawn-point');
+  const shrinkKind = gameObjectTypeIdForKey('shrink-zone-anchor');
+  const lootKind = gameObjectTypeIdForKey('loot-crate');
   // Drive the raw wire transport instead of the typed bridge: this helper
   // edits the map as plain wire JSON (the maps:update request's encoded
   // side), which is exactly what the renderer client puts on the channel.
   await page.evaluate(
-    async ({ pid, mid, kind, anchorCount }) => {
+    async ({ pid, mid, kind, shrinkAnchorKind, lootCrateKind, anchorCount }) => {
       type WireLayer = {
         readonly id: string;
         readonly kind: string;
@@ -219,7 +236,26 @@ export async function addBattleRoyaleSpawnAnchors(
             properties: { team: 'solo', weight: 1 },
           };
         });
-        const anchorIds = new Set(anchors.map((anchor) => anchor.id));
+        const requiredModeObjects = [
+          ...anchors,
+          {
+            id: 'object:00000000-0000-4000-8000-000000000900',
+            kind: shrinkAnchorKind,
+            x: 256,
+            y: 256,
+            layerId: objectLayer.id,
+            properties: { initialRadiusTiles: 20, finalRadiusTiles: 4 },
+          },
+          {
+            id: 'object:00000000-0000-4000-8000-000000000901',
+            kind: lootCrateKind,
+            x: 192,
+            y: 192,
+            layerId: objectLayer.id,
+            properties: { itemKind: 'health-pack', tier: 'common', weight: 1 },
+          },
+        ];
+        const anchorIds = new Set(requiredModeObjects.map((anchor) => anchor.id));
         const nextLayers = persisted.layers.map((layer) =>
           layer.id === objectLayer.id && Array.isArray(layer.objectIds)
             ? { ...layer, objectIds: [...layer.objectIds.filter((id) => !anchorIds.has(id)), ...anchorIds] }
@@ -232,7 +268,7 @@ export async function addBattleRoyaleSpawnAnchors(
             layers: nextLayers,
             objects: [
               ...persisted.objects.filter((object) => !anchorIds.has(String(object.id))),
-              ...anchors,
+              ...requiredModeObjects,
             ],
             properties: { ...persisted.properties, maxPlayers: anchorCount },
           },
@@ -243,7 +279,14 @@ export async function addBattleRoyaleSpawnAnchors(
         throw new Error(message, { cause: error });
       }
     },
-    { pid: projectId, mid: mapId, kind: spawnKind, anchorCount: count },
+    {
+      pid: projectId,
+      mid: mapId,
+      kind: spawnKind,
+      shrinkAnchorKind: shrinkKind,
+      lootCrateKind: lootKind,
+      anchorCount: count,
+    },
   );
 }
 

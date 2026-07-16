@@ -50,7 +50,7 @@ describe.sequential('project creation flow', () => {
     const { page, tileborneHome } = smokeContext!;
 
     const createButton = page.getByRole('button', {
-      name: /Create project/i,
+      name: /New game/i,
     }).first();
     await expect(createButton).toBeVisible();
     await createButton.click();

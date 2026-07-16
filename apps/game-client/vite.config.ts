@@ -28,6 +28,9 @@ export default defineConfig({
         "../../packages/ipc-contracts/src/protocols/battle-royale.ts",
       ),
       "@tileborne/ipc-contracts": resolveSrc("../../packages/ipc-contracts/src/index.ts"),
+      "@tileborne/plugin-api/project-content": resolveSrc(
+        "../../packages/plugin-api/src/project-content.ts",
+      ),
       "@tileborne/plugin-api": resolveSrc("../../packages/plugin-api/src/index.ts"),
       "@tileborne/ui": resolveSrc("../../packages/ui/src/index.ts"),
     },

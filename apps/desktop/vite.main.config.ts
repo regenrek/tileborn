@@ -1,34 +1,37 @@
-import { builtinModules } from "node:module";
+import { builtinModules } from 'node:module';
 
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
-import { cjsImportMetaUrl } from "./vite.cjs-import-meta-url.js";
+import { cjsImportMetaUrl } from './vite.cjs-import-meta-url.js';
 
 const nodeBuiltins = [
-  "electron",
+  'electron',
   ...builtinModules,
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
 ];
 
-const externalPackages = ["miniflare"];
-const workspacePackages = ["@tileborne/plugin-battle-royale"];
+// Only binary-backed runtimes stay external. Pure workspace/JavaScript
+// packages are bundled so a packaged app never resolves them by walking out of
+// Contents/Resources and into a checkout. electron-forge.config.cjs deploys
+// this exact external runtime closure after Packager pruning.
+const externalPackages = ['esbuild', 'miniflare'];
 
 export default defineConfig({
   plugins: [cjsImportMetaUrl()],
   build: {
-    outDir: ".vite/build",
+    outDir: '.vite/build',
     emptyOutDir: false,
     lib: {
-      entry: "src/main/main.ts",
-      formats: ["cjs"],
-      fileName: () => "main.cjs",
+      entry: 'src/main/main.ts',
+      formats: ['cjs'],
+      fileName: () => 'main.cjs',
     },
     rollupOptions: {
-      external: [...nodeBuiltins, ...externalPackages, ...workspacePackages],
+      external: [...nodeBuiltins, ...externalPackages],
       output: {
-        entryFileNames: "[name].cjs",
-        chunkFileNames: "[name].cjs",
-        format: "cjs",
+        entryFileNames: '[name].cjs',
+        chunkFileNames: '[name].cjs',
+        format: 'cjs',
       },
     },
   },

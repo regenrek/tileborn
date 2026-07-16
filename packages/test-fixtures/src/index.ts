@@ -276,7 +276,7 @@ const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
       { id: 'fixture-validation-records', unit: 'count', limit: 'exact', value: 14_857 },
       { id: 'full-project-validation-passes', unit: 'operations', limit: 'exact', value: 1 },
       { id: 'invalid-variant-faults', unit: 'count', limit: 'exact', value: 64 },
-      { id: 'diagnostics-returned', unit: 'count', limit: 'max', value: 64 },
+      { id: 'diagnostics-returned', unit: 'count', limit: 'exact', value: 64 },
       { id: 'records-inspected', unit: 'count', limit: 'max', value: 16_000 },
     ],
   },
@@ -603,6 +603,27 @@ export const creatorPerformanceMetricPasses = (
     case 'min':
       return observedValue >= metric.value;
   }
+};
+
+/**
+ * Compare a complete flow receipt. Missing and unknown metrics fail closed so a
+ * harness cannot satisfy the contract by reporting only convenient counters.
+ */
+export const creatorPerformanceFlowPasses = (
+  flow: CreatorPerformanceBudgetFlow,
+  observed: Readonly<Record<string, number>>,
+): boolean => {
+  const expectedIds = flow.metrics.map(({ id }) => id).sort();
+  const observedIds = Object.keys(observed).sort();
+  if (
+    expectedIds.length !== observedIds.length ||
+    expectedIds.some((id, index) => id !== observedIds[index])
+  ) {
+    return false;
+  }
+  return flow.metrics.every((metric) =>
+    creatorPerformanceMetricPasses(metric, observed[metric.id] ?? Number.NaN),
+  );
 };
 
 /** Decode one fixture/budget pair exactly once at its JSON boundary. */

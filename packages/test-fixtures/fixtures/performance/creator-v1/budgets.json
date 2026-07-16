@@ -186,9 +186,9 @@
         {
           "id": "diagnostics-returned",
           "unit": "count",
-          "limit": "max",
+          "limit": "exact",
           "value": 64,
-          "rationale": "One actionable diagnostic per injected fault prevents duplicate fan-out."
+          "rationale": "Exactly one actionable diagnostic per injected fault proves result conformance and prevents missing or duplicate fan-out."
         },
         {
           "id": "records-inspected",

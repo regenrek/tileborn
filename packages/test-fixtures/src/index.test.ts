@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FIXTURE_CATEGORIES,
   CREATOR_PERFORMANCE_FLOW_IDS,
+  creatorPerformanceFlowPasses,
   creatorPerformanceMetricPasses,
   decodeCreatorPerformanceContract,
   fixtureExists,
@@ -316,6 +317,7 @@ describe('@tileborne/test-fixtures', () => {
       ['asset-library-2000', 'fixture-assets'],
       ['large-behaviors-references', 'fixture-references'],
       ['validation', 'fixture-validation-records'],
+      ['validation', 'diagnostics-returned'],
       ['playtest-start', 'compiled-behavior-modules'],
       ['playtest-start', 'source-behavior-bytes'],
       ['package', 'asset-payload-input-bytes'],
@@ -331,6 +333,44 @@ describe('@tileborne/test-fixtures', () => {
     expect(creatorPerformanceMetricPasses(outputCeiling, outputCeiling.value - 1)).toBe(true);
     expect(creatorPerformanceMetricPasses(outputCeiling, outputCeiling.value + 1)).toBe(false);
     expect(creatorPerformanceMetricPasses(outputCeiling, Number.NaN)).toBe(false);
+  });
+
+  it('requires all 64 validation diagnostics and rejects a whole-flow no-op receipt', () => {
+    const validation = loadCreatorPerformanceContract().budgets.flows.find(
+      ({ id }) => id === 'validation',
+    );
+    expect(validation).toBeDefined();
+    const diagnostics = validation!.metrics.find(({ id }) => id === 'diagnostics-returned');
+    const inspected = validation!.metrics.find(({ id }) => id === 'records-inspected');
+    expect(diagnostics).toMatchObject({ limit: 'exact', value: 64 });
+    expect(inspected).toMatchObject({ limit: 'max', value: 16_000 });
+
+    expect(creatorPerformanceMetricPasses(diagnostics!, 0)).toBe(false);
+    expect(creatorPerformanceMetricPasses(diagnostics!, 63)).toBe(false);
+    expect(creatorPerformanceMetricPasses(diagnostics!, 64)).toBe(true);
+    expect(creatorPerformanceMetricPasses(diagnostics!, 65)).toBe(false);
+    expect(creatorPerformanceMetricPasses(inspected!, 16_001)).toBe(false);
+
+    const conformingReceipt = Object.fromEntries(
+      validation!.metrics.map((metric) => [metric.id, metric.limit === 'exact' ? metric.value : 0]),
+    );
+    expect(creatorPerformanceFlowPasses(validation!, conformingReceipt)).toBe(true);
+
+    const noOpReceipt = {
+      ...conformingReceipt,
+      'diagnostics-returned': 0,
+      'records-inspected': 0,
+    };
+    expect(creatorPerformanceFlowPasses(validation!, noOpReceipt)).toBe(false);
+    expect(
+      creatorPerformanceFlowPasses(validation!, {
+        ...conformingReceipt,
+        unexpected: 1,
+      }),
+    ).toBe(false);
+    const missingResultReceipt = { ...conformingReceipt };
+    delete missingResultReceipt['diagnostics-returned'];
+    expect(creatorPerformanceFlowPasses(validation!, missingResultReceipt)).toBe(false);
   });
 
   it('pins every flow metric id, unit, limit, and value as immutable v1 semantics', () => {

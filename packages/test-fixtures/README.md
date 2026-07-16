@@ -53,10 +53,10 @@ named in `measurementPolicy`.
   estimates.
 - `operations` counts completed named owner-boundary invocations or durable
   phase transitions. Harness setup and assertions are excluded.
-- `exact` fixes corpus inputs and required workload operations so an
-  under-processing harness fails. `max` is reserved for output, batching, and
-  amplification ceilings. A future `min` may only describe an explicit output
-  floor, never a fixed input total.
+- `exact` fixes corpus inputs, required workload operations, and
+  correctness-sensitive outputs so an under-processing harness fails. `max` is
+  reserved for output-size, batching, and amplification ceilings. A future
+  `min` may only describe an explicit output floor, never a fixed input total.
 - A run must report every metric for its flow. Missing metrics are failures, not
   zeroes. Wall-clock milliseconds are not valid v1 metric units.
 

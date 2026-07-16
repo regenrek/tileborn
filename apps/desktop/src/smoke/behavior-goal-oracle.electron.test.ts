@@ -7,6 +7,8 @@ import { createLocalGameHost } from '@tileborne/game-host/local';
 import { expect, type Dialog, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
+import { snapshotShippedArtifact } from '../../../../scripts/shipped-artifact-evidence.mjs';
+
 import {
   closeSmokeApp,
   createTileborneHome,
@@ -920,6 +922,14 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
     await capture(context, '07-ship-game-verified.png');
     await stopTrace(context, '03-multiplayer-and-ship.zip');
 
+    const shippedArtifactEvidence =
+      ORACLE_ARTIFACTS === undefined
+        ? undefined
+        : await snapshotShippedArtifact({
+            sourceDirectory: artifact.directory,
+            evidenceRoot: ORACLE_ARTIFACTS,
+          });
+
     const receiptTarget = artifactPath('receipt.json');
     if (receiptTarget !== undefined) {
       if (ORACLE_PREFLIGHT === undefined) {
@@ -986,7 +996,7 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
             profileRoot: tileborneHome,
             projectId: created.projectId,
             mapId: created.mapId,
-            shippedArtifactDirectory: artifact.directory,
+            shippedArtifact: shippedArtifactEvidence,
             flows: {
               freshProfileUiStarter: 'passed',
               visualBehavior: authored.visualId,
@@ -1011,7 +1021,13 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
     const isolatedRoot = await mkdtemp(path.join(tmpdir(), 'tileborne-behavior-goal-oracle-'));
     isolatedArtifacts.push(isolatedRoot);
     const isolatedArtifact = path.join(isolatedRoot, 'game');
-    await cp(artifact.directory, isolatedArtifact, { recursive: true });
+    await cp(
+      shippedArtifactEvidence === undefined
+        ? artifact.directory
+        : path.join(ORACLE_ARTIFACTS!, shippedArtifactEvidence.directory),
+      isolatedArtifact,
+      { recursive: true },
+    );
     const workerPath = path.join(isolatedArtifact, 'worker.js');
     const behaviorWorkerPath = path.join(isolatedArtifact, 'behavior-worker.js');
     const workerSource = await readFile(workerPath, 'utf8');

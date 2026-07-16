@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "id": "creator-performance-budgets-v1",
+  "fixtureId": "creator-performance-v1",
+  "measurementPolicy": {
+    "deterministicUnitsOnly": true,
+    "ciEnforcement": "deferred-to-plan-item-i-enforce-stable-count-size-budget-3518",
+    "nativeTimingCalibration": "deferred-to-plan-item-i-enforce-stable-count-size-budget-3518"
+  },
+  "flows": [
+    {
+      "id": "startup",
+      "description": "Cold editor startup before a project is opened.",
+      "metrics": [
+        {
+          "id": "project-records-eagerly-decoded",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "Startup may enumerate bounded project summaries but must not hydrate every large-project resource."
+        },
+        {
+          "id": "asset-records-eagerly-decoded",
+          "unit": "count",
+          "limit": "exact",
+          "value": 0,
+          "rationale": "Asset details belong to the on-demand library after project selection."
+        },
+        {
+          "id": "behavior-bodies-eagerly-decoded",
+          "unit": "count",
+          "limit": "exact",
+          "value": 0,
+          "rationale": "Cold startup must not read project behavior bodies."
+        }
+      ]
+    },
+    {
+      "id": "reopen",
+      "description": "Reopen creator-performance-v1 and render its initial editor shell.",
+      "metrics": [
+        {
+          "id": "project-manifest-decodes",
+          "unit": "operations",
+          "limit": "max",
+          "value": 1,
+          "rationale": "The canonical project manifest is decoded once per reopen."
+        },
+        {
+          "id": "initial-asset-page-records",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "The renderer-owned asset query uses a 64-record page."
+        },
+        {
+          "id": "initial-behavior-bodies",
+          "unit": "count",
+          "limit": "max",
+          "value": 1,
+          "rationale": "Only the active behavior may be hydrated during initial editor restore."
+        },
+        {
+          "id": "recovery-snapshot-reads",
+          "unit": "operations",
+          "limit": "max",
+          "value": 1,
+          "rationale": "Recovery state is a single versioned snapshot, not a per-resource scan."
+        }
+      ]
+    },
+    {
+      "id": "asset-library-2000",
+      "description": "Browse and scroll the 2,048-asset library and working palette.",
+      "metrics": [
+        {
+          "id": "fixture-assets",
+          "unit": "count",
+          "limit": "min",
+          "value": 2000,
+          "rationale": "The release corpus must exercise the reported 2,000+ asset scale."
+        },
+        {
+          "id": "asset-page-records",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "Asset-library IPC/query pages stay bounded at the renderer page size."
+        },
+        {
+          "id": "preview-references-per-request",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "Working-palette preview hydration is chunked into 64-reference requests."
+        },
+        {
+          "id": "preview-references-per-group-summary",
+          "unit": "count",
+          "limit": "max",
+          "value": 8,
+          "rationale": "Service-owned group summaries expose at most eight preview references."
+        },
+        {
+          "id": "full-corpus-preview-requests-before-scroll",
+          "unit": "operations",
+          "limit": "exact",
+          "value": 0,
+          "rationale": "Offscreen assets are deferred until their virtual window is requested."
+        }
+      ]
+    },
+    {
+      "id": "large-behaviors-references",
+      "description": "Open, search, and resolve the large behavior/reference corpus.",
+      "metrics": [
+        {
+          "id": "fixture-behaviors",
+          "unit": "count",
+          "limit": "min",
+          "value": 512,
+          "rationale": "The corpus covers a non-trivial mixed visual and TypeScript behavior set."
+        },
+        {
+          "id": "fixture-references",
+          "unit": "count",
+          "limit": "min",
+          "value": 8192,
+          "rationale": "Every v1 behavior carries sixteen deterministic references."
+        },
+        {
+          "id": "reference-search-page-records",
+          "unit": "count",
+          "limit": "max",
+          "value": 32,
+          "rationale": "Reference search uses the canonical 32-record page size."
+        },
+        {
+          "id": "reference-resolution-batch-records",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "Resolve-all hydration honors the main-process 64-reference boundary."
+        },
+        {
+          "id": "behavior-bodies-opened-by-list",
+          "unit": "count",
+          "limit": "exact",
+          "value": 0,
+          "rationale": "Listing and virtual scrolling operate on summaries, not every source body."
+        }
+      ]
+    },
+    {
+      "id": "validation",
+      "description": "Validate the valid corpus and its deterministic 64-fault variant.",
+      "metrics": [
+        {
+          "id": "full-project-validation-passes",
+          "unit": "operations",
+          "limit": "max",
+          "value": 1,
+          "rationale": "One validation request performs one owner traversal instead of repeating per panel."
+        },
+        {
+          "id": "invalid-variant-faults",
+          "unit": "count",
+          "limit": "exact",
+          "value": 64,
+          "rationale": "The invalid variant fixes diagnostic cardinality for comparable runs."
+        },
+        {
+          "id": "diagnostics-returned",
+          "unit": "count",
+          "limit": "max",
+          "value": 64,
+          "rationale": "One actionable diagnostic per injected fault prevents duplicate fan-out."
+        },
+        {
+          "id": "records-inspected",
+          "unit": "count",
+          "limit": "max",
+          "value": 16000,
+          "rationale": "The linear traversal ceiling covers maps, objects, assets, behaviors, and references with bounded overhead."
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "description": "Persist one changed map and its project revision atomically.",
+      "metrics": [
+        {
+          "id": "changed-resources",
+          "unit": "count",
+          "limit": "exact",
+          "value": 1,
+          "rationale": "The fixture save mutates one map so amplification is measurable."
+        },
+        {
+          "id": "content-files-rewritten",
+          "unit": "count",
+          "limit": "max",
+          "value": 3,
+          "rationale": "A map revision installs only map, project, and integrity-lock targets."
+        },
+        {
+          "id": "journal-phase-transitions",
+          "unit": "operations",
+          "limit": "max",
+          "value": 4,
+          "rationale": "The durable map transaction has prepared, map, project, and lock phases."
+        },
+        {
+          "id": "full-project-directory-copies",
+          "unit": "operations",
+          "limit": "exact",
+          "value": 0,
+          "rationale": "Normal incremental save must not copy the full large project."
+        }
+      ]
+    },
+    {
+      "id": "playtest-start",
+      "description": "Compile the selected map and start a local playtest session.",
+      "metrics": [
+        {
+          "id": "selected-map-packages",
+          "unit": "count",
+          "limit": "exact",
+          "value": 1,
+          "rationale": "Playtest start packages only the selected map."
+        },
+        {
+          "id": "compiled-behavior-modules",
+          "unit": "count",
+          "limit": "max",
+          "value": 512,
+          "rationale": "The fixture intentionally references the complete behavior corpus."
+        },
+        {
+          "id": "source-behavior-bytes",
+          "unit": "bytes",
+          "limit": "max",
+          "value": 2097152,
+          "rationale": "512 behavior sources at 4 KiB each define the v1 compile input ceiling."
+        },
+        {
+          "id": "session-start-transitions",
+          "unit": "operations",
+          "limit": "max",
+          "value": 3,
+          "rationale": "A session may progress through queued, starting, and running once."
+        }
+      ]
+    },
+    {
+      "id": "package",
+      "description": "Assemble all eight fixture maps into verified runtime map packages.",
+      "metrics": [
+        {
+          "id": "runtime-map-packages",
+          "unit": "count",
+          "limit": "exact",
+          "value": 8,
+          "rationale": "Package coverage includes every map in creator-performance-v1."
+        },
+        {
+          "id": "asset-payload-input-bytes",
+          "unit": "bytes",
+          "limit": "max",
+          "value": 8388608,
+          "rationale": "2,048 synthetic assets at 4 KiB each fix the v1 asset payload."
+        },
+        {
+          "id": "package-files",
+          "unit": "count",
+          "limit": "max",
+          "value": 3000,
+          "rationale": "Asset, behavior, map-section, manifest, and integrity files remain linearly bounded."
+        },
+        {
+          "id": "full-input-traversals",
+          "unit": "operations",
+          "limit": "max",
+          "value": 2,
+          "rationale": "Assembly plus integrity verification may each traverse the selected corpus once."
+        }
+      ]
+    },
+    {
+      "id": "ship",
+      "description": "Promote the packaged corpus into one verified local Ship artifact.",
+      "metrics": [
+        {
+          "id": "runtime-map-packages",
+          "unit": "count",
+          "limit": "exact",
+          "value": 8,
+          "rationale": "Ship consumes exactly the package output without silently dropping maps."
+        },
+        {
+          "id": "artifact-files",
+          "unit": "count",
+          "limit": "max",
+          "value": 3072,
+          "rationale": "The final inventory includes packaged content plus bounded host metadata/runtime files."
+        },
+        {
+          "id": "artifact-bytes",
+          "unit": "bytes",
+          "limit": "max",
+          "value": 67108864,
+          "rationale": "A 64 MiB ceiling detects accidental source/cache/runtime duplication for the 8 MiB asset corpus."
+        },
+        {
+          "id": "artifact-promotions",
+          "unit": "operations",
+          "limit": "exact",
+          "value": 1,
+          "rationale": "Ship atomically promotes one verified work directory to its final artifact."
+        },
+        {
+          "id": "post-promotion-integrity-traversals",
+          "unit": "operations",
+          "limit": "max",
+          "value": 1,
+          "rationale": "One durable inventory verification proves the promoted artifact."
+        }
+      ]
+    }
+  ]
+}

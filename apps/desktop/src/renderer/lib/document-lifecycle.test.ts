@@ -2,12 +2,18 @@
 
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  AppRecoveryStorageCommit,
+  AppRecoveryStorageRecord,
+} from '../../shared/app-lifecycle';
 
 import {
   documentLifecycle,
+  initializeDocumentRecoveryStorage,
   installGracefulAppClose,
   requestDocumentClose,
   useDocumentLifecycle,
+  type DocumentRecoveryRecord,
   type DocumentRegistration,
 } from './document-lifecycle';
 
@@ -46,21 +52,32 @@ const registration = (overrides: Partial<DocumentRegistration> = {}): DocumentRe
 });
 
 describe('document lifecycle', () => {
-  const flushRecoveryStorage = vi.fn().mockResolvedValue(undefined);
+  const mainRecords = new Map<string, AppRecoveryStorageRecord>();
+  const loadRecoveryStorage = vi.fn(async () => ({ records: [...mainRecords.values()] }));
+  const commitRecoveryStorage = vi.fn(async ({ mutations }: AppRecoveryStorageCommit) => {
+    for (const mutation of mutations) {
+      if (mutation._tag === 'upsert') mainRecords.set(mutation.record.documentId, mutation.record);
+      else mainRecords.delete(mutation.documentId);
+    }
+  });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     cleanup();
     localStorage.clear();
     documentLifecycle.resetForTests();
-    flushRecoveryStorage.mockClear();
+    mainRecords.clear();
+    loadRecoveryStorage.mockClear();
+    commitRecoveryStorage.mockClear();
     Object.defineProperty(window, 'tileborneAppLifecycle', {
       configurable: true,
       value: {
         onCloseRequested: vi.fn(),
         resolveClose: vi.fn(),
-        flushRecoveryStorage,
+        loadRecoveryStorage,
+        commitRecoveryStorage,
       },
     });
+    await initializeDocumentRecoveryStorage();
   });
 
   it('tracks dirty, saving and saved without reporting a failed write as success', async () => {
@@ -113,9 +130,10 @@ describe('document lifecycle', () => {
     const first = registration();
     documentLifecycle.register(first);
     documentLifecycle.markDirty(first.id);
-    await Promise.resolve();
+    await documentLifecycle.flushRecoveryStorage();
 
     documentLifecycle.resetForTests();
+    await initializeDocumentRecoveryStorage();
     const recover = vi.fn();
     documentLifecycle.register(registration({ recover }));
     expect(documentLifecycle.get(first.id)?.status).toBe('recovery');
@@ -125,8 +143,33 @@ describe('document lifecycle', () => {
     await documentLifecycle.save(first.id);
 
     documentLifecycle.resetForTests();
+    await initializeDocumentRecoveryStorage();
     documentLifecycle.register(registration());
     expect(documentLifecycle.get(first.id)?.status).toBe('clean');
+  });
+
+  it('imports a valid legacy local record before registration and removes it only after ack', async () => {
+    documentLifecycle.resetForTests();
+    const legacy: DocumentRecoveryRecord = {
+      schemaVersion: 1,
+      documentId: 'map:project-1:map-1',
+      kind: 'map',
+      label: 'Starter Arena',
+      revision: 4,
+      updatedAt: '2026-07-16T00:00:04.000Z',
+      snapshot: { title: 'legacy recovery' },
+    };
+    const key = `tileborne:document-recovery:v1:${legacy.documentId}`;
+    localStorage.setItem(key, JSON.stringify(legacy));
+
+    await initializeDocumentRecoveryStorage();
+
+    expect(mainRecords.get(legacy.documentId)).toEqual(legacy);
+    expect(localStorage.getItem(key)).toBeNull();
+    const recover = vi.fn();
+    documentLifecycle.register(registration({ recover }));
+    await expect(documentLifecycle.recover(legacy.documentId)).resolves.toBe(true);
+    expect(recover).toHaveBeenCalledWith({ title: 'legacy recovery' });
   });
 
   it('rehydrates recovery when navigating away and back without resetting the process registry', async () => {
@@ -172,8 +215,10 @@ describe('document lifecycle', () => {
     first.rerender({ draft: 'draft-v2' });
     await waitFor(() => expect(documentLifecycle.get('map:project-1:map-1')?.revision).toBe(2));
     first.unmount();
+    await documentLifecycle.flushRecoveryStorage();
 
     documentLifecycle.resetForTests();
+    await initializeDocumentRecoveryStorage();
     const recover = vi.fn();
     documentLifecycle.register(registration({ recover }));
     await expect(documentLifecycle.recover('map:project-1:map-1')).resolves.toBe(true);
@@ -186,7 +231,7 @@ describe('document lifecycle', () => {
     documentLifecycle.markDirty('map:project-1:map-1');
 
     await documentLifecycle.flushRecoveryStorage();
-    expect(flushRecoveryStorage).toHaveBeenCalledOnce();
+    expect(commitRecoveryStorage).toHaveBeenCalledOnce();
   });
 
   it.each(['save', 'discard'] as const)(
@@ -196,11 +241,16 @@ describe('document lifecycle', () => {
       documentLifecycle.register(entry);
       documentLifecycle.markDirty(entry.id);
       await documentLifecycle.flushRecoveryStorage();
-      flushRecoveryStorage.mockClear();
+      commitRecoveryStorage.mockClear();
       let acknowledgeFlush: (() => void) | undefined;
-      flushRecoveryStorage.mockImplementationOnce(
-        () =>
+      commitRecoveryStorage.mockImplementationOnce(
+        (commit) =>
           new Promise<void>((resolve) => {
+            for (const mutation of commit.mutations) {
+              if (mutation._tag === 'upsert')
+                mainRecords.set(mutation.record.documentId, mutation.record);
+              else mainRecords.delete(mutation.documentId);
+            }
             acknowledgeFlush = resolve;
           }),
       );
@@ -213,13 +263,13 @@ describe('document lifecycle', () => {
       void completion.then(() => {
         completed = true;
       });
-      await vi.waitFor(() => expect(flushRecoveryStorage).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(commitRecoveryStorage).toHaveBeenCalledOnce());
       expect(completed).toBe(false);
       acknowledgeFlush?.();
       await completion;
 
-      expect(localStorage.getItem(`tileborne:document-recovery:v1:${entry.id}`)).toBeNull();
-      expect(flushRecoveryStorage).toHaveBeenCalledOnce();
+      expect(mainRecords.has(entry.id)).toBe(false);
+      expect(commitRecoveryStorage).toHaveBeenCalledOnce();
     },
   );
 
@@ -236,7 +286,8 @@ describe('document lifecycle', () => {
           return vi.fn();
         },
         resolveClose,
-        flushRecoveryStorage,
+        loadRecoveryStorage,
+        commitRecoveryStorage,
       },
       vi.fn(() => true),
     );

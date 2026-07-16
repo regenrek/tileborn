@@ -16,7 +16,11 @@ import { createRoot } from 'react-dom/client';
 import { StartupBoundary } from '@/components/startup/startup-boundary';
 import { queryClient } from '@/lib/query-client';
 import { installTileborneBridge } from '@/lib/tileborne-bridge';
-import { installDocumentBeforeUnload, installGracefulAppClose } from '@/lib/document-lifecycle';
+import {
+  initializeDocumentRecoveryStorage,
+  installDocumentBeforeUnload,
+  installGracefulAppClose,
+} from '@/lib/document-lifecycle';
 import { router } from '@/router';
 
 import './index.css';
@@ -44,8 +48,6 @@ if (
 // component renders: decoding on this side of contextBridge is what preserves
 // schema class instances and Option identity (see lib/tileborne-bridge.ts).
 installTileborneBridge();
-installDocumentBeforeUnload();
-installGracefulAppClose();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -54,18 +56,22 @@ if (!rootElement) {
 
 const devtoolsEnabled = import.meta.env.DEV && import.meta.env.VITE_TILEBORNE_DEVTOOLS === '1';
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <StartupBoundary>
-        <RouterProvider router={router} />
-      </StartupBoundary>
-      {devtoolsEnabled ? (
-        <>
-          <ReactQueryDevtools initialIsOpen={false} />
-          <TanStackRouterDevtools router={router} position="bottom-right" />
-        </>
-      ) : null}
-    </QueryClientProvider>
-  </StrictMode>,
-);
+void initializeDocumentRecoveryStorage().then(() => {
+  installDocumentBeforeUnload();
+  installGracefulAppClose();
+  createRoot(rootElement).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <StartupBoundary>
+          <RouterProvider router={router} />
+        </StartupBoundary>
+        {devtoolsEnabled ? (
+          <>
+            <ReactQueryDevtools initialIsOpen={false} />
+            <TanStackRouterDevtools router={router} position="bottom-right" />
+          </>
+        ) : null}
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+});

@@ -1,10 +1,12 @@
 import process from 'node:process';
+import path from 'node:path';
 
 import { app, BrowserWindow, ipcMain, protocol } from 'electron';
 
 import { ASSET_PROTOCOL_SCHEME } from './asset-library/asset-protocol.js';
 import { createStartupReporter } from './startup-reporter.js';
 import { createMainWindow } from './window.js';
+import { createDocumentRecoveryStore } from './document-recovery-store.js';
 import {
   STARTUP_STATUS_CHANGED_CHANNEL,
   STARTUP_STATUS_GET_CHANNEL,
@@ -12,7 +14,11 @@ import {
   type StartupStatusStore,
 } from '../shared/startup-status.js';
 import type { DesktopStartupController } from './startup.js';
-import { APP_RECOVERY_STORAGE_FLUSH_CHANNEL } from '../shared/app-lifecycle.js';
+import {
+  APP_RECOVERY_STORAGE_COMMIT_CHANNEL,
+  APP_RECOVERY_STORAGE_LOAD_CHANNEL,
+  type AppRecoveryStorageCommit,
+} from '../shared/app-lifecycle.js';
 
 // Dev-only: expose CDP for native-devtools-mcp (and other CDP clients). Never in packaged builds.
 const cdpPort =
@@ -51,6 +57,9 @@ if (!gotSingleInstanceLock) {
 } else {
   const startupStatus = createStartupStatusStore();
   const startupReporter = createStartupReporter(startupStatus);
+  const recoveryStore = createDocumentRecoveryStore(
+    path.join(app.getPath('userData'), 'recovery', 'documents.json'),
+  );
   let startupController: DesktopStartupController | undefined;
   let quitting = false;
   let quitRequested = false;
@@ -63,9 +72,11 @@ if (!gotSingleInstanceLock) {
 
   const registerStartupIpc = (status: StartupStatusStore): (() => void) => {
     ipcMain.handle(STARTUP_STATUS_GET_CHANNEL, () => status.getSnapshot());
-    ipcMain.handle(APP_RECOVERY_STORAGE_FLUSH_CHANNEL, async (event) => {
-      await event.sender.session.flushStorageData();
-    });
+    ipcMain.handle(APP_RECOVERY_STORAGE_LOAD_CHANNEL, () => recoveryStore.load());
+    ipcMain.handle(
+      APP_RECOVERY_STORAGE_COMMIT_CHANNEL,
+      (_event, commit: AppRecoveryStorageCommit) => recoveryStore.commit(commit),
+    );
     const unsubscribe = status.subscribe((snapshot) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {
@@ -76,7 +87,8 @@ if (!gotSingleInstanceLock) {
     return () => {
       unsubscribe();
       ipcMain.removeHandler(STARTUP_STATUS_GET_CHANNEL);
-      ipcMain.removeHandler(APP_RECOVERY_STORAGE_FLUSH_CHANNEL);
+      ipcMain.removeHandler(APP_RECOVERY_STORAGE_LOAD_CHANNEL);
+      ipcMain.removeHandler(APP_RECOVERY_STORAGE_COMMIT_CHANNEL);
     };
   };
 

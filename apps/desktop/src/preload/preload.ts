@@ -6,7 +6,8 @@ import type { TileborneIpcTransport } from '../shared/ipc-transport.js';
 import {
   APP_CLOSE_REQUESTED_CHANNEL,
   APP_CLOSE_RESOLVED_CHANNEL,
-  APP_RECOVERY_STORAGE_FLUSH_CHANNEL,
+  APP_RECOVERY_STORAGE_COMMIT_CHANNEL,
+  APP_RECOVERY_STORAGE_LOAD_CHANNEL,
   type AppCloseRequest,
   type TileborneAppLifecycleBridge,
 } from '../shared/app-lifecycle.js';
@@ -71,8 +72,12 @@ const tileborneAppLifecycle: TileborneAppLifecycleBridge = {
   resolveClose: (resolution) => {
     ipcRenderer.send(APP_CLOSE_RESOLVED_CHANNEL, resolution);
   },
-  flushRecoveryStorage: () =>
-    ipcRenderer.invoke(APP_RECOVERY_STORAGE_FLUSH_CHANNEL) as Promise<void>,
+  loadRecoveryStorage: () =>
+    ipcRenderer.invoke(APP_RECOVERY_STORAGE_LOAD_CHANNEL) as ReturnType<
+      TileborneAppLifecycleBridge['loadRecoveryStorage']
+    >,
+  commitRecoveryStorage: (commit) =>
+    ipcRenderer.invoke(APP_RECOVERY_STORAGE_COMMIT_CHANNEL, commit) as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld('tileborneIpc', tileborneIpc);

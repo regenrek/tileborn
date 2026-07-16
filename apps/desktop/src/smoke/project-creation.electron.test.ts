@@ -298,15 +298,19 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     await context.page.getByTestId('content-tab-items').click();
     await context.page.getByTestId('content-name').fill('Crash Recovered Potion');
     await expect(context.page.getByTestId('content-document-status')).toHaveText('dirty');
-    const recoveryKey = `tileborne:document-recovery:v1:game-content:${created.projectId}`;
+    const recoveryDocumentId = `game-content:${created.projectId}`;
     await expect
-      .poll(async () => {
-        const raw = await context.page.evaluate((key) => localStorage.getItem(key), recoveryKey);
-        if (raw === null) return undefined;
-        return (JSON.parse(raw) as { snapshot?: { label?: string } }).snapshot?.label;
-      })
+      .poll(() =>
+        context.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return (
+            records.find((record) => record.documentId === documentId)?.snapshot as
+              | { label?: string }
+              | undefined
+          )?.label;
+        }, recoveryDocumentId),
+      )
       .toBe('Crash Recovered Potion');
-    await context.page.evaluate(() => window.tileborneAppLifecycle.flushRecoveryStorage());
 
     const appClosed = context.app.waitForEvent('close');
     context.app.process().kill('SIGKILL');
@@ -315,7 +319,10 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     smokeContext = await launchElectron(context.tileborneHome);
     await expect
       .poll(() =>
-        smokeContext!.page.evaluate((key) => localStorage.getItem(key) !== null, recoveryKey),
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.some((record) => record.documentId === documentId);
+        }, recoveryDocumentId),
       )
       .toBe(true);
     await navigateToRoute(smokeContext.page, `/projects/${created.projectId}/game-content`);
@@ -328,10 +335,12 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     await expect(smokeContext.page.getByTestId('content-document-status')).toHaveText('clean');
     await expect
       .poll(() =>
-        smokeContext!.page.evaluate((key) => localStorage.getItem(key) === null, recoveryKey),
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.every((record) => record.documentId !== documentId);
+        }, recoveryDocumentId),
       )
       .toBe(true);
-    await smokeContext.page.evaluate(() => window.tileborneAppLifecycle.flushRecoveryStorage());
 
     const discardedAppClosed = smokeContext.app.waitForEvent('close');
     smokeContext.app.process().kill('SIGKILL');
@@ -339,7 +348,10 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
     smokeContext = await launchElectron(context.tileborneHome);
     await expect
       .poll(() =>
-        smokeContext!.page.evaluate((key) => localStorage.getItem(key) === null, recoveryKey),
+        smokeContext!.page.evaluate(async (documentId) => {
+          const { records } = await window.tileborneAppLifecycle.loadRecoveryStorage();
+          return records.every((record) => record.documentId !== documentId);
+        }, recoveryDocumentId),
       )
       .toBe(true);
     await navigateToRoute(smokeContext.page, `/projects/${created.projectId}/game-content`);

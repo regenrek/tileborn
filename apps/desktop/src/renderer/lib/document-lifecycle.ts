@@ -1,7 +1,10 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 
-import type { TileborneAppLifecycleBridge } from '../../shared/app-lifecycle';
+import type {
+  AppRecoveryStorageMutation,
+  TileborneAppLifecycleBridge,
+} from '../../shared/app-lifecycle';
 
 export type DocumentKind =
   | 'map'
@@ -54,10 +57,40 @@ const RECOVERY_PREFIX = 'tileborne:document-recovery:v1:';
 const states = new Map<string, DocumentLifecycleState>();
 const registrations = new Map<string, DocumentRegistration>();
 const listeners = new Set<Listener>();
+const recoveryRecords = new Map<string, DocumentRecoveryRecord>();
+const pendingRecoveryMutations = new Map<
+  string,
+  { readonly version: number; readonly mutation: AppRecoveryStorageMutation }
+>();
 let recoveryFlushTimer: ReturnType<typeof setTimeout> | undefined;
 let recoveryMutationVersion = 0;
 let recoveryDurableVersion = 0;
 let recoveryFlushDrain: Promise<void> | undefined;
+let recoveryStorageBridge: TileborneAppLifecycleBridge | undefined;
+
+const decodeRecoveryRecord = (value: unknown): DocumentRecoveryRecord | undefined => {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Partial<DocumentRecoveryRecord>;
+  if (
+    record.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.documentRecovery ||
+    typeof record.documentId !== 'string' ||
+    typeof record.kind !== 'string' ||
+    typeof record.label !== 'string' ||
+    typeof record.revision !== 'number' ||
+    typeof record.updatedAt !== 'string'
+  ) {
+    return undefined;
+  }
+  return record as DocumentRecoveryRecord;
+};
+
+const queueRecoveryMutation = (documentId: string, mutation: AppRecoveryStorageMutation): void => {
+  recoveryMutationVersion += 1;
+  pendingRecoveryMutations.set(documentId, {
+    version: recoveryMutationVersion,
+    mutation,
+  });
+};
 
 const flushRecoveryStorage = (): Promise<void> => {
   if (recoveryFlushTimer !== undefined) clearTimeout(recoveryFlushTimer);
@@ -69,7 +102,21 @@ const flushRecoveryStorage = (): Promise<void> => {
     recoveryFlushDrain = (async () => {
       while (recoveryDurableVersion < recoveryMutationVersion) {
         const targetVersion = recoveryMutationVersion;
-        await globalThis.window?.tileborneAppLifecycle?.flushRecoveryStorage();
+        const batch = [...pendingRecoveryMutations.entries()].filter(
+          ([, pending]) => pending.version <= targetVersion,
+        );
+        if (batch.length > 0) {
+          const bridge = recoveryStorageBridge ?? globalThis.window?.tileborneAppLifecycle;
+          if (bridge === undefined) throw new Error('Document recovery storage bridge is missing');
+          await bridge.commitRecoveryStorage({
+            mutations: batch.map(([, pending]) => pending.mutation),
+          });
+          for (const [documentId, pending] of batch) {
+            if (pendingRecoveryMutations.get(documentId)?.version === pending.version) {
+              pendingRecoveryMutations.delete(documentId);
+            }
+          }
+        }
         recoveryDurableVersion = targetVersion;
       }
     })().finally(() => {
@@ -102,27 +149,8 @@ const storage = (): Storage | undefined => {
   }
 };
 
-const recoveryKey = (documentId: string): string => `${RECOVERY_PREFIX}${documentId}`;
-
-const readRecovery = (documentId: string): DocumentRecoveryRecord | undefined => {
-  const raw = storage()?.getItem(recoveryKey(documentId));
-  if (raw === null || raw === undefined) return undefined;
-  try {
-    const value = JSON.parse(raw) as Partial<DocumentRecoveryRecord>;
-    if (
-      value.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.documentRecovery ||
-      value.documentId !== documentId ||
-      typeof value.kind !== 'string' ||
-      typeof value.label !== 'string' ||
-      typeof value.revision !== 'number'
-    ) {
-      return undefined;
-    }
-    return value as DocumentRecoveryRecord;
-  } catch {
-    return undefined;
-  }
-};
+const readRecovery = (documentId: string): DocumentRecoveryRecord | undefined =>
+  recoveryRecords.get(documentId);
 
 const writeRecovery = (state: DocumentLifecycleState): void => {
   const registration = registrations.get(state.id);
@@ -136,18 +164,73 @@ const writeRecovery = (state: DocumentLifecycleState): void => {
     updatedAt: new Date().toISOString(),
     snapshot: registration.snapshot(),
   };
-  storage()?.setItem(recoveryKey(state.id), JSON.stringify(record));
-  recoveryMutationVersion += 1;
+  recoveryRecords.set(state.id, record);
+  queueRecoveryMutation(state.id, { _tag: 'upsert', record });
   scheduleRecoveryStorageFlush();
 };
 
 const clearRecovery = (documentId: string): void => {
-  const targetStorage = storage();
-  const key = recoveryKey(documentId);
-  if (targetStorage?.getItem(key) === null || targetStorage === undefined) return;
-  targetStorage.removeItem(key);
-  recoveryMutationVersion += 1;
+  if (!recoveryRecords.delete(documentId)) return;
+  queueRecoveryMutation(documentId, { _tag: 'delete', documentId });
   scheduleRecoveryStorageFlush();
+};
+
+export const initializeDocumentRecoveryStorage = async (
+  bridge: TileborneAppLifecycleBridge = globalThis.window.tileborneAppLifecycle,
+): Promise<void> => {
+  recoveryStorageBridge = bridge;
+  const merged = new Map<string, DocumentRecoveryRecord>();
+  let mainLoaded = false;
+  try {
+    const mainSnapshot = await bridge.loadRecoveryStorage();
+    mainLoaded = true;
+    for (const candidate of mainSnapshot.records) {
+      const record = decodeRecoveryRecord(candidate);
+      if (record !== undefined) merged.set(record.documentId, record);
+    }
+  } catch {
+    // Legacy local recovery remains available below if the main registry cannot
+    // be read. A subsequent mutation retries the main-owned transaction path.
+  }
+
+  const legacyStorage = storage();
+  const legacyKeys: string[] = [];
+  const imports: AppRecoveryStorageMutation[] = [];
+  for (let index = 0; index < (legacyStorage?.length ?? 0); index += 1) {
+    const key = legacyStorage?.key(index);
+    if (key === null || key === undefined || !key.startsWith(RECOVERY_PREFIX)) continue;
+    legacyKeys.push(key);
+    try {
+      const legacy = decodeRecoveryRecord(JSON.parse(legacyStorage?.getItem(key) ?? 'null'));
+      if (legacy === undefined) continue;
+      const current = merged.get(legacy.documentId);
+      if (
+        current === undefined ||
+        legacy.revision > current.revision ||
+        (legacy.revision === current.revision && legacy.updatedAt > current.updatedAt)
+      ) {
+        merged.set(legacy.documentId, legacy);
+        imports.push({ _tag: 'upsert', record: legacy });
+      }
+    } catch {
+      // Invalid legacy records were never recoverable; leave them for the
+      // existing browser-origin cleanup policy instead of importing them.
+    }
+  }
+  let migrationAcknowledged = mainLoaded && imports.length === 0;
+  if (imports.length > 0) {
+    try {
+      await bridge.commitRecoveryStorage({ mutations: imports });
+      migrationAcknowledged = true;
+    } catch {
+      // Preserve legacy keys when migration cannot be durably acknowledged.
+    }
+  }
+  if (migrationAcknowledged) {
+    for (const key of legacyKeys) legacyStorage?.removeItem(key);
+  }
+  recoveryRecords.clear();
+  for (const [documentId, record] of merged) recoveryRecords.set(documentId, record);
 };
 
 const setState = (
@@ -362,6 +445,9 @@ export const documentLifecycle = {
     recoveryMutationVersion = 0;
     recoveryDurableVersion = 0;
     recoveryFlushDrain = undefined;
+    recoveryStorageBridge = undefined;
+    recoveryRecords.clear();
+    pendingRecoveryMutations.clear();
     states.clear();
     registrations.clear();
     listeners.clear();

@@ -7,6 +7,10 @@ compatibility_date = "2024-12-01"
 name = "PLAYTEST_ROOM"
 class_name = "PlaytestRoom"
 
+[[services]]
+binding = "BEHAVIOR_RUNTIME"
+service = "{{SITE_NAME}}-behaviors"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["PlaytestRoom"]

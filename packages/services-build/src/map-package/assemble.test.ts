@@ -6,9 +6,11 @@ import {
   GameObjectCatalog,
   GameModeId,
   PluginId,
+  RuntimeBehaviorPackage,
   decodePersistedTileborneMapJson,
+  hashBytes,
 } from "@tileborne/core";
-import { ModeDataExportError } from "@tileborne/plugin-api";
+import { ModeDataExportError, RuntimeProjectContent } from "@tileborne/plugin-api";
 import { loadRuntimeMapPackage } from "@tileborne/runtime/map-package";
 import { Effect, Result, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -98,11 +100,87 @@ const fsReader = (directory: string) => async (entryPath: string) => {
 };
 
 describe("assembleRuntimeMapPackage (ADR-0030)", () => {
+  it('packages compiled behavior modules as hashed runtime-owned entries', async () => {
+    const dir = await makeTempDir();
+    const bytes = new TextEncoder().encode('export default () => [];\n');
+    const modulePath = `behaviors/modules/behavior-${UUID}.mjs`;
+    const behaviors = Schema.decodeUnknownSync(RuntimeBehaviorPackage)({
+      schemaVersion: 1,
+      manifests: [{
+        schemaVersion: 1,
+        id: `behavior:${UUID}`,
+        label: 'Award loot',
+        source: {
+          _tag: 'typescript',
+          sourcePath: `behaviors/sources/${UUID}.ts`,
+          exportName: 'default',
+        },
+        requiredCapabilities: [],
+      }],
+      visualDefinitions: [],
+      modules: [{
+        behaviorId: `behavior:${UUID}`,
+        sourceKind: 'typescript',
+        modulePath,
+        hash: hashBytes(bytes),
+      }],
+    });
+    const assembled = await Effect.runPromise(assembleRuntimeMapPackage({
+      ...baseInput(dir),
+      behaviors,
+      behaviorModules: [{ path: modulePath, bytes }],
+    }));
+
+    expect(await readFile(path.join(dir, modulePath))).toEqual(Buffer.from(bytes));
+    expect(assembled.mapPackage.behaviors.modules[0]?.modulePath).toBe(modulePath);
+    expect(assembled.mapPackage.manifest.entryHashes[modulePath]).toBe(hashBytes(bytes));
+    const loaded = await loadRuntimeMapPackage(fsReader(dir));
+    expect(Result.isSuccess(loaded)).toBe(true);
+    if (Result.isSuccess(loaded)) {
+      expect(loaded.success.behaviors.modules[0]?.hash).toBe(hashBytes(bytes));
+    }
+  });
+
+  it("emits byte-identical packages and content-derived ids for identical inputs", async () => {
+    const left = await makeTempDir();
+    const right = await makeTempDir();
+    const [leftResult, rightResult] = await Promise.all([
+      Effect.runPromise(assembleRuntimeMapPackage(baseInput(left))),
+      Effect.runPromise(assembleRuntimeMapPackage(baseInput(right))),
+    ]);
+    expect(rightResult.mapPackage.manifest.packageId).toBe(leftResult.mapPackage.manifest.packageId);
+    for (const file of [
+      "manifest.json",
+      "map.json",
+      "catalog.json",
+      "placements.json",
+      "settings.json",
+      "content.json",
+      "behaviors.json",
+      "visuals.json",
+      "assets.json",
+      "mode-data.json",
+    ]) {
+      expect(await readFile(path.join(right, file))).toEqual(await readFile(path.join(left, file)));
+    }
+  });
+
   it("writes the canonical layout that loadRuntimeMapPackage round-trips", async () => {
     const dir = await makeTempDir();
     const assembled = await Effect.runPromise(
       assembleRuntimeMapPackage({
         ...baseInput(dir),
+        projectContent: Schema.decodeUnknownSync(RuntimeProjectContent)({
+          schemaVersion: 1,
+          items: [{
+            id: `item:${UUID}`,
+            label: "Project potion",
+            data: {},
+          }],
+          lootTables: [],
+          weapons: [],
+          provenance: { [`item:${UUID}`]: { _tag: "project" } },
+        }),
         assets: [
           {
             path: "assets/ab/sprite.png",
@@ -118,6 +196,12 @@ describe("assembleRuntimeMapPackage (ADR-0030)", () => {
     expect(assembled.mapPackage.catalog[0]?.origin).toEqual({ _tag: "plugin", pluginId });
     // Only namespaced object sections survive into settings.
     expect(Object.keys(assembled.mapPackage.settings)).toEqual([PLUGIN]);
+    expect(assembled.mapPackage.behaviors).toMatchObject({
+      schemaVersion: 1,
+      manifests: [],
+      visualDefinitions: [],
+      modules: [],
+    });
 
     const loaded = Result.getOrThrow(await loadRuntimeMapPackage(fsReader(dir)));
     expect(loaded.manifest.packageId).toBe(assembled.mapPackage.manifest.packageId);
@@ -125,6 +209,9 @@ describe("assembleRuntimeMapPackage (ADR-0030)", () => {
     expect(loaded.manifest.playerCapacity).toBe(4);
     expect(loaded.placements).toHaveLength(1);
     expect(loaded.assets[0]?.path).toBe("assets/ab/sprite.png");
+    expect(loaded.content.items).toEqual([
+      expect.objectContaining({ id: `item:${UUID}`, label: "Project potion" }),
+    ]);
     expect(loaded.map.size.width).toBe(8);
 
     // The asset payload itself is written content-addressed next to the entries.

@@ -158,6 +158,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const WRANGLER_CONFIG = "dist/game/wrangler.toml";
+const BEHAVIOR_WRANGLER_CONFIG = "dist/game/wrangler.behavior.toml";
 const shell = process.platform === "win32";
 
 const run = (command, args) => {
@@ -195,6 +196,7 @@ const assertHandoffSecret = () => {
 
 run("node", [fileURLToPath(new URL("./build.mjs", import.meta.url))]);
 assertHandoffSecret();
+run("wrangler", ["deploy", "--config", BEHAVIOR_WRANGLER_CONFIG]);
 run("wrangler", ["deploy", "--config", WRANGLER_CONFIG]);
 `;
 
@@ -335,5 +337,6 @@ wrangler. No engine or gameplay logic.
   and runs \`tileborne game build --target cloudflare --out dist/game\` with
   the project's maps baked in.
 - \`deploy.mjs\` — \`build.mjs\` + \`HANDOFF_SIGNING_KEY\` secret check +
-  \`wrangler deploy --config dist/game/wrangler.toml\`.
+  behavior-isolate deploy via \`wrangler.behavior.toml\`, then the room worker
+  deploy via \`wrangler.toml\`.
 `;

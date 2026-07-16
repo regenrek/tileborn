@@ -6,6 +6,7 @@ import { bundledPlugin } from "./.generated/bundled-plugin.js";
 import {
   createRuntimeAdapter,
   decodeClientFrame,
+  decodeServerLifecycleFrame,
   encodeInvalidClientFrame,
   type RuntimeClientFrameDecodeResult,
   type RuntimeClientFrameView,
@@ -36,6 +37,9 @@ export type BundledClientFrameDecodeResult = RuntimeClientFrameDecodeResult;
 
 export interface BundledPluginProtocolBridge {
   readonly decodeClientFrame: (bytes: Uint8Array) => BundledClientFrameDecodeResult;
+  readonly decodeServerLifecycleFrame: (
+    bytes: Uint8Array,
+  ) => { readonly kind: "game-over"; readonly winnerPlayerId: string } | undefined;
   readonly encodeInvalidClientFrame: () => Uint8Array;
 }
 
@@ -163,6 +167,7 @@ export const createBundledPluginLoader = (options: BundledPluginLoaderOptions = 
 
 export const createBundledPluginProtocolBridge = (): BundledPluginProtocolBridge => ({
   decodeClientFrame,
+  decodeServerLifecycleFrame,
   encodeInvalidClientFrame,
 });
 

@@ -39,13 +39,6 @@ import {
 import { readProjectActiveGameModeId } from "./active-game-mode-selection.js";
 
 /**
- * The bundled battle-royale plugin id. Retained ONLY as a test fixture / assertion
- * literal (see `services-build.test.ts`); it is deliberately NOT used by the
- * playtest selection logic below, which is manifest-driven (ADR-0023).
- */
-export const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
-
-/**
  * A plugin candidate for playtest mode selection: its manifest (id + decoded
  * {@link GameModeManifest} contributions) paired with whether the project has it
  * enabled.
@@ -67,13 +60,11 @@ const enabledPlaytestGameModes = (
  * Manifest-driven playtest mode selection (ADR-0023 section B).
  *
  * Discovers the selectable game modes from the ENABLED plugins' decoded
- * contributions ({@link discoverGameModes}: a plugin is a mode when it declares a
- * runtime system) and activates the resolved active mode. Multi-mode projects
+ * contributions ({@link discoverGameModes}: a plugin is a mode when it explicitly
+ * declares `contributes.gameModes`) and activates the resolved active mode. Multi-mode projects
  * require an explicit active-mode selection; invalid selections resolve to no
  * plugin so PlaytestService can fail fast with an actionable error. There is NO
- * hardcoded plugin id: a new genre plugin that declares a runtime system becomes
- * selectable with zero engine edits. Battle royale stays selectable only because
- * it declares a runtime system, just like any other mode.
+ * hardcoded plugin id: a new genre plugin becomes selectable with zero engine edits.
  */
 export const activePlaytestPluginIds = (
   candidates: readonly PlaytestModeCandidate[],

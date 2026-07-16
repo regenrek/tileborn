@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   activePlaytestPluginIds,
-  BATTLE_ROYALE_PLUGIN_ID,
   type PlaytestModeCandidate,
 } from "./index.js";
+
+const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
 
 const pluginId = (value: string): PluginId => Schema.decodeUnknownSync(PluginId)(value);
 
@@ -36,6 +37,7 @@ const RUNTIME_DEFAULTS = {
 } as const;
 
 const CONTRIBUTIONS_DEFAULTS = {
+  gameModes: undefined,
   panels: undefined,
   tools: undefined,
   assetPacks: undefined,
@@ -56,6 +58,20 @@ const runtimeSystem = (id: string, label: string) => ({
 const withRuntimeSystem = (id: string, label: string): PluginContributions =>
   Schema.decodeUnknownSync(PluginContributions)({
     ...CONTRIBUTIONS_DEFAULTS,
+    gameModes: [{
+      _tag: "GameModeContribution",
+      id: "mode",
+      kind: "declarative",
+      display: { label, description: undefined, icon: undefined, order: undefined },
+      runtimeSystemId: id,
+      settingsPanelId: undefined,
+      settingsFormId: undefined,
+      mapValidatorId: undefined,
+      hudLayoutId: undefined,
+      starter: undefined,
+      checklistFacts: undefined,
+      capabilities: undefined,
+    }],
     runtime: { ...RUNTIME_DEFAULTS, systems: [runtimeSystem(id, label)] },
   });
 

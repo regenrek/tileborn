@@ -6,6 +6,7 @@ import {
   admitPlayerToRoom,
   createRoomJoinCode,
   createRoomResultsSummary,
+  finishRoomFromMatchEnd,
   isRoomJoinCode,
   markRoomPlayerDisconnected,
   projectRoomPresence,
@@ -343,6 +344,37 @@ describe('room presence and reconnect policy', () => {
 });
 
 describe('room results summary policy', () => {
+  it('freezes winner placements and completion time from the first match end', () => {
+    const active: RoomStorage = {
+      ...withPlayers(emptyRoomStorage('map:fixture', 42, {}, undefined, NOW), [
+        'player-1',
+        'player-2',
+      ]),
+      lifecycle: { phase: 'active', enteredAt: NOW, activeStartedAt: NOW },
+    };
+
+    const finished = finishRoomFromMatchEnd(active, LATER, 'player-2');
+    expect(finished).toMatchObject({
+      lifecycle: {
+        phase: 'finished',
+        finishedAt: LATER,
+        reason: 'match complete',
+      },
+      results: {
+        completedAt: LATER,
+        reason: 'match complete',
+        players: [
+          { playerId: 'player-1', outcome: 'completed', placement: 2 },
+          { playerId: 'player-2', outcome: 'completed', placement: 1 },
+        ],
+      },
+    });
+
+    expect(finishRoomFromMatchEnd(finished, '2026-01-01T00:02:00.000Z', 'player-1')).toBe(
+      finished,
+    );
+  });
+
   it('persists minimal abandoned results from known room participants', () => {
     const storage = markRoomPlayerDisconnected(
       withPlayers(emptyRoomStorage('map:fixture', 42, {}, undefined, NOW), ['player-1']),

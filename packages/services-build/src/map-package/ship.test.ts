@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { AssetPackManifest } from "@tileborne/asset-pipeline";
 import { ProjectManifest, decodePersistedTileborneMapJson } from "@tileborne/core";
@@ -158,6 +159,25 @@ describe("plugin node-entry discovery (generic exports)", () => {
     );
     const exporter = await Effect.runPromise(loadPluginModeDataExporter(root));
     expect(typeof exporter).toBe("function");
+  });
+
+  it("loads and executes the bundled Example Arena Ship exporter", async () => {
+    const packageRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../plugin-example-arena",
+    );
+    const exporter = await Effect.runPromise(loadPluginModeDataExporter(packageRoot));
+    expect(typeof exporter).toBe("function");
+    const result = exporter?.({
+      map: makeMap({ "@tileborne-plugins/example-arena": { arenaRadius: 48, enemyCount: 10 } }),
+      catalog: [],
+      placements: [],
+      settings: { arenaRadius: 48, enemyCount: 10 },
+    });
+    expect(result && Result.isSuccess(result)).toBe(true);
+    if (result !== undefined && Result.isSuccess(result)) {
+      expect(result.success).toEqual({ schemaVersion: 1, arenaRadius: 48, enemyCount: 10 });
+    }
   });
 
   it("returns undefined when the plugin has no node entry", async () => {

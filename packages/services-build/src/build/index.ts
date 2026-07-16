@@ -1,10 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { readFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { AssetPackManifest } from "@tileborne/asset-pipeline";
 import {
   BuildId,
+  type ContentHash,
   GameObjectCatalog,
   MapId,
   PackId,
@@ -13,36 +14,37 @@ import {
   ProjectId,
   RuntimeMapPackage,
   TileborneMap,
+  hashJsonStable,
+  makeCatalogId,
   type JsonObject,
+  type Uuid,
 } from "@tileborne/core";
 import {
   buildCloudflareGameHost,
+  hashBundleFile,
   type CloudflareGameHostMapPackageInput,
 } from "@tileborne/game-host/build";
-import { discoverGameModes, resolveActiveGameMode } from "@tileborne/plugin-api";
+import {
+  decodeProjectContentDocument,
+  discoverGameModes,
+  ProjectContentDocument,
+  resolveActiveGameMode,
+  resolveBehaviorAuthoringRegistry,
+  resolveEffectiveProjectContent,
+  runtimeProjectContentFromDocument,
+  WeaponCatalog,
+} from "@tileborne/plugin-api";
 import type { RuntimeCatalogPluginSource } from "@tileborne/runtime/map-package";
 import { PluginLoaderService, PluginRegistryService } from "@tileborne/services-plugin";
-import { AssetService, MapService, ProjectService } from "@tileborne/services-app";
+import {
+  AssetService,
+  MapService,
+  ProjectBehaviorService,
+  ProjectService,
+} from "@tileborne/services-app";
 import { HomeService, JobId, JobService } from "@tileborne/services-foundation";
-import { Context, Effect, Layer, Option, PubSub, Schema, Stream } from "effect";
-
-const runtimePackagePath = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../runtime/package.json",
-);
-
-const readRuntimeVersion = (): Effect.Effect<string, ServicesBuildError> =>
-  Effect.tryPromise({
-    try: async () => {
-      const raw = await readFile(runtimePackagePath, "utf8");
-      return (JSON.parse(raw) as { readonly version: string }).version;
-    },
-    catch: (cause) =>
-      new ServicesBuildError({
-        path: Option.some(runtimePackagePath),
-        message: errorMessage(cause),
-      }),
-  });
+import { TILEBORNE_RUNTIME_VERSION } from "@tileborne/runtime";
+import { Context, Effect, Layer, Option, PubSub, Result, Schema, Stream } from "effect";
 
 import {
   BuildArtifact,
@@ -78,8 +80,88 @@ import {
   type InstalledAssetPackSource,
 } from "../map-package/index.js";
 import { readProjectActiveGameModeId } from "../playtest/active-game-mode-selection.js";
+import { compileProjectBehaviorPackage } from "../behavior/project-package.js";
 
 const gameBuildMetadataFileName = "build-artifact.json";
+
+export interface BuildPromotionOperations {
+  readonly rename: (from: string, to: string) => Promise<void>;
+  readonly remove: (target: string) => Promise<void>;
+}
+
+export interface BuildServiceRuntimeOptions {
+  /** Portable Game Host assembly assets owned by the embedding runtime. */
+  readonly gameHostBuildAssetsRoot?: string;
+}
+
+export const nodeBuildPromotionOperations: BuildPromotionOperations = {
+  rename: (from, to) => rename(from, to),
+  remove: (target) => rm(target, { recursive: true, force: true }),
+};
+
+const isNotFoundError = (cause: unknown): boolean =>
+  typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT";
+
+const artifactFilesMatch = async (
+  directory: string,
+  fileHashes: Readonly<Record<string, ContentHash>>,
+): Promise<boolean> => {
+  try {
+    return (await Promise.all(
+      Object.entries(fileHashes).map(async ([relativePath, expected]) =>
+        await hashBundleFile(path.join(directory, relativePath)) === expected,
+      ),
+    )).every(Boolean);
+  } catch {
+    return false;
+  }
+};
+
+/** Shared crash-safe transaction for both managed and explicit Ship outputs. */
+export const promoteBuildDirectory = async (input: {
+  readonly directory: string;
+  readonly workDirectory: string;
+  readonly fileHashes: Readonly<Record<string, ContentHash>>;
+  readonly operations?: BuildPromotionOperations;
+}): Promise<"promoted" | "reused"> => {
+  const operations = input.operations ?? nodeBuildPromotionOperations;
+  if (await artifactFilesMatch(input.directory, input.fileHashes)) {
+    await operations.remove(input.workDirectory);
+    return "reused";
+  }
+
+  const backup = `${input.directory}.previous-${randomUUID()}`;
+  let backedUp = false;
+  try {
+    try {
+      await operations.rename(input.directory, backup);
+      backedUp = true;
+    } catch (cause) {
+      if (!isNotFoundError(cause)) throw cause;
+    }
+    await operations.rename(input.workDirectory, input.directory);
+    if (backedUp) await operations.remove(backup);
+    return "promoted";
+  } catch (cause) {
+    if (backedUp) {
+      await operations.remove(input.directory);
+      await operations.rename(backup, input.directory);
+    }
+    throw cause;
+  }
+};
+
+export const gameArtifactBuildId = (input: {
+  readonly target: GameBuildArtifact["target"];
+  readonly fileHashes: Readonly<Record<string, ContentHash>>;
+}): ContentHash =>
+  hashJsonStable({
+    schemaVersion: 1,
+    target: input.target,
+    files: Object.entries(input.fileHashes)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([relativePath, hash]) => ({ path: relativePath, hash })),
+  });
 
 /**
  * Serve instructions baked into the `local` target artifact (M5 S2): the
@@ -88,7 +170,6 @@ const gameBuildMetadataFileName = "build-artifact.json";
  */
 const localServeReadme = (input: {
   readonly pluginId: string;
-  readonly directory: string;
   readonly createdAt: string;
 }): string => `# Tileborne game-host (local build)
 
@@ -97,7 +178,7 @@ Built:  ${input.createdAt}
 
 Serve this directory locally (no Cloudflare account required):
 
-    tileborne game serve --dir "${input.directory}"
+    tileborne game serve --dir .
 
 The command prints a base URL once the host is ready. Create a joinable room:
 
@@ -106,13 +187,17 @@ The command prints a base URL once the host is ready. Create a joinable room:
       -d '{"mapId":"<mapId>"}'
 
 Bundled maps (and their ids) are listed in manifest.json under "maps".
-To deploy the same artifact to Cloudflare instead, run \`wrangler deploy\`
-with the included wrangler.toml.
+To deploy the same artifact to Cloudflare, publish the isolated behavior worker
+first, then the room worker:
+
+    wrangler deploy --config wrangler.behavior.toml
+    wrangler deploy --config wrangler.toml
 `;
 
 export class BuildService extends Context.Service<BuildService, {
   readonly build: (projectId: ProjectId, options?: BuildOptions) => Effect.Effect<JobId>;
   readonly buildGame: (options: GameBuildOptions) => Effect.Effect<GameBuildArtifact, ServicesBuildError>;
+  readonly verifyGameArtifact: (artifact: GameBuildArtifact | string) => Effect.Effect<GameBuildArtifact, ServicesBuildError | IntegrityMismatchError>;
   readonly getBuild: (
     buildId: BuildId,
   ) => Effect.Effect<BuildArtifact, ServicesBuildError | BuildNotFoundError | IntegrityMismatchError>;
@@ -134,7 +219,10 @@ const summarize = (artifact: BuildArtifact): BuildSummary =>
     integrityHash: artifact.integrityHash,
   });
 
-export const BuildServiceLive = Layer.effect(
+export const makeBuildServiceLive = (
+  promotionOperations: BuildPromotionOperations = nodeBuildPromotionOperations,
+  runtimeOptions: BuildServiceRuntimeOptions = {},
+) => Layer.effect(
   BuildService,
   Effect.gen(function* () {
     const home = yield* HomeService;
@@ -143,6 +231,7 @@ export const BuildServiceLive = Layer.effect(
     const loader = yield* PluginLoaderService;
     const assets = yield* AssetService;
     const projects = yield* ProjectService;
+    const projectBehaviors = yield* ProjectBehaviorService;
     const maps = yield* MapService;
     const events = yield* PubSub.unbounded<void>();
     const root = buildRoot(home.paths.cache);
@@ -260,6 +349,7 @@ export const BuildServiceLive = Layer.effect(
       readonly projectId: ProjectId;
       readonly mapIds: Option.Option<readonly string[]>;
       readonly assetsRoot: string;
+      readonly signal: AbortSignal;
     }) {
       const project = yield* projects.open(input.projectId).pipe(
         Effect.mapError((error) => buildError(error.message)),
@@ -294,7 +384,43 @@ export const BuildServiceLive = Layer.effect(
       const declarative = (yield* loader.listDeclarative()).filter((plugin) =>
         enabledIds.has(plugin.pluginId),
       );
-      const pluginCatalogs = declarative
+      const fragmentRaw = project.settings?.[PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY];
+      const projectContent = fragmentRaw === undefined
+        ? new ProjectContentDocument({
+            schemaVersion: 1,
+            catalog: new GameObjectCatalog({
+              id: makeCatalogId(input.projectId.slice('project:'.length) as Uuid),
+              schemaVersion: 1,
+              objectTypes: [],
+              lootTables: Option.some([]),
+              items: Option.some([]),
+            }),
+            weapons: new WeaponCatalog({ schemaVersion: 1, weapons: [] }),
+            weaponLabels: {},
+            provenance: {},
+          })
+        : yield* (() => {
+            const decoded = decodeProjectContentDocument(fragmentRaw);
+            return Result.isSuccess(decoded)
+              ? Effect.succeed(decoded.success)
+              : serviceError(`project content is invalid: ${decoded.failure.message}`);
+          })();
+      const effective = resolveEffectiveProjectContent(
+        declarative.map((plugin) => ({
+          pluginId: plugin.pluginId,
+          gameObjectCatalogs: plugin.gameObjectCatalogs,
+          weaponCatalogs: plugin.weaponCatalogs,
+        })),
+        projectContent,
+      );
+      if (Result.isFailure(effective)) {
+        return yield* serviceError(
+          effective.failure._tag === 'WeaponCatalogContributionValidationError'
+            ? effective.failure.issues.join('; ')
+            : effective.failure.message,
+        );
+      }
+      const pluginCatalogs = effective.success.pluginCatalogs
         .filter((plugin) => plugin.gameObjectCatalogs.length > 0)
         .map(
           (plugin): RuntimeCatalogPluginSource => ({
@@ -305,22 +431,6 @@ export const BuildServiceLive = Layer.effect(
             })),
           }),
         );
-      const weaponIds = new Set<string>(
-        declarative.flatMap((plugin) =>
-          plugin.weaponCatalogs.flatMap((materialized) =>
-            materialized.catalog.weapons.map((entry) => String(entry.weapon.id)),
-          ),
-        ),
-      );
-      const fragmentRaw = project.settings?.[PROJECT_CATALOG_FRAGMENT_SETTINGS_KEY];
-      const projectObjectTypes =
-        fragmentRaw === undefined
-          ? []
-          : (yield* Effect.try({
-              try: () => Schema.decodeUnknownSync(GameObjectCatalog)(fragmentRaw),
-              catch: (cause) =>
-                serviceError(`project catalog fragment is invalid: ${errorMessage(cause)}`),
-            })).objectTypes;
 
       const modeDataExporter = yield* loadPluginModeDataExporter(input.pluginRootPath);
       if (modeDataExporter === undefined) {
@@ -342,6 +452,37 @@ export const BuildServiceLive = Layer.effect(
         });
       }
       const packageAssets = yield* collectRuntimeMapPackageAssets(packSources);
+
+      const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
+        Effect.mapError((error) => serviceError(
+          error.message,
+          'path' in error ? error.path : 'behaviors',
+        )),
+      );
+      const projectPluginIds = new Set(project.plugins.map(({ id }) => String(id)));
+      const behaviorRegistry = resolveBehaviorAuthoringRegistry(
+        enabled
+          .filter(({ id }) => projectPluginIds.has(String(id)))
+          .map(({ id, manifest }) => ({ pluginId: id, contributions: manifest.contributes })),
+      ).registry;
+      const compiledBehaviors = yield* Effect.tryPromise({
+        try: () => compileProjectBehaviorPackage(
+          behaviorSnapshot,
+          behaviorRegistry,
+        ),
+        catch: (cause) => serviceError(
+          cause instanceof Error ? cause.message : String(cause),
+          'behaviors',
+        ),
+      });
+      if (!compiledBehaviors.ok || compiledBehaviors.behaviorPackage === undefined) {
+        return yield* serviceError(
+          `behavior compilation failed: ${compiledBehaviors.diagnostics
+            .map((entry) => `${entry.code}: ${entry.message}`)
+            .join('; ')}`,
+          compiledBehaviors.diagnostics[0]?.fileName ?? 'behaviors',
+        );
+      }
 
       const projectMapIds = project.maps.map((ref) => ref.id);
       const selectedIds = Option.getOrElse(input.mapIds, () => projectMapIds);
@@ -368,14 +509,18 @@ export const BuildServiceLive = Layer.effect(
           map,
           activeMode: active,
           pluginCatalogs,
-          projectObjectTypes,
+          projectObjectTypes: effective.success.projectObjectTypes,
+          projectContent: runtimeProjectContentFromDocument(projectContent),
           playerModels,
           playerCapacity: resolvePackagePlayerCapacity(map, active.pluginId),
           assets: packageAssets,
+          behaviors: compiledBehaviors.behaviorPackage,
+          behaviorModules: compiledBehaviors.modules ?? [],
           modeDataExporter,
-          mergeDeps: { resolveWeapon: (id) => weaponIds.has(id) },
+          mergeDeps: { resolveWeapon: (id) => effective.success.weaponIds.has(id) },
           engineVersion: project.engineVersion,
           outputDirectory: sourceDir,
+          signal: input.signal,
         });
         // The worker bakes the WIRE package (the encoded JSON every runtime
         // host hands the plugin, ADR-0030), never decoded class instances.
@@ -430,22 +575,36 @@ export const BuildServiceLive = Layer.effect(
         );
       }
       const target = options.target;
-      const directory =
-        Option.isSome(options.outputDirectory)
-          ? options.outputDirectory.value
-          : yield* verifiedChildPath(root, "games", `game-host-${target}`);
-      yield* ensureDirectory(directory);
-      const createdAt = new Date().toISOString();
+      const requestedDirectory = Option.isSome(options.outputDirectory)
+        ? path.resolve(options.outputDirectory.value)
+        : undefined;
+      const gamesRoot = yield* verifiedChildPath(root, "games");
+      yield* ensureDirectory(gamesRoot);
+      const workDirectory = requestedDirectory === undefined
+        ? yield* verifiedChildPath(gamesRoot, `.building-${randomUUID()}`)
+        : `${requestedDirectory}.building-${randomUUID()}`;
+      const createdAt = "1970-01-01T00:00:00.000Z";
+      const abortController = new AbortController();
+
+      return yield* Effect.gen(function* () {
+      // Staging creation itself is inside the ensuring scope: cancellation or
+      // failure delivered as mkdir completes cannot strand a .building tree.
+      yield* ensureDirectory(workDirectory);
+      const e2eAssemblyDelay = process.env["TILEBORNE_E2E"] === "1"
+        ? Number(process.env["TILEBORNE_E2E_SHIP_ASSEMBLY_DELAY_MS"] ?? 0)
+        : 0;
+      if (Number.isFinite(e2eAssemblyDelay) && e2eAssemblyDelay > 0) {
+        yield* Effect.sleep(e2eAssemblyDelay);
+      }
 
       // Both targets share ONE export assembly (M5 S2): the canonical
       // game-host artifact (worker.js + plugin runtime + map packages +
       // assets + manifest). `local` only adds the serve convention on top.
-      const manifestPath = yield* verifiedChildPath(directory, gameBuildMetadataFileName);
       const paths = yield* home.init().pipe(
         Effect.mapError(
           (error) =>
             new ServicesBuildError({
-              path: Option.none(),
+            path: Option.none(),
               message: error.message,
             }),
         ),
@@ -477,15 +636,16 @@ export const BuildServiceLive = Layer.effect(
         });
       }
       const siteName = Option.getOrElse(options.siteName, () => "tileborne-game-host");
-      const runtimeVersion = yield* readRuntimeVersion();
+      const runtimeVersion = TILEBORNE_RUNTIME_VERSION;
       const mapPackages = Option.isSome(options.projectId)
         ? yield* assembleShipMapPackages({
-            directory,
+            directory: workDirectory,
             pluginId,
             pluginRootPath: installed!.rootPath,
             projectId: Schema.decodeUnknownSync(ProjectId)(options.projectId.value),
             mapIds: options.mapIds,
             assetsRoot: paths.assets,
+            signal: abortController.signal,
           })
         : [];
       // A cloudflare artifact with zero bundled maps deploys a host whose
@@ -501,9 +661,14 @@ export const BuildServiceLive = Layer.effect(
         });
       }
       const buildResult = yield* Effect.tryPromise({
-        try: () =>
-          buildCloudflareGameHost({
-            outDir: directory,
+        try: (signal) => {
+          if (signal.aborted) abortController.abort();
+          else signal.addEventListener("abort", () => abortController.abort(), { once: true });
+          const buildInput = {
+            outDir: workDirectory,
+            ...(runtimeOptions.gameHostBuildAssetsRoot === undefined
+              ? {}
+              : { buildAssetsRoot: runtimeOptions.gameHostBuildAssetsRoot }),
             pluginId,
             pluginVersion: installed!.version,
             pluginRoot: installed!.rootPath,
@@ -512,39 +677,168 @@ export const BuildServiceLive = Layer.effect(
             runtimeVersion,
             siteName,
             createdAt,
-          }),
+            signal: abortController.signal,
+          };
+          return buildCloudflareGameHost(buildInput);
+        },
         catch: (cause) =>
           new ServicesBuildError({
-            path: Option.some(directory),
+            path: Option.some(workDirectory),
             message: errorMessage(cause),
           }),
       });
       const files = [...buildResult.files];
+      const fileHashes: Record<string, ContentHash> = { ...buildResult.fileHashes };
       if (target === "local") {
-        yield* writeTextFile(
-          yield* verifiedChildPath(directory, "README.md"),
-          localServeReadme({ pluginId, directory: buildResult.outDir, createdAt }),
-        );
+        const readmePath = yield* verifiedChildPath(workDirectory, "README.md");
+        yield* writeTextFile(readmePath, localServeReadme({ pluginId, createdAt }));
         files.push("README.md");
+        fileHashes["README.md"] = yield* Effect.tryPromise({
+          try: () => hashBundleFile(readmePath),
+          catch: (cause) => serviceError(errorMessage(cause), readmePath),
+        });
       }
-      const artifact = new GameBuildArtifact({
-        pluginId,
-        target,
-        directory: buildResult.outDir,
-        manifestPath: path.join(buildResult.outDir, "manifest.json"),
-        bundlePath: buildResult.bundlePath,
-        integrityHash: buildResult.manifestHash,
-        createdAt,
-        files,
+      const buildId = gameArtifactBuildId({ target, fileHashes });
+      return yield* Effect.uninterruptible(
+        Effect.gen(function* () {
+          const directory = requestedDirectory === undefined
+            ? yield* verifiedChildPath(
+                gamesRoot,
+                `game-host-${target}-${String(buildId).slice("sha256:".length)}`,
+              )
+            : requestedDirectory;
+          const artifact = new GameBuildArtifact({
+            pluginId,
+            target,
+            directory,
+            manifestPath: path.join(directory, "manifest.json"),
+            bundlePath: path.join(directory, path.basename(buildResult.bundlePath)),
+            buildId,
+            runtimeBuildId: buildResult.manifestHash,
+            integrityHash: emptyContentHash,
+            createdAt,
+            files,
+            fileHashes,
+          });
+          const workMetadataPath = path.join(workDirectory, gameBuildMetadataFileName);
+          const integrityHash = yield* writeVerifiedJson(workMetadataPath, GameBuildArtifact, artifact);
+          const completedArtifact = new GameBuildArtifact({ ...artifact, integrityHash });
+          const metadataHash = yield* Effect.tryPromise({
+            try: () => hashBundleFile(workMetadataPath),
+            catch: (cause) => serviceError(errorMessage(cause), workMetadataPath),
+          });
+          yield* Effect.tryPromise({
+            try: () => promoteBuildDirectory({
+              directory,
+              workDirectory,
+              fileHashes: { ...fileHashes, [gameBuildMetadataFileName]: metadataHash },
+              operations: promotionOperations,
+            }),
+            catch: (cause) =>
+              new ServicesBuildError({
+                path: Option.some(directory),
+                message: `failed to promote completed artifact: ${errorMessage(cause)}`,
+              }),
+          });
+          yield* PubSub.publish(events, void 0);
+          return completedArtifact;
+        }),
+      );
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => abortController.abort()).pipe(
+            Effect.andThen(deleteDirectory(workDirectory).pipe(Effect.catch(() => Effect.void))),
+          ),
+        ),
+      );
+    });
+
+    const verifyGameArtifact = Effect.fn("BuildService.verifyGameArtifact")(function* (
+      candidate: GameBuildArtifact | string,
+    ) {
+      const gamesRoot = yield* verifiedChildPath(root, "games");
+      const requestedDirectory = typeof candidate === "string" ? candidate : candidate.directory;
+      const resolvedDirectory = path.resolve(requestedDirectory);
+      const relative = path.relative(gamesRoot, resolvedDirectory);
+      if (relative.length === 0 || relative.startsWith("..") || path.isAbsolute(relative)) {
+        return yield* serviceError(
+          `game artifact is outside the managed build root: ${requestedDirectory}`,
+          requestedDirectory,
+        );
+      }
+      const directory = yield* verifiedChildPath(gamesRoot, relative);
+      const metadataPath = yield* verifiedChildPath(directory, gameBuildMetadataFileName);
+      const durable = yield* readVerifiedJson(metadataPath, GameBuildArtifact);
+      if (
+        durable.directory !== directory ||
+        durable.manifestPath !== path.join(directory, "manifest.json") ||
+        durable.bundlePath !== path.join(directory, "worker.js")
+      ) {
+        return yield* serviceError("game artifact contains non-canonical paths", metadataPath);
+      }
+      if (typeof candidate !== "string" && (
+        candidate.directory !== durable.directory ||
+        candidate.pluginId !== durable.pluginId ||
+        candidate.target !== durable.target ||
+        candidate.buildId !== durable.buildId ||
+        candidate.runtimeBuildId !== durable.runtimeBuildId ||
+        candidate.integrityHash !== durable.integrityHash
+      )) {
+        return yield* serviceError("game artifact request does not match its durable record", metadataPath);
+      }
+      const expectedFiles = new Set(durable.files);
+      if (
+        expectedFiles.size !== durable.files.length ||
+        Object.keys(durable.fileHashes).length !== durable.files.length ||
+        Object.keys(durable.fileHashes).some((file) => !expectedFiles.has(file))
+      ) {
+        return yield* serviceError("game artifact file inventory is inconsistent", metadataPath);
+      }
+      for (const relativePath of durable.files) {
+        const filePath = yield* verifiedChildPath(directory, relativePath);
+        const expected = durable.fileHashes[relativePath];
+        if (expected === undefined) {
+          return yield* serviceError(`missing final file hash for ${relativePath}`, metadataPath);
+        }
+        const actual = yield* Effect.tryPromise({
+          try: () => hashBundleFile(filePath),
+          catch: (cause) => serviceError(errorMessage(cause), filePath),
+        });
+        if (actual !== expected) {
+          return yield* new IntegrityMismatchError({
+            path: filePath,
+            expected,
+            actual,
+            message: `game artifact file integrity mismatch: ${relativePath}`,
+          });
+        }
+      }
+      const actualBuildId = gameArtifactBuildId({
+        target: durable.target,
+        fileHashes: durable.fileHashes,
       });
-      yield* writeVerifiedJson(manifestPath, GameBuildArtifact, artifact);
-      yield* PubSub.publish(events, void 0);
-      return artifact;
+      if (actualBuildId !== durable.buildId) {
+        return yield* new IntegrityMismatchError({
+          path: metadataPath,
+          expected: durable.buildId,
+          actual: actualBuildId,
+          message: "game artifact identity does not match its final file inventory",
+        });
+      }
+      const manifest = yield* Effect.tryPromise({
+        try: async () => JSON.parse(await readFile(durable.manifestPath, "utf8")) as { readonly buildId?: unknown },
+        catch: (cause) => serviceError(errorMessage(cause), durable.manifestPath),
+      });
+      if (manifest.buildId !== durable.runtimeBuildId) {
+        return yield* serviceError("manifest buildId does not match the durable artifact record", durable.manifestPath);
+      }
+      return durable;
     });
 
     return {
       build,
       buildGame,
+      verifyGameArtifact,
       getBuild,
       listBuilds,
       deleteBuild,
@@ -552,3 +846,5 @@ export const BuildServiceLive = Layer.effect(
     };
   }),
 );
+
+export const BuildServiceLive = makeBuildServiceLive();

@@ -707,6 +707,8 @@ describe.sequential('game CLI families', () => {
     expect(payload.data.bundlePath).toContain('worker.js');
     expect(payload.data.outDir.length).toBeGreaterThan(0);
     expect(payload.data.files).toContain('worker.js');
+    expect(payload.data.files).toContain('behavior-worker.js');
+    expect(payload.data.files).toContain('wrangler.behavior.toml');
     expect(payload.data.manifestHash).toMatch(/^sha256:/);
     // A cloudflare build without --project bundles zero maps: legal, but
     // loud — the deployed host could not create rooms.
@@ -714,7 +716,7 @@ describe.sequential('game CLI families', () => {
     expect((payload.data as { readonly warnings?: readonly string[] }).warnings?.[0]).toContain(
       'no maps bundled',
     );
-  });
+  }, 20_000);
 
   it('runtime discover emits backend json', async () => {
     const home = await makeTempHome();

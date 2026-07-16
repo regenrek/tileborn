@@ -144,6 +144,19 @@ export const generateBundledMapPackages = async () => {
     catalog: Schema.encodeSync(Schema.Array(core.RuntimeCatalogEntry))(catalog),
     placements: Schema.encodeSync(Schema.Array(core.RuntimeObjectPlacement))(placements),
     settings,
+    // The dev package has no project-owned definitions, but v3 requires the
+    // first-class neutral section so it exercises the same loader contract as
+    // playtest and shipped project packages.
+    content: {
+      schemaVersion: 1,
+      items: [],
+      lootTables: [],
+      weapons: [],
+      provenance: {},
+    },
+    behaviors: Schema.encodeSync(core.RuntimeBehaviorPackage)(
+      core.EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
+    ),
     visuals: Schema.encodeSync(core.RuntimeMapPackageVisuals)(visuals),
     assets: [],
     modeData,

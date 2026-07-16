@@ -92,8 +92,10 @@ describe("game-host smoke — CLI cloudflare build pipeline", () => {
     };
     expect(buildPayload.ok).toBe(true);
     expect(buildPayload.data.files).toContain("worker.js");
+    expect(buildPayload.data.files).toContain("behavior-worker.js");
     expect(buildPayload.data.files).toContain("manifest.json");
     expect(buildPayload.data.files).toContain("wrangler.toml");
+    expect(buildPayload.data.files).toContain("wrangler.behavior.toml");
     expect(buildPayload.data.manifestHash).toMatch(/^sha256:[0-9a-f]{64}$/);
 
     const workerPath = path.join(outputDir, "worker.js");
@@ -113,6 +115,7 @@ describe("game-host smoke — CLI cloudflare build pipeline", () => {
     const wranglerToml = await readFile(path.join(outputDir, "wrangler.toml"), "utf8");
     expect(parseTomlBinding(wranglerToml, "PLAYTEST_ROOM")).toBe(true);
     expect(wranglerToml.includes("main = \"worker.js\"")).toBe(true);
+    expect(wranglerToml.includes('binding = "BEHAVIOR_RUNTIME"')).toBe(true);
 
     const harness = await bootMiniflare({ workerPath });
     dispose = harness.mfDispose;

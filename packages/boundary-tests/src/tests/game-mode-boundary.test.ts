@@ -39,6 +39,15 @@ const CONTRACT_OWNER_FILES = [
   "packages/plugin-api/src/game-settings-form.ts",
 ] as const;
 
+const NEUTRAL_ORCHESTRATION_FILES = [
+  "apps/desktop/src/main/ipc/handlers.ts",
+  "apps/desktop/src/main/readiness.ts",
+  "apps/desktop/src/main/playtest-runtime-host.ts",
+  "apps/desktop/src/renderer/lib/active-game-mode-selection.ts",
+  "apps/desktop/src/renderer/components/shell/right-inspector.tsx",
+  "packages/services-build/src/playtest/index.ts",
+] as const;
+
 const CONTRACT_FORBIDDEN: readonly ForbiddenPattern[] = [
   { name: "mode literal", pattern: /battleRoyale|BATTLE_ROYALE|battle-royale/ },
   { name: "brand literal", pattern: /petwars|grassland|\.pwmap|erw:/ },
@@ -96,5 +105,65 @@ describe("ADR-0023 game-mode contract boundary", () => {
     const files = walkFiles({ rootDir: RENDERER_ROOT, extensions: [".ts", ".tsx"] });
     const violations = collectViolations(files, RENDERER_FORBIDDEN);
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("keeps Battle Royale imports and literals out of neutral desktop/build orchestration", () => {
+    const files = NEUTRAL_ORCHESTRATION_FILES.map((file) => path.join(repoRoot, file));
+    const violations = collectViolations(files, [
+      { name: "BR plugin import", pattern: /plugin-battle-royale/ },
+      { name: "BR plugin id or schema", pattern: /battle-royale|BATTLE_ROYALE/ },
+    ]);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("requires both bundled modes to use the explicit gameModes registration path", () => {
+    for (const manifestPath of [
+      "packages/plugin-battle-royale/tileborne-plugin.json",
+      "packages/plugin-example-arena/tileborne-plugin.json",
+    ]) {
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(repoRoot, manifestPath), "utf8"),
+      ) as {
+        contributes?: {
+          gameModes?: readonly {
+            runtimeSystemId?: string;
+            settingsFormId?: string;
+            mapValidatorId?: string;
+            capabilities?: { renderer?: string; starter?: string };
+          }[];
+        };
+      };
+      const registration = manifest.contributes?.gameModes?.[0];
+      expect(registration, manifestPath).toBeDefined();
+      expect(registration?.runtimeSystemId, manifestPath).toBeTruthy();
+      expect(registration?.settingsFormId, manifestPath).toBeTruthy();
+      expect(registration?.mapValidatorId, manifestPath).toBeTruthy();
+      expect(registration?.capabilities?.renderer, manifestPath).toBeTruthy();
+      expect(registration?.capabilities?.starter, manifestPath).toBeTruthy();
+    }
+  });
+
+  it("keeps renderer capability ids and server validator links as sole authorities", () => {
+    const bridge = fs.readFileSync(
+      path.join(repoRoot, "apps/desktop/src/renderer/lib/playtest-plugin-bridge.ts"),
+      "utf8",
+    );
+    const single = fs.readFileSync(
+      path.join(repoRoot, "apps/desktop/src/renderer/components/playtest-viewport.tsx"),
+      "utf8",
+    );
+    const multiplayer = fs.readFileSync(
+      path.join(repoRoot, "apps/desktop/src/renderer/components/playtest-multiplayer-viewport.tsx"),
+      "utf8",
+    );
+    const readiness = fs.readFileSync(
+      path.join(repoRoot, "apps/desktop/src/main/readiness.ts"),
+      "utf8",
+    );
+    expect(bridge).not.toMatch(/MODE_RENDER_PROVIDERS\.get\(pluginId\)/);
+    expect(single).not.toMatch(/rendererCapabilityId\s*\?\?\s*pluginId/);
+    expect(multiplayer).not.toMatch(/rendererCapabilityId\s*\?\?\s*(?:pluginId|activeModePluginId)/);
+    expect(readiness).not.toMatch(/manifest\.entry/);
+    expect(readiness).toContain("server?.mapValidators");
   });
 });

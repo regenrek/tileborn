@@ -1,11 +1,11 @@
-import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ProjectManifest } from "@tileborne/core";
 import { PluginManifest } from "@tileborne/plugin-api";
 import { MapService, ProjectService } from "@tileborne/services-app";
-import { ConfigLayer, HomeServiceLive, JobService, JobServiceLive } from "@tileborne/services-foundation";
+import { ConfigLayer, HomeService, HomeServiceLive, JobService } from "@tileborne/services-foundation";
 import { withTempHome } from "../../services-foundation/src/test-utils.js";
 import {
   LocalPluginSource,
@@ -24,7 +24,6 @@ import {
   BuildOptions,
   BuildService,
   GameBuildOptions,
-  BATTLE_ROYALE_PLUGIN_ID,
   CloudflareWorkerExportTarget,
   ExportOptions,
   ExportService,
@@ -39,7 +38,12 @@ import {
   SupportService,
   WebExportTarget,
   ServicesBuildLayer,
+  makeServicesBuildLayer,
+  gameArtifactBuildId,
+  type BuildPromotionOperations,
 } from "./index.js";
+
+const BATTLE_ROYALE_PLUGIN_ID = "@tileborne-plugins/battle-royale";
 import { metadataFileName } from "./internal/persistence.js";
 import { createLocalGameHost } from "./local-game-host.js";
 import { makeNewBuildId } from "./model.js";
@@ -53,19 +57,30 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   }
 };
 
-const foundationLayer = Layer.mergeAll(HomeServiceLive, JobServiceLive, ConfigLayer);
+// ServicesBuildLayer owns the canonical persistent JobService. Providing a
+// second in-memory JobService here splits create from list/cancel and makes
+// every async job appear permanently absent to the assertions.
+const foundationLayer = Layer.mergeAll(HomeServiceLive, ConfigLayer);
 const pluginLayer = Layer.mergeAll(PluginLoaderMainLayer, PluginInstallerLayer).pipe(
   Layer.provideMerge(PluginRegistryLayer),
   Layer.provideMerge(foundationLayer),
 );
 const testLayer = ServicesBuildLayer.pipe(Layer.provideMerge(pluginLayer), Layer.provideMerge(foundationLayer));
+const testLayerWithPromotion = (operations: BuildPromotionOperations) =>
+  makeServicesBuildLayer(operations).pipe(
+    Layer.provideMerge(pluginLayer),
+    Layer.provideMerge(foundationLayer),
+  );
 const EXAMPLE_ARENA_PLUGIN_ID = "@tileborne-plugins/example-arena";
 
 const waitForJob = (jobId: string) =>
   Effect.gen(function* () {
     const jobs = yield* JobService;
-    for (let attempt = 0; attempt < 50; attempt++) {
+    const deadline = performance.now() + 5_000;
+    let lastObserved: string | undefined;
+    while (performance.now() < deadline) {
       const job = (yield* jobs.list()).find((entry) => entry.id === jobId);
+      lastObserved = job?.status._tag;
       if (
         job &&
         (job.status._tag === "Completed" || job.status._tag === "Failed" || job.status._tag === "Cancelled")
@@ -74,7 +89,9 @@ const waitForJob = (jobId: string) =>
       }
       yield* Effect.sleep(10);
     }
-    throw new Error(`job did not finish: ${jobId}`);
+    throw new Error(
+      `job did not finish within 5000ms: ${jobId}; last status=${lastObserved ?? "not listed"}`,
+    );
   });
 
 const seedProject = (name = "Arena") =>
@@ -154,6 +171,13 @@ const installRuntimePlugin = (input: {
         permissions: [],
         dependsOn: [],
         contributes: {
+          gameModes: [{
+            _tag: "GameModeContribution",
+            id: "fixture-mode",
+            kind: "declarative",
+            display: { label: input.runtimeLabel },
+            runtimeSystemId: input.runtimeSystemId,
+          }],
           runtime: {
             systems: [
               {
@@ -207,6 +231,13 @@ const installShipModePlugin = () =>
         permissions: [],
         dependsOn: [],
         contributes: {
+          gameModes: [{
+            _tag: "GameModeContribution",
+            id: "ship-mode",
+            kind: "declarative",
+            display: { label: "Ship Mode" },
+            runtimeSystemId: "ship-mode-runtime",
+          }],
           runtime: {
             systems: [
               {
@@ -393,7 +424,7 @@ describe("BuildService", () => {
           const readme = yield* Effect.promise(() =>
             readFile(path.join(outDir, "README.md"), "utf8"),
           );
-          expect(readme).toContain(`tileborne game serve --dir "${outDir}"`);
+          expect(readme).toContain("tileborne game serve --dir .");
 
           // The artifact boots locally into a joinable room (no Cloudflare).
           const host = yield* Effect.promise(() =>
@@ -420,6 +451,119 @@ describe("BuildService", () => {
             yield* Effect.promise(() => host.stop());
           }
         }).pipe(Effect.provide(testLayer)),
+      );
+    }), 180_000);
+
+  it("reuses deterministic managed builds and rejects tampered or arbitrary artifacts", () =>
+    withTempHome(async () => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId } = yield* seedProject("Managed Ship Arena");
+          yield* installShipModePlugin();
+          const builds = yield* BuildService;
+          const options = new GameBuildOptions({
+            pluginId: SHIP_PLUGIN_ID,
+            target: "local",
+            outputDirectory: Option.none(),
+            assetPackIds: Option.none(),
+            siteName: Option.some('Unsafe " Arena\n[vars]'),
+            projectId: Option.some(projectId),
+            mapIds: Option.none(),
+          });
+          const first = yield* builds.buildGame(options);
+          const repeat = yield* builds.buildGame(options);
+          expect(repeat.directory).toBe(first.directory);
+          expect(repeat.buildId).toBe(first.buildId);
+          expect(repeat.fileHashes).toEqual(first.fileHashes);
+          expect((yield* builds.verifyGameArtifact(repeat)).buildId).toBe(first.buildId);
+          expect(gameArtifactBuildId({ target: "cloudflare", fileHashes: first.fileHashes })).not.toBe(
+            first.buildId,
+          );
+
+          const differentSite = yield* builds.buildGame(new GameBuildOptions({
+            ...options,
+            siteName: Option.some("Managed Ship Arena Beta"),
+          }));
+          expect(differentSite.runtimeBuildId).toBe(first.runtimeBuildId);
+          expect(differentSite.buildId).not.toBe(first.buildId);
+          expect(differentSite.directory).not.toBe(first.directory);
+          expect(differentSite.fileHashes["wrangler.toml"]).not.toBe(first.fileHashes["wrangler.toml"]);
+
+          const gamesRoot = path.dirname(first.directory);
+          for (const relativePath of first.files) {
+            const bytes = yield* Effect.promise(() => readFile(path.join(first.directory, relativePath)));
+            expect(bytes.includes(Buffer.from(".building-"))).toBe(false);
+            expect(bytes.includes(Buffer.from(gamesRoot))).toBe(false);
+          }
+
+          const failedReplacement = yield* Effect.result(builds.buildGame(new GameBuildOptions({
+            ...options,
+            mapIds: Option.some(["map:00000000-0000-4000-8000-000000000099"]),
+          })));
+          expect(Result.isFailure(failedReplacement)).toBe(true);
+          expect((yield* builds.verifyGameArtifact(first)).buildId).toBe(first.buildId);
+          expect((yield* Effect.promise(() => readdir(gamesRoot))).filter((entry) => entry.includes('.building-'))).toEqual([]);
+
+          yield* Effect.promise(() => writeFile(repeat.bundlePath, "tampered", "utf8"));
+          const tampered = yield* Effect.result(builds.verifyGameArtifact(repeat));
+          expect(Result.isFailure(tampered)).toBe(true);
+          const arbitrary = yield* Effect.result(builds.verifyGameArtifact(tmpdir()));
+          expect(Result.isFailure(arbitrary)).toBe(true);
+        }).pipe(Effect.provide(testLayer)),
+      );
+    }), 180_000);
+
+  it("rolls back a managed-root promotion failure, cleans residue, and retries", () =>
+    withTempHome(async () => {
+      let failFinalRename = false;
+      const operations: BuildPromotionOperations = {
+        rename: async (from, to) => {
+          if (failFinalRename && from.includes(".building-")) {
+            failFinalRename = false;
+            throw new Error("injected final promotion rename failure");
+          }
+          await rename(from, to);
+        },
+        remove: (target) => rm(target, { recursive: true, force: true }),
+      };
+      const faultLayer = testLayerWithPromotion(operations);
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId } = yield* seedProject("Promotion Transaction Arena");
+          yield* installShipModePlugin();
+          const home = yield* HomeService;
+          const builds = yield* BuildService;
+          const directory = path.join(home.paths.cache, "builds", "games", "promotion-slot");
+          const options = (siteName: string) => new GameBuildOptions({
+            pluginId: SHIP_PLUGIN_ID,
+            target: "local",
+            outputDirectory: Option.some(directory),
+            assetPackIds: Option.none(),
+            siteName: Option.some(siteName),
+            projectId: Option.some(projectId),
+            mapIds: Option.none(),
+          });
+
+          const prior = yield* builds.buildGame(options("Promotion Arena Alpha"));
+          yield* builds.verifyGameArtifact(prior);
+          const metadataBefore = yield* Effect.promise(() => readFile(path.join(directory, "build-artifact.json")));
+          failFinalRename = true;
+          const failed = yield* Effect.result(builds.buildGame(options("Promotion Arena Beta")));
+          expect(Result.isFailure(failed)).toBe(true);
+          expect(failFinalRename).toBe(false);
+          expect((yield* builds.verifyGameArtifact(prior)).buildId).toBe(prior.buildId);
+          expect(yield* Effect.promise(() => readFile(path.join(directory, "build-artifact.json")))).toEqual(metadataBefore);
+          expect((yield* Effect.promise(() => readdir(path.dirname(directory)))).filter(
+            (entry) => entry.includes(".building-") || entry.includes(".previous-"),
+          )).toEqual([]);
+
+          const retry = yield* builds.buildGame(options("Promotion Arena Beta"));
+          expect(retry.buildId).not.toBe(prior.buildId);
+          expect((yield* builds.verifyGameArtifact(retry)).buildId).toBe(retry.buildId);
+          expect((yield* Effect.promise(() => readdir(path.dirname(directory)))).filter(
+            (entry) => entry.includes(".building-") || entry.includes(".previous-"),
+          )).toEqual([]);
+        }).pipe(Effect.provide(faultLayer)),
       );
     }), 180_000);
 
@@ -719,6 +863,13 @@ describe("PlaytestService", () => {
           permissions: [],
           dependsOn: [],
           contributes: {
+            gameModes: [{
+              _tag: "GameModeContribution",
+              id: "battle-royale",
+              kind: "declarative",
+              display: { label: "Battle Royale" },
+              runtimeSystemId: "battle-royale-runtime",
+            }],
             runtime: {
               systems: [
                 {

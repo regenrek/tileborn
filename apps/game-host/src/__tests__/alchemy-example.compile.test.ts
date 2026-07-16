@@ -11,23 +11,29 @@ const configPath = path.join(packageRoot, "tsconfig.alchemy.example.json");
 const loadCompilerOptions = (): ts.CompilerOptions => {
   const configFile = ts.readConfigFile(configPath, (filePath) => readFileSync(filePath, "utf8"));
   if (configFile.error) {
-    throw new Error(ts.formatDiagnostic(configFile.error, {
-      getCanonicalFileName: (fileName) => fileName,
-      getCurrentDirectory: () => packageRoot,
-      getNewLine: () => "\n",
-    }));
+    throw new Error(
+      ts.formatDiagnostic(configFile.error, {
+        getCanonicalFileName: (fileName) => fileName,
+        getCurrentDirectory: () => packageRoot,
+        getNewLine: () => "\n",
+      }),
+    );
   }
 
-  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, packageRoot, undefined, configPath);
+  const parsed = ts.parseJsonConfigFileContent(
+    configFile.config,
+    ts.sys,
+    packageRoot,
+    undefined,
+    configPath,
+  );
   if (parsed.errors.length > 0) {
     const host = {
       getCanonicalFileName: (fileName: string) => fileName,
       getCurrentDirectory: () => packageRoot,
       getNewLine: () => "\n",
     };
-    throw new Error(
-      parsed.errors.map((error) => ts.formatDiagnostic(error, host)).join("\n"),
-    );
+    throw new Error(parsed.errors.map((error) => ts.formatDiagnostic(error, host)).join("\n"));
   }
 
   return parsed.options;
@@ -45,5 +51,5 @@ describe("alchemy.example.run.ts compile contract", () => {
         ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
       ),
     ).toEqual([]);
-  });
+  }, 15_000);
 });

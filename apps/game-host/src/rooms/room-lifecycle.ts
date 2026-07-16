@@ -631,6 +631,39 @@ export const createRoomResultsSummary = (
   })),
 });
 
+export const finishRoomFromMatchEnd = (
+  storage: RoomStorage,
+  now: string,
+  winnerPlayerId: string,
+): RoomStorage => {
+  // The first authoritative terminal event wins. A replayed/duplicate event
+  // must never mutate durable results, placements, or completion time.
+  if (storage.lifecycle.phase !== 'active' || storage.results !== null) {
+    return storage;
+  }
+  const playerIds = [
+    ...new Set([...sortedResultPlayerIds(storage), winnerPlayerId]),
+  ].sort((left, right) => left.localeCompare(right));
+  return {
+    ...storage,
+    results: {
+      completedAt: now,
+      reason: 'match complete',
+      players: playerIds.map((playerId) => ({
+        playerId,
+        outcome: 'completed',
+        placement: playerId === winnerPlayerId ? 1 : 2,
+      })),
+    },
+    lifecycle: {
+      phase: 'finished',
+      enteredAt: now,
+      finishedAt: now,
+      reason: 'match complete',
+    },
+  };
+};
+
 export const reserveRoomPlayer = (
   storage: RoomStorage,
   requestedPlayerId: string | undefined,

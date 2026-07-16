@@ -8,6 +8,7 @@ import { smokeBundledManifest } from "./fixtures/smoke-manifest.js";
 
 const gameHostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const workerEntry = path.join(gameHostRoot, "src/worker.ts");
+const behaviorWorkerEntry = path.join(gameHostRoot, "src/behavior/workerd/service-worker.ts");
 
 export const smokeDistDir = path.join(gameHostRoot, "dist-smoke");
 
@@ -36,7 +37,15 @@ export const runtimeManifest: BundledManifest = ${JSON.stringify(manifest, null,
     platform: "browser",
     target: "es2022",
     sourcemap: true,
-    external: ["cloudflare:*", "node:crypto", "node:fs", "node:fs/promises", "node:path", "node:url", "node:os"],
+    external: [
+      "cloudflare:*",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:path",
+      "node:url",
+      "node:os",
+    ],
     define: {
       __WORKER_VERSION__: JSON.stringify(manifest.runtimeVersion),
       __BUILD_ID__: JSON.stringify(manifest.buildId),
@@ -54,6 +63,16 @@ export const runtimeManifest: BundledManifest = ${JSON.stringify(manifest, null,
         },
       },
     ],
+  });
+
+  await esbuildBuild({
+    entryPoints: [behaviorWorkerEntry],
+    outfile: path.join(outDir, "behavior-worker.js"),
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: "es2022",
+    sourcemap: true,
   });
 
   return workerPath;

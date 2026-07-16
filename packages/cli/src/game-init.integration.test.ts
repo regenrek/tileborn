@@ -106,6 +106,12 @@ describe("game init scaffold", () => {
     expect(script).toContain('["secret", "list"');
     expect(script).toContain("wrangler");
     expect(script).toContain("dist/game/wrangler.toml");
+    expect(script).toContain("dist/game/wrangler.behavior.toml");
+    expect(
+      script.indexOf('run("wrangler", ["deploy", "--config", BEHAVIOR_WRANGLER_CONFIG])'),
+    ).toBeLessThan(
+      script.indexOf('run("wrangler", ["deploy", "--config", WRANGLER_CONFIG])'),
+    );
   });
 
   it("branding tokens decode against the neutral BrandConfig schema", async () => {

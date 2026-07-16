@@ -309,7 +309,14 @@ export class GameBuildArtifact extends Schema.Class<GameBuildArtifact>("GameBuil
   directory: Schema.String,
   manifestPath: Schema.String,
   bundlePath: Schema.String,
+  /** Canonical identity of the complete final shipped-file inventory. */
+  buildId: ContentHash,
+  /** Embedded worker/runtime manifest identity (kept separate to avoid a self-hash cycle). */
+  runtimeBuildId: ContentHash,
+  /** Integrity of this durable artifact record. */
   integrityHash: ContentHash,
   createdAt: Schema.String,
   files: Schema.Array(Schema.String),
+  /** Hashes of every final shipped file, used for immediate launch/open revalidation. */
+  fileHashes: Schema.Record(Schema.String, ContentHash),
 }) {}

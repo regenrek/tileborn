@@ -1,10 +1,15 @@
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Miniflare, type Json, type WebSocket as MiniflareWebSocket } from "miniflare";
 
 import { MIN_HANDOFF_SIGNING_KEY_LENGTH } from "../rooms/room-config.js";
+import {
+  LocalBehaviorWorkerdSupervisor,
+  type BehaviorRuntimeProcessEvent,
+} from "./behavior-workerd-supervisor.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8787;
@@ -16,6 +21,12 @@ export interface CreateLocalGameHostOptions {
   readonly port?: number;
   readonly signingKey?: string;
   readonly workerPath?: string;
+  readonly behaviorWorkerPath?: string;
+  readonly behaviorMaxWallTimeMs?: number;
+  readonly behaviorMaxStartupTimeMs?: number;
+  readonly behaviorMaxColdStartupTimeMs?: number;
+  readonly behaviorMaxDisposeTimeMs?: number;
+  readonly observeBehaviorProcess?: (event: BehaviorRuntimeProcessEvent) => void;
   readonly bindings?: Record<string, Json>;
   readonly includeSigningKey?: boolean;
 }
@@ -24,7 +35,10 @@ export interface LocalGameHost {
   readonly baseUrl: string;
   readonly signingKey: string;
   readonly stop: () => Promise<void>;
-  readonly fetch: (input: string | URL, init?: MiniflareFetchInit) => Promise<MiniflareFetchResponse>;
+  readonly fetch: (
+    input: string | URL,
+    init?: MiniflareFetchInit,
+  ) => Promise<MiniflareFetchResponse>;
   readonly websocketConnect: (
     wsUrl: string,
     hooks?: { readonly beforeAccept?: (socket: MiniflareWebSocket) => void },
@@ -36,6 +50,9 @@ export const generateHandoffSigningKey = (): string => randomBytes(32).toString(
 
 export const resolveBundledGameHostWorkerPath = (): string =>
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "dist", "worker.js");
+
+export const resolveBundledBehaviorWorkerPath = (): string =>
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "dist", "behavior-worker.js");
 
 const assertSigningKey = (signingKey: string): void => {
   if (signingKey.length < MIN_HANDOFF_SIGNING_KEY_LENGTH) {
@@ -49,13 +66,31 @@ export const createLocalGameHost = async (
   const host = DEFAULT_HOST;
   const port = options.port ?? DEFAULT_PORT;
   const includeSigningKey = options.includeSigningKey ?? true;
-  const signingKey = includeSigningKey
-    ? (options.signingKey ?? generateHandoffSigningKey())
-    : "";
+  const signingKey = includeSigningKey ? (options.signingKey ?? generateHandoffSigningKey()) : "";
   if (includeSigningKey) {
     assertSigningKey(signingKey);
   }
   const workerPath = options.workerPath ?? resolveBundledGameHostWorkerPath();
+  const behaviorWorkerPath =
+    options.behaviorWorkerPath ?? path.join(path.dirname(workerPath), "behavior-worker.js");
+  const behaviorSupervisor = new LocalBehaviorWorkerdSupervisor({
+    workerPath: behaviorWorkerPath,
+    ...(options.behaviorMaxWallTimeMs === undefined
+      ? {}
+      : { maxWallTimeMs: options.behaviorMaxWallTimeMs }),
+    ...(options.behaviorMaxStartupTimeMs === undefined
+      ? {}
+      : { maxStartupTimeMs: options.behaviorMaxStartupTimeMs }),
+    ...(options.behaviorMaxColdStartupTimeMs === undefined
+      ? {}
+      : { maxColdStartupTimeMs: options.behaviorMaxColdStartupTimeMs }),
+    ...(options.behaviorMaxDisposeTimeMs === undefined
+      ? {}
+      : { maxDisposeTimeMs: options.behaviorMaxDisposeTimeMs }),
+    ...(options.observeBehaviorProcess === undefined
+      ? {}
+      : { observeProcess: options.observeBehaviorProcess }),
+  });
   const baseUrl = `http://${host}:${port}`;
 
   const mf = new Miniflare({
@@ -74,12 +109,26 @@ export const createLocalGameHost = async (
     durableObjects: {
       PLAYTEST_ROOM: "PlaytestRoom",
     },
+    serviceBindings: {
+      BEHAVIOR_RUNTIME: (request: Request) => behaviorSupervisor.fetch(request),
+    },
     durableObjectsPersist: false,
   });
 
-  await mf.ready;
+  try {
+    await Promise.all([
+      mf.ready,
+      ...(existsSync(behaviorWorkerPath) ? [behaviorSupervisor.warmup()] : []),
+    ]);
+  } catch (error) {
+    await Promise.allSettled([behaviorSupervisor.dispose(), mf.dispose()]);
+    throw error;
+  }
 
-  const fetch = (input: string | URL, init?: MiniflareFetchInit): Promise<MiniflareFetchResponse> => {
+  const fetch = (
+    input: string | URL,
+    init?: MiniflareFetchInit,
+  ): Promise<MiniflareFetchResponse> => {
     const target =
       typeof input === "string" && input.startsWith("http")
         ? input
@@ -122,7 +171,10 @@ export const createLocalGameHost = async (
   return {
     baseUrl,
     signingKey,
-    stop: () => mf.dispose(),
+    stop: async () => {
+      await behaviorSupervisor.dispose();
+      await mf.dispose();
+    },
     fetch,
     websocketConnect,
     triggerRoomAlarm,

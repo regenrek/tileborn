@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -93,6 +94,51 @@ describe("M5 game build artifact contract (BundledManifest map packages)", () =>
     const docWindow = fullText.slice(Math.max(0, workerFilesIndex - 800), workerFilesIndex);
     expect(docWindow).toContain("PRE-EMBED");
     expect(docWindow).toContain("fixed-point");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pin 1b: the bundled development worker has one build owner.
+// ---------------------------------------------------------------------------
+
+const readJson = (relativePath: string): Record<string, unknown> =>
+  JSON.parse(readFileSync(path.join(repoRoot, relativePath), "utf8")) as Record<string, unknown>;
+
+describe("game-host bundled worker build ownership", () => {
+  it("keeps apps/game-host as the only TypeScript output owner for its dist directory", () => {
+    const servicesBuildTsconfig = readJson("packages/services-build/tsconfig.json");
+    const references = servicesBuildTsconfig.references as readonly { readonly path: string }[];
+
+    expect(references.map((reference) => reference.path)).not.toContain("../../apps/game-host");
+  });
+
+  it("prepares the canonical bundled worker before services-build build and test", () => {
+    const servicesBuildPackage = readJson("packages/services-build/package.json");
+    const scripts = servicesBuildPackage.scripts as Record<string, string>;
+
+    expect(scripts["prepare:game-host-worker"]).toBe(
+      "pnpm --filter @tileborne/game-host build",
+    );
+    expect(scripts.prebuild).toBe("pnpm run prepare:game-host-worker");
+    expect(scripts.pretest).toBe(
+      "pnpm run prepare:game-host-worker && tsc -b tsconfig.json --force",
+    );
+  });
+
+  it("declares the workspace typecheck-to-services-build regression sequence", () => {
+    const rootPackage = readJson("package.json");
+    const scripts = rootPackage.scripts as Record<string, string>;
+
+    expect(scripts["test:services-build-hermetic"]).toBe(
+      "pnpm typecheck && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test",
+    );
+  });
+
+  it("keeps bundled-worker verification with the game-host artifact owner", () => {
+    const gameHostPackage = readJson("apps/game-host/package.json");
+    const scripts = gameHostPackage.scripts as Record<string, string>;
+
+    expect(scripts["verify:bundled-worker"]).toBe("node scripts/verify-bundled-worker.mjs");
   });
 });
 

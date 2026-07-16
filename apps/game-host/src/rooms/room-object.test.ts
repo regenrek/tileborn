@@ -2,8 +2,10 @@ import { Effect, Option } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
+import { hashBytes, type BehaviorId } from '@tileborne/core';
 import { decodeMessage, makePluginHost, ServerNotice } from '@tileborne/runtime';
 import type { PluginHostApi, RuntimeMessage, RuntimePlugin } from '@tileborne/runtime';
+import { AuthoritativeBehaviorRuntimeHost } from '@tileborne/runtime/behavior';
 
 import { bundledMapPackages } from '../.generated/bundled-map-packages.js';
 import { mintHandoffToken } from './handoff-token.js';
@@ -102,11 +104,7 @@ const connectPlayer = async (
 
 const connectPlayerViaFetch = connectPlayer;
 
-const readyPlayer = async (
-  room: PlaytestRoom,
-  playerId: string,
-  ready = true,
-): Promise<Response> =>
+const readyPlayer = async (room: PlaytestRoom, playerId: string, ready = true): Promise<Response> =>
   room.fetch(
     new Request('https://do/lobby/ready?roomId=room-1', {
       method: 'POST',
@@ -186,6 +184,14 @@ const encodeBrSnapshotAckFrame = (tick: number, receivedAtMs = 1_000): ArrayBuff
 const queuedInputCount = (room: PlaytestRoom): number =>
   (room as unknown as { readonly inputQueueByPlayerId: { readonly size: number } })
     .inputQueueByPlayerId.size;
+
+const emitPluginFrameForTest = (room: PlaytestRoom, frame: Uint8Array): void => {
+  (
+    room as unknown as {
+      readonly emitPluginFrame: (value: Uint8Array) => void;
+    }
+  ).emitPluginFrame(frame);
+};
 
 describe('PlaytestRoom lifecycle', () => {
   let state: FakeDurableObjectState;
@@ -289,6 +295,50 @@ describe('PlaytestRoom lifecycle', () => {
     stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
     expect(stored?.lifecycle.phase).toBe('active');
     expect(stored?.tick).toBeGreaterThan(0);
+  });
+
+  it('advances packaged behaviors in the authoritative room tick path', async () => {
+    const behaviorId = 'behavior:99999999-9999-4999-8999-999999999999' as BehaviorId;
+    const code = `export default {id:'test.room-tick',sourceKind:'typescript',state:{ticks:0}};`;
+    const behaviorHost = new AuthoritativeBehaviorRuntimeHost();
+    expect(
+      behaviorHost.load({
+        artifact: {
+          behaviorId,
+          sourceKind: 'typescript',
+          modulePath: 'behaviors/modules/room-tick.mjs',
+          hash: hashBytes(new TextEncoder().encode(code)),
+        },
+        code,
+        namespace: {
+          default: {
+            id: 'test.room-tick',
+            sourceKind: 'typescript',
+            state: { ticks: 0 },
+            on: {
+              'runtime.tick': (context: {
+                readonly event: Readonly<Record<string, unknown>>;
+                readonly state: { set(key: string, value: number): unknown };
+              }) => context.state.set('ticks', context.event.tick as number),
+            },
+          },
+        },
+      }),
+    ).toBe(true);
+    const behaviorState = createFakeDurableObjectState();
+    const behaviorRoom = await initRoom(behaviorState, makeEnv(), {
+      createBehaviorRuntime: () => behaviorHost,
+    });
+    await connectPlayer(behaviorRoom, behaviorState, 'room-1', 'player-a');
+    await connectPlayer(behaviorRoom, behaviorState, 'room-1', 'player-b');
+    await readyPlayer(behaviorRoom, 'player-a');
+    await readyPlayer(behaviorRoom, 'player-b');
+    await behaviorRoom.alarm();
+
+    expect(behaviorHost.snapshot.states).toContainEqual({
+      behaviorId,
+      state: { ticks: 1 },
+    });
   });
 
   it('keeps countdown pending until configured countdownSeconds elapses', async () => {
@@ -456,7 +506,9 @@ describe('PlaytestRoom lifecycle', () => {
       }),
     );
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'join code must be 6 characters using A-Z and 2-9, excluding I, O, 0, and 1' });
+    expect(await response.json()).toEqual({
+      error: 'join code must be 6 characters using A-Z and 2-9, excluding I, O, 0, and 1',
+    });
   });
 
   it('caps reserved generated slots to the manifest playerCapacity', async () => {
@@ -605,6 +657,65 @@ describe('PlaytestRoom heartbeat and idle destroy', () => {
 });
 
 describe('PlaytestRoom persistence and recovery', () => {
+  it('freezes the first plugin GameOver into durable results and stops ticks and inputs', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = await initRoom(state, makeEnv());
+    const playerOne = await connectPlayer(room, state, 'room-1', 'player-1');
+    const playerTwo = await connectPlayer(room, state, 'room-1', 'player-2');
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-2')).status).toBe(200);
+
+    await room.alarm();
+    const active = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(active?.lifecycle.phase).toBe('active');
+
+    emitPluginFrameForTest(
+      room,
+      BattleRoyaleProtocol.encodeServerMessage(
+        new BattleRoyaleProtocol.GameOver({
+          winner: BattleRoyaleProtocol.makePlayerId('player-2'),
+        }),
+      ),
+    );
+    await room.alarm();
+
+    const finished = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(finished).toMatchObject({
+      tick: (active?.tick ?? 0) + 1,
+      lastPersistedTick: (active?.tick ?? 0) + 1,
+      lifecycle: { phase: 'finished', reason: 'match complete' },
+      results: {
+        reason: 'match complete',
+        players: [
+          { playerId: 'player-1', outcome: 'completed', placement: 2 },
+          { playerId: 'player-2', outcome: 'completed', placement: 1 },
+        ],
+      },
+    });
+    expect(await state.storage.getAlarm()).toBeNull();
+    for (const socket of [playerOne, playerTwo]) {
+      expect(
+        decodeBattleRoyaleMessages(socket).some((message) => message._tag === 'GameOver'),
+      ).toBe(true);
+    }
+
+    const resultsResponse = await room.fetch(new Request('https://do/results?roomId=room-1'));
+    expect(resultsResponse.status).toBe(200);
+    await expect(resultsResponse.json()).resolves.toMatchObject({
+      roomId: 'room-1',
+      results: { reason: 'match complete' },
+    });
+
+    await room.webSocketMessage(
+      playerOne as WebSocket,
+      encodeBrInputFrame({ tick: finished?.tick ?? 0, seq: 99, dir: 4 }),
+    );
+    expect(queuedInputCount(room)).toBe(0);
+    await room.alarm();
+    expect((await state.storage.get<RoomStorage>(STORAGE_KEY))?.tick).toBe(finished?.tick);
+  });
+
   it('persists state every N ticks', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
@@ -750,9 +861,9 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     if (selectedWelcome?._tag !== 'WelcomeSnapshot') {
       throw new Error('expected BR welcome snapshot for player-1');
     }
-    expect(
-      selectedWelcome.players.find((player) => player.id === 'player-1')?.modelId,
-    ).toBe('maltipoo-max');
+    expect(selectedWelcome.players.find((player) => player.id === 'player-1')?.modelId).toBe(
+      'maltipoo-max',
+    );
 
     const defaultSocket = await connectPlayerViaFetch(room, state, 'room-models', 'player-2');
     const defaultWelcome = decodeBattleRoyaleMessages(defaultSocket)
@@ -761,9 +872,9 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     if (defaultWelcome?._tag !== 'WelcomeSnapshot') {
       throw new Error('expected BR welcome snapshot for player-2');
     }
-    expect(
-      defaultWelcome.players.find((player) => player.id === 'player-2')?.modelId,
-    ).toBe('maltipoo-mae');
+    expect(defaultWelcome.players.find((player) => player.id === 'player-2')?.modelId).toBe(
+      'maltipoo-mae',
+    );
   });
 
   it('sends active late joiners a replay welcome that includes their spawned player', async () => {
@@ -787,9 +898,11 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     // The second joiner spawns at the SECOND spawn point of the generated
     // default package (deterministic spawn assignment) — derive the expected
     // coordinates from the package instead of pinning magic numbers.
-    const packageMap = (bundledMapPackages[0]!.mapPackage as unknown as {
-      map: { objects: readonly { x: number; y: number }[] };
-    }).map;
+    const packageMap = (
+      bundledMapPackages[0]!.mapPackage as unknown as {
+        map: { objects: readonly { x: number; y: number }[] };
+      }
+    ).map;
     const secondSpawn = packageMap.objects[1]!;
     expect(latePlayer).toMatchObject({ id: 'player-2', x: secondSpawn.x, y: secondSpawn.y });
   });

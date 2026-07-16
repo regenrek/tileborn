@@ -96,7 +96,7 @@ export const gameCommand = {
             return {
               outDir: artifact.directory,
               files: artifact.files,
-              manifestHash: artifact.integrityHash,
+              manifestHash: artifact.runtimeBuildId,
               pluginId: artifact.pluginId,
               target: artifact.target,
               bundlePath: artifact.bundlePath,

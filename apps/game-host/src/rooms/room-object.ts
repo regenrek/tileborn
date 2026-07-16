@@ -22,6 +22,10 @@ import {
   type BundledRuntimeInput,
 } from '../bundled-plugin-loader.js';
 import {
+  createWorkerdBehaviorRuntimeClient,
+  type AuthoritativeBehaviorRuntimeClient,
+} from '../behavior-runtime.js';
+import {
   broadcastBinaryFrame,
   createRoomMeta,
   parsePlaytestInitBody,
@@ -49,6 +53,7 @@ import {
   admitPlayerToRoom,
   advanceLifecycleForAlarm,
   archiveRoom,
+  finishRoomFromMatchEnd,
   finishRoomIfEmpty,
   createRoomJoinCode,
   markRoomPlayerDisconnected,
@@ -108,6 +113,10 @@ export interface PlaytestRoomDeps {
   readonly now?: () => number;
   readonly createRuntime?: () => GameRuntimeApi;
   readonly createPluginHost?: (emit: (message: RuntimeMessage) => void) => PluginHostApi;
+  readonly createBehaviorRuntime?: (input: {
+    readonly mapPackage?: JsonObject;
+    readonly seed?: string | number;
+  }) => AuthoritativeBehaviorRuntimeClient;
 }
 
 interface RoomSocketAttachment {
@@ -261,6 +270,7 @@ const websocketUpgradeResponse = (client: WebSocket): Response => {
 export class PlaytestRoom implements DurableObject {
   private storageData: RoomStorage | null = null;
   private runtime: GameRuntimeApi | null = null;
+  private behaviorRuntime: AuthoritativeBehaviorRuntimeClient | null = null;
   private pluginHost: PluginHostApi | null = null;
   private readonly socketByPlayerId = new Map<string, RoomSocketRecord>();
   private readonly inputQueueByPlayerId = new Map<string, QueuedInput<BundledRuntimeInput>>();
@@ -268,6 +278,7 @@ export class PlaytestRoom implements DurableObject {
   private readonly pluginMessages: RuntimeMessage[] = [];
   private readonly pluginBinaryFrames: Uint8Array[] = [];
   private readonly protocolBridge: BundledPluginProtocolBridge;
+  private pendingMatchEnd: { readonly winnerPlayerId: string } | null = null;
   private latestReplayFrames: readonly Uint8Array[] = [];
   private nextInputOrder = 0;
   private tickAlarmScheduled = false;
@@ -338,6 +349,12 @@ export class PlaytestRoom implements DurableObject {
     const copy = new Uint8Array(frame.byteLength);
     copy.set(frame);
     this.pluginBinaryFrames.push(copy);
+    if (this.pendingMatchEnd === null && this.storageData?.lifecycle.phase === 'active') {
+      const lifecycleFrame = this.protocolBridge.decodeServerLifecycleFrame(copy);
+      if (lifecycleFrame?.kind === 'game-over') {
+        this.pendingMatchEnd = { winnerPlayerId: lifecycleFrame.winnerPlayerId };
+      }
+    }
   }
 
   private setReplayFrames(frames: readonly Uint8Array[]): void {
@@ -492,6 +509,16 @@ export class PlaytestRoom implements DurableObject {
     }
     this.legacyEnvelopeEnabled = usingCustomPluginHost;
     await Effect.runPromise(runtime.start());
+    this.behaviorRuntime =
+      this.deps.createBehaviorRuntime?.({
+        ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
+        ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+      }) ??
+      createWorkerdBehaviorRuntimeClient({
+        ...(this.env.BEHAVIOR_RUNTIME === undefined ? {} : { binding: this.env.BEHAVIOR_RUNTIME }),
+        ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
+        ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+      });
     this.runtime = runtime;
     this.pluginHost = pluginHost;
   }
@@ -502,6 +529,7 @@ export class PlaytestRoom implements DurableObject {
     }
     await Effect.runPromise(this.runtime.stop());
     this.runtime = null;
+    this.behaviorRuntime = null;
     this.pluginHost = null;
     this.pluginBinaryFrames.length = 0;
     this.latestReplayFrames = [];
@@ -672,12 +700,7 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     const now = this.nowIso();
-    const next = markRoomPlayerDisconnected(
-      storage,
-      playerId,
-      now,
-      this.reconnectExpiresAt(now),
-    );
+    const next = markRoomPlayerDisconnected(storage, playerId, now, this.reconnectExpiresAt(now));
     await this.writeStorage(next);
     await this.scheduleReconnectExpiryCheck(next);
     const socket = this.socketByPlayerId.get(playerId)?.socket;
@@ -835,8 +858,10 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     if (lifecycleStep.runSimulation) {
-      await this.runSimulationTick();
-      await this.scheduleNextAlarm();
+      const shouldContinue = await this.runSimulationTick();
+      if (shouldContinue) {
+        await this.scheduleNextAlarm();
+      }
       return;
     }
     await this.scheduleReconnectExpiryCheck(lifecycleStep.changed ? lifecycleStep.storage : latest);
@@ -917,14 +942,15 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
-  private async runSimulationTick(): Promise<void> {
+  private async runSimulationTick(): Promise<boolean> {
     const storage = await this.readStorage();
     if (!storage || !this.runtime || storage.lifecycle.phase !== 'active') {
-      return;
+      return false;
     }
     this.drainInputQueueForTick();
     try {
       await Effect.runPromise(this.runtime.step(1));
+      await this.behaviorRuntime?.step(storage.tick + 1);
     } finally {
       this.inputByPlayerId.clear();
     }
@@ -932,7 +958,7 @@ export class PlaytestRoom implements DurableObject {
     const baseTick = tick % PERSIST_EVERY_N_TICKS === 0 ? tick : storage.baseTick;
     const diff = this.buildSnapshotDiff(tick, Object.keys(storage.players).length);
     const shouldPersist = tick % PERSIST_EVERY_N_TICKS === 0;
-    const next: RoomStorage = {
+    const tickStorage: RoomStorage = {
       ...storage,
       tick,
       baseTick,
@@ -944,7 +970,17 @@ export class PlaytestRoom implements DurableObject {
       },
       ...(shouldPersist ? { lastPersistedTick: tick } : {}),
     };
-    if (shouldPersist) {
+    const matchEnd = this.pendingMatchEnd;
+    this.pendingMatchEnd = null;
+    const next =
+      matchEnd === null
+        ? tickStorage
+        : {
+            ...finishRoomFromMatchEnd(tickStorage, this.nowIso(), matchEnd.winnerPlayerId),
+            lastPersistedTick: tick,
+          };
+    const terminal = next.lifecycle.phase === 'finished';
+    if (shouldPersist || terminal) {
       await this.writeStorage(next);
     } else {
       this.storageData = next;
@@ -977,6 +1013,13 @@ export class PlaytestRoom implements DurableObject {
       }
       this.broadcast(new Events({ events: Option.some([{ type: 'tick', tick }]) }));
     }
+    if (terminal) {
+      this.inputQueueByPlayerId.clear();
+      this.inputByPlayerId.clear();
+      this.tickAlarmScheduled = false;
+      await this.state.storage.deleteAlarm();
+    }
+    return !terminal;
   }
 
   private async touchHeartbeat(playerId: string): Promise<void> {
@@ -1185,7 +1228,10 @@ export class PlaytestRoom implements DurableObject {
       try {
         const storage = await this.validateReconnect(input.playerId);
         const roomId = url.searchParams.get('roomId') ?? 'local';
-        return Response.json({ playerId: input.playerId, lobby: this.buildLobbySummary(roomId, storage) });
+        return Response.json({
+          playerId: input.playerId,
+          lobby: this.buildLobbySummary(roomId, storage),
+        });
       } catch (error) {
         if (error instanceof RoomLifecycleRejectedError) {
           return Response.json({ error: error.message }, { status: error.httpStatus });
@@ -1321,6 +1367,14 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     if (decoded.frame.kind === 'input') {
+      const storage = await this.readStorage();
+      if (
+        storage === null ||
+        storage.lifecycle.phase === 'finished' ||
+        storage.lifecycle.phase === 'archived'
+      ) {
+        return;
+      }
       this.enqueueInput(playerId, decoded.frame.input, decoded.frame.sortKey);
       return;
     }

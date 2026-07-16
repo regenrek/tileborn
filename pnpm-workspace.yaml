@@ -4,16 +4,15 @@ packages:
 
 nodeLinker: hoisted
 
-# Release-owner override approved 2026-06-16 for GHSA-gv7w-rqvm-qjhr.
-# Temporarily relax from 7d to 3d so esbuild@0.28.1 can clear pnpm's
-# lockfile verifier; restore to 10080 after 2026-06-19T22:47:05Z.
-minimumReleaseAge: 4320
+# Supply-chain quarantine window for newly published dependencies.
+minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 43200
-# effect v4 beta: provenance-only publish vs v3 trusted-publisher (see c-u9lk); remove when stable >7d.
+# trustPolicyExclude justification: Effect v4 beta changed from v3 trusted-publisher
+# provenance to provenance-only publishing (see c-u9lk); remove when stable for >7 days.
 trustPolicyExclude:
   - effect@4.0.0-beta.70
   - '@effect/vitest@4.0.0-beta.70'
@@ -36,102 +35,6 @@ overrides:
   'vite@7.3.3': 7.3.5
   'vite@8.0.12': 8.0.16
   ws: 8.21.0
-
-# Vitest 4.1.7 pinned for current scaffold; revisit once stable >7d (see plandb c-ebql).
-# Root dev toolchain (eslint/turbo/typescript-eslint) pinned; remove excludes once stable >7d.
-minimumReleaseAgeExclude:
-  - '@turbo/darwin-64@2.9.14'
-  - '@turbo/darwin-arm64@2.9.14'
-  - '@turbo/linux-64@2.9.14'
-  - '@turbo/linux-arm64@2.9.14'
-  - '@turbo/windows-64@2.9.14'
-  - '@turbo/windows-arm64@2.9.14'
-  - '@typescript-eslint/eslint-plugin@8.59.4'
-  - '@typescript-eslint/parser@8.59.4'
-  - '@typescript-eslint/project-service@8.59.4'
-  - '@typescript-eslint/scope-manager@8.59.4'
-  - '@typescript-eslint/tsconfig-utils@8.59.4'
-  - '@typescript-eslint/type-utils@8.59.4'
-  - '@typescript-eslint/types@8.59.4'
-  - '@typescript-eslint/typescript-estree@8.59.4'
-  - '@typescript-eslint/utils@8.59.4'
-  - '@typescript-eslint/visitor-keys@8.59.4'
-  - '@vitest/expect@4.1.7'
-  - '@vitest/mocker@4.1.7'
-  - '@vitest/pretty-format@4.1.7'
-  - '@vitest/runner@4.1.7'
-  - '@vitest/snapshot@4.1.7'
-  - '@vitest/spy@4.1.7'
-  - '@vitest/utils@4.1.7'
-  - eslint@10.4.0
-  - turbo@2.9.14
-  - typescript-eslint@8.59.4
-  - vitest@4.1.7
-  # Desktop scaffold (Vite/React/TanStack/shadcn) — pinned 2026-05-20; remove after >7d stable.
-  - '@tanstack/history@1.162.0'
-  - '@tanstack/query-core@5.100.11'
-  - '@tanstack/query-devtools@5.100.11'
-  - '@tanstack/react-query-devtools@5.100.11'
-  - '@tanstack/react-query@5.100.11'
-  - '@tanstack/react-router-devtools@1.167.0'
-  - '@tanstack/react-router@1.170.5'
-  - '@tanstack/router-core@1.171.3'
-  - '@tanstack/router-devtools-core@1.168.0'
-  - '@tanstack/router-generator@1.167.6'
-  - '@tanstack/router-plugin@1.168.7'
-  - '@tanstack/router-utils@1.162.1'
-  - '@tanstack/virtual-file-routes@1.162.0'
-  # @tileborne/core Effect v4 beta — pinned 2026-05-20; remove after >7d stable.
-  - '@effect/vitest@4.0.0-beta.70'
-  - effect@4.0.0-beta.70
-  # @tileborne/core Effect stack — pinned 2026-05-20; remove after >7d stable.
-  # @tileborne/ui shadcn/base-mira stack — pinned 2026-05-20; remove after >7d stable.
-  - '@base-ui/react@1.4.1'
-  - '@testing-library/jest-dom@6.9.1'
-  - '@testing-library/react@16.3.2'
-  - '@testing-library/user-event@14.6.1'
-  - cmdk@1.1.1
-  - jsdom@29.1.1
-  # Electron Forge desktop scaffold — pinned 2026-05-22; remove after >7d stable.
-  - '@electron-forge/cli@7.11.2'
-  - '@electron-forge/maker-deb@7.11.2'
-  - '@electron-forge/maker-dmg@7.11.2'
-  - '@electron-forge/maker-rpm@7.11.2'
-  - '@electron-forge/maker-squirrel@7.11.2'
-  - '@electron-forge/plugin-vite@7.11.2'
-  - electron@42.2.0
-  # Playwright Electron smoke tests — pinned 2026-05-22; remove after >7d stable.
-  - '@playwright/test@1.60.0'
-  - playwright@1.60.0
-  - playwright-core@1.60.0
-  # @electron-forge/* transitive packages (pinned 2026-05-22 scaffold).
-  - '@electron-forge/core-utils@7.11.2'
-  - '@electron-forge/core@7.11.2'
-  - '@electron-forge/maker-base@7.11.2'
-  - '@electron-forge/plugin-base@7.11.2'
-  - '@electron-forge/publisher-base@7.11.2'
-  - '@electron-forge/shared-types@7.11.2'
-  - '@electron-forge/template-base@7.11.2'
-  - '@electron-forge/template-vite-typescript@7.11.2'
-  - '@electron-forge/template-vite@7.11.2'
-  - '@electron-forge/template-webpack-typescript@7.11.2'
-  - '@electron-forge/template-webpack@7.11.2'
-  - '@electron-forge/tracer@7.11.2'
-  - '@electron/node-gyp@10.2.0-electron.2'
-  - '@electron/rebuild@3.7.2'
-  - consola@3.4.2
-  - citty@0.2.2
-  - lucide-react@0.511.0
-  # @tileborne/game-host Cloudflare scaffold — pinned 2026-05-22; remove after >7d stable.
-  - '@cloudflare/workers-types@4.20250508.0'
-  - esbuild@0.25.5
-  - hono@4.12.18
-  - miniflare@4.20250525.1
-  - wrangler@4.19.1
-  # @tileborne/game-host Alchemy reference example — devDep only, not used at build/test runtime.
-  - alchemy@0.93.7
-  # @tileborne/docs Astro Starlight scaffold — pinned 2026-05-22; remove after >7d stable.
-  - astro@6.3.7
 
 allowBuilds:
   msgpackr-extract: true

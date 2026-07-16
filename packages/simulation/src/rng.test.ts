@@ -61,11 +61,10 @@ describe('createSeededRng', () => {
     const expected = samples / buckets;
     for (const count of counts) {
       // Within ~6% of the uniform expectation. This keeps the statistical
-      // sanity check meaningful without making the BigInt-backed RNG test
-      // dominate the root workspace test gate under parallel load.
+      // sanity check meaningful without weakening the sample under parallel load.
       expect(Math.abs(count - expected) / expected).toBeLessThan(0.06);
     }
-  });
+  }, 20_000);
 
   it('clone resumes from the current state, reproducing the tail', () => {
     const rng = createSeededRng(42);

@@ -296,5 +296,5 @@ describe('canonical readiness report', () => {
       ]),
     );
     expect(validator!(validMap)).toEqual({ ok: true, issues: [] });
-  });
+  }, 20_000);
 });

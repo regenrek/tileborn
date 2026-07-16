@@ -5,9 +5,9 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0-rc.0] - Unreleased
+## [0.0.1] - 2026-07-16
 
-Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 ### Added
 
@@ -50,8 +50,8 @@ prepared for maintainer go/no-go.
 
 #### Changed
 
-- First-party MIT-licensed app and package manifests now use
-  `1.0.0-rc.0` for release-candidate builds.
+- First-party MIT-licensed app and package manifests now use `0.0.1` for
+  source-preview builds.
 - `@tileborne/game-client-app` now declares the monorepo MIT license.
 - Dependency hygiene refreshed for mature patched Playwright, Wrangler, Hono,
   Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core`
@@ -141,4 +141,4 @@ First open-source, local-first release. Focus: editor + SDK tileset pipeline + B
 - Bundled asset loader validates manifest hashes and rejects fetch failures
 
 [0.1.0]: https://github.com/tileborne/tileborne/releases/tag/v0.1.0
-[1.0.0-rc.0]: https://github.com/tileborne/tileborne/compare/v0.1.0...HEAD
+[0.0.1]: https://github.com/regenrek/tileborn/releases/tag/v0.0.1

@@ -79,11 +79,9 @@ describe('desktop release documentation contract', () => {
     expect(baselineStatus.blockers).toHaveLength(7);
   });
 
-  it('keeps the unreleased RC state and all newly introduced local targets resolvable', () => {
-    expect(canonicalSurfaces['CHANGELOG.md']).toMatch(/^## \[1\.0\.0-rc\.0\] - Unreleased$/m);
-    expect(canonicalSurfaces['CHANGELOG.md']).not.toMatch(
-      /^## \[1\.0\.0-rc\.0\] - \d{4}-\d{2}-\d{2}$/m,
-    );
+  it('keeps the dated source-preview state and all newly introduced local targets resolvable', () => {
+    expect(canonicalSurfaces['CHANGELOG.md']).toMatch(/^## \[0\.0\.1\] - 2026-07-16$/m);
+    expect(canonicalSurfaces['CHANGELOG.md']).not.toMatch(/^## \[0\.0\.1\] - Unreleased$/m);
     for (const relativePath of [
       'docs/desktop-release-runbook.md',
       'docs/desktop-release-capability-audit.md',
@@ -304,10 +302,10 @@ Policy identity | Unrelated word
     }
   });
 
-  it('rejects a dated changelog heading', () => {
+  it('rejects an unreleased changelog heading', () => {
     assertMutatedContractFails(
       mutated('CHANGELOG.md', (source) =>
-        source.replace('## [1.0.0-rc.0] - Unreleased', '## [1.0.0-rc.0] - 2026-06-15'),
+        source.replace('## [0.0.1] - 2026-07-16', '## [0.0.1] - Unreleased'),
       ),
       'release-docs.changelog-state-drift',
     );
@@ -318,7 +316,7 @@ Policy identity | Unrelated word
     for (const relativePath of releaseStateSurfacePaths) {
       assertMutatedContractFails(
         mutated(relativePath, (source) =>
-          source.replace(state, state.replace('prepared', 'ready')),
+          source.replace(state, state.replace('source-only', 'binary-ready')),
         ),
         'release-docs.release-state-drift',
       );

@@ -5,7 +5,7 @@ description: Production 1.0 release-candidate checklist, deploy proof, secrets s
 
 # Release Readiness
 
-Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 This page is the maintainer checklist for preparing that candidate.
 
@@ -18,7 +18,7 @@ distribution.
 
 - Node.js 22 and pnpm 11.
 - A clean git tree before final gates.
-- Package manifests prepared for `1.0.0-rc.0` and a matching `CHANGELOG.md`
+- Package manifests prepared for `0.0.1` and a matching `CHANGELOG.md`
   entry plus top-level `RELEASE.md`.
 - No committed `.env` files, API tokens, `HANDOFF_SIGNING_KEY`, `ALCHEMY_PASSWORD`, Wrangler account state, or Cloudflare credentials.
 - No committed Apple signing/notarization keys, `GH_TOKEN`, desktop receipts, project backups, support bundles, or native traces.
@@ -43,12 +43,12 @@ The ship-pipeline integration proves the thin product-repo scaffold, bundled run
 
 ## Version and tag readiness
 
-The Production 1.0 release-candidate package version is `1.0.0-rc.0`.
-MIT-licensed first-party app and package manifests use that version for RC
-builds. Workspace-only private test tools remain unpublishable as
+The source-preview package version is `0.0.1`.
+MIT-licensed first-party app and package manifests use that version.
+Workspace-only private test tools remain unpublishable as
 `0.0.0`/`UNLICENSED`.
 
-The candidate tag is `v1.0.0-rc.0`, but tagging, pushing, GitHub release
+The source-preview tag is `v0.0.1`, but tagging, pushing, GitHub release
 creation, npm publishing, Homebrew publishing, and Cloudflare deployment all
 require explicit maintainer approval. See the root `RELEASE.md` handoff before
 running any publishing or deploy command.

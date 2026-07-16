@@ -3,8 +3,8 @@
 - Status: **audited, desktop distribution is not yet a 1.0 go**
 - Planr owner: `pln-84d4812b` / `i-for-desktop-packaging-per-platfo-06bb`
 - Audit host: macOS 26.4.1 (`Darwin arm64`)
-- Candidate: `@tileborne/desktop@1.0.0-rc.0`
-- Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+- Candidate: `@tileborne/desktop@0.0.1`
+- Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 - Audited source revision: `73bf0c20f6a4c0b0b3a198289e6671f0e3ff4bd5`
 
 This is the durable input to the 1.0 release-contract and documentation work. It audits the
@@ -70,7 +70,7 @@ local evidence and is not a source-controlled release artifact.
    sandboxed launch failed with `EPERM`; that permission failure is not a product failure.
 2. `uname -s -m`, `sw_vers`, `file .../Contents/MacOS/tileborne`, and `plutil` — host is
    macOS 26.4.1 arm64; executable is Mach-O arm64; bundle id is `dev.tileborne.app`; bundle
-   version is `1.0.0-rc.0`.
+   version is `0.0.1`.
 3. `codesign --verify --deep --strict --verbose=4 .../Tileborne.app` — **fail**, resources are
    not sealed as the signature expects. `codesign -dv --verbose=4` reports `Signature=adhoc`,
    `TeamIdentifier=not set`, and `Sealed Resources=none`; `spctl --assess` fails.

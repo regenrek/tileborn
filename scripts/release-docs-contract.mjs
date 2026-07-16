@@ -81,7 +81,7 @@ const expectedBlockerRows = (status) => [
 ];
 
 export const releaseStateSentence = (version) =>
-  `Desktop release state: \`${version}\` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.`;
+  `Release \`${version}\` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.`;
 
 const assertExactLines = (actual, expected, label) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -315,11 +315,11 @@ export function assertReleaseDocumentation({ surfaces, policy, baselineStatus, r
   }
 
   const changelog = surfaces['CHANGELOG.md'];
-  if (!/^## \[1\.0\.0-rc\.0\] - Unreleased$/m.test(changelog)) {
-    fail('release-docs.changelog-state-drift', '1.0.0-rc.0 heading must be Unreleased');
+  if (!/^## \[0\.0\.1\] - 2026-07-16$/m.test(changelog)) {
+    fail('release-docs.changelog-state-drift', '0.0.1 heading must use its release date');
   }
-  if (/^## \[1\.0\.0-rc\.0\] - \d{4}-\d{2}-\d{2}$/m.test(changelog)) {
-    fail('release-docs.changelog-state-drift', '1.0.0-rc.0 must not have a release date');
+  if (/^## \[0\.0\.1\] - Unreleased$/m.test(changelog)) {
+    fail('release-docs.changelog-state-drift', '0.0.1 must not remain Unreleased');
   }
 
   assertExactLines(

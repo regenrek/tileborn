@@ -10,7 +10,7 @@ policy.
 
 ## Current decision
 
-Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 macOS arm64 is the only 1.0 candidate, not a supported release yet. An evidence-free checkout
 deterministically reports:

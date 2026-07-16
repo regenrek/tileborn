@@ -1,6 +1,6 @@
-# Tileborne 1.0 Release Candidate
+# Tileborne 0.0.1 Source Preview
 
-Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 This file is the maintainer handoff for the candidate. No npm publish, Homebrew publish, or
 Cloudflare deploy has happened.
@@ -21,8 +21,8 @@ machine-readable support owner; Forge maker configuration is never evidence.
 
 ## Version Policy
 
-- Release-candidate tag: `v1.0.0-rc.0`.
-- MIT-licensed first-party app and package manifests use `1.0.0-rc.0`.
+- Source-preview tag: `v0.0.1`.
+- MIT-licensed first-party app and package manifests use `0.0.1`.
 - Private workspace-only test tools stay private and unpublishable:
   `@tileborne/boundary-tests` and `@tileborne/test-fixtures` remain
   `0.0.0` with `UNLICENSED`.
@@ -63,10 +63,10 @@ explicit, dated release-owner decision; it is not implied by an older handoff.
 Do not run these without explicit maintainer approval:
 
 ```bash
-git tag -a v1.0.0-rc.0 -m "Tileborne 1.0.0-rc.0"
-git push origin v1.0.0-rc.0
+git tag -a v0.0.1 -m "Tileborne 0.0.1"
+git push origin v0.0.1
 npm publish
-gh release create v1.0.0-rc.0
+gh release create v0.0.1
 wrangler deploy
 ```
 
@@ -128,8 +128,7 @@ only from stable committed inputs.
 
 ## Release Notes
 
-Tileborne `1.0.0-rc.0` prepares the BR vertical for a production release
-candidate decision:
+Tileborne `0.0.1` publishes the BR vertical as a source-only preview:
 
 - Electron desktop editor with committed BR playtest verification.
 - CLI ship pipeline for thin product repos and local-compatible Cloudflare

@@ -24,7 +24,7 @@ entries exist for macOS, Windows, and Linux, but they are not a support claim. D
 candidate only: a signed/notarized macOS arm64 DMG. It remains **NO-GO** until the canonical release
 contract verifies the artifact, provenance, native install/relaunch, project backup, retained-
 installer rollback, explicit publication approval, and active scoped credential.
-Desktop release state: `1.0.0-rc.0` is prepared, unreleased, and **NO-GO**; no tag, release date, publication, or completed release exists.
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 ```sh
 pnpm release:desktop:policy

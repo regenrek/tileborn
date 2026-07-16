@@ -270,14 +270,16 @@ export interface ResolvedPlaytestPlugin {
    * the active mode which cue, if any, should fire for the resolved input
    * intent, then sends that cue through the shared browser runtime audio engine.
    */
-  readonly audio?: {
-    readonly buses: readonly RuntimeAudioBusDefinition[];
-    readonly cues: readonly RuntimeAudioCueDefinition[];
-    readonly cueForIntent: (
-      intent: ResolvedInputIntent,
-      previousIntent: ResolvedInputIntent | undefined,
-    ) => string | undefined;
-  } | undefined;
+  readonly audio?:
+    | {
+        readonly buses: readonly RuntimeAudioBusDefinition[];
+        readonly cues: readonly RuntimeAudioCueDefinition[];
+        readonly cueForIntent: (
+          intent: ResolvedInputIntent,
+          previousIntent: ResolvedInputIntent | undefined,
+        ) => string | undefined;
+      }
+    | undefined;
   /**
    * The plugin's action→intent adapter: maps a neutral `ActionState` into the
    * `{ dir, shoot, reload, interact, drop, abilities, aimDeg, swapSlot }` intent the runtime expects, with
@@ -314,7 +316,9 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
       ? undefined
       : {
           ...(options.playerModels === undefined ? {} : { catalog: options.playerModels.catalog }),
-          ...(options.overlayVisuals === undefined ? {} : { overlays: options.overlayVisuals.catalog }),
+          ...(options.overlayVisuals === undefined
+            ? {}
+            : { overlays: options.overlayVisuals.catalog }),
           ...(weaponCatalog === undefined ? {} : { weapons: weaponCatalog }),
           ...(defaultWeaponId === undefined ? {} : { defaultWeaponId }),
         };

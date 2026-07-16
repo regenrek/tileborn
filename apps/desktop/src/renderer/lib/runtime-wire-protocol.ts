@@ -3,7 +3,10 @@ import { pack, unpack } from 'msgpackr';
 
 const JsonValue = Schema.Json;
 
-export class RuntimeWireHeartbeat extends Schema.TaggedClass<RuntimeWireHeartbeat>()('Heartbeat', {}) {}
+export class RuntimeWireHeartbeat extends Schema.TaggedClass<RuntimeWireHeartbeat>()(
+  'Heartbeat',
+  {},
+) {}
 
 export class RuntimeWireInputCommand extends Schema.TaggedClass<RuntimeWireInputCommand>()(
   'InputCommand',
@@ -21,10 +24,13 @@ export class RuntimeWirePlayerJoined extends Schema.TaggedClass<RuntimeWirePlaye
   },
 ) {}
 
-export class RuntimeWirePlayerLeft extends Schema.TaggedClass<RuntimeWirePlayerLeft>()('PlayerLeft', {
-  playerId: Schema.String,
-  reason: Schema.String,
-}) {}
+export class RuntimeWirePlayerLeft extends Schema.TaggedClass<RuntimeWirePlayerLeft>()(
+  'PlayerLeft',
+  {
+    playerId: Schema.String,
+    reason: Schema.String,
+  },
+) {}
 
 export class RuntimeWireSnapshotDelta extends Schema.TaggedClass<RuntimeWireSnapshotDelta>()(
   'SnapshotDelta',

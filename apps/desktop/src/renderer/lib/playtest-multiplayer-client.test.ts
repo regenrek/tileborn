@@ -17,7 +17,16 @@ class MockWebSocket {
   static instances: MockWebSocket[] = [];
 
   readonly sent: ArrayBuffer[] = [];
-  private readonly listeners = new Map<string, Array<(event: { readonly data?: ArrayBuffer; readonly code?: number; readonly reason?: string }) => void>>();
+  private readonly listeners = new Map<
+    string,
+    Array<
+      (event: {
+        readonly data?: ArrayBuffer;
+        readonly code?: number;
+        readonly reason?: string;
+      }) => void
+    >
+  >();
   readyState = MockWebSocket.OPEN;
   binaryType: BinaryType = 'blob';
 
@@ -36,7 +45,14 @@ class MockWebSocket {
     }
   }
 
-  addEventListener(type: string, listener: (event: { readonly data?: ArrayBuffer; readonly code?: number; readonly reason?: string }) => void): void {
+  addEventListener(
+    type: string,
+    listener: (event: {
+      readonly data?: ArrayBuffer;
+      readonly code?: number;
+      readonly reason?: string;
+    }) => void,
+  ): void {
     const listeners = this.listeners.get(type) ?? [];
     listeners.push(listener);
     this.listeners.set(type, listeners);
@@ -81,7 +97,11 @@ const makePlugin = (views: Record<number, ServerFrameView> = {}): ResolvedPlayte
   encodeSnapshotAckFrame: vi.fn(() => new Uint8Array([4])),
   encodeServerFrame: vi.fn(() => new Uint8Array([3])),
   decodeClientFrameView: () => undefined,
-  inputMap: { id: 'test', actions: [], schemeDefaults: {} } as unknown as ResolvedPlaytestPlugin['inputMap'],
+  inputMap: {
+    id: 'test',
+    actions: [],
+    schemeDefaults: {},
+  } as unknown as ResolvedPlaytestPlugin['inputMap'],
   controlScheme: 'keyboard-mouse' as unknown as ResolvedPlaytestPlugin['controlScheme'],
   inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
   resolveInputIntent: () => ({
@@ -128,7 +148,14 @@ describe('PlaytestMultiplayerClient', () => {
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
     client.connect('ws://localhost/rooms/test/connect', 'player-1');
-    client.sendInput(0, true, { reload: true, interact: true, drop: true, abilities: ['dash'], aimDeg: 90, swapSlot: 2 });
+    client.sendInput(0, true, {
+      reload: true,
+      interact: true,
+      drop: true,
+      abilities: ['dash'],
+      aimDeg: 90,
+      swapSlot: 2,
+    });
 
     expect(plugin.encodeClientInputFrame).toHaveBeenCalledWith({
       tick: 0,
@@ -218,9 +245,7 @@ describe('PlaytestMultiplayerClient', () => {
     expect(onStateChange).toHaveBeenCalledWith(
       expect.objectContaining({ tick: 5, errorMessage: null }),
     );
-    expect(onStateChange).not.toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 'error' }),
-    );
+    expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'error' }));
   });
 
   it('stays connecting for admission frames and becomes live only on a runtime snapshot', () => {
@@ -326,56 +351,53 @@ describe('PlaytestMultiplayerClient', () => {
 
     client.connect('ws://localhost/rooms/test/connect', 'player-1');
     const socket = MockWebSocket.instances[0];
-    socket?.receive(
-      toArrayBuffer(new Uint8Array([1])),
-    );
-    socket?.receive(
-      toArrayBuffer(new Uint8Array([2])),
-    );
-    socket?.receive(
-      toArrayBuffer(new Uint8Array([3])),
-    );
-    socket?.receive(
-      toArrayBuffer(new Uint8Array([4])),
-    );
+    socket?.receive(toArrayBuffer(new Uint8Array([1])));
+    socket?.receive(toArrayBuffer(new Uint8Array([2])));
+    socket?.receive(toArrayBuffer(new Uint8Array([3])));
+    socket?.receive(toArrayBuffer(new Uint8Array([4])));
 
     const latestState = onStateChange.mock.lastCall?.[0];
     expect(latestState).toMatchObject({
       tick: 10,
       players: [{ playerId: 'player-1' }],
-        hud: {
-          totalPlayers: 2,
-          zoneStatus: { phase: 'shrinking' },
-          localPlayer: {
-            team: 'blue',
-            shield: 20,
-            armor: { mitigation: 0.25, durability: 80 },
-            weapon: {
-              weaponId: 'weapon:primary',
-              slot: 2,
-              ammoInMagazine: 1,
-              magazineSize: 3,
-              reserveAmmo: 6,
-              reloadRemainingTicks: 4,
-              reloadTotalTicks: 12,
-            },
-            inventory: { itemIds: ['health-pack'], capacity: 5 },
-            pickupPrompt: { itemKind: 'ammo-box', tier: 'common', action: 'pickup-loot', available: true },
-            pickupToast: { itemKind: 'ammo-box', tier: 'common', quantity: 1, tick: 0 },
-            damageIndicator: { sourceId: 'player-2', angleDeg: 180, amount: 12, tick: 0 },
-            stats: { kills: 1, deaths: 0 },
-            abilityCooldowns: [{ abilityId: 'dash', remainingTicks: 8 }],
+      hud: {
+        totalPlayers: 2,
+        zoneStatus: { phase: 'shrinking' },
+        localPlayer: {
+          team: 'blue',
+          shield: 20,
+          armor: { mitigation: 0.25, durability: 80 },
+          weapon: {
+            weaponId: 'weapon:primary',
+            slot: 2,
+            ammoInMagazine: 1,
+            magazineSize: 3,
+            reserveAmmo: 6,
+            reloadRemainingTicks: 4,
+            reloadTotalTicks: 12,
           },
-          scoreboard: [
-            expect.objectContaining({ playerId: 'player-1', team: 'blue', kills: 1, deaths: 0 }),
+          inventory: { itemIds: ['health-pack'], capacity: 5 },
+          pickupPrompt: {
+            itemKind: 'ammo-box',
+            tier: 'common',
+            action: 'pickup-loot',
+            available: true,
+          },
+          pickupToast: { itemKind: 'ammo-box', tier: 'common', quantity: 1, tick: 0 },
+          damageIndicator: { sourceId: 'player-2', angleDeg: 180, amount: 12, tick: 0 },
+          stats: { kills: 1, deaths: 0 },
+          abilityCooldowns: [{ abilityId: 'dash', remainingTicks: 8 }],
+        },
+        scoreboard: [
+          expect.objectContaining({ playerId: 'player-1', team: 'blue', kills: 1, deaths: 0 }),
+        ],
+        minimap: {
+          objects: [
+            expect.objectContaining({ objectId: 'crate-1', kind: 'pickup', available: true }),
           ],
-          minimap: {
-            objects: [
-              expect.objectContaining({ objectId: 'crate-1', kind: 'pickup', available: true }),
-            ],
-          },
-          gameOver: {
-            winnerId: 'player-1',
+        },
+        gameOver: {
+          winnerId: 'player-1',
           winnerDisplayName: 'Player 1',
           alivePlayers: 1,
           totalPlayers: 2,

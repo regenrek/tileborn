@@ -76,7 +76,12 @@ const clips = () =>
 const model = new PlayerModelRef({
   id: 'model:hero',
   label: 'Hero',
-  ref: new AssetLibraryReference({ packId: PACK_ID, kind: 'sprite', refId: PLACEABLE_ID, clipId: CLIP_ID }),
+  ref: new AssetLibraryReference({
+    packId: PACK_ID,
+    kind: 'sprite',
+    refId: PLACEABLE_ID,
+    clipId: CLIP_ID,
+  }),
   defaultClipId: CLIP_ID,
   clips: clips(),
   anchor: { x: 0.5, y: 1 },
@@ -97,7 +102,11 @@ describe('buildPlayerModelRenderData', () => {
     // entity assetId + frame assetIds + atlas spec id are the same stable id.
     const atlasId = built!.atlases[0]!.renderableAssetId;
     expect(built?.data.assetId).toBe(atlasId);
-    expect(Object.values(built?.data.clips ?? {}).every((clip) => clip.frames.every((f) => f.assetId === atlasId))).toBe(true);
+    expect(
+      Object.values(built?.data.clips ?? {}).every((clip) =>
+        clip.frames.every((f) => f.assetId === atlasId),
+      ),
+    ).toBe(true);
     expect(atlasId).toContain('playermodel:');
   });
 
@@ -114,7 +123,9 @@ describe('buildPlayerModelRenderData', () => {
   });
 
   it('builds render data for every bundled Battle Royale default model', () => {
-    const parsed = parseTilesetManifest(JSON.parse(fs.readFileSync(battleRoyalePackPath, 'utf8')) as unknown);
+    const parsed = parseTilesetManifest(
+      JSON.parse(fs.readFileSync(battleRoyalePackPath, 'utf8')) as unknown,
+    );
     expect(parsed.diagnostics).toEqual([]);
     const pack = parsed.value!;
 

@@ -118,10 +118,7 @@ export const entityWithComponent = (
     ],
   });
 
-export const entityWithoutComponent = (
-  entity: GameObjectType,
-  tag: ComponentTag,
-): GameObjectType =>
+export const entityWithoutComponent = (entity: GameObjectType, tag: ComponentTag): GameObjectType =>
   new GameObjectType({
     ...entity,
     components: entity.components.filter((component) => component._tag !== tag),
@@ -152,7 +149,11 @@ export const defaultComponentForTag = (tag: ComponentTag): GameObjectComponent =
     case 'hazard':
       return new HazardComponent({ data: {} });
     case 'interactable':
-      return new InteractableComponent({ kind: asOpenTag('generic'), radiusPx: 32, parameters: {} });
+      return new InteractableComponent({
+        kind: asOpenTag('generic'),
+        radiusPx: 32,
+        parameters: {},
+      });
     case 'equippable':
       return new EquippableComponent({ slot: asOpenTag('primary') });
     case 'overlay-visual':
@@ -181,7 +182,9 @@ export const visualRefWithPatch = (
 ): VisualRefComponent =>
   new VisualRefComponent({
     placeableId:
-      patch.placeableId === undefined ? visualRef.placeableId : decodePlaceableId(patch.placeableId),
+      patch.placeableId === undefined
+        ? visualRef.placeableId
+        : decodePlaceableId(patch.placeableId),
     assetId: visualRef.assetId,
     width: patch.width ?? visualRef.width,
     height: patch.height ?? visualRef.height,

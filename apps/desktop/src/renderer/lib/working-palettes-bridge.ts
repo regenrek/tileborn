@@ -1,8 +1,4 @@
-import type {
-  AssetLibraryReference,
-  WorkingPalette,
-  WorkingPaletteItem,
-} from '@tileborne/core';
+import type { AssetLibraryReference, WorkingPalette, WorkingPaletteItem } from '@tileborne/core';
 import type {
   AutotileRuleIdType,
   ClipIdType,
@@ -13,10 +9,7 @@ import type {
 
 import type { BrushIntent } from '@/stores/editor-ui-store';
 
-export type {
-  WorkingPalette,
-  WorkingPaletteItem,
-};
+export type { WorkingPalette, WorkingPaletteItem };
 
 export interface WorkingPaletteItemDraft {
   readonly ref: AssetLibraryReference;
@@ -36,13 +29,29 @@ export const workingPaletteItemKey = (item: WorkingPaletteItem): string =>
 export const workingPaletteItemToBrushIntent = (item: WorkingPaletteItem): BrushIntent => {
   switch (item.ref.kind) {
     case 'tile':
-      return { kind: 'tile', packId: item.ref.packId, tileId: (item.ref.tileId ?? item.ref.refId) as TileIdType };
+      return {
+        kind: 'tile',
+        packId: item.ref.packId,
+        tileId: (item.ref.tileId ?? item.ref.refId) as TileIdType,
+      };
     case 'autotile':
-      return { kind: 'autotile', packId: item.ref.packId, ruleId: item.ref.refId as AutotileRuleIdType };
+      return {
+        kind: 'autotile',
+        packId: item.ref.packId,
+        ruleId: item.ref.refId as AutotileRuleIdType,
+      };
     case 'terrain':
-      return { kind: 'terrain', packId: item.ref.packId, classId: item.ref.refId as TerrainClassType };
+      return {
+        kind: 'terrain',
+        packId: item.ref.packId,
+        classId: item.ref.refId as TerrainClassType,
+      };
     case 'placeable':
-      return { kind: 'placeable', packId: item.ref.packId, placeableId: item.ref.refId as PlaceableIdType };
+      return {
+        kind: 'placeable',
+        packId: item.ref.packId,
+        placeableId: item.ref.refId as PlaceableIdType,
+      };
     case 'sprite':
       return {
         kind: 'placeable',
@@ -53,10 +62,7 @@ export const workingPaletteItemToBrushIntent = (item: WorkingPaletteItem): Brush
   }
 };
 
-export const brushIntentMatchesItem = (
-  intent: BrushIntent,
-  item: WorkingPaletteItem,
-): boolean => {
+export const brushIntentMatchesItem = (intent: BrushIntent, item: WorkingPaletteItem): boolean => {
   switch (item.ref.kind) {
     case 'tile':
       return (

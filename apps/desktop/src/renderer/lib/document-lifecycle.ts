@@ -12,13 +12,7 @@ export type DocumentKind =
   | 'game-settings'
   | 'behavior';
 
-export type DocumentStatus =
-  | 'clean'
-  | 'dirty'
-  | 'saving'
-  | 'saved'
-  | 'error'
-  | 'recovery';
+export type DocumentStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'error' | 'recovery';
 
 export interface DocumentLifecycleState {
   readonly id: string;
@@ -144,30 +138,33 @@ export const documentLifecycle = {
     registrations.set(registration.id, registration);
     const recovery = readRecovery(registration.id);
     const previous = states.get(registration.id);
-    states.set(registration.id, recovery === undefined
-      ? previous ?? {
-          id: registration.id,
-          label: registration.label,
-          kind: registration.kind,
-          scopeId: registration.scopeId,
-          status: 'clean',
-          revision: 0,
-          savedRevision: 0,
-          hasRecovery: false,
-        }
-      : {
-          ...(previous ?? {
+    states.set(
+      registration.id,
+      recovery === undefined
+        ? (previous ?? {
             id: registration.id,
+            label: registration.label,
+            kind: registration.kind,
+            scopeId: registration.scopeId,
+            status: 'clean',
+            revision: 0,
             savedRevision: 0,
-          }),
-          label: registration.label,
-          kind: registration.kind,
-          scopeId: registration.scopeId,
-          status: 'recovery',
-          revision: Math.max(previous?.revision ?? 0, recovery.revision),
-          error: undefined,
-          hasRecovery: true,
-        });
+            hasRecovery: false,
+          })
+        : {
+            ...(previous ?? {
+              id: registration.id,
+              savedRevision: 0,
+            }),
+            label: registration.label,
+            kind: registration.kind,
+            scopeId: registration.scopeId,
+            status: 'recovery',
+            revision: Math.max(previous?.revision ?? 0, recovery.revision),
+            error: undefined,
+            hasRecovery: true,
+          },
+    );
     emit();
     return () => {
       // updateRegistration replaces the object captured by this cleanup while the
@@ -301,8 +298,12 @@ export const documentLifecycle = {
   },
 
   hasUnsaved(): boolean {
-    return [...states.values()].some((state) =>
-      state.status === 'dirty' || state.status === 'saving' || state.status === 'error' || state.status === 'recovery',
+    return [...states.values()].some(
+      (state) =>
+        state.status === 'dirty' ||
+        state.status === 'saving' ||
+        state.status === 'error' ||
+        state.status === 'recovery',
     );
   },
 
@@ -318,11 +319,15 @@ export const requestDocumentClose = async (
   confirm: (message: string) => boolean = globalThis.confirm,
 ): Promise<boolean> => {
   const direct = documentLifecycle.get(documentId);
-  const candidates = direct === undefined
-    ? documentLifecycle.list().filter((state) => state.scopeId === documentId)
-    : [direct, ...documentLifecycle.list().filter(
-        (state) => state.id !== documentId && state.scopeId === documentId,
-      )];
+  const candidates =
+    direct === undefined
+      ? documentLifecycle.list().filter((state) => state.scopeId === documentId)
+      : [
+          direct,
+          ...documentLifecycle
+            .list()
+            .filter((state) => state.id !== documentId && state.scopeId === documentId),
+        ];
   for (const state of candidates) {
     if (state.status === 'clean' || state.status === 'saved') continue;
     if (confirm(`Save changes to ${state.label} before closing?`)) {
@@ -350,12 +355,13 @@ export const requestAllDocumentsClose = async (
 export const installGracefulAppClose = (
   bridge: TileborneAppLifecycleBridge = globalThis.window.tileborneAppLifecycle,
   confirm: (message: string) => boolean = globalThis.confirm,
-): (() => void) => bridge.onCloseRequested(({ requestId }) => {
-  void requestAllDocumentsClose(confirm).then(
-    (allow) => bridge.resolveClose({ requestId, allow }),
-    () => bridge.resolveClose({ requestId, allow: false }),
-  );
-});
+): (() => void) =>
+  bridge.onCloseRequested(({ requestId }) => {
+    void requestAllDocumentsClose(confirm).then(
+      (allow) => bridge.resolveClose({ requestId, allow }),
+      () => bridge.resolveClose({ requestId, allow: false }),
+    );
+  });
 
 export const installDocumentBeforeUnload = (): (() => void) => {
   const onBeforeUnload = (event: BeforeUnloadEvent) => {

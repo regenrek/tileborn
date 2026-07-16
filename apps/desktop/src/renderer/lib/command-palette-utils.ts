@@ -10,7 +10,11 @@ export function fuzzyMatchIndices(text: string, query: string): readonly number[
   const lowerQuery = query.trim().toLowerCase();
   const indices: number[] = [];
   let queryIndex = 0;
-  for (let textIndex = 0; textIndex < lowerText.length && queryIndex < lowerQuery.length; textIndex += 1) {
+  for (
+    let textIndex = 0;
+    textIndex < lowerText.length && queryIndex < lowerQuery.length;
+    textIndex += 1
+  ) {
     if (lowerText[textIndex] === lowerQuery[queryIndex]) {
       indices.push(textIndex);
       queryIndex += 1;
@@ -39,7 +43,8 @@ export function highlightFuzzyMatch(text: string, query: string): ReactNode {
           'span',
           {
             key: `match-${index}`,
-            className: 'font-semibold text-primary underline decoration-primary/40 underline-offset-2',
+            className:
+              'font-semibold text-primary underline decoration-primary/40 underline-offset-2',
           },
           char,
         ),

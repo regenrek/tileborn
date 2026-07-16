@@ -9,9 +9,7 @@ export interface BehaviorSourceNavigationTarget {
 
 const STORAGE_KEY = 'tileborne:behavior-source-navigation';
 
-export const requestBehaviorSourceNavigation = (
-  target: BehaviorSourceNavigationTarget,
-): void => {
+export const requestBehaviorSourceNavigation = (target: BehaviorSourceNavigationTarget): void => {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(target));
 };
 
@@ -46,11 +44,7 @@ export const consumeBehaviorSourceNavigation = (
   }
 };
 
-export const sourcePositionOffset = (
-  source: string,
-  line = 1,
-  column = 1,
-): number => {
+export const sourcePositionOffset = (source: string, line = 1, column = 1): number => {
   const lines = source.split('\n');
   const lineIndex = Math.max(0, Math.min(lines.length - 1, line - 1));
   const prefix = lines.slice(0, lineIndex).reduce((length, value) => length + value.length + 1, 0);

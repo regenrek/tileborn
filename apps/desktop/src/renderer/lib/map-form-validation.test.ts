@@ -5,9 +5,7 @@ import { hasMapDimensionErrors, validateMapDimensions } from './map-form-validat
 describe('validateMapDimensions', () => {
   it('accepts positive integer width and height', () => {
     expect(validateMapDimensions({ width: '64', height: '32' })).toEqual({});
-    expect(hasMapDimensionErrors(validateMapDimensions({ width: '64', height: '32' }))).toBe(
-      false,
-    );
+    expect(hasMapDimensionErrors(validateMapDimensions({ width: '64', height: '32' }))).toBe(false);
   });
 
   it('rejects invalid dimensions and seed', () => {

@@ -1,4 +1,8 @@
-import { REQUIRED_PLAYER_MODEL_CLIP_KEYS, makeClipId, type PlayerModelClipKey } from '@tileborne/core';
+import {
+  REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  makeClipId,
+  type PlayerModelClipKey,
+} from '@tileborne/core';
 import { describe, expect, it } from 'vitest';
 
 import type { SpritePickerSelection } from '@/lib/sprite-picker-model';
@@ -34,7 +38,10 @@ describe('player-model safe relink', () => {
   });
 
   it('rejects an incompatible target without returning a partial relink', () => {
-    const result = buildPlayerModelRelink(selection(['idle', 'walk']), REQUIRED_PLAYER_MODEL_CLIP_KEYS);
+    const result = buildPlayerModelRelink(
+      selection(['idle', 'walk']),
+      REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+    );
 
     expect(result.ref).toBeUndefined();
     expect(result.clips).toBeUndefined();

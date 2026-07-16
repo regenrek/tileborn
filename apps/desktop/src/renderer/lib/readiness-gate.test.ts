@@ -44,9 +44,7 @@ describe('readiness gate model', () => {
   it('uses only errors to block while preserving warnings', () => {
     expect(blockingReadinessDiagnostics(report)).toHaveLength(1);
     expect(readinessWarnings(report)).toHaveLength(1);
-    expect(readinessGateMessage(report, 'playtest')).toBe(
-      'Fix 1 readiness error before playtest.',
-    );
+    expect(readinessGateMessage(report, 'playtest')).toBe('Fix 1 readiness error before playtest.');
   });
 
   it('does not treat a missing async report as ready', () => {

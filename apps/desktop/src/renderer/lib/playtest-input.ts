@@ -154,7 +154,11 @@ export const attachPlaytestInputCapture = (
     }
     const rect = container.getBoundingClientRect();
     resolver.apply(
-      new MouseMoveInputEvent({ tick: 0, x: event.clientX - rect.left, y: event.clientY - rect.top }),
+      new MouseMoveInputEvent({
+        tick: 0,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      }),
     );
     pointerMoved = true;
   };

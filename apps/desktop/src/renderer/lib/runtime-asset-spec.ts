@@ -3,11 +3,8 @@ import { Schema } from 'effect';
 
 import { assetProtocolUrl } from '@/lib/asset-url';
 
-export const renderablePackAssetId = (
-  namespace: string,
-  packId: string,
-  assetId: string,
-): string => `${namespace}:${packId}:${assetId}`;
+export const renderablePackAssetId = (namespace: string, packId: string, assetId: string): string =>
+  `${namespace}:${packId}:${assetId}`;
 
 export const loadPackAssetBundledSpec = async (asset: {
   readonly renderableAssetId: string;

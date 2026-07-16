@@ -14,12 +14,18 @@ import {
 const memoryStorage = (): Storage => {
   const values = new Map<string, string>();
   return {
-    get length() { return values.size; },
+    get length() {
+      return values.size;
+    },
     clear: () => values.clear(),
     getItem: (key) => values.get(key) ?? null,
     key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => { values.delete(key); },
-    setItem: (key, value) => { values.set(key, value); },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
   };
 };
 
@@ -64,16 +70,31 @@ describe('document lifecycle', () => {
     const discard = vi.fn();
     documentLifecycle.register(registration({ save, discard }));
     documentLifecycle.markDirty('map:project-1:map-1');
-    expect(await requestDocumentClose('map:project-1:map-1', vi.fn(() => true))).toBe(true);
+    expect(
+      await requestDocumentClose(
+        'map:project-1:map-1',
+        vi.fn(() => true),
+      ),
+    ).toBe(true);
     expect(save).toHaveBeenCalledOnce();
 
     documentLifecycle.markDirty('map:project-1:map-1');
     const discardAnswers = [false, true];
-    expect(await requestDocumentClose('map:project-1:map-1', vi.fn(() => discardAnswers.shift()!))).toBe(true);
+    expect(
+      await requestDocumentClose(
+        'map:project-1:map-1',
+        vi.fn(() => discardAnswers.shift()!),
+      ),
+    ).toBe(true);
     expect(discard).toHaveBeenCalledOnce();
 
     documentLifecycle.markDirty('map:project-1:map-1');
-    expect(await requestDocumentClose('map:project-1:map-1', vi.fn(() => false))).toBe(false);
+    expect(
+      await requestDocumentClose(
+        'map:project-1:map-1',
+        vi.fn(() => false),
+      ),
+    ).toBe(false);
     expect(documentLifecycle.get('map:project-1:map-1')?.status).toBe('dirty');
   });
 
@@ -99,20 +120,24 @@ describe('document lifecycle', () => {
 
   it('rehydrates recovery when navigating away and back without resetting the process registry', async () => {
     const recover = vi.fn();
-    const first = renderHook(() => useDocumentLifecycle({
-      ...registration(),
-      dirty: true,
-      recoveryVersion: 'draft-v1',
-      snapshot: () => ({ title: 'same-process draft' }),
-    }));
+    const first = renderHook(() =>
+      useDocumentLifecycle({
+        ...registration(),
+        dirty: true,
+        recoveryVersion: 'draft-v1',
+        snapshot: () => ({ title: 'same-process draft' }),
+      }),
+    );
     await waitFor(() => expect(documentLifecycle.get('map:project-1:map-1')?.status).toBe('dirty'));
     first.unmount();
 
-    const remounted = renderHook(() => useDocumentLifecycle({
-      ...registration({ recover }),
-      dirty: false,
-      recoveryVersion: 'durable-v1',
-    }));
+    const remounted = renderHook(() =>
+      useDocumentLifecycle({
+        ...registration({ recover }),
+        dirty: false,
+        recoveryVersion: 'durable-v1',
+      }),
+    );
     await waitFor(() => expect(recover).toHaveBeenCalledWith({ title: 'same-process draft' }));
     expect(documentLifecycle.get('map:project-1:map-1')).toMatchObject({
       status: 'dirty',
@@ -122,12 +147,16 @@ describe('document lifecycle', () => {
   });
 
   it('persists the latest snapshot across multiple dirty edits', async () => {
-    const first = renderHook(({ draft }) => useDocumentLifecycle({
-      ...registration(),
-      dirty: true,
-      recoveryVersion: draft,
-      snapshot: () => ({ title: draft }),
-    }), { initialProps: { draft: 'draft-v1' } });
+    const first = renderHook(
+      ({ draft }) =>
+        useDocumentLifecycle({
+          ...registration(),
+          dirty: true,
+          recoveryVersion: draft,
+          snapshot: () => ({ title: draft }),
+        }),
+      { initialProps: { draft: 'draft-v1' } },
+    );
     await waitFor(() => expect(documentLifecycle.get('map:project-1:map-1')?.revision).toBe(1));
     first.rerender({ draft: 'draft-v2' });
     await waitFor(() => expect(documentLifecycle.get('map:project-1:map-1')?.revision).toBe(2));
@@ -146,19 +175,24 @@ describe('document lifecycle', () => {
     documentLifecycle.markDirty('map:project-1:map-1');
     let onCloseRequested: ((request: { requestId: string }) => void) | undefined;
     const resolveClose = vi.fn();
-    const uninstall = installGracefulAppClose({
-      onCloseRequested: (handler) => {
-        onCloseRequested = handler;
-        return vi.fn();
+    const uninstall = installGracefulAppClose(
+      {
+        onCloseRequested: (handler) => {
+          onCloseRequested = handler;
+          return vi.fn();
+        },
+        resolveClose,
       },
-      resolveClose,
-    }, vi.fn(() => true));
+      vi.fn(() => true),
+    );
 
     onCloseRequested?.({ requestId: 'close-1' });
-    await vi.waitFor(() => expect(resolveClose).toHaveBeenCalledWith({
-      requestId: 'close-1',
-      allow: false,
-    }));
+    await vi.waitFor(() =>
+      expect(resolveClose).toHaveBeenCalledWith({
+        requestId: 'close-1',
+        allow: false,
+      }),
+    );
     expect(documentLifecycle.get('map:project-1:map-1')).toMatchObject({
       status: 'error',
       error: 'read only disk',

@@ -35,9 +35,7 @@ class MemoryStorage implements Storage {
 const overlayMovingMinimapTo = (anchor: string): HudLayout =>
   Schema.decodeUnknownSync(HudLayout)({
     id: 'user-hud',
-    widgets: [
-      { id: 'minimap', kind: CORE_HUD_WIDGETS.Minimap, anchor, order: 0, enabled: true },
-    ],
+    widgets: [{ id: 'minimap', kind: CORE_HUD_WIDGETS.Minimap, anchor, order: 0, enabled: true }],
   });
 
 describe('playtest-user-hud persistence', () => {

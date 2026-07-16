@@ -81,7 +81,9 @@ const handAnchorFor = (
   return x === undefined || y === undefined ? undefined : { x, y };
 };
 
-const clipSetFor = (placeable: NonNullable<TilesetPack['placeables']>[number]): PlayerModelClipSet | undefined => {
+const clipSetFor = (
+  placeable: NonNullable<TilesetPack['placeables']>[number],
+): PlayerModelClipSet | undefined => {
   const byName = new Map(
     (placeable.clips ?? []).map((clip) => [clip.name.trim().toLowerCase(), clip.id as ClipId]),
   );

@@ -43,9 +43,8 @@ export const findCollisionFootprint = (
  * tooling and are surfaced read-only (re-derive at the source, never hand-tweak
  * a single instance).
  */
-export const footprintAllowsInstanceAdjust = (
-  footprint: CollisionFootprintComponent,
-): boolean => footprint.source === 'manual';
+export const footprintAllowsInstanceAdjust = (footprint: CollisionFootprintComponent): boolean =>
+  footprint.source === 'manual';
 
 export {
   COLLISION_FOOTPRINT_OFFSET_PROPERTY_KEY,

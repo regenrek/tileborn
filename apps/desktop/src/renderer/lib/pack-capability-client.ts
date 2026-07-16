@@ -44,7 +44,5 @@ export function pickPaintablePackId(
       return preferredPackId;
     }
   }
-  return installedPacks.find(
-    (pack) => capabilities.get(pack.id)?.paintable === true,
-  )?.id;
+  return installedPacks.find((pack) => capabilities.get(pack.id)?.paintable === true)?.id;
 }

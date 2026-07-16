@@ -14,10 +14,7 @@ const toContractTransport = (transport: TileborneIpcTransport): IpcClientTranspo
     Effect.tryPromise({
       try: () => transport.invoke(channel, payload),
       catch: (error) => error,
-    }) as IpcClientTransport['invoke'] extends (
-      channel: string,
-      payload: unknown,
-    ) => infer Result
+    }) as IpcClientTransport['invoke'] extends (channel: string, payload: unknown) => infer Result
       ? Result
       : never,
   subscribe: (channel, onPayload) => transport.subscribe(channel, onPayload),

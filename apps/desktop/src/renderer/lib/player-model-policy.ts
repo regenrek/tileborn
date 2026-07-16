@@ -27,14 +27,21 @@ export interface PlayerModelPolicyContribution {
   readonly pluginId: string;
   readonly mode: PlayerModelPolicyMode;
   readonly requiredClipKeys?: readonly PlayerModelClipKey[] | undefined;
-  readonly defaultGeometry?: {
-    readonly anchor: { readonly x: number; readonly y: number };
-    /** Model-local "hand" attachment anchor where equipped entities mount (ADR-0028). */
-    readonly hand: { readonly x: number; readonly y: number };
-    readonly hitbox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
-    readonly renderScale?: number | undefined;
-    readonly worldSize?: { readonly width: number; readonly height: number } | undefined;
-  } | undefined;
+  readonly defaultGeometry?:
+    | {
+        readonly anchor: { readonly x: number; readonly y: number };
+        /** Model-local "hand" attachment anchor where equipped entities mount (ADR-0028). */
+        readonly hand: { readonly x: number; readonly y: number };
+        readonly hitbox: {
+          readonly x: number;
+          readonly y: number;
+          readonly width: number;
+          readonly height: number;
+        };
+        readonly renderScale?: number | undefined;
+        readonly worldSize?: { readonly width: number; readonly height: number } | undefined;
+      }
+    | undefined;
   readonly placeholderModelIds?: readonly string[] | undefined;
   /**
    * Resolves the declared models for the given context. For `fixed` policies

@@ -39,10 +39,7 @@ const requiredClips = () =>
     defaultDurationMs: 100,
   }));
 
-const pack = (
-  properties: Record<string, unknown>,
-  clips = requiredClips(),
-): TilesetPack =>
+const pack = (properties: Record<string, unknown>, clips = requiredClips()): TilesetPack =>
   ({
     id: PACK_ID as string,
     assets: [{ id: 'asset:atlas', path: 'atlases/hero.png', mime: 'image/png' }],

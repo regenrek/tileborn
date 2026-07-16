@@ -2,22 +2,22 @@ import type { ResolvedEntityVisual } from '@tileborne/core';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
 
 import type { SpriteVisualRenderData } from '@/lib/playtest-plugin-bridge';
-import {
-  buildPlaceableAnimation,
-  type PlaceableAtlasRef,
-} from '@/lib/placeable-animation';
+import { buildPlaceableAnimation, type PlaceableAtlasRef } from '@/lib/placeable-animation';
 
 const entityAnchors = (
   visual: ResolvedEntityVisual,
 ): SpriteVisualRenderData['anchors'] | undefined => {
-  const entries = Object.entries(visual.anchors).map(([name, anchor]) => [
-    name,
-    {
-      point: { x: anchor.point.x, y: anchor.point.y },
-      rotationDeg: anchor.rotationDeg,
-      zOffset: anchor.zOffset,
-    },
-  ] as const);
+  const entries = Object.entries(visual.anchors).map(
+    ([name, anchor]) =>
+      [
+        name,
+        {
+          point: { x: anchor.point.x, y: anchor.point.y },
+          rotationDeg: anchor.rotationDeg,
+          zOffset: anchor.zOffset,
+        },
+      ] as const,
+  );
   return entries.length === 0 ? undefined : Object.fromEntries(entries);
 };
 
@@ -33,13 +33,21 @@ export const buildEntityVisualRenderData = (
   packs: ReadonlyMap<string, TilesetPack>,
   visual: ResolvedEntityVisual,
   namespace: string,
-): { readonly data: SpriteVisualRenderData; readonly atlases: readonly PlaceableAtlasRef[] } | undefined => {
+):
+  | { readonly data: SpriteVisualRenderData; readonly atlases: readonly PlaceableAtlasRef[] }
+  | undefined => {
   const placeableId = visual.placeableId;
   if (placeableId === undefined) {
     return undefined;
   }
   for (const [packId, pack] of packs) {
-    const animation = buildPlaceableAnimation(pack, packId, String(placeableId), undefined, namespace);
+    const animation = buildPlaceableAnimation(
+      pack,
+      packId,
+      String(placeableId),
+      undefined,
+      namespace,
+    );
     if (animation === undefined) {
       continue;
     }

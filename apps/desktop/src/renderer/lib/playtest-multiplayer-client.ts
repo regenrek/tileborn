@@ -1,7 +1,4 @@
-import {
-  decodeMessage as decodeRuntimeMessage,
-  type RuntimeMessage,
-} from '@tileborne/runtime';
+import { decodeMessage as decodeRuntimeMessage, type RuntimeMessage } from '@tileborne/runtime';
 import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
 import {
   GameplayEntityDefeated,
@@ -104,7 +101,9 @@ const toInitialFrame = (
       ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
       ...(player.stats === undefined ? {} : { stats: player.stats }),
       ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
-      ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: player.abilityCooldowns }),
+      ...(player.abilityCooldowns === undefined
+        ? {}
+        : { abilityCooldowns: player.abilityCooldowns }),
     })),
     zone,
   });
@@ -203,31 +202,37 @@ export class PlaytestMultiplayerClient {
         kills: player.stats?.kills ?? 0,
         deaths: player.stats?.deaths ?? 0,
       }))
-      .sort((left, right) => right.kills - left.kills || left.playerId.localeCompare(right.playerId));
+      .sort(
+        (left, right) => right.kills - left.kills || left.playerId.localeCompare(right.playerId),
+      );
     const minimapObjects: MinimapObject[] = [...this.objects.values()]
       .flatMap((object): MinimapObject[] => {
         if (object.hazard?.enabled) {
           return [{ objectId: object.objectId, x: object.x, y: object.y, kind: 'hazard' as const }];
         }
         if (object.pickup !== undefined) {
-          return [{
-            objectId: object.objectId,
-            x: object.x,
-            y: object.y,
-            kind: 'pickup' as const,
-            tier: object.pickup.tier,
-            available: object.pickup.available,
-          }];
+          return [
+            {
+              objectId: object.objectId,
+              x: object.x,
+              y: object.y,
+              kind: 'pickup' as const,
+              tier: object.pickup.tier,
+              available: object.pickup.available,
+            },
+          ];
         }
         if (object.lootSource !== undefined) {
-          return [{
-            objectId: object.objectId,
-            x: object.x,
-            y: object.y,
-            kind: 'loot' as const,
-            tier: object.lootSource.tier,
-            available: !object.lootSource.collected,
-          }];
+          return [
+            {
+              objectId: object.objectId,
+              x: object.x,
+              y: object.y,
+              kind: 'loot' as const,
+              tier: object.lootSource.tier,
+              available: !object.lootSource.collected,
+            },
+          ];
         }
         return [];
       })
@@ -257,12 +262,22 @@ export class PlaytestMultiplayerClient {
               ...(localPlayer.armor === undefined ? {} : { armor: localPlayer.armor }),
               ...(localPlayer.weapon === undefined ? {} : { weapon: localPlayer.weapon }),
               ...(localPlayer.inventory === undefined ? {} : { inventory: localPlayer.inventory }),
-              ...(localPlayer.pickupPrompt === undefined ? {} : { pickupPrompt: localPlayer.pickupPrompt }),
-              ...(localPlayer.pickupToast === undefined ? {} : { pickupToast: localPlayer.pickupToast }),
-              ...(localPlayer.damageIndicator === undefined ? {} : { damageIndicator: localPlayer.damageIndicator }),
+              ...(localPlayer.pickupPrompt === undefined
+                ? {}
+                : { pickupPrompt: localPlayer.pickupPrompt }),
+              ...(localPlayer.pickupToast === undefined
+                ? {}
+                : { pickupToast: localPlayer.pickupToast }),
+              ...(localPlayer.damageIndicator === undefined
+                ? {}
+                : { damageIndicator: localPlayer.damageIndicator }),
               ...(localPlayer.stats === undefined ? {} : { stats: localPlayer.stats }),
-              ...(localPlayer.statusEffects === undefined ? {} : { statusEffects: localPlayer.statusEffects }),
-              ...(localPlayer.abilityCooldowns === undefined ? {} : { abilityCooldowns: localPlayer.abilityCooldowns }),
+              ...(localPlayer.statusEffects === undefined
+                ? {}
+                : { statusEffects: localPlayer.statusEffects }),
+              ...(localPlayer.abilityCooldowns === undefined
+                ? {}
+                : { abilityCooldowns: localPlayer.abilityCooldowns }),
             },
           }
         : {}),
@@ -305,12 +320,14 @@ export class PlaytestMultiplayerClient {
       return;
     }
     this.seenPickupToastKeys.add(key);
-    this.pushGameplayEvent(new GameplayItemGranted({
-      targetId: makeGameplayEntityId(localPlayer.playerId),
-      itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
-      quantity: pickupToast.quantity,
-      tick: pickupToast.tick,
-    }));
+    this.pushGameplayEvent(
+      new GameplayItemGranted({
+        targetId: makeGameplayEntityId(localPlayer.playerId),
+        itemId: makeGameplayItemId(`${pickupToast.itemKind}:${pickupToast.tier}`),
+        quantity: pickupToast.quantity,
+        tick: pickupToast.tick,
+      }),
+    );
   }
 
   private emitState(): void {
@@ -374,10 +391,14 @@ export class PlaytestMultiplayerClient {
           ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
           ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
           ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
-          ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
+          ...(player.damageIndicator === undefined
+            ? {}
+            : { damageIndicator: player.damageIndicator }),
           ...(player.stats === undefined ? {} : { stats: player.stats }),
           ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
-          ...(player.abilityCooldowns === undefined ? {} : { abilityCooldowns: player.abilityCooldowns }),
+          ...(player.abilityCooldowns === undefined
+            ? {}
+            : { abilityCooldowns: player.abilityCooldowns }),
         });
       }
       this.objects.clear();
@@ -483,11 +504,13 @@ export class PlaytestMultiplayerClient {
       return;
     }
     if (message.kind === 'killed') {
-      this.pushGameplayEvent(new GameplayEntityDefeated({
-        targetId: makeGameplayEntityId(message.victim),
-        sourceId: makeGameplayEntityId(message.killer),
-        tick: message.tick,
-      }));
+      this.pushGameplayEvent(
+        new GameplayEntityDefeated({
+          targetId: makeGameplayEntityId(message.victim),
+          sourceId: makeGameplayEntityId(message.killer),
+          tick: message.tick,
+        }),
+      );
       this.emitState();
       return;
     }
@@ -500,11 +523,13 @@ export class PlaytestMultiplayerClient {
         totalPlayers: Math.max(this.maxPlayersSeen, this.players.size),
         tickCount: this.tick,
       };
-      this.pushGameplayEvent(new GameplayMatchPhaseChanged({
-        tick: this.gameOver.tickCount,
-        phase: 'finished',
-        winnerId: makeGameplayEntityId(message.winner),
-      }));
+      this.pushGameplayEvent(
+        new GameplayMatchPhaseChanged({
+          tick: this.gameOver.tickCount,
+          phase: 'finished',
+          winnerId: makeGameplayEntityId(message.winner),
+        }),
+      );
       this.emitState();
     }
   }

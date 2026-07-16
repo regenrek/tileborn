@@ -53,13 +53,12 @@ const resolveRendererConfig = async (): Promise<UserConfig> => {
 
 describe('Base UI renderer dependency boundary', () => {
   it('loads the Base UI entries and CJS shims used by the renderer graph', async () => {
-    const [tileborneUi, baseUiDialog, syncExternalStoreShim, selectorShim] =
-      await Promise.all([
-        importModule('@tileborne/ui'),
-        importModule('@base-ui/react/dialog'),
-        importModule('use-sync-external-store/shim'),
-        importModule('use-sync-external-store/shim/with-selector'),
-      ]);
+    const [tileborneUi, baseUiDialog, syncExternalStoreShim, selectorShim] = await Promise.all([
+      importModule('@tileborne/ui'),
+      importModule('@base-ui/react/dialog'),
+      importModule('use-sync-external-store/shim'),
+      importModule('use-sync-external-store/shim/with-selector'),
+    ]);
 
     const dialog = baseUiDialog.Dialog as { Root?: unknown } | undefined;
 

@@ -2,7 +2,11 @@ import type {
   LibraryPreviewIndex as SdkLibraryPreviewIndex,
   LibraryPreviewRef as SdkLibraryPreviewRef,
 } from '@tileborne/sdk-tileset/renderer';
-import type { AssetLibraryReference, AssetLibraryGroup, AssetLibraryGroupKind } from '@tileborne/core';
+import type {
+  AssetLibraryReference,
+  AssetLibraryGroup,
+  AssetLibraryGroupKind,
+} from '@tileborne/core';
 
 import type { WorkingPaletteItemDraft } from '@/lib/working-palettes-bridge';
 

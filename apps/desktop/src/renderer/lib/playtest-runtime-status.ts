@@ -12,12 +12,7 @@ export interface PlaytestRuntimeStatusMetrics {
   readonly hud?: PlaytestHudState | undefined;
 }
 
-export type PlaytestConnectionStatus =
-  | 'idle'
-  | 'connecting'
-  | 'live'
-  | 'error'
-  | 'disconnected';
+export type PlaytestConnectionStatus = 'idle' | 'connecting' | 'live' | 'error' | 'disconnected';
 
 export interface PlaytestSessionConnectionInput {
   readonly status: 'Starting' | 'Running' | 'Stopped';

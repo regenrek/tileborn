@@ -9,10 +9,10 @@ export interface CreatorReadinessStep {
 
 const statusFor = (diagnostics: readonly ReadinessDiagnostic[]) =>
   diagnostics.some((entry) => entry.severity === 'error')
-    ? 'blocked' as const
+    ? ('blocked' as const)
     : diagnostics.some((entry) => entry.severity === 'warning')
-      ? 'warning' as const
-      : 'complete' as const;
+      ? ('warning' as const)
+      : ('complete' as const);
 
 export const buildCreatorReadinessChecklist = (
   report: ReadinessReport,
@@ -38,9 +38,7 @@ export const buildCreatorReadinessChecklist = (
     step('gameplay', 'Resolve gameplay catalog references', ['catalog']),
     step('visuals', 'Prepare assets and player visuals', ['asset', 'visual-model']),
   ];
-  const factSteps = modeFacts.map((fact) =>
-    step(`mode-fact:${fact.id}`, fact.label, fact.sources),
-  );
+  const factSteps = modeFacts.map((fact) => step(`mode-fact:${fact.id}`, fact.label, fact.sources));
   return [
     ...coreSteps,
     ...factSteps,

@@ -35,7 +35,10 @@ export const buildPlaceableAnimation = (
     return undefined;
   }
   const assetById = new Map<string, { readonly path: string; readonly mime: string }>(
-    pack.assets.map((asset) => [String(asset.id), { path: asset.path, mime: asset.mime ?? 'image/png' }]),
+    pack.assets.map((asset) => [
+      String(asset.id),
+      { path: asset.path, mime: asset.mime ?? 'image/png' },
+    ]),
   );
   const atlases = new Map<string, PlaceableAtlasRef>();
   const clip =
@@ -76,6 +79,5 @@ export const buildPlaceableAnimation = (
   };
 };
 
-export const loadPlaceableAtlasSpec = async (
-  atlas: PlaceableAtlasRef,
-): Promise<BundledAssetSpec> => loadPackAssetBundledSpec(atlas);
+export const loadPlaceableAtlasSpec = async (atlas: PlaceableAtlasRef): Promise<BundledAssetSpec> =>
+  loadPackAssetBundledSpec(atlas);

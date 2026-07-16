@@ -44,9 +44,7 @@ const humanise = (key: string): string => {
  */
 export type InstanceOverrideValues = Record<string, number>;
 
-const numericDefaults = (
-  objectType: GameObjectType,
-): readonly (readonly [string, number])[] =>
+const numericDefaults = (objectType: GameObjectType): readonly (readonly [string, number])[] =>
   Object.entries(objectType.instanceDefaults).filter(
     (entry): entry is [string, number] => typeof entry[1] === 'number',
   );
@@ -135,9 +133,7 @@ export interface LootBindingValue {
 }
 
 /** Find an object type's loot-source component, if any (the binding's source). */
-export const findLootSource = (
-  objectType: GameObjectType,
-): LootSourceComponent | undefined =>
+export const findLootSource = (objectType: GameObjectType): LootSourceComponent | undefined =>
   objectType.components.find(
     (component): component is LootSourceComponent => component._tag === 'loot-source',
   );

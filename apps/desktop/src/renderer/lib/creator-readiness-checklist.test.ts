@@ -12,12 +12,22 @@ describe('creator readiness checklist', () => {
       purpose: 'authoring',
       diagnostics: [
         new ReadinessDiagnostic({
-          id: 'map-error', code: 'map.error', severity: 'error', source: 'map',
-          title: 'Map', message: 'Fix map', projectId,
+          id: 'map-error',
+          code: 'map.error',
+          severity: 'error',
+          source: 'map',
+          title: 'Map',
+          message: 'Fix map',
+          projectId,
         }),
         new ReadinessDiagnostic({
-          id: 'asset-warning', code: 'asset.warning', severity: 'warning', source: 'asset',
-          title: 'Asset', message: 'Check asset', projectId,
+          id: 'asset-warning',
+          code: 'asset.warning',
+          severity: 'warning',
+          source: 'asset',
+          title: 'Asset',
+          message: 'Check asset',
+          projectId,
         }),
       ],
     });
@@ -27,6 +37,8 @@ describe('creator readiness checklist', () => {
     expect(checklist.find((entry) => entry.id === 'world')?.status).toBe('blocked');
     expect(checklist.find((entry) => entry.id === 'visuals')?.status).toBe('warning');
     expect(checklist.find((entry) => entry.id === 'ready')?.status).toBe('blocked');
-    expect(checklist.find((entry) => entry.id === 'mode-fact:spawn-layout')?.status).toBe('blocked');
+    expect(checklist.find((entry) => entry.id === 'mode-fact:spawn-layout')?.status).toBe(
+      'blocked',
+    );
   });
 });

@@ -2,19 +2,17 @@ import type { TileborneMap } from '@tileborne/core';
 import type { CatalogValidationIssue } from '@tileborne/ipc-contracts';
 import { describe, expect, it } from 'vitest';
 
-import {
-  groupValidationIssues,
-  resolveValidationNavigation,
-} from '@/lib/catalog-validation';
+import { groupValidationIssues, resolveValidationNavigation } from '@/lib/catalog-validation';
 
-const issue = (input: Partial<CatalogValidationIssue> & Pick<CatalogValidationIssue, 'kind' | 'message'>) =>
-  input as CatalogValidationIssue;
+const issue = (
+  input: Partial<CatalogValidationIssue> & Pick<CatalogValidationIssue, 'kind' | 'message'>,
+) => input as CatalogValidationIssue;
 
 const TYPE_A = 'gameObjectType:aaaa' as CatalogValidationIssue['objectTypeId'];
 const TYPE_B = 'gameObjectType:bbbb' as CatalogValidationIssue['objectTypeId'];
 
 const mapWith = (objects: readonly { id: string; kind: string }[]): TileborneMap =>
-  ({ objects } as unknown as TileborneMap);
+  ({ objects }) as unknown as TileborneMap;
 
 describe('groupValidationIssues', () => {
   it('buckets issues by kind in the canonical order, only emitting non-empty groups', () => {

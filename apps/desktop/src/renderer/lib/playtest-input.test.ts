@@ -29,7 +29,11 @@ const primaryActionOverlay = (code: string): InputMap =>
     actions: [{ action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' }],
     schemeDefaults: {
       'keyboard-mouse': [
-        { _tag: 'InputBinding', action: CORE_ACTIONS.PrimaryAction, trigger: { _tag: 'key', code } },
+        {
+          _tag: 'InputBinding',
+          action: CORE_ACTIONS.PrimaryAction,
+          trigger: { _tag: 'key', code },
+        },
       ],
     },
   });
@@ -211,7 +215,10 @@ describe('attachPlaytestInputCapture (user remap overlay applied — ADR-0024 he
     // The persisted overlay rebinds PrimaryAction Space→KeyF; the effective map is
     // pluginDefault ⊕ overlay. The resolver must now fire shoot on KeyF and ignore
     // the old Space binding entirely.
-    const effective = resolveEffectiveInputMap(battleRoyaleDefaultInputMap(), primaryActionOverlay('KeyF'));
+    const effective = resolveEffectiveInputMap(
+      battleRoyaleDefaultInputMap(),
+      primaryActionOverlay('KeyF'),
+    );
     const { intents } = attachWithMap(effective);
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
@@ -231,7 +238,10 @@ describe('attachPlaytestInputCapture (user remap overlay applied — ADR-0024 he
     expect(intents.at(-1)?.shoot).toBe(true);
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
 
-    const effective = resolveEffectiveInputMap(battleRoyaleDefaultInputMap(), primaryActionOverlay('KeyF'));
+    const effective = resolveEffectiveInputMap(
+      battleRoyaleDefaultInputMap(),
+      primaryActionOverlay('KeyF'),
+    );
     handle?.setEffectiveMap(effective);
 
     // Space no longer fires; the rebound KeyF does — proving the swap re-derived

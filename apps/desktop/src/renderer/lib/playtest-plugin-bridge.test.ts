@@ -68,7 +68,9 @@ describe('playtest-plugin-bridge', () => {
     const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
     const registered = new Set(plugin?.bundledAssets.map((asset) => String(asset.assetId)) ?? []);
 
-    expect(requiredBattleRoyaleRenderableAssetIds().filter((assetId) => !registered.has(assetId))).toEqual([]);
+    expect(
+      requiredBattleRoyaleRenderableAssetIds().filter((assetId) => !registered.has(assetId)),
+    ).toEqual([]);
   });
 
   it('uses the BR plugin defaults when no user overlay is injected (Space + mouse bound)', () => {
@@ -96,7 +98,9 @@ describe('playtest-plugin-bridge', () => {
       },
     });
 
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { userInputOverlay: overlay });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, {
+      userInputOverlay: overlay,
+    });
     const scheme = plugin?.controlScheme;
     const bindings = scheme === undefined ? [] : (plugin?.inputMap.schemeDefaults[scheme] ?? []);
     const primary = bindings.filter((binding) => binding.action === CORE_ACTIONS.PrimaryAction);
@@ -135,7 +139,9 @@ describe('playtest-plugin-bridge', () => {
       ],
     });
 
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { manifestHudLayout: manifestLayout });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, {
+      manifestHudLayout: manifestLayout,
+    });
     expect(plugin?.hudLayout.id).toBe('manifest-hud');
     expect(plugin?.hudLayout.widgets).toHaveLength(1);
     expect(plugin?.hudLayout.widgets[0]?.anchor).toBe('bottom-left');
@@ -207,7 +213,9 @@ describe('playtest-plugin-bridge', () => {
       ],
     });
 
-    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, { userHudOverlay: overlay });
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID, {
+      userHudOverlay: overlay,
+    });
     const byId = new Map(
       (plugin?.hudLayout.widgets ?? []).map((widget) => [widget.id as string, widget]),
     );

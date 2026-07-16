@@ -38,7 +38,11 @@ const overlayRebindingPrimaryActionTo = (code: string): InputMap =>
     actions: [{ action: CORE_ACTIONS.PrimaryAction, valueKind: 'digital' }],
     schemeDefaults: {
       'keyboard-mouse': [
-        { _tag: 'InputBinding', action: CORE_ACTIONS.PrimaryAction, trigger: { _tag: 'key', code } },
+        {
+          _tag: 'InputBinding',
+          action: CORE_ACTIONS.PrimaryAction,
+          trigger: { _tag: 'key', code },
+        },
       ],
     },
   });

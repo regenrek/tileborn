@@ -44,11 +44,7 @@ describe('playtest room HTTP contracts', () => {
       .mockResolvedValueOnce(jsonResponse({ lobby, canStart: false }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const joined = await startPlaytestJoinSession(
-      'http://127.0.0.1:8787',
-      'map-1',
-      'room-1',
-    );
+    const joined = await startPlaytestJoinSession('http://127.0.0.1:8787', 'map-1', 'room-1');
     expect(joined).toEqual({
       wsUrl: 'ws://127.0.0.1:8787/rooms/room-1/connect',
       playerId: 'player-1',
@@ -66,9 +62,7 @@ describe('playtest room HTTP contracts', () => {
     );
 
     const readyCall = fetchMock.mock.calls[1];
-    expect(String(readyCall?.[0])).toBe(
-      'http://127.0.0.1:8787/lobbies/room-1/ready',
-    );
+    expect(String(readyCall?.[0])).toBe('http://127.0.0.1:8787/lobbies/room-1/ready');
     expect(JSON.parse(String(readyCall?.[1]?.body))).toEqual({
       playerId: 'player-1',
       ready: true,
@@ -88,12 +82,12 @@ describe('playtest room HTTP contracts', () => {
       .mockResolvedValueOnce(jsonResponse({ roomId: 'room-1', results }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      getLocalMultiplayerLobby('http://127.0.0.1:8787', 'room-1'),
-    ).resolves.toEqual(lobby);
-    await expect(
-      getLocalMultiplayerResults('http://127.0.0.1:8787', 'room-1'),
-    ).resolves.toEqual(results);
+    await expect(getLocalMultiplayerLobby('http://127.0.0.1:8787', 'room-1')).resolves.toEqual(
+      lobby,
+    );
+    await expect(getLocalMultiplayerResults('http://127.0.0.1:8787', 'room-1')).resolves.toEqual(
+      results,
+    );
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
       'http://127.0.0.1:8787/lobbies/room-1',

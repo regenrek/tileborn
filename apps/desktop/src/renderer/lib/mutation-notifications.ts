@@ -21,11 +21,7 @@ export function isUserCancelledMutation(error: unknown): boolean {
   );
 }
 
-export function formatMutationError(
-  error: unknown,
-  action: string,
-  retryHint?: string,
-): string {
+export function formatMutationError(error: unknown, action: string, retryHint?: string): string {
   const ipcError = getIpcError(error);
   const reason =
     ipcError?.message ??

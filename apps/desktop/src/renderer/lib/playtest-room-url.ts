@@ -179,9 +179,7 @@ export const setLocalMultiplayerReady = async (
   }).setReady(session.roomId, {
     playerId: session.playerId,
     ready,
-    ...(session.reconnectToken === undefined
-      ? {}
-      : { reconnectToken: session.reconnectToken }),
+    ...(session.reconnectToken === undefined ? {} : { reconnectToken: session.reconnectToken }),
   });
   return response.lobby;
 };
@@ -230,8 +228,6 @@ export const startPlaytestJoinSession = async (
     wsUrl: toWebSocketUrl(started.wsUrl),
     playerId: started.playerId,
     handoffToken: started.handoffToken,
-    ...(started.reconnectToken === undefined
-      ? {}
-      : { reconnectToken: started.reconnectToken }),
+    ...(started.reconnectToken === undefined ? {} : { reconnectToken: started.reconnectToken }),
   };
 };

@@ -24,9 +24,7 @@ export interface BuiltPlayerModel {
 const renderableAtlasId = (packId: string, assetId: string): string =>
   renderablePackAssetId('playermodel', packId, assetId);
 
-const renderScaleFor = (
-  properties: Readonly<Record<string, unknown>>,
-): number | undefined => {
+const renderScaleFor = (properties: Readonly<Record<string, unknown>>): number | undefined => {
   const value = properties['tileborne.player.renderScale'];
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 };
@@ -46,7 +44,10 @@ export const buildPlayerModelRenderData = (
     return undefined;
   }
   const assetById = new Map<string, { readonly path: string; readonly mime: string }>(
-    pack.assets.map((asset) => [String(asset.id), { path: asset.path, mime: asset.mime ?? 'image/png' }]),
+    pack.assets.map((asset) => [
+      String(asset.id),
+      { path: asset.path, mime: asset.mime ?? 'image/png' },
+    ]),
   );
   const atlases = new Map<
     string,
@@ -86,7 +87,9 @@ export const buildPlayerModelRenderData = (
     return {
       frames,
       loop: clip.loop,
-      ...(clip.defaultDurationMs === undefined ? {} : { defaultDurationMs: clip.defaultDurationMs }),
+      ...(clip.defaultDurationMs === undefined
+        ? {}
+        : { defaultDurationMs: clip.defaultDurationMs }),
     };
   };
 
@@ -97,14 +100,17 @@ export const buildPlayerModelRenderData = (
     return undefined;
   }
   const renderScale = model.renderScale ?? renderScaleFor(placeable.source.properties);
-  const anchorEntries = Object.entries(model.anchors).map(([name, anchor]) => [
-    name,
-    {
-      point: { x: anchor.point.x, y: anchor.point.y },
-      rotationDeg: anchor.rotationDeg,
-      zOffset: anchor.zOffset,
-    },
-  ] as const);
+  const anchorEntries = Object.entries(model.anchors).map(
+    ([name, anchor]) =>
+      [
+        name,
+        {
+          point: { x: anchor.point.x, y: anchor.point.y },
+          rotationDeg: anchor.rotationDeg,
+          zOffset: anchor.zOffset,
+        },
+      ] as const,
+  );
 
   return {
     modelId: model.id,

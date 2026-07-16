@@ -18,8 +18,10 @@ export const queryKeys = {
   behaviors: {
     all: ['behaviors'] as const,
     project: (projectId: string) => [...queryKeys.behaviors.all, projectId] as const,
-    documents: (projectId: string) => [...queryKeys.behaviors.project(projectId), 'documents'] as const,
-    registry: (projectId: string) => [...queryKeys.behaviors.project(projectId), 'registry'] as const,
+    documents: (projectId: string) =>
+      [...queryKeys.behaviors.project(projectId), 'documents'] as const,
+    registry: (projectId: string) =>
+      [...queryKeys.behaviors.project(projectId), 'registry'] as const,
   },
   behaviorReferences: {
     all: ['behaviorReferences'] as const,
@@ -30,13 +32,8 @@ export const queryKeys = {
       [...queryKeys.behaviorReferences.project(projectId), 'resolve'] as const,
     resolve: (projectId: string, referencesKey: string) =>
       [...queryKeys.behaviorReferences.resolveAll(projectId), referencesKey] as const,
-    page: (
-      projectId: string,
-      kind: string,
-      query: string,
-      offset: number,
-      limit: number,
-    ) => [...queryKeys.behaviorReferences.kind(projectId, kind), query, offset, limit] as const,
+    page: (projectId: string, kind: string, query: string, offset: number, limit: number) =>
+      [...queryKeys.behaviorReferences.kind(projectId, kind), query, offset, limit] as const,
   },
   maps: {
     all: ['maps'] as const,
@@ -148,7 +145,8 @@ export const queryKeys = {
   playtest: {
     all: ['playtest'] as const,
     list: () => [...queryKeys.playtest.all, 'list'] as const,
-    behaviorDebug: (sessionId: string) => [...queryKeys.playtest.all, sessionId, 'behavior-debug'] as const,
+    behaviorDebug: (sessionId: string) =>
+      [...queryKeys.playtest.all, sessionId, 'behavior-debug'] as const,
   },
   support: {
     all: ['support'] as const,
@@ -183,10 +181,12 @@ export const invalidateBehaviorReferences = (
   client: Pick<QueryClient, 'invalidateQueries'>,
   projectId?: string,
   kind?: string,
-) => client.invalidateQueries({
-  queryKey: projectId === undefined
-    ? queryKeys.behaviorReferences.all
-    : kind === undefined
-      ? queryKeys.behaviorReferences.project(projectId)
-      : queryKeys.behaviorReferences.kind(projectId, kind),
-});
+) =>
+  client.invalidateQueries({
+    queryKey:
+      projectId === undefined
+        ? queryKeys.behaviorReferences.all
+        : kind === undefined
+          ? queryKeys.behaviorReferences.project(projectId)
+          : queryKeys.behaviorReferences.kind(projectId, kind),
+  });

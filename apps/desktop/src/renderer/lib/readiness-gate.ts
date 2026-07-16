@@ -9,7 +9,7 @@ export type RendererExecutionEntryPoint =
 
 export const rendererExecutionAction = (
   entryPoint: RendererExecutionEntryPoint,
-): 'playtest' | 'build' => entryPoint.includes('build') ? 'build' : 'playtest';
+): 'playtest' | 'build' => (entryPoint.includes('build') ? 'build' : 'playtest');
 
 export const READINESS_PROBLEMS_EVENT = 'tileborne:readiness-show-problems';
 

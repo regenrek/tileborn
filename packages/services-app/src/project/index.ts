@@ -680,6 +680,9 @@ export const writeProjectWithLock = (
   projectDir: string,
   project: ProjectManifest,
   maps: readonly MapIntegrityEntry[],
+  faultAfterPhase?:
+    | ((phase: ProjectManifestRevisionTransactionFaultPhase) => void | Promise<void>)
+    | undefined,
 ): Effect.Effect<void, ProjectSaveError | ProjectValidationError> =>
   Effect.gen(function* () {
     const encodedProject = yield* encodeJson(
@@ -697,48 +700,16 @@ export const writeProjectWithLock = (
       lock,
       (message) => new ProjectSaveError({ path: projectLockPath(projectDir), message }),
     );
-    const manifestFile = projectManifestPath(projectDir);
-    const lockFile = projectLockPath(projectDir);
-    const [manifestExists, lockExists] = yield* Effect.tryPromise({
+    yield* Effect.tryPromise({
       try: () =>
-        Promise.all(
-          [manifestFile, lockFile].map((filePath) =>
-            access(filePath).then(
-              () => true,
-              (cause) => (isNotFound(cause) ? false : Promise.reject(cause)),
-            ),
-          ),
-        ),
+        commitProjectManifestRevision({
+          projectRoot: projectDir,
+          projectId: project.id,
+          buildSnapshots: () => ({ project: encodedProject, lock: encodedLock }),
+          faultAfterPhase,
+        }),
       catch: (cause) => new ProjectSaveError({ path: projectDir, message: errorMessage(cause) }),
     });
-    if (manifestExists !== lockExists) {
-      return yield* new ProjectSaveError({
-        path: projectDir,
-        message: 'refusing to replace a partial project manifest/integrity-lock pair',
-      });
-    }
-    if (manifestExists) {
-      yield* Effect.tryPromise({
-        try: () =>
-          commitProjectManifestRevision({
-            projectRoot: projectDir,
-            projectId: project.id,
-            buildSnapshots: () => ({ project: encodedProject, lock: encodedLock }),
-          }),
-        catch: (cause) => new ProjectSaveError({ path: projectDir, message: errorMessage(cause) }),
-      });
-    } else {
-      yield* writeJsonAtomic(manifestFile, encodedProject).pipe(
-        Effect.mapError(
-          (error) => new ProjectSaveError({ path: error.path, message: error.message }),
-        ),
-      );
-      yield* writeJsonAtomic(lockFile, encodedLock).pipe(
-        Effect.mapError(
-          (error) => new ProjectSaveError({ path: error.path, message: error.message }),
-        ),
-      );
-    }
   });
 
 export const writeProjectPreservingMapLocks = (
@@ -802,6 +773,19 @@ export const upgradeProjectManifestAtRoot = (
     const changed = fromVersion !== PERSISTED_SCHEMA_VERSIONS.projectManifest;
     let backupPath: string | undefined;
     if (changed) {
+      const lockFile = projectLockPath(projectRoot);
+      const lockExists = yield* Effect.tryPromise({
+        try: () =>
+          access(lockFile).then(
+            () => true,
+            (cause) => (isNotFound(cause) ? false : Promise.reject(cause)),
+          ),
+        catch: (cause) =>
+          new ProjectValidationError({ path: lockFile, message: errorMessage(cause) }),
+      });
+      if (lockExists) {
+        yield* readProjectLock(lockFile);
+      }
       backupPath = yield* Effect.tryPromise({
         try: () => verifiedProjectManifestBackup(projectRoot, raw, fromVersion, faultAfterPhase),
         catch: (cause) =>
@@ -810,38 +794,37 @@ export const upgradeProjectManifestAtRoot = (
             message: `failed to create verified pre-migration backup: ${errorMessage(cause)}`,
           }),
       });
-      const lock = yield* readProjectLock(projectLockPath(projectRoot)).pipe(
-        Effect.catchTag('ProjectValidationError', () =>
-          Effect.succeed(
-            new ProjectIntegrityLock({
-              schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
-              projectHash: hashJsonStable({}),
-              maps: [],
-            }),
-          ),
-        ),
-      );
       const encodedProject = yield* encodeJson(
         ProjectManifestSchema,
         manifest,
         (message) => new ProjectSaveError({ path: manifestFile, message }),
       );
-      const nextLock = new ProjectIntegrityLock({
-        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
-        projectHash: yield* projectHash(manifest),
-        maps: [...lock.maps],
-      });
-      const encodedLock = yield* encodeJson(
-        ProjectIntegrityLock,
-        nextLock,
-        (message) => new ProjectSaveError({ path: projectLockPath(projectRoot), message }),
-      );
+      const manifestHash = yield* projectHash(manifest);
       yield* Effect.tryPromise({
         try: () =>
           commitProjectManifestRevision({
             projectRoot,
             projectId: manifest.id,
-            buildSnapshots: () => ({ project: encodedProject, lock: encodedLock }),
+            buildSnapshots: (current) => {
+              const currentLock =
+                current.lock === undefined
+                  ? new ProjectIntegrityLock({
+                      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+                      projectHash: hashJsonStable({}),
+                      maps: [],
+                    })
+                  : Schema.decodeUnknownSync(ProjectIntegrityLock)(current.lock);
+              const nextLock = new ProjectIntegrityLock({
+                schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+                projectHash: manifestHash,
+                maps: [...currentLock.maps],
+              });
+              return {
+                project: encodedProject,
+                lock: Schema.encodeSync(ProjectIntegrityLock)(nextLock),
+              };
+            },
+            allowMissingLock: !lockExists,
             faultAfterPhase,
           }),
         catch: (cause) => new ProjectSaveError({ path: projectRoot, message: errorMessage(cause) }),

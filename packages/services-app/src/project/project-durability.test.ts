@@ -2,7 +2,13 @@ import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:f
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { ProjectManifest } from '@tileborne/core';
+import {
+  PERSISTED_SCHEMA_VERSIONS,
+  ProjectManifest,
+  hashJsonStable,
+  makeProjectId,
+  type Uuid,
+} from '@tileborne/core';
 import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -147,6 +153,68 @@ describe.sequential('project manifest durability fixtures', () => {
       });
     },
   );
+
+  it('refuses an existing invalid integrity lock before backup or source side effects', async () => {
+    const { projectRoot, raw } = await stageFixture('legacy-v0');
+    const lockFile = path.join(projectRoot, 'project.lock.json');
+    const invalidLockRaw = `${JSON.stringify(
+      {
+        schemaVersion: 999,
+        projectHash: 'valuable-project-hash-sentinel',
+        maps: [
+          {
+            id: 'map:550e8400-e29b-41d4-a716-446655440099',
+            path: 'maps/valuable-map.json',
+            hash: 'valuable-map-hash-sentinel',
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`;
+    await writeFile(lockFile, invalidLockRaw, 'utf8');
+
+    await expect(upgrade(projectRoot)).rejects.toMatchObject({
+      _tag: 'ProjectValidationError',
+    });
+    await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(raw);
+    await expect(readFile(lockFile, 'utf8')).resolves.toBe(invalidLockRaw);
+    await expect(access(path.join(projectRoot, '.tileborne/backups'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('preserves every valid existing map-lock entry while migrating the manifest', async () => {
+    const { projectRoot } = await stageFixture('legacy-v0');
+    const lockFile = path.join(projectRoot, 'project.lock.json');
+    const valuableMap = {
+      id: 'map:550e8400-e29b-41d4-a716-446655440098',
+      path: 'maps/valuable-map.json',
+      hash: hashJsonStable({ valuable: true }),
+    };
+    await writeFile(
+      lockFile,
+      `${JSON.stringify(
+        {
+          schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+          projectHash: hashJsonStable({ legacy: true }),
+          maps: [valuableMap],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+
+    await upgrade(projectRoot);
+
+    const migratedLock = await Effect.runPromise(readProjectLock(lockFile));
+    expect(migratedLock.maps).toEqual([valuableMap]);
+    await expect(Effect.runPromise(readVerifiedProjectAtRoot(projectRoot))).resolves.toMatchObject({
+      name: 'Legacy Project',
+      schemaVersion: 1,
+    });
+  });
 
   it('refuses restore traversal without touching the project or outside bytes', async () => {
     const { projectRoot } = await stageFixture('legacy-v0');
@@ -316,4 +384,94 @@ describe.sequential('project manifest durability fixtures', () => {
       });
     },
   );
+
+  const freshPairFaultPhases = [
+    'owner-acquired',
+    'prepared',
+    'project-installed',
+    'lock-installed',
+  ] as const satisfies readonly ProjectManifestRevisionTransactionFaultPhase[];
+
+  it.each(freshPairFaultPhases)(
+    'fresh project pair restart converges through the shared journal after a crash at %s',
+    async (faultPhase) => {
+      temporaryRoot = await mkdtemp(path.join(tmpdir(), 'tileborne-project-fresh-pair-'));
+      const projectRoot = path.join(temporaryRoot, 'project');
+      await mkdir(projectRoot, { recursive: true });
+      const project = new ProjectManifest({
+        id: makeProjectId('550e8400-e29b-41d4-a716-446655440077' as Uuid),
+        name: 'Fresh Pair Project',
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+        engineVersion: '0.1.0',
+        plugins: [],
+        assetPacks: [],
+        maps: [],
+      });
+      const manifestFile = path.join(projectRoot, 'project.json');
+      const lockFile = path.join(projectRoot, 'project.lock.json');
+
+      await expect(
+        Effect.runPromise(
+          writeProjectWithLock(projectRoot, project, [], (phase) => {
+            if (phase === faultPhase) throw new Error(`simulated crash after ${phase}`);
+          }),
+        ),
+      ).rejects.toMatchObject({
+        message: expect.stringContaining(`simulated crash after ${faultPhase}`),
+      });
+
+      if (faultPhase === 'owner-acquired' || faultPhase === 'prepared') {
+        await expect(access(manifestFile)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(access(lockFile)).rejects.toMatchObject({ code: 'ENOENT' });
+      } else if (faultPhase === 'project-installed') {
+        await expect(access(manifestFile)).resolves.toBeUndefined();
+        await expect(access(lockFile)).rejects.toMatchObject({ code: 'ENOENT' });
+      } else {
+        await expect(access(manifestFile)).resolves.toBeUndefined();
+        await expect(access(lockFile)).resolves.toBeUndefined();
+      }
+
+      await Effect.runPromise(writeProjectWithLock(projectRoot, project, []));
+      await expect(
+        Effect.runPromise(readVerifiedProjectAtRoot(projectRoot)),
+      ).resolves.toMatchObject({ id: project.id, name: 'Fresh Pair Project' });
+      await expect(access(projectRevisionTransactionPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(access(projectRevisionOwnerPath(projectRoot))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    },
+  );
+
+  it('refuses an unjournaled partial fresh pair without overwriting source bytes', async () => {
+    temporaryRoot = await mkdtemp(path.join(tmpdir(), 'tileborne-project-partial-pair-'));
+    const projectRoot = path.join(temporaryRoot, 'project');
+    await mkdir(projectRoot, { recursive: true });
+    const project = new ProjectManifest({
+      id: makeProjectId('550e8400-e29b-41d4-a716-446655440076' as Uuid),
+      name: 'Intended Project',
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+      engineVersion: '0.1.0',
+      plugins: [],
+      assetPacks: [],
+      maps: [],
+    });
+    const manifestFile = path.join(projectRoot, 'project.json');
+    const lockFile = path.join(projectRoot, 'project.lock.json');
+    const unrelatedRaw = '{"unrelated":"source-sentinel"}\n';
+    await writeFile(manifestFile, unrelatedRaw, 'utf8');
+
+    await expect(
+      Effect.runPromise(writeProjectWithLock(projectRoot, project, [])),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('partial project manifest/integrity-lock pair'),
+    });
+
+    await expect(readFile(manifestFile, 'utf8')).resolves.toBe(unrelatedRaw);
+    await expect(access(lockFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(projectRevisionTransactionPath(projectRoot))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
 });

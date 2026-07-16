@@ -108,6 +108,8 @@ export interface CommitProjectManifestRevisionInput {
   readonly rawProject?: string | undefined;
   /** Defaults to the target project's stable JSON hash. */
   readonly projectIntegrityHash?: string | undefined;
+  /** Legacy migration alone may start with a manifest but no historical lock. */
+  readonly allowMissingLock?: boolean | undefined;
   readonly faultAfterPhase?:
     | ((phase: ProjectRevisionTransactionFaultPhase) => void | Promise<void>)
     | undefined;
@@ -771,6 +773,14 @@ export const commitProjectManifestRevision = async (
       project: await readJsonOrMissing(targets.project),
       lock: await readJsonOrMissing(targets.lock),
     };
+    const projectMissing = current.project === undefined;
+    const lockMissing = current.lock === undefined;
+    if (
+      projectMissing !== lockMissing &&
+      !(input.allowMissingLock === true && !projectMissing && lockMissing)
+    ) {
+      throw new Error('refusing to replace a partial project manifest/integrity-lock pair');
+    }
     const oldHashes = {
       project:
         current.project === undefined ? MISSING_TARGET_HASH : hashJsonStable(current.project),

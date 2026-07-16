@@ -17,6 +17,7 @@ import {
   readMapJson,
   readProjectManifest,
   resolveMainEntry,
+  setProjectActiveGameMode,
   SMOKE_PROJECT_NAME,
   waitForJob,
   type SmokeContext,
@@ -107,9 +108,12 @@ describe.sequential('desktop smoke lifecycle', () => {
     await page.reload();
     await expect(page.getByText(SMOKE_PROJECT_NAME)).toBeVisible();
 
+    await setProjectActiveGameMode(page, projectId, '@tileborne-plugins/example-arena');
+
     const manifest = await readProjectManifest(tileborneHome, projectId);
     expect(manifest.id).toBe(projectId);
     expect(manifest.name).toBe(SMOKE_PROJECT_NAME);
+    expect(manifest.settings?.activeGameMode).toBe('@tileborne-plugins/example-arena');
   });
 
   it('4. install local plugin — bridge install and plugins directory', async () => {

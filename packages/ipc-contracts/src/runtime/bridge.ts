@@ -1,4 +1,4 @@
-import type { Effect } from "effect";
+import type { Effect } from 'effect';
 
 import {
   TILEBORNE_IPC_DOMAIN_PREFIXES,
@@ -6,18 +6,18 @@ import {
   type IpcBridgeOf,
   type IpcClientOf,
   type Unsubscribe,
-} from "../codegen-shape.js";
-import type { IpcEventRegistry } from "../events-core.js";
-import type { IpcRegistry } from "../registry.js";
-import { createIpcClient } from "./client.js";
-import { createEventSubscriber, type IpcEventSubscriberOf } from "./events.js";
-import type { IpcClientTransport } from "./transport.js";
+} from '../codegen-shape.js';
+import type { IpcEventRegistry } from '../events-core.js';
+import type { IpcRegistry } from '../registry.js';
+import { createIpcClient } from './client.js';
+import { createEventSubscriber, type IpcEventSubscriberOf } from './events.js';
+import type { IpcClientTransport } from './transport.js';
 
 const capitalizeKebab = (segment: string): string =>
   segment
-    .split("-")
+    .split('-')
     .map((part) => (part.length === 0 ? part : `${part[0]!.toUpperCase()}${part.slice(1)}`))
-    .join("");
+    .join('');
 
 /**
  * Type-level twin: `EventHandlerName<Channel>` in `codegen-shape.ts`. Any change here must mirror
@@ -46,7 +46,7 @@ const bindDomainMethods = <Client extends IpcClientOf<IpcRegistry>>(
 
     const method = channel.slice(channelPrefix.length);
     const invoke = client[channel as keyof Client & string];
-    if (typeof invoke !== "function") {
+    if (typeof invoke !== 'function') {
       continue;
     }
 
@@ -73,10 +73,7 @@ export const buildIpcBridge = <Registry extends IpcRegistry>(
 export const buildEventBridge = <Registry extends IpcEventRegistry>(
   subscriber: IpcEventSubscriberOf<Registry>,
 ): EventSubscribersOf<Registry> => {
-  const bridge = {} as Record<
-    string,
-    (handler: (payload: unknown) => void) => Unsubscribe
-  >;
+  const bridge = {} as Record<string, (handler: (payload: unknown) => void) => Unsubscribe>;
 
   for (const channel of Object.keys(subscriber)) {
     const subscribe = subscriber[channel as keyof IpcEventSubscriberOf<Registry>];
@@ -90,10 +87,7 @@ export const buildEventBridge = <Registry extends IpcEventRegistry>(
   return bridge as EventSubscribersOf<Registry>;
 };
 
-export const buildTileborneBridge = <
-  IpcReg extends IpcRegistry,
-  EventReg extends IpcEventRegistry,
->(
+export const buildTileborneBridge = <IpcReg extends IpcRegistry, EventReg extends IpcEventRegistry>(
   ipcRegistry: IpcReg,
   eventRegistry: EventReg,
   transport: IpcClientTransport,

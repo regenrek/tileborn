@@ -1,39 +1,41 @@
-import { Schema } from "effect";
-import { pack, unpack } from "msgpackr";
-import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from "@tileborne/core";
-import { BattleRoyaleAbilityId, Direction8 } from "./battle-royale-input.js";
+import { Schema } from 'effect';
+import { pack, unpack } from 'msgpackr';
+import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
+import { BattleRoyaleAbilityId, Direction8 } from './battle-royale-input.js';
 
 export {
   BATTLE_ROYALE_ABILITY_IDS,
   BattleRoyaleAbility,
   BattleRoyaleAbilityId,
   Direction8,
-} from "./battle-royale-input.js";
+} from './battle-royale-input.js';
 
 // ADR-0014 Phase 1: snapshot frames carry required monotonic server timestamps
 // so renderers can interpolate in server time while sampling with client clocks.
-export const PlayerId = Schema.String.pipe(Schema.brand("PlayerId"));
+export const PlayerId = Schema.String.pipe(Schema.brand('PlayerId'));
 export type PlayerId = typeof PlayerId.Type;
 
 export const makePlayerId = (id: string): PlayerId => Schema.decodeUnknownSync(PlayerId)(id);
 
-export const ProjectileId = Schema.String.pipe(Schema.brand("ProjectileId"));
+export const ProjectileId = Schema.String.pipe(Schema.brand('ProjectileId'));
 export type ProjectileId = typeof ProjectileId.Type;
 
-export const makeProjectileId = (id: string): ProjectileId => Schema.decodeUnknownSync(ProjectileId)(id);
+export const makeProjectileId = (id: string): ProjectileId =>
+  Schema.decodeUnknownSync(ProjectileId)(id);
 
-export const DeployableId = Schema.String.pipe(Schema.brand("DeployableId"));
+export const DeployableId = Schema.String.pipe(Schema.brand('DeployableId'));
 export type DeployableId = typeof DeployableId.Type;
 
-export const makeDeployableId = (id: string): DeployableId => Schema.decodeUnknownSync(DeployableId)(id);
+export const makeDeployableId = (id: string): DeployableId =>
+  Schema.decodeUnknownSync(DeployableId)(id);
 
-export const DeployableOwnerId = Schema.String.pipe(Schema.brand("DeployableOwnerId"));
+export const DeployableOwnerId = Schema.String.pipe(Schema.brand('DeployableOwnerId'));
 export type DeployableOwnerId = typeof DeployableOwnerId.Type;
 
 export const makeDeployableOwnerId = (id: string): DeployableOwnerId =>
   Schema.decodeUnknownSync(DeployableOwnerId)(id);
 
-export const ObjectId = Schema.String.pipe(Schema.brand("ObjectId"));
+export const ObjectId = Schema.String.pipe(Schema.brand('ObjectId'));
 export type ObjectId = typeof ObjectId.Type;
 
 export const makeObjectId = (id: string): ObjectId => Schema.decodeUnknownSync(ObjectId)(id);
@@ -98,7 +100,7 @@ export const PlayerPickupPromptSnapshot = Schema.Struct({
   itemKind: Schema.optional(Schema.String),
   tier: Schema.optional(Schema.String),
   distance: Schema.optional(Schema.Number),
-  action: Schema.Literal("pickup-loot"),
+  action: Schema.Literal('pickup-loot'),
   available: Schema.Boolean,
 });
 export type PlayerPickupPromptSnapshot = typeof PlayerPickupPromptSnapshot.Type;
@@ -168,7 +170,7 @@ export const PlayerUpdate = Schema.Struct({
 });
 export type PlayerUpdate = typeof PlayerUpdate.Type;
 
-export class ProjectileSnapshot extends Schema.Class<ProjectileSnapshot>("ProjectileSnapshot")({
+export class ProjectileSnapshot extends Schema.Class<ProjectileSnapshot>('ProjectileSnapshot')({
   id: ProjectileId,
   ownerPlayerId: PlayerId,
   weaponSlot: Schema.Int,
@@ -180,7 +182,7 @@ export class ProjectileSnapshot extends Schema.Class<ProjectileSnapshot>("Projec
   ttlMs: Schema.Int,
 }) {}
 
-export class ProjectileUpdate extends Schema.Class<ProjectileUpdate>("ProjectileUpdate")({
+export class ProjectileUpdate extends Schema.Class<ProjectileUpdate>('ProjectileUpdate')({
   id: ProjectileId,
   ownerPlayerId: Schema.OptionFromOptional(PlayerId),
   weaponSlot: Schema.OptionFromOptional(Schema.Int),
@@ -192,10 +194,10 @@ export class ProjectileUpdate extends Schema.Class<ProjectileUpdate>("Projectile
   ttlMs: Schema.OptionFromOptional(Schema.Int),
 }) {}
 
-export const DeployableKind = Schema.Literals(["trap", "decoy", "scan-pulse"] as const);
+export const DeployableKind = Schema.Literals(['trap', 'decoy', 'scan-pulse'] as const);
 export type DeployableKind = typeof DeployableKind.Type;
 
-export class DeployableSnapshot extends Schema.Class<DeployableSnapshot>("DeployableSnapshot")({
+export class DeployableSnapshot extends Schema.Class<DeployableSnapshot>('DeployableSnapshot')({
   id: DeployableId,
   kind: DeployableKind,
   ownerId: DeployableOwnerId,
@@ -207,7 +209,7 @@ export class DeployableSnapshot extends Schema.Class<DeployableSnapshot>("Deploy
   triggered: Schema.Boolean,
 }) {}
 
-export class DeployableUpdate extends Schema.Class<DeployableUpdate>("DeployableUpdate")({
+export class DeployableUpdate extends Schema.Class<DeployableUpdate>('DeployableUpdate')({
   id: DeployableId,
   kind: Schema.OptionFromOptional(DeployableKind),
   ownerId: Schema.OptionFromOptional(DeployableOwnerId),
@@ -255,7 +257,7 @@ export const ObjectHazardSnapshot = Schema.Struct({
 });
 export type ObjectHazardSnapshot = typeof ObjectHazardSnapshot.Type;
 
-export class ObjectSnapshot extends Schema.Class<ObjectSnapshot>("ObjectSnapshot")({
+export class ObjectSnapshot extends Schema.Class<ObjectSnapshot>('ObjectSnapshot')({
   id: ObjectId,
   x: Schema.Number,
   y: Schema.Number,
@@ -266,7 +268,7 @@ export class ObjectSnapshot extends Schema.Class<ObjectSnapshot>("ObjectSnapshot
   hazard: Schema.optional(ObjectHazardSnapshot),
 }) {}
 
-export class PlayerInput extends Schema.TaggedClass<PlayerInput>()("PlayerInput", {
+export class PlayerInput extends Schema.TaggedClass<PlayerInput>()('PlayerInput', {
   tick: Schema.Int,
   seq: Schema.Int,
   dir: Schema.OptionFromOptional(Direction8),
@@ -279,16 +281,16 @@ export class PlayerInput extends Schema.TaggedClass<PlayerInput>()("PlayerInput"
   swapSlot: Schema.OptionFromOptional(Schema.Int),
 }) {}
 
-export class Heartbeat extends Schema.TaggedClass<Heartbeat>()("Heartbeat", {
+export class Heartbeat extends Schema.TaggedClass<Heartbeat>()('Heartbeat', {
   tick: Schema.Int,
 }) {}
 
-export class SnapshotAck extends Schema.TaggedClass<SnapshotAck>()("SnapshotAck", {
+export class SnapshotAck extends Schema.TaggedClass<SnapshotAck>()('SnapshotAck', {
   tick: Schema.Int,
   receivedAtMs: Schema.Number,
 }) {}
 
-export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()("WelcomeSnapshot", {
+export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()('WelcomeSnapshot', {
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
   seed: Schema.Union([Schema.String, Schema.Number]),
@@ -299,7 +301,7 @@ export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()("Welc
   zone: ZoneState,
 }) {}
 
-export class DeltaSnapshot extends Schema.TaggedClass<DeltaSnapshot>()("DeltaSnapshot", {
+export class DeltaSnapshot extends Schema.TaggedClass<DeltaSnapshot>()('DeltaSnapshot', {
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
   removed: Schema.Array(PlayerId),
@@ -313,25 +315,25 @@ export class DeltaSnapshot extends Schema.TaggedClass<DeltaSnapshot>()("DeltaSna
   zone: Schema.OptionFromOptional(ZoneState),
 }) {}
 
-export class PlayerJoined extends Schema.TaggedClass<PlayerJoined>()("PlayerJoined", {
+export class PlayerJoined extends Schema.TaggedClass<PlayerJoined>()('PlayerJoined', {
   id: PlayerId,
 }) {}
 
-export class PlayerLeft extends Schema.TaggedClass<PlayerLeft>()("PlayerLeft", {
+export class PlayerLeft extends Schema.TaggedClass<PlayerLeft>()('PlayerLeft', {
   id: PlayerId,
 }) {}
 
-export class PlayerKilled extends Schema.TaggedClass<PlayerKilled>()("PlayerKilled", {
+export class PlayerKilled extends Schema.TaggedClass<PlayerKilled>()('PlayerKilled', {
   killer: PlayerId,
   victim: PlayerId,
   tick: Schema.Int,
 }) {}
 
-export class GameOver extends Schema.TaggedClass<GameOver>()("GameOver", {
+export class GameOver extends Schema.TaggedClass<GameOver>()('GameOver', {
   winner: PlayerId,
 }) {}
 
-export class WireError extends Schema.TaggedClass<WireError>()("Error", {
+export class WireError extends Schema.TaggedClass<WireError>()('Error', {
   code: Schema.String,
   message: Schema.String,
 }) {}
@@ -364,25 +366,25 @@ export const BattleRoyaleMessage = Schema.Union([
 ]);
 export type BattleRoyaleMessage = Schema.Schema.Type<typeof BattleRoyaleMessage>;
 
-export class ProtocolError extends Schema.TaggedErrorClass<ProtocolError>()("ProtocolError", {
+export class ProtocolError extends Schema.TaggedErrorClass<ProtocolError>()('ProtocolError', {
   message: Schema.String,
   cause: Schema.OptionFromOptional(Schema.Unknown),
 }) {}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const withLegacyServerTimestampDefault = (value: unknown): unknown => {
   if (
     isRecord(value) &&
-    (value._tag === "WelcomeSnapshot" || value._tag === "DeltaSnapshot") &&
-    typeof value.serverTimestampMs !== "number"
+    (value._tag === 'WelcomeSnapshot' || value._tag === 'DeltaSnapshot') &&
+    typeof value.serverTimestampMs !== 'number'
   ) {
     return {
       ...value,
       // Legacy local frames only carried tick; use it as a deterministic fallback
       // before schema validation while new frames keep serverTimestampMs required.
-      serverTimestampMs: typeof value.tick === "number" ? value.tick : 0,
+      serverTimestampMs: typeof value.tick === 'number' ? value.tick : 0,
     };
   }
   return value;

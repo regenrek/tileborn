@@ -61,9 +61,7 @@ export class ReadinessNavigationTarget extends Schema.Class<ReadinessNavigationT
 }) {}
 
 /** Canonical problem model shared by authoring UI and execution gates. */
-export class ReadinessDiagnostic extends Schema.Class<ReadinessDiagnostic>(
-  'ReadinessDiagnostic',
-)({
+export class ReadinessDiagnostic extends Schema.Class<ReadinessDiagnostic>('ReadinessDiagnostic')({
   id: Schema.String,
   code: Schema.String,
   severity: ReadinessSeverity,

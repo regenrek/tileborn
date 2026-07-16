@@ -8,5 +8,4 @@ export {
   IpcTimeoutError,
   IpcTransportError,
   IpcValidationError,
-} from "../errors.js";
-
+} from '../errors.js';

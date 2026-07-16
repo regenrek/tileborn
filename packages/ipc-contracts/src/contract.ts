@@ -1,6 +1,6 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { IpcChannel, makeIpcChannel } from "./channel.js";
+import { IpcChannel, makeIpcChannel } from './channel.js';
 
 export const IpcContractMeta = Schema.Struct({
   timeoutMs: Schema.optionalKey(Schema.Number),
@@ -14,7 +14,7 @@ export class IpcContract<
   Res,
   Err,
   Channel extends IpcChannel = IpcChannel,
-> extends Schema.Class<IpcContract<unknown, unknown, unknown, IpcChannel>>("IpcContract")({
+> extends Schema.Class<IpcContract<unknown, unknown, unknown, IpcChannel>>('IpcContract')({
   channel: IpcChannel,
   request: Schema.Any,
   response: Schema.Any,
@@ -66,9 +66,9 @@ export const defineContract = <
 >(
   definition: IpcContractDefinition<Channel, RequestSchema, ResponseSchema, ErrorSchema>,
 ): IpcContract<
-  RequestSchema["Type"],
-  ResponseSchema["Type"],
-  ErrorSchema["Type"],
+  RequestSchema['Type'],
+  ResponseSchema['Type'],
+  ErrorSchema['Type'],
   Channel & IpcChannel
 > & {
   readonly request: RequestSchema;
@@ -81,7 +81,12 @@ export const defineContract = <
     response: definition.response,
     errors: definition.errors,
     ...(definition.meta !== undefined ? { meta: definition.meta } : {}),
-  }) as IpcContract<RequestSchema["Type"], ResponseSchema["Type"], ErrorSchema["Type"], Channel & IpcChannel> & {
+  }) as IpcContract<
+    RequestSchema['Type'],
+    ResponseSchema['Type'],
+    ErrorSchema['Type'],
+    Channel & IpcChannel
+  > & {
     readonly request: RequestSchema;
     readonly response: ResponseSchema;
     readonly errors: ErrorSchema;

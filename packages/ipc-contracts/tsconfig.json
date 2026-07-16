@@ -5,12 +5,8 @@
     "rootDir": "src",
     "composite": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "**/*.test.ts"
-  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts"],
   "references": [
     {
       "path": "../core"

@@ -1,11 +1,15 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { HudLayout, JsonObject, MapId, PluginId, ProjectId } from "@tileborne/core";
-import { ContributionId, GameSettingsScope, PluginContributionZone } from "@tileborne/plugin-api/preload";
+import { HudLayout, JsonObject, MapId, PluginId, ProjectId } from '@tileborne/core';
+import {
+  ContributionId,
+  GameSettingsScope,
+  PluginContributionZone,
+} from '@tileborne/plugin-api/preload';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyResponse, IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyResponse, IpcContractErrors } from './common.js';
 
 export const PluginSummary = Schema.Struct({
   id: PluginId,
@@ -73,7 +77,7 @@ export const GameModeCreatorChecklistFactView = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
   description: Schema.optional(Schema.String),
-  sources: Schema.Array(Schema.Literals(["game-mode", "map", "catalog", "asset", "visual-model"])),
+  sources: Schema.Array(Schema.Literals(['game-mode', 'map', 'catalog', 'asset', 'visual-model'])),
 });
 
 export const PluginsListRequest = Schema.Struct({});
@@ -153,14 +157,14 @@ export const PluginsListContributionsResponse = Schema.Struct({
 });
 
 export const PluginsListContract = defineContract({
-  channel: "tileborne:plugins:list",
+  channel: 'tileborne:plugins:list',
   request: PluginsListRequest,
   response: PluginsListResponse,
   errors: IpcContractErrors,
 });
 
 export const PluginsInstallContract = defineContract({
-  channel: "tileborne:plugins:install",
+  channel: 'tileborne:plugins:install',
   request: PluginsInstallRequest,
   response: PluginsInstallResponse,
   errors: IpcContractErrors,
@@ -168,7 +172,7 @@ export const PluginsInstallContract = defineContract({
 });
 
 export const PluginsInstallBundledBattleRoyaleContract = defineContract({
-  channel: "tileborne:plugins:installBundledBattleRoyale",
+  channel: 'tileborne:plugins:installBundledBattleRoyale',
   request: PluginsInstallBundledBattleRoyaleRequest,
   response: PluginsInstallBundledBattleRoyaleResponse,
   errors: IpcContractErrors,
@@ -176,7 +180,7 @@ export const PluginsInstallBundledBattleRoyaleContract = defineContract({
 });
 
 export const PluginsUninstallContract = defineContract({
-  channel: "tileborne:plugins:uninstall",
+  channel: 'tileborne:plugins:uninstall',
   request: PluginsUninstallRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,
@@ -184,28 +188,28 @@ export const PluginsUninstallContract = defineContract({
 });
 
 export const PluginsEnableContract = defineContract({
-  channel: "tileborne:plugins:enable",
+  channel: 'tileborne:plugins:enable',
   request: PluginsEnableRequest,
   response: PluginsEnableResponse,
   errors: IpcContractErrors,
 });
 
 export const PluginsDisableContract = defineContract({
-  channel: "tileborne:plugins:disable",
+  channel: 'tileborne:plugins:disable',
   request: PluginsDisableRequest,
   response: PluginsDisableResponse,
   errors: IpcContractErrors,
 });
 
 export const PluginsGetManifestContract = defineContract({
-  channel: "tileborne:plugins:getManifest",
+  channel: 'tileborne:plugins:getManifest',
   request: PluginsGetManifestRequest,
   response: PluginsGetManifestResponse,
   errors: IpcContractErrors,
 });
 
 export const PluginsListContributionsContract = defineContract({
-  channel: "tileborne:plugins:listContributions",
+  channel: 'tileborne:plugins:listContributions',
   request: PluginsListContributionsRequest,
   response: PluginsListContributionsResponse,
   errors: IpcContractErrors,
@@ -223,7 +227,7 @@ export const PluginsInvokeEditorCommandResponse = Schema.Struct({
 });
 
 export const PluginsInvokeEditorCommandContract = defineContract({
-  channel: "tileborne:plugins:invokeEditorCommand",
+  channel: 'tileborne:plugins:invokeEditorCommand',
   request: PluginsInvokeEditorCommandRequest,
   response: PluginsInvokeEditorCommandResponse,
   errors: IpcContractErrors,

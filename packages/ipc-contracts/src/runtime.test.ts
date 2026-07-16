@@ -1,14 +1,14 @@
-import { Effect, Option, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { Effect, Option, Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { makeProjectId, makeProjectManifest } from "@tileborne/core";
+import { makeProjectId, makeProjectManifest } from '@tileborne/core';
 
-import type { IpcHandlersOf } from "./codegen-shape.js";
-import { defineContract } from "./contract.js";
-import { ProjectsGetContract } from "./contracts/index.js";
-import { EmptyRequest, EmptyResponse } from "./contracts/common.js";
-import { MainEventRegistry } from "./events.js";
-import { TriggerEventPayload } from "./contracts/trigger.js";
+import type { IpcHandlersOf } from './codegen-shape.js';
+import { defineContract } from './contract.js';
+import { ProjectsGetContract } from './contracts/index.js';
+import { EmptyRequest, EmptyResponse } from './contracts/common.js';
+import { MainEventRegistry } from './events.js';
+import { TriggerEventPayload } from './contracts/trigger.js';
 import {
   IpcContractError,
   IpcDecodeError,
@@ -17,9 +17,9 @@ import {
   IpcTimeoutError,
   IpcTransportError,
   IpcValidationError,
-} from "./errors.js";
-import { IpcChannel } from "./channel.js";
-import { createRegistry } from "./registry.js";
+} from './errors.js';
+import { IpcChannel } from './channel.js';
+import { createRegistry } from './registry.js';
 import {
   createEventEmitter,
   createEventSubscriber,
@@ -27,14 +27,14 @@ import {
   registerIpcHandlers,
   type IpcClientTransport,
   type IpcServerTransport,
-} from "./runtime/index.js";
+} from './runtime/index.js';
 
-const UUID = "550e8400-e29b-41d4-a716-446655440000";
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const projectId = makeProjectId(UUID);
 
 const manifest = makeProjectManifest({
   id: projectId,
-  name: "Example",
+  name: 'Example',
 });
 
 const projectsGetRequest = { projectId };
@@ -43,7 +43,7 @@ const projectsGetResponse = Schema.decodeUnknownSync(ProjectsGetContract.respons
 });
 
 const timeoutContract = defineContract({
-  channel: "tileborne:test:timeout",
+  channel: 'tileborne:test:timeout',
   request: EmptyRequest,
   response: EmptyResponse,
   errors: IpcError,
@@ -124,36 +124,36 @@ const failureOf = <A, E>(effect: Effect.Effect<A, E>): Promise<E> =>
     ),
   );
 
-describe("IPC runtime adapters", () => {
-  it("round-trips a projects.get request through client and handlers", async () => {
+describe('IPC runtime adapters', () => {
+  it('round-trips a projects.get request through client and handlers', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () =>
+      'tileborne:projects:get': () =>
         Effect.succeed({
           project: manifest,
         }),
     });
 
     const client = createIpcClient(registry, transport.client);
-    const response = await Effect.runPromise(client["tileborne:projects:get"](projectsGetRequest));
+    const response = await Effect.runPromise(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(response).toEqual(projectsGetResponse);
     expect(transport.invokeCount).toBe(1);
     expect(transport.lastPayload).toEqual({ projectId });
   });
 
-  it("validates requests on the client before touching transport", async () => {
+  it('validates requests on the client before touching transport', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     const client = createIpcClient(registry, transport.client);
-    const invokeProjectOpenUnchecked = client["tileborne:projects:get"] as (
+    const invokeProjectOpenUnchecked = client['tileborne:projects:get'] as (
       request: unknown,
-    ) => ReturnType<(typeof client)["tileborne:projects:get"]>;
+    ) => ReturnType<(typeof client)['tileborne:projects:get']>;
 
     const error = await failureOf(
       invokeProjectOpenUnchecked({
-        projectId: "not-a-project-id",
+        projectId: 'not-a-project-id',
       }),
     );
 
@@ -161,20 +161,20 @@ describe("IPC runtime adapters", () => {
     expect(transport.invokeCount).toBe(0);
   });
 
-  it("validates raw requests on the server before calling handlers", async () => {
+  it('validates raw requests on the server before calling handlers', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     let handlerCalls = 0;
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () => {
+      'tileborne:projects:get': () => {
         handlerCalls += 1;
         return Effect.succeed(projectsGetResponse);
       },
     });
 
     const raw = await Effect.runPromise(
-      transport.client.invoke("tileborne:projects:get", {
-        projectId: "not-a-project-id",
+      transport.client.invoke('tileborne:projects:get', {
+        projectId: 'not-a-project-id',
       }),
     );
     const decoded = Schema.decodeUnknownSync(IpcError)(raw);
@@ -183,171 +183,172 @@ describe("IPC runtime adapters", () => {
     expect(handlerCalls).toBe(0);
   });
 
-  it("surfaces malformed handler responses as contract errors", async () => {
+  it('surfaces malformed handler responses as contract errors', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () =>
+      'tileborne:projects:get': () =>
         Effect.succeed({ bad: true } as unknown as typeof ProjectsGetContract.response.Type),
     });
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcContractError);
-    expect(error._tag).toBe("IpcSerializationError");
+    expect(error._tag).toBe('IpcSerializationError');
   });
 
-  it("surfaces malformed raw transport responses as decode errors", async () => {
+  it('surfaces malformed raw transport responses as decode errors', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
-    transport.server.handle("tileborne:projects:get", async () => ({ bad: true }));
+    transport.server.handle('tileborne:projects:get', async () => ({ bad: true }));
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcDecodeError);
   });
 
-  it("decodes contract error payloads into IpcContractError", async () => {
+  it('decodes contract error payloads into IpcContractError', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () =>
+      'tileborne:projects:get': () =>
         Effect.fail(
           new IpcPermissionDeniedError({
             channel: ProjectsGetContract.channel,
-            message: "Project picker approval required",
-            reason: Option.some("project-open"),
+            message: 'Project picker approval required',
+            reason: Option.some('project-open'),
           }),
         ),
     });
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcContractError);
-    expect(error._tag).toBe("IpcPermissionDeniedError");
+    expect(error._tag).toBe('IpcPermissionDeniedError');
   });
 
-  it("maps contract timeouts to IpcTimeoutError", async () => {
+  it('maps contract timeouts to IpcTimeoutError', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([timeoutContract] as const);
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:test:timeout": () => Effect.sleep("50 millis").pipe(Effect.as({})),
+      'tileborne:test:timeout': () => Effect.sleep('50 millis').pipe(Effect.as({})),
     });
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:test:timeout"]({}));
+    const error = await failureOf(client['tileborne:test:timeout']({}));
 
     expect(error).toBeInstanceOf(IpcTimeoutError);
   });
 
-  it("propagates transport failures when no handler is bound", async () => {
+  it('propagates transport failures when no handler is bound', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcTransportError);
   });
 
-  it("unregister removes server handlers", async () => {
+  it('unregister removes server handlers', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     const registered = registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () => Effect.succeed(projectsGetResponse),
+      'tileborne:projects:get': () => Effect.succeed(projectsGetResponse),
     });
     const client = createIpcClient(registry, transport.client);
 
-    await Effect.runPromise(client["tileborne:projects:get"](projectsGetRequest));
+    await Effect.runPromise(client['tileborne:projects:get'](projectsGetRequest));
     registered.unregister();
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcTransportError);
   });
 
-  it("turns synchronous handler throws into handler errors", async () => {
+  it('turns synchronous handler throws into handler errors', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     const handlers = {
-      "tileborne:projects:get": () => {
-        throw new Error("boom");
+      'tileborne:projects:get': () => {
+        throw new Error('boom');
       },
     } as unknown as IpcHandlersOf<typeof registry>;
     registerIpcHandlers(registry, transport.server, handlers);
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcContractError);
-    expect(error._tag).toBe("IpcHandlerThrewError");
+    expect(error._tag).toBe('IpcHandlerThrewError');
   });
 
-  it("turns unchecked handler defects into handler errors", async () => {
+  it('turns unchecked handler defects into handler errors', async () => {
     const transport = new InMemoryIpcTransport();
     const registry = createRegistry([ProjectsGetContract] as const);
     registerIpcHandlers(registry, transport.server, {
-      "tileborne:projects:get": () =>
+      'tileborne:projects:get': () =>
         Effect.sync(() => {
-          throw new Error("defect");
+          throw new Error('defect');
         }),
     } as unknown as IpcHandlersOf<typeof registry>);
     const client = createIpcClient(registry, transport.client);
 
-    const error = await failureOf(client["tileborne:projects:get"](projectsGetRequest));
+    const error = await failureOf(client['tileborne:projects:get'](projectsGetRequest));
 
     expect(error).toBeInstanceOf(IpcContractError);
-    expect(error._tag).toBe("IpcHandlerThrewError");
+    expect(error._tag).toBe('IpcHandlerThrewError');
   });
 
-  it("emits and subscribes to trigger-only event payloads", async () => {
+  it('emits and subscribes to trigger-only event payloads', async () => {
     const transport = new InMemoryIpcTransport();
     const emitter = createEventEmitter(MainEventRegistry, transport.server);
     const subscriber = createEventSubscriber(MainEventRegistry, transport.client);
     const received: Array<unknown> = [];
-    subscriber["tileborne:projects:changed"]((payload) => received.push(payload));
+    subscriber['tileborne:projects:changed']((payload) => received.push(payload));
 
-    await Effect.runPromise(emitter["tileborne:projects:changed"]({}));
+    await Effect.runPromise(emitter['tileborne:projects:changed']({}));
 
     expect(received).toHaveLength(1);
     expect(Schema.encodeSync(TriggerEventPayload)(received[0])).toEqual({});
   });
 
-  it("accepts empty trigger payloads", () => {
+  it('accepts empty trigger payloads', () => {
     const transport = new InMemoryIpcTransport();
     const subscriber = createEventSubscriber(MainEventRegistry, transport.client);
     const received: Array<unknown> = [];
-    subscriber["tileborne:projects:changed"]((payload) => received.push(payload));
+    subscriber['tileborne:projects:changed']((payload) => received.push(payload));
 
-    transport.server.emit("tileborne:projects:changed", {});
+    transport.server.emit('tileborne:projects:changed', {});
 
     expect(received).toEqual([{}]);
   });
 
-  it("unsubscribe removes event listeners", async () => {
+  it('unsubscribe removes event listeners', async () => {
     const transport = new InMemoryIpcTransport();
     const emitter = createEventEmitter(MainEventRegistry, transport.server);
     const subscriber = createEventSubscriber(MainEventRegistry, transport.client);
     const received: Array<unknown> = [];
-    const unsubscribe = subscriber["tileborne:projects:changed"]((payload) => received.push(payload));
+    const unsubscribe = subscriber['tileborne:projects:changed']((payload) =>
+      received.push(payload),
+    );
 
     unsubscribe();
-    await Effect.runPromise(emitter["tileborne:projects:changed"]({}));
+    await Effect.runPromise(emitter['tileborne:projects:changed']({}));
 
     expect(received).toEqual([]);
-    expect(transport.listeners.has("tileborne:projects:changed")).toBe(false);
+    expect(transport.listeners.has('tileborne:projects:changed')).toBe(false);
   });
 
-  it("rejects invalid event payloads at the decode boundary", () => {
+  it('rejects invalid event payloads at the decode boundary', () => {
     const transport = new InMemoryIpcTransport();
     const subscriber = createEventSubscriber(MainEventRegistry, transport.client);
-    subscriber["tileborne:projects:changed"](() => undefined);
+    subscriber['tileborne:projects:changed'](() => undefined);
 
     expect(() => {
-      transport.server.emit("tileborne:projects:changed", null);
+      transport.server.emit('tileborne:projects:changed', null);
     }).toThrow(IpcDecodeError);
   });
 });
-

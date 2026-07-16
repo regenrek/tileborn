@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 import {
   ContentHash,
@@ -7,14 +7,14 @@ import {
   PackId,
   ProjectId,
   WorkingPaletteId,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { IpcContractErrors } from './common.js';
 
 export const JobId = Schema.String.check(Schema.isPattern(/^job:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("JobId"),
+  Schema.brand('JobId'),
 );
 
 export const AssetPackSummary = Schema.Struct({
@@ -27,7 +27,7 @@ export const AssetPackSummary = Schema.Struct({
   capability: PackCapability,
 });
 
-export const AssetPackSourceKind = Schema.Literals(["directory"]);
+export const AssetPackSourceKind = Schema.Literals(['directory']);
 
 export const AssetsListPacksRequest = Schema.Struct({});
 export const AssetsListPacksResponse = Schema.Struct({
@@ -59,17 +59,17 @@ export const AssetsImportPackResponse = Schema.Struct({
 });
 
 export const AssetImportDetectedKind = Schema.Literals([
-  "tileborne-pack",
-  "tiled-source",
-  "image",
-  "ambiguous",
-  "zip",
-  "unsupported",
+  'tileborne-pack',
+  'tiled-source',
+  'image',
+  'ambiguous',
+  'zip',
+  'unsupported',
 ]);
 export const AssetImportPreferredKind = Schema.Literals([
-  "tileborne-pack",
-  "tiled-source",
-  "image",
+  'tileborne-pack',
+  'tiled-source',
+  'image',
 ]);
 export const AssetsDetectImportSourceRequest = Schema.Struct({
   path: Schema.String,
@@ -133,7 +133,7 @@ export const AssetsImportSpriteSheetRequest = Schema.Struct({
   imageHeight: Schema.Int,
   slice: SpriteSheetSliceConfigSchema,
   spriteName: Schema.optional(Schema.String),
-  anchor: Schema.optional(Schema.Literals(["top-left", "center", "bottom-left"])),
+  anchor: Schema.optional(Schema.Literals(['top-left', 'center', 'bottom-left'])),
   packName: Schema.optional(Schema.String),
   clips: Schema.optional(Schema.Array(SpriteSheetClipInputSchema)),
   playerModel: Schema.optional(SpriteSheetPlayerModelMetadataSchema),
@@ -182,28 +182,28 @@ export const AssetsCapabilityRefreshedEventPayload = Schema.Struct({
 });
 
 export const AssetsListPacksContract = defineContract({
-  channel: "tileborne:assets:listPacks",
+  channel: 'tileborne:assets:listPacks',
   request: AssetsListPacksRequest,
   response: AssetsListPacksResponse,
   errors: IpcContractErrors,
 });
 
 export const AssetsGetPackContract = defineContract({
-  channel: "tileborne:assets:getPack",
+  channel: 'tileborne:assets:getPack',
   request: AssetsGetPackRequest,
   response: AssetsGetPackResponse,
   errors: IpcContractErrors,
 });
 
 export const AssetsDescribePackContract = defineContract({
-  channel: "tileborne:assets:describePack",
+  channel: 'tileborne:assets:describePack',
   request: AssetsDescribePackRequest,
   response: AssetsDescribePackResponse,
   errors: IpcContractErrors,
 });
 
 export const AssetsImportPackContract = defineContract({
-  channel: "tileborne:assets:importPack",
+  channel: 'tileborne:assets:importPack',
   request: AssetsImportPackRequest,
   response: AssetsImportPackResponse,
   errors: IpcContractErrors,
@@ -211,14 +211,14 @@ export const AssetsImportPackContract = defineContract({
 });
 
 export const AssetsDetectImportSourceContract = defineContract({
-  channel: "tileborne:assets:detectImportSource",
+  channel: 'tileborne:assets:detectImportSource',
   request: AssetsDetectImportSourceRequest,
   response: AssetsDetectImportSourceResponse,
   errors: IpcContractErrors,
 });
 
 export const AssetsImportSpriteSheetContract = defineContract({
-  channel: "tileborne:assets:importSpriteSheet",
+  channel: 'tileborne:assets:importSpriteSheet',
   request: AssetsImportSpriteSheetRequest,
   response: AssetsImportSpriteSheetResponse,
   errors: IpcContractErrors,
@@ -226,7 +226,7 @@ export const AssetsImportSpriteSheetContract = defineContract({
 });
 
 export const AssetsRemovePackContract = defineContract({
-  channel: "tileborne:assets:removePack",
+  channel: 'tileborne:assets:removePack',
   request: AssetsRemovePackRequest,
   response: AssetsRemovePackResponse,
   errors: IpcContractErrors,
@@ -234,14 +234,14 @@ export const AssetsRemovePackContract = defineContract({
 });
 
 export const AssetsListPackAssetsContract = defineContract({
-  channel: "tileborne:assets:listPackAssets",
+  channel: 'tileborne:assets:listPackAssets',
   request: AssetsListPackAssetsRequest,
   response: AssetsListPackAssetsResponse,
   errors: IpcContractErrors,
 });
 
 export const AssetsGetAssetDataUrlContract = defineContract({
-  channel: "tileborne:assets:getAssetDataUrl",
+  channel: 'tileborne:assets:getAssetDataUrl',
   request: AssetsGetAssetDataUrlRequest,
   response: AssetsGetAssetDataUrlResponse,
   errors: IpcContractErrors,

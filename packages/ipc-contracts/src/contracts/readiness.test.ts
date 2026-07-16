@@ -79,7 +79,19 @@ describe('readiness IPC contract', () => {
     });
 
     expect(diagnostic.navigation?.behaviorId).toBe(behaviorId);
-    expect(diagnostic).toMatchObject({ behaviorId, behaviorNodeId, sourceKind: 'visual', line: 17, column: 4 });
-    expect(diagnostic.navigation).toMatchObject({ behaviorId, behaviorNodeId, sourceKind: 'visual', line: 17, column: 4 });
+    expect(diagnostic).toMatchObject({
+      behaviorId,
+      behaviorNodeId,
+      sourceKind: 'visual',
+      line: 17,
+      column: 4,
+    });
+    expect(diagnostic.navigation).toMatchObject({
+      behaviorId,
+      behaviorNodeId,
+      sourceKind: 'visual',
+      line: 17,
+      column: 4,
+    });
   });
 });

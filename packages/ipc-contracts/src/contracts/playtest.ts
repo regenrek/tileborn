@@ -1,26 +1,26 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { BehaviorId, JsonObject, MapId, ProjectId } from "@tileborne/core";
+import { BehaviorId, JsonObject, MapId, ProjectId } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { IpcContractErrors } from "./common.js";
-import { GameplayEvent } from "./gameplay-event.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { IpcContractErrors } from './common.js';
+import { GameplayEvent } from './gameplay-event.js';
 
 export const PlaytestSessionId = Schema.String.check(
   Schema.isPattern(/^playtest:[0-9a-f-]{36}$/),
-).pipe(Schema.brand("PlaytestSessionId"));
+).pipe(Schema.brand('PlaytestSessionId'));
 
 export const PlaytestSessionStatus = Schema.Union([
-  Schema.Literal("Starting"),
-  Schema.Literal("Running"),
-  Schema.Literal("Stopped"),
+  Schema.Literal('Starting'),
+  Schema.Literal('Running'),
+  Schema.Literal('Stopped'),
 ]);
 
 export const PlaytestRuntimeZonePhase = Schema.Literals([
-  "stable",
-  "countdown",
-  "shrinking",
+  'stable',
+  'countdown',
+  'shrinking',
 ] as const);
 
 export const PlaytestRuntimeZoneStatus = Schema.Struct({
@@ -64,7 +64,7 @@ export const PlaytestRuntimePickupPrompt = Schema.Struct({
   itemKind: Schema.optional(Schema.String),
   tier: Schema.optional(Schema.String),
   distance: Schema.optional(Schema.Number),
-  action: Schema.Literal("pickup-loot"),
+  action: Schema.Literal('pickup-loot'),
   available: Schema.Boolean,
 });
 
@@ -117,7 +117,9 @@ export const PlaytestRuntimeScoreboardEntry = Schema.Struct({
 });
 
 export const PlaytestRuntimeMinimap = Schema.Struct({
-  zone: Schema.optional(Schema.Struct({ cx: Schema.Number, cy: Schema.Number, radius: Schema.Number })),
+  zone: Schema.optional(
+    Schema.Struct({ cx: Schema.Number, cy: Schema.Number, radius: Schema.Number }),
+  ),
   players: Schema.Array(
     Schema.Struct({
       playerId: Schema.String,
@@ -133,7 +135,7 @@ export const PlaytestRuntimeMinimap = Schema.Struct({
       objectId: Schema.String,
       x: Schema.Number,
       y: Schema.Number,
-      kind: Schema.Literals(["pickup", "loot", "hazard", "objective"] as const),
+      kind: Schema.Literals(['pickup', 'loot', 'hazard', 'objective'] as const),
       tier: Schema.optional(Schema.String),
       available: Schema.optional(Schema.Boolean),
     }),
@@ -193,8 +195,8 @@ export const PlaytestRuntimeReplayDiagnostics = Schema.Struct({
   eventFrames: Schema.Int,
   byteSize: Schema.Int,
   rollingHash: Schema.String,
-  recorderStatus: Schema.Literal("recording"),
-  deterministicVerifier: Schema.Literal("battle-royale-replay-harness"),
+  recorderStatus: Schema.Literal('recording'),
+  deterministicVerifier: Schema.Literal('battle-royale-replay-harness'),
 });
 
 export const PlaytestRuntimeEntityDiagnostics = Schema.Struct({
@@ -280,19 +282,19 @@ export const PlaytestListResponse = Schema.Struct({
 });
 
 export const PlaytestBehaviorDebugSource = Schema.Struct({
-  sourceKind: Schema.Literals(["visual", "typescript"] as const),
+  sourceKind: Schema.Literals(['visual', 'typescript'] as const),
   filePath: Schema.String,
   nodeId: Schema.optional(Schema.String),
 });
 
 export const PlaytestBehaviorDebugStep = Schema.Union([
   Schema.Struct({
-    kind: Schema.Literal("branch"),
+    kind: Schema.Literal('branch'),
     nodeId: Schema.String,
-    branch: Schema.Literals(["then", "else"] as const),
+    branch: Schema.Literals(['then', 'else'] as const),
   }),
   Schema.Struct({
-    kind: Schema.Literal("action"),
+    kind: Schema.Literal('action'),
     nodeId: Schema.String,
     actionId: Schema.String,
   }),
@@ -303,7 +305,7 @@ export const PlaytestBehaviorDebugTrace = Schema.Struct({
   tick: Schema.Int,
   behaviorId: BehaviorId,
   instanceId: Schema.String,
-  sourceKind: Schema.Literals(["visual", "typescript"] as const),
+  sourceKind: Schema.Literals(['visual', 'typescript'] as const),
   eventId: Schema.String,
   event: JsonObject,
   stateBefore: JsonObject,
@@ -315,7 +317,7 @@ export const PlaytestBehaviorDebugTrace = Schema.Struct({
 
 export const PlaytestBehaviorDebugDiagnostic = Schema.Struct({
   code: Schema.String,
-  severity: Schema.Literals(["error", "warning"] as const),
+  severity: Schema.Literals(['error', 'warning'] as const),
   message: Schema.String,
   behaviorId: Schema.optional(BehaviorId),
   eventId: Schema.optional(Schema.String),
@@ -325,14 +327,14 @@ export const PlaytestBehaviorDebugDiagnostic = Schema.Struct({
 
 export const PlaytestBehaviorReloadStatus = Schema.Struct({
   behaviorId: BehaviorId,
-  status: Schema.Literals(["applied", "rejected-using-last-known-good"] as const),
+  status: Schema.Literals(['applied', 'rejected-using-last-known-good'] as const),
   hash: Schema.optional(Schema.String),
   diagnostic: Schema.optional(PlaytestBehaviorDebugDiagnostic),
 });
 
 export const PlaytestBehaviorDebugSnapshot = Schema.Struct({
   sessionId: PlaytestSessionId,
-  status: Schema.Literals(["running", "paused"] as const),
+  status: Schema.Literals(['running', 'paused'] as const),
   tick: Schema.Int,
   traces: Schema.Array(PlaytestBehaviorDebugTrace).check(Schema.isMaxLength(256)),
   diagnostics: Schema.Array(PlaytestBehaviorDebugDiagnostic).check(Schema.isMaxLength(256)),
@@ -346,40 +348,40 @@ export const PlaytestBehaviorDebugInspectResponse = Schema.Struct({
 });
 export const PlaytestBehaviorDebugControlRequest = Schema.Struct({
   sessionId: PlaytestSessionId,
-  command: Schema.Literals(["pause", "step", "continue"] as const),
+  command: Schema.Literals(['pause', 'step', 'continue'] as const),
 });
 export const PlaytestBehaviorDebugControlResponse = PlaytestBehaviorDebugInspectResponse;
 
 export const PlaytestStartContract = defineContract({
-  channel: "tileborne:playtest:start",
+  channel: 'tileborne:playtest:start',
   request: PlaytestStartRequest,
   response: PlaytestStartResponse,
   errors: IpcContractErrors,
 });
 
 export const PlaytestStopContract = defineContract({
-  channel: "tileborne:playtest:stop",
+  channel: 'tileborne:playtest:stop',
   request: PlaytestStopRequest,
   response: PlaytestStopResponse,
   errors: IpcContractErrors,
 });
 
 export const PlaytestListContract = defineContract({
-  channel: "tileborne:playtest:list",
+  channel: 'tileborne:playtest:list',
   request: PlaytestListRequest,
   response: PlaytestListResponse,
   errors: IpcContractErrors,
 });
 
 export const PlaytestBehaviorDebugInspectContract = defineContract({
-  channel: "tileborne:playtest:behaviorDebugInspect",
+  channel: 'tileborne:playtest:behaviorDebugInspect',
   request: PlaytestBehaviorDebugInspectRequest,
   response: PlaytestBehaviorDebugInspectResponse,
   errors: IpcContractErrors,
 });
 
 export const PlaytestBehaviorDebugControlContract = defineContract({
-  channel: "tileborne:playtest:behaviorDebugControl",
+  channel: 'tileborne:playtest:behaviorDebugControl',
   request: PlaytestBehaviorDebugControlRequest,
   response: PlaytestBehaviorDebugControlResponse,
   errors: IpcContractErrors,

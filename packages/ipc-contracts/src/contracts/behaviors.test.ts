@@ -24,17 +24,19 @@ const uuid = (tail: string): Uuid => `00000000-0000-4000-8000-${tail.padStart(12
 
 describe('behavior authoring IPC contracts', () => {
   it('publishes the complete CRUD and registry channel family', () => {
-    expect(MainIpcRegistry.contracts.map(({ channel }) => channel)).toEqual(expect.arrayContaining([
-      'tileborne:behaviors:open',
-      'tileborne:behaviors:createVisual',
-      'tileborne:behaviors:saveVisual',
-      'tileborne:behaviors:convertToTypeScript',
-      'tileborne:behaviors:saveTypeScript',
-      'tileborne:behaviors:remove',
-      'tileborne:behaviors:registry',
-      'tileborne:behaviors:references',
-      'tileborne:behaviors:resolveReferences',
-    ]));
+    expect(MainIpcRegistry.contracts.map(({ channel }) => channel)).toEqual(
+      expect.arrayContaining([
+        'tileborne:behaviors:open',
+        'tileborne:behaviors:createVisual',
+        'tileborne:behaviors:saveVisual',
+        'tileborne:behaviors:convertToTypeScript',
+        'tileborne:behaviors:saveTypeScript',
+        'tileborne:behaviors:remove',
+        'tileborne:behaviors:registry',
+        'tileborne:behaviors:references',
+        'tileborne:behaviors:resolveReferences',
+      ]),
+    );
   });
 
   it('round-trips the declarative registry and rejects malformed visual saves', () => {
@@ -55,18 +57,22 @@ describe('behavior authoring IPC contracts', () => {
       options: [],
     });
     expect(references.options).toEqual([]);
-    expect(() => Schema.decodeUnknownSync(BehaviorsReferencesRequest)({
-      projectId: makeProjectId(uuid('1')),
-      kind: 'asset',
-      limit: 65,
-    })).toThrow();
-    expect(() => Schema.decodeUnknownSync(BehaviorsResolveReferencesRequest)({
-      projectId: makeProjectId(uuid('1')),
-      references: Array.from({ length: 65 }, () => ({
-        _tag: 'behavior',
-        behaviorId: makeBehaviorId(uuid('2')),
-      })),
-    })).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(BehaviorsReferencesRequest)({
+        projectId: makeProjectId(uuid('1')),
+        kind: 'asset',
+        limit: 65,
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(BehaviorsResolveReferencesRequest)({
+        projectId: makeProjectId(uuid('1')),
+        references: Array.from({ length: 65 }, () => ({
+          _tag: 'behavior',
+          behaviorId: makeBehaviorId(uuid('2')),
+        })),
+      }),
+    ).toThrow();
     const projectId = makeProjectId(uuid('1'));
     const create = Schema.decodeUnknownSync(BehaviorsCreateVisualRequest)({
       projectId,
@@ -78,25 +84,31 @@ describe('behavior authoring IPC contracts', () => {
       },
     });
     expect(create.definition.when.entryId).toBe('lifecycle.started');
-    expect(Schema.decodeUnknownSync(BehaviorsConvertToTypeScriptRequest)({
-      projectId,
-      behaviorId: makeBehaviorId(uuid('2')),
-      expectedRevision: 1,
-    }).expectedRevision).toBe(1);
-    expect(Schema.decodeUnknownSync(BehaviorsSaveTypeScriptRequest)({
-      projectId,
-      behaviorId: makeBehaviorId(uuid('2')),
-      expectedRevision: 1,
-      label: 'Script',
-      source: 'export default {};',
-      exportName: 'default',
-    }).exportName).toBe('default');
-    expect(() => Schema.decodeUnknownSync(BehaviorsSaveVisualRequest)({
-      projectId,
-      behaviorId: makeBehaviorId(uuid('2')),
-      expectedRevision: -1,
-      label: 'Broken',
-      definition: {},
-    })).toThrow();
+    expect(
+      Schema.decodeUnknownSync(BehaviorsConvertToTypeScriptRequest)({
+        projectId,
+        behaviorId: makeBehaviorId(uuid('2')),
+        expectedRevision: 1,
+      }).expectedRevision,
+    ).toBe(1);
+    expect(
+      Schema.decodeUnknownSync(BehaviorsSaveTypeScriptRequest)({
+        projectId,
+        behaviorId: makeBehaviorId(uuid('2')),
+        expectedRevision: 1,
+        label: 'Script',
+        source: 'export default {};',
+        exportName: 'default',
+      }).exportName,
+    ).toBe('default');
+    expect(() =>
+      Schema.decodeUnknownSync(BehaviorsSaveVisualRequest)({
+        projectId,
+        behaviorId: makeBehaviorId(uuid('2')),
+        expectedRevision: -1,
+        label: 'Broken',
+        definition: {},
+      }),
+    ).toThrow();
   });
 });

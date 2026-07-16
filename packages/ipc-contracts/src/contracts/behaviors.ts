@@ -110,12 +110,7 @@ export const BehaviorsRemoveRequest = Schema.Struct({
 export const BehaviorsRemoveResponse = BehaviorsOpenResponse;
 
 export const BehaviorsRegistryRequest = Schema.Struct({ projectId: ProjectId });
-export const BehaviorReferenceKind = Schema.Literals([
-  'entity',
-  'asset',
-  'catalog',
-  'behavior',
-]);
+export const BehaviorReferenceKind = Schema.Literals(['entity', 'asset', 'catalog', 'behavior']);
 export type BehaviorReferenceKind = typeof BehaviorReferenceKind.Type;
 export const BehaviorReferenceOptionView = Schema.Struct({
   id: Schema.String,

@@ -1,9 +1,9 @@
-import { Effect, Option, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { Effect, Option, Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { makeBuildId, makeProjectId } from "@tileborne/core";
+import { makeBuildId, makeProjectId } from '@tileborne/core';
 
-import { IpcChannel } from "./channel.js";
+import { IpcChannel } from './channel.js';
 import {
   AssetsListPacksContract,
   BuildsListBuildsContract,
@@ -18,18 +18,18 @@ import {
   RuntimeStartLocalHostContract,
   SupportListBundlesContract,
   SystemPingContract,
-} from "./contracts/index.js";
-import { IpcTransportError } from "./errors.js";
-import { createRegistry } from "./registry.js";
+} from './contracts/index.js';
+import { IpcTransportError } from './errors.js';
+import { createRegistry } from './registry.js';
 import {
   createIpcClient,
   defineHandlers,
   registerIpcHandlers,
   type IpcClientTransport,
   type IpcServerTransport,
-} from "./runtime/index.js";
+} from './runtime/index.js';
 
-const UUID = "550e8400-e29b-41d4-a716-446655440000";
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const projectId = makeProjectId(UUID);
 const buildId = makeBuildId(UUID);
 
@@ -75,88 +75,91 @@ class InMemoryIpcTransport {
 
 const domainCases = [
   {
-    domain: "projects",
+    domain: 'projects',
     contract: ProjectsListContract,
     request: {},
     response: { projects: [] },
     handler: () => Effect.succeed({ projects: [] }),
   },
   {
-    domain: "maps",
+    domain: 'maps',
     contract: MapsListContract,
     request: { projectId },
     response: { maps: [] },
     handler: () => Effect.succeed({ maps: [] }),
   },
   {
-    domain: "assets",
+    domain: 'assets',
     contract: AssetsListPacksContract,
     request: {},
     response: { packs: [] },
     handler: () => Effect.succeed({ packs: [] }),
   },
   {
-    domain: "plugins",
+    domain: 'plugins',
     contract: PluginsListContract,
     request: {},
     response: { plugins: [] },
     handler: () => Effect.succeed({ plugins: [] }),
   },
   {
-    domain: "jobs",
+    domain: 'jobs',
     contract: JobsListContract,
     request: {},
     response: { jobs: [] },
     handler: () => Effect.succeed({ jobs: [] }),
   },
   {
-    domain: "builds",
+    domain: 'builds',
     contract: BuildsListBuildsContract,
     request: { projectId },
     response: { builds: [] },
     handler: () => Effect.succeed({ builds: [] }),
   },
   {
-    domain: "exports",
+    domain: 'exports',
     contract: ExportsListExportsContract,
     request: { buildId },
     response: { exports: [] },
     handler: () => Effect.succeed({ exports: [] }),
   },
   {
-    domain: "playtest",
+    domain: 'playtest',
     contract: PlaytestListContract,
     request: {},
     response: { sessions: [] },
     handler: () => Effect.succeed({ sessions: [] }),
   },
   {
-    domain: "runtime",
+    domain: 'runtime',
     contract: RuntimeStartLocalHostContract,
     request: { port: 8787 },
-    response: { baseUrl: "http://127.0.0.1:8787", signingKey: "local-handoff-signing-key-32-bytes-x" },
+    response: {
+      baseUrl: 'http://127.0.0.1:8787',
+      signingKey: 'local-handoff-signing-key-32-bytes-x',
+    },
     handler: () =>
       Effect.succeed({
-        baseUrl: "http://127.0.0.1:8787",
-        signingKey: "local-handoff-signing-key-32-bytes-x",
+        baseUrl: 'http://127.0.0.1:8787',
+        signingKey: 'local-handoff-signing-key-32-bytes-x',
       }),
   },
   {
-    domain: "runtime-deploy",
+    domain: 'runtime-deploy',
     contract: RuntimeDeployListDeploymentsContract,
     request: { buildId },
     response: { deployments: [] },
     handler: () => Effect.succeed({ deployments: [] }),
   },
   {
-    domain: "support",
+    domain: 'support',
     contract: SupportListBundlesContract,
     request: {},
     response: { bundles: [] },
     handler: () => Effect.succeed({ bundles: [] }),
   },
   {
-    domain: "system",
+    domain: 'system',
     contract: SystemPingContract,
     request: {},
     response: { pong: true, ts: 1_714_000_000_000 },
@@ -164,9 +167,9 @@ const domainCases = [
   },
 ] as const;
 
-describe("main IPC registry domain composition", () => {
+describe('main IPC registry domain composition', () => {
   it.each(domainCases)(
-    "$domain round-trips a representative contract through client and handlers",
+    '$domain round-trips a representative contract through client and handlers',
     async ({ contract, request, response, handler }) => {
       expect(MainIpcRegistry.byChannel[contract.channel]).toBe(contract);
 

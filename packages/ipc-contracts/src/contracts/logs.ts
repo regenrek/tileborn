@@ -1,8 +1,8 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { IpcContractErrors } from './common.js';
 
 export const LogEntryView = Schema.Struct({
   ts: Schema.String,
@@ -19,7 +19,7 @@ export const LogsListRecentResponse = Schema.Struct({
 });
 
 export const LogsListRecentContract = defineContract({
-  channel: "tileborne:logs:listRecent",
+  channel: 'tileborne:logs:listRecent',
   request: LogsListRecentRequest,
   response: LogsListRecentResponse,
   errors: IpcContractErrors,

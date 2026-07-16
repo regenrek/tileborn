@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { makeMapId, makePackId, makeProjectId } from '@tileborne/core';
 
-import {
-  MapsContracts,
-  MapsImportTiledContract,
-  MapsSetMapTilesetPackContract,
-} from './maps.ts';
+import { MapsContracts, MapsImportTiledContract, MapsSetMapTilesetPackContract } from './maps.ts';
 
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const projectId = makeProjectId(UUID);
@@ -40,7 +36,12 @@ describe('map IPC contracts', () => {
   });
 
   it('validates Tiled import profiles at the IPC boundary', () => {
-    const accepted = ['standard', 'standard-plus-hints', 'assistive-infer', { kind: 'plugin', id: 'my-plugin' }] as const;
+    const accepted = [
+      'standard',
+      'standard-plus-hints',
+      'assistive-infer',
+      { kind: 'plugin', id: 'my-plugin' },
+    ] as const;
     for (const profile of accepted) {
       roundTrip(MapsImportTiledContract.request, {
         projectId,
@@ -49,7 +50,13 @@ describe('map IPC contracts', () => {
       });
     }
 
-    const rejected: readonly unknown[] = ['random', 'plugin:', 'plugin:bad path', { kind: 'plugin', id: 'bad path' }, 123];
+    const rejected: readonly unknown[] = [
+      'random',
+      'plugin:',
+      'plugin:bad path',
+      { kind: 'plugin', id: 'bad path' },
+      123,
+    ];
     for (const profile of rejected) {
       expect(() =>
         Schema.decodeUnknownSync(MapsImportTiledContract.request)({

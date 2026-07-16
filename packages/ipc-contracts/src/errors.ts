@@ -1,9 +1,9 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { IpcChannel } from "./channel.js";
+import { IpcChannel } from './channel.js';
 
 export class IpcChannelNotFoundError extends Schema.TaggedErrorClass<IpcChannelNotFoundError>()(
-  "IpcChannelNotFoundError",
+  'IpcChannelNotFoundError',
   {
     channel: Schema.String,
     message: Schema.String,
@@ -11,7 +11,7 @@ export class IpcChannelNotFoundError extends Schema.TaggedErrorClass<IpcChannelN
 ) {}
 
 export class IpcValidationError extends Schema.TaggedErrorClass<IpcValidationError>()(
-  "IpcValidationError",
+  'IpcValidationError',
   {
     channel: Schema.OptionFromUndefinedOr(IpcChannel),
     message: Schema.String,
@@ -19,14 +19,14 @@ export class IpcValidationError extends Schema.TaggedErrorClass<IpcValidationErr
   },
 ) {}
 
-export class IpcTimeoutError extends Schema.TaggedErrorClass<IpcTimeoutError>()("IpcTimeoutError", {
+export class IpcTimeoutError extends Schema.TaggedErrorClass<IpcTimeoutError>()('IpcTimeoutError', {
   channel: IpcChannel,
   timeoutMs: Schema.Number,
   message: Schema.String,
 }) {}
 
 export class IpcHandlerThrewError extends Schema.TaggedErrorClass<IpcHandlerThrewError>()(
-  "IpcHandlerThrewError",
+  'IpcHandlerThrewError',
   {
     channel: IpcChannel,
     message: Schema.String,
@@ -35,7 +35,7 @@ export class IpcHandlerThrewError extends Schema.TaggedErrorClass<IpcHandlerThre
 ) {}
 
 export class IpcPermissionDeniedError extends Schema.TaggedErrorClass<IpcPermissionDeniedError>()(
-  "IpcPermissionDeniedError",
+  'IpcPermissionDeniedError',
   {
     channel: IpcChannel,
     message: Schema.String,
@@ -44,7 +44,7 @@ export class IpcPermissionDeniedError extends Schema.TaggedErrorClass<IpcPermiss
 ) {}
 
 export class IpcSerializationError extends Schema.TaggedErrorClass<IpcSerializationError>()(
-  "IpcSerializationError",
+  'IpcSerializationError',
   {
     channel: Schema.OptionFromUndefinedOr(IpcChannel),
     message: Schema.String,
@@ -52,7 +52,7 @@ export class IpcSerializationError extends Schema.TaggedErrorClass<IpcSerializat
 ) {}
 
 export class IpcTransportError extends Schema.TaggedErrorClass<IpcTransportError>()(
-  "IpcTransportError",
+  'IpcTransportError',
   {
     channel: Schema.OptionFromUndefinedOr(IpcChannel),
     message: Schema.String,
@@ -60,7 +60,7 @@ export class IpcTransportError extends Schema.TaggedErrorClass<IpcTransportError
   },
 ) {}
 
-export class IpcDecodeError extends Schema.TaggedErrorClass<IpcDecodeError>()("IpcDecodeError", {
+export class IpcDecodeError extends Schema.TaggedErrorClass<IpcDecodeError>()('IpcDecodeError', {
   channel: Schema.OptionFromUndefinedOr(IpcChannel),
   message: Schema.String,
   issues: Schema.Array(Schema.String),
@@ -71,7 +71,7 @@ export class IpcContractError extends Error {
 
   constructor(error: Readonly<{ readonly _tag: string; readonly message?: string }>) {
     super(error.message ?? error._tag);
-    this.name = "IpcContractError";
+    this.name = 'IpcContractError';
     this._tag = error._tag;
     Object.assign(this, error);
   }

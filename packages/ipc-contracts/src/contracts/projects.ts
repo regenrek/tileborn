@@ -1,10 +1,10 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { MapId, ProjectId, ProjectManifest } from "@tileborne/core";
+import { MapId, ProjectId, ProjectManifest } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyResponse, IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyResponse, IpcContractErrors } from './common.js';
 
 export const ProjectSummary = Schema.Struct({
   id: ProjectId,
@@ -65,21 +65,21 @@ export const ProjectsCloseRequest = Schema.Struct({
 });
 
 export const ProjectsListContract = defineContract({
-  channel: "tileborne:projects:list",
+  channel: 'tileborne:projects:list',
   request: ProjectsListRequest,
   response: ProjectsListResponse,
   errors: IpcContractErrors,
 });
 
 export const ProjectsGetContract = defineContract({
-  channel: "tileborne:projects:get",
+  channel: 'tileborne:projects:get',
   request: ProjectsGetRequest,
   response: ProjectsGetResponse,
   errors: IpcContractErrors,
 });
 
 export const ProjectsCreateContract = defineContract({
-  channel: "tileborne:projects:create",
+  channel: 'tileborne:projects:create',
   request: ProjectsCreateRequest,
   response: ProjectsCreateResponse,
   errors: IpcContractErrors,
@@ -95,7 +95,7 @@ export const ProjectsCreateGameContract = defineContract({
 });
 
 export const ProjectsUpdateContract = defineContract({
-  channel: "tileborne:projects:update",
+  channel: 'tileborne:projects:update',
   request: ProjectsUpdateRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,
@@ -103,7 +103,7 @@ export const ProjectsUpdateContract = defineContract({
 });
 
 export const ProjectsDeleteContract = defineContract({
-  channel: "tileborne:projects:delete",
+  channel: 'tileborne:projects:delete',
   request: ProjectsDeleteRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,
@@ -111,7 +111,7 @@ export const ProjectsDeleteContract = defineContract({
 });
 
 export const ProjectsOpenContract = defineContract({
-  channel: "tileborne:projects:open",
+  channel: 'tileborne:projects:open',
   request: ProjectsOpenRequest,
   response: ProjectsOpenResponse,
   errors: IpcContractErrors,
@@ -119,7 +119,7 @@ export const ProjectsOpenContract = defineContract({
 });
 
 export const ProjectsCloseContract = defineContract({
-  channel: "tileborne:projects:close",
+  channel: 'tileborne:projects:close',
   request: ProjectsCloseRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,
@@ -141,7 +141,7 @@ export const ProjectsExportArchiveResponse = Schema.Struct({
 });
 
 export const ProjectsImportFromDirectoryContract = defineContract({
-  channel: "tileborne:projects:importFromDirectory",
+  channel: 'tileborne:projects:importFromDirectory',
   request: ProjectsImportFromDirectoryRequest,
   response: ProjectsImportFromDirectoryResponse,
   errors: IpcContractErrors,
@@ -149,7 +149,7 @@ export const ProjectsImportFromDirectoryContract = defineContract({
 });
 
 export const ProjectsExportArchiveContract = defineContract({
-  channel: "tileborne:projects:exportArchive",
+  channel: 'tileborne:projects:exportArchive',
   request: ProjectsExportArchiveRequest,
   response: ProjectsExportArchiveResponse,
   errors: IpcContractErrors,

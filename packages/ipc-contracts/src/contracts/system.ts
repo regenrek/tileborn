@@ -1,10 +1,10 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { MapId, ProjectId } from "@tileborne/core";
+import { MapId, ProjectId } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyRequest, IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyRequest, IpcContractErrors } from './common.js';
 
 export const SystemPingResponse = Schema.Struct({
   pong: Schema.Boolean,
@@ -33,21 +33,21 @@ export const SystemGetHomePathsResponse = Schema.Struct({
 });
 
 export const SystemPingContract = defineContract({
-  channel: "tileborne:system:ping",
+  channel: 'tileborne:system:ping',
   request: EmptyRequest,
   response: SystemPingResponse,
   errors: IpcContractErrors,
 });
 
 export const SystemGetVersionContract = defineContract({
-  channel: "tileborne:system:getVersion",
+  channel: 'tileborne:system:getVersion',
   request: EmptyRequest,
   response: SystemGetVersionResponse,
   errors: IpcContractErrors,
 });
 
 export const SystemGetHomePathsContract = defineContract({
-  channel: "tileborne:system:getHomePaths",
+  channel: 'tileborne:system:getHomePaths',
   request: EmptyRequest,
   response: SystemGetHomePathsResponse,
   errors: IpcContractErrors,
@@ -63,14 +63,14 @@ export const SystemPickImportSourceResponse = Schema.Struct({
 });
 
 export const SystemPickDirectoryContract = defineContract({
-  channel: "tileborne:system:pickDirectory",
+  channel: 'tileborne:system:pickDirectory',
   request: SystemPickDirectoryRequest,
   response: SystemPickDirectoryResponse,
   errors: IpcContractErrors,
 });
 
 export const SystemPickImportSourceContract = defineContract({
-  channel: "tileborne:system:pickImportSource",
+  channel: 'tileborne:system:pickImportSource',
   request: SystemPickImportSourceRequest,
   response: SystemPickImportSourceResponse,
   errors: IpcContractErrors,
@@ -88,7 +88,7 @@ export const SystemOpenPlaytestJoinWindowResponse = Schema.Struct({
 });
 
 export const SystemOpenPlaytestJoinWindowContract = defineContract({
-  channel: "tileborne:system:openPlaytestJoinWindow",
+  channel: 'tileborne:system:openPlaytestJoinWindow',
   request: SystemOpenPlaytestJoinWindowRequest,
   response: SystemOpenPlaytestJoinWindowResponse,
   errors: IpcContractErrors,

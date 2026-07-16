@@ -1,12 +1,12 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { JsonObject, MapId, ProjectId } from "@tileborne/core";
-import { Uint8ArraySchema } from "../bytes.js";
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { BattleRoyaleAbilityId, Direction8 } from "../protocols/battle-royale-input.js";
-import { PlaytestSessionId } from "./playtest.js";
-import { EmptyRequest, EmptyResponse, IpcContractErrors } from "./common.js";
+import { JsonObject, MapId, ProjectId } from '@tileborne/core';
+import { Uint8ArraySchema } from '../bytes.js';
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { BattleRoyaleAbilityId, Direction8 } from '../protocols/battle-royale-input.js';
+import { PlaytestSessionId } from './playtest.js';
+import { EmptyRequest, EmptyResponse, IpcContractErrors } from './common.js';
 
 export const RuntimeStartLocalHostRequest = Schema.Struct({
   port: Schema.optional(Schema.Number),
@@ -40,21 +40,21 @@ export const RuntimePrepareLocalRoomArtifactResponse = Schema.Struct({
 });
 
 export const RuntimeStartLocalHostContract = defineContract({
-  channel: "tileborne:runtime:startLocalHost",
+  channel: 'tileborne:runtime:startLocalHost',
   request: RuntimeStartLocalHostRequest,
   response: RuntimeStartLocalHostResponse,
   errors: IpcContractErrors,
 });
 
 export const RuntimeStopLocalHostContract = defineContract({
-  channel: "tileborne:runtime:stopLocalHost",
+  channel: 'tileborne:runtime:stopLocalHost',
   request: RuntimeStopLocalHostRequest,
   response: RuntimeStopLocalHostResponse,
   errors: IpcContractErrors,
 });
 
 export const RuntimePrepareLocalRoomArtifactContract = defineContract({
-  channel: "tileborne:runtime:prepareLocalRoomArtifact",
+  channel: 'tileborne:runtime:prepareLocalRoomArtifact',
   request: RuntimePrepareLocalRoomArtifactRequest,
   response: RuntimePrepareLocalRoomArtifactResponse,
   errors: IpcContractErrors,
@@ -94,14 +94,14 @@ export const RuntimePlaytestSnapshotResponse = Schema.Struct({
 });
 
 export const RuntimePlaytestInputContract = defineContract({
-  channel: "tileborne:runtime:playtestInput",
+  channel: 'tileborne:runtime:playtestInput',
   request: RuntimePlaytestInputRequest,
   response: RuntimePlaytestInputResponse,
   errors: IpcContractErrors,
 });
 
 export const RuntimePlaytestSnapshotContract = defineContract({
-  channel: "tileborne:runtime:playtestSnapshot",
+  channel: 'tileborne:runtime:playtestSnapshot',
   request: RuntimePlaytestSnapshotRequest,
   response: RuntimePlaytestSnapshotResponse,
   errors: IpcContractErrors,

@@ -1,13 +1,13 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { BuildId, ContentHash, ProjectId } from "@tileborne/core";
+import { BuildId, ContentHash, ProjectId } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyResponse, IpcContractErrors } from "./common.js";
-import { JobId } from "./assets.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyResponse, IpcContractErrors } from './common.js';
+import { JobId } from './assets.js';
 
-export const BuildTarget = Schema.Literals(["cloudflare", "local"]);
+export const BuildTarget = Schema.Literals(['cloudflare', 'local']);
 
 export const BuildSummary = Schema.Struct({
   id: BuildId,
@@ -44,7 +44,7 @@ export const BuildsDeleteBuildRequest = Schema.Struct({
 });
 
 export const BuildsBuildContract = defineContract({
-  channel: "tileborne:builds:build",
+  channel: 'tileborne:builds:build',
   request: BuildsBuildRequest,
   response: BuildsBuildResponse,
   errors: IpcContractErrors,
@@ -52,21 +52,21 @@ export const BuildsBuildContract = defineContract({
 });
 
 export const BuildsGetBuildContract = defineContract({
-  channel: "tileborne:builds:getBuild",
+  channel: 'tileborne:builds:getBuild',
   request: BuildsGetBuildRequest,
   response: BuildsGetBuildResponse,
   errors: IpcContractErrors,
 });
 
 export const BuildsListBuildsContract = defineContract({
-  channel: "tileborne:builds:listBuilds",
+  channel: 'tileborne:builds:listBuilds',
   request: BuildsListBuildsRequest,
   response: BuildsListBuildsResponse,
   errors: IpcContractErrors,
 });
 
 export const BuildsDeleteBuildContract = defineContract({
-  channel: "tileborne:builds:deleteBuild",
+  channel: 'tileborne:builds:deleteBuild',
   request: BuildsDeleteBuildRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,

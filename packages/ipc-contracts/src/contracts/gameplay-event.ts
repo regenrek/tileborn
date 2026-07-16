@@ -1,14 +1,14 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { WeaponDefinitionId } from "@tileborne/core";
-import { InventoryItemId, StatusEffectId } from "@tileborne/simulation";
+import { WeaponDefinitionId } from '@tileborne/core';
+import { InventoryItemId, StatusEffectId } from '@tileborne/simulation';
 
 /**
  * Plugin-neutral runtime identity used at the gameplay-event wire boundary.
  * A game-mode adapter maps its ECS/runtime identity into this stable string;
  * consumers never need to know the plugin's entity representation.
  */
-export const GameplayEntityId = Schema.String.pipe(Schema.brand("GameplayEntityId"));
+export const GameplayEntityId = Schema.String.pipe(Schema.brand('GameplayEntityId'));
 export type GameplayEntityId = typeof GameplayEntityId.Type;
 export const makeGameplayEntityId = (id: string): GameplayEntityId =>
   Schema.decodeUnknownSync(GameplayEntityId)(id);
@@ -16,19 +16,16 @@ export const makeGameplayEntityId = (id: string): GameplayEntityId =>
 export const makeGameplayItemId = (id: string): InventoryItemId =>
   Schema.decodeUnknownSync(InventoryItemId)(id);
 
-export class GameplayWeaponFired extends Schema.TaggedClass<GameplayWeaponFired>()(
-  "WeaponFired",
-  {
-    tick: Schema.Int,
-    sourceId: GameplayEntityId,
-    weaponId: WeaponDefinitionId,
-    damage: Schema.Number,
-    ammoRemaining: Schema.Int,
-  },
-) {}
+export class GameplayWeaponFired extends Schema.TaggedClass<GameplayWeaponFired>()('WeaponFired', {
+  tick: Schema.Int,
+  sourceId: GameplayEntityId,
+  weaponId: WeaponDefinitionId,
+  damage: Schema.Number,
+  ammoRemaining: Schema.Int,
+}) {}
 
 export class GameplayDamageApplied extends Schema.TaggedClass<GameplayDamageApplied>()(
-  "DamageApplied",
+  'DamageApplied',
   {
     tick: Schema.Int,
     targetId: GameplayEntityId,
@@ -40,7 +37,7 @@ export class GameplayDamageApplied extends Schema.TaggedClass<GameplayDamageAppl
 ) {}
 
 export class GameplayEntityDefeated extends Schema.TaggedClass<GameplayEntityDefeated>()(
-  "EntityDefeated",
+  'EntityDefeated',
   {
     tick: Schema.Int,
     targetId: GameplayEntityId,
@@ -50,29 +47,23 @@ export class GameplayEntityDefeated extends Schema.TaggedClass<GameplayEntityDef
   },
 ) {}
 
-export class GameplayItemGranted extends Schema.TaggedClass<GameplayItemGranted>()(
-  "ItemGranted",
-  {
-    tick: Schema.Int,
-    targetId: GameplayEntityId,
-    itemId: InventoryItemId,
-    slot: Schema.optionalKey(Schema.Int),
-    quantity: Schema.Int,
-  },
-) {}
+export class GameplayItemGranted extends Schema.TaggedClass<GameplayItemGranted>()('ItemGranted', {
+  tick: Schema.Int,
+  targetId: GameplayEntityId,
+  itemId: InventoryItemId,
+  slot: Schema.optionalKey(Schema.Int),
+  quantity: Schema.Int,
+}) {}
 
-export class GameplayItemDropped extends Schema.TaggedClass<GameplayItemDropped>()(
-  "ItemDropped",
-  {
-    tick: Schema.Int,
-    sourceId: GameplayEntityId,
-    itemId: InventoryItemId,
-    reason: Schema.Literals(["overflow", "requested", "defeat"] as const),
-  },
-) {}
+export class GameplayItemDropped extends Schema.TaggedClass<GameplayItemDropped>()('ItemDropped', {
+  tick: Schema.Int,
+  sourceId: GameplayEntityId,
+  itemId: InventoryItemId,
+  reason: Schema.Literals(['overflow', 'requested', 'defeat'] as const),
+}) {}
 
 export class GameplayItemConsumed extends Schema.TaggedClass<GameplayItemConsumed>()(
-  "ItemConsumed",
+  'ItemConsumed',
   {
     tick: Schema.Int,
     sourceId: GameplayEntityId,
@@ -81,7 +72,7 @@ export class GameplayItemConsumed extends Schema.TaggedClass<GameplayItemConsume
 ) {}
 
 export class GameplayStatusApplied extends Schema.TaggedClass<GameplayStatusApplied>()(
-  "StatusApplied",
+  'StatusApplied',
   {
     tick: Schema.Int,
     targetId: GameplayEntityId,
@@ -91,7 +82,7 @@ export class GameplayStatusApplied extends Schema.TaggedClass<GameplayStatusAppl
 ) {}
 
 export class GameplayStatusExpired extends Schema.TaggedClass<GameplayStatusExpired>()(
-  "StatusExpired",
+  'StatusExpired',
   {
     tick: Schema.Int,
     targetId: GameplayEntityId,
@@ -100,7 +91,7 @@ export class GameplayStatusExpired extends Schema.TaggedClass<GameplayStatusExpi
 ) {}
 
 export class GameplayZonePhaseChanged extends Schema.TaggedClass<GameplayZonePhaseChanged>()(
-  "ZonePhaseChanged",
+  'ZonePhaseChanged',
   {
     tick: Schema.Int,
     phase: Schema.String,
@@ -110,7 +101,7 @@ export class GameplayZonePhaseChanged extends Schema.TaggedClass<GameplayZonePha
 ) {}
 
 export class GameplayMatchPhaseChanged extends Schema.TaggedClass<GameplayMatchPhaseChanged>()(
-  "MatchPhaseChanged",
+  'MatchPhaseChanged',
   {
     tick: Schema.Int,
     phase: Schema.String,

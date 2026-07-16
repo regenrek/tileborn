@@ -1,10 +1,10 @@
-import { Option, Result, Schema } from "effect";
+import { Option, Result, Schema } from 'effect';
 
-const CHANNEL_PREFIX = "tileborne:";
+const CHANNEL_PREFIX = 'tileborne:';
 
 export const IpcChannel = Schema.String.check(
   Schema.isPattern(/^tileborne:[a-z][a-z0-9-]*(?::[a-z][a-zA-Z0-9-]*)+$/),
-).pipe(Schema.brand("IpcChannel"));
+).pipe(Schema.brand('IpcChannel'));
 
 export type IpcChannel = typeof IpcChannel.Type;
 

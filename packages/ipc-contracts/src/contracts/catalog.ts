@@ -8,10 +8,7 @@ import {
   PluginId,
   ProjectId,
 } from '@tileborne/core';
-import {
-  ProjectDefinitionProvenance,
-  WeaponCatalogEntry,
-} from '@tileborne/plugin-api';
+import { ProjectDefinitionProvenance, WeaponCatalogEntry } from '@tileborne/plugin-api';
 
 import { defineContract } from '../contract.js';
 import { createRegistry } from '../registry.js';

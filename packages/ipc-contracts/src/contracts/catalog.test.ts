@@ -69,7 +69,11 @@ describe('catalog IPC contracts', () => {
     roundTrip(CatalogResolveContract.request, { projectId });
     roundTrip(CatalogResolveContract.response, {
       objectTypes: [
-        { objectType: pluginGameObjectType, origin: 'plugin', sourcePluginId: '@tileborne/plugin-x' },
+        {
+          objectType: pluginGameObjectType,
+          origin: 'plugin',
+          sourcePluginId: '@tileborne/plugin-x',
+        },
         { objectType: pluginGameObjectType, origin: 'project' },
       ],
       lootTables: [{ id: lootTableId, label: 'common', entries: [] }],
@@ -83,10 +87,10 @@ describe('catalog IPC contracts', () => {
     expect(() =>
       Schema.decodeUnknownSync(CatalogResolveContract.response)({
         objectTypes: [{ objectType: pluginGameObjectType, origin: 'engine' }],
-      lootTables: [],
-      items: [],
-      weapons: [],
-      definitionProvenance: {},
+        lootTables: [],
+        items: [],
+        weapons: [],
+        definitionProvenance: {},
       }),
     ).toThrow();
   });

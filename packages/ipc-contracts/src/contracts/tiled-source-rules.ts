@@ -1,6 +1,6 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { ContentHash } from "@tileborne/core";
+import { ContentHash } from '@tileborne/core';
 import {
   ContradictoryRuleError,
   TiledSourceRulePipeline,
@@ -13,11 +13,11 @@ import {
   MissingTilesetError,
   SourceDigest,
   SourceManifestId,
-} from "@tileborne/sdk-tileset/tiled-source-rules";
+} from '@tileborne/sdk-tileset/tiled-source-rules';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { IpcContractErrors } from "./common.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { IpcContractErrors } from './common.js';
 
 export const TiledSourceRulesContractErrors = Schema.Union([
   IpcContractErrors,
@@ -28,7 +28,7 @@ export const TiledSourceRulesContractErrors = Schema.Union([
 ]);
 
 export class TiledSourceRulesCompilePreviewRequest extends Schema.Class<TiledSourceRulesCompilePreviewRequest>(
-  "TiledSourceRulesCompilePreviewRequest",
+  'TiledSourceRulesCompilePreviewRequest',
 )({
   manifestId: SourceManifestId,
   manifest: TiledSourceTiledSourceManifest,
@@ -36,7 +36,7 @@ export class TiledSourceRulesCompilePreviewRequest extends Schema.Class<TiledSou
 }) {}
 
 export class TiledSourceRulesCompilePreviewResponse extends Schema.Class<TiledSourceRulesCompilePreviewResponse>(
-  "TiledSourceRulesCompilePreviewResponse",
+  'TiledSourceRulesCompilePreviewResponse',
 )({
   manifestId: SourceManifestId,
   sourceDigest: SourceDigest,
@@ -45,7 +45,7 @@ export class TiledSourceRulesCompilePreviewResponse extends Schema.Class<TiledSo
 }) {}
 
 export class TiledSourceRulesRuntimeApplyRequest extends Schema.Class<TiledSourceRulesRuntimeApplyRequest>(
-  "TiledSourceRulesRuntimeApplyRequest",
+  'TiledSourceRulesRuntimeApplyRequest',
 )({
   manifestId: SourceManifestId,
   pipeline: TiledSourceRulePipeline,
@@ -53,7 +53,7 @@ export class TiledSourceRulesRuntimeApplyRequest extends Schema.Class<TiledSourc
 }) {}
 
 export class TiledSourceRulesRuntimeApplyResponse extends Schema.Class<TiledSourceRulesRuntimeApplyResponse>(
-  "TiledSourceRulesRuntimeApplyResponse",
+  'TiledSourceRulesRuntimeApplyResponse',
 )({
   manifestId: SourceManifestId,
   sourceDigest: SourceDigest,
@@ -61,16 +61,16 @@ export class TiledSourceRulesRuntimeApplyResponse extends Schema.Class<TiledSour
 }) {}
 
 export const TiledSourceRulesProgressStage = Schema.Literals([
-  "queued",
-  "validating-source",
-  "compiling-rules",
-  "projecting-runtime",
-  "completed",
-  "failed",
+  'queued',
+  'validating-source',
+  'compiling-rules',
+  'projecting-runtime',
+  'completed',
+  'failed',
 ] as const);
 
 export class TiledSourceRulesCompileProgressEventPayload extends Schema.Class<TiledSourceRulesCompileProgressEventPayload>(
-  "TiledSourceRulesCompileProgressEventPayload",
+  'TiledSourceRulesCompileProgressEventPayload',
 )({
   manifestId: SourceManifestId,
   sourceDigest: Schema.OptionFromOptional(SourceDigest),
@@ -81,7 +81,7 @@ export class TiledSourceRulesCompileProgressEventPayload extends Schema.Class<Ti
 }) {}
 
 export class TiledSourceRulesRuntimeApplyProgressEventPayload extends Schema.Class<TiledSourceRulesRuntimeApplyProgressEventPayload>(
-  "TiledSourceRulesRuntimeApplyProgressEventPayload",
+  'TiledSourceRulesRuntimeApplyProgressEventPayload',
 )({
   manifestId: SourceManifestId,
   sourceDigest: SourceDigest,
@@ -93,12 +93,12 @@ export class TiledSourceRulesRuntimeApplyProgressEventPayload extends Schema.Cla
 }) {}
 
 export const TiledSourceRulesDiagnosticsScope = Schema.Literals([
-  "compile-preview",
-  "runtime-apply",
+  'compile-preview',
+  'runtime-apply',
 ] as const);
 
 export class TiledSourceRulesDiagnosticsEventPayload extends Schema.Class<TiledSourceRulesDiagnosticsEventPayload>(
-  "TiledSourceRulesDiagnosticsEventPayload",
+  'TiledSourceRulesDiagnosticsEventPayload',
 )({
   manifestId: SourceManifestId,
   sourceDigest: Schema.OptionFromOptional(SourceDigest),
@@ -108,14 +108,14 @@ export class TiledSourceRulesDiagnosticsEventPayload extends Schema.Class<TiledS
 }) {}
 
 export const TiledSourceRulesCompilePreviewContract = defineContract({
-  channel: "tileborne:tiled-source-rules:compilePreview",
+  channel: 'tileborne:tiled-source-rules:compilePreview',
   request: TiledSourceRulesCompilePreviewRequest,
   response: TiledSourceRulesCompilePreviewResponse,
   errors: TiledSourceRulesContractErrors,
 });
 
 export const TiledSourceRulesRuntimeApplyContract = defineContract({
-  channel: "tileborne:tiled-source-rules:runtimeApply",
+  channel: 'tileborne:tiled-source-rules:runtimeApply',
   request: TiledSourceRulesRuntimeApplyRequest,
   response: TiledSourceRulesRuntimeApplyResponse,
   errors: TiledSourceRulesContractErrors,

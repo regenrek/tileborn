@@ -1,12 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
-import { decodePersistedTileborneMapJson, type TileborneMap } from "@tileborne/core";
+import { decodePersistedTileborneMapJson, type TileborneMap } from '@tileborne/core';
 
-import { CliValidationError } from "../render/errors.js";
+import { CliValidationError } from '../render/errors.js';
 
 export const readMapFile = async (filePath: string): Promise<TileborneMap> => {
   try {
-    const raw = await readFile(filePath, "utf8");
+    const raw = await readFile(filePath, 'utf8');
     const parsed: unknown = JSON.parse(raw);
     return decodePersistedTileborneMapJson(parsed);
   } catch (cause) {
@@ -23,9 +23,9 @@ export const mapToPersistedJson = (map: TileborneMap): unknown => ({
   tileSize: { width: map.tileSize.width, height: map.tileSize.height },
   layers: map.layers.map((layer) => {
     switch (layer._tag) {
-      case "tile":
+      case 'tile':
         return {
-          kind: "tile",
+          kind: 'tile',
           id: layer.id,
           name: layer.name,
           visible: layer.visible,
@@ -38,18 +38,18 @@ export const mapToPersistedJson = (map: TileborneMap): unknown => ({
             tiles: [...chunk.tiles],
           })),
         };
-      case "object":
+      case 'object':
         return {
-          kind: "object",
+          kind: 'object',
           id: layer.id,
           name: layer.name,
           visible: layer.visible,
           opacity: layer.opacity,
           objectIds: [...layer.objectIds],
         };
-      case "image":
+      case 'image':
         return {
-          kind: "image",
+          kind: 'image',
           id: layer.id,
           name: layer.name,
           visible: layer.visible,
@@ -58,9 +58,9 @@ export const mapToPersistedJson = (map: TileborneMap): unknown => ({
           x: layer.x,
           y: layer.y,
         };
-      case "collision":
+      case 'collision':
         return {
-          kind: "collision",
+          kind: 'collision',
           id: layer.id,
           name: layer.name,
           visible: layer.visible,

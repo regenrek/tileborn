@@ -1,18 +1,18 @@
-import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
-import { MapId } from "@tileborne/core";
-import { PlaytestService } from "@tileborne/services-build";
-import { createLocalGameHost, type LocalGameHost } from "@tileborne/services-build/local-game-host";
-import { Effect } from "effect";
+import { MapId } from '@tileborne/core';
+import { PlaytestService } from '@tileborne/services-build';
+import { createLocalGameHost, type LocalGameHost } from '@tileborne/services-build/local-game-host';
+import { Effect } from 'effect';
 
-import { findAvailablePort } from "./listen-port.js";
-import { resolveProjectId } from "./project-context.js";
-import { requestSignalExitCode } from "./shutdown.js";
-import { disposeCliRuntime, runCliEffect } from "../services-layer.js";
-import { CliValidationError } from "../render/errors.js";
-import { renderMultiplayerStatus, type RenderContext } from "../render/output.js";
+import { findAvailablePort } from './listen-port.js';
+import { resolveProjectId } from './project-context.js';
+import { requestSignalExitCode } from './shutdown.js';
+import { disposeCliRuntime, runCliEffect } from '../services-layer.js';
+import { CliValidationError } from '../render/errors.js';
+import { renderMultiplayerStatus, type RenderContext } from '../render/output.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -39,21 +39,21 @@ export interface MultiplayerPlaytestReady {
 }
 
 export const signingKeyFingerprint = (signingKey: string): string =>
-  createHash("sha256").update(signingKey).digest("hex").slice(0, 12);
+  createHash('sha256').update(signingKey).digest('hex').slice(0, 12);
 
 const toWebSocketUrl = (connectUrl: string): string =>
-  connectUrl.replace(/^http:\/\//i, "ws://").replace(/^https:\/\//i, "wss://");
+  connectUrl.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
 
 const readPlayersArg = (players: number): number => {
   if (!Number.isFinite(players) || players <= 0 || !Number.isInteger(players)) {
-    throw new CliValidationError({ message: "players must be a positive integer" });
+    throw new CliValidationError({ message: 'players must be a positive integer' });
   }
   return players;
 };
 
 const readPortArg = (port: number): number => {
   if (!Number.isFinite(port) || port < 0) {
-    throw new CliValidationError({ message: "port must be 0 (auto) or a positive integer" });
+    throw new CliValidationError({ message: 'port must be 0 (auto) or a positive integer' });
   }
   return port;
 };
@@ -72,7 +72,7 @@ const bootstrapArtifact = (input: MultiplayerPlaytestInput) =>
 
 const openDesktopClient = async (deeplink: string): Promise<void> => {
   const platform = process.platform;
-  const opener = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
+  const opener = platform === 'darwin' ? 'open' : platform === 'win32' ? 'start' : 'xdg-open';
   await execFileAsync(opener, [deeplink]).catch(() => undefined);
 };
 
@@ -83,14 +83,14 @@ const installMultiplayerSignalHandlers = (shutdown: () => Promise<void>): void =
       return;
     }
     active = true;
-    process.removeAllListeners("SIGINT");
-    process.removeAllListeners("SIGTERM");
+    process.removeAllListeners('SIGINT');
+    process.removeAllListeners('SIGTERM');
     void shutdown().finally(() => process.exit(0));
   };
-  process.removeAllListeners("SIGINT");
-  process.removeAllListeners("SIGTERM");
-  process.on("SIGINT", handler);
-  process.on("SIGTERM", handler);
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
+  process.on('SIGINT', handler);
+  process.on('SIGTERM', handler);
 };
 
 export const runMultiplayerPlaytest = async (
@@ -106,8 +106,8 @@ export const runMultiplayerPlaytest = async (
   let host: LocalGameHost | undefined;
   host = await createLocalGameHost({ port });
   const createResponse = await host.fetch(`${host.baseUrl}/rooms/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       mapId: input.mapId,
       options: {
@@ -122,7 +122,10 @@ export const runMultiplayerPlaytest = async (
     throw new CliValidationError({ message: `room create failed: HTTP ${createResponse.status}` });
   }
 
-  const created = (await createResponse.json()) as { readonly roomId: string; readonly wsUrl: string };
+  const created = (await createResponse.json()) as {
+    readonly roomId: string;
+    readonly wsUrl: string;
+  };
   const wsUrl = toWebSocketUrl(created.wsUrl);
   const ready: MultiplayerPlaytestReady = {
     baseUrl: host.baseUrl,

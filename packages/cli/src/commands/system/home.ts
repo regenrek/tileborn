@@ -1,20 +1,20 @@
-import { Effect, Option } from "effect";
+import { Effect, Option } from 'effect';
 
-import { ConfigService, HomeService } from "@tileborne/services-foundation";
+import { ConfigService, HomeService } from '@tileborne/services-foundation';
 
-import { runCliEffect } from "../../services-layer.js";
-import { mapErrorToExitCode } from "../../render/errors.js";
-import { renderFailure, renderSuccess, setVerboseLevel } from "../../render/output.js";
+import { runCliEffect } from '../../services-layer.js';
+import { mapErrorToExitCode } from '../../render/errors.js';
+import { renderFailure, renderSuccess, setVerboseLevel } from '../../render/output.js';
 import {
   globalArgs,
   readGlobalCliArgs,
   readStringArg,
   renderContextFromArgs,
   type CliRunContext,
-} from "../shared.js";
+} from '../shared.js';
 
 const showHome = async (ctx: ReturnType<typeof renderContextFromArgs>) => {
-  const { readdir } = await import("node:fs/promises");
+  const { readdir } = await import('node:fs/promises');
   const result = await runCliEffect(
     Effect.gen(function* () {
       const home = yield* HomeService;
@@ -24,7 +24,7 @@ const showHome = async (ctx: ReturnType<typeof renderContextFromArgs>) => {
         catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
       });
       return {
-        home: process.env["TILEBORNE_HOME"] ?? paths.root,
+        home: process.env['TILEBORNE_HOME'] ?? paths.root,
         root: paths.root,
         entries,
         paths,
@@ -36,17 +36,17 @@ const showHome = async (ctx: ReturnType<typeof renderContextFromArgs>) => {
 
 export const homeCommand = {
   meta: {
-    name: "home",
-    description: "Show or configure the Tileborne home directory",
+    name: 'home',
+    description: 'Show or configure the Tileborne home directory',
   },
   subCommands: {
     set: {
-      meta: { name: "set", description: "Set the Tileborne home directory" },
+      meta: { name: 'set', description: 'Set the Tileborne home directory' },
       args: {
         ...globalArgs,
         path: {
-          type: "positional" as const,
-          description: "New home directory path",
+          type: 'positional' as const,
+          description: 'New home directory path',
           required: true,
         },
       },
@@ -54,9 +54,9 @@ export const homeCommand = {
         const global = readGlobalCliArgs(context.args);
         const ctx = renderContextFromArgs(global);
         setVerboseLevel(global.verbose);
-        const homePath = readStringArg(context.args, "path");
+        const homePath = readStringArg(context.args, 'path');
         if (!homePath) {
-          renderFailure(ctx, new Error("home set requires a path argument"), 64);
+          renderFailure(ctx, new Error('home set requires a path argument'), 64);
           return;
         }
         try {

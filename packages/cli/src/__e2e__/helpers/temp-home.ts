@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach } from 'vitest';
 
 const tempHomes: string[] = [];
 const tempDirs: string[] = [];
@@ -11,7 +11,7 @@ let activeHome: string | undefined;
 
 export const registerE2eHomeHooks = (): void => {
   beforeEach(() => {
-    activeHome = mkdtempSync(path.join(tmpdir(), "tileborne-cli-e2e-home-"));
+    activeHome = mkdtempSync(path.join(tmpdir(), 'tileborne-cli-e2e-home-'));
     tempHomes.push(activeHome);
   });
 
@@ -34,7 +34,7 @@ export const registerE2eHomeHooks = (): void => {
 
 export const tileborneHome = (): string => {
   if (!activeHome) {
-    throw new Error("e2e home is not initialized; call registerE2eHomeHooks() first");
+    throw new Error('e2e home is not initialized; call registerE2eHomeHooks() first');
   }
   return activeHome;
 };

@@ -232,7 +232,10 @@ describe.sequential('game CLI families', () => {
         readonly featureFlags: { readonly imageCollection: boolean; readonly gridAtlas: boolean };
         readonly placeableCandidates: readonly unknown[];
         readonly sourceRoles: readonly { readonly kind: string; readonly evidence: string }[];
-        readonly importRecommendation: { readonly primaryAction: string; readonly browseTarget: string };
+        readonly importRecommendation: {
+          readonly primaryAction: string;
+          readonly browseTarget: string;
+        };
       };
     };
     expect(payload.data.featureFlags.imageCollection).toBe(true);

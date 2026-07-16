@@ -27,16 +27,16 @@ export interface GameTemplateOptions {
  * literal is CLI template DATA (the thin product repo names its shipped
  * plugin) — engine packages stay plugin-neutral and never read it.
  */
-export const DEFAULT_GAME_PLUGIN_ID = "@tileborne-plugins/battle-royale";
+export const DEFAULT_GAME_PLUGIN_ID = '@tileborne-plugins/battle-royale';
 
 /** Top-level directories of the thin product repo shape. */
 export const TEMPLATE_DIRECTORIES = [
-  "branding",
-  "assets",
-  "maps",
-  "plugins",
-  "deploy",
-  "scripts",
+  'branding',
+  'assets',
+  'maps',
+  'plugins',
+  'deploy',
+  'scripts',
 ] as const;
 
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
@@ -44,18 +44,18 @@ const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 export const renderPackageJson = ({ name, pluginId }: GameTemplateOptions): string =>
   json({
     name,
-    version: "0.1.0",
+    version: '0.1.0',
     private: true,
-    type: "module",
+    type: 'module',
     scripts: {
-      build: "node scripts/build.mjs",
+      build: 'node scripts/build.mjs',
       serve: 'tileborne game serve --dir "dist/game"',
-      deploy: "node scripts/deploy.mjs",
+      deploy: 'node scripts/deploy.mjs',
     },
     devDependencies: {
-      "@tileborne/cli": "latest",
-      [pluginId]: "latest",
-      wrangler: "^4.0.0",
+      '@tileborne/cli': 'latest',
+      [pluginId]: 'latest',
+      wrangler: '^4.0.0',
     },
   });
 
@@ -81,17 +81,17 @@ export const renderBrandingTokens = ({ name, pluginId }: GameTemplateOptions): s
     schemaVersion: 1,
     title: name,
     palette: {
-      background: "#0b0d12",
-      surface: "#161a22",
-      accent: "#4f8cff",
-      accentHostile: "#ff5a5a",
-      accentFriendly: "#52d273",
-      textPrimary: "#f2f4f8",
-      textMuted: "#9aa3b2",
+      background: '#0b0d12',
+      surface: '#161a22',
+      accent: '#4f8cff',
+      accentHostile: '#ff5a5a',
+      accentFriendly: '#52d273',
+      textPrimary: '#f2f4f8',
+      textMuted: '#9aa3b2',
     },
     lobbyCopy: {
-      tagline: "Your game, your maps, your brand.",
-      cta: "Play now",
+      tagline: 'Your game, your maps, your brand.',
+      cta: 'Play now',
     },
     servers: {
       plugin: pluginId,

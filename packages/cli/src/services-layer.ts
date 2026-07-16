@@ -1,13 +1,9 @@
-import { AppServicesLayer } from "@tileborne/services-app";
-import { ServicesBuildLayer } from "@tileborne/services-build";
-import { PluginInstallerLayer } from "@tileborne/services-plugin";
-import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
+import { AppServicesLayer } from '@tileborne/services-app';
+import { ServicesBuildLayer } from '@tileborne/services-build';
+import { PluginInstallerLayer } from '@tileborne/services-plugin';
+import { Effect, Fiber, Layer, ManagedRuntime } from 'effect';
 
-const CliServicesLayer = Layer.mergeAll(
-  AppServicesLayer,
-  ServicesBuildLayer,
-  PluginInstallerLayer,
-);
+const CliServicesLayer = Layer.mergeAll(AppServicesLayer, ServicesBuildLayer, PluginInstallerLayer);
 
 const makeRuntime = () => ManagedRuntime.make(CliServicesLayer);
 
@@ -20,7 +16,11 @@ export const getCliRuntime = () => {
 };
 
 export const runCliEffect = async <A, E>(
-  effect: Effect.Effect<A, E, ManagedRuntime.ManagedRuntime.Services<ReturnType<typeof getCliRuntime>>>,
+  effect: Effect.Effect<
+    A,
+    E,
+    ManagedRuntime.ManagedRuntime.Services<ReturnType<typeof getCliRuntime>>
+  >,
 ): Promise<A> => {
   const rt = getCliRuntime();
   const fiber = rt.runFork(effect);

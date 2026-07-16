@@ -1,40 +1,45 @@
-import { Effect, Option } from "effect";
+import { Effect, Option } from 'effect';
 
-import { ConfigService, type LoggerLevel, type TileborneConfig } from "@tileborne/services-foundation";
+import {
+  ConfigService,
+  type LoggerLevel,
+  type TileborneConfig,
+} from '@tileborne/services-foundation';
 
-import { runCliEffect } from "../../services-layer.js";
-import { CliUsageError, CliValidationError, mapErrorToExitCode } from "../../render/errors.js";
-import { renderFailure, renderSuccess, setVerboseLevel } from "../../render/output.js";
+import { runCliEffect } from '../../services-layer.js';
+import { CliUsageError, CliValidationError, mapErrorToExitCode } from '../../render/errors.js';
+import { renderFailure, renderSuccess, setVerboseLevel } from '../../render/output.js';
 import {
   globalArgs,
   readGlobalCliArgs,
   readStringArg,
   renderContextFromArgs,
   type CliRunContext,
-} from "../shared.js";
+} from '../shared.js';
 
-const CONFIG_KEYS = ["loggerLevel", "telemetryOptIn", "lastOpenedProject", "homePath"] as const;
+const CONFIG_KEYS = ['loggerLevel', 'telemetryOptIn', 'lastOpenedProject', 'homePath'] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
-const isConfigKey = (key: string): key is ConfigKey => (CONFIG_KEYS as readonly string[]).includes(key);
+const isConfigKey = (key: string): key is ConfigKey =>
+  (CONFIG_KEYS as readonly string[]).includes(key);
 
 const parseConfigValue = (key: ConfigKey, raw: string): TileborneConfig[keyof TileborneConfig] => {
   switch (key) {
-    case "loggerLevel":
-      if (!["trace", "debug", "info", "warn", "error", "silent"].includes(raw)) {
+    case 'loggerLevel':
+      if (!['trace', 'debug', 'info', 'warn', 'error', 'silent'].includes(raw)) {
         throw new CliValidationError({ message: `invalid loggerLevel: ${raw}` });
       }
       return raw as LoggerLevel;
-    case "telemetryOptIn":
-      if (raw === "true") {
+    case 'telemetryOptIn':
+      if (raw === 'true') {
         return true;
       }
-      if (raw === "false") {
+      if (raw === 'false') {
         return false;
       }
       throw new CliValidationError({ message: `invalid boolean for telemetryOptIn: ${raw}` });
-    case "lastOpenedProject":
-    case "homePath":
+    case 'lastOpenedProject':
+    case 'homePath':
       return raw.length === 0 ? Option.none() : Option.some(raw);
     default:
       throw new CliValidationError({ message: `unsupported config key: ${key}` });
@@ -43,30 +48,30 @@ const parseConfigValue = (key: ConfigKey, raw: string): TileborneConfig[keyof Ti
 
 const patchForKey = (key: ConfigKey, value: TileborneConfig[keyof TileborneConfig]) => {
   switch (key) {
-    case "loggerLevel":
+    case 'loggerLevel':
       return { loggerLevel: value as LoggerLevel };
-    case "telemetryOptIn":
+    case 'telemetryOptIn':
       return { telemetryOptIn: value as boolean };
-    case "lastOpenedProject":
+    case 'lastOpenedProject':
       return { lastOpenedProject: value as Option.Option<string> };
-    case "homePath":
+    case 'homePath':
       return { homePath: value as Option.Option<string> };
   }
 };
 
 export const configCommand = {
   meta: {
-    name: "config",
-    description: "Read or update Tileborne configuration",
+    name: 'config',
+    description: 'Read or update Tileborne configuration',
   },
   subCommands: {
     get: {
-      meta: { name: "get", description: "Get a configuration value" },
+      meta: { name: 'get', description: 'Get a configuration value' },
       args: {
         ...globalArgs,
         key: {
-          type: "positional" as const,
-          description: "Configuration key",
+          type: 'positional' as const,
+          description: 'Configuration key',
           required: true,
         },
       },
@@ -75,9 +80,9 @@ export const configCommand = {
         const ctx = renderContextFromArgs(global);
         setVerboseLevel(global.verbose);
         try {
-          const keyValue = readStringArg(context.args, "key");
+          const keyValue = readStringArg(context.args, 'key');
           if (!keyValue || !isConfigKey(keyValue)) {
-            throw new CliUsageError({ message: `unknown config key: ${keyValue ?? "<missing>"}` });
+            throw new CliUsageError({ message: `unknown config key: ${keyValue ?? '<missing>'}` });
           }
           const key = keyValue;
           const value = await runCliEffect(
@@ -85,13 +90,13 @@ export const configCommand = {
               const config = yield* ConfigService;
               const current = yield* config.get;
               switch (key) {
-                case "loggerLevel":
+                case 'loggerLevel':
                   return current.loggerLevel;
-                case "telemetryOptIn":
+                case 'telemetryOptIn':
                   return current.telemetryOptIn;
-                case "lastOpenedProject":
+                case 'lastOpenedProject':
                   return current.lastOpenedProject;
-                case "homePath":
+                case 'homePath':
                   return current.homePath;
               }
             }),
@@ -103,17 +108,17 @@ export const configCommand = {
       },
     },
     set: {
-      meta: { name: "set", description: "Set a configuration value" },
+      meta: { name: 'set', description: 'Set a configuration value' },
       args: {
         ...globalArgs,
         key: {
-          type: "positional" as const,
-          description: "Configuration key",
+          type: 'positional' as const,
+          description: 'Configuration key',
           required: true,
         },
         value: {
-          type: "positional" as const,
-          description: "Configuration value",
+          type: 'positional' as const,
+          description: 'Configuration value',
           required: true,
         },
       },
@@ -122,10 +127,10 @@ export const configCommand = {
         const ctx = renderContextFromArgs(global);
         setVerboseLevel(global.verbose);
         try {
-          const keyValue = readStringArg(context.args, "key");
-          const rawValue = readStringArg(context.args, "value");
+          const keyValue = readStringArg(context.args, 'key');
+          const rawValue = readStringArg(context.args, 'value');
           if (!keyValue || !isConfigKey(keyValue) || rawValue === undefined) {
-            throw new CliUsageError({ message: "config set requires <key> <value>" });
+            throw new CliUsageError({ message: 'config set requires <key> <value>' });
           }
           const key = keyValue;
           const parsed = parseConfigValue(key, rawValue);
@@ -136,11 +141,11 @@ export const configCommand = {
             }),
           );
           const nextValue =
-            key === "loggerLevel"
+            key === 'loggerLevel'
               ? next.loggerLevel
-              : key === "telemetryOptIn"
+              : key === 'telemetryOptIn'
                 ? next.telemetryOptIn
-                : key === "lastOpenedProject"
+                : key === 'lastOpenedProject'
                   ? next.lastOpenedProject
                   : next.homePath;
           renderSuccess(ctx, { key, value: nextValue, config: next });
@@ -150,7 +155,7 @@ export const configCommand = {
       },
     },
     list: {
-      meta: { name: "list", description: "List all configuration values" },
+      meta: { name: 'list', description: 'List all configuration values' },
       args: globalArgs,
       async run(context: CliRunContext) {
         const global = readGlobalCliArgs(context.args);

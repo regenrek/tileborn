@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { spawnCli } from "./helpers/spawn-cli.js";
-import { registerE2eHomeHooks } from "./helpers/temp-home.js";
+import { spawnCli } from './helpers/spawn-cli.js';
+import { registerE2eHomeHooks } from './helpers/temp-home.js';
 
-describe.sequential("game serve e2e", () => {
+describe.sequential('game serve e2e', () => {
   registerE2eHomeHooks();
 
-  it("boots local host, serves health, and exits 0 on SIGINT", async () => {
-    const handle = spawnCli(["game", "serve", "--port", "0", "--json"], {
-      env: { TILEBORNE_LOG_LEVEL: "silent" },
+  it('boots local host, serves health, and exits 0 on SIGINT', async () => {
+    const handle = spawnCli(['game', 'serve', '--port', '0', '--json'], {
+      env: { TILEBORNE_LOG_LEVEL: 'silent' },
     });
 
     await handle.waitForOutput(/"baseUrl"\s*:\s*"([^"]+)"/);
@@ -24,10 +24,12 @@ describe.sequential("game serve e2e", () => {
     const health = await fetch(`${payload.data.baseUrl}/health`);
     expect(health.status).toBe(200);
 
-    handle.kill("SIGINT");
+    handle.kill('SIGINT');
     const exitCode = await Promise.race([
       handle.exited,
-      new Promise<number>((_, reject) => setTimeout(() => reject(new Error("process did not exit within 3s")), 3_000)),
+      new Promise<number>((_, reject) =>
+        setTimeout(() => reject(new Error('process did not exit within 3s')), 3_000),
+      ),
     ]);
     expect(exitCode).toBe(0);
   }, 30_000);

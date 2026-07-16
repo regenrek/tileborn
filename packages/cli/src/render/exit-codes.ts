@@ -18,22 +18,22 @@ export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
 export const exitCodeLabel = (code: ExitCodeValue): string => {
   switch (code) {
     case ExitCode.Ok:
-      return "OK";
+      return 'OK';
     case ExitCode.Usage:
-      return "USAGE";
+      return 'USAGE';
     case ExitCode.DataErr:
-      return "DATAERR";
+      return 'DATAERR';
     case ExitCode.NoInput:
-      return "NOINPUT";
+      return 'NOINPUT';
     case ExitCode.Unavailable:
-      return "UNAVAILABLE";
+      return 'UNAVAILABLE';
     case ExitCode.IoErr:
-      return "IOERR";
+      return 'IOERR';
     case ExitCode.TempFail:
-      return "TEMPFAIL";
+      return 'TEMPFAIL';
     case ExitCode.Config:
-      return "CONFIG";
+      return 'CONFIG';
     default:
-      return "ERROR";
+      return 'ERROR';
   }
 };

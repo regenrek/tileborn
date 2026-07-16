@@ -1,20 +1,20 @@
-import { access } from "node:fs/promises";
-import path from "node:path";
+import { access } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   createLocalGameHost,
   resolveBundledGameHostWorkerPath,
   type LocalGameHost,
-} from "@tileborne/services-build/local-game-host";
+} from '@tileborne/services-build/local-game-host';
 
-import { findAvailablePort } from "./listen-port.js";
-import { signingKeyFingerprint } from "./multiplayer-playtest.js";
-import { requestSignalExitCode } from "./shutdown.js";
-import { disposeCliRuntime } from "../services-layer.js";
-import { CliValidationError } from "../render/errors.js";
-import { renderGameServeStatus, type RenderContext } from "../render/output.js";
+import { findAvailablePort } from './listen-port.js';
+import { signingKeyFingerprint } from './multiplayer-playtest.js';
+import { requestSignalExitCode } from './shutdown.js';
+import { disposeCliRuntime } from '../services-layer.js';
+import { CliValidationError } from '../render/errors.js';
+import { renderGameServeStatus, type RenderContext } from '../render/output.js';
 
-const DEFAULT_BIND = "127.0.0.1";
+const DEFAULT_BIND = '127.0.0.1';
 
 export interface GameServeInput {
   readonly port: number;
@@ -34,7 +34,7 @@ export interface GameServeReady {
 
 const readPortArg = (port: number): number => {
   if (!Number.isFinite(port) || port < 0) {
-    throw new CliValidationError({ message: "port must be 0 (auto) or a positive integer" });
+    throw new CliValidationError({ message: 'port must be 0 (auto) or a positive integer' });
   }
   return port;
 };
@@ -53,7 +53,7 @@ const resolveWorkerPath = async (dir: string | undefined): Promise<string> => {
   if (dir === undefined) {
     return resolveBundledGameHostWorkerPath();
   }
-  const workerPath = path.resolve(dir, "worker.js");
+  const workerPath = path.resolve(dir, 'worker.js');
   try {
     await access(workerPath);
   } catch {
@@ -71,14 +71,14 @@ const installGameServeSignalHandlers = (shutdown: () => Promise<void>): void => 
       return;
     }
     active = true;
-    process.removeAllListeners("SIGINT");
-    process.removeAllListeners("SIGTERM");
+    process.removeAllListeners('SIGINT');
+    process.removeAllListeners('SIGTERM');
     void shutdown().finally(() => process.exit(0));
   };
-  process.removeAllListeners("SIGINT");
-  process.removeAllListeners("SIGTERM");
-  process.on("SIGINT", handler);
-  process.on("SIGTERM", handler);
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
+  process.on('SIGINT', handler);
+  process.on('SIGTERM', handler);
 };
 
 export const runGameServe = async (ctx: RenderContext, input: GameServeInput): Promise<never> => {

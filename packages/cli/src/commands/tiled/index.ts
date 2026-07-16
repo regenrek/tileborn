@@ -23,7 +23,9 @@ export const tiledCommand = {
           Effect.gen(function* () {
             const file = readStringArg(context.args, 'file');
             if (!file) {
-              yield* Effect.fail(new CliValidationError({ message: 'tiled file path is required' }));
+              yield* Effect.fail(
+                new CliValidationError({ message: 'tiled file path is required' }),
+              );
             }
             const sourcePath = path.resolve(file as string);
             const result = yield* Effect.promise(() =>
@@ -33,7 +35,9 @@ export const tiledCommand = {
                 reader: { readFile, realpath },
               }),
             );
-            const blocking = result.diagnostics.find((diagnostic) => diagnostic.severity === 'error');
+            const blocking = result.diagnostics.find(
+              (diagnostic) => diagnostic.severity === 'error',
+            );
             if (blocking !== undefined || result.scan === undefined) {
               yield* Effect.fail(
                 new CliValidationError({ message: blocking?.message ?? 'Tiled scan failed' }),

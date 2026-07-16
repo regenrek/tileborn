@@ -1,16 +1,16 @@
-import rootConfig from "../../eslint.config.js";
+import rootConfig from '../../eslint.config.js';
 
 export default [
   ...rootConfig,
   {
-    ignores: ["fixtures/**"],
+    ignores: ['fixtures/**'],
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
-        Buffer: "readonly",
-        console: "readonly",
+        Buffer: 'readonly',
+        console: 'readonly',
       },
     },
   },

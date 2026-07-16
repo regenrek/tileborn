@@ -17,11 +17,11 @@ Each fixture directory includes a `PROVENANCE.md` with source and license attrib
 ## Usage
 
 ```ts
-import { getFixturePath, listFixtures } from "@tileborne/test-fixtures";
+import { getFixturePath, listFixtures } from '@tileborne/test-fixtures';
 
-const pluginRoot = getFixturePath("plugins", "smoke-fixture");
-const packRoot = getFixturePath("asset-packs", "smoke-pack");
-const categories = listFixtures("plugins");
+const pluginRoot = getFixturePath('plugins', 'smoke-fixture');
+const packRoot = getFixturePath('asset-packs', 'smoke-pack');
+const categories = listFixtures('plugins');
 ```
 
 The bundled sample asset pack is generated from the SDK Tiled source importer.

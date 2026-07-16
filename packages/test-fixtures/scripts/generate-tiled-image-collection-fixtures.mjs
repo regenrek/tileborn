@@ -3,13 +3,13 @@
 // (no third-party art): a flat grid tile and a simple shape sprite.
 //
 // Run with: node packages/test-fixtures/scripts/generate-tiled-image-collection-fixtures.mjs
-import { deflateSync } from "node:zlib";
-import { writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { deflateSync } from 'node:zlib';
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.join(here, "..", "fixtures", "maps", "tiled-image-collection");
+const outDir = path.join(here, '..', 'fixtures', 'maps', 'tiled-image-collection');
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -32,7 +32,7 @@ const crc32 = (buf) => {
 };
 
 const chunk = (type, data) => {
-  const typeBuf = Buffer.from(type, "ascii");
+  const typeBuf = Buffer.from(type, 'ascii');
   const lenBuf = Buffer.alloc(4);
   lenBuf.writeUInt32BE(data.length, 0);
   const crcBuf = Buffer.alloc(4);
@@ -69,9 +69,9 @@ const encodePng = (width, height, rgba) => {
 
   return Buffer.concat([
     signature,
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
   ]);
 };
 
@@ -98,6 +98,6 @@ const tree = encodePng(64, 96, (x, y) => {
   return [0, 0, 0, 0];
 });
 
-writeFileSync(path.join(outDir, "terrain.png"), terrain);
-writeFileSync(path.join(outDir, "tree.png"), tree);
-console.log("wrote synthetic terrain.png (32x32) and tree.png (64x96)");
+writeFileSync(path.join(outDir, 'terrain.png'), terrain);
+writeFileSync(path.join(outDir, 'tree.png'), tree);
+console.log('wrote synthetic terrain.png (32x32) and tree.png (64x96)');

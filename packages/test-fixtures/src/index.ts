@@ -1,18 +1,18 @@
-import { readdirSync, statSync, type Dirent } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readdirSync, statSync, type Dirent } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const packageRoot = path.dirname(fileURLToPath(import.meta.url));
-const fixturesRoot = path.join(packageRoot, "..", "fixtures");
+const fixturesRoot = path.join(packageRoot, '..', 'fixtures');
 
 /** Top-level fixture categories shipped with `@tileborne/test-fixtures`. */
-export const FIXTURE_CATEGORIES = ["maps", "asset-packs", "plugins", "projects"] as const;
+export const FIXTURE_CATEGORIES = ['maps', 'asset-packs', 'plugins', 'projects'] as const;
 
 export type FixtureCategory = (typeof FIXTURE_CATEGORIES)[number];
 
 const normalizeRelative = (relativePath: string): string => {
-  const normalized = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, "");
-  if (normalized.startsWith("..")) {
+  const normalized = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
+  if (normalized.startsWith('..')) {
     throw new Error(`fixture path escapes fixtures root: ${relativePath}`);
   }
   return normalized;
@@ -60,11 +60,11 @@ export const fixtureExists = (...segments: readonly string[]): boolean => {
 export const fixturesRootPath = (): string => fixturesRoot;
 
 /** Bundled CC0 sample tileset used for editor first-launch seeding. */
-export const SAMPLE_ASSET_PACK_ID = "pack:550e8400-e29b-41d4-a716-446655440099" as const;
+export const SAMPLE_ASSET_PACK_ID = 'pack:550e8400-e29b-41d4-a716-446655440099' as const;
 
 /** Relative directory under `fixtures/asset-packs/`. */
-export const SAMPLE_ASSET_PACK_DIR = "smoke-pack" as const;
+export const SAMPLE_ASSET_PACK_DIR = 'smoke-pack' as const;
 
 /** Absolute path to the sample asset pack fixture root. */
 export const getSampleAssetPackPath = (): string =>
-  getFixturePath("asset-packs", SAMPLE_ASSET_PACK_DIR);
+  getFixturePath('asset-packs', SAMPLE_ASSET_PACK_DIR);

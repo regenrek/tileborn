@@ -28,7 +28,11 @@
     "docs:build": "pnpm --filter @tileborne/docs build",
     "docs:dev": "pnpm --filter @tileborne/docs dev",
     "build": "turbo run build",
-    "ci": "pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test -- --run && pnpm build && pnpm test:boundaries && pnpm test:cli-e2e && pnpm test:desktop-smoke",
+    "release:gate": "node scripts/release-gates.mjs run",
+    "release:gates": "node scripts/release-gates.mjs run-all",
+    "release:gates:matrix": "node scripts/release-gates.mjs matrix",
+    "test:release-gates": "vitest run --config vitest.config.ts scripts/release-gates.test.ts",
+    "ci": "pnpm release:gates",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

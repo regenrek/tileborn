@@ -331,9 +331,27 @@ const atomicWriteText = async (filePath: string, contents: string): Promise<void
   }
 };
 
+const projectManifestSchemaVersion = (parsed: unknown): number => {
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !Object.hasOwn(parsed, 'schemaVersion')
+  ) {
+    return 0;
+  }
+  const version = readSchemaVersion(parsed);
+  if (version === undefined || version < 0) {
+    throw new Error(
+      'project: explicit schemaVersion must be a non-negative integer; only an absent property is legacy v0',
+    );
+  }
+  return version;
+};
+
 const decodeRestorableProjectManifest = (raw: string): ProjectManifest => {
   const parsed: unknown = JSON.parse(raw);
-  const fromVersion = readSchemaVersion(parsed) ?? 0;
+  const fromVersion = projectManifestSchemaVersion(parsed);
   const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
   if (Result.isFailure(migrated)) {
     throw new Error(migrated.failure);
@@ -347,7 +365,7 @@ const verifyProjectManifestBackupIdentity = (backupPath: string, raw: string): v
     throw new Error('project manifest backup filename is invalid');
   }
   const parsed: unknown = JSON.parse(raw);
-  const fromVersion = readSchemaVersion(parsed) ?? 0;
+  const fromVersion = projectManifestSchemaVersion(parsed);
   if (Number(match[1]) !== fromVersion) {
     throw new Error('project manifest backup filename version does not match its contents');
   }
@@ -391,7 +409,7 @@ const verifiedProjectManifestBackup = async (
     throw new Error(`project migration backup verification failed at ${relativeBackupPath}`);
   }
   const parsed: unknown = JSON.parse(verifiedRaw);
-  if ((readSchemaVersion(parsed) ?? 0) !== fromVersion) {
+  if (projectManifestSchemaVersion(parsed) !== fromVersion) {
     throw new Error(`project migration backup version mismatch at ${relativeBackupPath}`);
   }
   verifyProjectManifestBackupIdentity(relativeBackupPath, verifiedRaw);
@@ -402,8 +420,8 @@ const verifiedProjectManifestBackup = async (
 /**
  * Restore an exact-byte project-manifest migration backup after validating that
  * it is contained by the project, unmodified, and still migrates to the current
- * schema. The integrity lock remains valid because it hashes the deterministic
- * current in-memory manifest produced by the same migration chain.
+ * schema. The manifest and a matching integrity lock are replaced together;
+ * both previous files are restored if installation or verified reopen fails.
  */
 export const restoreProjectManifestBackupAtRoot = (
   projectRoot: string,
@@ -411,6 +429,8 @@ export const restoreProjectManifestBackupAtRoot = (
 ): Effect.Effect<void, ProjectMigrationError> =>
   Effect.tryPromise({
     try: async () => {
+      const manifestFile = projectManifestPath(projectRoot);
+      const lockFile = projectLockPath(projectRoot);
       const backupPath = rejectPathTraversal(projectRoot, relativeBackupPath);
       const expectedDirectory = path.resolve(projectRoot, PROJECT_MANIFEST_BACKUP_DIRECTORY);
       if (path.dirname(backupPath) !== expectedDirectory) {
@@ -419,11 +439,58 @@ export const restoreProjectManifestBackupAtRoot = (
       const verifiedPath = await rejectSymlinkEscape(projectRoot, backupPath);
       const raw = await readFile(verifiedPath, 'utf8');
       verifyProjectManifestBackupIdentity(backupPath, raw);
-      decodeRestorableProjectManifest(raw);
-      await atomicWriteText(projectManifestPath(projectRoot), raw);
-      const restored = await readFile(projectManifestPath(projectRoot), 'utf8');
-      if (restored !== raw) {
-        throw new Error('restored project manifest does not match its verified backup');
+      const manifest = decodeRestorableProjectManifest(raw);
+
+      const previousManifestRaw = await readFile(manifestFile, 'utf8');
+      const previousLockRaw = await readFile(lockFile, 'utf8');
+      const currentLock = Schema.decodeUnknownSync(ProjectIntegrityLock)(
+        JSON.parse(previousLockRaw) as unknown,
+      );
+      const encodedManifest = Schema.encodeSync(ProjectManifestSchema)(manifest);
+      const restoredHash = hashJsonStable(encodedManifest);
+      const nextLock = new ProjectIntegrityLock({
+        schemaVersion: PERSISTED_SCHEMA_VERSIONS.projectIntegrityLock,
+        projectHash: restoredHash,
+        maps: [...currentLock.maps],
+      });
+      const encodedLock = Schema.encodeSync(ProjectIntegrityLock)(nextLock);
+      const nextLockRaw = `${JSON.stringify(encodedLock, null, 2)}\n`;
+
+      try {
+        await atomicWriteText(manifestFile, raw);
+        await atomicWriteText(lockFile, nextLockRaw);
+
+        const restoredRaw = await readFile(manifestFile, 'utf8');
+        const installedLockRaw = await readFile(lockFile, 'utf8');
+        if (restoredRaw !== raw) {
+          throw new Error('restored project manifest does not match its verified backup');
+        }
+        const verifiedManifest = decodeRestorableProjectManifest(restoredRaw);
+        const verifiedLock = Schema.decodeUnknownSync(ProjectIntegrityLock)(
+          JSON.parse(installedLockRaw) as unknown,
+        );
+        const verifiedHash = hashJsonStable(
+          Schema.encodeSync(ProjectManifestSchema)(verifiedManifest),
+        );
+        if (verifiedLock.projectHash !== verifiedHash) {
+          throw new Error('restored project integrity lock does not match the restored manifest');
+        }
+        const reopened = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
+        if (reopened.id !== manifest.id || reopened.schemaVersion !== manifest.schemaVersion) {
+          throw new Error('restored project verification returned a different manifest identity');
+        }
+      } catch (cause) {
+        try {
+          await atomicWriteText(manifestFile, previousManifestRaw);
+          await atomicWriteText(lockFile, previousLockRaw);
+        } catch (rollbackCause) {
+          throw new AggregateError(
+            [cause],
+            `restore failed (${errorMessage(cause)}) and rollback failed (${errorMessage(rollbackCause)})`,
+            { cause: rollbackCause },
+          );
+        }
+        throw cause;
       }
     },
     catch: (cause) =>
@@ -817,7 +884,11 @@ const readManifestAtRoot = (
           message: errorMessage(cause),
         }),
     });
-    const fromVersion = readSchemaVersion(parsed) ?? 0;
+    const fromVersion = yield* Effect.try({
+      try: () => projectManifestSchemaVersion(parsed),
+      catch: (cause) =>
+        new ProjectMigrationError({ path: manifestFile, message: errorMessage(cause) }),
+    });
     const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
     return yield* Result.match(migrated, {
       onFailure: (message) =>
@@ -1080,7 +1151,11 @@ export const ProjectServiceLive = Layer.effect(
         catch: (cause) =>
           new ProjectValidationError({ path: manifestFile, message: errorMessage(cause) }),
       });
-      const fromVersion = readSchemaVersion(parsed) ?? 0;
+      const fromVersion = yield* Effect.try({
+        try: () => projectManifestSchemaVersion(parsed),
+        catch: (cause) =>
+          new ProjectMigrationError({ path: manifestFile, message: errorMessage(cause) }),
+      });
       const migrated = projectMigrationChain.migrateToLatest(parsed, fromVersion);
       const manifest = yield* Result.match(migrated, {
         onFailure: (message) =>

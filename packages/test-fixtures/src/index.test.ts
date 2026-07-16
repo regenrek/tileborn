@@ -35,7 +35,7 @@ describe('@tileborne/test-fixtures', () => {
 
   it('ships the complete project schema-compatibility matrix', () => {
     expect(listFixtures('projects')).toContain('schema-compatibility');
-    for (const fixture of ['legacy-v0', 'current-v1', 'future-v2', 'corrupt']) {
+    for (const fixture of ['legacy-v0', 'current-v1', 'future-v2', 'invalid-version', 'corrupt']) {
       expect(
         fixtureExists('projects', 'schema-compatibility', fixture, 'project.json'),
         fixture,

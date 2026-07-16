@@ -2,14 +2,17 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { ProjectManifest } from '@tileborne/core';
 import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppServicesLayer } from '../index.js';
 import {
   ProjectService,
+  readProjectLock,
   readVerifiedProjectAtRoot,
   restoreProjectManifestBackupAtRoot,
+  writeProjectWithLock,
 } from './index.js';
 
 const compatibilityFixtures = path.resolve(
@@ -17,7 +20,7 @@ const compatibilityFixtures = path.resolve(
   '../../../test-fixtures/fixtures/projects/schema-compatibility',
 );
 
-type FixtureName = 'legacy-v0' | 'current-v1' | 'future-v2' | 'corrupt';
+type FixtureName = 'legacy-v0' | 'current-v1' | 'future-v2' | 'invalid-version' | 'corrupt';
 type AppRuntime = ReturnType<typeof ManagedRuntime.make<typeof AppServicesLayer>>;
 
 describe.sequential('project manifest durability fixtures', () => {
@@ -107,6 +110,7 @@ describe.sequential('project manifest durability fixtures', () => {
 
   it.each([
     ['future-v2' as const, 'ProjectMigrationError'],
+    ['invalid-version' as const, 'ProjectMigrationError'],
     ['corrupt' as const, 'ProjectValidationError'],
   ])('refuses the committed %s fixture without source loss', async (fixture, errorTag) => {
     const { projectRoot, raw } = await stageFixture(fixture);
@@ -117,6 +121,26 @@ describe.sequential('project manifest durability fixtures', () => {
       code: 'ENOENT',
     });
   });
+
+  it.each([null, -1, 1.5, true, {}, []])(
+    'refuses explicit invalid schemaVersion %j without bytes or backup side effects',
+    async (schemaVersion) => {
+      const { projectRoot, raw } = await stageFixture('invalid-version');
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const adversarialRaw = `${JSON.stringify({ ...parsed, schemaVersion }, null, 2)}\n`;
+      await writeFile(path.join(projectRoot, 'project.json'), adversarialRaw, 'utf8');
+
+      await expect(upgrade(projectRoot)).rejects.toMatchObject({
+        _tag: 'ProjectMigrationError',
+      });
+      await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(
+        adversarialRaw,
+      );
+      await expect(access(path.join(projectRoot, '.tileborne/backups'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    },
+  );
 
   it('refuses restore traversal without touching the project or outside bytes', async () => {
     const { projectRoot } = await stageFixture('legacy-v0');
@@ -150,5 +174,27 @@ describe.sequential('project manifest durability fixtures', () => {
     await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(
       migratedRaw,
     );
+  });
+
+  it('restores manifest and matching integrity lock after a legitimate post-upgrade edit', async () => {
+    const { projectRoot, raw } = await stageFixture('legacy-v0');
+    const result = await upgrade(projectRoot);
+    const upgraded = await Effect.runPromise(readVerifiedProjectAtRoot(projectRoot));
+    const currentLock = await Effect.runPromise(
+      readProjectLock(path.join(projectRoot, 'project.lock.json')),
+    );
+    const edited = new ProjectManifest({ ...upgraded, name: 'Edited After Upgrade' });
+    await Effect.runPromise(writeProjectWithLock(projectRoot, edited, currentLock.maps));
+    await expect(Effect.runPromise(readVerifiedProjectAtRoot(projectRoot))).resolves.toMatchObject({
+      name: 'Edited After Upgrade',
+    });
+
+    await Effect.runPromise(restoreProjectManifestBackupAtRoot(projectRoot, result.backupPath!));
+
+    await expect(readFile(path.join(projectRoot, 'project.json'), 'utf8')).resolves.toBe(raw);
+    await expect(Effect.runPromise(readVerifiedProjectAtRoot(projectRoot))).resolves.toMatchObject({
+      name: 'Legacy Project',
+      schemaVersion: 1,
+    });
   });
 });

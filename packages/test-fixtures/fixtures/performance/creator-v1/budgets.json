@@ -40,9 +40,16 @@
       "description": "Reopen creator-performance-v1 and render its initial editor shell.",
       "metrics": [
         {
+          "id": "project-manifest-input-bytes",
+          "unit": "bytes",
+          "limit": "exact",
+          "value": 32768,
+          "rationale": "The v1 reopen workload always consumes the committed 32 KiB manifest payload."
+        },
+        {
           "id": "project-manifest-decodes",
           "unit": "operations",
-          "limit": "max",
+          "limit": "exact",
           "value": 1,
           "rationale": "The canonical project manifest is decoded once per reopen."
         },
@@ -76,9 +83,9 @@
         {
           "id": "fixture-assets",
           "unit": "count",
-          "limit": "min",
-          "value": 2000,
-          "rationale": "The release corpus must exercise the reported 2,000+ asset scale."
+          "limit": "exact",
+          "value": 2048,
+          "rationale": "The release corpus fixes exactly 2,048 assets so under-processing cannot satisfy the workload."
         },
         {
           "id": "asset-page-records",
@@ -117,14 +124,14 @@
         {
           "id": "fixture-behaviors",
           "unit": "count",
-          "limit": "min",
+          "limit": "exact",
           "value": 512,
           "rationale": "The corpus covers a non-trivial mixed visual and TypeScript behavior set."
         },
         {
           "id": "fixture-references",
           "unit": "count",
-          "limit": "min",
+          "limit": "exact",
           "value": 8192,
           "rationale": "Every v1 behavior carries sixteen deterministic references."
         },
@@ -156,9 +163,16 @@
       "description": "Validate the valid corpus and its deterministic 64-fault variant.",
       "metrics": [
         {
+          "id": "fixture-validation-records",
+          "unit": "count",
+          "limit": "exact",
+          "value": 14857,
+          "rationale": "The validation workload includes one project, eight maps, 4,096 objects, 2,048 assets, 512 behaviors, and 8,192 references."
+        },
+        {
           "id": "full-project-validation-passes",
           "unit": "operations",
-          "limit": "max",
+          "limit": "exact",
           "value": 1,
           "rationale": "One validation request performs one owner traversal instead of repeating per panel."
         },
@@ -206,7 +220,7 @@
         {
           "id": "journal-phase-transitions",
           "unit": "operations",
-          "limit": "max",
+          "limit": "exact",
           "value": 4,
           "rationale": "The durable map transaction has prepared, map, project, and lock phases."
         },
@@ -233,21 +247,21 @@
         {
           "id": "compiled-behavior-modules",
           "unit": "count",
-          "limit": "max",
+          "limit": "exact",
           "value": 512,
           "rationale": "The fixture intentionally references the complete behavior corpus."
         },
         {
           "id": "source-behavior-bytes",
           "unit": "bytes",
-          "limit": "max",
+          "limit": "exact",
           "value": 2097152,
-          "rationale": "512 behavior sources at 4 KiB each define the v1 compile input ceiling."
+          "rationale": "512 behavior sources at 4 KiB each fix the complete v1 compile input workload."
         },
         {
           "id": "session-start-transitions",
           "unit": "operations",
-          "limit": "max",
+          "limit": "exact",
           "value": 3,
           "rationale": "A session may progress through queued, starting, and running once."
         }
@@ -265,9 +279,23 @@
           "rationale": "Package coverage includes every map in creator-performance-v1."
         },
         {
+          "id": "input-assets",
+          "unit": "count",
+          "limit": "exact",
+          "value": 2048,
+          "rationale": "Package consumes the complete fixed asset corpus before output amplification is measured."
+        },
+        {
+          "id": "input-behavior-modules",
+          "unit": "count",
+          "limit": "exact",
+          "value": 512,
+          "rationale": "Package consumes the complete fixed behavior corpus before output amplification is measured."
+        },
+        {
           "id": "asset-payload-input-bytes",
           "unit": "bytes",
-          "limit": "max",
+          "limit": "exact",
           "value": 8388608,
           "rationale": "2,048 synthetic assets at 4 KiB each fix the v1 asset payload."
         },
@@ -322,7 +350,7 @@
         {
           "id": "post-promotion-integrity-traversals",
           "unit": "operations",
-          "limit": "max",
+          "limit": "exact",
           "value": 1,
           "rationale": "One durable inventory verification proves the promoted artifact."
         }

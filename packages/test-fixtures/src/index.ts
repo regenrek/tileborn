@@ -180,6 +180,21 @@ const requireRecord = (value: unknown, label: string): Record<string, unknown> =
   return value;
 };
 
+const requireExactKeys = (
+  record: Record<string, unknown>,
+  expectedKeys: readonly string[],
+  label: string,
+): void => {
+  const actualKeys = Object.keys(record).sort();
+  const canonicalKeys = [...expectedKeys].sort();
+  if (
+    actualKeys.length !== canonicalKeys.length ||
+    actualKeys.some((key, index) => key !== canonicalKeys[index])
+  ) {
+    throw new Error(`Invalid creator performance contract: ${label} keys`);
+  }
+};
+
 const requireLiteral = <const T extends string | number | boolean>(
   value: unknown,
   literal: T,
@@ -196,49 +211,180 @@ const requireString = (value: unknown, label: string): string => {
   return value;
 };
 
-const requireSafeInteger = (value: unknown, label: string): number => {
-  if (!Number.isSafeInteger(value) || Number(value) < 0) {
-    throw new Error(`Invalid creator performance contract: ${label}`);
-  }
-  return Number(value);
-};
-
-const requireStringArray = (value: unknown, label: string): readonly string[] => {
-  if (!Array.isArray(value)) {
-    throw new Error(`Invalid creator performance contract: ${label}`);
-  }
-  return value.map((entry, index) => requireString(entry, `${label}[${index}]`));
-};
-
-const requireOneOf = <const T extends readonly string[]>(
-  value: unknown,
-  allowed: T,
-  label: string,
-): T[number] => {
-  if (typeof value !== 'string' || !allowed.includes(value)) {
-    throw new Error(`Invalid creator performance contract: ${label}`);
-  }
-  return value;
-};
-
-const PERFORMANCE_METRIC_UNITS = ['bytes', 'count', 'operations'] as const;
-const PERFORMANCE_METRIC_LIMITS = ['exact', 'max', 'min'] as const;
 const DEFERRED_PERFORMANCE_ITEM =
   'deferred-to-plan-item-i-enforce-stable-count-size-budget-3518' as const;
 
+type CanonicalMetricSpec = Readonly<{
+  id: string;
+  unit: CreatorPerformanceMetricUnit;
+  limit: CreatorPerformanceMetricLimit;
+  value: number;
+}>;
+
+const CANONICAL_CREATOR_PERFORMANCE_FLOWS = [
+  {
+    id: 'startup',
+    description: 'Cold editor startup before a project is opened.',
+    metrics: [
+      { id: 'project-records-eagerly-decoded', unit: 'count', limit: 'max', value: 64 },
+      { id: 'asset-records-eagerly-decoded', unit: 'count', limit: 'exact', value: 0 },
+      { id: 'behavior-bodies-eagerly-decoded', unit: 'count', limit: 'exact', value: 0 },
+    ],
+  },
+  {
+    id: 'reopen',
+    description: 'Reopen creator-performance-v1 and render its initial editor shell.',
+    metrics: [
+      { id: 'project-manifest-input-bytes', unit: 'bytes', limit: 'exact', value: 32_768 },
+      { id: 'project-manifest-decodes', unit: 'operations', limit: 'exact', value: 1 },
+      { id: 'initial-asset-page-records', unit: 'count', limit: 'max', value: 64 },
+      { id: 'initial-behavior-bodies', unit: 'count', limit: 'max', value: 1 },
+      { id: 'recovery-snapshot-reads', unit: 'operations', limit: 'max', value: 1 },
+    ],
+  },
+  {
+    id: 'asset-library-2000',
+    description: 'Browse and scroll the 2,048-asset library and working palette.',
+    metrics: [
+      { id: 'fixture-assets', unit: 'count', limit: 'exact', value: 2_048 },
+      { id: 'asset-page-records', unit: 'count', limit: 'max', value: 64 },
+      { id: 'preview-references-per-request', unit: 'count', limit: 'max', value: 64 },
+      { id: 'preview-references-per-group-summary', unit: 'count', limit: 'max', value: 8 },
+      {
+        id: 'full-corpus-preview-requests-before-scroll',
+        unit: 'operations',
+        limit: 'exact',
+        value: 0,
+      },
+    ],
+  },
+  {
+    id: 'large-behaviors-references',
+    description: 'Open, search, and resolve the large behavior/reference corpus.',
+    metrics: [
+      { id: 'fixture-behaviors', unit: 'count', limit: 'exact', value: 512 },
+      { id: 'fixture-references', unit: 'count', limit: 'exact', value: 8_192 },
+      { id: 'reference-search-page-records', unit: 'count', limit: 'max', value: 32 },
+      { id: 'reference-resolution-batch-records', unit: 'count', limit: 'max', value: 64 },
+      { id: 'behavior-bodies-opened-by-list', unit: 'count', limit: 'exact', value: 0 },
+    ],
+  },
+  {
+    id: 'validation',
+    description: 'Validate the valid corpus and its deterministic 64-fault variant.',
+    metrics: [
+      { id: 'fixture-validation-records', unit: 'count', limit: 'exact', value: 14_857 },
+      { id: 'full-project-validation-passes', unit: 'operations', limit: 'exact', value: 1 },
+      { id: 'invalid-variant-faults', unit: 'count', limit: 'exact', value: 64 },
+      { id: 'diagnostics-returned', unit: 'count', limit: 'max', value: 64 },
+      { id: 'records-inspected', unit: 'count', limit: 'max', value: 16_000 },
+    ],
+  },
+  {
+    id: 'save',
+    description: 'Persist one changed map and its project revision atomically.',
+    metrics: [
+      { id: 'changed-resources', unit: 'count', limit: 'exact', value: 1 },
+      { id: 'content-files-rewritten', unit: 'count', limit: 'max', value: 3 },
+      { id: 'journal-phase-transitions', unit: 'operations', limit: 'exact', value: 4 },
+      { id: 'full-project-directory-copies', unit: 'operations', limit: 'exact', value: 0 },
+    ],
+  },
+  {
+    id: 'playtest-start',
+    description: 'Compile the selected map and start a local playtest session.',
+    metrics: [
+      { id: 'selected-map-packages', unit: 'count', limit: 'exact', value: 1 },
+      { id: 'compiled-behavior-modules', unit: 'count', limit: 'exact', value: 512 },
+      { id: 'source-behavior-bytes', unit: 'bytes', limit: 'exact', value: 2_097_152 },
+      { id: 'session-start-transitions', unit: 'operations', limit: 'exact', value: 3 },
+    ],
+  },
+  {
+    id: 'package',
+    description: 'Assemble all eight fixture maps into verified runtime map packages.',
+    metrics: [
+      { id: 'runtime-map-packages', unit: 'count', limit: 'exact', value: 8 },
+      { id: 'input-assets', unit: 'count', limit: 'exact', value: 2_048 },
+      { id: 'input-behavior-modules', unit: 'count', limit: 'exact', value: 512 },
+      { id: 'asset-payload-input-bytes', unit: 'bytes', limit: 'exact', value: 8_388_608 },
+      { id: 'package-files', unit: 'count', limit: 'max', value: 3_000 },
+      { id: 'full-input-traversals', unit: 'operations', limit: 'max', value: 2 },
+    ],
+  },
+  {
+    id: 'ship',
+    description: 'Promote the packaged corpus into one verified local Ship artifact.',
+    metrics: [
+      { id: 'runtime-map-packages', unit: 'count', limit: 'exact', value: 8 },
+      { id: 'artifact-files', unit: 'count', limit: 'max', value: 3_072 },
+      { id: 'artifact-bytes', unit: 'bytes', limit: 'max', value: 67_108_864 },
+      { id: 'artifact-promotions', unit: 'operations', limit: 'exact', value: 1 },
+      {
+        id: 'post-promotion-integrity-traversals',
+        unit: 'operations',
+        limit: 'exact',
+        value: 1,
+      },
+    ],
+  },
+] as const satisfies readonly {
+  readonly id: CreatorPerformanceFlowId;
+  readonly description: string;
+  readonly metrics: readonly CanonicalMetricSpec[];
+}[];
+
 const decodePerformanceFixture = (value: unknown): CreatorPerformanceFixture => {
   const root = requireRecord(value, 'fixture root');
+  requireExactKeys(root, ['schemaVersion', 'id', 'seed', 'generator', 'project'], 'fixture root');
   const generator = requireRecord(root.generator, 'fixture.generator');
+  requireExactKeys(generator, ['algorithm', 'ordering', 'textEncoding'], 'fixture.generator');
   const project = requireRecord(root.project, 'fixture.project');
+  requireExactKeys(
+    project,
+    ['projectManifestBytes', 'maps', 'assets', 'behaviors', 'validation'],
+    'fixture.project',
+  );
   const maps = requireRecord(project.maps, 'fixture.project.maps');
+  requireExactKeys(
+    maps,
+    ['count', 'widthTiles', 'heightTiles', 'objectsPerMap'],
+    'fixture.project.maps',
+  );
   const assets = requireRecord(project.assets, 'fixture.project.assets');
+  requireExactKeys(
+    assets,
+    ['packCount', 'groupCount', 'assetCount', 'payloadBytesPerAsset', 'workingPaletteItems'],
+    'fixture.project.assets',
+  );
   const behaviors = requireRecord(project.behaviors, 'fixture.project.behaviors');
+  requireExactKeys(
+    behaviors,
+    [
+      'count',
+      'visualCount',
+      'typescriptCount',
+      'referencesPerBehavior',
+      'totalReferences',
+      'sourceBytesPerBehavior',
+      'nodesPerVisualBehavior',
+    ],
+    'fixture.project.behaviors',
+  );
   const validation = requireRecord(project.validation, 'fixture.project.validation');
+  requireExactKeys(
+    validation,
+    ['validVariantFaults', 'invalidVariantFaults', 'faultKinds'],
+    'fixture.project.validation',
+  );
+  if (!Array.isArray(validation.faultKinds) || validation.faultKinds.length !== 4) {
+    throw new Error('Invalid creator performance contract: fixture.project.validation.faultKinds');
+  }
 
   return {
     schemaVersion: requireLiteral(root.schemaVersion, 1, 'fixture.schemaVersion'),
     id: requireLiteral(root.id, 'creator-performance-v1', 'fixture.id'),
-    seed: requireSafeInteger(root.seed, 'fixture.seed'),
+    seed: requireLiteral(root.seed, 20_260_716, 'fixture.seed'),
     generator: {
       algorithm: requireLiteral(
         generator.algorithm,
@@ -257,53 +403,66 @@ const decodePerformanceFixture = (value: unknown): CreatorPerformanceFixture => 
       ),
     },
     project: {
-      projectManifestBytes: requireSafeInteger(
+      projectManifestBytes: requireLiteral(
         project.projectManifestBytes,
+        32_768,
         'fixture.project.projectManifestBytes',
       ),
       maps: {
-        count: requireSafeInteger(maps.count, 'fixture.project.maps.count'),
-        widthTiles: requireSafeInteger(maps.widthTiles, 'fixture.project.maps.widthTiles'),
-        heightTiles: requireSafeInteger(maps.heightTiles, 'fixture.project.maps.heightTiles'),
-        objectsPerMap: requireSafeInteger(maps.objectsPerMap, 'fixture.project.maps.objectsPerMap'),
+        count: requireLiteral(maps.count, 8, 'fixture.project.maps.count'),
+        widthTiles: requireLiteral(maps.widthTiles, 256, 'fixture.project.maps.widthTiles'),
+        heightTiles: requireLiteral(maps.heightTiles, 256, 'fixture.project.maps.heightTiles'),
+        objectsPerMap: requireLiteral(
+          maps.objectsPerMap,
+          512,
+          'fixture.project.maps.objectsPerMap',
+        ),
       },
       assets: {
-        packCount: requireSafeInteger(assets.packCount, 'fixture.project.assets.packCount'),
-        groupCount: requireSafeInteger(assets.groupCount, 'fixture.project.assets.groupCount'),
-        assetCount: requireSafeInteger(assets.assetCount, 'fixture.project.assets.assetCount'),
-        payloadBytesPerAsset: requireSafeInteger(
+        packCount: requireLiteral(assets.packCount, 4, 'fixture.project.assets.packCount'),
+        groupCount: requireLiteral(assets.groupCount, 256, 'fixture.project.assets.groupCount'),
+        assetCount: requireLiteral(assets.assetCount, 2_048, 'fixture.project.assets.assetCount'),
+        payloadBytesPerAsset: requireLiteral(
           assets.payloadBytesPerAsset,
+          4_096,
           'fixture.project.assets.payloadBytesPerAsset',
         ),
-        workingPaletteItems: requireSafeInteger(
+        workingPaletteItems: requireLiteral(
           assets.workingPaletteItems,
+          2_048,
           'fixture.project.assets.workingPaletteItems',
         ),
       },
       behaviors: {
-        count: requireSafeInteger(behaviors.count, 'fixture.project.behaviors.count'),
-        visualCount: requireSafeInteger(
+        count: requireLiteral(behaviors.count, 512, 'fixture.project.behaviors.count'),
+        visualCount: requireLiteral(
           behaviors.visualCount,
+          256,
           'fixture.project.behaviors.visualCount',
         ),
-        typescriptCount: requireSafeInteger(
+        typescriptCount: requireLiteral(
           behaviors.typescriptCount,
+          256,
           'fixture.project.behaviors.typescriptCount',
         ),
-        referencesPerBehavior: requireSafeInteger(
+        referencesPerBehavior: requireLiteral(
           behaviors.referencesPerBehavior,
+          16,
           'fixture.project.behaviors.referencesPerBehavior',
         ),
-        totalReferences: requireSafeInteger(
+        totalReferences: requireLiteral(
           behaviors.totalReferences,
+          8_192,
           'fixture.project.behaviors.totalReferences',
         ),
-        sourceBytesPerBehavior: requireSafeInteger(
+        sourceBytesPerBehavior: requireLiteral(
           behaviors.sourceBytesPerBehavior,
+          4_096,
           'fixture.project.behaviors.sourceBytesPerBehavior',
         ),
-        nodesPerVisualBehavior: requireSafeInteger(
+        nodesPerVisualBehavior: requireLiteral(
           behaviors.nodesPerVisualBehavior,
+          32,
           'fixture.project.behaviors.nodesPerVisualBehavior',
         ),
       },
@@ -313,14 +472,33 @@ const decodePerformanceFixture = (value: unknown): CreatorPerformanceFixture => 
           0,
           'fixture.project.validation.validVariantFaults',
         ),
-        invalidVariantFaults: requireSafeInteger(
+        invalidVariantFaults: requireLiteral(
           validation.invalidVariantFaults,
+          64,
           'fixture.project.validation.invalidVariantFaults',
         ),
-        faultKinds: requireStringArray(
-          validation.faultKinds,
-          'fixture.project.validation.faultKinds',
-        ),
+        faultKinds: [
+          requireLiteral(
+            validation.faultKinds[0],
+            'missing-asset',
+            'fixture.project.validation.faultKinds[0]',
+          ),
+          requireLiteral(
+            validation.faultKinds[1],
+            'missing-behavior',
+            'fixture.project.validation.faultKinds[1]',
+          ),
+          requireLiteral(
+            validation.faultKinds[2],
+            'missing-entity',
+            'fixture.project.validation.faultKinds[2]',
+          ),
+          requireLiteral(
+            validation.faultKinds[3],
+            'missing-map',
+            'fixture.project.validation.faultKinds[3]',
+          ),
+        ],
       },
     },
   };
@@ -331,28 +509,56 @@ const decodePerformanceBudgets = (
   fixtureId: CreatorPerformanceFixture['id'],
 ): CreatorPerformanceBudgets => {
   const root = requireRecord(value, 'budgets root');
+  requireExactKeys(
+    root,
+    ['schemaVersion', 'id', 'fixtureId', 'measurementPolicy', 'flows'],
+    'budgets root',
+  );
   const policy = requireRecord(root.measurementPolicy, 'budgets.measurementPolicy');
-  if (!Array.isArray(root.flows)) {
+  requireExactKeys(
+    policy,
+    ['deterministicUnitsOnly', 'ciEnforcement', 'nativeTimingCalibration'],
+    'budgets.measurementPolicy',
+  );
+  if (
+    !Array.isArray(root.flows) ||
+    root.flows.length !== CANONICAL_CREATOR_PERFORMANCE_FLOWS.length
+  ) {
     throw new Error('Invalid creator performance contract: budgets.flows');
   }
 
   const flows = root.flows.map((flowValue, flowIndex): CreatorPerformanceBudgetFlow => {
-    const flow = requireRecord(flowValue, `budgets.flows[${flowIndex}]`);
-    if (!Array.isArray(flow.metrics)) {
-      throw new Error(`Invalid creator performance contract: budgets.flows[${flowIndex}].metrics`);
+    const label = `budgets.flows[${flowIndex}]`;
+    const canonicalFlow = CANONICAL_CREATOR_PERFORMANCE_FLOWS[flowIndex];
+    if (canonicalFlow === undefined) {
+      throw new Error(`Invalid creator performance contract: ${label}`);
+    }
+    const flow = requireRecord(flowValue, label);
+    requireExactKeys(flow, ['id', 'description', 'metrics'], label);
+    if (!Array.isArray(flow.metrics) || flow.metrics.length !== canonicalFlow.metrics.length) {
+      throw new Error(`Invalid creator performance contract: ${label}.metrics`);
     }
     return {
-      id: requireOneOf(flow.id, CREATOR_PERFORMANCE_FLOW_IDS, `budgets.flows[${flowIndex}].id`),
-      description: requireString(flow.description, `budgets.flows[${flowIndex}].description`),
+      id: requireLiteral(flow.id, canonicalFlow.id, `${label}.id`),
+      description: requireLiteral(
+        flow.description,
+        canonicalFlow.description,
+        `${label}.description`,
+      ),
       metrics: flow.metrics.map((metricValue, metricIndex): CreatorPerformanceBudgetMetric => {
-        const label = `budgets.flows[${flowIndex}].metrics[${metricIndex}]`;
-        const metric = requireRecord(metricValue, label);
+        const metricLabel = `${label}.metrics[${metricIndex}]`;
+        const canonicalMetric = canonicalFlow.metrics[metricIndex];
+        if (canonicalMetric === undefined) {
+          throw new Error(`Invalid creator performance contract: ${metricLabel}`);
+        }
+        const metric = requireRecord(metricValue, metricLabel);
+        requireExactKeys(metric, ['id', 'unit', 'limit', 'value', 'rationale'], metricLabel);
         return {
-          id: requireString(metric.id, `${label}.id`),
-          unit: requireOneOf(metric.unit, PERFORMANCE_METRIC_UNITS, `${label}.unit`),
-          limit: requireOneOf(metric.limit, PERFORMANCE_METRIC_LIMITS, `${label}.limit`),
-          value: requireSafeInteger(metric.value, `${label}.value`),
-          rationale: requireString(metric.rationale, `${label}.rationale`),
+          id: requireLiteral(metric.id, canonicalMetric.id, `${metricLabel}.id`),
+          unit: requireLiteral(metric.unit, canonicalMetric.unit, `${metricLabel}.unit`),
+          limit: requireLiteral(metric.limit, canonicalMetric.limit, `${metricLabel}.limit`),
+          value: requireLiteral(metric.value, canonicalMetric.value, `${metricLabel}.value`),
+          rationale: requireString(metric.rationale, `${metricLabel}.rationale`),
         };
       }),
     };
@@ -383,6 +589,22 @@ const decodePerformanceBudgets = (
   };
 };
 
+/** Pure comparison used by downstream harnesses after they collect one stable metric. */
+export const creatorPerformanceMetricPasses = (
+  metric: CreatorPerformanceBudgetMetric,
+  observedValue: number,
+): boolean => {
+  if (!Number.isSafeInteger(observedValue) || observedValue < 0) return false;
+  switch (metric.limit) {
+    case 'exact':
+      return observedValue === metric.value;
+    case 'max':
+      return observedValue <= metric.value;
+    case 'min':
+      return observedValue >= metric.value;
+  }
+};
+
 /** Decode one fixture/budget pair exactly once at its JSON boundary. */
 export const decodeCreatorPerformanceContract = (
   fixtureValue: unknown,
@@ -390,31 +612,6 @@ export const decodeCreatorPerformanceContract = (
 ): CreatorPerformanceContract => {
   const fixture = decodePerformanceFixture(fixtureValue);
   const budgets = decodePerformanceBudgets(budgetValue, fixture.id);
-  const flowIds = budgets.flows.map(({ id }) => id);
-  if (
-    flowIds.length !== CREATOR_PERFORMANCE_FLOW_IDS.length ||
-    flowIds.some((id, index) => id !== CREATOR_PERFORMANCE_FLOW_IDS[index])
-  ) {
-    throw new Error('Invalid creator performance contract: budgets.flows coverage/order');
-  }
-  for (const flow of budgets.flows) {
-    const metricIds = flow.metrics.map(({ id }) => id);
-    if (metricIds.length === 0 || new Set(metricIds).size !== metricIds.length) {
-      throw new Error(`Invalid creator performance contract: ${flow.id} metric ids`);
-    }
-  }
-  if (
-    fixture.project.assets.assetCount < 2_000 ||
-    fixture.project.assets.workingPaletteItems !== fixture.project.assets.assetCount ||
-    fixture.project.behaviors.visualCount + fixture.project.behaviors.typescriptCount !==
-      fixture.project.behaviors.count ||
-    fixture.project.behaviors.totalReferences !==
-      fixture.project.behaviors.count * fixture.project.behaviors.referencesPerBehavior ||
-    new Set(fixture.project.validation.faultKinds).size !==
-      fixture.project.validation.faultKinds.length
-  ) {
-    throw new Error('Invalid creator performance contract: fixture derived invariants');
-  }
   return { fixture, budgets };
 };
 

@@ -39,6 +39,9 @@ save, playtest start, package, and Ship.
 Consumers must load both files through `loadCreatorPerformanceContract()`. A
 new corpus or incompatible measurement meaning requires a new directory and
 schema version; do not mutate `creator-v1` to represent a different workload.
+The loader is a closed schema: unknown keys, reordered/omitted flows or metrics,
+and changes to a v1 metric's id, unit, limit, or value are rejected. Explanatory
+rationales remain required non-empty text.
 The v1 contract intentionally contains no wall-clock limits. CI enforcement and
 native Electron timing calibration are owned by the follow-up hardening item
 named in `measurementPolicy`.
@@ -50,7 +53,10 @@ named in `measurementPolicy`.
   estimates.
 - `operations` counts completed named owner-boundary invocations or durable
   phase transitions. Harness setup and assertions are excluded.
-- `min` proves the corpus is large enough; `max` and `exact` are the budgets.
+- `exact` fixes corpus inputs and required workload operations so an
+  under-processing harness fails. `max` is reserved for output, batching, and
+  amplification ceilings. A future `min` may only describe an explicit output
+  floor, never a fixed input total.
 - A run must report every metric for its flow. Missing metrics are failures, not
   zeroes. Wall-clock milliseconds are not valid v1 metric units.
 

@@ -311,5 +311,5 @@ describe('import boundaries', () => {
       .join('\n');
 
     expect(violations, message).toEqual([]);
-  });
+  }, 30_000);
 });

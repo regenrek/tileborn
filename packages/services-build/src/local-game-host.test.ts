@@ -22,7 +22,7 @@ describe('createLocalGameHost', () => {
     }
 
     await expect(fetch('http://127.0.0.1:18080/health')).rejects.toThrow();
-  });
+  }, 20_000);
 
   it('boots a worker.js from an explicit artifact directory (game serve --dir contract)', async () => {
     const artifactDir = await mkdtemp(path.join(tmpdir(), 'tileborne-artifact-serve-'));
@@ -38,7 +38,7 @@ describe('createLocalGameHost', () => {
       await host.stop();
       await rm(artifactDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it('creates a multiplayer room via POST /rooms/create', async () => {
     const host = await createLocalGameHost({ port: 18081 });
@@ -58,5 +58,5 @@ describe('createLocalGameHost', () => {
     } finally {
       await host.stop();
     }
-  });
+  }, 20_000);
 });

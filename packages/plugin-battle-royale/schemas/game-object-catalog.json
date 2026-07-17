@@ -11,11 +11,48 @@
       "layerHint": "objects",
       "components": [
         {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005000",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
           "_tag": "spawn-point",
-          "data": { "defaultTeam": "solo" }
+          "data": {
+            "defaultTeam": "solo"
+          }
         }
       ],
-      "instanceDefaults": { "team": "solo", "weight": 1 }
+      "instanceFields": [
+        {
+          "key": "team",
+          "label": "Spawn team",
+          "help": "Solo ignores team labels; Duo and Squad group matching labels.",
+          "kind": "enum",
+          "default": "solo",
+          "options": [
+            { "value": "solo", "label": "Automatic / solo" },
+            { "value": "alpha", "label": "Team Alpha" },
+            { "value": "beta", "label": "Team Beta" },
+            { "value": "gamma", "label": "Team Gamma" },
+            { "value": "delta", "label": "Team Delta" }
+          ]
+        },
+        {
+          "key": "weight",
+          "label": "Spawn weight",
+          "kind": "number",
+          "default": 1,
+          "min": 0.1,
+          "step": 0.1
+        }
+      ],
+      "instanceDefaults": {
+        "team": "solo",
+        "weight": 1
+      }
     },
     {
       "id": "gobj:7fa4f2e6-ea31-873b-8c6a-4cae28615f78",
@@ -26,13 +63,24 @@
       "layerHint": "objects",
       "components": [
         {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005001",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
           "_tag": "interactable",
           "kind": "shrink-zone-anchor",
           "radiusPx": 0,
           "parameters": {}
         }
       ],
-      "instanceDefaults": { "initialRadiusTiles": 48, "finalRadiusTiles": 4 }
+      "instanceDefaults": {
+        "initialRadiusTiles": 48,
+        "finalRadiusTiles": 4
+      }
     },
     {
       "id": "gobj:9aeedc25-bee2-8d64-8f80-7a922d8cb826",
@@ -43,13 +91,428 @@
       "layerHint": "objects",
       "components": [
         {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005002",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {
+            "pickup": {
+              "point": {
+                "x": 0.5,
+                "y": 0.5
+              }
+            }
+          }
+        },
+        {
           "_tag": "loot-source",
           "lootTableId": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
           "interactionMode": "tap",
-          "grants": {}
+          "grants": {},
+          "grantRefs": [
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007001"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007002"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007003"
+            },
+            {
+              "_tag": "item-grant",
+              "itemId": "item:b4111e00-0000-4000-8000-000000007004"
+            }
+          ]
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": true,
+              "blocksProjectiles": true,
+              "blocksVision": true
+            }
+          ]
         }
       ],
-      "instanceDefaults": { "tier": "common", "respawnSeconds": 0 }
+      "instanceDefaults": {
+        "tier": "common",
+        "respawnSeconds": 0
+      },
+      "instanceFields": [
+        {
+          "key": "tier",
+          "label": "Loot rarity",
+          "kind": "enum",
+          "default": "common",
+          "options": [
+            { "value": "common", "label": "Common" },
+            { "value": "uncommon", "label": "Uncommon" },
+            { "value": "rare", "label": "Rare" },
+            { "value": "epic", "label": "Epic" },
+            { "value": "legendary", "label": "Legendary" }
+          ]
+        },
+        {
+          "key": "respawnSeconds",
+          "label": "Loot respawn seconds",
+          "kind": "number",
+          "default": 0,
+          "min": 0,
+          "step": 1
+        }
+      ]
+    },
+    {
+      "id": "gobj:3eb0db38-4591-8f16-8e66-ff41dff40cdd",
+      "schemaVersion": 1,
+      "label": "Trap",
+      "family": "hazard",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005003",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "interactable",
+          "kind": "trap",
+          "radiusPx": 34,
+          "parameters": {}
+        },
+        {
+          "_tag": "hazard",
+          "data": {
+            "kind": "trap",
+            "radius": 34,
+            "slowTicks": 60,
+            "stunTicks": 10,
+            "damageTicks": 60
+          }
+        }
+      ],
+      "instanceDefaults": {
+        "radius": 34,
+        "slowTicks": 60,
+        "stunTicks": 10,
+        "damageTicks": 60
+      }
+    },
+    {
+      "id": "gobj:e4b5db5e-0557-87f6-8311-e7092943226e",
+      "schemaVersion": 1,
+      "label": "Decoy",
+      "family": "prop",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005004",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": -16,
+              "y": -16,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": false,
+              "blocksProjectiles": true,
+              "blocksVision": false
+            }
+          ]
+        }
+      ],
+      "instanceDefaults": {
+        "radius": 16,
+        "durationTicks": 140
+      }
+    },
+    {
+      "id": "gobj:fa0f2b84-d7da-8624-8699-3ece01d777f8",
+      "schemaVersion": 1,
+      "label": "Barrier",
+      "family": "obstacle",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000005005",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {}
+        },
+        {
+          "_tag": "collision-footprint",
+          "source": "manual",
+          "reviewed": true,
+          "parts": [
+            {
+              "x": -16,
+              "y": -16,
+              "width": 32,
+              "height": 32,
+              "blocksMovement": true,
+              "blocksProjectiles": true,
+              "blocksVision": true
+            }
+          ]
+        },
+        {
+          "_tag": "breakable",
+          "hp": 125,
+          "dropTableId": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+        }
+      ],
+      "instanceDefaults": {
+        "hp": 125
+      }
+    },
+    {
+      "id": "gobj:1d6fd6da-93a2-841d-85ff-13364a5cf220",
+      "schemaVersion": 1,
+      "label": "Pulse Carbine",
+      "family": "weapon",
+      "category": "gameplay",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-000000007003",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000103",
+          "width": 48,
+          "height": 48,
+          "anchors": {
+            "grip": {
+              "point": {
+                "x": 0.28,
+                "y": 0.56
+              }
+            },
+            "muzzle": {
+              "point": {
+                "x": 0.92,
+                "y": 0.49
+              }
+            }
+          },
+          "renderProfile": {
+            "scale": 0.52,
+            "pivot": {
+              "x": 0.28,
+              "y": 0.56
+            }
+          }
+        },
+        {
+          "_tag": "equippable",
+          "slot": "weapon",
+          "attachAnchor": "grip"
+        },
+        {
+          "_tag": "weapon-ref",
+          "weaponId": "weapon:00000000-0000-4000-8000-000000000001",
+          "projectileEntityId": "gobj:2d139c81-7661-857e-850f-2b875a6ad3ac",
+          "muzzleFlashEntityId": "gobj:22c52750-9436-89a8-8739-030d071355ac",
+          "impactVfxEntityId": "gobj:13f7af9c-869d-8c23-8a90-b7d7a3166f14",
+          "pickupEntityId": "gobj:9aeedc25-bee2-8d64-8f80-7a922d8cb826"
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:2d139c81-7661-857e-850f-2b875a6ad3ac",
+      "schemaVersion": 1,
+      "label": "Projectile Bolt",
+      "family": "projectile",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500a",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 24,
+          "height": 24,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 0.72,
+            "pivot": {
+              "x": 0.14,
+              "y": 0.5
+            }
+          }
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:22c52750-9436-89a8-8739-030d071355ac",
+      "schemaVersion": 1,
+      "label": "Muzzle Flash",
+      "family": "vfx",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500b",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 24,
+          "height": 24,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 0.72,
+            "pivot": {
+              "x": 0.18,
+              "y": 0.5
+            }
+          }
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:13f7af9c-869d-8c23-8a90-b7d7a3166f14",
+      "schemaVersion": 1,
+      "label": "Impact Burst",
+      "family": "vfx",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500c",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 24,
+          "height": 24,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 0.86,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.5
+            }
+          }
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:c244e1cb-5d9c-82d7-8b45-98e2e170be10",
+      "schemaVersion": 1,
+      "label": "Shield Bubble",
+      "family": "vfx",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500d",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 1,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.5
+            }
+          }
+        },
+        {
+          "_tag": "overlay-visual",
+          "slot": "shield"
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:283e2261-e20d-8c71-8e58-4292a924f92c",
+      "schemaVersion": 1,
+      "label": "Player Shadow",
+      "family": "vfx",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500e",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 1,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.5
+            }
+          }
+        },
+        {
+          "_tag": "overlay-visual",
+          "slot": "shadow"
+        }
+      ],
+      "instanceDefaults": {}
+    },
+    {
+      "id": "gobj:e24ea032-e11c-877c-8bc9-942438afd581",
+      "schemaVersion": 1,
+      "label": "Hazard Flame",
+      "family": "vfx",
+      "category": "visual",
+      "layerHint": "objects",
+      "components": [
+        {
+          "_tag": "visual-ref",
+          "placeableId": "placeable:b4111e00-0000-4000-8000-00000000500f",
+          "assetId": "asset:b4111e00-0000-4000-8000-000000000003",
+          "width": 48,
+          "height": 48,
+          "anchors": {},
+          "renderProfile": {
+            "scale": 1,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.62
+            }
+          }
+        },
+        {
+          "_tag": "overlay-visual",
+          "slot": "hazard"
+        }
+      ],
+      "instanceDefaults": {}
     }
   ],
   "lootTables": [
@@ -57,12 +520,70 @@
       "id": "loot:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
       "label": "Battle Royale Default Loot",
       "entries": [
-        { "itemKind": "health-pack", "tier": "common", "weight": 40 },
-        { "itemKind": "ammo-box", "tier": "common", "weight": 35 },
-        { "itemKind": "armor-vest", "tier": "rare", "weight": 15 },
-        { "itemKind": "weapon-crate", "tier": "epic", "weight": 10 }
+        {
+          "itemKind": "health-pack",
+          "tier": "common",
+          "weight": 40
+        },
+        {
+          "itemKind": "ammo-box",
+          "tier": "common",
+          "weight": 35
+        },
+        {
+          "itemKind": "armor-vest",
+          "tier": "rare",
+          "weight": 15
+        },
+        {
+          "itemKind": "weapon-crate",
+          "tier": "epic",
+          "weight": 10
+        }
       ]
     }
   ],
-  "items": []
+  "items": [
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007001",
+      "label": "Health Pack",
+      "category": "consumable",
+      "data": {
+        "itemKind": "health-pack",
+        "tier": "common",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005006"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007002",
+      "label": "Ammo Box",
+      "category": "ammo",
+      "data": {
+        "itemKind": "ammo-box",
+        "tier": "common",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005007"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007003",
+      "label": "Armor Vest",
+      "category": "armor",
+      "data": {
+        "itemKind": "armor-vest",
+        "tier": "rare",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005008"
+      }
+    },
+    {
+      "id": "item:b4111e00-0000-4000-8000-000000007004",
+      "label": "Rifle",
+      "category": "weapon",
+      "equippableSlot": "primary",
+      "data": {
+        "itemKind": "weapon-crate",
+        "tier": "epic",
+        "visualPlaceableId": "placeable:b4111e00-0000-4000-8000-000000005009"
+      }
+    }
+  ]
 }

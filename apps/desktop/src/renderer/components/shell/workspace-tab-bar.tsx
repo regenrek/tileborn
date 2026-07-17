@@ -1,18 +1,12 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
 import { cn, typography } from '@tileborne/ui';
-import {
-  MapIcon,
-  PackageIcon,
-  PuzzleIcon,
-  SettingsIcon,
-  FolderOpenIcon,
-  XIcon,
-  type LucideIcon,
-} from 'lucide-react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { XIcon, type LucideIcon } from 'lucide-react';
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 
 import { useMap, useProject } from '@/hooks/queries';
+import { MAP_TAB_ICON, workspaceViewForKind } from '@/lib/workspace-views';
+import { requestDocumentClose } from '@/lib/document-lifecycle';
 import { useEditorUiStore, type WorkspaceTab } from '@/stores/editor-ui-store';
 
 import { describeTabForPath, isTabActive } from './workspace-tabs';
@@ -22,38 +16,23 @@ interface TabLabel {
   readonly label: string;
 }
 
+/**
+ * Icon and static label come from the workspace-view SSOT; map and overview
+ * tabs override the label with live data (map id / project name).
+ */
 function useTabLabel(tab: WorkspaceTab): TabLabel {
   const isMap = tab.kind === 'map';
-  const needsProject =
-    tab.projectId !== undefined &&
-    (tab.kind === 'overview' || tab.kind === 'assets' || tab.kind === 'plugins');
+  const needsProject = tab.projectId !== undefined && tab.kind === 'overview';
   const projectQuery = useProject(needsProject || isMap ? tab.projectId : undefined);
   const mapQuery = useMap(isMap ? tab.projectId : undefined, isMap ? tab.mapId : undefined);
-  const projectName = projectQuery.data?.project.name;
 
-  switch (tab.kind) {
-    case 'map': {
-      const mapName = mapQuery.data?.map.id ?? tab.mapId ?? 'Map';
-      return { icon: MapIcon, label: mapName };
-    }
-    case 'overview':
-      return {
-        icon: FolderOpenIcon,
-        label: projectName ?? 'Project',
-      };
-    case 'assets':
-      return {
-        icon: PackageIcon,
-        label: 'Asset library',
-      };
-    case 'plugins':
-      return {
-        icon: PuzzleIcon,
-        label: 'Plugin manager',
-      };
-    case 'settings':
-      return { icon: SettingsIcon, label: 'Settings' };
+  if (tab.kind === 'map') {
+    return { icon: MAP_TAB_ICON, label: mapQuery.data?.map.id ?? tab.mapId ?? 'Map' };
   }
+  const view = workspaceViewForKind(tab.kind);
+  const label =
+    tab.kind === 'overview' ? (projectQuery.data?.project.name ?? view.label) : view.label;
+  return { icon: view.icon, label };
 }
 
 interface TabItemProps {
@@ -148,46 +127,24 @@ export function WorkspaceTabBar() {
 
   const navigateToTab = useCallback(
     (tab: WorkspaceTab) => {
-      switch (tab.kind) {
-        case 'map':
-          if (tab.projectId && tab.mapId) {
-            void navigate({
-              to: '/projects/$projectId/maps/$mapId',
-              params: { projectId: tab.projectId, mapId: tab.mapId },
-            });
-          }
-          return;
-        case 'overview':
-          if (tab.projectId) {
-            void navigate({ to: '/projects/$projectId', params: { projectId: tab.projectId } });
-          }
-          return;
-        case 'assets':
-          if (tab.projectId) {
-            void navigate({
-              to: '/projects/$projectId/assets',
-              params: { projectId: tab.projectId },
-            });
-          }
-          return;
-        case 'plugins':
-          if (tab.projectId) {
-            void navigate({
-              to: '/projects/$projectId/plugins',
-              params: { projectId: tab.projectId },
-            });
-          }
-          return;
-        case 'settings':
-          if (tab.projectId) {
-            void navigate({
-              to: '/projects/$projectId/settings',
-              params: { projectId: tab.projectId },
-            });
-          } else {
-            void navigate({ to: '/settings' });
-          }
-          return;
+      if (tab.kind === 'map') {
+        if (tab.projectId && tab.mapId) {
+          void navigate({
+            to: '/projects/$projectId/maps/$mapId',
+            params: { projectId: tab.projectId, mapId: tab.mapId },
+          });
+        }
+        return;
+      }
+      if (tab.projectId) {
+        void navigate({
+          to: workspaceViewForKind(tab.kind).route,
+          params: { projectId: tab.projectId },
+        });
+        return;
+      }
+      if (tab.kind === 'settings') {
+        void navigate({ to: '/settings' });
       }
     },
     [navigate],
@@ -217,7 +174,8 @@ export function WorkspaceTabBar() {
   );
 
   const handleCloseTab = useCallback(
-    (tab: WorkspaceTab) => {
+    async (tab: WorkspaceTab) => {
+      if (!(await requestDocumentClose(tab.id))) return;
       const wasActive = isTabActive(tab, activeDescriptor);
       const successor = closeTabAction(tab.id);
       if (!wasActive) return;
@@ -229,6 +187,12 @@ export function WorkspaceTabBar() {
     },
     [activeDescriptor, closeTabAction, navigateToFallback, navigateToTab],
   );
+  const closeActiveTab = useEffectEvent(() => {
+    const activeTab = openTabs.find((tab) => isTabActive(tab, activeDescriptor));
+    if (activeTab === undefined) return false;
+    void handleCloseTab(activeTab);
+    return true;
+  });
 
   /** Cmd/Ctrl+W closes the active tab. */
   useEffect(() => {
@@ -236,14 +200,12 @@ export function WorkspaceTabBar() {
       const mod = event.metaKey || event.ctrlKey;
       if (!mod || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 'w') return;
-      const activeTab = openTabs.find((tab) => isTabActive(tab, activeDescriptor));
-      if (activeTab === undefined) return;
+      if (!closeActiveTab()) return;
       event.preventDefault();
-      handleCloseTab(activeTab);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeDescriptor, handleCloseTab, openTabs]);
+  }, []);
 
   if (openTabs.length === 0) {
     return null;
@@ -267,7 +229,7 @@ export function WorkspaceTabBar() {
           tab={tab}
           active={isTabActive(tab, activeDescriptor)}
           onActivate={() => navigateToTab(tab)}
-          onClose={() => handleCloseTab(tab)}
+          onClose={() => void handleCloseTab(tab)}
         />
       ))}
     </div>

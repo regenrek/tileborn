@@ -1,7 +1,7 @@
-import type { Effect } from "effect";
+import type { Effect } from 'effect';
 
-import type { World } from "../ecs/world.js";
-import type { RuntimeMessage } from "../net/protocol.js";
+import type { World } from '../ecs/world.js';
+import type { RuntimeMessage } from '../net/protocol.js';
 
 export interface RuntimePluginContext {
   readonly pluginId: string;
@@ -21,5 +21,7 @@ export interface RuntimePluginExecutable {
 }
 
 export interface RuntimePluginLoader {
-  readonly loadExecutable: (pluginId: string) => Effect.Effect<RuntimePlugin | RuntimePluginExecutable, unknown>;
+  readonly loadExecutable: (
+    pluginId: string,
+  ) => Effect.Effect<RuntimePlugin | RuntimePluginExecutable, unknown>;
 }

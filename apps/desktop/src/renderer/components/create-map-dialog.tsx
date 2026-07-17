@@ -12,17 +12,10 @@ import {
   Input,
 } from '@tileborne/ui';
 
-import {
-  DialogSubmitButton,
-  FormField,
-  usePendingDialogClose,
-} from '@/components/dialog-form';
+import { DialogSubmitButton, FormField, usePendingDialogClose } from '@/components/dialog-form';
 import { useCreateMap } from '@/hooks/mutations';
 import { getIpcError } from '@/lib/ipc';
-import {
-  hasMapDimensionErrors,
-  validateMapDimensions,
-} from '@/lib/map-form-validation';
+import { hasMapDimensionErrors, validateMapDimensions } from '@/lib/map-form-validation';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 
 interface CreateMapDialogProps {
@@ -65,7 +58,9 @@ export function CreateMapDialog({ open, onOpenChange, projectId }: CreateMapDial
       });
     } catch (error) {
       const ipcError = getIpcError(error);
-      notifyError(ipcError?.message ?? (error instanceof Error ? error.message : 'Map creation failed'));
+      notifyError(
+        ipcError?.message ?? (error instanceof Error ? error.message : 'Map creation failed'),
+      );
     }
   };
 

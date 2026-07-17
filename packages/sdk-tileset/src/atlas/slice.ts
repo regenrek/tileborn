@@ -1,5 +1,5 @@
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import type { UVRect } from "../schemas/uv-rect.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
+import type { UVRect } from '../schemas/uv-rect.js';
 
 export type SliceAtlasParams = {
   readonly imageWidth: number;
@@ -25,7 +25,7 @@ export type SliceAtlasResult = ParseResult<SliceAtlasSuccess> & {
   readonly diagnostics: readonly ParseDiagnostic[];
 };
 
-const ATLAS_PATH = "/atlas";
+const ATLAS_PATH = '/atlas';
 
 const computeColumns = (
   imageWidth: number,
@@ -49,12 +49,7 @@ const computeRows = (
   return Math.floor((imageHeight - margin * 2 + spacing) / step);
 };
 
-const tileFits = (
-  rect: UVRect,
-  imageWidth: number,
-  imageHeight: number,
-  margin: number,
-): boolean =>
+const tileFits = (rect: UVRect, imageWidth: number, imageHeight: number, margin: number): boolean =>
   rect.x >= margin &&
   rect.y >= margin &&
   rect.x + rect.w <= imageWidth - margin &&
@@ -62,12 +57,15 @@ const tileFits = (
 
 const invalidAtlasGrid = (
   message: string,
-  fields: Omit<Extract<ParseDiagnostic, { _tag: "InvalidAtlasGrid" }>, "_tag" | "path" | "message" | "severity">,
+  fields: Omit<
+    Extract<ParseDiagnostic, { _tag: 'InvalidAtlasGrid' }>,
+    '_tag' | 'path' | 'message' | 'severity'
+  >,
 ): ParseDiagnostic => ({
-  _tag: "InvalidAtlasGrid",
+  _tag: 'InvalidAtlasGrid',
   path: ATLAS_PATH,
   message,
-  severity: "error",
+  severity: 'error',
   ...fields,
 });
 
@@ -89,10 +87,10 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (cellWidth <= 0 || cellHeight <= 0) {
     diagnostics.push({
-      _tag: "InvalidCellSize",
+      _tag: 'InvalidCellSize',
       path: `${ATLAS_PATH}/cellSize`,
-      message: "Cell size must be positive",
-      severity: "error",
+      message: 'Cell size must be positive',
+      severity: 'error',
       width: cellWidth,
       height: cellHeight,
     });
@@ -101,10 +99,10 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (margin < 0 || spacing < 0) {
     diagnostics.push({
-      _tag: "InvalidMarginSpacing",
+      _tag: 'InvalidMarginSpacing',
       path: ATLAS_PATH,
-      message: "Margin and spacing must be non-negative",
-      severity: "error",
+      message: 'Margin and spacing must be non-negative',
+      severity: 'error',
       margin,
       spacing,
     });
@@ -116,7 +114,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (columns <= 0) {
     diagnostics.push(
-      invalidAtlasGrid("Atlas image is too small to fit any tile columns", {
+      invalidAtlasGrid('Atlas image is too small to fit any tile columns', {
         imageWidth,
         imageHeight,
         cellWidth,
@@ -135,7 +133,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
       margin * 2 + declaredColumns * cellWidth + Math.max(0, declaredColumns - 1) * spacing;
     if (requiredWidth > imageWidth) {
       diagnostics.push(
-        invalidAtlasGrid("Atlas image is too small for the declared column count", {
+        invalidAtlasGrid('Atlas image is too small for the declared column count', {
           imageWidth,
           imageHeight,
           cellWidth,
@@ -154,7 +152,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (maxRows <= 0) {
     diagnostics.push(
-      invalidAtlasGrid("Atlas image is too small to fit any tile rows", {
+      invalidAtlasGrid('Atlas image is too small to fit any tile rows', {
         imageWidth,
         imageHeight,
         cellWidth,
@@ -173,7 +171,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (totalTiles <= 0) {
     diagnostics.push(
-      invalidAtlasGrid("Tile count must be positive", {
+      invalidAtlasGrid('Tile count must be positive', {
         imageWidth,
         imageHeight,
         cellWidth,
@@ -189,7 +187,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
   if (totalTiles > capacity) {
     diagnostics.push(
-      invalidAtlasGrid("Atlas image is too small for the declared tile count", {
+      invalidAtlasGrid('Atlas image is too small for the declared tile count', {
         imageWidth,
         imageHeight,
         cellWidth,
@@ -216,7 +214,7 @@ export const sliceAtlas = (params: SliceAtlasParams): SliceAtlasResult => {
 
     if (!tileFits(rect, imageWidth, imageHeight, margin)) {
       diagnostics.push(
-        invalidAtlasGrid("Atlas tile UV rect extends outside the image bounds", {
+        invalidAtlasGrid('Atlas tile UV rect extends outside the image bounds', {
           imageWidth,
           imageHeight,
           cellWidth,

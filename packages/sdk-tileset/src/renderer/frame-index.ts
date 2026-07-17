@@ -1,14 +1,14 @@
-import type { AssetId } from "@tileborne/core";
-import { Option } from "effect";
+import type { AssetId } from '@tileborne/core';
+import { Option } from 'effect';
 
-import { compileAnimation } from "../animation/compile.js";
-import type { CompiledAnimation } from "../animation/types.js";
-import type { AnimationId, TileId } from "../schemas/ids.js";
-import type { TilesetPack } from "../schemas/tileset-pack.js";
-import type { VariantFilter } from "../schemas/variant-filter.js";
-import { selectVariant, type VariantContext } from "../variants/select.js";
+import { compileAnimation } from '../animation/compile.js';
+import type { CompiledAnimation } from '../animation/types.js';
+import type { AnimationId, TileId } from '../schemas/ids.js';
+import type { TilesetPack } from '../schemas/tileset-pack.js';
+import type { VariantFilter } from '../schemas/variant-filter.js';
+import { selectVariant, type VariantContext } from '../variants/select.js';
 
-import type { FrameLookupResult } from "./types.js";
+import type { FrameLookupResult } from './types.js';
 
 export type FrameIndex = {
   readonly lookup: (tileId: TileId) => FrameLookupResult | undefined;
@@ -22,7 +22,7 @@ export type FrameIndex = {
 
 type TileEntry = {
   readonly imageAssetId: AssetId;
-  readonly uv: FrameLookupResult["uv"];
+  readonly uv: FrameLookupResult['uv'];
   readonly animationId?: AnimationId;
   readonly sourceAssetPaths: ReadonlyArray<string>;
 };

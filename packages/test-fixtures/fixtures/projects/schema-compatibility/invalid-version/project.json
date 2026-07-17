@@ -1,0 +1,12 @@
+{
+  "id": "project:550e8400-e29b-41d4-a716-446655440033",
+  "name": "Invalid Version Project",
+  "schemaVersion": "not-an-integer",
+  "engineVersion": "0.1.0",
+  "plugins": [],
+  "assetPacks": [],
+  "maps": [],
+  "settings": {
+    "migrationSentinel": "must-not-be-treated-as-legacy"
+  }
+}

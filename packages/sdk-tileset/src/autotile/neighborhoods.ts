@@ -1,14 +1,14 @@
 /** Four cardinal edge neighbors (Wang 2-edge). */
-export const Edge4 = "edge4" as const;
+export const Edge4 = 'edge4' as const;
 
 /** Four corner Wang neighbors including the center cell at bit 7. */
-export const Corner4 = "corner4" as const;
+export const Corner4 = 'corner4' as const;
 
 /** Eight neighbors around a cell (blob / RPG Maker A2). */
-export const Around8 = "around8" as const;
+export const Around8 = 'around8' as const;
 
 /** Custom neighborhood with explicit offsets supplied by a rule source. */
-export const CustomNeighborhood = "custom" as const;
+export const CustomNeighborhood = 'custom' as const;
 
 export type NeighborhoodKind =
   | typeof Edge4

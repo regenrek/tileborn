@@ -13,7 +13,9 @@ import {
   CatalogExportContract,
   CatalogImportContract,
   CatalogIpcRegistry,
+  CatalogRemoveTypeContract,
   CatalogResolveContract,
+  CatalogUpsertTypeContract,
   CatalogValidateContract,
 } from './catalog.ts';
 
@@ -41,12 +43,17 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 };
 
 describe('catalog IPC contracts', () => {
-  it('registers all four catalog channels with the expected naming', () => {
-    expect(CatalogContracts).toHaveLength(4);
+  it('registers all catalog channels with the expected naming', () => {
+    expect(CatalogContracts).toHaveLength(9);
     expect(Object.keys(CatalogIpcRegistry.byChannel).sort()).toEqual([
+      'tileborne:catalog:duplicateDefinition',
       'tileborne:catalog:export',
       'tileborne:catalog:import',
+      'tileborne:catalog:removeDefinition',
+      'tileborne:catalog:removeType',
       'tileborne:catalog:resolve',
+      'tileborne:catalog:upsertDefinition',
+      'tileborne:catalog:upsertType',
       'tileborne:catalog:validate',
     ]);
   });
@@ -62,11 +69,17 @@ describe('catalog IPC contracts', () => {
     roundTrip(CatalogResolveContract.request, { projectId });
     roundTrip(CatalogResolveContract.response, {
       objectTypes: [
-        { objectType: pluginGameObjectType, origin: 'plugin', sourcePluginId: '@tileborne/plugin-x' },
+        {
+          objectType: pluginGameObjectType,
+          origin: 'plugin',
+          sourcePluginId: '@tileborne/plugin-x',
+        },
         { objectType: pluginGameObjectType, origin: 'project' },
       ],
       lootTables: [{ id: lootTableId, label: 'common', entries: [] }],
       items: [{ id: itemId, label: 'potion', category: 'consumable', data: {} }],
+      weapons: [],
+      definitionProvenance: {},
     });
   });
 
@@ -76,6 +89,8 @@ describe('catalog IPC contracts', () => {
         objectTypes: [{ objectType: pluginGameObjectType, origin: 'engine' }],
         lootTables: [],
         items: [],
+        weapons: [],
+        definitionProvenance: {},
       }),
     ).toThrow();
   });
@@ -116,5 +131,18 @@ describe('catalog IPC contracts', () => {
     roundTrip(CatalogExportContract.response, {
       catalogJson: { id: 'catalog:project', schemaVersion: 1, objectTypes: [] },
     });
+  });
+
+  it('round-trips upsertType/removeType for the entity editor authoring loop', () => {
+    roundTrip(CatalogUpsertTypeContract.request, {
+      projectId,
+      objectTypeJson: pluginGameObjectType,
+    });
+    roundTrip(CatalogUpsertTypeContract.response, {
+      saved: true,
+      report: { ok: true, issues: [] },
+    });
+    roundTrip(CatalogRemoveTypeContract.request, { projectId, objectTypeId });
+    roundTrip(CatalogRemoveTypeContract.response, { removed: true });
   });
 });

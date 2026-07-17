@@ -27,13 +27,13 @@ Failed steps roll back staging; partial packs never land in the home directory.
 
 Default importers (`defaultImporters`):
 
-| Importer | Handles |
-| --- | --- |
-| `imageImporter` | PNG, JPEG, WebP (magic-byte verified) |
-| `tilesetImporter` | Tileset sheets and metadata |
-| `audioImporter` | OGG, MP3, WAV |
-| `tmxImporter` | Tiled TMX maps |
-| `ldtkImporter` | LDtk JSON projects |
+| Importer          | Handles                               |
+| ----------------- | ------------------------------------- |
+| `imageImporter`   | PNG, JPEG, WebP (magic-byte verified) |
+| `tilesetImporter` | Tileset sheets and metadata           |
+| `audioImporter`   | OGG, MP3, WAV                         |
+| `tmxImporter`     | Tiled TMX maps                        |
+| `ldtkImporter`    | LDtk JSON projects                    |
 
 Each importer implements the shared `AssetImporter` contract: detect, validate, normalize paths, emit pack entries.
 

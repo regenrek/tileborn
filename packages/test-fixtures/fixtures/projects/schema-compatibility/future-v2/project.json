@@ -1,0 +1,15 @@
+{
+  "id": "project:550e8400-e29b-41d4-a716-446655440032",
+  "name": "Future Project",
+  "schemaVersion": 2,
+  "engineVersion": "9.9.9",
+  "plugins": [],
+  "assetPacks": [],
+  "maps": [],
+  "settings": {
+    "migrationSentinel": "must-not-be-rewritten"
+  },
+  "futureField": {
+    "unknown": true
+  }
+}

@@ -1,6 +1,6 @@
-import { Tile } from "../../schemas/tile.js";
-import { Tileset } from "../../schemas/tileset.js";
-import type { TilesetId, TileId } from "../../schemas/ids.js";
+import { Tile } from '../../schemas/tile.js';
+import { Tileset } from '../../schemas/tileset.js';
+import type { TilesetId, TileId } from '../../schemas/ids.js';
 
 export type TiledSourceTileProvenance = {
   readonly tilesetId: TilesetId;
@@ -9,15 +9,12 @@ export type TiledSourceTileProvenance = {
   readonly localTileId: number;
 };
 
-export const tileProvenanceTags = (
-  sourcePath: string,
-  localTileId: number,
-): readonly string[] => [`tiled-source:source=${sourcePath}`, `tiled-source:tile=${localTileId}`];
+export const tileProvenanceTags = (sourcePath: string, localTileId: number): readonly string[] => [
+  `tiled-source:source=${sourcePath}`,
+  `tiled-source:tile=${localTileId}`,
+];
 
-export const attachTileProvenanceTags = (
-  tileset: Tileset,
-  sourcePath: string,
-): Tileset =>
+export const attachTileProvenanceTags = (tileset: Tileset, sourcePath: string): Tileset =>
   new Tileset({
     id: tileset.id,
     name: tileset.name,

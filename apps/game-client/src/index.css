@@ -1,0 +1,17 @@
+/**
+ * Shipped game-client styles.
+ *
+ * Theme tokens (Tailwind v4 @theme block, :root + .dark palette) are the SSOT
+ * in @tileborne/ui — imported below. The HUD chassis and the @tileborne/ui
+ * components used by menu sections are styled with Tailwind utilities, so the
+ * client needs the same Tailwind pipeline as the desktop editor.
+ *
+ * Tailwind v4 only scans the application's source directory by default;
+ * pointing `@source` at the ui and game-client package sources guarantees
+ * every utility used by the design system and the HUD chassis makes it into
+ * the generated CSS (same pattern as apps/desktop/src/renderer/index.css).
+ */
+@import '@tileborne/ui/styles/index.css';
+
+@source "../../../packages/ui/src/**/*.{ts,tsx,js,jsx}";
+@source "../../../packages/game-client/src/**/*.{ts,tsx,js,jsx}";

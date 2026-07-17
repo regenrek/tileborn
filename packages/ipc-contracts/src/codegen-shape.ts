@@ -115,11 +115,13 @@ type IpcDomainBridge<Prefix extends string, Registry extends IpcRegistry> = Unio
 
 export const TILEBORNE_IPC_DOMAIN_PREFIXES = {
   projects: 'tileborne:projects',
+  behaviors: 'tileborne:behaviors',
   maps: 'tileborne:maps',
   assets: 'tileborne:assets',
   assetLibrary: 'tileborne:asset-library',
   workingPalettes: 'tileborne:working-palettes',
   catalog: 'tileborne:catalog',
+  readiness: 'tileborne:readiness',
   plugins: 'tileborne:plugins',
   jobs: 'tileborne:jobs',
   logs: 'tileborne:logs',
@@ -130,6 +132,7 @@ export const TILEBORNE_IPC_DOMAIN_PREFIXES = {
   playtest: 'tileborne:playtest',
   runtime: 'tileborne:runtime',
   runtimeDeploy: 'tileborne:runtime-deploy',
+  ship: 'tileborne:ship',
   support: 'tileborne:support',
   system: 'tileborne:system',
 } as const;

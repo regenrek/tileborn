@@ -1,11 +1,11 @@
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import { PluginId } from "@tileborne/core";
-import { PluginManifest, validatePluginContributions } from "@tileborne/plugin-api";
-import { Context, Effect, Layer, Option, Ref, Schema } from "effect";
+import { PluginId } from '@tileborne/core';
+import { PluginManifest, validatePluginContributions } from '@tileborne/plugin-api';
+import { Context, Effect, Layer, Option, Ref, Schema } from 'effect';
 
-import { resolvePluginGameObjectCatalogs } from "../catalog.js";
+import { resolvePluginGameObjectCatalogs, resolvePluginWeaponCatalogs } from '../catalog.js';
 import {
   hashPluginDirectory,
   readInstalledLock,
@@ -13,11 +13,12 @@ import {
   resolvePluginManifestPath,
   validatePluginDirectory,
   validatePluginManifestPaths,
-} from "../filesystem.js";
+} from '../filesystem.js';
 import {
   InstalledPlugin,
   LoadedDeclarativePlugin,
   MaterializedGameObjectCatalog,
+  MaterializedWeaponCatalog,
   type LoadedExecutablePlugin,
   PLUGIN_MANIFEST_FILE,
   PluginExecutionContext,
@@ -27,38 +28,49 @@ import {
   PluginNotFoundError,
   PluginValidationError,
   type PluginLoaderError,
-} from "../model.js";
-import { PluginRegistryService } from "../registry/index.js";
-import type { PluginRegistryServiceError } from "../registry/index.js";
+} from '../model.js';
+import { PluginRegistryService } from '../registry/index.js';
+import type { PluginRegistryServiceError } from '../registry/index.js';
 
-export class PluginExecutionContextService extends Context.Service<PluginExecutionContextService, {
-  readonly context: PluginExecutionContext;
-}>()("@tileborne/services-plugin/PluginExecutionContextService") {
+export class PluginExecutionContextService extends Context.Service<
+  PluginExecutionContextService,
+  {
+    readonly context: PluginExecutionContext;
+  }
+>()('@tileborne/services-plugin/PluginExecutionContextService') {
   static readonly main = Layer.succeed(PluginExecutionContextService, {
-    context: new PluginExecutionContext({ processKind: "main", allowedInRenderer: false }),
+    context: new PluginExecutionContext({ processKind: 'main', allowedInRenderer: false }),
   });
 
   static readonly cli = Layer.succeed(PluginExecutionContextService, {
-    context: new PluginExecutionContext({ processKind: "cli", allowedInRenderer: false }),
+    context: new PluginExecutionContext({ processKind: 'cli', allowedInRenderer: false }),
   });
 
   static readonly renderer = Layer.succeed(PluginExecutionContextService, {
-    context: new PluginExecutionContext({ processKind: "renderer", allowedInRenderer: false }),
+    context: new PluginExecutionContext({ processKind: 'renderer', allowedInRenderer: false }),
   });
 }
 
-export class PluginLoaderService extends Context.Service<PluginLoaderService, {
-  readonly loadDeclarative: (pluginId: PluginId) => Effect.Effect<LoadedDeclarativePlugin, PluginLoaderServiceError>;
-  readonly loadExecutable: (pluginId: PluginId) => Effect.Effect<LoadedExecutablePlugin, PluginLoaderServiceError>;
-  readonly listDeclarative: () => Effect.Effect<readonly LoadedDeclarativePlugin[]>;
-}>()("@tileborne/services-plugin/PluginLoaderService") {}
+export class PluginLoaderService extends Context.Service<
+  PluginLoaderService,
+  {
+    readonly loadDeclarative: (
+      pluginId: PluginId,
+    ) => Effect.Effect<LoadedDeclarativePlugin, PluginLoaderServiceError>;
+    readonly loadExecutable: (
+      pluginId: PluginId,
+    ) => Effect.Effect<LoadedExecutablePlugin, PluginLoaderServiceError>;
+    readonly listDeclarative: () => Effect.Effect<readonly LoadedDeclarativePlugin[]>;
+  }
+>()('@tileborne/services-plugin/PluginLoaderService') {}
 
 export type PluginLoaderServiceError = PluginLoaderError | PluginRegistryServiceError;
 
 const notFound = (pluginId: PluginId): PluginNotFoundError =>
   new PluginNotFoundError({ pluginId, message: `plugin not found: ${pluginId}` });
 
-const toMessage = (cause: unknown): string => cause instanceof Error ? cause.message : String(cause);
+const toMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const executableEntry = (manifest: PluginManifest): string | undefined => {
   if (Option.isNone(manifest.entry)) {
@@ -110,17 +122,19 @@ const readVerifiedInstalledPlugin = (
         cause instanceof PluginValidationError
           ? cause
           : new PluginValidationError({
-            path: path.join(installed.rootPath, PLUGIN_MANIFEST_FILE),
-            message: toMessage(cause),
-          }),
+              path: path.join(installed.rootPath, PLUGIN_MANIFEST_FILE),
+              message: toMessage(cause),
+            }),
     });
     const expectedHash = yield* Effect.tryPromise({
       try: () => readInstalledLock(installed.rootPath),
-      catch: (cause) => new PluginIntegrityError({ path: installed.rootPath, message: toMessage(cause) }),
+      catch: (cause) =>
+        new PluginIntegrityError({ path: installed.rootPath, message: toMessage(cause) }),
     });
     const actualHash = yield* Effect.tryPromise({
       try: () => hashPluginDirectory(installed.rootPath),
-      catch: (cause) => new PluginIntegrityError({ path: installed.rootPath, message: toMessage(cause) }),
+      catch: (cause) =>
+        new PluginIntegrityError({ path: installed.rootPath, message: toMessage(cause) }),
     });
     if (actualHash !== expectedHash) {
       yield* new PluginIntegrityError({
@@ -145,7 +159,9 @@ export const PluginLoaderServiceLive = Layer.effect(
     const execution = yield* PluginExecutionContextService;
     const declarativeRef = yield* Ref.make(new Map<PluginId, LoadedDeclarativePlugin>());
 
-    const loadDeclarative = Effect.fn("PluginLoaderService.loadDeclarative")(function* (pluginId: PluginId) {
+    const loadDeclarative = Effect.fn('PluginLoaderService.loadDeclarative')(function* (
+      pluginId: PluginId,
+    ) {
       const plugins = yield* registry.list();
       const installed = plugins.find((candidate) => candidate.id === pluginId);
       if (!installed) {
@@ -153,17 +169,29 @@ export const PluginLoaderServiceLive = Layer.effect(
       }
       const plugin = yield* readVerifiedInstalledPlugin(installed!);
       yield* Effect.try({
-        try: () => validatePluginManifestPaths(plugin.rootPath, Schema.encodeSync(PluginManifest)(plugin.manifest)),
+        try: () =>
+          validatePluginManifestPaths(
+            plugin.rootPath,
+            Schema.encodeSync(PluginManifest)(plugin.manifest),
+          ),
         catch: (cause) =>
           cause instanceof PluginValidationError
             ? cause
             : new PluginInstallError({ path: plugin.rootPath, message: toMessage(cause) }),
       });
       // Resolve + decode the plugin's catalog contributions at load time
-      // (ADR-0019) so the loaded plugin carries materialized catalogs instead of
-      // raw `{ indexPath }` indirection. Cross-plugin merge stays deferred to the
-      // runtime-map-package capstone.
-      const resolvedCatalogs = yield* resolvePluginGameObjectCatalogs(plugin.rootPath, plugin.manifest);
+      // (ADR-0019 game objects, ADR-0018 Slice 5 weapons) so the loaded plugin
+      // carries materialized catalogs instead of raw `{ indexPath }` indirection.
+      // Cross-plugin merge stays deferred to the caller (`mergeGameObjectCatalogs`
+      // / `mergeWeaponCatalogs`).
+      const resolvedCatalogs = yield* resolvePluginGameObjectCatalogs(
+        plugin.rootPath,
+        plugin.manifest,
+      );
+      const resolvedWeaponCatalogs = yield* resolvePluginWeaponCatalogs(
+        plugin.rootPath,
+        plugin.manifest,
+      );
       const loaded = new LoadedDeclarativePlugin({
         pluginId,
         manifest: plugin.manifest,
@@ -175,17 +203,26 @@ export const PluginLoaderServiceLive = Layer.effect(
               catalog: entry.catalog,
             }),
         ),
+        weaponCatalogs: resolvedWeaponCatalogs.map(
+          (entry) =>
+            new MaterializedWeaponCatalog({
+              contributionId: entry.contributionId,
+              catalog: entry.catalog,
+            }),
+        ),
       });
       yield* Ref.update(declarativeRef, (current) => new Map(current).set(pluginId, loaded));
       return loaded;
     });
 
-    const loadExecutable = Effect.fn("PluginLoaderService.loadExecutable")(function* (pluginId: PluginId) {
-      if (execution.context.processKind === "renderer" && !execution.context.allowedInRenderer) {
+    const loadExecutable = Effect.fn('PluginLoaderService.loadExecutable')(function* (
+      pluginId: PluginId,
+    ) {
+      if (execution.context.processKind === 'renderer' && !execution.context.allowedInRenderer) {
         yield* new PluginExecutionForbiddenError({
           pluginId,
           processKind: execution.context.processKind,
-          message: "plugin executable code is forbidden in the renderer",
+          message: 'plugin executable code is forbidden in the renderer',
         });
       }
       const plugins = yield* registry.list();
@@ -198,7 +235,7 @@ export const PluginLoaderServiceLive = Layer.effect(
       if (!entry) {
         yield* new PluginInstallError({
           path: installed.rootPath,
-          message: "plugin manifest has no executable entrypoint",
+          message: 'plugin manifest has no executable entrypoint',
         });
       }
       const entryPath = yield* Effect.tryPromise({
@@ -210,8 +247,7 @@ export const PluginLoaderServiceLive = Layer.effect(
       });
       const module = yield* Effect.tryPromise({
         try: () => import(pathToFileURL(entryPath).href) as Promise<unknown>,
-        catch: (cause) =>
-          new PluginInstallError({ path: entryPath, message: toMessage(cause) }),
+        catch: (cause) => new PluginInstallError({ path: entryPath, message: toMessage(cause) }),
       });
       return {
         pluginId,
@@ -220,7 +256,7 @@ export const PluginLoaderServiceLive = Layer.effect(
       };
     });
 
-    const listDeclarative = Effect.fn("PluginLoaderService.listDeclarative")(function* () {
+    const listDeclarative = Effect.fn('PluginLoaderService.listDeclarative')(function* () {
       return [...(yield* Ref.get(declarativeRef)).values()];
     });
 

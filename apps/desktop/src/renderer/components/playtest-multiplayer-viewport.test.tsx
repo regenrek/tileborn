@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,7 +22,20 @@ const multiplayerStateMock = vi.hoisted(() => ({
   current: {
     sessionState: null as unknown,
     client: null as unknown,
+    roomReady: null as unknown,
+    participantSession: null as unknown,
+    lobbyState: null as unknown,
+    roomResults: null as unknown,
+    isReadyPending: false,
+    lobbyError: null as string | null,
+    setLocalReady: vi.fn(() => Promise.resolve()),
+    leaveSession: vi.fn(),
     stopHosting: vi.fn(),
+  },
+}));
+const projectStateMock = vi.hoisted(() => ({
+  current: {
+    settings: undefined as { readonly activeGameMode?: string } | undefined,
   },
 }));
 const setCameraMock = vi.hoisted(() => vi.fn());
@@ -47,6 +60,27 @@ vi.mock('@tileborne/runtime', () => ({
     getCurrentFullState = vi.fn(() => undefined);
     getPreviousFullState = vi.fn(() => undefined);
   },
+  // Neutral input-resolver stubs (ADR-0024): the input bridge constructs an
+  // InputResolver + raw-event values; these overlay tests do not dispatch input.
+  InputResolver: class InputResolver {
+    apply = vi.fn();
+    resolve = vi.fn(() => ({ digital: new Map(), analog: new Map(), pointer: new Map() }));
+  },
+  KeyInputEvent: class KeyInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
+  MouseMoveInputEvent: class MouseMoveInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
+  MouseButtonInputEvent: class MouseButtonInputEvent {
+    constructor(props: Record<string, unknown>) {
+      Object.assign(this, props);
+    }
+  },
   // Real interpolation (not identity) so the render-loop test can assert the
   // camera follows the INTERPOLATED local entity, mirroring the runtime helper.
   interpolateRenderableEntities: (
@@ -63,7 +97,11 @@ vi.mock('@tileborne/runtime', () => ({
       const prior = previousById.get(value.id);
       return prior === undefined
         ? value
-        : { ...value, x: prior.x + (value.x - prior.x) * resolved, y: prior.y + (value.y - prior.y) * resolved };
+        : {
+            ...value,
+            x: prior.x + (value.x - prior.x) * resolved,
+            y: prior.y + (value.y - prior.y) * resolved,
+          };
     });
   },
 }));
@@ -93,17 +131,56 @@ vi.mock('@/editor/viewport/pixi-texture-from-bytes', () => ({
   pixiTextureFromBytes: vi.fn(),
 }));
 
-vi.mock('@/lib/playtest-plugin-bridge', async () => ({
-  BATTLE_ROYALE_PLUGIN_ID: (
-    await vi.importActual<typeof import('@tileborne/plugin-battle-royale/constants')>(
-      '@tileborne/plugin-battle-royale/constants',
-    )
-  ).PLUGIN_ID,
+const activeModePluginId = ['@tileborne-plugins', 'battle-royale'].join('/');
+const arenaModePluginId = ['@tileborne-plugins', 'example-arena'].join('/');
+
+// The viewport discovers the active game mode from the `gameModes` IPC
+// projection (ADR-0023 section B) rather than a hardcoded battle-royale id.
+vi.mock('@/hooks/queries', () => ({
+  useProject: () => ({ data: { project: projectStateMock.current } }),
+  usePluginContributions: () => ({
+    data: {
+      panels: [],
+      tools: [],
+      gameModes: [
+        {
+          modeId: activeModePluginId,
+          pluginId: activeModePluginId,
+          label: 'Battle Royale',
+          rendererCapabilityId: 'battle-royale.renderer',
+          hasAuthoringPanel: true,
+        },
+        {
+          modeId: arenaModePluginId,
+          pluginId: arenaModePluginId,
+          label: 'Example Arena',
+          rendererCapabilityId: 'example-arena.renderer',
+          hasAuthoringPanel: true,
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+vi.mock('@/lib/playtest-plugin-bridge', () => ({
   resolvePlaytestPlugin: vi.fn(() => ({
     projector: { mergeFrame: vi.fn(), project: projectMock },
     bundledAssets: [],
     manifest: { fixedZoom: 4, hudInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
     decodeServerFrame: vi.fn(() => undefined),
+    inputMap: { id: 'test', actions: [], schemeDefaults: {} },
+    controlScheme: 'keyboard-mouse',
+    inputCaptureProfile: { boundKeyCodes: new Set<string>(), usesMouseButtons: false },
+    resolveInputIntent: vi.fn(() => ({
+      dir: undefined,
+      shoot: false,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+    })),
   })),
 }));
 
@@ -115,9 +192,23 @@ const stablePlayerModels = vi.hoisted(() => ({
   selectedModelId: undefined,
   roster: [] as const,
 }));
+const stableOverlayVisuals = vi.hoisted(() => ({
+  builtOverlays: [] as const,
+}));
+vi.mock('@/hooks/mutations', () => ({
+  useUpdateProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+const stableWeaponVisuals = vi.hoisted(() => ({
+  builtWeapons: [] as const,
+}));
 vi.mock('@/hooks/use-playtest-player-models', () => ({
   usePlaytestPlayerModels: () => stablePlayerModels,
+  usePlaytestOverlayVisuals: () => stableOverlayVisuals,
+  usePlaytestWeaponVisuals: () => stableWeaponVisuals,
   assemblePlaytestPlayerModelConfig: vi.fn(),
+  assemblePlaytestOverlayVisualConfig: vi.fn(),
+  assemblePlaytestWeaponVisualConfig: vi.fn(),
 }));
 
 vi.mock('@/stores/playtest-multiplayer-store', () => {
@@ -137,6 +228,7 @@ vi.mock('@/stores/editor-ui-store', () => {
   };
 });
 
+import { resolvePlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import { PlaytestMultiplayerViewport } from './playtest-multiplayer-viewport';
 
 class ResizeObserverStub {
@@ -173,10 +265,23 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     multiplayerStateMock.current = {
       sessionState: null,
       client: null,
+      roomReady: null,
+      participantSession: null,
+      lobbyState: null,
+      roomResults: null,
+      isReadyPending: false,
+      lobbyError: null,
+      setLocalReady: vi.fn(() => Promise.resolve()),
+      leaveSession: vi.fn(),
       stopHosting: vi.fn(),
     };
+    projectStateMock.current = { settings: { activeGameMode: activeModePluginId } };
+    vi.mocked(resolvePlaytestPlugin).mockClear();
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 0),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
 
@@ -233,6 +338,123 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     });
   });
 
+  it('uses the project-selected non-default game mode for projector resolution', async () => {
+    projectStateMock.current = { settings: { activeGameMode: arenaModePluginId } };
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(resolvePlaytestPlugin).toHaveBeenCalledWith(
+        'example-arena.renderer',
+        expect.any(Object),
+      );
+    });
+  });
+
+  it('keeps both players in the explicit lobby until ready, then shows active play and terminal results', async () => {
+    const setLocalReady = vi.fn(() => Promise.resolve());
+    const leaveSession = vi.fn();
+    const players = [
+      {
+        playerId: 'player-1',
+        status: 'connected',
+        ready: false,
+        reconnectEligible: true,
+        lastSeenAt: null,
+      },
+      {
+        playerId: 'player-2',
+        status: 'connected',
+        ready: false,
+        reconnectEligible: true,
+        lastSeenAt: null,
+      },
+    ];
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      // Regression: even a prematurely-live socket projection must not bypass
+      // the authoritative room lobby phase.
+      sessionState: { phase: 'live', localPlayerId: 'player-1', tick: 0, players: [] },
+      participantSession: {
+        baseUrl: 'http://127.0.0.1:8787',
+        roomId: 'room-1',
+        wsUrl: 'ws://127.0.0.1:8787/rooms/room-1/connect',
+        playerId: 'player-1',
+        handoffToken: 'handoff-1',
+        reconnectToken: 'reconnect-1',
+      },
+      lobbyState: {
+        roomId: 'room-1',
+        mapId: 'map-1',
+        phase: 'lobby',
+        lobby: { visibility: 'private' },
+        playerCount: 2,
+        maxPlayers: 8,
+        minReadyPlayers: 2,
+        canStart: false,
+        players,
+      },
+      setLocalReady,
+      leaveSession,
+    };
+
+    const { rerender } = renderViewport();
+
+    expect(screen.getByTestId('multiplayer-lobby')).toBeTruthy();
+    expect(screen.getAllByText('Not ready')).toHaveLength(2);
+    fireEvent.click(screen.getByTestId('multiplayer-ready-toggle'));
+    expect(setLocalReady).toHaveBeenCalledWith(true);
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      lobbyState: {
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
+        phase: 'lobby',
+        canStart: false,
+        players: [{ ...players[0], ready: true }, players[1]],
+      },
+    };
+    rerender(viewport());
+    expect(screen.getByTestId('multiplayer-lobby')).toBeTruthy();
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      sessionState: { phase: 'live', localPlayerId: 'player-1', tick: 1, players: [] },
+      lobbyState: {
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
+        phase: 'active',
+        canStart: true,
+        players: players.map((player) => ({ ...player, ready: true })),
+      },
+    };
+    rerender(viewport());
+    expect(screen.queryByTestId('multiplayer-lobby')).toBeNull();
+
+    multiplayerStateMock.current = {
+      ...multiplayerStateMock.current,
+      lobbyState: {
+        ...(multiplayerStateMock.current.lobbyState as Record<string, unknown>),
+        phase: 'finished',
+      },
+      roomResults: {
+        completedAt: '2026-07-14T12:00:00.000Z',
+        reason: 'last-player-standing',
+        players: [
+          { playerId: 'player-1', outcome: 'winner', placement: 1, score: 100 },
+          { playerId: 'player-2', outcome: 'eliminated', placement: 2, score: 25 },
+        ],
+      },
+    };
+    rerender(viewport());
+
+    expect(screen.getByTestId('multiplayer-results')).toBeTruthy();
+    expect(screen.getByText('last-player-standing')).toBeTruthy();
+    expect(screen.getByText('winner · 100 pts')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to editor' }));
+    expect(leaveSession).toHaveBeenCalledTimes(1);
+    expect(multiplayerStateMock.current.stopHosting).not.toHaveBeenCalled();
+  });
+
   // Regression lock for the snapshot-interpolation smoothness fix: the
   // follow-camera must track the INTERPOLATED local-player position (not the
   // discrete latest snapshot), and the renderer must receive an empty
@@ -247,14 +469,20 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
 
     const previousSnapshot = { tag: 'previous' };
     const currentSnapshot = { tag: 'current' };
+    const animation = {
+      clipId: 'maltipoo-mae:idle',
+      frames: [{ assetId: 'pet', uv: { x: 0, y: 0, w: 192, h: 208 }, durationMs: 130 }],
+      loop: true,
+      clockMs: 0,
+    };
     // Local player walks from (0,0) -> (10,20); at alpha 0.5 the interpolated
     // position is (5,10). The discrete `current` would be (10,20).
     projectMock.mockImplementation((snapshot: unknown) => {
       if (snapshot === currentSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 10, y: 20, animation }];
       }
       if (snapshot === previousSnapshot) {
-        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0 }];
+        return [{ id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, animation }];
       }
       return [];
     });
@@ -295,8 +523,17 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     expect(alpha).toBe(1);
     expect(previousById).toBeInstanceOf(Map);
     expect((previousById as Map<string, unknown>).size).toBe(0);
-    expect(projected).toEqual([
-      { id: 'br:player:p1', assetId: 'pet', x: 0, y: 0, scale: 4 },
-    ]);
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toEqual(
+      expect.objectContaining({
+        id: 'br:player:p1',
+        assetId: 'pet',
+        x: 0,
+        y: 0,
+        scaleX: 4,
+        scaleY: 4,
+      }),
+    );
+    expect(projected[0]?.scale).toBeUndefined();
   });
 });

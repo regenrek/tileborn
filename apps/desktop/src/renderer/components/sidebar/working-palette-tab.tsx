@@ -49,7 +49,11 @@ export function WorkingPaletteTab({ projectId, mapId }: WorkingPaletteTabProps) 
       : undefined;
 
   const activePaletteItemPackId = activePalette?.items[0]?.ref.packId;
-  const preferredPalettePackId = [mapTilesetPackId, activePalettePackId ?? undefined, activePaletteItemPackId]
+  const preferredPalettePackId = [
+    mapTilesetPackId,
+    activePalettePackId ?? undefined,
+    activePaletteItemPackId,
+  ]
     .filter((packId): packId is string => packId !== undefined)
     .find((packId) => installedPacks.some((pack) => pack.id === packId));
   const palettePackId = useMemo(() => {

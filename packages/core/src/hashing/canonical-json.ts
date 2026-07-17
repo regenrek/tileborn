@@ -1,7 +1,7 @@
-import { CanonicalJsonError } from "../errors/index.js";
+import { CanonicalJsonError } from '../errors/index.js';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false;
   }
   const proto = Object.getPrototypeOf(value);
@@ -16,37 +16,37 @@ const reject = (path: string, message: string): never => {
 
 const assertSerializable = (value: unknown, path: string): void => {
   if (value === undefined) {
-    reject(path, "undefined is not serializable");
+    reject(path, 'undefined is not serializable');
   }
 
-  if (value === null || typeof value === "boolean" || typeof value === "string") {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
     return;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
-      reject(path, "non-finite numbers are not serializable");
+      reject(path, 'non-finite numbers are not serializable');
     }
     return;
   }
 
-  if (typeof value === "bigint") {
-    reject(path, "bigint is not serializable");
+  if (typeof value === 'bigint') {
+    reject(path, 'bigint is not serializable');
   }
 
   if (value instanceof Date) {
-    reject(path, "Date is not serializable");
+    reject(path, 'Date is not serializable');
   }
 
   if (value instanceof Map) {
-    reject(path, "Map is not serializable");
+    reject(path, 'Map is not serializable');
   }
 
   if (value instanceof Set) {
-    reject(path, "Set is not serializable");
+    reject(path, 'Set is not serializable');
   }
 
-  if (typeof value === "function" || typeof value === "symbol") {
+  if (typeof value === 'function' || typeof value === 'symbol') {
     reject(path, `unsupported value type ${typeof value}`);
   }
 
@@ -61,7 +61,7 @@ const assertSerializable = (value: unknown, path: string): void => {
   }
 
   if (!isPlainObject(value)) {
-    reject(path, "class instances and exotic objects are not serializable");
+    reject(path, 'class instances and exotic objects are not serializable');
   }
 
   const record = value as Record<string, unknown>;
@@ -86,21 +86,21 @@ const assertSerializable = (value: unknown, path: string): void => {
  * - Rejects Date, Map, Set, class instances, sparse arrays, non-finite numbers, and BigInt.
  */
 export const canonicalJson = (value: unknown): string => {
-  assertSerializable(value, "");
+  assertSerializable(value, '');
 
-  if (value === null || typeof value === "boolean" || typeof value === "string") {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
     return JSON.stringify(value);
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return value.toString();
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+    return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
   }
 
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key]!)}`).join(",")}}`;
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key]!)}`).join(',')}}`;
 };

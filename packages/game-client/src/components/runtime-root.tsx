@@ -1,17 +1,25 @@
-import type { BrandConfig } from "@tileborne/core";
-import { useCallback, useEffect, type CSSProperties, type ReactElement, type ReactNode } from "react";
-
-import { defaultBrandConfig } from "../config/default-brand.js";
-import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
+import type { BrandConfig, HudLayout } from '@tileborne/core';
 import {
-  initialMenuState,
-  type MenuEvent,
-  type MenuState,
-} from "../state/menu-machine.js";
-import { useMenuMachine } from "../state/use-menu-machine.js";
-import { brandThemeVars } from "../theming/brand-theme.js";
-import { MenuShell } from "./menu-shell.js";
-import type { MatchResults } from "./results-screen.js";
+  useCallback,
+  useEffect,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
+
+import { defaultBrandConfig } from '../config/default-brand.js';
+import type { MenuSectionRegistration } from '../contributions/menu-registry.js';
+import { HudOverlay, type HudInsets } from '../hud/hud-overlay.js';
+import type { HudMetrics } from '../hud/hud-state.js';
+import type { HudWidgetRegistration } from '../hud/hud-widget-registry.js';
+import { initialMenuState, type MenuEvent, type MenuState } from '../state/menu-machine.js';
+import { useMenuMachine } from '../state/use-menu-machine.js';
+import { brandThemeVars } from '../theming/brand-theme.js';
+import { useRuntimeAudio } from '../audio/use-runtime-audio.js';
+import { MenuShell, type RuntimeLobbyRenderProps } from './menu-shell.js';
+import type { AudioTabConfig } from './audio-tab.js';
+import type { ControlsTabConfig } from './controls-tab.js';
+import type { MatchResults } from './results-screen.js';
 
 export interface RuntimeRootProps {
   /** Brand overlay; defaults to the neutral "Tileborne Game" brand. */
@@ -32,6 +40,28 @@ export interface RuntimeRootProps {
   readonly initialState?: MenuState;
   /** 0..1 boot progress for the splash. */
   readonly bootProgress?: number;
+  /**
+   * Controls-tab keybind remap editor wiring (ADR-0024). The app supplies the
+   * active mode's default `InputMap`, control scheme, and a persistence store;
+   * the Settings → Controls tab then renders a live remap editor. Omit to keep
+   * the static Controls blurb.
+   */
+  readonly controls?: ControlsTabConfig;
+  /** Runtime mixer settings shown in Settings -> Audio. */
+  readonly audio?: AudioTabConfig;
+  /** Optional app-owned lobby surface that reuses the shell state machine. */
+  readonly renderLobby?: ((props: RuntimeLobbyRenderProps) => ReactNode) | undefined;
+  /**
+   * In-match HUD wiring (ADR-0027). The app supplies the live HUD metrics
+   * stream, the effective `HudLayout` (plugin default ⊕ user overlay), custom
+   * widget registrations for plugin-declared kinds, and optional render-area
+   * insets. The HUD chassis mounts over the canvas during `in-match` whenever
+   * metrics are present; the pause scrim layers above it.
+   */
+  readonly hudMetrics?: HudMetrics;
+  readonly hudLayout?: HudLayout;
+  readonly hudWidgets?: readonly HudWidgetRegistration[];
+  readonly hudInsets?: HudInsets;
 }
 
 /**
@@ -50,12 +80,20 @@ export function RuntimeRoot({
   onQuit,
   initialState = initialMenuState,
   bootProgress,
+  controls,
+  audio,
+  renderLobby,
+  hudMetrics,
+  hudLayout,
+  hudWidgets,
+  hudInsets,
 }: RuntimeRootProps): ReactElement {
   const { state, dispatch } = useMenuMachine(initialState);
+  useRuntimeAudio(audio);
 
   const dispatchWithEffects = useCallback(
     (event: MenuEvent) => {
-      if (event.type === "PLAY") {
+      if (event.type === 'PLAY') {
         onPlay?.();
       }
       dispatch(event);
@@ -70,7 +108,7 @@ export function RuntimeRoot({
   // invocation; the last surviving invocation dispatches BOOT_COMPLETE. Boot is
   // expected to be idempotent.
   useEffect(() => {
-    if (state.phase !== "boot") {
+    if (state.phase !== 'boot') {
       return;
     }
     let cancelled = false;
@@ -78,16 +116,16 @@ export function RuntimeRoot({
     void boot().then(
       () => {
         if (!cancelled) {
-          dispatch({ type: "BOOT_COMPLETE" });
+          dispatch({ type: 'BOOT_COMPLETE' });
         }
       },
       (cause: unknown) => {
         if (!cancelled) {
           dispatch({
-            type: "BOOT_FAILED",
+            type: 'BOOT_FAILED',
             error: {
-              title: "Failed to start",
-              message: cause instanceof Error ? cause.message : "The game failed to boot.",
+              title: 'Failed to start',
+              message: cause instanceof Error ? cause.message : 'The game failed to boot.',
             },
           });
         }
@@ -102,17 +140,17 @@ export function RuntimeRoot({
   // Global Esc: pause/resume in-match, otherwise step back through menus.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      if (event.key !== 'Escape') {
         return;
       }
-      if (state.phase === "in-match") {
-        dispatch({ type: state.paused ? "RESUME" : "PAUSE" });
-      } else if (state.phase === "menu" && state.screen !== "main") {
-        dispatch({ type: "BACK" });
+      if (state.phase === 'in-match') {
+        dispatch({ type: state.paused ? 'RESUME' : 'PAUSE' });
+      } else if (state.phase === 'menu' && state.screen !== 'main') {
+        dispatch({ type: 'BACK' });
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [state.phase, state.paused, state.screen, dispatch]);
 
   const style = brandThemeVars(brand) as CSSProperties;
@@ -123,6 +161,14 @@ export function RuntimeRoot({
         {canvas}
       </div>
       <div className="tb-overlay-layer">
+        {state.phase === 'in-match' && hudMetrics !== undefined ? (
+          <HudOverlay
+            metrics={hudMetrics}
+            layout={hudLayout}
+            customWidgets={hudWidgets}
+            hudInsets={hudInsets}
+          />
+        ) : null}
         <MenuShell
           state={state}
           dispatch={dispatchWithEffects}
@@ -131,6 +177,9 @@ export function RuntimeRoot({
           results={results}
           bootProgress={bootProgress}
           onQuit={onQuit}
+          renderLobby={renderLobby}
+          {...(controls ? { controls } : {})}
+          {...(audio ? { audio } : {})}
         />
       </div>
     </div>

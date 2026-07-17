@@ -196,7 +196,10 @@ const installWorkingPaletteBridge = () => {
     update: vi.fn(),
     delete: vi.fn(),
     removeItem: vi.fn(
-      async (input: { paletteId: WorkingPaletteId; itemId: WorkingPalette['items'][number]['id'] }) => {
+      async (input: {
+        paletteId: WorkingPaletteId;
+        itemId: WorkingPalette['items'][number]['id'];
+      }) => {
         const existing = palettes.find((palette) => palette.id === input.paletteId)!;
         const next: WorkingPalette = {
           ...existing,
@@ -330,7 +333,26 @@ const imageCollectionOnlyPackJson = {
 };
 
 describe('AssetPackBrowser', () => {
+  let originalOffsetHeight: PropertyDescriptor | undefined;
+  let originalOffsetWidth: PropertyDescriptor | undefined;
+
   beforeEach(() => {
+    // jsdom reports offsetWidth/offsetHeight as 0 for every element, which makes
+    // @tanstack/react-virtual measure the scroll viewport as 0px tall and render
+    // zero rows (its range is null when the measured outer size is 0). Give every
+    // element a stable non-zero box so the virtualizer computes a real window and
+    // mounts the leading group cards the assertions below rely on.
+    originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+    originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 600,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 320,
+    });
+
     editorState = {
       brushIntent: { kind: 'eraser' },
       selectBrush: vi.fn(),
@@ -391,7 +413,19 @@ describe('AssetPackBrowser', () => {
     useWorkingPalettesStore.getState().__resetForTests();
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    if (originalOffsetHeight !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeight);
+    } else {
+      delete (HTMLElement.prototype as { offsetHeight?: number }).offsetHeight;
+    }
+    if (originalOffsetWidth !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    } else {
+      delete (HTMLElement.prototype as { offsetWidth?: number }).offsetWidth;
+    }
+    cleanup();
+  });
 
   it('shows loading skeleton while pack data is being fetched', () => {
     useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: true, isError: false });
@@ -452,9 +486,13 @@ describe('AssetPackBrowser', () => {
       }),
     );
 
-    render(<AssetPackBrowser packId={pack.id} packName="Atlas-Props-Sprites" projectId={projectId} />);
+    render(
+      <AssetPackBrowser packId={pack.id} packName="Atlas-Props-Sprites" projectId={projectId} />,
+    );
 
-    expect(await screen.findByTestId('asset-pack-browser-group-source:Atlas-Props-Sprites')).toBeTruthy();
+    expect(
+      await screen.findByTestId('asset-pack-browser-group-source:Atlas-Props-Sprites'),
+    ).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-placeable').textContent).toContain('1');
     expect(screen.getByTestId('asset-pack-browser-tab-tileset').textContent).not.toContain('1');
 
@@ -493,31 +531,33 @@ describe('AssetPackBrowser', () => {
     ).toHaveLength(2);
   });
 
-  it('keeps per-group thumbnail rendering capped behind Load more', () => {
-    const manyPreviewRefs = Array.from(
-      { length: 96 },
-      (_, index) => {
-        const generatedTileId = makeTileId(
-          `550e8400-e29b-41d4-a716-${String(446655441000 + index).padStart(12, '0')}`,
-        );
-        return new AssetLibraryReference({
-          packId,
-          kind: 'tile',
-          refId: generatedTileId,
-          tileId: generatedTileId,
-        });
-      },
-    );
-    const largeGroup = new AssetLibraryGroup({
+  const buildLargePreviewGroup = (length: number) => {
+    const manyPreviewRefs = Array.from({ length }, (_, index) => {
+      const generatedTileId = makeTileId(
+        `550e8400-e29b-41d4-a716-${String(446655441000 + index).padStart(12, '0')}`,
+      );
+      return new AssetLibraryReference({
+        packId,
+        kind: 'tile',
+        refId: generatedTileId,
+        tileId: generatedTileId,
+      });
+    });
+    return new AssetLibraryGroup({
       id: 'tileset:large-preview-group',
       packId,
       kind: 'tileset',
       label: 'Large Preview Group',
-      count: 96,
+      count: length,
       metadata: {},
       searchText: 'large preview group',
       previewRefs: manyPreviewRefs,
     });
+  };
+
+  it('virtualizes large per-group thumbnail grids instead of paging behind Load more', () => {
+    const totalRefs = 2_000;
+    const largeGroup = buildLargePreviewGroup(totalRefs);
     useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: false, isError: false });
     useAssetPackLibraryPagesMock.mockReturnValue({
       data: {
@@ -534,22 +574,56 @@ describe('AssetPackBrowser', () => {
     render(<AssetPackBrowser packId={packId} packName="Tiled source" projectId={projectId} />);
 
     const group = screen.getByTestId('asset-pack-browser-group-tileset:large-preview-group');
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(32);
 
-    fireEvent.click(within(group).getByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'));
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(48);
-
-    fireEvent.click(within(group).getByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'));
-    expect(
-      within(group).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group'),
-    ).toHaveLength(64);
+    // The per-group Load-more button is gone: every ref is reachable by
+    // scrolling the virtualized grid instead of clicking through pages.
     expect(
       within(group).queryByTestId('asset-pack-browser-load-more-group-tileset:large-preview-group'),
     ).toBeNull();
+
+    // Only the rows near the (mocked 600px tall) viewport are mounted.
+    const renderedItems = within(group).getAllByTestId(
+      'asset-pack-browser-item-tileset:large-preview-group',
+    );
+    expect(renderedItems.length).toBeGreaterThan(0);
+    expect(renderedItems.length).toBeLessThan(totalRefs / 4);
+
+    // The spacer reserves the full scroll height for all rows: with the mocked
+    // 320px offsetWidth the grid lays out 6 columns of 48px cells + 6px gap,
+    // each virtual row being 54px tall.
+    const columns = Math.floor((320 + 6) / (48 + 6));
+    const spacer = screen.getByTestId('asset-pack-browser-grid-tileset:large-preview-group-spacer');
+    expect(spacer.style.height).toBe(`${Math.ceil(totalRefs / columns) * 54}px`);
+  });
+
+  it('opens an expanded dialog with the full virtualized grid for a group', async () => {
+    const largeGroup = buildLargePreviewGroup(96);
+    useTilesetPackMock.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    useAssetPackLibraryPagesMock.mockReturnValue({
+      data: {
+        packId,
+        total: 1,
+        offset: 0,
+        limit: 64,
+        groups: [largeGroup],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<AssetPackBrowser packId={packId} packName="Tiled source" projectId={projectId} />);
+
+    fireEvent.click(
+      screen.getByTestId('asset-pack-browser-expand-group-tileset:large-preview-group'),
+    );
+
+    const expandedGrid = await screen.findByTestId(
+      'asset-pack-browser-expanded-grid-tileset:large-preview-group',
+    );
+    expect(
+      within(expandedGrid).getAllByTestId('asset-pack-browser-item-tileset:large-preview-group')
+        .length,
+    ).toBeGreaterThan(0);
   });
 
   it('virtualizes large asset libraries instead of rendering every group card', () => {
@@ -585,10 +659,22 @@ describe('AssetPackBrowser', () => {
       <AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />,
     );
 
-    expect(
-      container.querySelectorAll('[data-testid^="asset-pack-browser-group-"]').length,
-    ).toBeLessThan(40);
+    // jsdom reports zero layout height, so @tanstack/react-virtual only mounts
+    // the first overscan window. Only a small slice of the 1,000 group cards is
+    // in the DOM, while the off-screen tail (e.g. the final group) is absent.
+    const renderedCards = container.querySelectorAll('[data-testid^="asset-pack-browser-group-"]');
+    expect(renderedCards.length).toBeGreaterThan(0);
+    expect(renderedCards.length).toBeLessThan(40);
     expect(screen.queryByText('Large Tileset 999')).toBeNull();
+    // The leading group still renders so painting/selection stays interactive.
+    expect(screen.getByText('Large Tileset 0')).toBeTruthy();
+
+    // The virtualizer reserves the full scroll height for all 1,000 rows even
+    // though only the window is mounted — this is the spacer that drives the
+    // scrollbar. Asserting it ties the test to the useVirtualizer wiring rather
+    // than to a hand-rolled window so the test cannot pass vacuously.
+    const spacer = screen.getByTestId('asset-pack-browser-virtual-spacer');
+    expect(spacer.style.height).toBe(`${largeGroups.length * 306}px`);
   });
 
   it('renders cache status controls and calls the reload mutation', () => {
@@ -653,7 +739,9 @@ describe('AssetPackBrowser', () => {
       // canonical thumbnail `<img>` is never mounted (no protocol request),
       // even though the bounded grid of preview cells is rendered.
       expect(screen.queryAllByTestId('asset-pack-browser-item-thumb')).toHaveLength(0);
-      expect(screen.getAllByTestId('asset-pack-browser-item-tileset:thumb-0').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByTestId('asset-pack-browser-item-tileset:thumb-0').length,
+      ).toBeGreaterThan(0);
     } finally {
       window.IntersectionObserver = originalIntersectionObserver;
     }
@@ -710,7 +798,9 @@ describe('AssetPackBrowser', () => {
     render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
     fireEvent.click(screen.getByTestId('asset-pack-browser-tab-terrain'));
     fireEvent.click(
-      (await screen.findAllByTestId('asset-pack-browser-item-terrain:tiled-source:grass terrain'))[0]!,
+      (
+        await screen.findAllByTestId('asset-pack-browser-item-terrain:tiled-source:grass terrain')
+      )[0]!,
     );
     await waitFor(() => {
       const nextPalettes = useWorkingPalettesStore.getState().list({ projectId });

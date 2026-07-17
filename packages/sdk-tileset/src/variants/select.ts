@@ -1,8 +1,8 @@
-import type { TileId } from "../schemas/ids.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import type { VariantFilter } from "../schemas/variant-filter.js";
-import type { ParseDiagnostic } from "../diagnostics.js";
-import { mixSeed } from "./hash.js";
+import type { TileId } from '../schemas/ids.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import type { VariantFilter } from '../schemas/variant-filter.js';
+import type { ParseDiagnostic } from '../diagnostics.js';
+import { mixSeed } from './hash.js';
 
 export type VariantContext = {
   readonly mapSeed: number | string;
@@ -31,10 +31,10 @@ type WeightedEntry = {
 };
 
 const emptyVariantDiagnostic = (filter: VariantFilter): ParseDiagnostic => ({
-  _tag: "EmptyVariantSelection",
+  _tag: 'EmptyVariantSelection',
   path: `/variantFilters/${filter.id}`,
-  message: "No positive variant weights; using first tile as fallback",
-  severity: "warning",
+  message: 'No positive variant weights; using first tile as fallback',
+  severity: 'warning',
   filterId: filter.id,
 });
 
@@ -43,20 +43,20 @@ const negativeWeightDiagnostic = (
   weightIndex: number,
   weight: number,
 ): ParseDiagnostic => ({
-  _tag: "VariantWeightOutOfRange",
+  _tag: 'VariantWeightOutOfRange',
   path: `/variantFilters/${filter.id}/weights/${weightIndex}`,
-  message: "Variant weight must be non-negative",
-  severity: "warning",
+  message: 'Variant weight must be non-negative',
+  severity: 'warning',
   filterId: filter.id,
   weightIndex,
   weight,
 });
 
 const weightCountMismatchDiagnostic = (filter: VariantFilter): ParseDiagnostic => ({
-  _tag: "VariantWeightCountMismatch",
+  _tag: 'VariantWeightCountMismatch',
   path: `/variantFilters/${filter.id}`,
-  message: "Variant weight count must match tile id count",
-  severity: "warning",
+  message: 'Variant weight count must match tile id count',
+  severity: 'warning',
   filterId: filter.id,
   tileCount: filter.tileIds.length,
   weightCount: filter.weights.length,

@@ -120,7 +120,11 @@ export function CatalogValidationDrawer({ projectId, mapId }: CatalogValidationD
       />
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-96 sm:max-w-md" data-testid="catalog-validation-drawer">
+        <SheetContent
+          side="right"
+          className="w-96 sm:max-w-md"
+          data-testid="catalog-validation-drawer"
+        >
           <SheetHeader>
             <SheetTitle>Catalog validation</SheetTitle>
             <SheetDescription>
@@ -217,7 +221,10 @@ function ValidationTrigger({
         <CheckCircle2Icon className="size-3 text-success" aria-hidden />
       ) : (
         <TriangleAlertIcon
-          className={cn('size-3', isError || report !== undefined ? 'text-destructive' : 'text-muted-foreground')}
+          className={cn(
+            'size-3',
+            isError || report !== undefined ? 'text-destructive' : 'text-muted-foreground',
+          )}
           aria-hidden
         />
       )}

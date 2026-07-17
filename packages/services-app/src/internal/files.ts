@@ -1,13 +1,13 @@
-import { readFile, rename, rm } from "node:fs/promises";
+import { readFile, rename, rm } from 'node:fs/promises';
 
-import { ContentHash, hashJsonStable } from "@tileborne/core";
-import { Effect, Schema } from "effect";
+import { ContentHash, hashJsonStable } from '@tileborne/core';
+import { Effect, Schema } from 'effect';
 
 export const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" &&
+  typeof cause === 'object' &&
   cause !== null &&
-  "code" in cause &&
-  (cause as { readonly code?: unknown }).code === "ENOENT";
+  'code' in cause &&
+  (cause as { readonly code?: unknown }).code === 'ENOENT';
 
 export const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
@@ -19,7 +19,7 @@ export const readJson = <A, I, E>(
 ): Effect.Effect<A, E> =>
   Effect.gen(function* () {
     const raw = yield* Effect.tryPromise({
-      try: () => readFile(filePath, "utf8"),
+      try: () => readFile(filePath, 'utf8'),
       catch: (cause) => onError(errorMessage(cause)),
     });
     const parsed = yield* Effect.try({
@@ -80,10 +80,10 @@ export const replaceDirectory = async (sourcePath: string, targetPath: string): 
     await rename(sourcePath, targetPath);
   } catch (cause) {
     const code =
-      typeof cause === "object" && cause !== null && "code" in cause
+      typeof cause === 'object' && cause !== null && 'code' in cause
         ? (cause as { readonly code?: unknown }).code
         : undefined;
-    if (code === "ENOTEMPTY" || code === "EEXIST") {
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') {
       await rm(targetPath, { recursive: true, force: true });
       await rename(sourcePath, targetPath);
       return;

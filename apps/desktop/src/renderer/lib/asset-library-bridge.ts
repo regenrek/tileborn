@@ -1,5 +1,12 @@
-import type { LibraryPreviewIndex, LibraryPreviewRef } from '@tileborne/sdk-tileset/renderer';
-import type { AssetLibraryReference, AssetLibraryGroup, AssetLibraryGroupKind } from '@tileborne/core';
+import type {
+  LibraryPreviewIndex as SdkLibraryPreviewIndex,
+  LibraryPreviewRef as SdkLibraryPreviewRef,
+} from '@tileborne/sdk-tileset/renderer';
+import type {
+  AssetLibraryReference,
+  AssetLibraryGroup,
+  AssetLibraryGroupKind,
+} from '@tileborne/core';
 
 import type { WorkingPaletteItemDraft } from '@/lib/working-palettes-bridge';
 
@@ -62,8 +69,8 @@ export const libraryGroupToPaletteDrafts = (
 
 export const libraryGroupPrimaryPreview = (
   group: AssetLibraryGroup,
-  previewIndex: LibraryPreviewIndex | undefined,
-): LibraryPreviewRef | undefined => {
+  previewIndex: SdkLibraryPreviewIndex | undefined,
+): SdkLibraryPreviewRef | undefined => {
   if (previewIndex === undefined) {
     return undefined;
   }
@@ -73,9 +80,9 @@ export const libraryGroupPrimaryPreview = (
 
 export const libraryGroupPreviews = (
   group: AssetLibraryGroup,
-  previewIndex: LibraryPreviewIndex | undefined,
+  previewIndex: SdkLibraryPreviewIndex | undefined,
   options: { readonly limit?: number | undefined } = {},
-): readonly LibraryPreviewRef[] =>
+): readonly SdkLibraryPreviewRef[] =>
   previewIndex === undefined
     ? []
     : previewIndex.previewsForRefs(
@@ -84,7 +91,7 @@ export const libraryGroupPreviews = (
 
 export const libraryGroupPreviewRefs = (
   group: AssetLibraryGroup,
-  previewIndex: LibraryPreviewIndex | undefined,
+  previewIndex: SdkLibraryPreviewIndex | undefined,
   options: { readonly limit?: number | undefined } = {},
 ): readonly AssetLibraryReference[] =>
   previewIndex === undefined

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  AssetLibraryGroup,
-  AssetLibraryReference,
-  makePackId,
-  makeTileId,
-} from '@tileborne/core';
+import { AssetLibraryGroup, AssetLibraryReference, makePackId, makeTileId } from '@tileborne/core';
 
 import { parseTilesetPackJson } from '@/lib/tileset-pack';
 import {
@@ -87,7 +82,9 @@ const samplePackJson = {
 describe('asset-library-bridge', () => {
   it('humanises namespaced source identifiers to compact labels', () => {
     expect(humanizeIdentifier('tiled-source:source=foo/Sample Walls.tmx')).toBe('Sample Walls');
-    expect(humanizeIdentifier('tiled-source:grass terrain', { dropTerrainSuffix: true })).toBe('Grass');
+    expect(humanizeIdentifier('tiled-source:grass terrain', { dropTerrainSuffix: true })).toBe(
+      'Grass',
+    );
     expect(humanizeIdentifier('tiled-source:water_drowning')).toBe('Water Drowning');
   });
 

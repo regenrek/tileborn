@@ -25,10 +25,6 @@
       "generatorId": "generate-map"
     },
     {
-      "_tag": "ExportArtifact",
-      "formats": ["battle-royale-artifact"]
-    },
-    {
       "_tag": "RegisterRuntimeSystem",
       "systemId": "battle-royale-runtime"
     },
@@ -43,6 +39,107 @@
   ],
   "dependsOn": [],
   "contributes": {
+    "gameModes": [
+      {
+        "_tag": "GameModeContribution",
+        "id": "battle-royale",
+        "kind": "declarative",
+        "display": {
+          "label": "Battle Royale",
+          "description": "Last-player-standing game mode with authored zones, loot, and spawn rules."
+        },
+        "runtimeSystemId": "battle-royale-runtime",
+        "settingsPanelId": "battle-royale-settings",
+        "settingsFormId": "battle-royale-settings-form",
+        "mapValidatorId": "validate-map",
+        "hudLayoutId": "br-hud-layout",
+        "starter": {
+          "templateId": "battle-royale-starter-v1",
+          "label": "Battle Royale Starter",
+          "description": "Playable arena with spawn points, zone anchors, and loot."
+        },
+        "checklistFacts": [
+          { "id": "playable-map", "label": "Playable map", "sources": ["map", "game-mode"] },
+          { "id": "gameplay-catalog", "label": "Gameplay catalog", "sources": ["catalog"] },
+          {
+            "id": "player-visuals",
+            "label": "Player visuals",
+            "sources": ["visual-model", "asset"]
+          }
+        ],
+        "capabilities": {
+          "authoring": "battle-royale.authoring",
+          "renderer": "battle-royale.renderer",
+          "readiness": "battle-royale.readiness",
+          "starter": "battle-royale.starter"
+        }
+      }
+    ],
+    "behaviorEntries": [
+      {
+        "id": "battle-royale.player-eliminated",
+        "kind": "event",
+        "label": "Player eliminated",
+        "category": "Battle Royale",
+        "description": "Runs when a player is eliminated from the match.",
+        "capability": "battle-royale.match",
+        "icon": "skull",
+        "inputs": [
+          { "key": "player", "label": "Player", "valueKind": "entity-reference", "required": false }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "battle-royale.alive-count-at-most",
+        "kind": "condition",
+        "label": "Alive count is at most",
+        "category": "Battle Royale",
+        "description": "Checks the number of players still alive.",
+        "capability": "battle-royale.match",
+        "icon": "users-round",
+        "inputs": [
+          {
+            "key": "count",
+            "label": "Players",
+            "valueKind": "number",
+            "required": true,
+            "defaultValue": 1
+          }
+        ],
+        "outputs": []
+      },
+      {
+        "id": "battle-royale.spawn-loot",
+        "kind": "action",
+        "label": "Spawn loot",
+        "category": "Battle Royale",
+        "description": "Spawns a catalog object through the Battle Royale capability.",
+        "capability": "battle-royale.loot",
+        "icon": "package-open",
+        "inputs": [
+          {
+            "key": "objectType",
+            "label": "Loot object",
+            "valueKind": "catalog-reference",
+            "required": true
+          }
+        ],
+        "outputs": []
+      }
+    ],
+    "behaviorTemplates": [
+      {
+        "id": "battle-royale.final-player-reward",
+        "label": "Final player reward",
+        "description": "When a player is eliminated and one remains, spawn a reward.",
+        "category": "Battle Royale",
+        "icon": "trophy",
+        "requiredCapabilities": ["battle-royale.match", "battle-royale.loot"],
+        "when": { "entryId": "battle-royale.player-eliminated", "arguments": {} },
+        "if": [{ "entryId": "battle-royale.alive-count-at-most", "arguments": { "count": 1 } }],
+        "do": [{ "entryId": "battle-royale.spawn-loot", "arguments": {} }]
+      }
+    ],
     "panels": [
       {
         "id": "battle-royale-settings",
@@ -51,10 +148,7 @@
         "description": "Configure zone shrink timing, player cap, and loot density for authored maps.",
         "group": "gameplay",
         "order": 10,
-        "capabilities": ["settings"],
-        "data": {
-          "indexPath": "./panels/index.json"
-        }
+        "capabilities": ["settings"]
       },
       {
         "id": "battle-royale-match-rules",
@@ -88,7 +182,7 @@
         "_tag": "AssetPackContribution",
         "id": "battle-royale-core",
         "name": "Battle Royale Core Assets",
-        "path": "./assets/index.json",
+        "path": "./assets/core",
         "license": {
           "spdxId": "MIT",
           "attribution": "Tileborne"
@@ -96,6 +190,34 @@
       }
     ],
     "editor": {
+      "gameSettingsForms": [
+        {
+          "_tag": "DeclarativeEditorGameSettingsFormContribution",
+          "id": "battle-royale-settings-form",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Settings"
+          },
+          "data": {
+            "scope": "map",
+            "invalidMessage": "Battle Royale settings must be positive numbers.",
+            "fields": [
+              { "key": "maxPlayers", "label": "Max players", "min": 1, "step": 1, "default": 32 },
+              { "key": "waitSec", "label": "Zone wait", "min": 1, "step": 1, "default": 60 },
+              { "key": "shrinkSec", "label": "Shrink time", "min": 1, "step": 1, "default": 30 },
+              { "key": "holdSec", "label": "Hold time", "min": 1, "step": 1, "default": 30 },
+              { "key": "shrinkPhases", "label": "Phases", "min": 1, "step": 1, "default": 3 },
+              {
+                "key": "damagePerSecOutside",
+                "label": "Zone DPS",
+                "min": 1,
+                "step": 0.5,
+                "default": 5
+              }
+            ]
+          }
+        }
+      ],
       "presets": [
         {
           "_tag": "DeclarativeEditorPresetContribution",
@@ -152,17 +274,6 @@
           "kind": "executable",
           "display": {
             "label": "Generate Battle Royale Arena"
-          },
-          "entry": "./dist/server.js"
-        }
-      ],
-      "exporters": [
-        {
-          "_tag": "ExecutableEditorExporterContribution",
-          "id": "export-artifact",
-          "kind": "executable",
-          "display": {
-            "label": "Export Battle Royale Artifact"
           },
           "entry": "./dist/server.js"
         }
@@ -224,6 +335,384 @@
           },
           "data": {
             "indexPath": "./schemas/game-object-catalog.json"
+          }
+        }
+      ],
+      "weaponCatalogs": [
+        {
+          "_tag": "DeclarativeRuntimeWeaponCatalogContribution",
+          "id": "br-weapon-catalog",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Weapons",
+            "description": "Neutral weapon-content pack: BR's primary projectile weapon balance numbers."
+          },
+          "data": {
+            "schemaVersion": 1,
+            "weapons": [
+              {
+                "weapon": {
+                  "id": "weapon:00000000-0000-4000-8000-000000000001",
+                  "damage": 25,
+                  "cooldownTicks": 8,
+                  "magazineSize": 3,
+                  "reloadTicks": 12
+                },
+                "delivery": {
+                  "_tag": "ProjectileDelivery",
+                  "damage": 25,
+                  "speed": 20,
+                  "ttlTicks": 40,
+                  "radius": 16,
+                  "falloff": { "_tag": "NoFalloff" },
+                  "knockback": 0
+                },
+                "appliesStatus": []
+              }
+            ]
+          }
+        }
+      ],
+      "inputMaps": [
+        {
+          "_tag": "DeclarativeRuntimeInputMapContribution",
+          "id": "br-input-map",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Controls",
+            "description": "Neutral input map: default keyboard-mouse bindings (Space/mouse-0 fire, WASD move, R reload, 1-5 slots, pointer aim)."
+          },
+          "data": {
+            "id": "br-default-bindings",
+            "actions": [
+              { "action": "core.Move", "valueKind": "analog2d" },
+              { "action": "core.Aim", "valueKind": "pointer" },
+              { "action": "core.PrimaryAction", "valueKind": "digital" },
+              { "action": "core.SecondaryAction", "valueKind": "digital" },
+              { "action": "core.Dash", "valueKind": "digital" },
+              { "action": "core.Reload", "valueKind": "digital" },
+              { "action": "core.Interact", "valueKind": "digital" },
+              { "action": "battle-royale.ScanPulse", "valueKind": "digital" },
+              { "action": "battle-royale.PlaceTrap", "valueKind": "digital" },
+              { "action": "battle-royale.DeployDecoy", "valueKind": "digital" },
+              { "action": "battle-royale.DropItem", "valueKind": "digital" },
+              { "action": "core.Slot1", "valueKind": "digital" },
+              { "action": "core.Slot2", "valueKind": "digital" },
+              { "action": "core.Slot3", "valueKind": "digital" },
+              { "action": "core.Slot4", "valueKind": "digital" },
+              { "action": "core.Slot5", "valueKind": "digital" }
+            ],
+            "schemeDefaults": {
+              "keyboard-mouse": [
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyW" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowUp" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyS" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowDown" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyA" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowLeft" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyD" },
+                  "axisRole": "x+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "ArrowRight" },
+                  "axisRole": "x+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "key", "code": "Space" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "mouseButton", "button": 0 }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.SecondaryAction",
+                  "trigger": { "_tag": "key", "code": "ShiftLeft" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.SecondaryAction",
+                  "trigger": { "_tag": "key", "code": "ShiftRight" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Dash",
+                  "trigger": { "_tag": "key", "code": "KeyF" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.ScanPulse",
+                  "trigger": { "_tag": "key", "code": "KeyQ" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.PlaceTrap",
+                  "trigger": { "_tag": "key", "code": "KeyT" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.DeployDecoy",
+                  "trigger": { "_tag": "key", "code": "KeyC" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "battle-royale.DropItem",
+                  "trigger": { "_tag": "key", "code": "KeyG" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Reload",
+                  "trigger": { "_tag": "key", "code": "KeyR" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Interact",
+                  "trigger": { "_tag": "key", "code": "KeyE" }
+                },
+                { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot1",
+                  "trigger": { "_tag": "key", "code": "Digit1" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot1",
+                  "trigger": { "_tag": "key", "code": "Numpad1" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot2",
+                  "trigger": { "_tag": "key", "code": "Digit2" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot2",
+                  "trigger": { "_tag": "key", "code": "Numpad2" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot3",
+                  "trigger": { "_tag": "key", "code": "Digit3" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot3",
+                  "trigger": { "_tag": "key", "code": "Numpad3" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot4",
+                  "trigger": { "_tag": "key", "code": "Digit4" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot4",
+                  "trigger": { "_tag": "key", "code": "Numpad4" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot5",
+                  "trigger": { "_tag": "key", "code": "Digit5" }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot5",
+                  "trigger": { "_tag": "key", "code": "Numpad5" }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "audioBuses": [
+        {
+          "_tag": "DeclarativeRuntimeAudioBusContribution",
+          "id": "br-audio-bus",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale SFX",
+            "description": "Battle Royale runtime SFX bus and cue vocabulary for weapon, pickup, player, and zone events."
+          },
+          "data": {
+            "schemaVersion": 1,
+            "buses": [
+              {
+                "id": "battle-royale.sfx",
+                "label": "Battle Royale SFX",
+                "kind": "sfx",
+                "defaultVolume": 0.85
+              }
+            ],
+            "cues": [
+              {
+                "id": "battle-royale.weapon.fire",
+                "label": "Weapon fire",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.72
+              },
+              {
+                "id": "battle-royale.weapon.reload",
+                "label": "Weapon reload",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.62
+              },
+              {
+                "id": "battle-royale.player.hit",
+                "label": "Player hit",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.8
+              },
+              {
+                "id": "battle-royale.player.eliminated",
+                "label": "Player eliminated",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.88
+              },
+              {
+                "id": "battle-royale.pickup.collect",
+                "label": "Pickup collect",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.58
+              },
+              {
+                "id": "battle-royale.zone.warning",
+                "label": "Zone warning",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.76
+              }
+            ]
+          }
+        }
+      ],
+      "hudLayouts": [
+        {
+          "_tag": "DeclarativeRuntimeHudLayoutContribution",
+          "id": "br-hud-layout",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale HUD",
+            "description": "Default in-match HUD arrangement: player status + team roster top-left, alive count + minimap + scoreboard top-right, zone status + pickup prompt + weapon panel bottom-center, kill feed bottom-left, toasts + damage indicator centered."
+          },
+          "data": {
+            "id": "br-default-hud",
+            "widgets": [
+              {
+                "id": "local-player",
+                "kind": "core.LocalPlayerStatus",
+                "anchor": "top-left",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "team-roster",
+                "kind": "core.TeamRoster",
+                "anchor": "top-left",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "alive-count",
+                "kind": "core.AliveCount",
+                "anchor": "top-right",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "minimap",
+                "kind": "core.Minimap",
+                "anchor": "top-right",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "scoreboard",
+                "kind": "core.Scoreboard",
+                "anchor": "top-right",
+                "order": 2,
+                "enabled": true
+              },
+              {
+                "id": "zone-status",
+                "kind": "core.ZoneStatus",
+                "anchor": "bottom-center",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "pickup-prompt",
+                "kind": "core.PickupPrompt",
+                "anchor": "bottom-center",
+                "order": 1,
+                "enabled": true
+              },
+              {
+                "id": "weapon-panel",
+                "kind": "core.WeaponPanel",
+                "anchor": "bottom-center",
+                "order": 2,
+                "enabled": true
+              },
+              {
+                "id": "kill-feed",
+                "kind": "core.KillFeed",
+                "anchor": "bottom-left",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "event-toast",
+                "kind": "core.EventToast",
+                "anchor": "center",
+                "order": 0,
+                "enabled": true
+              },
+              {
+                "id": "damage-indicator",
+                "kind": "core.DamageIndicator",
+                "anchor": "center",
+                "order": 1,
+                "enabled": true
+              }
+            ]
           }
         }
       ],

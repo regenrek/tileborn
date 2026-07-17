@@ -214,14 +214,17 @@ describe('viewport mount lifecycle', () => {
     const adapter = new PixiRendererAdapter();
     let cancelled = false;
     let controller: { dispose: () => Promise<void> } | undefined;
-    const mountPromise = Effect.runPromise(adapter.mount(document.createElement('div'))).then(async () => {
-      if (cancelled) {
-        await Effect.runPromise(adapter.dispose());
-        return;
-      }
-      const { EditorViewportController } = await import('./viewport/editor-viewport-controller.js');
-      controller = new EditorViewportController(adapter);
-    });
+    const mountPromise = Effect.runPromise(adapter.mount(document.createElement('div'))).then(
+      async () => {
+        if (cancelled) {
+          await Effect.runPromise(adapter.dispose());
+          return;
+        }
+        const { EditorViewportController } =
+          await import('./viewport/editor-viewport-controller.js');
+        controller = new EditorViewportController(adapter);
+      },
+    );
 
     cancelled = true;
     chainViewportDispose(async () => {

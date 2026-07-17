@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
-import { PluginId } from "@tileborne/core";
-import { PluginManifest } from "@tileborne/plugin-api";
-import { writeJsonAtomic } from "@tileborne/services-foundation";
-import { Effect, Schema } from "effect";
+import { PERSISTED_SCHEMA_VERSIONS, PluginId } from '@tileborne/core';
+import { PluginManifest } from '@tileborne/plugin-api';
+import { writeJsonAtomic } from '@tileborne/services-foundation';
+import { Effect, Schema } from 'effect';
 
 import {
   hashPluginDirectory,
@@ -13,28 +13,29 @@ import {
   runCommand,
   validatePluginDirectory,
   validatePluginManifestPaths,
-} from "./filesystem.js";
+} from './filesystem.js';
 import {
   PLUGIN_MANIFEST_FILE,
   PluginInstallError,
   PluginValidationError,
   type PluginInstallerError,
-} from "./model.js";
+} from './model.js';
 
-export class PluginPackResult extends Schema.Class<PluginPackResult>("PluginPackResult")({
+export class PluginPackResult extends Schema.Class<PluginPackResult>('PluginPackResult')({
   archivePath: Schema.String,
   manifest: PluginManifest,
   integrity: Schema.String,
 }) {}
 
-export class PluginCreateResult extends Schema.Class<PluginCreateResult>("PluginCreateResult")({
+export class PluginCreateResult extends Schema.Class<PluginCreateResult>('PluginCreateResult')({
   directory: Schema.String,
   manifest: PluginManifest,
 }) {}
 
 export type PluginScaffoldError = PluginInstallerError;
 
-const toMessage = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+const toMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const defaultContributions = {
   panels: undefined,
@@ -58,12 +59,12 @@ const manifestTemplate = (
   version,
   displayName: name,
   description: `Tileborne plugin ${name}`,
-  author: "Tileborne",
-  license: "MIT",
-  engines: { tileborne: "^0.1.0" },
+  author: 'Tileborne',
+  license: 'MIT',
+  engines: { tileborne: '^0.1.0' },
   repository: undefined,
   homepage: undefined,
-  entry: template === "executable" ? { server: "./entry.js" } : undefined,
+  entry: template === 'executable' ? { server: './entry.js' } : undefined,
   contributes: defaultContributions,
   permissions: [],
   dependsOn: [],
@@ -78,19 +79,17 @@ export const createPluginScaffold = (
   Effect.gen(function* () {
     const pluginId = yield* Effect.try({
       try: () => Schema.decodeUnknownSync(PluginId)(`@tileborne-plugins/${name}`),
-      catch: (cause) =>
-        new PluginValidationError({ path: name, message: toMessage(cause) }),
+      catch: (cause) => new PluginValidationError({ path: name, message: toMessage(cause) }),
     });
     const directory = path.resolve(cwd, name);
     yield* Effect.tryPromise({
       try: () => mkdir(directory, { recursive: true }),
       catch: (cause) => new PluginInstallError({ path: directory, message: toMessage(cause) }),
     });
-    const raw = materializePluginManifestInput(manifestTemplate(pluginId, name, "0.1.0", template));
+    const raw = materializePluginManifestInput(manifestTemplate(pluginId, name, '0.1.0', template));
     const manifest = yield* Effect.try({
       try: () => Schema.decodeUnknownSync(PluginManifest)(raw),
-      catch: (cause) =>
-        new PluginValidationError({ path: directory, message: toMessage(cause) }),
+      catch: (cause) => new PluginValidationError({ path: directory, message: toMessage(cause) }),
     });
     yield* Effect.tryPromise({
       try: () =>
@@ -101,14 +100,15 @@ export const createPluginScaffold = (
       catch: (cause) => new PluginInstallError({ path: directory, message: toMessage(cause) }),
     });
     yield* Effect.tryPromise({
-      try: () => writeFile(path.join(directory, "README.md"), `# ${name}\n\nTileborne plugin scaffold.\n`),
+      try: () =>
+        writeFile(path.join(directory, 'README.md'), `# ${name}\n\nTileborne plugin scaffold.\n`),
       catch: (cause) => new PluginInstallError({ path: directory, message: toMessage(cause) }),
     });
-    if (template === "executable") {
+    if (template === 'executable') {
       yield* Effect.tryPromise({
         try: () =>
           writeFile(
-            path.join(directory, "entry.js"),
+            path.join(directory, 'entry.js'),
             "/** @type {import('@tileborne/plugin-api').PluginModule} */\nexport default {};\n",
           ),
         catch: (cause) => new PluginInstallError({ path: directory, message: toMessage(cause) }),
@@ -131,14 +131,16 @@ export const packPluginDirectory = (
           : new PluginValidationError({ path: resolved, message: toMessage(cause) }),
     });
     const manifestInput = yield* Effect.tryPromise({
-      try: () => readFile(path.join(resolved, PLUGIN_MANIFEST_FILE), "utf8").then((raw) => JSON.parse(raw) as unknown),
-      catch: (cause) =>
-        new PluginValidationError({ path: resolved, message: toMessage(cause) }),
+      try: () =>
+        readFile(path.join(resolved, PLUGIN_MANIFEST_FILE), 'utf8').then(
+          (raw) => JSON.parse(raw) as unknown,
+        ),
+      catch: (cause) => new PluginValidationError({ path: resolved, message: toMessage(cause) }),
     });
     const manifest = yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(PluginManifest)(materializePluginManifestInput(manifestInput)),
-      catch: (cause) =>
-        new PluginValidationError({ path: resolved, message: toMessage(cause) }),
+      try: () =>
+        Schema.decodeUnknownSync(PluginManifest)(materializePluginManifestInput(manifestInput)),
+      catch: (cause) => new PluginValidationError({ path: resolved, message: toMessage(cause) }),
     });
     yield* Effect.try({
       try: () => validatePluginManifestPaths(resolved, Schema.encodeSync(PluginManifest)(manifest)),
@@ -157,26 +159,29 @@ export const packPluginDirectory = (
       catch: (cause) => new PluginInstallError({ path: archivePath, message: toMessage(cause) }),
     });
     yield* Effect.tryPromise({
-      try: () => runCommand("tar", ["-czf", archivePath, "-C", resolved, "."], path.dirname(archivePath)),
+      try: () =>
+        runCommand('tar', ['-czf', archivePath, '-C', resolved, '.'], path.dirname(archivePath)),
       catch: (cause) => new PluginInstallError({ path: archivePath, message: toMessage(cause) }),
     });
     const archiveHash = yield* Effect.tryPromise({
       try: async () => {
         const bytes = await readFile(archivePath);
-        return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+        return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
       },
       catch: (cause) => new PluginInstallError({ path: archivePath, message: toMessage(cause) }),
     });
     const metadataPath = `${archivePath}.meta.json`;
     yield* writeJsonAtomic(metadataPath, {
-      schemaVersion: 1,
-      kind: "plugin",
+      schemaVersion: PERSISTED_SCHEMA_VERSIONS.pluginArchiveSidecar,
+      kind: 'plugin',
       pluginId: manifest.id,
       version: manifest.version,
       integrity,
       archiveHash,
     }).pipe(
-      Effect.mapError((error) => new PluginInstallError({ path: metadataPath, message: error.message })),
+      Effect.mapError(
+        (error) => new PluginInstallError({ path: metadataPath, message: error.message }),
+      ),
     );
     return new PluginPackResult({ archivePath, manifest, integrity });
   });

@@ -1,11 +1,11 @@
-import rootConfig from "../../eslint.config.js"
+import rootConfig from '../../eslint.config.js';
 
 export default [
   ...rootConfig,
   {
-    files: ["**/*.test.ts", "**/*.test.tsx", "src/test/**", "vite.config.ts", "vitest.config.ts"],
+    files: ['**/*.test.ts', '**/*.test.tsx', 'src/test/**', 'vite.config.ts', 'vitest.config.ts'],
     rules: {
-      "import/no-extraneous-dependencies": "off",
+      'import/no-extraneous-dependencies': 'off',
     },
   },
-]
+];

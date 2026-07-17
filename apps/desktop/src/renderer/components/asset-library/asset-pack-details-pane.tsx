@@ -16,14 +16,14 @@ import {
   cn,
   typography,
 } from '@tileborne/ui';
-import { CheckIcon, FolderOpenIcon, PaletteIcon, Trash2Icon } from 'lucide-react';
-import { useParams } from '@tanstack/react-router';
+import { CheckIcon, FolderOpenIcon, Link2Icon, PaletteIcon, Trash2Icon } from 'lucide-react';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import type { MapId, PackId, ProjectId } from '@tileborne/core';
 import { useState } from 'react';
 
 import { AssetPackBrowserDialog } from '@/components/asset-library/asset-pack-browser-dialog';
 import { useRemoveAssetPack, useSetMapTilesetPack } from '@/hooks/mutations';
-import { useAssetPack } from '@/hooks/queries';
+import { useAssetPack, useAssetPackUseSites } from '@/hooks/queries';
 import { notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
@@ -36,15 +36,23 @@ interface AssetPackDetailsPaneProps {
 
 export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
   const { projectId, mapId } = useParams({ strict: false });
+  const navigate = useNavigate();
   const packQuery = useAssetPack(packId);
+  const useSitesQuery = useAssetPackUseSites(projectId, packId);
   const { tileCount, tileSize, loading: statsLoading } = usePackTileStats(packId);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const activePalettePackId = useEditorUiStore((state) => state.activePalettePackId);
   const setActivePalettePackId = useEditorUiStore((state) => state.setActivePalettePackId);
+  const setSelection = useEditorUiStore((state) => state.setSelection);
+  const selectTool = useEditorUiStore((state) => state.selectTool);
+  const setCatalogTargetObjectTypeId = useEditorUiStore(
+    (state) => state.setCatalogTargetObjectTypeId,
+  );
   const setMapTilesetPack = useSetMapTilesetPack();
   const removePack = useRemoveAssetPack();
   const pack = packQuery.data?.pack;
+  const useSites = useSitesQuery.data?.useSites ?? [];
   const isActive = activePalettePackId === packId;
   const handleSetActive = () => {
     setActivePalettePackId(packId);
@@ -67,6 +75,57 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
   const handleRemovePack = async () => {
     await removePack.mutateAsync(packId);
     setConfirmRemoveOpen(false);
+  };
+  const navigateToUseSite = (index: number) => {
+    const target = useSites[index]?.navigation;
+    if (target === undefined) {
+      return;
+    }
+    switch (target.kind) {
+      case 'project-settings':
+        void navigate({
+          to: '/projects/$projectId/settings',
+          params: { projectId: target.projectId },
+        });
+        return;
+      case 'map':
+      case 'map-object':
+        if (target.mapId === undefined) {
+          return;
+        }
+        if (target.kind === 'map-object' && target.objectId !== undefined) {
+          setSelection(new Set([target.objectId]));
+          selectTool('select');
+        }
+        void navigate({
+          to: '/projects/$projectId/maps/$mapId',
+          params: { projectId: target.projectId, mapId: target.mapId },
+        });
+        return;
+      case 'catalog':
+        setCatalogTargetObjectTypeId(target.objectTypeId ?? null);
+        void navigate({
+          to: '/projects/$projectId/entities',
+          params: { projectId: target.projectId },
+        });
+        return;
+      case 'player-model':
+        void navigate({
+          to: '/projects/$projectId/player-models',
+          params: { projectId: target.projectId },
+          search: {
+            ...(target.modelId === undefined ? {} : { modelId: target.modelId }),
+            ...(target.path === undefined ? {} : { path: target.path }),
+          },
+        });
+        return;
+      case 'asset-library':
+        void navigate({
+          to: '/projects/$projectId/assets',
+          params: { projectId: target.projectId },
+        });
+        return;
+    }
   };
 
   if (packQuery.isLoading || !pack) {
@@ -107,6 +166,49 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
           <DetailRow label="Tile size" value={statsLoading ? '…' : (tileSize ?? '—')} />
           <DetailRow label="Total assets" value={String(pack.assetCount)} />
         </dl>
+        <div
+          className="mt-4 rounded-md border border-border/80 bg-muted/25 p-2"
+          data-testid="asset-pack-use-sites"
+        >
+          <p className={cn('flex items-center gap-1.5', typography.rowTitle)}>
+            <Link2Icon className="size-3.5" aria-hidden />
+            Dependencies & use sites
+          </p>
+          {useSitesQuery.isLoading ? (
+            <p className={cn('mt-1.5 text-muted-foreground', typography.bodyMicro)}>
+              Resolving project consumers…
+            </p>
+          ) : useSites.length === 0 ? (
+            <p className={cn('mt-1.5 text-muted-foreground', typography.bodyMicro)}>
+              No player model, entity, map, object, or animation currently uses this pack.
+            </p>
+          ) : (
+            <ul className="mt-1.5 max-h-56 space-y-1 overflow-y-auto">
+              {useSites.map((site, index) => (
+                <li key={site.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded px-1.5 py-1 text-left hover:bg-accent/40"
+                    onClick={() => navigateToUseSite(index)}
+                    data-testid={`asset-pack-use-site-${site.kind}`}
+                  >
+                    <span className={cn('block text-foreground', typography.rowMeta)}>
+                      {site.label}
+                    </span>
+                    <span className={cn('block text-muted-foreground', typography.bodyMicro)}>
+                      {site.detail}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {useSitesQuery.data?.truncated ? (
+            <p className={cn('mt-1.5 text-muted-foreground', typography.bodyMicro)}>
+              Showing {useSites.length} of at least {useSitesQuery.data.total} bounded results.
+            </p>
+          ) : null}
+        </div>
       </CardContent>
       <CardFooter className="flex-col gap-2 pt-0">
         <Button

@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 import {
   MapObject,
   ObjectLayer,
@@ -7,20 +7,28 @@ import {
   makeTileborneMap,
   type MapObject as MapObjectType,
   type TileborneMap,
-} from "@tileborne/core";
+} from '@tileborne/core';
 
-import { LOOT_CRATE_KIND, SHRINK_ZONE_ANCHOR_KIND, SPAWN_POINT_KIND } from "./constants.js";
-import { layerIdFromSeed, mapIdFromSeed, objectIdFromSeed } from "./id-utils.js";
-import type { GenerateMapOptions } from "./types/artifact.js";
-import { SeededRng } from "./rng.js";
+import {
+  ABILITY,
+  BARRIER_KIND,
+  DECOY_KIND,
+  LOOT_CRATE_KIND,
+  SHRINK_ZONE_ANCHOR_KIND,
+  SPAWN_POINT_KIND,
+  TRAP_KIND,
+} from './constants.js';
+import { layerIdFromSeed, mapIdFromSeed, objectIdFromSeed } from './id-utils.js';
+import type { GenerateMapOptions } from './types/artifact.js';
+import { SeededRng } from './rng.js';
 
 const makeMapObject = (input: {
-  readonly id: MapObjectType["id"];
-  readonly kind: MapObjectType["kind"];
+  readonly id: MapObjectType['id'];
+  readonly kind: MapObjectType['kind'];
   readonly x: number;
   readonly y: number;
-  readonly layerId: MapObjectType["layerId"];
-  readonly properties: MapObjectType["properties"];
+  readonly layerId: MapObjectType['layerId'];
+  readonly properties: MapObjectType['properties'];
 }): MapObject =>
   new MapObject({
     ...input,
@@ -28,7 +36,12 @@ const makeMapObject = (input: {
     height: Option.none(),
   });
 
-const buildGroundLayer = (seed: string | number, width: number, height: number, rng: SeededRng): TileLayer => {
+const buildGroundLayer = (
+  seed: string | number,
+  width: number,
+  height: number,
+  rng: SeededRng,
+): TileLayer => {
   const tiles: number[] = [];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -36,8 +49,8 @@ const buildGroundLayer = (seed: string | number, width: number, height: number, 
     }
   }
   return new TileLayer({
-    id: layerIdFromSeed(`${width}x${height}`, "ground"),
-    name: "Ground",
+    id: layerIdFromSeed(`${width}x${height}`, 'ground'),
+    name: 'Ground',
     visible: true,
     opacity: 1,
     chunks: [new TileChunk({ x: 0, y: 0, width, height, tiles })],
@@ -99,7 +112,7 @@ const poissonLikePoints = (
 export const generateMap = (seed: string | number, opts: GenerateMapOptions): TileborneMap => {
   const rng = new SeededRng(seed);
   const { width, height, spawnCount, lootDensity } = opts;
-  const objectLayerId = layerIdFromSeed(seed, "objects");
+  const objectLayerId = layerIdFromSeed(seed, 'objects');
   const objects: MapObject[] = [];
 
   for (let index = 0; index < spawnCount; index += 1) {
@@ -111,14 +124,14 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
         x: position.x,
         y: position.y,
         layerId: objectLayerId,
-        properties: { team: "solo", weight: 1 },
+        properties: { team: 'solo', weight: 1 },
       }),
     );
   }
 
   objects.push(
     makeMapObject({
-      id: objectIdFromSeed(seed, "shrink-anchor"),
+      id: objectIdFromSeed(seed, 'shrink-anchor'),
       kind: SHRINK_ZONE_ANCHOR_KIND,
       x: width / 2,
       y: height / 2,
@@ -134,7 +147,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
   const lootPoints = poissonLikePoints(rng, lootCount, width, height, 4);
   for (const [index, point] of lootPoints.entries()) {
     const tierRoll = rng.nextFloat();
-    const tier = tierRoll < 0.7 ? "common" : tierRoll < 0.9 ? "rare" : "epic";
+    const tier = tierRoll < 0.7 ? 'common' : tierRoll < 0.9 ? 'rare' : 'epic';
     objects.push(
       makeMapObject({
         id: objectIdFromSeed(seed, `loot-${index}`),
@@ -147,9 +160,59 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
     );
   }
 
+  const trapCount = Math.max(1, Math.floor(spawnCount / 2));
+  const trapPoints = poissonLikePoints(rng, trapCount, width, height, 6);
+  for (const [index, point] of trapPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `trap-${index}`),
+        kind: TRAP_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: {
+          radius: ABILITY.trap.radius,
+          slowTicks: ABILITY.trap.slowTicks,
+          stunTicks: ABILITY.trap.stunTicks,
+          damageTicks: ABILITY.trap.damageTicks,
+        },
+      }),
+    );
+  }
+
+  const decoyCount = Math.max(1, Math.floor(spawnCount / 3));
+  const decoyPoints = poissonLikePoints(rng, decoyCount, width, height, 8);
+  for (const [index, point] of decoyPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `decoy-${index}`),
+        kind: DECOY_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: { radius: ABILITY.decoy.radius, durationTicks: ABILITY.decoy.durationTicks },
+      }),
+    );
+  }
+
+  const barrierCount = Math.max(2, Math.floor(Math.min(width, height) / 12));
+  const barrierPoints = poissonLikePoints(rng, barrierCount, width, height, 7);
+  for (const [index, point] of barrierPoints.entries()) {
+    objects.push(
+      makeMapObject({
+        id: objectIdFromSeed(seed, `barrier-${index}`),
+        kind: BARRIER_KIND,
+        x: point.x,
+        y: point.y,
+        layerId: objectLayerId,
+        properties: { width: 32, height: 32 },
+      }),
+    );
+  }
+
   const objectLayer = new ObjectLayer({
     id: objectLayerId,
-    name: "Objects",
+    name: 'Objects',
     visible: true,
     opacity: 1,
     objectIds: objects.map((object) => object.id),

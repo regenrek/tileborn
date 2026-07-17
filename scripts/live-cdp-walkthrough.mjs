@@ -181,9 +181,7 @@ class CdpPage {
       }
       this.pending.delete(payload.id);
       if (payload.error) {
-        pending.reject(
-          new CdpProtocolError(`${pending.method} failed`, payload.error),
-        );
+        pending.reject(new CdpProtocolError(`${pending.method} failed`, payload.error));
         return;
       }
       pending.resolve(payload.result);
@@ -259,10 +257,10 @@ class CdpPage {
         `),
       { timeoutMs: DEFAULT_STEP_TIMEOUT_MS, description: `navigate ${normalized}` },
     );
-    await this.waitFor(
-      () => this.evaluate(`typeof window.tileborne === 'object'`),
-      { timeoutMs: DEFAULT_STEP_TIMEOUT_MS, description: 'window.tileborne ready' },
-    );
+    await this.waitFor(() => this.evaluate(`typeof window.tileborne === 'object'`), {
+      timeoutMs: DEFAULT_STEP_TIMEOUT_MS,
+      description: 'window.tileborne ready',
+    });
     await sleep(300);
   }
 
@@ -365,7 +363,9 @@ class CdpPage {
       }
       await sleep(intervalMs);
     }
-    throw new Error(`Timed out waiting for ${description} (${timeoutMs}ms); last=${JSON.stringify(lastValue)}`);
+    throw new Error(
+      `Timed out waiting for ${description} (${timeoutMs}ms); last=${JSON.stringify(lastValue)}`,
+    );
   }
 
   /** @param {string} filePath */
@@ -458,9 +458,7 @@ async function connectPrimaryPage() {
   const targets = await fetchJson(`${CDP_BASE}/json/list`);
   const pageTarget = targets.find(isTilebornePageTarget);
   if (!pageTarget?.webSocketDebuggerUrl) {
-    throw new Error(
-      `No Tileborne renderer page in CDP target list at ${CDP_BASE}/json/list`,
-    );
+    throw new Error(`No Tileborne renderer page in CDP target list at ${CDP_BASE}/json/list`);
   }
   const client = new CdpPage(pageTarget.webSocketDebuggerUrl, 'primary');
   await client.connect();
@@ -532,7 +530,8 @@ function parseRuntimeStatus(text) {
 }
 
 function isCdpUnavailable(error) {
-  const message = error instanceof Error ? `${error.message} ${error.cause?.message ?? ''}` : String(error);
+  const message =
+    error instanceof Error ? `${error.message} ${error.cause?.message ?? ''}` : String(error);
   return /fetch failed|ECONNREFUSED|No Tileborne renderer page in CDP target list/i.test(message);
 }
 
@@ -597,7 +596,8 @@ async function stopSinglePlaytest(page) {
 }
 
 async function openBottomDrawer(page) {
-  await page.evaluate(`
+  await page.evaluate(
+    `
     (async () => {
       const origin = window.location.origin;
       try {
@@ -608,7 +608,9 @@ async function openBottomDrawer(page) {
         return false;
       }
     })()
-  `, true);
+  `,
+    true,
+  );
   await sleep(400);
 }
 
@@ -685,9 +687,12 @@ async function main() {
   await runStep('02', 'project-create', async (page) => {
     await page.navigateHash('/');
     await page.clickButtonByText('Create project');
-    await page.waitFor(() => page.evaluate(`Boolean(document.querySelector('#create-project-name'))`), {
-      description: 'create project dialog',
-    });
+    await page.waitFor(
+      () => page.evaluate(`Boolean(document.querySelector('#create-project-name'))`),
+      {
+        description: 'create project dialog',
+      },
+    );
     await page.fillInput('#create-project-name', ctx.projectName);
     await page.clickTestId('create-project-submit');
     await page.waitFor(
@@ -729,11 +734,13 @@ async function main() {
   await runStep('03', 'asset-pack', async (page) => {
     await page.navigateHash(`/projects/${ctx.projectId}/assets`);
     await page.clickButtonByText('Import sample tileset');
-    await page.waitFor(
-      () => page.queryExists(`asset-pack-card-${SAMPLE_ASSET_PACK_ID}`),
-      { timeoutMs: 120_000, description: 'sample pack card' },
-    );
-    const thumbBox = await page.waitFor(() => page.evaluate(`
+    await page.waitFor(() => page.queryExists(`asset-pack-card-${SAMPLE_ASSET_PACK_ID}`), {
+      timeoutMs: 120_000,
+      description: 'sample pack card',
+    });
+    const thumbBox = await page.waitFor(
+      () =>
+        page.evaluate(`
       (() => {
         const card = document.querySelector('[data-testid="asset-pack-card-${SAMPLE_ASSET_PACK_ID}"]');
         const img = card?.querySelector('[data-testid="asset-pack-preview-thumb"]');
@@ -744,7 +751,9 @@ async function main() {
         }
         return { width: rect.width, height: rect.height };
       })()
-    `), { timeoutMs: 60_000, description: 'sample pack preview thumb layout' });
+    `),
+      { timeoutMs: 60_000, description: 'sample pack preview thumb layout' },
+    );
     if (!thumbBox || thumbBox.width <= 0 || thumbBox.height <= 0) {
       throw new Error('Sample pack preview thumb has zero size');
     }
@@ -795,7 +804,10 @@ async function main() {
       throw new Error('Could not read generated map id from sidebar');
     }
     await page.waitFor(
-      () => page.evaluate(`Boolean(document.querySelector('.touch-none.bg-background canvas, canvas'))`),
+      () =>
+        page.evaluate(
+          `Boolean(document.querySelector('.touch-none.bg-background canvas, canvas'))`,
+        ),
       { description: 'map editor canvas' },
     );
   });
@@ -822,7 +834,10 @@ async function main() {
         `),
       { timeoutMs: DEFAULT_STEP_TIMEOUT_MS, description: 'BR installed plugin visible' },
     );
-    if (!String(bodyText).includes(BATTLE_ROYALE_PLUGIN_ID) && !String(bodyText).includes('Battle Royale')) {
+    if (
+      !String(bodyText).includes(BATTLE_ROYALE_PLUGIN_ID) &&
+      !String(bodyText).includes('Battle Royale')
+    ) {
       throw new Error('Battle Royale plugin not listed after install');
     }
     if (!String(bodyText).includes('Enabled') || String(bodyText).includes('Failed')) {
@@ -851,8 +866,7 @@ async function main() {
         const text = await page.readText('playtest-runtime-status');
         const parsed = parseRuntimeStatus(text);
         const freshEvent =
-          parsed.lastPluginEvent === 'onInit' ||
-          /^onTick:[1-9]\d*$/.test(parsed.lastPluginEvent);
+          parsed.lastPluginEvent === 'onInit' || /^onTick:[1-9]\d*$/.test(parsed.lastPluginEvent);
         if (parsed.tickCount > 0 && parsed.playerCount > 0 && freshEvent) {
           return parsed;
         }
@@ -902,10 +916,10 @@ async function main() {
     );
 
     await page.clickButtonByText('Join as host');
-    await page.waitFor(
-      () => page.queryExists('playtest-multiplayer-viewport'),
-      { timeoutMs: 120_000, description: 'host multiplayer viewport' },
-    );
+    await page.waitFor(() => page.queryExists('playtest-multiplayer-viewport'), {
+      timeoutMs: 120_000,
+      description: 'host multiplayer viewport',
+    });
 
     const hostPlayers = await page.waitFor(() => page.readMultiplayerHudAliveCount(), {
       timeoutMs: 120_000,
@@ -1011,10 +1025,10 @@ async function main() {
     } else {
       await page.clickButtonByText('Stop hosting');
     }
-    await page.waitFor(
-      () => page.queryExists('playtest-local-host-pill').then((v) => !v),
-      { timeoutMs: 30_000, description: 'hosting pill removed' },
-    );
+    await page.waitFor(() => page.queryExists('playtest-local-host-pill').then((v) => !v), {
+      timeoutMs: 30_000,
+      description: 'hosting pill removed',
+    });
     if (ctx.secondaryClient) {
       await ctx.secondaryClient.close();
       ctx.secondaryClient = null;
@@ -1086,7 +1100,9 @@ async function main() {
 main()
   .catch((error) => {
     if (!(error instanceof StepFailure)) {
-      process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+      process.stderr.write(
+        `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+      );
     }
     process.exitCode = 1;
   })

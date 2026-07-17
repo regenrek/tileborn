@@ -11,7 +11,10 @@ export function AssetPackGridSkeleton({ count = 6 }: AssetPackGridSkeletonProps)
       aria-busy="true"
       aria-label="Loading asset packs"
     >
-      {Array.from({ length: count }, (_, cardNumber) => `asset-pack-skeleton-card-${cardNumber}`).map((cardKey) => (
+      {Array.from(
+        { length: count },
+        (_, cardNumber) => `asset-pack-skeleton-card-${cardNumber}`,
+      ).map((cardKey) => (
         <Card key={cardKey} className="gap-2 py-2">
           <CardHeader className="gap-2 px-2">
             <Skeleton className="aspect-square w-full rounded-md" />

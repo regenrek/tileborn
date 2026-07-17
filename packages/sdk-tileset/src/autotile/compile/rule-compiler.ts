@@ -1,30 +1,30 @@
-import type { ParseDiagnostic } from "../../diagnostics.js";
-import type { AutotileRule } from "../../schemas/autotile-rule.js";
-import type { TileId } from "../../schemas/ids.js";
+import type { ParseDiagnostic } from '../../diagnostics.js';
+import type { AutotileRule } from '../../schemas/autotile-rule.js';
+import type { TileId } from '../../schemas/ids.js';
 
-import { compileBlob47 } from "./blob47.js";
-import { compileRpgm, type RpgmSetKind } from "./rpgm.js";
-import type { CompileDebug, CompileResult, RuleBaseInput } from "./shared.js";
-import { compileWang, type WangPattern, type WangTileEntry } from "./wang.js";
+import { compileBlob47 } from './blob47.js';
+import { compileRpgm, type RpgmSetKind } from './rpgm.js';
+import type { CompileDebug, CompileResult, RuleBaseInput } from './shared.js';
+import { compileWang, type WangPattern, type WangTileEntry } from './wang.js';
 
 export type AutotileSourceFormat =
   | {
-      readonly kind: "blob47";
+      readonly kind: 'blob47';
       readonly cells: readonly (TileId | undefined)[];
     }
   | {
-      readonly kind: "rpgm";
+      readonly kind: 'rpgm';
       readonly set: RpgmSetKind;
       readonly cells: readonly (TileId | undefined)[];
     }
   | {
-      readonly kind: "wang";
+      readonly kind: 'wang';
       readonly pattern: WangPattern;
       readonly entries?: readonly WangTileEntry[];
       readonly cells?: readonly (TileId | undefined)[];
     }
   | {
-      readonly kind: "tiledWang";
+      readonly kind: 'tiledWang';
       readonly pattern: WangPattern;
       readonly entries: readonly WangTileEntry[];
       readonly wangSetName?: string;
@@ -43,16 +43,16 @@ export type CompileAutotileRuleResult = CompileResult & {
 };
 
 const unknownRpgmSet = (path: string, set: string): ParseDiagnostic => ({
-  _tag: "UnknownRpgmSetKind",
+  _tag: 'UnknownRpgmSetKind',
   path,
   message: `Unknown RPG Maker autotile set kind "${set}"`,
-  severity: "error",
+  severity: 'error',
   set,
 });
 
 /** High-level autotile rule compiler dispatcher for source-format hints and atlas data. */
 export const compileAutotileRule = (input: CompileAutotileRuleInput): CompileAutotileRuleResult => {
-  const path = input.path ?? "/autotile/compile";
+  const path = input.path ?? '/autotile/compile';
   const base: RuleBaseInput = {
     id: input.id,
     name: input.name,
@@ -70,16 +70,13 @@ export const compileAutotileRule = (input: CompileAutotileRuleInput): CompileAut
   });
 
   switch (input.source.kind) {
-    case "blob47":
-      return attachDebug(
-        compileBlob47({ ...base, path, cells: input.source.cells }),
-        "blob47",
-      );
-    case "rpgm":
-      if (input.source.set !== "A2" && input.source.set !== "A3" && input.source.set !== "A4") {
+    case 'blob47':
+      return attachDebug(compileBlob47({ ...base, path, cells: input.source.cells }), 'blob47');
+    case 'rpgm':
+      if (input.source.set !== 'A2' && input.source.set !== 'A3' && input.source.set !== 'A4') {
         return {
           debug: {
-            pattern: "rpgm",
+            pattern: 'rpgm',
             mappedMaskCount: 0,
             ...(input.debug !== undefined ? { source: input.debug } : {}),
           },
@@ -88,9 +85,9 @@ export const compileAutotileRule = (input: CompileAutotileRuleInput): CompileAut
       }
       return attachDebug(
         compileRpgm({ ...base, path, set: input.source.set, cells: input.source.cells }),
-        input.source.set === "A2" ? "rpgmA2" : input.source.set === "A3" ? "rpgmA3" : "rpgmA4",
+        input.source.set === 'A2' ? 'rpgmA2' : input.source.set === 'A3' ? 'rpgmA3' : 'rpgmA4',
       );
-    case "wang":
+    case 'wang':
       return attachDebug(
         compileWang({
           ...base,
@@ -101,7 +98,7 @@ export const compileAutotileRule = (input: CompileAutotileRuleInput): CompileAut
         }),
         input.source.pattern,
       );
-    case "tiledWang":
+    case 'tiledWang':
       return attachDebug(
         compileWang({
           ...base,

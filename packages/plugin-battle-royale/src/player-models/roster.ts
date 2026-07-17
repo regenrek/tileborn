@@ -1,13 +1,21 @@
 import {
   PlayerModelRef,
   ProjectManifest,
+  REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  validatePlayerModelRef,
   type JsonObject,
   type JsonValue,
   type TileborneMap,
-} from "@tileborne/core";
-import { Schema } from "effect";
+  type PlayerModelValidationIssue,
+} from '@tileborne/core';
+import { Schema } from 'effect';
 
-import { PLUGIN_ID } from "../constants.js";
+import {
+  DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS,
+  DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS,
+  isDeprecatedBattleRoyalePlayerModelId,
+} from '../content-assets.js';
+import { PLUGIN_ID } from '../constants.js';
 
 /**
  * Battle Royale's per-project player-model roster: a single set of selectable
@@ -24,9 +32,33 @@ import { PLUGIN_ID } from "../constants.js";
 const PlayerModelArray = Schema.Array(PlayerModelRef);
 
 const readObject = (value: JsonValue | undefined): JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as JsonObject)
-    : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as JsonObject) : {};
+
+export interface BattleRoyalePlayerModelRosterIssue extends PlayerModelValidationIssue {
+  readonly modelId: string | undefined;
+}
+
+export const validateBattleRoyalePlayerModelRoster = (
+  models: readonly PlayerModelRef[],
+): readonly BattleRoyalePlayerModelRosterIssue[] =>
+  models.flatMap((model, index) =>
+    validatePlayerModelRef(model).map((issue) => ({
+      ...issue,
+      path: `playerModels[${index}].${issue.path}`,
+      modelId: model.id,
+    })),
+  );
+
+const assertValidBattleRoyalePlayerModelRoster = (models: readonly PlayerModelRef[]): void => {
+  const issues = validateBattleRoyalePlayerModelRoster(models);
+  if (issues.length > 0) {
+    throw new Error(
+      `Invalid Battle Royale player-model roster: ${issues
+        .map((issue) => `${issue.path}: ${issue.message}`)
+        .join('; ')}`,
+    );
+  }
+};
 
 /** Decode the project's BR player-model roster (empty when unset/invalid). */
 export const readBattleRoyalePlayerModels = (
@@ -41,17 +73,57 @@ export const readBattleRoyalePlayerModels = (
     return [];
   }
   try {
-    return Schema.decodeUnknownSync(PlayerModelArray)(raw);
+    const models = Schema.decodeUnknownSync(PlayerModelArray)(raw);
+    return validateBattleRoyalePlayerModelRoster(models).length === 0 ? models : [];
   } catch {
     return [];
   }
 };
+
+/** Read authored project models that are still part of the production roster contract. */
+export const readBattleRoyalePlayerModelOverrides = (
+  project: ProjectManifest | undefined,
+): readonly PlayerModelRef[] =>
+  readBattleRoyalePlayerModels(project).filter(
+    (model) => !isDeprecatedBattleRoyalePlayerModelId(model.id),
+  );
+
+export const hasBattleRoyalePlayerModelOverrides = (
+  project: ProjectManifest | undefined,
+): boolean => readBattleRoyalePlayerModelOverrides(project).length > 0;
+
+/** Resolve the effective BR roster: authored project roster, else bundled defaults. */
+export const resolveBattleRoyalePlayerModels = (
+  project: ProjectManifest | undefined,
+): readonly PlayerModelRef[] => {
+  const projectModels = readBattleRoyalePlayerModelOverrides(project);
+  return projectModels.length === 0 ? DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS : projectModels;
+};
+
+/**
+ * Wire-boundary roster resolver: takes the WIRE (encoded) project manifest and
+ * returns WIRE `PlayerModelRef[]`. Exported from the plugin's node entry under
+ * the generic `resolvePlayerModels` name (mirrors `exportModeData`) so build
+ * hosts discover the roster without a plugin-id literal and without sharing
+ * schema class instances across bundle copies of `@tileborne/core`.
+ */
+export const resolveBattleRoyalePlayerModelsWire = (
+  project: Pick<ProjectManifest, 'settings'> | undefined,
+): readonly JsonObject[] =>
+  JSON.parse(
+    JSON.stringify(
+      Schema.encodeSync(PlayerModelArray)(
+        resolveBattleRoyalePlayerModels(project as ProjectManifest | undefined),
+      ),
+    ),
+  ) as JsonObject[];
 
 /** Persist a new BR player-model roster onto the project manifest settings. */
 export const applyBattleRoyalePlayerModels = (
   project: ProjectManifest,
   models: readonly PlayerModelRef[],
 ): ProjectManifest => {
+  assertValidBattleRoyalePlayerModelRoster(models);
   // Encode through the schema then JSON-roundtrip so optional/undefined fields
   // collapse to a clean JsonValue the project manifest can persist.
   const encoded = JSON.parse(
@@ -76,7 +148,7 @@ export const upsertBattleRoyalePlayerModel = (
   project: ProjectManifest,
   model: PlayerModelRef,
 ): ProjectManifest => {
-  const current = readBattleRoyalePlayerModels(project);
+  const current = readBattleRoyalePlayerModelOverrides(project);
   const next = current.some((entry) => entry.id === model.id)
     ? current.map((entry) => (entry.id === model.id ? model : entry))
     : [...current, model];
@@ -90,7 +162,7 @@ export const removeBattleRoyalePlayerModel = (
 ): ProjectManifest =>
   applyBattleRoyalePlayerModels(
     project,
-    readBattleRoyalePlayerModels(project).filter((entry) => entry.id !== modelId),
+    readBattleRoyalePlayerModelOverrides(project).filter((entry) => entry.id !== modelId),
   );
 
 /**
@@ -111,7 +183,17 @@ interface PlayerModelPolicyContext {
  */
 export const BATTLE_ROYALE_PLAYER_MODEL_POLICY = {
   pluginId: PLUGIN_ID,
-  mode: "selectable" as const,
+  mode: 'selectable' as const,
+  requiredClipKeys: REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  defaultGeometry: {
+    anchor: { x: 0.5, y: 0.86 },
+    hand: { x: 0.64, y: 0.56 },
+    hitbox: { x: 0.28, y: 0.18, width: 0.44, height: 0.66 },
+    renderScale: 1,
+    worldSize: { width: 24, height: 32 },
+  },
+  placeholderModelIds: DEPRECATED_BATTLE_ROYALE_PLAYER_MODEL_IDS,
   resolveModels: (context: PlayerModelPolicyContext): readonly PlayerModelRef[] =>
-    readBattleRoyalePlayerModels(context.project),
+    resolveBattleRoyalePlayerModels(context.project),
+  applyModels: applyBattleRoyalePlayerModels,
 };

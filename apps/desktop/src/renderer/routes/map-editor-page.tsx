@@ -1,15 +1,20 @@
 import { Link, useParams, useSearch } from '@tanstack/react-router';
-import type { ProjectId } from '@tileborne/core';
+import {
+  decodePersistedTileborneMapJson,
+  type ProjectId,
+  type TileborneMap,
+} from '@tileborne/core';
 import { Button, Skeleton } from '@tileborne/ui';
 import { MapIcon } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { MapEditorViewport } from '@/components/map-editor-viewport';
 import { MapEditorToolbar } from '@/components/map-editor-toolbar';
 import { PlaytestMultiplayerViewport } from '@/components/playtest-multiplayer-viewport';
 import { PlaytestViewport } from '@/components/playtest-viewport';
 import { useCreateMap } from '@/hooks/mutations';
-import { useMap, useMaps } from '@/hooks/queries';
+import { useMap, useMaps, usePluginContributions, useProject } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { formatMutationError } from '@/lib/mutation-notifications';
 import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -28,7 +33,15 @@ export function MapEditorPage() {
   };
   const mapQuery = useMap(projectId, mapId);
   const mapsQuery = useMaps(projectId);
+  const projectQuery = useProject(projectId);
+  const contributionsQuery = usePluginContributions();
   const createMap = useCreateMap();
+  // ADR-0023 section B: the deep-link join runs the ACTIVE game mode's
+  // discovered playtest runtime, resolved from the project selection.
+  const rendererCapabilityId = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  )?.rendererCapabilityId;
   const playtestActive = useEditorUiStore((state) => state.playtestActive);
   const playtestMode = useEditorUiStore((state) => state.playtestMode);
   const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
@@ -46,18 +59,33 @@ export function MapEditorPage() {
     if (!search.joinRoom || !mapQuery.data?.map) {
       return;
     }
+    // Wait until the discovered modes + project selection are loaded so the
+    // join targets the resolved active mode (not a spurious "no mode" error).
+    if (contributionsQuery.isLoading || projectQuery.isLoading) {
+      return;
+    }
     const joinInput =
       search.joinBase && search.joinRoom
         ? `${search.joinBase.replace(/\/$/, '')}/rooms/${search.joinRoom}`
         : search.joinRoom;
     void joinFromInput(
       joinInput,
+      rendererCapabilityId,
       mapId,
       mapQuery.data.map.size.width,
       mapQuery.data.map.size.height,
       search.joinBase,
     );
-  }, [joinFromInput, mapId, mapQuery.data?.map, search.joinBase, search.joinRoom]);
+  }, [
+    rendererCapabilityId,
+    contributionsQuery.isLoading,
+    projectQuery.isLoading,
+    joinFromInput,
+    mapId,
+    mapQuery.data?.map,
+    search.joinBase,
+    search.joinRoom,
+  ]);
 
   useEffect(
     () => () => {
@@ -65,6 +93,25 @@ export function MapEditorPage() {
     },
     [],
   );
+
+  // The viewports consume a runtime `TileborneMap` (`_tag` layers + Option fields).
+  // The maps cache may hold EITHER the persisted IPC shape (layers keyed by
+  // `kind`, e.g. a fresh `maps.get` fetch) OR an already-decoded runtime map (an
+  // optimistic/in-memory write). Decode only the persisted shape through the
+  // canonical boundary (ADR-0019); pass an already-decoded map through unchanged
+  // so we never double-decode. Memoized to keep a stable identity across renders.
+  const map = useMemo(() => {
+    const raw = mapQuery.data?.map;
+    if (raw === undefined) {
+      return undefined;
+    }
+    const firstLayer = (raw as { readonly layers?: ReadonlyArray<Record<string, unknown>> })
+      .layers?.[0];
+    if (firstLayer !== undefined && '_tag' in firstLayer && !('kind' in firstLayer)) {
+      return raw as TileborneMap;
+    }
+    return decodePersistedTileborneMapJson(raw);
+  }, [mapQuery.data?.map]);
 
   if (mapQuery.isLoading) {
     return (
@@ -112,7 +159,9 @@ export function MapEditorPage() {
                   notifySuccess(`Created map ${result.mapId}`);
                 })
                 .catch((error) => {
-                  notifyError(formatMutationError(error, 'create map', 'Adjust dimensions and retry.'));
+                  notifyError(
+                    formatMutationError(error, 'create map', 'Adjust dimensions and retry.'),
+                  );
                 });
             }}
           >
@@ -123,19 +172,26 @@ export function MapEditorPage() {
     );
   }
 
-  const map = mapQuery.data.map;
-  const showSinglePlaytest = playtestActive && playtestMode === 'single' && playtestSessionId;
+  if (map === undefined) {
+    return null;
+  }
+  const singlePlaytestSessionId =
+    playtestActive && playtestMode === 'single' ? playtestSessionId : null;
+  const showSinglePlaytest = singlePlaytestSessionId !== null;
   const showMultiplayerPlaytest = playtestActive && playtestMode === 'multiplayer';
+  const showEditorViewport = !showSinglePlaytest && !showMultiplayerPlaytest;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <MapEditorViewport projectId={projectId} mapId={mapId} map={map} />
+      {showEditorViewport ? (
+        <MapEditorViewport projectId={projectId} mapId={mapId} map={map} />
+      ) : null}
       {!playtestActive ? <MapEditorToolbar /> : null}
       {showSinglePlaytest ? (
         <PlaytestViewport
           projectId={projectId}
           map={map}
-          sessionId={playtestSessionId}
+          sessionId={singlePlaytestSessionId}
           activePlugins={playtestActivePlugins}
         />
       ) : null}

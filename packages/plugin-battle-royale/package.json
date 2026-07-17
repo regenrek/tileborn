@@ -1,10 +1,11 @@
 {
   "name": "@tileborne/plugin-battle-royale",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "generate:assets": "node scripts/generate-content-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -23,6 +24,10 @@
       "types": "./src/authoring/index.ts",
       "default": "./dist/authoring.js"
     },
+    "./renderer": {
+      "types": "./src/renderer/index.ts",
+      "default": "./dist/renderer.js"
+    },
     "./player-models": {
       "types": "./src/player-models/index.ts",
       "default": "./dist/player-models.js"
@@ -30,6 +35,10 @@
     "./constants": {
       "types": "./src/constants.ts",
       "default": "./dist/constants.js"
+    },
+    "./policy": {
+      "types": "./src/policy.ts",
+      "default": "./dist/policy.js"
     },
     "./dist/runtime.js": "./dist/runtime.js",
     "./dist/server.js": "./dist/server.js"
@@ -43,6 +52,7 @@
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/runtime": "workspace:*",
+    "@tileborne/simulation": "workspace:*",
     "@tileborne/sdk-tileset": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "effect": "4.0.0-beta.70",

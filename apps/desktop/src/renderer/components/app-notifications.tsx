@@ -37,7 +37,12 @@ function NotificationItem({
       className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${elevation.md} ${kindStyles[kind]}`}
     >
       <p className="min-w-0 flex-1">{message}</p>
-      <Button variant="ghost" size="icon-xs" aria-label="Dismiss notification" onClick={() => dismiss(id)}>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Dismiss notification"
+        onClick={() => dismiss(id)}
+      >
         <XIcon />
       </Button>
     </div>

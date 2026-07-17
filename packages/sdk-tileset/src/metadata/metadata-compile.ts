@@ -1,17 +1,17 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import type { ParseDiagnostic } from "../diagnostics.js";
-import type { CollisionMask } from "../schemas/collision-mask.js";
-import { TerrainClass } from "../schemas/terrain-class.js";
-import type { TileId } from "../schemas/ids.js";
-import type { TiledJsonObject, TiledJsonProperty } from "../tiled/types.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import type { CollisionMask } from '../schemas/collision-mask.js';
+import { TerrainClass } from '../schemas/terrain-class.js';
+import type { TileId } from '../schemas/ids.js';
+import type { TiledJsonObject, TiledJsonProperty } from '../tiled/types.js';
 
 import {
   collisionMaskFromManifest,
   compileCollisionFromLdtkIntGridValue,
   compileCollisionFromTiledObjectGroup,
   compileCollisionFromUnityMetaSprite,
-} from "./collision.js";
+} from './collision.js';
 import type {
   AxisAlignedBounds,
   CompiledTileMetadata,
@@ -20,10 +20,10 @@ import type {
   PathfindingHint,
   SpawnAnchor,
   UnityMetaSprite,
-} from "./types.js";
-import { validateCollisionMask } from "./validate.js";
+} from './types.js';
+import { validateCollisionMask } from './validate.js';
 
-const KNOWN_NAMESPACES = ["tileborne", "gameplay", "tiled", "ldtk", "unity"] as const;
+const KNOWN_NAMESPACES = ['tileborne', 'gameplay', 'tiled', 'ldtk', 'unity'] as const;
 const SPAWN_IDENTIFIER = /spawn|player|start|character/i;
 const BLOCKED_IDENTIFIER = /block|solid|wall|collision|obstacle/i;
 
@@ -54,9 +54,9 @@ const propertiesToRecord = (
 };
 
 const splitNamespacedKey = (key: string): { readonly namespace: string; readonly name: string } => {
-  const dotIndex = key.indexOf(".");
+  const dotIndex = key.indexOf('.');
   if (dotIndex <= 0 || dotIndex === key.length - 1) {
-    return { namespace: "tiled", name: key };
+    return { namespace: 'tiled', name: key };
   }
   const namespace = key.slice(0, dotIndex);
   return { namespace, name: key.slice(dotIndex + 1) };
@@ -80,7 +80,9 @@ export const namespaceCustomProperties = (
   return grouped;
 };
 
-const boundsFromTiledObjects = (objects: readonly TiledJsonObject[]): AxisAlignedBounds | undefined => {
+const boundsFromTiledObjects = (
+  objects: readonly TiledJsonObject[],
+): AxisAlignedBounds | undefined => {
   if (objects.length === 0) {
     return undefined;
   }
@@ -113,7 +115,12 @@ const boundsFromTiledObjects = (objects: readonly TiledJsonObject[]): AxisAligne
     }
   }
 
-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+  if (
+    !Number.isFinite(minX) ||
+    !Number.isFinite(minY) ||
+    !Number.isFinite(maxX) ||
+    !Number.isFinite(maxY)
+  ) {
     return undefined;
   }
 
@@ -126,7 +133,7 @@ const boundsFromTiledObjects = (objects: readonly TiledJsonObject[]): AxisAligne
 };
 
 const isSpawnTiledObject = (object: TiledJsonObject): boolean => {
-  const cls = object.class ?? object.type ?? object.name ?? "";
+  const cls = object.class ?? object.type ?? object.name ?? '';
   return SPAWN_IDENTIFIER.test(cls);
 };
 
@@ -142,23 +149,23 @@ const pathfindingFromProperties = (
   properties: Readonly<Record<string, string | number | boolean>>,
   collisionMask: CollisionMask | undefined,
 ): PathfindingHint | undefined => {
-  const blockedProperty = properties["tileborne.blocked"] ?? properties["gameplay.blocked"];
-  const costProperty = properties["tileborne.pathCost"] ?? properties["gameplay.pathCost"];
+  const blockedProperty = properties['tileborne.blocked'] ?? properties['gameplay.blocked'];
+  const costProperty = properties['tileborne.pathCost'] ?? properties['gameplay.pathCost'];
 
   const blockedFromProperty =
-    blockedProperty === true || blockedProperty === 1 || blockedProperty === "true";
+    blockedProperty === true || blockedProperty === 1 || blockedProperty === 'true';
   const blockedFromCollision =
-    collisionMask?._tag === "bitmask"
+    collisionMask?._tag === 'bitmask'
       ? collisionMask.blocked !== 0 && collisionMask.passable === 0
-      : collisionMask?._tag === "polygon"
+      : collisionMask?._tag === 'polygon'
         ? collisionMask.blocksMovement
         : false;
 
   const blocked = blockedFromProperty || blockedFromCollision;
   const cost =
-    typeof costProperty === "number"
+    typeof costProperty === 'number'
       ? costProperty
-      : typeof costProperty === "string"
+      : typeof costProperty === 'string'
         ? Number.parseFloat(costProperty)
         : blocked
           ? Number.POSITIVE_INFINITY
@@ -193,7 +200,7 @@ export type CompileTileMetadataInput = {
       readonly identifier: string;
       readonly px: readonly [number, number];
       readonly size: readonly [number, number];
-      readonly kind: "spawn" | "prop";
+      readonly kind: 'spawn' | 'prop';
     };
     readonly fields?: Readonly<Record<string, unknown>>;
   };
@@ -212,13 +219,15 @@ export const compileTileMetadata = (
   const propertyRecords: Record<string, string | number | boolean> = {};
 
   for (const tag of input.tags ?? []) {
-    const eqIndex = tag.indexOf("=");
+    const eqIndex = tag.indexOf('=');
     if (eqIndex <= 0) {
       continue;
     }
     const rawKey = tag.slice(0, eqIndex);
     const rawValue = tag.slice(eqIndex + 1);
-    const namespacedKey = rawKey.startsWith("tiled:") ? `tiled.${rawKey.slice("tiled:".length)}` : rawKey;
+    const namespacedKey = rawKey.startsWith('tiled:')
+      ? `tiled.${rawKey.slice('tiled:'.length)}`
+      : rawKey;
     if (propertyRecords[namespacedKey] === undefined) {
       propertyRecords[namespacedKey] = rawValue;
     }
@@ -231,7 +240,7 @@ export const compileTileMetadata = (
     for (const [key, value] of Object.entries(input.ldtk.fields)) {
       if (
         propertyRecords[`ldtk.${key}`] === undefined &&
-        (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+        (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
       ) {
         propertyRecords[`ldtk.${key}`] = value;
       }
@@ -244,10 +253,10 @@ export const compileTileMetadata = (
   }
 
   const terrainProperty =
-    propertyRecords["terrainClass"] ??
-    propertyRecords["terrain"] ??
-    propertyRecords["tileborne.terrainClass"];
-  if (typeof terrainProperty === "string") {
+    propertyRecords['terrainClass'] ??
+    propertyRecords['terrain'] ??
+    propertyRecords['tileborne.terrainClass'];
+  if (typeof terrainProperty === 'string') {
     const terrainClass = decodeTerrainClass(terrainProperty);
     if (terrainClass !== undefined && !terrainClasses.includes(terrainClass)) {
       terrainClasses.push(terrainClass);
@@ -295,7 +304,7 @@ export const compileTileMetadata = (
     }
   }
 
-  if (input.ldtk?.entity?.kind === "spawn") {
+  if (input.ldtk?.entity?.kind === 'spawn') {
     spawnAnchors.push({
       identifier: input.ldtk.entity.identifier,
       x: input.ldtk.entity.px[0],

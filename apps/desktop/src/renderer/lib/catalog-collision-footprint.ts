@@ -3,8 +3,14 @@ import type {
   CollisionFootprintPart,
   GameObjectType,
   JsonObject,
-  JsonValue,
   MapObject,
+} from '@tileborne/core';
+import {
+  COLLISION_FOOTPRINT_OFFSET_PROPERTY_KEY,
+  footprintOffsetRecord,
+  readCollisionFootprintOffset,
+  ZERO_FOOTPRINT_OFFSET,
+  type FootprintOffset,
 } from '@tileborne/core';
 
 /**
@@ -37,25 +43,15 @@ export const findCollisionFootprint = (
  * tooling and are surfaced read-only (re-derive at the source, never hand-tweak
  * a single instance).
  */
-export const footprintAllowsInstanceAdjust = (
-  footprint: CollisionFootprintComponent,
-): boolean => footprint.source === 'manual';
+export const footprintAllowsInstanceAdjust = (footprint: CollisionFootprintComponent): boolean =>
+  footprint.source === 'manual';
 
-/** The reserved `MapObject.properties` key holding the per-instance footprint offset. */
-export const COLLISION_FOOTPRINT_OFFSET_PROPERTY_KEY = 'collisionFootprintOffset';
-
-/** A placed object's per-instance footprint offset, in object-local pixels. */
-export interface FootprintOffset {
-  readonly x: number;
-  readonly y: number;
-}
-
-export const ZERO_FOOTPRINT_OFFSET: FootprintOffset = { x: 0, y: 0 };
-
-const isPlainRecord = (
-  value: JsonValue | undefined,
-): value is { readonly [key: string]: JsonValue } =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+export {
+  COLLISION_FOOTPRINT_OFFSET_PROPERTY_KEY,
+  footprintOffsetRecord,
+  ZERO_FOOTPRINT_OFFSET,
+  type FootprintOffset,
+};
 
 /**
  * Read the effective per-instance footprint offset for a placed object: the
@@ -63,23 +59,8 @@ const isPlainRecord = (
  * zero offset (an untouched instance sits exactly on its type's footprint).
  */
 export const readFootprintOffset = (object: MapObject): FootprintOffset => {
-  const raw = object.properties[COLLISION_FOOTPRINT_OFFSET_PROPERTY_KEY];
-  if (!isPlainRecord(raw)) {
-    return ZERO_FOOTPRINT_OFFSET;
-  }
-  const x = raw.x;
-  const y = raw.y;
-  return {
-    x: typeof x === 'number' ? x : 0,
-    y: typeof y === 'number' ? y : 0,
-  };
+  return readCollisionFootprintOffset(object.properties);
 };
-
-/** Serialize a footprint offset into the JSON record persisted on the object. */
-export const footprintOffsetRecord = (offset: FootprintOffset): JsonObject => ({
-  x: offset.x,
-  y: offset.y,
-});
 
 /**
  * Compute the next `properties` bag with the per-instance footprint offset

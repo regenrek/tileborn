@@ -7,10 +7,7 @@ import {
   type LootTableId,
   type PluginId,
 } from '@tileborne/core';
-import {
-  type CatalogContributionInput,
-  mergeGameObjectCatalogs,
-} from '@tileborne/plugin-api';
+import { type CatalogContributionInput, mergeGameObjectCatalogs } from '@tileborne/plugin-api';
 import { Option, Result } from 'effect';
 
 /**
@@ -61,6 +58,19 @@ const toContributionInputs = (
 ): readonly CatalogContributionInput[] =>
   sources.map((source) => ({ contributionId: source.contributionId, catalog: source.catalog }));
 
+/**
+ * Cross-registry deps for the merge. `weaponIds` is the union of weapon ids
+ * contributed by enabled plugins' weapon catalogs (ADR-0018); `weapon-ref`
+ * components resolve against it (ADR-0028 §4a). When omitted, weaponId
+ * resolution is skipped (merge sites without weapon knowledge).
+ */
+export interface CatalogProjectionDeps {
+  readonly weaponIds?: ReadonlySet<string>;
+}
+
+const mergeDeps = (deps: CatalogProjectionDeps | undefined) =>
+  deps?.weaponIds === undefined ? {} : { resolveWeapon: (id: string) => deps.weaponIds!.has(id) };
+
 const lootTableUnion = (sources: readonly CatalogContributionSource[]): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const source of sources) {
@@ -90,6 +100,52 @@ const lootTableRefs = (
     }
   }
   return refs;
+};
+
+/**
+ * Companion-entity references carried by a `weapon-ref` component, plus the
+ * weapon-id join itself. Structured here (refKind/missingId) so the editor
+ * report stays click-navigable instead of collapsing into the coherence
+ * catch-all that the shared merge gate emits.
+ */
+const weaponRefIssues = (
+  objectType: GameObjectType,
+  typeIds: ReadonlySet<string>,
+  weaponIds: ReadonlySet<string> | undefined,
+): readonly CatalogValidationIssueProjection[] => {
+  const issues: CatalogValidationIssueProjection[] = [];
+  for (const component of objectType.components) {
+    if (component._tag !== 'weapon-ref') {
+      continue;
+    }
+    if (weaponIds !== undefined && !weaponIds.has(String(component.weaponId))) {
+      issues.push({
+        kind: 'unknown-reference',
+        objectTypeId: objectType.id,
+        refKind: 'weapon-ref.weaponId',
+        missingId: String(component.weaponId),
+        message: `${objectType.id}: weapon-ref.weaponId references unknown weapon ${component.weaponId}`,
+      });
+    }
+    const companions = [
+      ['weapon-ref.projectileEntityId', component.projectileEntityId],
+      ['weapon-ref.muzzleFlashEntityId', component.muzzleFlashEntityId],
+      ['weapon-ref.impactVfxEntityId', component.impactVfxEntityId],
+      ['weapon-ref.pickupEntityId', component.pickupEntityId],
+    ] as const;
+    for (const [refKind, entityId] of companions) {
+      if (entityId !== undefined && !typeIds.has(String(entityId))) {
+        issues.push({
+          kind: 'unknown-reference',
+          objectTypeId: objectType.id,
+          refKind,
+          missingId: String(entityId),
+          message: `${objectType.id}: ${refKind} references unknown entity ${entityId}`,
+        });
+      }
+    }
+  }
+  return issues;
 };
 
 const originIndex = (
@@ -145,9 +201,10 @@ const collectFor = <T>(
  */
 export const buildResolveProjection = (
   sources: readonly CatalogContributionSource[],
+  deps?: CatalogProjectionDeps,
 ): CatalogResolveProjection => {
   const origins = originIndex(sources);
-  const merged = mergeGameObjectCatalogs(toContributionInputs(sources));
+  const merged = mergeGameObjectCatalogs(toContributionInputs(sources), mergeDeps(deps));
 
   const objectTypes = Result.isSuccess(merged)
     ? merged.success.objectTypes
@@ -182,6 +239,7 @@ export const buildResolveProjection = (
  */
 export const buildValidationReport = (
   sources: readonly CatalogContributionSource[],
+  deps?: CatalogProjectionDeps,
 ): CatalogValidationReportProjection => {
   const issues: CatalogValidationIssueProjection[] = [];
 
@@ -200,6 +258,12 @@ export const buildValidationReport = (
   }
 
   const lootIds = lootTableUnion(sources);
+  const itemIds = new Set(
+    sources.flatMap((source) =>
+      Option.getOrElse(source.catalog.items, () => []).map((item) => String(item.id)),
+    ),
+  );
+  const typeIds: ReadonlySet<string> = new Set([...seenTypeIds].map(String));
   for (const source of sources) {
     for (const objectType of source.catalog.objectTypes) {
       const tags = new Set<string>();
@@ -224,12 +288,37 @@ export const buildValidationReport = (
           });
         }
       }
+      issues.push(...weaponRefIssues(objectType, typeIds, deps?.weaponIds));
+    }
+    for (const table of Option.getOrElse(source.catalog.lootTables, () => [])) {
+      table.entries.forEach((entry, index) => {
+        if (typeof entry.itemId === 'string' && !itemIds.has(entry.itemId)) {
+          issues.push({
+            kind: 'unknown-reference',
+            refKind: 'item',
+            missingId: entry.itemId,
+            message: `loot table "${table.label}" entry ${index + 1} references an unknown item`,
+          });
+        }
+        if (
+          typeof entry.weight !== 'number' ||
+          !Number.isFinite(entry.weight) ||
+          entry.weight <= 0
+        ) {
+          issues.push({
+            kind: 'coherence',
+            message: `loot table "${table.label}" entry ${index + 1} needs a positive drop weight`,
+          });
+        }
+      });
     }
   }
 
-  const merged = mergeGameObjectCatalogs(toContributionInputs(sources));
-  const ok = Result.isSuccess(merged);
-  if (!ok && issues.length === 0) {
+  const merged = mergeGameObjectCatalogs(toContributionInputs(sources), mergeDeps(deps));
+  const ok =
+    Result.isSuccess(merged) &&
+    issues.every((entry) => entry.kind !== 'unknown-reference' && entry.kind !== 'coherence');
+  if (Result.isFailure(merged) && issues.length === 0) {
     const failure = merged.failure;
     const message =
       failure._tag === 'CatalogContributionValidationError'

@@ -1,14 +1,14 @@
-import * as React from "react"
+import * as React from 'react';
 
-import { cn } from "../../lib/utils.js"
+import { cn } from '../../lib/utils.js';
 
 function Checkbox({
   className,
   checked,
   onCheckedChange,
   ...props
-}: Omit<React.ComponentProps<"input">, "type" | "onChange"> & {
-  readonly onCheckedChange?: (checked: boolean) => void
+}: Omit<React.ComponentProps<'input'>, 'type' | 'onChange'> & {
+  readonly onCheckedChange?: (checked: boolean) => void;
 }) {
   return (
     <input
@@ -16,10 +16,10 @@ function Checkbox({
       type="checkbox"
       checked={checked}
       onChange={(event) => onCheckedChange?.(event.currentTarget.checked)}
-      className={cn("size-4 rounded border border-input accent-primary", className)}
+      className={cn('size-4 rounded border border-input accent-primary', className)}
       {...props}
     />
-  )
+  );
 }
 
-export { Checkbox }
+export { Checkbox };

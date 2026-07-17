@@ -1,8 +1,8 @@
-import type { AssetPackManifest, AssetPackManifestAsset } from "@tileborne/asset-pipeline";
-import type { AssetId } from "@tileborne/core";
-import { Effect } from "effect";
+import type { AssetPackManifest, AssetPackManifestAsset } from '@tileborne/asset-pipeline/pack';
+import type { AssetId } from '@tileborne/core';
+import { Effect } from 'effect';
 
-import { RendererAssetError, rendererAssetError } from "../renderer/renderer-adapter.js";
+import { RendererAssetError, rendererAssetError } from '../renderer/renderer-adapter.js';
 
 export type RuntimeAssetManifest = AssetPackManifest;
 
@@ -22,6 +22,8 @@ export interface RuntimeAssetLoaderOptions {
   readonly basePath?: string;
   readonly baseUrl?: string | URL;
   readonly fetch?: (input: string | URL) => Promise<Response>;
+  /** Host-owned local byte reader. The neutral runtime never imports Node filesystem APIs. */
+  readonly readFile?: (path: string) => Promise<Uint8Array>;
 }
 
 export const DEFAULT_RUNTIME_ASSET_CACHE_CAPACITY = 256;
@@ -35,16 +37,18 @@ export class RuntimeAssetLoader {
   private readonly basePath: string | undefined;
   private readonly baseUrl: string | URL | undefined;
   private readonly fetchImpl: (input: string | URL) => Promise<Response>;
+  private readonly readFileImpl: ((path: string) => Promise<Uint8Array>) | undefined;
   private readonly cache = new Map<AssetId, LoadedAsset>();
 
   constructor(options: RuntimeAssetLoaderOptions = {}) {
     this.capacity = options.capacity ?? DEFAULT_RUNTIME_ASSET_CACHE_CAPACITY;
     if (!Number.isInteger(this.capacity) || this.capacity <= 0) {
-      throw new RangeError("runtime asset cache capacity must be a positive integer");
+      throw new RangeError('runtime asset cache capacity must be a positive integer');
     }
     this.basePath = options.basePath;
     this.baseUrl = options.baseUrl;
     this.fetchImpl = options.fetch ?? ((input) => fetch(input));
+    this.readFileImpl = options.readFile;
   }
 
   load(manifest: RuntimeAssetManifest): Effect.Effect<LoadedAssets, RendererAssetError> {
@@ -94,7 +98,7 @@ export class RuntimeAssetLoader {
 
   private readBytes(asset: AssetPackManifestAsset): Effect.Effect<Uint8Array, RendererAssetError> {
     const location = this.resolveLocation(asset.path);
-    if (typeof location !== "string" || isRemoteUrl(location)) {
+    if (typeof location !== 'string' || isRemoteUrl(location)) {
       return this.fetchBytes(location, asset.id);
     }
     return this.readFileBytes(location, asset.id);
@@ -108,12 +112,15 @@ export class RuntimeAssetLoader {
       return new URL(assetPath, this.baseUrl);
     }
     if (this.basePath) {
-      return `${this.basePath.replace(/\/$/u, "")}/${assetPath.replace(/^\//u, "")}`;
+      return `${this.basePath.replace(/\/$/u, '')}/${assetPath.replace(/^\//u, '')}`;
     }
     return assetPath;
   }
 
-  private fetchBytes(location: string | URL, assetId: AssetId): Effect.Effect<Uint8Array, RendererAssetError> {
+  private fetchBytes(
+    location: string | URL,
+    assetId: AssetId,
+  ): Effect.Effect<Uint8Array, RendererAssetError> {
     return Effect.tryPromise({
       try: async () => {
         const response = await this.fetchImpl(location);
@@ -123,18 +130,31 @@ export class RuntimeAssetLoader {
         return new Uint8Array(await response.arrayBuffer());
       },
       catch: (cause) =>
-        rendererAssetError(toAssetIdString(assetId), `failed to fetch asset ${toAssetIdString(assetId)}`, cause),
+        rendererAssetError(
+          toAssetIdString(assetId),
+          `failed to fetch asset ${toAssetIdString(assetId)}`,
+          cause,
+        ),
     });
   }
 
-  private readFileBytes(path: string, assetId: AssetId): Effect.Effect<Uint8Array, RendererAssetError> {
+  private readFileBytes(
+    path: string,
+    assetId: AssetId,
+  ): Effect.Effect<Uint8Array, RendererAssetError> {
     return Effect.tryPromise({
       try: async () => {
-        const fs = await import("node:fs/promises");
-        return new Uint8Array(await fs.readFile(path));
+        if (this.readFileImpl === undefined) {
+          throw new Error('local asset loading requires a host-provided readFile implementation');
+        }
+        return this.readFileImpl(path);
       },
       catch: (cause) =>
-        rendererAssetError(toAssetIdString(assetId), `failed to read asset ${toAssetIdString(assetId)}`, cause),
+        rendererAssetError(
+          toAssetIdString(assetId),
+          `failed to read asset ${toAssetIdString(assetId)}`,
+          cause,
+        ),
     });
   }
 
@@ -155,4 +175,5 @@ export const createRuntimeAssetLoader = (options?: RuntimeAssetLoaderOptions): R
 export const loadRuntimeAssets = (
   manifest: RuntimeAssetManifest,
   options?: RuntimeAssetLoaderOptions,
-): Effect.Effect<LoadedAssets, RendererAssetError> => createRuntimeAssetLoader(options).load(manifest);
+): Effect.Effect<LoadedAssets, RendererAssetError> =>
+  createRuntimeAssetLoader(options).load(manifest);

@@ -1,14 +1,14 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 import {
   computeMask,
   formatMaskKey,
   neighborhoodForRule,
   NEIGHBORHOODS,
   resolveAutotile,
-} from "../autotile/index.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import type { TerrainTransition } from "../schemas/terrain-transition.js";
+} from '../autotile/index.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import type { TerrainTransition } from '../schemas/terrain-transition.js';
 
 import type {
   ResolveTerrainCellInput,
@@ -17,18 +17,18 @@ import type {
   TerrainResolveResult,
   TileRef,
   TransitionMode,
-} from "./types.js";
+} from './types.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const readTransitionModeFromRule = (rule: AutotileRule): TransitionMode | undefined => {
-  if (rule._tag !== "custom" || !isRecord(rule.source)) {
+  if (rule._tag !== 'custom' || !isRecord(rule.source)) {
     return undefined;
   }
 
   const mode = rule.source.transitionMode;
-  if (mode === "mask-layer" || mode === "autotile-derived" || mode === "explicit-overlay") {
+  if (mode === 'mask-layer' || mode === 'autotile-derived' || mode === 'explicit-overlay') {
     return mode;
   }
 
@@ -53,30 +53,30 @@ const resolveTransitionMode = (
   }
 
   if (classRegistry.maskLayerTilesForMask !== undefined) {
-    return "mask-layer";
+    return 'mask-layer';
   }
 
   if (classRegistry.overlayTilesForMask !== undefined) {
-    return "explicit-overlay";
+    return 'explicit-overlay';
   }
 
-  return "autotile-derived";
+  return 'autotile-derived';
 };
 
 const missingTransitionRuleDiagnostic = (
   fromClass: TerrainClass,
   toClass: TerrainClass,
 ): ParseDiagnostic => ({
-  _tag: "MissingTransitionRule",
+  _tag: 'MissingTransitionRule',
   path: `/terrainTransitions/${fromClass}->${toClass}`,
   message: `No terrain transition rule from ${fromClass} to ${toClass}`,
-  severity: "warning",
+  severity: 'warning',
   fromClass,
   toClass,
 });
 
 const neighborTerrainAt =
-  (neighbors: ResolveTerrainCellInput["neighbors"]) =>
+  (neighbors: ResolveTerrainCellInput['neighbors']) =>
   (dx: number, dy: number): TerrainClass | undefined => {
     for (const neighbor of neighbors) {
       if (neighbor.dx === dx && neighbor.dy === dy) {
@@ -87,7 +87,7 @@ const neighborTerrainAt =
   };
 
 const computeTransitionMask = (
-  neighbors: ResolveTerrainCellInput["neighbors"],
+  neighbors: ResolveTerrainCellInput['neighbors'],
   toClass: TerrainClass,
   rule: AutotileRule | undefined,
 ): number => {
@@ -152,11 +152,11 @@ const resolveOverlayTiles = (
   }
 
   switch (mode) {
-    case "autotile-derived":
+    case 'autotile-derived':
       return rule === undefined ? [] : resolveAutotileDerivedOverlay(rule, mask);
-    case "explicit-overlay":
+    case 'explicit-overlay':
       return resolveExplicitOverlay(transition, mask, classRegistry, rule);
-    case "mask-layer":
+    case 'mask-layer':
       return resolveMaskLayerOverlay(transition, mask, classRegistry, rule);
   }
 };
@@ -182,7 +182,7 @@ export const resolveTerrainCell = ({
   let debug: TerrainResolveDebug = {
     fromClass,
     toClass: fromClass,
-    mode: "autotile-derived",
+    mode: 'autotile-derived',
   };
 
   const distinctNeighborClasses = new Set<TerrainClass>();
@@ -199,7 +199,7 @@ export const resolveTerrainCell = ({
       debug: {
         fromClass,
         toClass: fromClass,
-        mode: "autotile-derived",
+        mode: 'autotile-derived',
       },
       diagnostics,
     };
@@ -224,13 +224,7 @@ export const resolveTerrainCell = ({
     const rule = classRegistry.ruleForId(transition.ruleId);
     const mode = resolveTransitionMode(transition, rule, classRegistry);
     const mask = computeTransitionMask(neighbors, toClass, rule);
-    const transitionOverlays = resolveOverlayTiles(
-      transition,
-      mode,
-      mask,
-      classRegistry,
-      rule,
-    );
+    const transitionOverlays = resolveOverlayTiles(transition, mode, mask, classRegistry, rule);
 
     overlays.push(...transitionOverlays);
 

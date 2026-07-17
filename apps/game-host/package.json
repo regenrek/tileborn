@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/game-host",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -17,6 +17,10 @@
     "./local": {
       "types": "./dist/local/launcher.d.ts",
       "default": "./dist/local/launcher.js"
+    },
+    "./behavior-node": {
+      "types": "./dist/behavior/node/index.d.ts",
+      "default": "./dist/behavior/node/index.js"
     }
   },
   "scripts": {
@@ -28,6 +32,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "verify:bundled-worker": "node scripts/verify-bundled-worker.mjs",
     "build": "tsc -b tsconfig.json --force && node scripts/bundle-worker.mjs"
   },
   "dependencies": {
@@ -36,8 +41,8 @@
     "@tileborne/runtime": "workspace:*",
     "effect": "4.0.0-beta.70",
     "esbuild": "0.25.5",
-    "hono": "4.12.18",
-    "miniflare": "4.20250525.1",
+    "hono": "4.12.23",
+    "miniflare": "4.20260603.0",
     "msgpackr": "2.0.1"
   },
   "devDependencies": {
@@ -48,7 +53,7 @@
     "alchemy": "0.93.7",
     "typescript": "6.0.3",
     "vitest": "4.1.7",
-    "wrangler": "4.19.1"
+    "wrangler": "4.98.0"
   },
   "license": "MIT"
 }

@@ -1,4 +1,4 @@
-export type DeterministicClockMode = "virtual" | "system";
+export type DeterministicClockMode = 'virtual' | 'system';
 
 export interface DeterministicClockOptions {
   readonly mode?: DeterministicClockMode;
@@ -22,7 +22,7 @@ export class DeterministicClock {
   private lastObservedMs: number;
 
   constructor(options: DeterministicClockOptions = {}) {
-    this.mode = options.mode ?? "virtual";
+    this.mode = options.mode ?? 'virtual';
     this.systemNow = options.now ?? (() => performance.now());
     this.startMs = options.startMs ?? 0;
     this.currentMs = this.startMs;
@@ -32,14 +32,15 @@ export class DeterministicClock {
   }
 
   now(): number {
-    const next = this.mode === "system" ? Math.max(this.lastObservedMs, this.systemNow()) : this.currentMs;
+    const next =
+      this.mode === 'system' ? Math.max(this.lastObservedMs, this.systemNow()) : this.currentMs;
     this.lastObservedMs = next;
     return next;
   }
 
   advance(ms: number): number {
     if (!Number.isFinite(ms) || ms < 0) {
-      throw new RangeError("clock advance must be a finite non-negative number");
+      throw new RangeError('clock advance must be a finite non-negative number');
     }
     this.currentMs += ms;
     this.lastObservedMs = Math.max(this.lastObservedMs, this.currentMs);

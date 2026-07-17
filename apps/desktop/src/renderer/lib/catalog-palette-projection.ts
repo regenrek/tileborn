@@ -118,7 +118,8 @@ const compareItems = (
  */
 export const projectCatalogPaletteActions = (
   entries: readonly GameObjectCatalogEntryView[],
-): readonly PaletteActionItem[] => groupCatalogPaletteActions(entries).flatMap((group) => group.items);
+): readonly PaletteActionItem[] =>
+  groupCatalogPaletteActions(entries).flatMap((group) => group.items);
 
 /**
  * Project the resolved catalog `objectTypes` into palette actions grouped by
@@ -130,7 +131,10 @@ export const groupCatalogPaletteActions = (
 ): readonly CatalogPaletteGroup[] => {
   const byFamily = new Map<
     string,
-    { readonly label: string; readonly items: { item: PaletteActionItem; category: string | undefined }[] }
+    {
+      readonly label: string;
+      readonly items: { item: PaletteActionItem; category: string | undefined }[];
+    }
   >();
 
   for (const entry of entries) {

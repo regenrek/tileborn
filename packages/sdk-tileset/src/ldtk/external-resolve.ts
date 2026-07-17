@@ -1,4 +1,4 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 import {
   directoryName,
   isAbsoluteFilesystemPath,
@@ -7,7 +7,7 @@ import {
   resolveAbsoluteProjectRoot,
   resolvePath,
   trimTrailingSlash,
-} from "../tiled/external-resolve.js";
+} from '../tiled/external-resolve.js';
 
 export type FileReadResult =
   | { readonly ok: true; readonly text: string }
@@ -16,16 +16,16 @@ export type FileReadResult =
 /** Injected relative-path reader used for external LDtk level files. */
 export type FileReader = (relativePath: string) => FileReadResult;
 
-const normalizeSlashes = (value: string): string => value.replace(/\\/g, "/");
+const normalizeSlashes = (value: string): string => value.replace(/\\/g, '/');
 
 /** Join a project base directory with a relative LDtk path. */
 export const joinProjectRelativePath = (projectPath: string, relativePath: string): string => {
-  const base = normalizeSlashes(projectPath).replace(/\/[^/]+$/, "");
-  const rel = normalizeSlashes(relativePath).replace(/^\.\//, "");
-  if (rel.startsWith("/")) {
+  const base = normalizeSlashes(projectPath).replace(/\/[^/]+$/, '');
+  const rel = normalizeSlashes(relativePath).replace(/^\.\//, '');
+  if (rel.startsWith('/')) {
     return rel;
   }
-  return `${base}/${rel}`.replace(/\/+/g, "/");
+  return `${base}/${rel}`.replace(/\/+/g, '/');
 };
 
 /** Read and parse JSON from a project-relative path via an injected reader. */
@@ -61,10 +61,10 @@ const blockedDiagnostic = (
   message: string,
   resolvedPath: string,
 ): ParseDiagnostic => ({
-  _tag: "LdtkExternalRefBlocked",
+  _tag: 'LdtkExternalRefBlocked',
   path: `${projectPath}/${externalRelPath}`,
   message,
-  severity: "error",
+  severity: 'error',
   externalRelPath,
   resolvedPath,
 });
@@ -73,13 +73,13 @@ const blockedDiagnostic = (
 export const resolveExternalLevel = (
   input: ResolveExternalLevelInput,
 ): ResolveExternalLevelResult => {
-  if (input.projectPath.trim() === "") {
+  if (input.projectPath.trim() === '') {
     return {
       ok: false,
       diagnostic: blockedDiagnostic(
         input.externalRelPath,
         input.projectPath,
-        "LDtk project path must not be empty",
+        'LDtk project path must not be empty',
         input.projectPath,
       ),
     };
@@ -92,7 +92,7 @@ export const resolveExternalLevel = (
       diagnostic: blockedDiagnostic(
         input.externalRelPath,
         input.projectPath,
-        "External level reference must not contain path traversal segments",
+        'External level reference must not contain path traversal segments',
         normalizedSource.path,
       ),
     };
@@ -104,7 +104,7 @@ export const resolveExternalLevel = (
       diagnostic: blockedDiagnostic(
         input.externalRelPath,
         input.projectPath,
-        "External level reference must be relative to the LDtk project",
+        'External level reference must be relative to the LDtk project',
         normalizedSource.path,
       ),
     };
@@ -124,7 +124,7 @@ export const resolveExternalLevel = (
       diagnostic: blockedDiagnostic(
         input.externalRelPath,
         input.projectPath,
-        "External level reference must resolve to an absolute path inside the LDtk project root",
+        'External level reference must resolve to an absolute path inside the LDtk project root',
         resolved,
       ),
     };
@@ -136,7 +136,7 @@ export const resolveExternalLevel = (
       diagnostic: blockedDiagnostic(
         input.externalRelPath,
         input.projectPath,
-        "External level reference resolves outside the LDtk project root",
+        'External level reference resolves outside the LDtk project root',
         resolved,
       ),
     };
@@ -148,10 +148,10 @@ export const resolveExternalLevel = (
     return {
       ok: false,
       diagnostic: {
-        _tag: "LdtkExternalLevelMissing",
+        _tag: 'LdtkExternalLevelMissing',
         path: `${input.projectPath}/${safeRelativePath}`,
         message: error,
-        severity: "error",
+        severity: 'error',
         externalRelPath: safeRelativePath,
       },
     };

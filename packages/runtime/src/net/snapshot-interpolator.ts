@@ -62,7 +62,7 @@ export class SnapshotInterpolator {
 
   setInterpolationDelayMs(ms: number): void {
     if (!Number.isFinite(ms) || ms < 0) {
-      throw new RangeError("Interpolation delay must be a non-negative finite number");
+      throw new RangeError('Interpolation delay must be a non-negative finite number');
     }
     this.interpolationDelayMs = ms;
   }
@@ -71,9 +71,14 @@ export class SnapshotInterpolator {
     this.entries = [];
   }
 
-  private interpolate(previous: SnapshotEntry, current: SnapshotEntry, targetTickMs: number): InterpolatedFullState {
+  private interpolate(
+    previous: SnapshotEntry,
+    current: SnapshotEntry,
+    targetTickMs: number,
+  ): InterpolatedFullState {
     const durationMs = current.serverTickMs - previous.serverTickMs;
-    const alpha = durationMs <= 0 ? 1 : clampAlpha((targetTickMs - previous.serverTickMs) / durationMs);
+    const alpha =
+      durationMs <= 0 ? 1 : clampAlpha((targetTickMs - previous.serverTickMs) / durationMs);
     return {
       previous: previous.fullState,
       current: current.fullState,

@@ -1,6 +1,6 @@
-import { Cause, Effect, Option, Queue, Ref, Stream } from "effect";
+import { Cause, Effect, Option, Queue, Ref, Stream } from 'effect';
 
-import { TransportError } from "./protocol.js";
+import { TransportError } from './protocol.js';
 
 export const NORMAL_CLOSE_CODE = 1000;
 export const KICKED_CLOSE_CODE = 4001;
@@ -10,12 +10,12 @@ export const DEFAULT_RECONNECT_ATTEMPT_CAP = 6;
 export type RuntimeTransportError = TransportError;
 
 export interface TransportMessageEvent {
-  readonly _tag: "message";
+  readonly _tag: 'message';
   readonly data: Uint8Array;
 }
 
 export interface TransportCloseEvent {
-  readonly _tag: "close";
+  readonly _tag: 'close';
   readonly code: number;
   readonly reason?: string;
   readonly wasClean: boolean;
@@ -41,7 +41,9 @@ export interface BrowserWebSocketTransportOptions {
 export const isReconnectableCloseCode = (code: number): boolean =>
   code !== NORMAL_CLOSE_CODE && code !== KICKED_CLOSE_CODE && code !== MATCH_ENDED_CLOSE_CODE;
 
-export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransportOptions = {}): Transport => {
+export const makeBrowserWebSocketTransport = (
+  options: BrowserWebSocketTransportOptions = {},
+): Transport => {
   const queue = Effect.runSync(Queue.unbounded<TransportEvent, TransportError | Cause.Done>());
   const sessionAttempts = Ref.makeUnsafe(0);
   const pendingHealthAck = Ref.makeUnsafe(true);
@@ -62,7 +64,7 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
   const openSocket = (url: string): Promise<void> =>
     new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
-      ws.binaryType = "arraybuffer";
+      ws.binaryType = 'arraybuffer';
       socket = ws;
       lastUrl = url;
 
@@ -79,11 +81,11 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
       ws.onmessage = (event: MessageEvent<ArrayBuffer | Blob>) => {
         Effect.runSync(markHealthy());
         if (event.data instanceof ArrayBuffer) {
-          Queue.offerUnsafe(queue, { _tag: "message", data: new Uint8Array(event.data) });
+          Queue.offerUnsafe(queue, { _tag: 'message', data: new Uint8Array(event.data) });
           return;
         }
         void event.data.arrayBuffer().then((buffer) => {
-          Queue.offerUnsafe(queue, { _tag: "message", data: new Uint8Array(buffer) });
+          Queue.offerUnsafe(queue, { _tag: 'message', data: new Uint8Array(buffer) });
         });
       };
       ws.onclose = (event) => {
@@ -91,7 +93,7 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
           socket = undefined;
         }
         Queue.offerUnsafe(queue, {
-          _tag: "close",
+          _tag: 'close',
           code: event.code,
           reason: event.reason,
           wasClean: event.wasClean,
@@ -110,7 +112,7 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
           cause instanceof TransportError
             ? cause
             : new TransportError({
-                message: "websocket connect failed",
+                message: 'websocket connect failed',
                 code: Option.none(),
                 cause: Option.some(cause),
               }),
@@ -120,19 +122,22 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         try: () => {
           if (!socket || socket.readyState !== WebSocket.OPEN) {
             throw new TransportError({
-              message: "websocket is not open",
+              message: 'websocket is not open',
               code: Option.none(),
               cause: Option.none(),
             });
           }
-          const body = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+          const body = data.buffer.slice(
+            data.byteOffset,
+            data.byteOffset + data.byteLength,
+          ) as ArrayBuffer;
           socket.send(body);
         },
         catch: (cause) =>
           cause instanceof TransportError
             ? cause
             : new TransportError({
-                message: "websocket send failed",
+                message: 'websocket send failed',
                 code: Option.none(),
                 cause: Option.some(cause),
               }),
@@ -146,7 +151,7 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         },
         catch: (cause) =>
           new TransportError({
-            message: "websocket close failed",
+            message: 'websocket close failed',
             code: Option.some(code),
             cause: Option.some(cause),
           }),
@@ -156,14 +161,14 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         const nextAttempt = yield* Ref.updateAndGet(sessionAttempts, (attempts) => attempts + 1);
         if (nextAttempt > reconnectAttemptCap) {
           yield* new TransportError({
-            message: "reconnect attempts exhausted",
+            message: 'reconnect attempts exhausted',
             code: Option.none(),
             cause: Option.none(),
           });
         }
         if (!reconnectToken) {
           yield* new TransportError({
-            message: "reconnectToken is required for reconnect",
+            message: 'reconnectToken is required for reconnect',
             code: Option.none(),
             cause: Option.none(),
           });
@@ -171,15 +176,18 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         const response = yield* Effect.tryPromise({
           try: () =>
             fetchImpl(`/api/matches/${encodeURIComponent(roomId)}/reconnect`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ reconnectToken }),
             }),
           catch: (cause) =>
             cause instanceof TransportError
               ? cause
               : new TransportError({
-                  message: lastUrl === undefined ? "reconnect failed" : `reconnect failed after ${lastUrl}`,
+                  message:
+                    lastUrl === undefined
+                      ? 'reconnect failed'
+                      : `reconnect failed after ${lastUrl}`,
                   code: Option.none(),
                   cause: Option.some(cause),
                 }),
@@ -192,10 +200,14 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
           });
         }
         const body = (yield* Effect.tryPromise({
-          try: () => response.json() as Promise<{ readonly wsUrl?: string; readonly reconnectToken?: string }>,
+          try: () =>
+            response.json() as Promise<{
+              readonly wsUrl?: string;
+              readonly reconnectToken?: string;
+            }>,
           catch: (cause) =>
             new TransportError({
-              message: "reconnect response decode failed",
+              message: 'reconnect response decode failed',
               code: Option.none(),
               cause: Option.some(cause),
             }),
@@ -203,7 +215,7 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         const wsUrl = body.wsUrl;
         if (wsUrl === undefined) {
           yield* new TransportError({
-            message: "reconnect response missing wsUrl",
+            message: 'reconnect response missing wsUrl',
             code: Option.none(),
             cause: Option.none(),
           });
@@ -211,14 +223,17 @@ export const makeBrowserWebSocketTransport = (options: BrowserWebSocketTransport
         }
         reconnectToken = body.reconnectToken ?? reconnectToken;
         yield* Ref.set(pendingHealthAck, true);
-        socket?.close(NORMAL_CLOSE_CODE, "reconnecting");
+        socket?.close(NORMAL_CLOSE_CODE, 'reconnecting');
         yield* Effect.tryPromise({
           try: () => openSocket(wsUrl),
           catch: (cause) =>
             cause instanceof TransportError
               ? cause
               : new TransportError({
-                  message: lastUrl === undefined ? "reconnect failed" : `reconnect failed after ${lastUrl}`,
+                  message:
+                    lastUrl === undefined
+                      ? 'reconnect failed'
+                      : `reconnect failed after ${lastUrl}`,
                   code: Option.none(),
                   cause: Option.some(cause),
                 }),

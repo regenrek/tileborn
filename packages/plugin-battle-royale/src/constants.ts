@@ -1,12 +1,16 @@
-import { gameObjectTypeIdForKey } from "@tileborne/core";
+import { gameObjectTypeIdForKey } from '@tileborne/core';
+import { BattleRoyaleAbility } from '@tileborne/ipc-contracts/protocols/battle-royale';
 
 /**
  * Human-readable object-kind keys (stable across persistence / Tiled / palette
  * brushes). These are the keys the catalog derives type ids from.
  */
-export const SPAWN_POINT_KEY = "spawn-point";
-export const SHRINK_ZONE_ANCHOR_KEY = "shrink-zone-anchor";
-export const LOOT_CRATE_KEY = "loot-crate";
+export const SPAWN_POINT_KEY = 'spawn-point';
+export const SHRINK_ZONE_ANCHOR_KEY = 'shrink-zone-anchor';
+export const LOOT_CRATE_KEY = 'loot-crate';
+export const TRAP_KEY = 'trap';
+export const DECOY_KEY = 'decoy';
+export const BARRIER_KEY = 'barrier';
 
 /**
  * Catalog {@link GameObjectTypeId}s for BR's object types. `MapObject.kind`
@@ -16,6 +20,22 @@ export const LOOT_CRATE_KEY = "loot-crate";
 export const SPAWN_POINT_KIND = gameObjectTypeIdForKey(SPAWN_POINT_KEY);
 export const SHRINK_ZONE_ANCHOR_KIND = gameObjectTypeIdForKey(SHRINK_ZONE_ANCHOR_KEY);
 export const LOOT_CRATE_KIND = gameObjectTypeIdForKey(LOOT_CRATE_KEY);
+export const TRAP_KIND = gameObjectTypeIdForKey(TRAP_KEY);
+export const DECOY_KIND = gameObjectTypeIdForKey(DECOY_KEY);
+export const BARRIER_KIND = gameObjectTypeIdForKey(BARRIER_KEY);
+
+/**
+ * The runtime-global overlay slots BR consumes (entity-first, post visual-role
+ * hard cut): catalog entities claim these via an `overlay-visual` component;
+ * the plugin ships default claimant entities in `schemas/game-object-catalog.json`
+ * and a project-authored claimant overrides the plugin's (core derivation
+ * precedence).
+ */
+export const BR_OVERLAY_SLOTS = {
+  shield: 'shield',
+  shadow: 'shadow',
+  hazard: 'hazard',
+} as const;
 
 export const MIN_SPAWN_POINTS = 4;
 export const REQUIRED_SHRINK_ANCHORS = 1;
@@ -26,15 +46,22 @@ export const DEFAULT_LOOT_TABLE: readonly {
   readonly tier: string;
   readonly weight: number;
 }[] = [
-  { itemKind: "health-pack", tier: "common", weight: 40 },
-  { itemKind: "ammo-box", tier: "common", weight: 35 },
-  { itemKind: "armor-vest", tier: "rare", weight: 15 },
-  { itemKind: "weapon-crate", tier: "epic", weight: 10 },
+  { itemKind: 'health-pack', tier: 'common', weight: 40 },
+  { itemKind: 'ammo-box', tier: 'common', weight: 35 },
+  { itemKind: 'armor-vest', tier: 'rare', weight: 15 },
+  { itemKind: 'weapon-crate', tier: 'epic', weight: 10 },
 ];
 
 export const LOOT_PICKUP_RADIUS = 1.5;
 
-export const PLUGIN_ID = "@tileborne-plugins/battle-royale" as const;
+export const PLUGIN_ID = '@tileborne-plugins/battle-royale' as const;
+
+/**
+ * Branded id of Battle Royale's single primary weapon (`weapon:<uuid>`).
+ * Lives in renderer-safe constants (no simulation import) so the projector
+ * bridge can reference the default weapon without pulling weapon balance code.
+ */
+export const BR_PRIMARY_WEAPON_ID = 'weapon:00000000-0000-4000-8000-000000000001';
 
 /** Default player cap from declarative room-rules panel (`panels/index.json`). */
 export const DEFAULT_MAX_PLAYERS = 32;
@@ -83,6 +110,83 @@ export const PROJECTILE = {
   radius: 4,
   /** Numbered weapon slots accepted by runtime input; clients send 1..N. */
   weaponSlotCount: 3,
+  /** Loaded rounds before the weapon must reload from inventory reserve. */
+  magazineSize: 3,
+  /** Simulation ticks a reload takes before reserve rounds enter the magazine. */
+  reloadTicks: 12,
+  /** Starting reserve rounds carried in inventory, separate from the loaded magazine. */
+  initialAmmoReserve: 6,
+} as const;
+
+export const INVENTORY = {
+  /** Max carried non-ammo inventory items before pickup overflow drops the oldest item. */
+  capacity: 5,
+  /** Rounds granted by an ammo-box pickup. */
+  ammoPickupAmount: 3,
+  /** Health restored by a health-pack pickup. */
+  healthPackAmount: 25,
+  /** Armor payload granted by an armor-vest pickup. */
+  armorDurability: 100,
+  armorMitigation: 0.25,
+} as const;
+
+export const ABILITY = {
+  dash: {
+    id: BattleRoyaleAbility.dash,
+    cooldownTicks: 18,
+    distance: 96,
+  },
+  shieldBurst: {
+    id: BattleRoyaleAbility.shieldBurst,
+    cooldownTicks: 80,
+    durationTicks: 90,
+    shieldAmount: 50,
+  },
+  scanPulse: {
+    id: BattleRoyaleAbility.scanPulse,
+    cooldownTicks: 70,
+    durationTicks: 24,
+    revealTicks: 70,
+    radius: 220,
+  },
+  trap: {
+    id: BattleRoyaleAbility.trap,
+    cooldownTicks: 90,
+    armTicks: 8,
+    durationTicks: 220,
+    radius: 34,
+    deployDistance: 28,
+    slowTicks: 60,
+    stunTicks: 10,
+    damageTicks: 60,
+  },
+  decoy: {
+    id: BattleRoyaleAbility.decoy,
+    cooldownTicks: 110,
+    durationTicks: 140,
+    deployDistance: 36,
+    radius: 16,
+  },
+} as const;
+
+export const STATUS_EFFECT = {
+  slow: {
+    id: 'slow',
+    movementMultiplier: 0.5,
+  },
+  stun: {
+    id: 'stun',
+  },
+  reveal: {
+    id: 'reveal',
+  },
+  shield: {
+    id: 'shield',
+  },
+  damageOverTime: {
+    id: 'damage-over-time',
+    damagePerTick: 1,
+  },
 } as const;
 
 export const DAMAGE = {

@@ -91,9 +91,7 @@ describe('DuplicatePackDialog', () => {
 
   it('shows Replace/Keep both prompt when duplicate-id diagnostic is present', async () => {
     jobsGetMock.mockResolvedValue(completedJob('pack-x'));
-    getPackMock.mockResolvedValue(
-      packWithDuplicate('pack-x', { integrityHashesMatch: true }),
-    );
+    getPackMock.mockResolvedValue(packWithDuplicate('pack-x', { integrityHashesMatch: true }));
 
     render(<DuplicatePackDialog />, { wrapper });
     useEditorUiStore.setState({ pendingImportJobId: 'job:00000000-0000-4000-8000-000000000001' });
@@ -127,9 +125,7 @@ describe('DuplicatePackDialog', () => {
 
   it('Replace path calls removePack(existingPackId)', async () => {
     jobsGetMock.mockResolvedValue(completedJob('pack-x'));
-    getPackMock.mockResolvedValue(
-      packWithDuplicate('pack-x', { existingPackId: 'pack-existing' }),
-    );
+    getPackMock.mockResolvedValue(packWithDuplicate('pack-x', { existingPackId: 'pack-existing' }));
 
     render(<DuplicatePackDialog />, { wrapper });
     useEditorUiStore.setState({ pendingImportJobId: 'job:00000000-0000-4000-8000-000000000001' });

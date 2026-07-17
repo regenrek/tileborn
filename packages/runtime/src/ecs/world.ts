@@ -1,13 +1,13 @@
-import { Option, Schema } from "effect";
+import { Option, Schema } from 'effect';
 
-import type { ComponentDefinition, ComponentFieldType } from "./components.js";
+import type { ComponentDefinition, ComponentFieldType } from './components.js';
 
 const SLOT_BITS = 16;
 const SLOT_MASK = 0xffff;
 const MAX_GENERATION = 0xffff;
 const DEFAULT_CAPACITY = 1024;
 
-export const EntityIdSchema = Schema.Number.pipe(Schema.brand("EntityId"));
+export const EntityIdSchema = Schema.Number.pipe(Schema.brand('EntityId'));
 export type EntityId = typeof EntityIdSchema.Type;
 
 type NumericArray = Float32Array | Float64Array | Int32Array | Uint32Array | Int8Array | Uint8Array;
@@ -90,7 +90,10 @@ export class World {
     this.masks[slot] = this.maskOfSlot(slot) & ~registered.bit;
   }
 
-  getComponent<T extends object>(entity: EntityId, component: ComponentDefinition<T>): Option.Option<T> {
+  getComponent<T extends object>(
+    entity: EntityId,
+    component: ComponentDefinition<T>,
+  ): Option.Option<T> {
     const slot = this.slotForRead(entity);
     if (slot === undefined) {
       return Option.none();
@@ -115,7 +118,9 @@ export class World {
     components: T,
     callback: (
       entity: EntityId,
-      ...values: { [K in keyof T]: T[K] extends ComponentDefinition<infer C> ? ComponentAccess<C> : never }
+      ...values: {
+        [K in keyof T]: T[K] extends ComponentDefinition<infer C> ? ComponentAccess<C> : never;
+      }
     ) => void,
   ): void {
     const registered = components.map((component) => this.register(component));
@@ -197,7 +202,9 @@ export class World {
     }
   }
 
-  private createColumns<T extends object>(definition: ComponentDefinition<T>): { readonly [K in keyof T]: NumericArray } {
+  private createColumns<T extends object>(
+    definition: ComponentDefinition<T>,
+  ): { readonly [K in keyof T]: NumericArray } {
     const columns: Partial<Record<keyof T, NumericArray>> = {};
     for (const key of Object.keys(definition.fields) as Array<keyof T>) {
       columns[key] = this.createArray(definition.fields[key], this.capacity);
@@ -216,22 +223,26 @@ export class World {
 
   private createArray(type: ComponentFieldType, capacity: number): NumericArray {
     switch (type) {
-      case "f32":
+      case 'f32':
         return new Float32Array(capacity);
-      case "f64":
+      case 'f64':
         return new Float64Array(capacity);
-      case "i32":
+      case 'i32':
         return new Int32Array(capacity);
-      case "u32":
+      case 'u32':
         return new Uint32Array(capacity);
-      case "i8":
+      case 'i8':
         return new Int8Array(capacity);
-      case "u8":
+      case 'u8':
         return new Uint8Array(capacity);
     }
   }
 
-  private writeComponent<T extends object>(component: RegisteredComponent<T>, slot: number, value: T): void {
+  private writeComponent<T extends object>(
+    component: RegisteredComponent<T>,
+    slot: number,
+    value: T,
+  ): void {
     for (const key of Object.keys(component.definition.fields) as Array<keyof T>) {
       component.columns[key][slot] = Number(value[key]);
     }
@@ -243,7 +254,10 @@ export class World {
     }
   }
 
-  private clearRegisteredComponentSlot<T extends object>(component: RegisteredComponent<T>, slot: number): void {
+  private clearRegisteredComponentSlot<T extends object>(
+    component: RegisteredComponent<T>,
+    slot: number,
+  ): void {
     for (const key of Object.keys(component.definition.fields) as Array<keyof T>) {
       component.columns[key][slot] = 0;
     }
@@ -258,13 +272,18 @@ export class World {
     return Schema.decodeUnknownSync(codec)(value);
   }
 
-  private accessorFor<T extends object>(component: RegisteredComponent<T>, entity: EntityId): ComponentAccess<T> {
+  private accessorFor<T extends object>(
+    component: RegisteredComponent<T>,
+    entity: EntityId,
+  ): ComponentAccess<T> {
     const accessor = this.cursorFor(component);
     accessor.setEntity(entity);
     return accessor.value;
   }
 
-  private cursorFor<T extends object>(component: RegisteredComponent<T>): {
+  private cursorFor<T extends object>(
+    component: RegisteredComponent<T>,
+  ): {
     readonly value: ComponentAccess<T>;
     setEntity: (entity: EntityId) => void;
   } {
@@ -342,7 +361,7 @@ export class World {
 
 /** Raised when an entity handle no longer matches the live slot generation. */
 export class EntityHandleStaleError extends Schema.TaggedErrorClass<EntityHandleStaleError>()(
-  "EntityHandleStaleError",
+  'EntityHandleStaleError',
   {
     slotIndex: Schema.Number,
     expectedGeneration: Schema.Number,

@@ -1,4 +1,4 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 
 import {
   isSupportedTilesetSource,
@@ -6,16 +6,16 @@ import {
   resolveExternalPath,
   resolvePath,
   tilesetIdFromSource,
-} from "./external-resolve.js";
-import { decodeTiledGid, isIdentityTiledTransform, locateTiledGid } from "./gid.js";
-import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
+} from './external-resolve.js';
+import { decodeTiledGid, isIdentityTiledTransform, locateTiledGid } from './gid.js';
+import { normalizeTiledTilesetImageAssetPaths } from './image-paths.js';
 import {
   primitivePropertyValue,
   unsupportedClassPropertyFeaturesForMap,
   unsupportedClassPropertyFeaturesForTileset,
   unsupportedFeature,
   unsupportedFeatureDiagnostic,
-} from "./support-policy.js";
+} from './support-policy.js';
 import {
   childNode,
   convertTiledXmlMap,
@@ -25,10 +25,14 @@ import {
   toArray,
   xmlMapRoot,
   xmlTilesetRoot,
-} from "./xml-common.js";
-import { normalizeJsonTileLayers, validateTiledJsonMap, validateTiledJsonTileset } from "./validate.js";
-import { buildTilesetWindows } from "./compile-map.js";
-import { buildTiledSourceInventory } from "./source-inventory.js";
+} from './xml-common.js';
+import {
+  normalizeJsonTileLayers,
+  validateTiledJsonMap,
+  validateTiledJsonTileset,
+} from './validate.js';
+import { buildTilesetWindows } from './compile-map.js';
+import { buildTiledSourceInventory } from './source-inventory.js';
 import type {
   TiledExternalReader,
   TiledImportScan,
@@ -48,8 +52,8 @@ import type {
   TiledScanTileset,
   TiledScanUnsupportedFeature,
   TiledSourceInventoryRule,
-} from "./types.js";
-import type { TiledInventoryTilesetInput } from "./source-inventory.js";
+} from './types.js';
+import type { TiledInventoryTilesetInput } from './source-inventory.js';
 
 export type TiledScanSourceInput = {
   readonly sourcePath: string;
@@ -59,7 +63,7 @@ export type TiledScanSourceInput = {
 };
 
 type LoadedTileset = {
-  readonly ref: TiledJsonMap["tilesets"][number];
+  readonly ref: TiledJsonMap['tilesets'][number];
   readonly tileset: TiledJsonTileset;
   readonly source?: string;
 };
@@ -69,23 +73,26 @@ const inventoryTilesetInput = ({ tileset, source }: LoadedTileset): TiledInvento
 
 type DirectoryEntry = {
   readonly path: string;
-  readonly kind: "file" | "directory";
+  readonly kind: 'file' | 'directory';
 };
 
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
+): string | number | boolean | undefined =>
+  primitivePropertyValue(properties?.find((property) => property.name === name));
 
-const boolProperty = (properties: readonly TiledJsonProperty[] | undefined, name: string): boolean =>
-  propertyValue(properties, name) === true;
+const boolProperty = (
+  properties: readonly TiledJsonProperty[] | undefined,
+  name: string,
+): boolean => propertyValue(properties, name) === true;
 
 const numberProperty = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
 ): number | undefined => {
   const value = propertyValue(properties, name);
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 
 const stringProperty = (
@@ -93,33 +100,49 @@ const stringProperty = (
   name: string,
 ): string | undefined => {
   const value = propertyValue(properties, name);
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 };
 
-const categoryId = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9.-]+/g, "-");
+const categoryId = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-');
 
 const collectCategoryValues = (input: {
   readonly class?: string | undefined;
   readonly type?: string | undefined;
   readonly properties?: readonly TiledJsonProperty[] | undefined;
-}): readonly { readonly label: string; readonly source: TiledScanCategory["source"]; readonly confidence: number }[] => [
-  ...(input.class ? [{ label: input.class, source: "class" as const, confidence: 0.9 }] : []),
-  ...(input.type ? [{ label: input.type, source: "type" as const, confidence: 0.85 }] : []),
-  ...(stringProperty(input.properties, "category")
-    ? [{ label: stringProperty(input.properties, "category")!, source: "property" as const, confidence: 0.75 }]
-    : []),
-  ...(stringProperty(input.properties, "tileborne.category")
+}): readonly {
+  readonly label: string;
+  readonly source: TiledScanCategory['source'];
+  readonly confidence: number;
+}[] => [
+  ...(input.class ? [{ label: input.class, source: 'class' as const, confidence: 0.9 }] : []),
+  ...(input.type ? [{ label: input.type, source: 'type' as const, confidence: 0.85 }] : []),
+  ...(stringProperty(input.properties, 'category')
     ? [
         {
-          label: stringProperty(input.properties, "tileborne.category")!,
-          source: "tileborne-hint" as const,
+          label: stringProperty(input.properties, 'category')!,
+          source: 'property' as const,
+          confidence: 0.75,
+        },
+      ]
+    : []),
+  ...(stringProperty(input.properties, 'tileborne.category')
+    ? [
+        {
+          label: stringProperty(input.properties, 'tileborne.category')!,
+          source: 'tileborne-hint' as const,
           confidence: 1,
         },
       ]
     : []),
 ];
 
-const parseJsonMap = (raw: string): { readonly map?: TiledJsonMap; readonly diagnostics: readonly ParseDiagnostic[] } => {
+const parseJsonMap = (
+  raw: string,
+): { readonly map?: TiledJsonMap; readonly diagnostics: readonly ParseDiagnostic[] } => {
   try {
     const validated = validateTiledJsonMap(JSON.parse(raw) as unknown);
     return validated.ok
@@ -129,30 +152,40 @@ const parseJsonMap = (raw: string): { readonly map?: TiledJsonMap; readonly diag
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: `Failed to parse TMJ JSON: ${(error as Error).message}`,
-          severity: "error",
-          format: "tmj",
+          severity: 'error',
+          format: 'tmj',
         },
       ],
     };
   }
 };
 
-const collectXmlLayerEntries = (node: Record<string, unknown>): readonly { readonly kind: string; readonly value: unknown }[] => [
-  ...toArray(node.layer).map((value) => ({ kind: "layer", value })),
-  ...toArray(node.objectgroup).map((value) => ({ kind: "objectgroup", value })),
-  ...toArray(node.imagelayer).map((value) => ({ kind: "imagelayer", value })),
-  ...toArray(node.group).map((value) => ({ kind: "group", value })),
+const collectXmlLayerEntries = (
+  node: Record<string, unknown>,
+): readonly { readonly kind: string; readonly value: unknown }[] => [
+  ...toArray(node.layer).map((value) => ({ kind: 'layer', value })),
+  ...toArray(node.objectgroup).map((value) => ({ kind: 'objectgroup', value })),
+  ...toArray(node.imagelayer).map((value) => ({ kind: 'imagelayer', value })),
+  ...toArray(node.group).map((value) => ({ kind: 'group', value })),
 ];
 
-const parseXmlMap = (raw: string): { readonly map?: TiledJsonMap; readonly diagnostics: readonly ParseDiagnostic[] } => {
+const parseXmlMap = (
+  raw: string,
+): { readonly map?: TiledJsonMap; readonly diagnostics: readonly ParseDiagnostic[] } => {
   const parsed = parseTiledXmlDocument(raw);
   if (!parsed.ok) {
     return {
       diagnostics: [
-        { _tag: "TiledParseError", path: "/", message: parsed.error, severity: "error", format: "tmx" },
+        {
+          _tag: 'TiledParseError',
+          path: '/',
+          message: parsed.error,
+          severity: 'error',
+          format: 'tmx',
+        },
       ],
     };
   }
@@ -161,11 +194,11 @@ const parseXmlMap = (raw: string): { readonly map?: TiledJsonMap; readonly diagn
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
-          message: "Tiled XML map is missing <map> root",
-          severity: "error",
-          format: "tmx",
+          _tag: 'TiledParseError',
+          path: '/',
+          message: 'Tiled XML map is missing <map> root',
+          severity: 'error',
+          format: 'tmx',
         },
       ],
     };
@@ -174,31 +207,39 @@ const parseXmlMap = (raw: string): { readonly map?: TiledJsonMap; readonly diagn
     const base = convertTiledXmlMap(root);
     const layers = collectXmlLayerEntries(root).map((entry): TiledJsonAnyLayer => {
       const node = entry.value as Record<string, unknown>;
-      if (entry.kind === "objectgroup") {
+      if (entry.kind === 'objectgroup') {
         return convertTiledXmlObjectGroup(node) as TiledJsonAnyLayer;
       }
-      if (entry.kind === "group") {
+      if (entry.kind === 'group') {
         return {
-          type: "group",
-          name: String(node.name ?? "group"),
+          type: 'group',
+          name: String(node.name ?? 'group'),
           layers: collectXmlLayerEntries(node).map((child) =>
-            child.kind === "objectgroup"
-              ? (convertTiledXmlObjectGroup(child.value as Record<string, unknown>) as TiledJsonAnyLayer)
-              : ({ type: "tilelayer", name: String((child.value as { name?: unknown }).name ?? "layer"), width: 0, height: 0, data: [] } as TiledJsonAnyLayer),
+            child.kind === 'objectgroup'
+              ? (convertTiledXmlObjectGroup(
+                  child.value as Record<string, unknown>,
+                ) as TiledJsonAnyLayer)
+              : ({
+                  type: 'tilelayer',
+                  name: String((child.value as { name?: unknown }).name ?? 'layer'),
+                  width: 0,
+                  height: 0,
+                  data: [],
+                } as TiledJsonAnyLayer),
           ),
         };
       }
-      if (entry.kind === "imagelayer") {
-        const image = childNode(node.image, "image");
+      if (entry.kind === 'imagelayer') {
+        const image = childNode(node.image, 'image');
         return {
-          type: "imagelayer",
-          name: String(node.name ?? "image"),
-          image: String(image?.source ?? ""),
+          type: 'imagelayer',
+          name: String(node.name ?? 'image'),
+          image: String(image?.source ?? ''),
         } as TiledJsonAnyLayer;
       }
       return {
-        type: "tilelayer",
-        name: String(node.name ?? "layer"),
+        type: 'tilelayer',
+        name: String(node.name ?? 'layer'),
         width: Number(node.width ?? 0),
         height: Number(node.height ?? 0),
         data: [],
@@ -210,11 +251,11 @@ const parseXmlMap = (raw: string): { readonly map?: TiledJsonMap; readonly diagn
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: (error as Error).message,
-          severity: "error",
-          format: "tmx",
+          severity: 'error',
+          format: 'tmx',
         },
       ],
     };
@@ -226,51 +267,69 @@ const parseTilesetRaw = (
   source: string,
 ): { readonly tileset?: TiledJsonTileset; readonly diagnostics: readonly ParseDiagnostic[] } => {
   try {
-    if (source.toLowerCase().endsWith(".tsx")) {
+    if (source.toLowerCase().endsWith('.tsx')) {
       const parsed = parseTiledXmlDocument(raw);
       const root = parsed.ok ? xmlTilesetRoot(parsed.value) : undefined;
       if (!parsed.ok || !root) {
         return {
           diagnostics: [
             {
-              _tag: "TiledParseError",
+              _tag: 'TiledParseError',
               path: source,
-              message: parsed.ok ? "Tiled XML tileset is missing <tileset> root" : parsed.error,
-              severity: "error",
-              format: "tsx",
+              message: parsed.ok ? 'Tiled XML tileset is missing <tileset> root' : parsed.error,
+              severity: 'error',
+              format: 'tsx',
             },
           ],
         };
       }
       const validated = validateTiledJsonTileset(convertTiledXmlTileset(root));
-      return validated.ok ? { tileset: validated.tileset, diagnostics: [] } : { diagnostics: [validated.diagnostic] };
+      return validated.ok
+        ? { tileset: validated.tileset, diagnostics: [] }
+        : { diagnostics: [validated.diagnostic] };
     }
     const validated = validateTiledJsonTileset(JSON.parse(raw) as unknown);
-    return validated.ok ? { tileset: validated.tileset, diagnostics: [] } : { diagnostics: [validated.diagnostic] };
+    return validated.ok
+      ? { tileset: validated.tileset, diagnostics: [] }
+      : { diagnostics: [validated.diagnostic] };
   } catch (error) {
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: source,
           message: `Failed to parse external tileset: ${(error as Error).message}`,
-          severity: "error",
-          format: source.toLowerCase().endsWith(".tsx") ? "tsx" : "tsj",
+          severity: 'error',
+          format: source.toLowerCase().endsWith('.tsx') ? 'tsx' : 'tsj',
         },
       ],
     };
   }
 };
 
-const normalizeDirectoryEntries = (basePath: string, entries: readonly unknown[]): readonly DirectoryEntry[] =>
+const normalizeDirectoryEntries = (
+  basePath: string,
+  entries: readonly unknown[],
+): readonly DirectoryEntry[] =>
   entries.flatMap((entry): readonly DirectoryEntry[] => {
-    if (typeof entry === "string") {
-      return [{ path: resolvePath(basePath, entry), kind: entry.endsWith("/") ? "directory" : "file" }];
+    if (typeof entry === 'string') {
+      return [
+        { path: resolvePath(basePath, entry), kind: entry.endsWith('/') ? 'directory' : 'file' },
+      ];
     }
-    if (!entry || typeof entry !== "object") return [];
-    const value = entry as { readonly name?: unknown; readonly path?: unknown; readonly kind?: unknown };
-    if (value.kind !== "file" && value.kind !== "directory") return [];
-    const name = typeof value.path === "string" ? value.path : typeof value.name === "string" ? value.name : undefined;
+    if (!entry || typeof entry !== 'object') return [];
+    const value = entry as {
+      readonly name?: unknown;
+      readonly path?: unknown;
+      readonly kind?: unknown;
+    };
+    if (value.kind !== 'file' && value.kind !== 'directory') return [];
+    const name =
+      typeof value.path === 'string'
+        ? value.path
+        : typeof value.name === 'string'
+          ? value.name
+          : undefined;
     return name === undefined ? [] : [{ path: resolvePath(basePath, name), kind: value.kind }];
   });
 
@@ -285,7 +344,7 @@ const walkDirectory = async (
     visited.add(dir);
     const entries = normalizeDirectoryEntries(dir, await reader.readDirectory!(dir));
     const nested = await Promise.all(
-      entries.filter((entry) => entry.kind === "directory").map((entry) => walk(entry.path)),
+      entries.filter((entry) => entry.kind === 'directory').map((entry) => walk(entry.path)),
     );
     return [...entries, ...nested.flat()];
   };
@@ -295,7 +354,10 @@ const walkDirectory = async (
 const loadStandaloneTileset = async (
   input: TiledScanSourceInput,
   raw: string,
-): Promise<{ readonly tileset?: LoadedTileset; readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<{
+  readonly tileset?: LoadedTileset;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> => {
   const parsed = parseTilesetRaw(raw, input.sourcePath);
   if (!parsed.tileset) return { diagnostics: parsed.diagnostics };
   const normalized = normalizeTiledTilesetImageAssetPaths(parsed.tileset, {
@@ -318,7 +380,10 @@ const loadStandaloneTileset = async (
 const loadTilesets = async (
   map: TiledJsonMap,
   input: TiledScanSourceInput,
-): Promise<{ readonly tilesets: readonly LoadedTileset[]; readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<{
+  readonly tilesets: readonly LoadedTileset[];
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> => {
   const tilesets: LoadedTileset[] = [];
   const diagnostics: ParseDiagnostic[] = [];
   for (const ref of map.tilesets) {
@@ -335,11 +400,11 @@ const loadTilesets = async (
     }
     if (!input.reader || !isSupportedTilesetSource(ref.source)) {
       diagnostics.push({
-        _tag: "TiledParseError",
+        _tag: 'TiledParseError',
         path: ref.source,
-        message: "External tileset source must be .json, .tsj, or .tsx and requires a reader",
-        severity: "error",
-        format: "tmj",
+        message: 'External tileset source must be .json, .tsj, or .tsx and requires a reader',
+        severity: 'error',
+        format: 'tmj',
       });
       continue;
     }
@@ -373,7 +438,7 @@ const loadTilesets = async (
 
 const flattenLayers = (layers: readonly TiledJsonAnyLayer[]): readonly TiledJsonAnyLayer[] =>
   layers.flatMap((layer): readonly TiledJsonAnyLayer[] =>
-    layer.type === "group" ? [layer, ...flattenLayers(layer.layers)] : [layer],
+    layer.type === 'group' ? [layer, ...flattenLayers(layer.layers)] : [layer],
   );
 
 const hasUnsupportedTiledGidFlags = (rawGid: number): boolean => {
@@ -381,24 +446,43 @@ const hasUnsupportedTiledGidFlags = (rawGid: number): boolean => {
   return !isIdentityTiledTransform(decoded.transform);
 };
 
-const featureFlagsFor = (map: TiledJsonMap, tilesets: readonly LoadedTileset[]): TiledScanFeatureFlags => {
+const featureFlagsFor = (
+  map: TiledJsonMap,
+  tilesets: readonly LoadedTileset[],
+): TiledScanFeatureFlags => {
   const layers = flattenLayers(map.layers);
-  const objects = layers.flatMap((layer) => (layer.type === "objectgroup" ? [...layer.objects] : []));
+  const objects = layers.flatMap((layer) =>
+    layer.type === 'objectgroup' ? [...layer.objects] : [],
+  );
   return {
     gridAtlas: tilesets.some(({ tileset }) => tileset.columns > 0),
     imageCollection: tilesets.some(({ tileset }) => tileset.columns === 0),
     wangSets: tilesets.some(({ tileset }) => (tileset.wangsets?.length ?? 0) > 0),
-    animations: tilesets.some(({ tileset }) => (tileset.tiles ?? []).some((tile) => (tile.animation?.length ?? 0) > 0)),
-    collisionObjectgroups: tilesets.some(({ tileset }) => (tileset.tiles ?? []).some((tile) => tile.objectgroup !== undefined)),
+    animations: tilesets.some(({ tileset }) =>
+      (tileset.tiles ?? []).some((tile) => (tile.animation?.length ?? 0) > 0),
+    ),
+    collisionObjectgroups: tilesets.some(({ tileset }) =>
+      (tileset.tiles ?? []).some((tile) => tile.objectgroup !== undefined),
+    ),
     templates: objects.some((object) => object.template !== undefined),
     rotation: objects.some((object) => object.rotation !== undefined && object.rotation !== 0),
-    parallax: layers.some((layer) => layer.parallaxx !== undefined || layer.parallaxy !== undefined),
-    infiniteChunks: map.infinite === true || layers.some((layer) => layer.type === "tilelayer" && (layer.chunks?.length ?? 0) > 0),
-    unsupportedOrientation: map.orientation !== "orthogonal",
-    classProperties: unsupportedClassPropertyFeaturesForMap(map, tilesets.map(({ tileset }) => tileset)).length > 0,
+    parallax: layers.some(
+      (layer) => layer.parallaxx !== undefined || layer.parallaxy !== undefined,
+    ),
+    infiniteChunks:
+      map.infinite === true ||
+      layers.some((layer) => layer.type === 'tilelayer' && (layer.chunks?.length ?? 0) > 0),
+    unsupportedOrientation: map.orientation !== 'orthogonal',
+    classProperties:
+      unsupportedClassPropertyFeaturesForMap(
+        map,
+        tilesets.map(({ tileset }) => tileset),
+      ).length > 0,
     projectFiles: false,
     flipFlags:
-      layers.some((layer) => layer.type === "tilelayer" && layer.data.some(hasUnsupportedTiledGidFlags)) ||
+      layers.some(
+        (layer) => layer.type === 'tilelayer' && layer.data.some(hasUnsupportedTiledGidFlags),
+      ) ||
       objects.some((object) => object.gid !== undefined && hasUnsupportedTiledGidFlags(object.gid)),
   };
 };
@@ -406,7 +490,8 @@ const featureFlagsFor = (map: TiledJsonMap, tilesets: readonly LoadedTileset[]):
 const terrainClassCount = (tileset: TiledJsonTileset): number =>
   new Set(
     (tileset.tiles ?? []).flatMap((tile) => {
-      const terrain = propertyValue(tile.properties, "terrain") ?? propertyValue(tile.properties, "terrainClass");
+      const terrain =
+        propertyValue(tile.properties, 'terrain') ?? propertyValue(tile.properties, 'terrainClass');
       return terrain === undefined ? [] : [String(terrain)];
     }),
   ).size;
@@ -432,12 +517,16 @@ const tileCategories = (tileset: TiledJsonTileset): readonly string[] =>
 const scanTileset = (loaded: LoadedTileset): TiledScanTileset => {
   const categories = tileCategories(loaded.tileset);
   const wangSetCount = loaded.tileset.wangsets?.length ?? 0;
-  const animationCount = (loaded.tileset.tiles ?? []).filter((tile) => (tile.animation?.length ?? 0) > 0).length;
-  const collisionObjectCount = (loaded.tileset.tiles ?? []).filter((tile) => tile.objectgroup !== undefined).length;
+  const animationCount = (loaded.tileset.tiles ?? []).filter(
+    (tile) => (tile.animation?.length ?? 0) > 0,
+  ).length;
+  const collisionObjectCount = (loaded.tileset.tiles ?? []).filter(
+    (tile) => tile.objectgroup !== undefined,
+  ).length;
   return {
     name: loaded.tileset.name,
     firstgid: loaded.ref.firstgid,
-    kind: loaded.tileset.columns === 0 ? "image-collection" : "grid",
+    kind: loaded.tileset.columns === 0 ? 'image-collection' : 'grid',
     tileCount: loaded.tileset.tilecount,
     columns: loaded.tileset.columns,
     wangSetCount,
@@ -458,7 +547,9 @@ const scanImageAssets = (tilesets: readonly LoadedTileset[]): readonly TiledScan
     ),
   ]);
 
-const scanPlaceables = (tilesets: readonly LoadedTileset[]): readonly TiledScanPlaceableCandidate[] =>
+const scanPlaceables = (
+  tilesets: readonly LoadedTileset[],
+): readonly TiledScanPlaceableCandidate[] =>
   tilesets.flatMap(({ tileset }) =>
     (tileset.tiles ?? []).flatMap((tile): readonly TiledScanPlaceableCandidate[] => {
       if (tileset.columns === 0 && tile.image) {
@@ -466,28 +557,28 @@ const scanPlaceables = (tilesets: readonly LoadedTileset[]): readonly TiledScanP
           {
             tilesetName: tileset.name,
             localTileId: tile.id,
-            source: "image-collection" as const,
+            source: 'image-collection' as const,
             image: tile.image,
             width: tile.imagewidth ?? tileset.tilewidth,
             height: tile.imageheight ?? tileset.tileheight,
-            ...(stringProperty(tile.properties, "tileborne.category") === undefined
+            ...(stringProperty(tile.properties, 'tileborne.category') === undefined
               ? {}
-              : { category: categoryId(stringProperty(tile.properties, "tileborne.category")!) }),
+              : { category: categoryId(stringProperty(tile.properties, 'tileborne.category')!) }),
             confidence: 1,
           },
         ];
       }
-      if (boolProperty(tile.properties, "tileborne.placeable")) {
+      if (boolProperty(tile.properties, 'tileborne.placeable')) {
         return [
           {
             tilesetName: tileset.name,
             localTileId: tile.id,
-            source: "tileborne-hint" as const,
-            width: numberProperty(tile.properties, "tileborne.objectWidth") ?? tileset.tilewidth,
-            height: numberProperty(tile.properties, "tileborne.objectHeight") ?? tileset.tileheight,
-            ...(stringProperty(tile.properties, "tileborne.category") === undefined
+            source: 'tileborne-hint' as const,
+            width: numberProperty(tile.properties, 'tileborne.objectWidth') ?? tileset.tilewidth,
+            height: numberProperty(tile.properties, 'tileborne.objectHeight') ?? tileset.tileheight,
+            ...(stringProperty(tile.properties, 'tileborne.category') === undefined
               ? {}
-              : { category: categoryId(stringProperty(tile.properties, "tileborne.category")!) }),
+              : { category: categoryId(stringProperty(tile.properties, 'tileborne.category')!) }),
             confidence: 1,
           },
         ];
@@ -500,40 +591,58 @@ const scanCategories = (
   map: TiledJsonMap,
   tilesets: readonly LoadedTileset[],
 ): readonly TiledScanCategory[] => {
-  const counts = new Map<string, { label: string; source: TiledScanCategory["source"]; count: number; confidence: number }>();
-  const add = (entry: { readonly label: string; readonly source: TiledScanCategory["source"]; readonly confidence: number }) => {
+  const counts = new Map<
+    string,
+    { label: string; source: TiledScanCategory['source']; count: number; confidence: number }
+  >();
+  const add = (entry: {
+    readonly label: string;
+    readonly source: TiledScanCategory['source'];
+    readonly confidence: number;
+  }) => {
     const id = categoryId(entry.label);
     const existing = counts.get(id);
     counts.set(id, {
       label: entry.label,
-      source: existing?.source === "tileborne-hint" ? existing.source : entry.source,
+      source: existing?.source === 'tileborne-hint' ? existing.source : entry.source,
       count: (existing?.count ?? 0) + 1,
       confidence: Math.max(existing?.confidence ?? 0, entry.confidence),
     });
   };
 
-  for (const category of collectCategoryValues({ class: map.class, properties: map.properties })) add(category);
+  for (const category of collectCategoryValues({ class: map.class, properties: map.properties }))
+    add(category);
   for (const layer of flattenLayers(map.layers)) {
-    add({ label: layer.name, source: "type", confidence: 0.6 });
-    for (const category of collectCategoryValues({ class: layer.class, properties: layer.properties })) add(category);
-    if (layer.type === "objectgroup") {
+    add({ label: layer.name, source: 'type', confidence: 0.6 });
+    for (const category of collectCategoryValues({
+      class: layer.class,
+      properties: layer.properties,
+    }))
+      add(category);
+    if (layer.type === 'objectgroup') {
       for (const object of layer.objects) {
         for (const category of collectCategoryValues({
           class: object.class,
           type: object.type,
           properties: object.properties,
-        })) add(category);
+        }))
+          add(category);
       }
     }
   }
   for (const { tileset } of tilesets) {
-    for (const category of collectCategoryValues({ class: tileset.class, properties: tileset.properties })) add(category);
+    for (const category of collectCategoryValues({
+      class: tileset.class,
+      properties: tileset.properties,
+    }))
+      add(category);
     for (const tile of tileset.tiles ?? []) {
       for (const category of collectCategoryValues({
         class: tile.class,
         type: tile.type,
         properties: tile.properties,
-      })) add(category);
+      }))
+        add(category);
     }
   }
 
@@ -542,28 +651,30 @@ const scanCategories = (
     .sort((left, right) => left.id.localeCompare(right.id));
 };
 
-const unsupportedFeatures = (features: TiledScanFeatureFlags): readonly TiledScanUnsupportedFeature[] => {
+const unsupportedFeatures = (
+  features: TiledScanFeatureFlags,
+): readonly TiledScanUnsupportedFeature[] => {
   const unsupported: TiledScanUnsupportedFeature[] = [];
   if (features.templates) {
-    unsupported.push(unsupportedFeature("templates", "/layers"));
+    unsupported.push(unsupportedFeature('templates', '/layers'));
   }
   if (features.infiniteChunks) {
-    unsupported.push(unsupportedFeature("infinite-chunks", "/layers"));
+    unsupported.push(unsupportedFeature('infinite-chunks', '/layers'));
   }
   if (features.rotation) {
-    unsupported.push(unsupportedFeature("rotation", "/layers"));
+    unsupported.push(unsupportedFeature('rotation', '/layers'));
   }
   if (features.parallax) {
-    unsupported.push(unsupportedFeature("parallax", "/layers"));
+    unsupported.push(unsupportedFeature('parallax', '/layers'));
   }
   if (features.unsupportedOrientation) {
-    unsupported.push(unsupportedFeature("orientation", "/orientation"));
+    unsupported.push(unsupportedFeature('orientation', '/orientation'));
   }
   if (features.classProperties) {
-    unsupported.push(unsupportedFeature("class-properties", "/properties"));
+    unsupported.push(unsupportedFeature('class-properties', '/properties'));
   }
   if (features.projectFiles) {
-    unsupported.push(unsupportedFeature("project-files", "/"));
+    unsupported.push(unsupportedFeature('project-files', '/'));
   }
   return unsupported;
 };
@@ -574,72 +685,76 @@ const recommendedProfileFor = (input: {
   readonly ambiguousAtlasObjects: readonly TiledScanAmbiguousAtlasObject[];
 }): TiledImportRecommendedProfile =>
   input.unsupportedFeatures.length > 0
-    ? "plugin-required"
-    : input.placeableCandidates.some((candidate) => candidate.source === "tileborne-hint") ||
+    ? 'plugin-required'
+    : input.placeableCandidates.some((candidate) => candidate.source === 'tileborne-hint') ||
         input.ambiguousAtlasObjects.length > 0
-      ? "standard-plus-hints"
-      : "standard";
+      ? 'standard-plus-hints'
+      : 'standard';
 
 const importRecommendationFor = (input: {
-  readonly maps: TiledImportScan["maps"];
+  readonly maps: TiledImportScan['maps'];
   readonly tilesets: readonly TiledScanTileset[];
   readonly objectLayers: readonly TiledScanObjectLayer[];
   readonly placeableCandidates: readonly TiledScanPlaceableCandidate[];
   readonly unsupportedFeatures: readonly TiledScanUnsupportedFeature[];
   readonly ambiguousAtlasObjects: readonly TiledScanAmbiguousAtlasObject[];
 }): TiledImportRecommendation => {
-  const sourceRoles: TiledImportRecommendation["sourceRoles"] = [
+  const sourceRoles: TiledImportRecommendation['sourceRoles'] = [
     ...input.tilesets
-      .filter((tileset) => tileset.kind === "grid")
+      .filter((tileset) => tileset.kind === 'grid')
       .map((tileset) => ({
-        kind: "paintable-tileset" as const,
-        evidence: "grid-tileset" as const,
+        kind: 'paintable-tileset' as const,
+        evidence: 'grid-tileset' as const,
         confidence: tileset.confidence,
         count: tileset.tileCount,
         tilesetName: tileset.name,
-        browseTarget: "tilesets" as const,
+        browseTarget: 'tilesets' as const,
         reviewRequired: false,
-        rationale: "Grid tilesets are paintable Tileborne tilesets by default.",
+        rationale: 'Grid tilesets are paintable Tileborne tilesets by default.',
       })),
     ...input.placeableCandidates.map((candidate) => ({
-      kind: "placeable-object" as const,
-      evidence: candidate.source === "image-collection" ? "image-collection" as const : "tileborne-placeable-hint" as const,
+      kind: 'placeable-object' as const,
+      evidence:
+        candidate.source === 'image-collection'
+          ? ('image-collection' as const)
+          : ('tileborne-placeable-hint' as const),
       confidence: candidate.confidence,
       count: 1,
       tilesetName: candidate.tilesetName,
-      browseTarget: "objects" as const,
+      browseTarget: 'objects' as const,
       reviewRequired: false,
       rationale:
-        candidate.source === "image-collection"
-          ? "Image-collection tiles are placeable Objects."
-          : "Explicit tileborne.placeable hints promote atlas tiles to Objects.",
+        candidate.source === 'image-collection'
+          ? 'Image-collection tiles are placeable Objects.'
+          : 'Explicit tileborne.placeable hints promote atlas tiles to Objects.',
     })),
     ...input.objectLayers.map((layer) => ({
-      kind: "map-context" as const,
-      evidence: "object-layer" as const,
+      kind: 'map-context' as const,
+      evidence: 'object-layer' as const,
       confidence: layer.confidence,
       count: layer.objectCount,
       layerName: layer.name,
-      browseTarget: "maps" as const,
+      browseTarget: 'maps' as const,
       reviewRequired: false,
-      rationale: "Object layers provide placement evidence but do not promote grid atlas tiles by themselves.",
+      rationale:
+        'Object layers provide placement evidence but do not promote grid atlas tiles by themselves.',
     })),
     ...input.ambiguousAtlasObjects.map((entry) => ({
-      kind: "review-required" as const,
-      evidence: "ambiguous-atlas-object" as const,
+      kind: 'review-required' as const,
+      evidence: 'ambiguous-atlas-object' as const,
       confidence: 0.55,
       count: 1,
       tilesetName: entry.tilesetName,
-      browseTarget: "review" as const,
+      browseTarget: 'review' as const,
       reviewRequired: true,
       rationale: entry.message,
     })),
     ...input.unsupportedFeatures.map((feature) => ({
-      kind: "review-required" as const,
-      evidence: "unsupported-feature" as const,
+      kind: 'review-required' as const,
+      evidence: 'unsupported-feature' as const,
       confidence: 0.2,
       count: 1,
-      browseTarget: "review" as const,
+      browseTarget: 'review' as const,
       reviewRequired: true,
       rationale: feature.message,
     })),
@@ -650,34 +765,34 @@ const importRecommendationFor = (input: {
     ambiguousAtlasObjects: input.ambiguousAtlasObjects,
   });
   const reviewRequired = sourceRoles.some((role) => role.reviewRequired);
-  const hasPaintable = sourceRoles.some((role) => role.kind === "paintable-tileset");
-  const hasPlaceable = sourceRoles.some((role) => role.kind === "placeable-object");
+  const hasPaintable = sourceRoles.some((role) => role.kind === 'paintable-tileset');
+  const hasPlaceable = sourceRoles.some((role) => role.kind === 'placeable-object');
   const primaryAction =
-    recommendedProfile === "plugin-required"
-      ? "choose-plugin-profile"
+    recommendedProfile === 'plugin-required'
+      ? 'choose-plugin-profile'
       : reviewRequired
-        ? "review-before-import"
+        ? 'review-before-import'
         : hasPaintable && hasPlaceable
-          ? "import-mixed-assets"
+          ? 'import-mixed-assets'
           : hasPlaceable
-            ? "import-placeable-objects"
-            : "import-paintable-tilesets";
+            ? 'import-placeable-objects'
+            : 'import-paintable-tilesets';
   const browseTarget =
-    primaryAction === "choose-plugin-profile" || primaryAction === "review-before-import"
-      ? "review"
-      : primaryAction === "import-placeable-objects"
-        ? "objects"
-        : "tilesets";
+    primaryAction === 'choose-plugin-profile' || primaryAction === 'review-before-import'
+      ? 'review'
+      : primaryAction === 'import-placeable-objects'
+        ? 'objects'
+        : 'tilesets';
   const rationale =
-    primaryAction === "choose-plugin-profile"
-      ? "Unsupported Tiled features require a plugin profile before import."
-      : primaryAction === "review-before-import"
-        ? "Ambiguous atlas object evidence requires review before Tileborne creates placeables."
-        : primaryAction === "import-mixed-assets"
-          ? "The source contains paintable grid tilesets and placeable object tiles."
-          : primaryAction === "import-placeable-objects"
-            ? "The source is an image collection, so imported content should open as Objects."
-            : "The source is a grid tileset, so imported content should open as paintable Tilesets.";
+    primaryAction === 'choose-plugin-profile'
+      ? 'Unsupported Tiled features require a plugin profile before import.'
+      : primaryAction === 'review-before-import'
+        ? 'Ambiguous atlas object evidence requires review before Tileborne creates placeables.'
+        : primaryAction === 'import-mixed-assets'
+          ? 'The source contains paintable grid tilesets and placeable object tiles.'
+          : primaryAction === 'import-placeable-objects'
+            ? 'The source is an image collection, so imported content should open as Objects.'
+            : 'The source is a grid tileset, so imported content should open as paintable Tilesets.';
 
   return {
     sourceRoles,
@@ -690,9 +805,9 @@ const importRecommendationFor = (input: {
 };
 
 const emptyMapForScan = (): TiledJsonMap => ({
-  type: "map",
-  version: "1.10",
-  orientation: "orthogonal",
+  type: 'map',
+  version: '1.10',
+  orientation: 'orthogonal',
   width: 0,
   height: 0,
   tilewidth: 0,
@@ -703,8 +818,8 @@ const emptyMapForScan = (): TiledJsonMap => ({
 
 const buildScanFromTilesets = (input: {
   readonly sourcePath: string;
-  readonly sourceKind: "tileset" | "source-folder";
-  readonly maps: TiledImportScan["maps"];
+  readonly sourceKind: 'tileset' | 'source-folder';
+  readonly maps: TiledImportScan['maps'];
   readonly tilesets: readonly LoadedTileset[];
   readonly rules?: readonly TiledSourceInventoryRule[];
   readonly projectFilePaths?: readonly string[];
@@ -713,14 +828,20 @@ const buildScanFromTilesets = (input: {
   const classPropertyFeatures = input.tilesets.flatMap(({ tileset }) =>
     unsupportedClassPropertyFeaturesForTileset(tileset, `/tilesets/${tileset.name}`),
   );
-  const projectFileFeatures = (input.projectFilePaths ?? []).map((path) => unsupportedFeature("project-files", path));
+  const projectFileFeatures = (input.projectFilePaths ?? []).map((path) =>
+    unsupportedFeature('project-files', path),
+  );
   const unsupported = [...classPropertyFeatures, ...projectFileFeatures];
   const flags: TiledScanFeatureFlags = {
     gridAtlas: input.tilesets.some(({ tileset }) => tileset.columns > 0),
     imageCollection: input.tilesets.some(({ tileset }) => tileset.columns === 0),
     wangSets: input.tilesets.some(({ tileset }) => (tileset.wangsets?.length ?? 0) > 0),
-    animations: input.tilesets.some(({ tileset }) => (tileset.tiles ?? []).some((tile) => (tile.animation?.length ?? 0) > 0)),
-    collisionObjectgroups: input.tilesets.some(({ tileset }) => (tileset.tiles ?? []).some((tile) => tile.objectgroup !== undefined)),
+    animations: input.tilesets.some(({ tileset }) =>
+      (tileset.tiles ?? []).some((tile) => (tile.animation?.length ?? 0) > 0),
+    ),
+    collisionObjectgroups: input.tilesets.some(({ tileset }) =>
+      (tileset.tiles ?? []).some((tile) => tile.objectgroup !== undefined),
+    ),
     templates: false,
     rotation: false,
     parallax: false,
@@ -757,12 +878,19 @@ const buildScanFromTilesets = (input: {
     inventory: {
       mapCount: input.maps.length,
       tilesetCount: scannedTilesets.length,
-      gridAtlasCount: scannedTilesets.filter((tileset) => tileset.kind === "grid").length,
-      imageCollectionCount: scannedTilesets.filter((tileset) => tileset.kind === "image-collection").length,
+      gridAtlasCount: scannedTilesets.filter((tileset) => tileset.kind === 'grid').length,
+      imageCollectionCount: scannedTilesets.filter((tileset) => tileset.kind === 'image-collection')
+        .length,
       wangSetCount: scannedTilesets.reduce((count, tileset) => count + tileset.wangSetCount, 0),
-      terrainClassCount: scannedTilesets.reduce((count, tileset) => count + tileset.terrainClassCount, 0),
+      terrainClassCount: scannedTilesets.reduce(
+        (count, tileset) => count + tileset.terrainClassCount,
+        0,
+      ),
       animationCount: scannedTilesets.reduce((count, tileset) => count + tileset.animationCount, 0),
-      collisionObjectCount: scannedTilesets.reduce((count, tileset) => count + tileset.collisionObjectCount, 0),
+      collisionObjectCount: scannedTilesets.reduce(
+        (count, tileset) => count + tileset.collisionObjectCount,
+        0,
+      ),
       objectLayerCount: 0,
       placeableCandidateCount: placeableCandidates.length,
       unsupportedFeatureCount: unsupported.length,
@@ -791,7 +919,7 @@ const ambiguousAtlasObjects = (
   );
   const byName = new Map(tilesets.map(({ tileset }) => [tileset.name, tileset] as const));
   const objects = flattenLayers(map.layers).flatMap((layer) =>
-    layer.type === "objectgroup" ? layer.objects.map((object) => ({ layer, object })) : [],
+    layer.type === 'objectgroup' ? layer.objects.map((object) => ({ layer, object })) : [],
   );
   return objects.flatMap(({ layer, object }): readonly TiledScanAmbiguousAtlasObject[] => {
     if (object.gid === undefined) return [];
@@ -800,7 +928,7 @@ const ambiguousAtlasObjects = (
     const tileset = byName.get(located.window.name);
     if (!tileset || tileset.columns === 0) return [];
     const explicit = tileset.tiles?.find((tile) => tile.id === located.localId);
-    if (boolProperty(explicit?.properties, "tileborne.placeable")) return [];
+    if (boolProperty(explicit?.properties, 'tileborne.placeable')) return [];
     const sizeLooksObject =
       (object.width ?? tileset.tilewidth) > tileset.tilewidth ||
       (object.height ?? tileset.tileheight) > tileset.tileheight;
@@ -811,29 +939,36 @@ const ambiguousAtlasObjects = (
         localTileId: located.localId,
         objectId: object.id,
         path: `/layers/${layer.name}/objects/${object.id}`,
-        message: "Atlas tile object is ambiguous; add tileborne.placeable=true or use a plugin profile.",
+        message:
+          'Atlas tile object is ambiguous; add tileborne.placeable=true or use a plugin profile.',
       },
     ];
   });
 };
 
-export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
+export const scanTiledSource = async (
+  input: TiledScanSourceInput,
+): Promise<{
   readonly scan?: TiledImportScan;
   readonly diagnostics: readonly ParseDiagnostic[];
 }> => {
-  if (input.raw === undefined && input.reader?.readDirectory && !input.sourcePath.toLowerCase().match(/\.(tmx|tmj|tsx|tsj|json)$/)) {
+  if (
+    input.raw === undefined &&
+    input.reader?.readDirectory &&
+    !input.sourcePath.toLowerCase().match(/\.(tmx|tmj|tsx|tsj|json)$/)
+  ) {
     const entries = await walkDirectory(input.sourcePath, input.reader);
     const tileSources = entries
-      .filter((entry) => entry.kind === "file" && isSupportedTilesetSource(entry.path))
+      .filter((entry) => entry.kind === 'file' && isSupportedTilesetSource(entry.path))
       .sort((left, right) => left.path.localeCompare(right.path));
     const mapSources = entries
       .filter((entry) => {
         const lower = entry.path.toLowerCase();
-        return entry.kind === "file" && (lower.endsWith(".tmx") || lower.endsWith(".tmj"));
+        return entry.kind === 'file' && (lower.endsWith('.tmx') || lower.endsWith('.tmj'));
       })
       .sort((left, right) => left.path.localeCompare(right.path));
     const projectFilePaths = entries
-      .filter((entry) => entry.kind === "file" && entry.path.toLowerCase().endsWith(".tiled"))
+      .filter((entry) => entry.kind === 'file' && entry.path.toLowerCase().endsWith('.tiled'))
       .map((entry) => entry.path)
       .sort((left, right) => left.localeCompare(right));
     const diagnostics: ParseDiagnostic[] = [];
@@ -846,27 +981,41 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
       diagnostics.push(...loaded.diagnostics);
       if (loaded.tileset) tilesets.push(loaded.tileset);
     }
-    if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+    if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
       return { diagnostics };
     }
     const ruleSources = entries
       .filter((entry) => {
         const lower = entry.path.toLowerCase();
-        return entry.kind === "file" && (lower.endsWith("/rules.txt") || /\/rules\/[^/]+\.(tmx|tmj)$/.test(lower));
+        return (
+          entry.kind === 'file' &&
+          (lower.endsWith('/rules.txt') || /\/rules\/[^/]+\.(tmx|tmj)$/.test(lower))
+        );
       })
       .map((entry) => ({
         path: entry.path,
-        kind: entry.path.toLowerCase().endsWith("/rules.txt") ? "rules-index" as const : "rule-map" as const,
+        kind: entry.path.toLowerCase().endsWith('/rules.txt')
+          ? ('rules-index' as const)
+          : ('rule-map' as const),
       }));
     const scan = buildScanFromTilesets({
-        sourceKind: "source-folder",
-        sourcePath: input.sourcePath,
-        maps: mapSources.map((entry) => ({ path: entry.path, width: 0, height: 0, tileWidth: 0, tileHeight: 0 })),
-        tilesets,
-        rules: ruleSources,
-        projectFilePaths,
-      });
-    return { scan, diagnostics: [...diagnostics, ...scan.unsupportedFeatures.map(unsupportedFeatureDiagnostic)] };
+      sourceKind: 'source-folder',
+      sourcePath: input.sourcePath,
+      maps: mapSources.map((entry) => ({
+        path: entry.path,
+        width: 0,
+        height: 0,
+        tileWidth: 0,
+        tileHeight: 0,
+      })),
+      tilesets,
+      rules: ruleSources,
+      projectFilePaths,
+    });
+    return {
+      scan,
+      diagnostics: [...diagnostics, ...scan.unsupportedFeatures.map(unsupportedFeatureDiagnostic)],
+    };
   }
   const raw =
     input.raw ??
@@ -875,23 +1024,23 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: input.sourcePath,
-          message: "scanTiledSource requires raw input or a reader",
-          severity: "error",
-          format: input.sourcePath.toLowerCase().endsWith(".tmx") ? "tmx" : "tmj",
+          message: 'scanTiledSource requires raw input or a reader',
+          severity: 'error',
+          format: input.sourcePath.toLowerCase().endsWith('.tmx') ? 'tmx' : 'tmj',
         },
       ],
     };
   }
   const lowerSourcePath = input.sourcePath.toLowerCase();
-  const parsedJsonMap = lowerSourcePath.endsWith(".json") ? parseJsonMap(raw) : undefined;
+  const parsedJsonMap = lowerSourcePath.endsWith('.json') ? parseJsonMap(raw) : undefined;
   if (parsedJsonMap?.map === undefined && isSupportedTilesetSource(input.sourcePath)) {
     const loaded = await loadStandaloneTileset(input, raw);
     if (!loaded.tileset) return { diagnostics: loaded.diagnostics };
     return {
       scan: buildScanFromTilesets({
-        sourceKind: "tileset",
+        sourceKind: 'tileset',
         sourcePath: input.sourcePath,
         maps: [],
         tilesets: [loaded.tileset],
@@ -899,19 +1048,23 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
       diagnostics: loaded.diagnostics,
     };
   }
-  const parsed = lowerSourcePath.endsWith(".tmx") || raw.trimStart().startsWith("<")
-    ? parseXmlMap(raw)
-    : (parsedJsonMap ?? parseJsonMap(raw));
+  const parsed =
+    lowerSourcePath.endsWith('.tmx') || raw.trimStart().startsWith('<')
+      ? parseXmlMap(raw)
+      : (parsedJsonMap ?? parseJsonMap(raw));
   if (!parsed.map) {
     return { diagnostics: parsed.diagnostics };
   }
   const loaded = await loadTilesets(parsed.map, input);
-  if (loaded.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (loaded.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     return { diagnostics: [...parsed.diagnostics, ...loaded.diagnostics] };
   }
   const tilesets = loaded.tilesets;
   const flags = featureFlagsFor(parsed.map, tilesets);
-  const classPropertyUnsupported = unsupportedClassPropertyFeaturesForMap(parsed.map, tilesets.map(({ tileset }) => tileset));
+  const classPropertyUnsupported = unsupportedClassPropertyFeaturesForMap(
+    parsed.map,
+    tilesets.map(({ tileset }) => tileset),
+  );
   const unsupported = [
     ...unsupportedFeatures({ ...flags, classProperties: false }),
     ...classPropertyUnsupported,
@@ -922,12 +1075,14 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
   const scannedTilesets = tilesets.map(scanTileset);
   const categories = scanCategories(parsed.map, tilesets);
   const objectLayers = layers.flatMap((layer): readonly TiledScanObjectLayer[] =>
-    layer.type === "objectgroup"
+    layer.type === 'objectgroup'
       ? [
           {
-            name: layer.name ?? "objects",
+            name: layer.name ?? 'objects',
             objectCount: layer.objects.length,
-            gidObjectCount: layer.objects.filter((object: TiledJsonObject) => object.gid !== undefined).length,
+            gidObjectCount: layer.objects.filter(
+              (object: TiledJsonObject) => object.gid !== undefined,
+            ).length,
             categories: layer.objects
               .flatMap((object) =>
                 collectCategoryValues({
@@ -946,12 +1101,19 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
   const inventory = {
     mapCount: 1,
     tilesetCount: scannedTilesets.length,
-    gridAtlasCount: scannedTilesets.filter((tileset) => tileset.kind === "grid").length,
-    imageCollectionCount: scannedTilesets.filter((tileset) => tileset.kind === "image-collection").length,
+    gridAtlasCount: scannedTilesets.filter((tileset) => tileset.kind === 'grid').length,
+    imageCollectionCount: scannedTilesets.filter((tileset) => tileset.kind === 'image-collection')
+      .length,
     wangSetCount: scannedTilesets.reduce((count, tileset) => count + tileset.wangSetCount, 0),
-    terrainClassCount: scannedTilesets.reduce((count, tileset) => count + tileset.terrainClassCount, 0),
+    terrainClassCount: scannedTilesets.reduce(
+      (count, tileset) => count + tileset.terrainClassCount,
+      0,
+    ),
     animationCount: scannedTilesets.reduce((count, tileset) => count + tileset.animationCount, 0),
-    collisionObjectCount: scannedTilesets.reduce((count, tileset) => count + tileset.collisionObjectCount, 0),
+    collisionObjectCount: scannedTilesets.reduce(
+      (count, tileset) => count + tileset.collisionObjectCount,
+      0,
+    ),
     objectLayerCount: objectLayers.length,
     placeableCandidateCount: placeableCandidates.length,
     unsupportedFeatureCount: unsupported.length,
@@ -974,10 +1136,10 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
     ...loaded.diagnostics,
     ...unsupported.map(unsupportedFeatureDiagnostic),
     ...ambiguous.map((entry) => ({
-      _tag: "TiledAmbiguousAtlasObject" as const,
+      _tag: 'TiledAmbiguousAtlasObject' as const,
       path: entry.path,
       message: entry.message,
-      severity: "warning" as const,
+      severity: 'warning' as const,
       tilesetName: entry.tilesetName,
       localTileId: entry.localTileId,
       ...(entry.objectId === undefined ? {} : { objectId: entry.objectId }),
@@ -1001,7 +1163,7 @@ export const scanTiledSource = async (input: TiledScanSourceInput): Promise<{
   });
   return {
     scan: {
-      sourceKind: "map",
+      sourceKind: 'map',
       sourcePath: input.sourcePath,
       maps: [
         {

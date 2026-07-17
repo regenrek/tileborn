@@ -1,30 +1,23 @@
-import { Result } from "effect";
-import { describe, expect, it } from "vitest";
+import { Result } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import {
   AssetExtensionMismatchError,
   AssetMagicByteMismatchError,
   AssetMimeRejectedError,
   AssetTooLargeError,
-} from "../errors.js";
-import { extensionOf, isAllowedExtensionForMime } from "./extension-allowlist.js";
-import { isAllowedMimeType } from "./mime-allowlist.js";
-import {
-  hasExpectedMagicBytes,
-  isJpeg,
-  isOgg,
-  isPng,
-  isWav,
-  isWebp,
-} from "./magic-bytes.js";
-import { MAX_ASSET_BYTES } from "./size-limits.js";
+} from '../errors.js';
+import { extensionOf, isAllowedExtensionForMime } from './extension-allowlist.js';
+import { isAllowedMimeType } from './mime-allowlist.js';
+import { hasExpectedMagicBytes, isJpeg, isOgg, isPng, isWav, isWebp } from './magic-bytes.js';
+import { MAX_ASSET_BYTES } from './size-limits.js';
 import {
   AssetPathSecurityError,
   assertWithinRoot,
   rejectPathTraversal,
   rejectSymlinkEscape,
-} from "./path-security.js";
-import { validateAssetCandidate } from "./security.js";
+} from './path-security.js';
+import { validateAssetCandidate } from './security.js';
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const webp = new Uint8Array([
@@ -36,18 +29,18 @@ const wav = new Uint8Array([
   0x52, 0x49, 0x46, 0x46, 0x01, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
 ]);
 
-describe("asset security allowlists", () => {
-  it("accepts known MIME types and matching extensions", () => {
-    expect(isAllowedMimeType("image/png")).toBe(true);
-    expect(isAllowedMimeType("audio/ogg")).toBe(true);
-    expect(isAllowedExtensionForMime("tiles/terrain.png", "image/png")).toBe(true);
-    expect(extensionOf("terrain.PNG")).toBe(".png");
+describe('asset security allowlists', () => {
+  it('accepts known MIME types and matching extensions', () => {
+    expect(isAllowedMimeType('image/png')).toBe(true);
+    expect(isAllowedMimeType('audio/ogg')).toBe(true);
+    expect(isAllowedExtensionForMime('tiles/terrain.png', 'image/png')).toBe(true);
+    expect(extensionOf('terrain.PNG')).toBe('.png');
   });
 
-  it("rejects mismatched MIME and extension pairs", () => {
+  it('rejects mismatched MIME and extension pairs', () => {
     const result = validateAssetCandidate({
-      mime: "image/png",
-      filename: "terrain.jpg",
+      mime: 'image/png',
+      filename: 'terrain.jpg',
       bytes: png,
     });
     expect(Result.isFailure(result)).toBe(true);
@@ -56,10 +49,10 @@ describe("asset security allowlists", () => {
     }
   });
 
-  it("rejects unknown MIME types", () => {
+  it('rejects unknown MIME types', () => {
     const result = validateAssetCandidate({
-      mime: "application/x-msdownload",
-      filename: "bad.exe",
+      mime: 'application/x-msdownload',
+      filename: 'bad.exe',
       bytes: new Uint8Array([1, 2, 3]),
     });
     expect(Result.isFailure(result)).toBe(true);
@@ -68,10 +61,10 @@ describe("asset security allowlists", () => {
     }
   });
 
-  it("enforces per-asset size limits", () => {
+  it('enforces per-asset size limits', () => {
     const result = validateAssetCandidate({
-      mime: "text/plain",
-      filename: "huge.txt",
+      mime: 'text/plain',
+      filename: 'huge.txt',
       bytes: new Uint8Array(MAX_ASSET_BYTES + 1),
     });
     expect(Result.isFailure(result)).toBe(true);
@@ -81,8 +74,8 @@ describe("asset security allowlists", () => {
   });
 });
 
-describe("magic byte checks", () => {
-  it("accepts common image and audio signatures", () => {
+describe('magic byte checks', () => {
+  it('accepts common image and audio signatures', () => {
     expect(isPng(png)).toBe(true);
     expect(isWebp(webp)).toBe(true);
     expect(isJpeg(jpeg)).toBe(true);
@@ -90,24 +83,24 @@ describe("magic byte checks", () => {
     expect(isWav(wav)).toBe(true);
   });
 
-  it("rejects truncated or wrong signatures", () => {
+  it('rejects truncated or wrong signatures', () => {
     expect(isPng(png.slice(0, 4))).toBe(false);
     expect(isWebp(new Uint8Array([0x52, 0x49, 0x46, 0x46]))).toBe(false);
     expect(isJpeg(new Uint8Array([0xff, 0x00, 0xff]))).toBe(false);
-    expect(hasExpectedMagicBytes("audio/ogg", wav)).toBe(false);
+    expect(hasExpectedMagicBytes('audio/ogg', wav)).toBe(false);
   });
 
-  it("combines MIME, extension, size, and magic checks", () => {
+  it('combines MIME, extension, size, and magic checks', () => {
     const ok = validateAssetCandidate({
-      mime: "image/png",
-      filename: "terrain.png",
+      mime: 'image/png',
+      filename: 'terrain.png',
       bytes: png,
     });
     expect(Result.isSuccess(ok)).toBe(true);
 
     const bad = validateAssetCandidate({
-      mime: "image/png",
-      filename: "terrain.png",
+      mime: 'image/png',
+      filename: 'terrain.png',
       bytes: jpeg,
     });
     expect(Result.isFailure(bad)).toBe(true);
@@ -117,27 +110,31 @@ describe("magic byte checks", () => {
   });
 });
 
-describe("path security primitives", () => {
-  it("accepts candidates inside the declared root", () => {
-    expect(assertWithinRoot("/tmp/assets", "tiles/grass.png")).toBe("/tmp/assets/tiles/grass.png");
+describe('path security primitives', () => {
+  it('accepts candidates inside the declared root', () => {
+    expect(assertWithinRoot('/tmp/assets', 'tiles/grass.png')).toBe('/tmp/assets/tiles/grass.png');
   });
 
-  it("rejects traversal and absolute candidate paths", () => {
-    expect(() => rejectPathTraversal("/tmp/assets", "../escape.png")).toThrow(AssetPathSecurityError);
-    expect(() => rejectPathTraversal("/tmp/assets", "/etc/passwd")).toThrow(AssetPathSecurityError);
+  it('rejects traversal and absolute candidate paths', () => {
+    expect(() => rejectPathTraversal('/tmp/assets', '../escape.png')).toThrow(
+      AssetPathSecurityError,
+    );
+    expect(() => rejectPathTraversal('/tmp/assets', '/etc/passwd')).toThrow(AssetPathSecurityError);
   });
 
-  it("rejects symlinks that resolve outside the root", async () => {
-    const rootPath = await import("node:fs/promises").then(async (fs) => {
-      const os = await import("node:os");
-      const path = await import("node:path");
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), "asset-path-"));
-      await fs.writeFile(path.join(root, "inside.txt"), "ok");
-      await fs.symlink(os.tmpdir(), path.join(root, "escape"));
+  it('rejects symlinks that resolve outside the root', async () => {
+    const rootPath = await import('node:fs/promises').then(async (fs) => {
+      const os = await import('node:os');
+      const path = await import('node:path');
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'asset-path-'));
+      await fs.writeFile(path.join(root, 'inside.txt'), 'ok');
+      await fs.symlink(os.tmpdir(), path.join(root, 'escape'));
       return root;
     });
 
-    await expect(rejectSymlinkEscape(rootPath, "inside.txt")).resolves.toContain("inside.txt");
-    await expect(rejectSymlinkEscape(rootPath, "escape")).rejects.toBeInstanceOf(AssetPathSecurityError);
+    await expect(rejectSymlinkEscape(rootPath, 'inside.txt')).resolves.toContain('inside.txt');
+    await expect(rejectSymlinkEscape(rootPath, 'escape')).rejects.toBeInstanceOf(
+      AssetPathSecurityError,
+    );
   });
 });

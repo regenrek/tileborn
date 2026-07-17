@@ -1,14 +1,14 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { BuildId, ContentHash } from "@tileborne/core";
+import { BuildId, ContentHash } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyResponse, IpcContractErrors } from "./common.js";
-import { JobId } from "./assets.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyResponse, IpcContractErrors } from './common.js';
+import { JobId } from './assets.js';
 
 export const ExportId = Schema.String.check(Schema.isPattern(/^export:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("ExportId"),
+  Schema.brand('ExportId'),
 );
 
 export const ExportTargetView = Schema.Unknown;
@@ -48,7 +48,7 @@ export const ExportsDeleteExportRequest = Schema.Struct({
 });
 
 export const ExportsExportBuildContract = defineContract({
-  channel: "tileborne:exports:exportBuild",
+  channel: 'tileborne:exports:exportBuild',
   request: ExportsExportBuildRequest,
   response: ExportsExportBuildResponse,
   errors: IpcContractErrors,
@@ -56,21 +56,21 @@ export const ExportsExportBuildContract = defineContract({
 });
 
 export const ExportsGetExportContract = defineContract({
-  channel: "tileborne:exports:getExport",
+  channel: 'tileborne:exports:getExport',
   request: ExportsGetExportRequest,
   response: ExportsGetExportResponse,
   errors: IpcContractErrors,
 });
 
 export const ExportsListExportsContract = defineContract({
-  channel: "tileborne:exports:listExports",
+  channel: 'tileborne:exports:listExports',
   request: ExportsListExportsRequest,
   response: ExportsListExportsResponse,
   errors: IpcContractErrors,
 });
 
 export const ExportsDeleteExportContract = defineContract({
-  channel: "tileborne:exports:deleteExport",
+  channel: 'tileborne:exports:deleteExport',
   request: ExportsDeleteExportRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,

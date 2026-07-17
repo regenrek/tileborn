@@ -1,54 +1,60 @@
-import { Effect, Option, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { Effect, Option, Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { DeterministicClock } from "./clock/deterministic-clock.js";
+import { DeterministicClock } from './clock/deterministic-clock.js';
 import {
   defineComponent,
   HealthComponent,
   PositionComponent,
   VelocityComponent,
   type ComponentDefinition,
-} from "./ecs/components.js";
-import { SystemScheduler, type System } from "./ecs/systems.js";
-import { EntityHandleStaleError, World } from "./ecs/world.js";
-import { Button, InputBuffer, KeyInputEvent, MouseButtonInputEvent, MouseMoveInputEvent } from "./input/input.js";
-import { GameLoop } from "./loop/game-loop.js";
-import { GameRuntime, makeGameRuntime } from "./runtime/game-runtime.js";
+} from './ecs/components.js';
+import { SystemScheduler, type System } from './ecs/systems.js';
+import { EntityHandleStaleError, World } from './ecs/world.js';
+import {
+  Button,
+  InputBuffer,
+  KeyInputEvent,
+  MouseButtonInputEvent,
+  MouseMoveInputEvent,
+} from './input/input.js';
+import { GameLoop } from './loop/game-loop.js';
+import { GameRuntime, makeGameRuntime } from './runtime/game-runtime.js';
 
 const components = (...items: readonly ComponentDefinition<object>[]) => items;
 const componentValue = <T>(value: Option.Option<T>): T => Option.getOrThrow(value);
 const slotIndexOf = (entity: number): number => entity & 0xffff;
 const generationOf = (entity: number): number => entity >>> 16;
 
-describe("DeterministicClock", () => {
-  it("advances virtual time", () => {
+describe('DeterministicClock', () => {
+  it('advances virtual time', () => {
     const clock = new DeterministicClock({ startMs: 10 });
     expect(clock.now()).toBe(10);
     expect(clock.advance(5)).toBe(15);
     expect(clock.now()).toBe(15);
   });
 
-  it("resets virtual time", () => {
+  it('resets virtual time', () => {
     const clock = new DeterministicClock({ startMs: 10 });
     clock.advance(20);
     clock.reset();
     expect(clock.now()).toBe(10);
   });
 
-  it("keeps system time monotonic", () => {
+  it('keeps system time monotonic', () => {
     const values = [5, 3, 8];
-    const clock = new DeterministicClock({ mode: "system", now: () => values.shift() ?? 8 });
+    const clock = new DeterministicClock({ mode: 'system', now: () => values.shift() ?? 8 });
     expect([clock.now(), clock.now(), clock.now()]).toEqual([5, 5, 8]);
   });
 
-  it("replays seeded random values after reset", () => {
+  it('replays seeded random values after reset', () => {
     const clock = new DeterministicClock({ seed: 123 });
     const first = [clock.random(), clock.random()];
     clock.reset();
     expect([clock.random(), clock.random()]).toEqual(first);
   });
 
-  it("produces deterministic RNG streams from matching seeds", () => {
+  it('produces deterministic RNG streams from matching seeds', () => {
     const first = new DeterministicClock({ seed: 123 });
     const second = new DeterministicClock({ seed: 123 });
     const different = new DeterministicClock({ seed: 456 });
@@ -59,23 +65,23 @@ describe("DeterministicClock", () => {
   });
 });
 
-describe("InputBuffer", () => {
-  it("records and consumes events", () => {
+describe('InputBuffer', () => {
+  it('records and consumes events', () => {
     const buffer = new InputBuffer();
-    buffer.record(new KeyInputEvent({ tick: 1, code: "KeyW", pressed: true }));
+    buffer.record(new KeyInputEvent({ tick: 1, code: 'KeyW', pressed: true }));
     expect(buffer.consumeEvents()).toHaveLength(1);
   });
 
-  it("clears consumed events between ticks", () => {
+  it('clears consumed events between ticks', () => {
     const buffer = new InputBuffer();
     buffer.record(new MouseMoveInputEvent({ tick: 1, x: 10, y: 20 }));
     buffer.consumeEvents();
     expect(buffer.consumeEvents()).toEqual([]);
   });
 
-  it("creates a command from current state", () => {
+  it('creates a command from current state', () => {
     const buffer = new InputBuffer();
-    buffer.record(new KeyInputEvent({ tick: 1, code: "KeyD", pressed: true }));
+    buffer.record(new KeyInputEvent({ tick: 1, code: 'KeyD', pressed: true }));
     buffer.record(new MouseButtonInputEvent({ tick: 1, button: 0, pressed: true }));
     const command = buffer.commandForTick(2);
     expect(command.moveX).toBe(1);
@@ -83,8 +89,8 @@ describe("InputBuffer", () => {
   });
 });
 
-describe("GameLoop", () => {
-  it("converges fixed steps over 100 ms at 60 Hz", () => {
+describe('GameLoop', () => {
+  it('converges fixed steps over 100 ms at 60 Hz', () => {
     let updates = 0;
     const clock = new DeterministicClock();
     const loop = new GameLoop({ clock, update: () => updates++ });
@@ -97,7 +103,7 @@ describe("GameLoop", () => {
     expect(updates).toBe(6);
   });
 
-  it("pauses and resumes", () => {
+  it('pauses and resumes', () => {
     let updates = 0;
     const clock = new DeterministicClock();
     const loop = new GameLoop({ clock, update: () => updates++ });
@@ -112,14 +118,14 @@ describe("GameLoop", () => {
     expect(updates).toBe(1);
   });
 
-  it("manual step advances one tick", () => {
+  it('manual step advances one tick', () => {
     const ticks: number[] = [];
     const loop = new GameLoop({ update: (_dt, tick) => ticks.push(tick) });
     expect(loop.step(1)).toBe(1);
     expect(ticks).toEqual([1]);
   });
 
-  it("caps catch-up work after a large frame", () => {
+  it('caps catch-up work after a large frame', () => {
     let updates = 0;
     const clock = new DeterministicClock();
     const loop = new GameLoop({ clock, maxCatchupTicks: 5, update: () => updates++ });
@@ -131,17 +137,21 @@ describe("GameLoop", () => {
     expect(result.alpha).toBeLessThanOrEqual(loop.maxCatchupTicks);
   });
 
-  it("renders the partial tick alpha", () => {
+  it('renders the partial tick alpha', () => {
     const alphas: number[] = [];
     const clock = new DeterministicClock();
-    const loop = new GameLoop({ clock, update: () => undefined, render: (alpha) => alphas.push(alpha) });
+    const loop = new GameLoop({
+      clock,
+      update: () => undefined,
+      render: (alpha) => alphas.push(alpha),
+    });
     loop.start();
     clock.advance(loop.stepMs * 0.7);
     loop.runFrame();
     expect(alphas.at(-1)).toBeCloseTo(0.7);
   });
 
-  it("keeps 60 Hz ticks deterministic over 10000 milliseconds", () => {
+  it('keeps 60 Hz ticks deterministic over 10000 milliseconds', () => {
     let updates = 0;
     const clock = new DeterministicClock();
     const loop = new GameLoop({ clock, update: () => updates++ });
@@ -156,8 +166,8 @@ describe("GameLoop", () => {
   });
 });
 
-describe("World", () => {
-  it("creates and destroys entities", () => {
+describe('World', () => {
+  it('creates and destroys entities', () => {
     const world = new World();
     const entity = world.createEntity();
     expect(world.hasEntity(entity)).toBe(true);
@@ -165,7 +175,7 @@ describe("World", () => {
     expect(world.hasEntity(entity)).toBe(false);
   });
 
-  it("adds and removes components", () => {
+  it('adds and removes components', () => {
     const world = new World();
     const entity = world.createEntity();
     world.addComponent(entity, PositionComponent, { x: 3 });
@@ -175,7 +185,7 @@ describe("World", () => {
     expect(Option.isNone(world.getComponent(entity, PositionComponent))).toBe(true);
   });
 
-  it("queries expected entities", () => {
+  it('queries expected entities', () => {
     const world = new World();
     const moving = world.createEntity();
     const staticEntity = world.createEntity();
@@ -187,7 +197,7 @@ describe("World", () => {
     expect(queried).toEqual([moving]);
   });
 
-  it("keeps query results stable across ticks", () => {
+  it('keeps query results stable across ticks', () => {
     const world = new World();
     const first = world.createEntity();
     const second = world.createEntity();
@@ -202,7 +212,7 @@ describe("World", () => {
     expect(query()).toEqual([first, second]);
   });
 
-  it("rejects stale handles when a slot is reused", () => {
+  it('rejects stale handles when a slot is reused', () => {
     const world = new World();
     const original = world.createEntity();
     world.addComponent(original, PositionComponent, { x: 1 });
@@ -220,7 +230,7 @@ describe("World", () => {
     );
   });
 
-  it("retires a slot when its 16-bit generation is exhausted", () => {
+  it('retires a slot when its 16-bit generation is exhausted', () => {
     const world = new World(1);
     const original = world.createEntity();
     let entity = original;
@@ -232,13 +242,13 @@ describe("World", () => {
     expect(Option.isNone(world.getComponent(original, PositionComponent))).toBe(true);
   });
 
-  it("queries component masks beyond 32 registered component types", () => {
+  it('queries component masks beyond 32 registered component types', () => {
     const world = new World();
     const definitions = Array.from({ length: 40 }, (_, index) =>
       defineComponent(
         `Dummy${index}`,
         Schema.Struct({ value: Schema.Number }),
-        { value: "i32" },
+        { value: 'i32' },
         () => ({ value: 0 }),
       ),
     );
@@ -255,7 +265,7 @@ describe("World", () => {
     expect(matches).toBe(1);
   });
 
-  it("continues query iteration while current entities are destroyed", () => {
+  it('continues query iteration while current entities are destroyed', () => {
     const world = new World();
     for (let index = 0; index < 100; index += 1) {
       const entity = world.createEntity();
@@ -276,7 +286,7 @@ describe("World", () => {
     expect(remaining).toBe(66);
   });
 
-  it("rejects stale query view mutation after the entity is destroyed outside the callback", () => {
+  it('rejects stale query view mutation after the entity is destroyed outside the callback', () => {
     const world = new World();
     const entity = world.createEntity();
     world.addComponent(entity, PositionComponent, { x: 1, y: 2 });
@@ -298,7 +308,7 @@ describe("World", () => {
     );
   });
 
-  it("rejects stale query view mutation after destroying the current entity inside the callback", () => {
+  it('rejects stale query view mutation after destroying the current entity inside the callback', () => {
     const world = new World();
     const entity = world.createEntity();
     world.addComponent(entity, PositionComponent, { x: 1, y: 2 });
@@ -317,7 +327,7 @@ describe("World", () => {
     });
   });
 
-  it("rejects stale query view mutation after slot recycling", () => {
+  it('rejects stale query view mutation after slot recycling', () => {
     const world = new World();
     const original = world.createEntity();
     world.addComponent(original, PositionComponent, { x: 1, y: 2 });
@@ -369,7 +379,7 @@ describe("World", () => {
     expect(visited).toBe(100);
   });
 
-  it("grows capacity while keeping entity ids and component columns intact", () => {
+  it('grows capacity while keeping entity ids and component columns intact', () => {
     const world = new World();
     const entities = Array.from({ length: 1500 }, (_, index) => {
       const entity = world.createEntity();
@@ -385,24 +395,24 @@ describe("World", () => {
   });
 });
 
-describe("SystemScheduler", () => {
-  it("orders dependencies before dependents", () => {
+describe('SystemScheduler', () => {
+  it('orders dependencies before dependents', () => {
     const scheduler = new SystemScheduler();
-    scheduler.add(system("render", ["move"]));
-    scheduler.add(system("move"));
-    expect(scheduler.ordered().map((entry) => entry.name)).toEqual(["move", "render"]);
+    scheduler.add(system('render', ['move']));
+    scheduler.add(system('move'));
+    expect(scheduler.ordered().map((entry) => entry.name)).toEqual(['move', 'render']);
   });
 
-  it("keeps insertion order without dependencies", () => {
+  it('keeps insertion order without dependencies', () => {
     const scheduler = new SystemScheduler();
-    scheduler.add(system("a"));
-    scheduler.add(system("b"));
-    expect(scheduler.ordered().map((entry) => entry.name)).toEqual(["a", "b"]);
+    scheduler.add(system('a'));
+    scheduler.add(system('b'));
+    expect(scheduler.ordered().map((entry) => entry.name)).toEqual(['a', 'b']);
   });
 });
 
-describe("GameRuntime", () => {
-  it("updates position by velocity end-to-end", async () => {
+describe('GameRuntime', () => {
+  it('updates position by velocity end-to-end', async () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         const runtime = yield* GameRuntime;
@@ -411,22 +421,27 @@ describe("GameRuntime", () => {
         state.world.addComponent(entity, PositionComponent);
         state.world.addComponent(entity, VelocityComponent, { x: 60, y: 0 });
         yield* runtime.registerSystem({
-          name: "movement",
+          name: 'movement',
           query: components(PositionComponent, VelocityComponent),
           update: (world, dt) => {
-            world.query(components(PositionComponent, VelocityComponent), (_moving, position, velocity) => {
-              position.x += velocity.x * dt;
-              position.y += velocity.y * dt;
-            });
+            world.query(
+              components(PositionComponent, VelocityComponent),
+              (_moving, position, velocity) => {
+                position.x += velocity.x * dt;
+                position.y += velocity.y * dt;
+              },
+            );
           },
         });
         yield* runtime.step(10);
-        expect(componentValue(state.world.getComponent(entity, PositionComponent)).x).toBeCloseTo(10);
+        expect(componentValue(state.world.getComponent(entity, PositionComponent)).x).toBeCloseTo(
+          10,
+        );
       }).pipe(Effect.provide(GameRuntime.layer)),
     );
   });
 
-  it("factory exposes lifecycle without a layer", async () => {
+  it('factory exposes lifecycle without a layer', async () => {
     const runtime = makeGameRuntime();
     const state = await Effect.runPromise(runtime.init({ tickRate: 30 }));
     await Effect.runPromise(runtime.start());

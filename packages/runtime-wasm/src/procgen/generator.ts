@@ -1,6 +1,6 @@
-import { createProcgenRng } from "./rng.js";
+import { createProcgenRng } from './rng.js';
 
-export const MAP_GENERATE_PRESETS = ["open", "dungeon", "arena"] as const;
+export const MAP_GENERATE_PRESETS = ['open', 'dungeon', 'arena'] as const;
 export type MapGeneratePreset = (typeof MAP_GENERATE_PRESETS)[number];
 
 const FLOOR_TILE = 0;
@@ -84,11 +84,11 @@ export const generatePresetTiles = (
   seed: number,
 ): number[] => {
   switch (preset) {
-    case "open":
+    case 'open':
       return generateOpen(width, height);
-    case "arena":
+    case 'arena':
       return generateArena(width, height);
-    case "dungeon":
+    case 'dungeon':
       return generateDungeon(width, height, seed);
   }
 };

@@ -1,46 +1,62 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import type { TilesetPackAsset as TilesetPackAssetType } from "../schemas/tileset-pack.js";
-import { TilesetPack, TilesetPackAsset as TilesetPackAssetClass, TilesetPackLicense } from "../schemas/tileset-pack.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
+import type { TilesetPackAsset as TilesetPackAssetType } from '../schemas/tileset-pack.js';
+import {
+  TilesetPack,
+  TilesetPackAsset as TilesetPackAssetClass,
+  TilesetPackLicense,
+} from '../schemas/tileset-pack.js';
 
-import { buildTilesetWindows, compileTiledMap, tiledImageLayerAssetId } from "./compile-map.js";
-import { compileTiledTileset } from "./compile-tileset.js";
-import { compileTileborneMap } from "./core-map.js";
-import { deterministicPackId } from "./deterministic-ids.js";
+import { buildTilesetWindows, compileTiledMap, tiledImageLayerAssetId } from './compile-map.js';
+import { compileTiledTileset } from './compile-tileset.js';
+import { compileTileborneMap } from './core-map.js';
+import { deterministicPackId } from './deterministic-ids.js';
 import {
   isSupportedTilesetSource,
   readExternalText,
   resolveExternalPath,
   tilesetIdFromSource,
-} from "./external-resolve.js";
-import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "./tile-data.js";
-import { normalizeJsonTileLayers, validateTiledJsonMap } from "./validate.js";
-import { parseTsj } from "./tsj-parse.js";
-import { parseTsx } from "./tsx-parse.js";
-import { unsupportedClassPropertyFeaturesForMap, unsupportedFeatureDiagnostic } from "./support-policy.js";
-import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
-import type { TiledImportOptions, TiledImportSuccess, TiledJsonAnyLayer, TiledJsonMap, TiledJsonTileLayer, TiledJsonTileset } from "./types.js";
+} from './external-resolve.js';
+import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from './tile-data.js';
+import { normalizeJsonTileLayers, validateTiledJsonMap } from './validate.js';
+import { parseTsj } from './tsj-parse.js';
+import { parseTsx } from './tsx-parse.js';
+import {
+  unsupportedClassPropertyFeaturesForMap,
+  unsupportedFeatureDiagnostic,
+} from './support-policy.js';
+import { normalizeTiledTilesetImageAssetPaths } from './image-paths.js';
+import type {
+  TiledImportOptions,
+  TiledImportSuccess,
+  TiledJsonAnyLayer,
+  TiledJsonMap,
+  TiledJsonTileLayer,
+  TiledJsonTileset,
+} from './types.js';
 
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
-  diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  diagnostics.some((diagnostic) => diagnostic.severity === 'error');
 
-const imageLayerPackAssets = (layers: readonly TiledJsonAnyLayer[]): readonly TilesetPackAssetType[] =>
+const imageLayerPackAssets = (
+  layers: readonly TiledJsonAnyLayer[],
+): readonly TilesetPackAssetType[] =>
   layers.flatMap((layer) => {
-    if (layer.type === "group") return imageLayerPackAssets(layer.layers);
-    if (layer.type !== "imagelayer") return [];
+    if (layer.type === 'group') return imageLayerPackAssets(layer.layers);
+    if (layer.type !== 'imagelayer') return [];
     return [
       new TilesetPackAssetClass({
         id: tiledImageLayerAssetId(layer.image),
         path: layer.image,
-        mime: "image/png",
+        mime: 'image/png',
       }),
     ];
   });
 
 const layerDecodeInput = (
   layer: TiledJsonTileLayer & { readonly text?: string },
-): import("./tile-data.js").DecodeTileLayerDataInput => ({
+): import('./tile-data.js').DecodeTileLayerDataInput => ({
   layerName: layer.name,
   width: layer.width,
   height: layer.height,
@@ -49,7 +65,7 @@ const layerDecodeInput = (
   ...(layer.text ? { text: layer.text } : {}),
 });
 
-const inlineTilesetSource = (ref: TiledJsonMap["tilesets"][number]): TiledJsonTileset =>
+const inlineTilesetSource = (ref: TiledJsonMap['tilesets'][number]): TiledJsonTileset =>
   ref as TiledJsonTileset;
 
 const resolveTilesets = async (
@@ -63,25 +79,27 @@ const resolveTilesets = async (
   const diagnostics: ParseDiagnostic[] = [];
 
   for (const ref of map.tilesets) {
-    const tilesetSeed = ref.source ? tilesetIdFromSource(ref.source) : ref.name ?? `firstgid-${ref.firstgid}`;
+    const tilesetSeed = ref.source
+      ? tilesetIdFromSource(ref.source)
+      : (ref.name ?? `firstgid-${ref.firstgid}`);
     if (ref.source) {
       if (!options.reader) {
         diagnostics.push({
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: ref.source,
-          message: "External tileset reference requires an injected reader",
-          severity: "error",
-          format: "tmj",
+          message: 'External tileset reference requires an injected reader',
+          severity: 'error',
+          format: 'tmj',
         });
         continue;
       }
       if (!isSupportedTilesetSource(ref.source)) {
         diagnostics.push({
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: ref.source,
-          message: "External tileset source must be .json, .tsj, or .tsx",
-          severity: "error",
-          format: "tmj",
+          message: 'External tileset source must be .json, .tsj, or .tsx',
+          severity: 'error',
+          format: 'tmj',
         });
         continue;
       }
@@ -99,7 +117,7 @@ const resolveTilesets = async (
 
       const raw = await readExternalText(options.reader.readFile, resolved.absolutePath);
       const lower = ref.source.toLowerCase();
-      const result = lower.endsWith(".tsx")
+      const result = lower.endsWith('.tsx')
         ? parseTsx(raw, {
             packIdSeed: options.packIdSeed,
             tilesetSeed,
@@ -153,10 +171,10 @@ const hydrateTileLayers = async (
   const diagnostics: ParseDiagnostic[] = [];
 
   const hydrateLayer = async (layer: TiledJsonAnyLayer): Promise<TiledJsonAnyLayer> => {
-    if (layer.type === "group") {
+    if (layer.type === 'group') {
       return { ...layer, layers: await Promise.all(layer.layers.map(hydrateLayer)) };
     }
-    if (layer.type !== "tilelayer") return layer;
+    if (layer.type !== 'tilelayer') return layer;
 
     const tileLayer = layer as TiledJsonTileLayer & { readonly text?: string };
     if (tileLayer.data.length > 0) return tileLayer;
@@ -177,7 +195,9 @@ const hydrateTileLayers = async (
 export const parseTmj = async (
   raw: string,
   options: TiledImportOptions,
-): Promise<ParseResult<TiledImportSuccess> & { readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<
+  ParseResult<TiledImportSuccess> & { readonly diagnostics: readonly ParseDiagnostic[] }
+> => {
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -185,11 +205,11 @@ export const parseTmj = async (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: `Failed to parse TMJ JSON: ${(error as Error).message}`,
-          severity: "error",
-          format: "tmj",
+          severity: 'error',
+          format: 'tmj',
         },
       ],
     };
@@ -221,17 +241,20 @@ export const parseTmj = async (
   const pack = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(options.packIdSeed),
-    name: options.packName ?? map.class ?? "Tiled Import",
-    version: options.packVersion ?? map.version ?? "1.0.0",
+    name: options.packName ?? map.class ?? 'Tiled Import',
+    version: options.packVersion ?? map.version ?? '1.0.0',
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
-      attribution: Option.some("Imported from Tiled"),
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Imported from Tiled'),
       sourceUrl: Option.none(),
       notes: Option.some(options.sourcePath),
       redistributable: false,
     }),
     tilesets: tilesetValues.map((entry) => entry.tileset),
-    assets: [...tilesetValues.flatMap((entry) => entry.assets), ...imageLayerPackAssets(map.layers)],
+    assets: [
+      ...tilesetValues.flatMap((entry) => entry.assets),
+      ...imageLayerPackAssets(map.layers),
+    ],
     placeables: tilesetValues.flatMap((entry) => entry.placeables),
   });
 
@@ -243,7 +266,12 @@ export const parseTmj = async (
       name: ref.name ?? tilesetValues[index]?.tileset.name ?? `tileset-${ref.firstgid}`,
     })),
   );
-  const compiledMap = compileTiledMap({ map, windows, placeables: pack.placeables, profile: options.profile });
+  const compiledMap = compileTiledMap({
+    map,
+    windows,
+    placeables: pack.placeables,
+    profile: options.profile,
+  });
   if (hasBlockingDiagnostics(compiledMap.diagnostics)) {
     return { diagnostics: [...diagnostics, ...compiledMap.diagnostics] };
   }
@@ -270,11 +298,11 @@ export const parseTmjSync = (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: `Failed to parse TMJ JSON: ${(error as Error).message}`,
-          severity: "error",
-          format: "tmj",
+          severity: 'error',
+          format: 'tmj',
         },
       ],
     };
@@ -287,7 +315,7 @@ export const parseTmjSync = (
   let map = normalizeJsonTileLayers(validated.map);
 
   const syncLayers = map.layers.map((layer) => {
-    if (layer.type !== "tilelayer" || layer.data.length > 0) return layer;
+    if (layer.type !== 'tilelayer' || layer.data.length > 0) return layer;
     const decoded = decodeTileLayerDataSync(
       layerDecodeInput(layer as TiledJsonTileLayer & { readonly text?: string }),
     );
@@ -337,17 +365,20 @@ export const parseTmjSync = (
   const pack = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(options.packIdSeed),
-    name: options.packName ?? "Tiled Import",
-    version: options.packVersion ?? map.version ?? "1.0.0",
+    name: options.packName ?? 'Tiled Import',
+    version: options.packVersion ?? map.version ?? '1.0.0',
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
-      attribution: Option.some("Imported from Tiled"),
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Imported from Tiled'),
       sourceUrl: Option.none(),
       notes: Option.some(options.sourcePath),
       redistributable: false,
     }),
     tilesets: tilesetValues.map((entry) => entry.tileset),
-    assets: [...tilesetValues.flatMap((entry) => entry.assets), ...imageLayerPackAssets(map.layers)],
+    assets: [
+      ...tilesetValues.flatMap((entry) => entry.assets),
+      ...imageLayerPackAssets(map.layers),
+    ],
     placeables: tilesetValues.flatMap((entry) => entry.placeables),
   });
 
@@ -360,7 +391,12 @@ export const parseTmjSync = (
     })),
   );
 
-  const compiledMap = compileTiledMap({ map, windows, placeables: pack.placeables, profile: options.profile });
+  const compiledMap = compileTiledMap({
+    map,
+    windows,
+    placeables: pack.placeables,
+    profile: options.profile,
+  });
   if (hasBlockingDiagnostics(compiledMap.diagnostics)) {
     return { diagnostics: [...diagnostics, ...compiledMap.diagnostics] };
   }

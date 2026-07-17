@@ -9,25 +9,49 @@ Tileborne treats the editor renderer, third-party plugins, imported assets, and 
 
 ## Trust zones
 
-| Zone | Trust level | Key rule |
-| --- | --- | --- |
-| Renderer (Electron) | Untrusted for Node/fs | `contextIsolation: true`, no plugin executables |
-| Main / CLI / game-host | Trusted platform | Effect services mediate all I/O |
-| Imported assets & plugins | Untrusted input | Validated before staging commit |
-| Browser runtime client | Adversarial | Authoritative simulation on game-host only |
+| Zone                      | Trust level           | Key rule                                        |
+| ------------------------- | --------------------- | ----------------------------------------------- |
+| Renderer (Electron)       | Untrusted for Node/fs | `contextIsolation: true`, no plugin executables |
+| Main / CLI / game-host    | Trusted platform      | Effect services mediate all I/O                 |
+| Imported assets & plugins | Untrusted input       | Validated before staging commit                 |
+| Browser runtime client    | Adversarial           | Authoritative simulation on game-host only      |
 
 ## Supply-chain hardening
 
 Root `pnpm-workspace.yaml` configures pnpm trust policy:
 
-| Setting | Purpose |
-| --- | --- |
-| `minimumReleaseAge` / `minimumReleaseAgeStrict` | Block freshly published packages unless explicitly excluded |
-| `blockExoticSubdeps` | Reject git/subpath dependencies without an override |
-| `dangerouslyAllowAllBuilds: false` | Require an explicit `allowBuilds` allowlist for install scripts |
-| `trustPolicy: no-downgrade` | Prefer provenance-aware installs |
+| Setting                                         | Purpose                                                         |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `minimumReleaseAge` / `minimumReleaseAgeStrict` | Block freshly published packages unless explicitly excluded     |
+| `blockExoticSubdeps`                            | Reject git/subpath dependencies without an override             |
+| `dangerouslyAllowAllBuilds: false`              | Require an explicit `allowBuilds` allowlist for install scripts |
+| `trustPolicy: no-downgrade`                     | Prefer provenance-aware installs                                |
 
 Pinned exclusions must include a dated comment and be removed once the dependency has been stable for more than seven days. See [CONTRIBUTING.md](https://github.com/tileborne/tileborne/blob/main/CONTRIBUTING.md) on the monorepo.
+
+## Release audit gate
+
+Production release candidates must pass the local security hygiene gate before handoff:
+
+- Run `pnpm audit --audit-level moderate`.
+- Review secret-scan hits for `CLOUDFLARE_API_TOKEN`, `ALCHEMY_PASSWORD`, `HANDOFF_SIGNING_KEY`, API keys, tokens, passwords, and private keys.
+- Keep production secrets in the operator's Cloudflare, Alchemy, or environment secret store; do not commit `.env` files or plaintext credentials.
+- Treat remaining moderate-or-higher advisories as release blockers unless the release owner records an explicit acceptance decision.
+
+For the 2026-06-15 Production 1.0 audit, mature patched releases removed the actionable Playwright, Wrangler, Hono, Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core` findings. `esbuild >=0.17.0 <0.28.1` remains blocked because the patched `0.28.1` release is still inside the repository's seven-day `minimumReleaseAge` window.
+
+## Desktop release secrets and private evidence
+
+Apple signing identity, Team ID, App Store Connect key path/id/issuer, and the scoped GitHub release
+token are operator/CI secrets. Do not commit or print their values, key files, `.env` files, or
+shell transcripts that expose them. `TILEBORNE_DESKTOP_PUBLISH_APPROVED=1` is a one-run maintainer
+approval, not a durable default, and credential presence alone is insufficient.
+
+Native release receipts, Playwright traces, redacted support bundles, and project backup archives
+may still contain local paths or project metadata. Keep them restricted, inspect them before private
+sharing, and follow the release owner's retention/deletion policy. Remote crash reporting is
+unsupported in desktop 1.0; local fail-fast logs, recovery, and an opt-in support bundle are not
+consent for automatic upload. See [Desktop Release](/desktop-release/).
 
 ## Path traversal and symlink escape
 
@@ -73,6 +97,37 @@ Electron main window defaults (`apps/desktop/src/main/window.ts`):
 
 All channels are defined in `@tileborne/ipc-contracts` with Effect Schema decode/encode at the preload boundary. Undeclared IPC is rejected.
 
+## Gameplay behavior security
+
+Project gameplay TypeScript is untrusted input even after a creator grants the
+project permission to compile it. Trust is an execution precondition, not a
+general capability grant.
+
+| Threat                                                  | Enforced policy                                                                                                                                                                                        | Automated owner/evidence                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Imported code before consent                            | `imported-untrusted` snapshots fail package compilation; source is preserved for inspection                                                                                                            | `@tileborne/services-build` `project-package.test.ts`                                    |
+| Filesystem, network, Node, Electron, DOM, environment   | Only `@tileborne/game-sdk`, approved bare modules, and contained project-relative imports resolve; forbidden globals/imports produce stable `TBSDK` diagnostics                                        | `@tileborne/game-sdk` authoring validator tests and built-artifact adversarial tests     |
+| Wall clock and ambient randomness                       | `Date`, `performance`, `Math.random`, Web Crypto randomness, timers, and aliases/computed/destructured escapes are rejected; use injected tick clock, seeded RNG, and tick timers                      | `@tileborne/game-sdk` authoring validator tests                                          |
+| Dynamic code/import escapes                             | `eval`, `Function`, constructor aliases, `Reflect.get`/property-descriptor retrieval, dynamic imports, string/Wasm code generation, and unresolved imports fail closed                                 | SDK source/built-validator and services-build compiler tests plus isolated-host VM tests |
+| Runaway CPU, recursion, queues, actions, state, or heap | Scheduler budgets reject floods; worker wall-time/resource limits terminate the isolated worker and restore last-known-good modules/state                                                              | `@tileborne/runtime` scheduler tests and `apps/game-host` isolated-runtime tests         |
+| Execution in a privileged/editor process                | Gameplay never executes in Electron renderer, preload, or main. Local playtest uses a Node worker; authoritative/shipped execution uses a separate Workerd service                                     | `@tileborne/boundary-tests` behavior boundary plus game-host isolation smoke             |
+| Debug-data disclosure or unbounded retention            | Debug values are JSON-only and size/depth/count bounded; secret-like keys plus POSIX, drive, UNC, and traversal paths are redacted; scheduler retains only the newest bounded trace/diagnostic windows | desktop playtest-runtime-host tests and runtime scheduler tests                          |
+
+Default in-process scheduler limits are 8 ms per handler, 64 KiB state per
+instance, 2 MiB scheduler-accounted memory, queue depth 512, recursion depth 16,
+128 actions per dispatch, 2,048 actions per tick, and 256 retained traces and
+diagnostics. The local isolated host additionally defaults to a 250 ms hard wall
+deadline and Node worker heap/stack resource limits. Host profiles may tighten
+these values; raising them is an owned runtime/security decision, not a project
+script option.
+
+Behavior source, diagnostics, traces, and artifacts remain project-local unless
+the user invokes an explicit existing export or publish operation. Runtime
+inspection is ephemeral and bounded; Tileborne does not silently upload gameplay
+source or debug traces. A new SDK capability requires a typed declaration,
+source/build validation, authoritative runtime handler, documentation,
+adversarial tests, and security review.
+
 ## Handoff tokens (game-host)
 
 Playtest and room WebSocket upgrades require short-lived HMAC tokens minted by the Worker and validated inside the Durable Object:
@@ -83,11 +138,11 @@ Playtest and room WebSocket upgrades require short-lived HMAC tokens minted by t
 
 Wire format: `<base64url(payload)>.<base64url(hmac-sha256)>`
 
-| Setting | Requirement |
-| --- | --- |
+| Setting               | Requirement                           |
+| --------------------- | ------------------------------------- |
 | `HANDOFF_SIGNING_KEY` | ≥ 32 characters; secret in production |
-| TTL | 300 seconds from `/playtest/start` |
-| Invalid token | WebSocket close **4001** |
+| TTL                   | 300 seconds from `/playtest/start`    |
+| Invalid token         | WebSocket close **4001**              |
 
 `/health` returns **503** when the signing key is missing or too short.
 

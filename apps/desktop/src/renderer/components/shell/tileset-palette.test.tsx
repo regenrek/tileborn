@@ -1,11 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import {
-  makeAssetId,
-  makePackId,
-  makePlaceableId,
-  makeTileId,
-  type Uuid,
-} from '@tileborne/core';
+import { makeAssetId, makePackId, makePlaceableId, makeTileId, type Uuid } from '@tileborne/core';
 import {
   AutotileRuleId,
   CellSize,

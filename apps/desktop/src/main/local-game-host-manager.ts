@@ -1,22 +1,26 @@
-import path from "node:path";
+import path from 'node:path';
 
-import type { LocalGameHost } from "@tileborne/services-build/local-game-host";
+import type { LocalGameHost } from '@tileborne/services-build/local-game-host';
 
 let activeHost: LocalGameHost | undefined;
 
 const resolveGameHostWorkerPath = (): string =>
-  path.resolve(process.cwd(), "../game-host/dist/worker.js");
+  path.resolve(process.cwd(), '../game-host/dist/worker.js');
 
 export const startDesktopLocalGameHost = async (
   port?: number,
+  artifactDirectory?: string,
 ): Promise<{ readonly baseUrl: string; readonly signingKey: string }> => {
   if (activeHost) {
     await activeHost.stop();
     activeHost = undefined;
   }
-  const workerPath = resolveGameHostWorkerPath();
+  const workerPath =
+    artifactDirectory === undefined
+      ? resolveGameHostWorkerPath()
+      : path.resolve(artifactDirectory, 'worker.js');
   try {
-    const { createLocalGameHost } = await import("@tileborne/services-build/local-game-host");
+    const { createLocalGameHost } = await import('@tileborne/services-build/local-game-host');
     activeHost = await createLocalGameHost({
       workerPath,
       ...(port === undefined ? {} : { port }),

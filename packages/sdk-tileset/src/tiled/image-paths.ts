@@ -1,4 +1,4 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 
 import {
   directoryName,
@@ -7,8 +7,8 @@ import {
   normalizePath,
   resolveAbsoluteProjectRoot,
   trimTrailingSlash,
-} from "./external-resolve.js";
-import type { TiledJsonTile, TiledJsonTileset } from "./types.js";
+} from './external-resolve.js';
+import type { TiledJsonTile, TiledJsonTileset } from './types.js';
 
 type NormalizedImagePath =
   | { readonly ok: true; readonly path: string }
@@ -19,47 +19,53 @@ const pathDiagnostic = (
   resolvedPath: string,
   message: string,
 ): ParseDiagnostic => ({
-  _tag: "TiledExternalRefBlocked",
+  _tag: 'TiledExternalRefBlocked',
   path: source,
   message,
-  severity: "error",
+  severity: 'error',
   source,
   resolvedPath,
 });
 
 const nonStringDiagnostic = (path: string): ParseDiagnostic => ({
-  _tag: "TiledParseError",
+  _tag: 'TiledParseError',
   path,
-  message: "Tiled image source must be a string",
-  severity: "error",
-  format: "tmj",
+  message: 'Tiled image source must be a string',
+  severity: 'error',
+  format: 'tmj',
 });
 
 export const normalizeTiledImageAssetPath = (
   value: unknown,
   diagnosticPath: string,
-  context?: {
-    readonly projectRoot: string;
-    readonly basePath: string;
-    readonly allowParentTraversalWithinRoot?: boolean | undefined;
-  } | undefined,
+  context?:
+    | {
+        readonly projectRoot: string;
+        readonly basePath: string;
+        readonly allowParentTraversalWithinRoot?: boolean | undefined;
+      }
+    | undefined,
 ): NormalizedImagePath => {
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return { ok: false, diagnostic: nonStringDiagnostic(diagnosticPath) };
   }
 
-  if (value.includes("\0")) {
+  if (value.includes('\0')) {
     return {
       ok: false,
-      diagnostic: pathDiagnostic(value, value, "Tiled image source must not contain NUL bytes"),
+      diagnostic: pathDiagnostic(value, value, 'Tiled image source must not contain NUL bytes'),
     };
   }
 
-  const source = value.replaceAll("\\", "/");
-  if (source.startsWith("/") || /^[A-Za-z]:\//.test(source)) {
+  const source = value.replaceAll('\\', '/');
+  if (source.startsWith('/') || /^[A-Za-z]:\//.test(source)) {
     return {
       ok: false,
-      diagnostic: pathDiagnostic(value, source, "Tiled image source must be relative to the Tiled file"),
+      diagnostic: pathDiagnostic(
+        value,
+        source,
+        'Tiled image source must be relative to the Tiled file',
+      ),
     };
   }
 
@@ -69,21 +75,33 @@ export const normalizeTiledImageAssetPath = (
     if (!isAbsoluteFilesystemPath(projectRoot) || !isAbsoluteFilesystemPath(baseDir)) {
       return {
         ok: false,
-        diagnostic: pathDiagnostic(value, source, "Tiled image source must resolve inside the project root"),
+        diagnostic: pathDiagnostic(
+          value,
+          source,
+          'Tiled image source must resolve inside the project root',
+        ),
       };
     }
-    const prefix = projectRoot.startsWith("/") ? "/" : /^[A-Za-z]:\//.test(projectRoot) ? projectRoot.slice(0, 3) : "";
+    const prefix = projectRoot.startsWith('/')
+      ? '/'
+      : /^[A-Za-z]:\//.test(projectRoot)
+        ? projectRoot.slice(0, 3)
+        : '';
     const baseSegments = trimTrailingSlash(normalizePath(baseDir).path)
       .slice(prefix.length)
-      .split("/")
+      .split('/')
       .filter(Boolean);
-    const boundarySegments = context.allowParentTraversalWithinRoot === true
-      ? trimTrailingSlash(normalizePath(projectRoot).path).slice(prefix.length).split("/").filter(Boolean)
-      : baseSegments;
+    const boundarySegments =
+      context.allowParentTraversalWithinRoot === true
+        ? trimTrailingSlash(normalizePath(projectRoot).path)
+            .slice(prefix.length)
+            .split('/')
+            .filter(Boolean)
+        : baseSegments;
     const segments = [...baseSegments];
-    for (const segment of source.split("/")) {
-      if (segment === "" || segment === ".") continue;
-      if (segment === "..") {
+    for (const segment of source.split('/')) {
+      if (segment === '' || segment === '.') continue;
+      if (segment === '..') {
         if (segments.length <= boundarySegments.length) {
           return {
             ok: false,
@@ -91,8 +109,8 @@ export const normalizeTiledImageAssetPath = (
               value,
               source,
               context.allowParentTraversalWithinRoot === true
-                ? "Tiled image source must not escape the project root"
-                : "Tiled image source must not escape the Tiled file directory",
+                ? 'Tiled image source must not escape the project root'
+                : 'Tiled image source must not escape the Tiled file directory',
             ),
           };
         }
@@ -101,33 +119,37 @@ export const normalizeTiledImageAssetPath = (
       }
       segments.push(segment);
     }
-    const resolved = `${prefix}${segments.join("/")}`;
+    const resolved = `${prefix}${segments.join('/')}`;
     const normalizedResolved = trimTrailingSlash(normalizePath(resolved).path);
     if (!isPathInsideFolder(projectRoot, normalizedResolved)) {
       return {
         ok: false,
-        diagnostic: pathDiagnostic(value, normalizedResolved, "Tiled image source must not escape the project root"),
+        diagnostic: pathDiagnostic(
+          value,
+          normalizedResolved,
+          'Tiled image source must not escape the project root',
+        ),
       };
     }
     const root = trimTrailingSlash(normalizePath(projectRoot).path);
     return {
       ok: true,
-      path: normalizedResolved === root ? "" : normalizedResolved.slice(root.length + 1),
+      path: normalizedResolved === root ? '' : normalizedResolved.slice(root.length + 1),
     };
   }
 
-  const rawSegments = source.split("/").filter((segment) => segment !== "" && segment !== ".");
+  const rawSegments = source.split('/').filter((segment) => segment !== '' && segment !== '.');
   const segments: string[] = [];
   for (const [index, segment] of rawSegments.entries()) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
       if (segments.length === 0) {
         return {
           ok: false,
           diagnostic: pathDiagnostic(
             value,
-            ["..", ...rawSegments.slice(index + 1)].join("/"),
-            "Tiled image source must not escape the Tiled file directory",
+            ['..', ...rawSegments.slice(index + 1)].join('/'),
+            'Tiled image source must not escape the Tiled file directory',
           ),
         };
       }
@@ -137,16 +159,18 @@ export const normalizeTiledImageAssetPath = (
     segments.push(segment);
   }
 
-  return { ok: true, path: segments.join("/") };
+  return { ok: true, path: segments.join('/') };
 };
 
 export const normalizeTiledTilesetImageAssetPaths = (
   tileset: TiledJsonTileset,
-  context?: {
-    readonly projectRoot: string;
-    readonly basePath: string;
-    readonly allowParentTraversalWithinRoot?: boolean | undefined;
-  } | undefined,
+  context?:
+    | {
+        readonly projectRoot: string;
+        readonly basePath: string;
+        readonly allowParentTraversalWithinRoot?: boolean | undefined;
+      }
+    | undefined,
 ): { readonly tileset?: TiledJsonTileset; readonly diagnostics: readonly ParseDiagnostic[] } => {
   const diagnostics: ParseDiagnostic[] = [];
   const rawImage: unknown = tileset.image;
@@ -180,7 +204,7 @@ export const normalizeTiledTilesetImageAssetPaths = (
     normalizedTiles.push({ ...tile, image: normalizedTileImage.path });
   }
 
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     return { diagnostics };
   }
 

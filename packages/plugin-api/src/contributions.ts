@@ -1,25 +1,96 @@
-import { JsonObject, PluginId, type SchemaMigrationChain } from "@tileborne/core";
-import { License } from "@tileborne/asset-pipeline";
-import { Option, Schema } from "effect";
+import {
+  BehaviorRegistryEntry,
+  BehaviorTemplate,
+  JsonObject,
+  PluginId,
+  type SchemaMigrationChain,
+} from '@tileborne/core';
+import { License } from '@tileborne/asset-pipeline/license';
+import { Option, Schema } from 'effect';
 
-import { DuplicateContributionError } from "./errors.js";
-import { ContributionId } from "./primitives.js";
+import { DuplicateContributionError } from './errors.js';
+import { PluginContributionZone } from './contribution-zone.js';
+import { ContributionId } from './primitives.js';
 
 const IconName = Schema.String.check(Schema.isPattern(/^[a-z0-9-]+:[a-z0-9-]+[a-z0-9-_.]*$/i));
 
-export class ContributionDisplay extends Schema.Class<ContributionDisplay>("ContributionDisplay")({
+export class ContributionDisplay extends Schema.Class<ContributionDisplay>('ContributionDisplay')({
   label: Schema.String,
   description: Schema.OptionFromUndefinedOr(Schema.String),
   icon: Schema.OptionFromUndefinedOr(IconName),
   order: Schema.OptionFromUndefinedOr(Schema.Number),
 }) {}
 
-export const PluginContributionZone = Schema.Literals(["project", "working-palette", "assets", "plugins"]);
-export type PluginContributionZone = typeof PluginContributionZone.Type;
-
 const ContributionCapability = Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9.-]*$/i));
 
-export class PluginPanelContribution extends Schema.Class<PluginPanelContribution>("PluginPanelContribution")({
+/**
+ * A stable key implemented by a bundled host registration. Manifest data may
+ * opt into one of these capabilities, while neutral editor/runtime code only
+ * sees the key and never imports a concrete game-mode package.
+ */
+export const GameModeCapabilityId = ContributionCapability;
+export type GameModeCapabilityId = typeof GameModeCapabilityId.Type;
+
+export class GameModeCapabilities extends Schema.Class<GameModeCapabilities>(
+  'GameModeCapabilities',
+)({
+  authoring: Schema.optional(GameModeCapabilityId),
+  renderer: Schema.optional(GameModeCapabilityId),
+  readiness: Schema.optional(GameModeCapabilityId),
+  starter: Schema.optional(GameModeCapabilityId),
+}) {}
+
+export class GameModeDisplay extends Schema.Class<GameModeDisplay>('GameModeDisplay')({
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+  icon: Schema.optional(IconName),
+  order: Schema.optional(Schema.Number),
+}) {}
+
+export class GameModeStarterDeclaration extends Schema.Class<GameModeStarterDeclaration>(
+  'GameModeStarterDeclaration',
+)({
+  templateId: ContributionId,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+}) {}
+
+export class GameModeCreatorChecklistFact extends Schema.Class<GameModeCreatorChecklistFact>(
+  'GameModeCreatorChecklistFact',
+)({
+  id: ContributionId,
+  label: Schema.String,
+  description: Schema.optional(Schema.String),
+  /** Readiness diagnostic sources which satisfy this fact. */
+  sources: Schema.Array(Schema.Literals(['game-mode', 'map', 'catalog', 'asset', 'visual-model'])),
+}) {}
+
+/**
+ * The single owned registration point for a game mode. All other contribution
+ * ids are linked explicitly instead of being inferred from array order or
+ * plugin ids. Generic schema forms remain the default authoring UI; bundled
+ * executable behavior is opt-in through the typed capability keys above.
+ */
+export class GameModeContribution extends Schema.TaggedClass<GameModeContribution>()(
+  'GameModeContribution',
+  {
+    id: ContributionId,
+    kind: Schema.Literal('declarative'),
+    display: GameModeDisplay,
+    runtimeSystemId: ContributionId,
+    settingsPanelId: Schema.optional(ContributionId),
+    settingsFormId: Schema.optional(ContributionId),
+    mapValidatorId: Schema.optional(ContributionId),
+    hudLayoutId: Schema.optional(ContributionId),
+    starter: Schema.optional(GameModeStarterDeclaration),
+    checklistFacts: Schema.optional(Schema.Array(GameModeCreatorChecklistFact)),
+    capabilities: Schema.optional(GameModeCapabilities),
+  },
+) {}
+
+export class PluginPanelContribution extends Schema.Class<PluginPanelContribution>(
+  'PluginPanelContribution',
+)({
   id: ContributionId,
   zone: PluginContributionZone,
   title: Schema.String,
@@ -30,7 +101,9 @@ export class PluginPanelContribution extends Schema.Class<PluginPanelContributio
   data: Schema.OptionFromUndefinedOr(JsonObject),
 }) {}
 
-export class PluginToolContribution extends Schema.Class<PluginToolContribution>("PluginToolContribution")({
+export class PluginToolContribution extends Schema.Class<PluginToolContribution>(
+  'PluginToolContribution',
+)({
   id: ContributionId,
   zone: PluginContributionZone,
   title: Schema.String,
@@ -42,13 +115,13 @@ export class PluginToolContribution extends Schema.Class<PluginToolContribution>
   data: Schema.OptionFromUndefinedOr(JsonObject),
 }) {}
 
-export class ExecutableRef extends Schema.Class<ExecutableRef>("ExecutableRef")({
-  kind: Schema.Literal("executable"),
+export class ExecutableRef extends Schema.Class<ExecutableRef>('ExecutableRef')({
+  kind: Schema.Literal('executable'),
   entry: Schema.String,
 }) {}
 
-const DeclarativeKind = Schema.Literal("declarative");
-const ExecutableKind = Schema.Literal("executable");
+const DeclarativeKind = Schema.Literal('declarative');
+const ExecutableKind = Schema.Literal('executable');
 
 const defineDeclarativeContributionSlot = <const SlotName extends string>(slotName: SlotName) => {
   const tag = `Declarative${slotName}Contribution` as const;
@@ -75,12 +148,15 @@ const defineExecutableContributionSlot = <const SlotName extends string>(slotNam
 const defineHybridContributionSlot = <const SlotName extends string>(slotName: SlotName) => {
   const declarativeTag = `Declarative${slotName}Contribution` as const;
   const executableTag = `Executable${slotName}Contribution` as const;
-  class DeclarativeContribution extends Schema.TaggedClass<DeclarativeContribution>()(declarativeTag, {
-    id: ContributionId,
-    kind: DeclarativeKind,
-    display: Schema.OptionFromUndefinedOr(ContributionDisplay),
-    data: JsonObject,
-  }) {}
+  class DeclarativeContribution extends Schema.TaggedClass<DeclarativeContribution>()(
+    declarativeTag,
+    {
+      id: ContributionId,
+      kind: DeclarativeKind,
+      display: Schema.OptionFromUndefinedOr(ContributionDisplay),
+      data: JsonObject,
+    },
+  ) {}
   class ExecutableContribution extends Schema.TaggedClass<ExecutableContribution>()(executableTag, {
     id: ContributionId,
     kind: ExecutableKind,
@@ -91,7 +167,7 @@ const defineHybridContributionSlot = <const SlotName extends string>(slotName: S
 };
 
 export class AssetPackContribution extends Schema.TaggedClass<AssetPackContribution>()(
-  "AssetPackContribution",
+  'AssetPackContribution',
   {
     id: ContributionId,
     name: Schema.String,
@@ -104,74 +180,81 @@ export const TilesetPackContribution = AssetPackContribution;
 export type TilesetPackContribution = AssetPackContribution;
 
 export class TiledImportProfileContribution extends Schema.Class<TiledImportProfileContribution>(
-  "TiledImportProfileContribution",
+  'TiledImportProfileContribution',
 )({
   id: ContributionId,
   displayName: Schema.String,
   transformPlan: Schema.Unknown,
 }) {}
 
-export const EditorTabContribution = defineHybridContributionSlot("EditorTab");
+export const EditorTabContribution = defineHybridContributionSlot('EditorTab');
 export type EditorTabContribution = typeof EditorTabContribution.Type;
 
-export const EditorToolContribution = defineHybridContributionSlot("EditorTool");
+export const EditorToolContribution = defineHybridContributionSlot('EditorTool');
 export type EditorToolContribution = typeof EditorToolContribution.Type;
 
-export const EditorInspectorContribution = defineHybridContributionSlot("EditorInspector");
+export const EditorInspectorContribution = defineHybridContributionSlot('EditorInspector');
 export type EditorInspectorContribution = typeof EditorInspectorContribution.Type;
 
-export const EditorCommandContribution = defineHybridContributionSlot("EditorCommand");
+export const EditorCommandContribution = defineHybridContributionSlot('EditorCommand');
 export type EditorCommandContribution = typeof EditorCommandContribution.Type;
 
-export const EditorMenuContribution = defineHybridContributionSlot("EditorMenu");
+export const EditorMenuContribution = defineHybridContributionSlot('EditorMenu');
 export type EditorMenuContribution = typeof EditorMenuContribution.Type;
 
-export const EditorSettingsContribution = defineHybridContributionSlot("EditorSettings");
+export const EditorSettingsContribution = defineHybridContributionSlot('EditorSettings');
 export type EditorSettingsContribution = typeof EditorSettingsContribution.Type;
 
-export const EditorPaletteCategoryContribution = defineDeclarativeContributionSlot("EditorPaletteCategory");
+export const EditorPaletteCategoryContribution =
+  defineDeclarativeContributionSlot('EditorPaletteCategory');
 export type EditorPaletteCategoryContribution = typeof EditorPaletteCategoryContribution.Type;
 
-export const EditorPaletteSubFilterContribution = defineDeclarativeContributionSlot("EditorPaletteSubFilter");
+export const EditorPaletteSubFilterContribution =
+  defineDeclarativeContributionSlot('EditorPaletteSubFilter');
 export type EditorPaletteSubFilterContribution = typeof EditorPaletteSubFilterContribution.Type;
 
-export const EditorPaletteItemActionContribution = defineDeclarativeContributionSlot("EditorPaletteItemAction");
+export const EditorPaletteItemActionContribution =
+  defineDeclarativeContributionSlot('EditorPaletteItemAction');
 export type EditorPaletteItemActionContribution = typeof EditorPaletteItemActionContribution.Type;
 
-export const EditorViewportActionContribution = defineDeclarativeContributionSlot("EditorViewportAction");
+export const EditorViewportActionContribution =
+  defineDeclarativeContributionSlot('EditorViewportAction');
 export type EditorViewportActionContribution = typeof EditorViewportActionContribution.Type;
 
-export const EditorToolDockContribution = defineHybridContributionSlot("EditorToolDock");
+export const EditorToolDockContribution = defineHybridContributionSlot('EditorToolDock');
 export type EditorToolDockContribution = typeof EditorToolDockContribution.Type;
 
-export const EditorOverlayContribution = defineHybridContributionSlot("EditorOverlay");
+export const EditorOverlayContribution = defineHybridContributionSlot('EditorOverlay');
 export type EditorOverlayContribution = typeof EditorOverlayContribution.Type;
 
-export const EditorInspectorPanelContribution = defineDeclarativeContributionSlot("EditorInspectorPanel");
+export const EditorInspectorPanelContribution =
+  defineDeclarativeContributionSlot('EditorInspectorPanel');
 export type EditorInspectorPanelContribution = typeof EditorInspectorPanelContribution.Type;
 
-export const EditorSettingsPanelContribution = defineDeclarativeContributionSlot("EditorSettingsPanel");
+export const EditorSettingsPanelContribution =
+  defineDeclarativeContributionSlot('EditorSettingsPanel');
 export type EditorSettingsPanelContribution = typeof EditorSettingsPanelContribution.Type;
 
-export const EditorMapKindContribution = defineDeclarativeContributionSlot("EditorMapKind");
+export const EditorMapKindContribution = defineDeclarativeContributionSlot('EditorMapKind');
 export type EditorMapKindContribution = typeof EditorMapKindContribution.Type;
 
-export const EditorPresetContribution = defineDeclarativeContributionSlot("EditorPreset");
+export const EditorPresetContribution = defineDeclarativeContributionSlot('EditorPreset');
 export type EditorPresetContribution = typeof EditorPresetContribution.Type;
 
-export const EditorPanelContribution = defineDeclarativeContributionSlot("EditorPanel");
+export const EditorPanelContribution = defineDeclarativeContributionSlot('EditorPanel');
 export type EditorPanelContribution = typeof EditorPanelContribution.Type;
 
-export const EditorValidatorContribution = defineHybridContributionSlot("EditorValidator");
+export const EditorValidatorContribution = defineHybridContributionSlot('EditorValidator');
 export type EditorValidatorContribution = typeof EditorValidatorContribution.Type;
 
-export const EditorExporterContribution = defineExecutableContributionSlot("EditorExporter");
+export const EditorExporterContribution = defineExecutableContributionSlot('EditorExporter');
 export type EditorExporterContribution = typeof EditorExporterContribution.Type;
 
-export const EditorGeneratorContribution = defineExecutableContributionSlot("EditorGenerator");
+export const EditorGeneratorContribution = defineExecutableContributionSlot('EditorGenerator');
 export type EditorGeneratorContribution = typeof EditorGeneratorContribution.Type;
 
-export const EditorAssetMetadataContribution = defineDeclarativeContributionSlot("EditorAssetMetadata");
+export const EditorAssetMetadataContribution =
+  defineDeclarativeContributionSlot('EditorAssetMetadata');
 export type EditorAssetMetadataContribution = typeof EditorAssetMetadataContribution.Type;
 
 /**
@@ -180,10 +263,26 @@ export type EditorAssetMetadataContribution = typeof EditorAssetMetadataContribu
  * plugin declares the policy, the generic editor resolves it. The concrete
  * model set + mode live in `data` (a JsonObject the consuming editor decodes).
  */
-export const EditorPlayerModelPolicyContribution = defineDeclarativeContributionSlot("EditorPlayerModelPolicy");
+export const EditorPlayerModelPolicyContribution =
+  defineDeclarativeContributionSlot('EditorPlayerModelPolicy');
 export type EditorPlayerModelPolicyContribution = typeof EditorPlayerModelPolicyContribution.Type;
 
-export class EditorContributions extends Schema.Class<EditorContributions>("EditorContributions")({
+/**
+ * Declares a game-mode's authoring SETTINGS FORM as manifest-discovered data
+ * (ADR-0023 section A). `data` is a `GameSettingsFormDeclaration` (scope +
+ * schema'd field descriptors + validation policy) decoded by
+ * {@link decodeGameSettingsForm} in `game-settings-form.ts`; the editor renders
+ * + validates the form generically and persists VALUES under the neutral
+ * per-plugin namespace (`map.properties.<pluginId>` / `project.settings.<pluginId>`).
+ * Promotes the TS-only `AuthoringSettingsForm` precedent; game-mode discovery
+ * projects this declaration as first-class IPC data so the renderer never reads
+ * a form from settings-panel `data`.
+ */
+export const EditorGameSettingsFormContribution =
+  defineDeclarativeContributionSlot('EditorGameSettingsForm');
+export type EditorGameSettingsFormContribution = typeof EditorGameSettingsFormContribution.Type;
+
+export class EditorContributions extends Schema.Class<EditorContributions>('EditorContributions')({
   tabs: Schema.OptionFromUndefinedOr(Schema.Array(EditorTabContribution)),
   tools: Schema.OptionFromUndefinedOr(Schema.Array(EditorToolContribution)),
   inspectors: Schema.OptionFromUndefinedOr(Schema.Array(EditorInspectorContribution)),
@@ -192,7 +291,9 @@ export class EditorContributions extends Schema.Class<EditorContributions>("Edit
   settings: Schema.OptionFromUndefinedOr(Schema.Array(EditorSettingsContribution)),
   paletteCategories: Schema.OptionFromUndefinedOr(Schema.Array(EditorPaletteCategoryContribution)),
   paletteSubFilters: Schema.OptionFromUndefinedOr(Schema.Array(EditorPaletteSubFilterContribution)),
-  paletteItemActions: Schema.OptionFromUndefinedOr(Schema.Array(EditorPaletteItemActionContribution)),
+  paletteItemActions: Schema.OptionFromUndefinedOr(
+    Schema.Array(EditorPaletteItemActionContribution),
+  ),
   viewportActions: Schema.OptionFromUndefinedOr(Schema.Array(EditorViewportActionContribution)),
   toolDock: Schema.OptionFromUndefinedOr(Schema.Array(EditorToolDockContribution)),
   overlays: Schema.OptionFromUndefinedOr(Schema.Array(EditorOverlayContribution)),
@@ -205,28 +306,45 @@ export class EditorContributions extends Schema.Class<EditorContributions>("Edit
   exporters: Schema.OptionFromUndefinedOr(Schema.Array(EditorExporterContribution)),
   generators: Schema.OptionFromUndefinedOr(Schema.Array(EditorGeneratorContribution)),
   assetMetadata: Schema.OptionFromUndefinedOr(Schema.Array(EditorAssetMetadataContribution)),
-  playerModelPolicies: Schema.OptionFromUndefinedOr(Schema.Array(EditorPlayerModelPolicyContribution)),
+  playerModelPolicies: Schema.OptionFromUndefinedOr(
+    Schema.Array(EditorPlayerModelPolicyContribution),
+  ),
+  gameSettingsForms: Schema.OptionFromUndefinedOr(Schema.Array(EditorGameSettingsFormContribution)),
 }) {}
 
-export const RuntimeSystemContribution = defineExecutableContributionSlot("RuntimeSystem");
+export const RuntimeSystemContribution = defineExecutableContributionSlot('RuntimeSystem');
 export type RuntimeSystemContribution = typeof RuntimeSystemContribution.Type;
 
-export const RuntimeComponentContribution = defineDeclarativeContributionSlot("RuntimeComponent");
+export const RuntimeComponentContribution = defineDeclarativeContributionSlot('RuntimeComponent');
 export type RuntimeComponentContribution = typeof RuntimeComponentContribution.Type;
 
-export const RuntimeEventContribution = defineDeclarativeContributionSlot("RuntimeEvent");
+export const RuntimeEventContribution = defineDeclarativeContributionSlot('RuntimeEvent');
 export type RuntimeEventContribution = typeof RuntimeEventContribution.Type;
 
-export const RuntimeAssetLoaderContribution = defineExecutableContributionSlot("RuntimeAssetLoader");
+export const RuntimeAssetLoaderContribution =
+  defineExecutableContributionSlot('RuntimeAssetLoader');
 export type RuntimeAssetLoaderContribution = typeof RuntimeAssetLoaderContribution.Type;
 
-export const RuntimeClientSystemContribution = defineExecutableContributionSlot("RuntimeClientSystem");
+export const RuntimeClientSystemContribution =
+  defineExecutableContributionSlot('RuntimeClientSystem');
 export type RuntimeClientSystemContribution = typeof RuntimeClientSystemContribution.Type;
 
-export const RuntimeHudWidgetContribution = defineExecutableContributionSlot("RuntimeHudWidget");
+export const RuntimeHudWidgetContribution = defineExecutableContributionSlot('RuntimeHudWidget');
 export type RuntimeHudWidgetContribution = typeof RuntimeHudWidgetContribution.Type;
 
-export const RuntimeLobbyPanelContribution = defineExecutableContributionSlot("RuntimeLobbyPanel");
+/**
+ * Declarative HUD LAYOUT contribution: a game-mode plugin's default in-match
+ * HUD arrangement as `@tileborne/core` `HudLayout` data (which widget kinds,
+ * which anchor, order, visibility, offsets). Decoded by
+ * `decodeHudLayout` and merged with the user's HUD customisation via
+ * `resolveEffectiveHudLayout`. Distinct from {@link RuntimeHudWidgetContribution},
+ * which is the EXECUTABLE widget-implementation slot for the shipped
+ * game-client (ADR-0022); this slot is pure data and renderer-safe (ADR-0001).
+ */
+export const RuntimeHudLayoutContribution = defineDeclarativeContributionSlot('RuntimeHudLayout');
+export type RuntimeHudLayoutContribution = typeof RuntimeHudLayoutContribution.Type;
+
+export const RuntimeLobbyPanelContribution = defineExecutableContributionSlot('RuntimeLobbyPanel');
 export type RuntimeLobbyPanelContribution = typeof RuntimeLobbyPanelContribution.Type;
 
 /**
@@ -236,12 +354,12 @@ export type RuntimeLobbyPanelContribution = typeof RuntimeLobbyPanelContribution
  * single source of truth for menu slot ids.
  */
 export const RuntimeMenuSlot = Schema.Literals([
-  "main.primaryActions",
-  "main.secondaryActions",
-  "main.tabs",
-  "settings.tabs",
-  "pause.actions",
-  "results.actions",
+  'main.primaryActions',
+  'main.secondaryActions',
+  'main.tabs',
+  'settings.tabs',
+  'pause.actions',
+  'results.actions',
 ]);
 export type RuntimeMenuSlot = typeof RuntimeMenuSlot.Type;
 
@@ -255,7 +373,7 @@ export const RUNTIME_MENU_SLOTS = RuntimeMenuSlot.literals;
  * `RuntimeLobbyPanelContribution` precedent but adds a `slot` + `order`.
  */
 export class RuntimeMenuSectionContribution extends Schema.TaggedClass<RuntimeMenuSectionContribution>()(
-  "RuntimeMenuSectionContribution",
+  'RuntimeMenuSectionContribution',
   {
     id: ContributionId,
     kind: ExecutableKind,
@@ -266,19 +384,32 @@ export class RuntimeMenuSectionContribution extends Schema.TaggedClass<RuntimeMe
   },
 ) {}
 
-export const RuntimeInputMapContribution = defineDeclarativeContributionSlot("RuntimeInputMap");
+/**
+ * Public declarative slot for a plugin to declare its neutral input map (ADR-0024).
+ * `data` is a `@tileborne/core` `InputMap` (the actions it uses + each action's
+ * value kind + default bindings per control scheme) which {@link decodeInputMap}
+ * in `input-map-registry.ts` decodes + validates against the core schema, then
+ * {@link resolveEffectiveInputMap} overlays the user's persisted remaps before the
+ * runtime `InputResolver` consumes the effective map. The engine owns the resolver,
+ * remap UI, and persistence; the plugin ships only defaults + vocabulary. Mirrors
+ * {@link RuntimeWeaponCatalogContribution} and hard-cuts the previously-unconsumed
+ * untyped `JsonObject` path (the slot was never decoded before).
+ */
+export const RuntimeInputMapContribution = defineDeclarativeContributionSlot('RuntimeInputMap');
 export type RuntimeInputMapContribution = typeof RuntimeInputMapContribution.Type;
 
-export const RuntimeAudioBusContribution = defineDeclarativeContributionSlot("RuntimeAudioBus");
+export const RuntimeAudioBusContribution = defineDeclarativeContributionSlot('RuntimeAudioBus');
 export type RuntimeAudioBusContribution = typeof RuntimeAudioBusContribution.Type;
 
-export const RuntimeCameraContribution = defineExecutableContributionSlot("RuntimeCamera");
+export const RuntimeCameraContribution = defineExecutableContributionSlot('RuntimeCamera');
 export type RuntimeCameraContribution = typeof RuntimeCameraContribution.Type;
 
-export const RuntimeInterpolatorContribution = defineExecutableContributionSlot("RuntimeInterpolator");
+export const RuntimeInterpolatorContribution =
+  defineExecutableContributionSlot('RuntimeInterpolator');
 export type RuntimeInterpolatorContribution = typeof RuntimeInterpolatorContribution.Type;
 
-export const RuntimeErrorMapperContribution = defineDeclarativeContributionSlot("RuntimeErrorMapper");
+export const RuntimeErrorMapperContribution =
+  defineDeclarativeContributionSlot('RuntimeErrorMapper');
 export type RuntimeErrorMapperContribution = typeof RuntimeErrorMapperContribution.Type;
 
 /**
@@ -289,18 +420,35 @@ export type RuntimeErrorMapperContribution = typeof RuntimeErrorMapperContributi
  * removed JSON-Schema `ObjectKindContribution` / `EditorObjectType` path.
  */
 export const RuntimeGameObjectCatalogContribution = defineDeclarativeContributionSlot(
-  "RuntimeGameObjectCatalog",
+  'RuntimeGameObjectCatalog',
 );
-export type RuntimeGameObjectCatalogContribution =
-  typeof RuntimeGameObjectCatalogContribution.Type;
+export type RuntimeGameObjectCatalogContribution = typeof RuntimeGameObjectCatalogContribution.Type;
 
-export class RuntimeContributions extends Schema.Class<RuntimeContributions>("RuntimeContributions")({
+/**
+ * Public declarative slot for a plugin to register a neutral weapon-content pack
+ * (ADR-0018 Slice 5). `data` is decoded + validated against the
+ * `@tileborne/simulation` schemas (`WeaponDefinition` + `DamageDelivery` family,
+ * with status-effect ids) by {@link decodeWeaponCatalog} / {@link mergeWeaponCatalogs}
+ * in `weapon-catalog-registry.ts`: the engine owns the *shape*, plugins supply the
+ * balance *numbers*. Mirrors {@link RuntimeGameObjectCatalogContribution} and
+ * supersedes the removed untyped `JsonObject` weapon-catalog path.
+ * Ability/status *definition* catalogs are deferred to P1 (`t-p1-status-abilities-plan`),
+ * where their `@tileborne/simulation` schemas land.
+ */
+export const RuntimeWeaponCatalogContribution =
+  defineDeclarativeContributionSlot('RuntimeWeaponCatalog');
+export type RuntimeWeaponCatalogContribution = typeof RuntimeWeaponCatalogContribution.Type;
+
+export class RuntimeContributions extends Schema.Class<RuntimeContributions>(
+  'RuntimeContributions',
+)({
   systems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeSystemContribution)),
   components: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeComponentContribution)),
   events: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeEventContribution)),
   assetLoaders: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeAssetLoaderContribution)),
   clientSystems: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeClientSystemContribution)),
   hudWidgets: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeHudWidgetContribution)),
+  hudLayouts: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeHudLayoutContribution)),
   lobbyPanels: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeLobbyPanelContribution)),
   menuSections: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeMenuSectionContribution)),
   inputMaps: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInputMapContribution)),
@@ -312,46 +460,45 @@ export class RuntimeContributions extends Schema.Class<RuntimeContributions>("Ru
   gameObjectCatalogs: Schema.OptionFromUndefinedOr(
     Schema.Array(RuntimeGameObjectCatalogContribution),
   ),
+  weaponCatalogs: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeWeaponCatalogContribution)),
 }) {}
 
-export const ServerRuleContribution = defineHybridContributionSlot("ServerRule");
+export const ServerRuleContribution = defineHybridContributionSlot('ServerRule');
 export type ServerRuleContribution = typeof ServerRuleContribution.Type;
 
-export const ServerScoringContribution = defineHybridContributionSlot("ServerScoring");
+export const ServerScoringContribution = defineHybridContributionSlot('ServerScoring');
 export type ServerScoringContribution = typeof ServerScoringContribution.Type;
 
-export const ServerLootTableContribution = defineDeclarativeContributionSlot("ServerLootTable");
+export const ServerLootTableContribution = defineDeclarativeContributionSlot('ServerLootTable');
 export type ServerLootTableContribution = typeof ServerLootTableContribution.Type;
 
-export const ServerMatchmakingContribution = defineHybridContributionSlot("ServerMatchmaking");
+export const ServerMatchmakingContribution = defineHybridContributionSlot('ServerMatchmaking');
 export type ServerMatchmakingContribution = typeof ServerMatchmakingContribution.Type;
 
-export const ServerSystemContribution = defineExecutableContributionSlot("ServerSystem");
+export const ServerSystemContribution = defineExecutableContributionSlot('ServerSystem');
 export type ServerSystemContribution = typeof ServerSystemContribution.Type;
 
-export const ServerRoomRuleContribution = defineDeclarativeContributionSlot("ServerRoomRule");
+export const ServerRoomRuleContribution = defineDeclarativeContributionSlot('ServerRoomRule');
 export type ServerRoomRuleContribution = typeof ServerRoomRuleContribution.Type;
 
-export const ServerWeaponCatalogContribution = defineDeclarativeContributionSlot("ServerWeaponCatalog");
-export type ServerWeaponCatalogContribution = typeof ServerWeaponCatalogContribution.Type;
-
-export const ServerMapValidatorContribution = defineExecutableContributionSlot("ServerMapValidator");
+export const ServerMapValidatorContribution =
+  defineExecutableContributionSlot('ServerMapValidator');
 export type ServerMapValidatorContribution = typeof ServerMapValidatorContribution.Type;
 
-export const ServerMatchPhaseContribution = defineHybridContributionSlot("ServerMatchPhase");
+export const ServerMatchPhaseContribution = defineHybridContributionSlot('ServerMatchPhase');
 export type ServerMatchPhaseContribution = typeof ServerMatchPhaseContribution.Type;
 
-export const ServerReplayWriterContribution = defineExecutableContributionSlot("ServerReplayWriter");
+export const ServerReplayWriterContribution =
+  defineExecutableContributionSlot('ServerReplayWriter');
 export type ServerReplayWriterContribution = typeof ServerReplayWriterContribution.Type;
 
-export class ServerContributions extends Schema.Class<ServerContributions>("ServerContributions")({
+export class ServerContributions extends Schema.Class<ServerContributions>('ServerContributions')({
   rules: Schema.OptionFromUndefinedOr(Schema.Array(ServerRuleContribution)),
   scoring: Schema.OptionFromUndefinedOr(Schema.Array(ServerScoringContribution)),
   lootTables: Schema.OptionFromUndefinedOr(Schema.Array(ServerLootTableContribution)),
   matchmaking: Schema.OptionFromUndefinedOr(Schema.Array(ServerMatchmakingContribution)),
   serverSystems: Schema.OptionFromUndefinedOr(Schema.Array(ServerSystemContribution)),
   roomRules: Schema.OptionFromUndefinedOr(Schema.Array(ServerRoomRuleContribution)),
-  weaponCatalog: Schema.OptionFromUndefinedOr(Schema.Array(ServerWeaponCatalogContribution)),
   mapValidators: Schema.OptionFromUndefinedOr(Schema.Array(ServerMapValidatorContribution)),
   matchPhases: Schema.OptionFromUndefinedOr(Schema.Array(ServerMatchPhaseContribution)),
   replayWriters: Schema.OptionFromUndefinedOr(Schema.Array(ServerReplayWriterContribution)),
@@ -361,25 +508,28 @@ export const SchemaVersion = Schema.Int;
 export type SchemaVersion = typeof SchemaVersion.Type;
 
 export class InlineSchemaMigrationChain extends Schema.TaggedClass<InlineSchemaMigrationChain>()(
-  "InlineSchemaMigrationChain",
+  'InlineSchemaMigrationChain',
   {
-    kind: Schema.Literal("inline"),
+    kind: Schema.Literal('inline'),
     latestVersion: SchemaVersion,
     chain: Schema.Unknown,
   },
 ) {}
 
 export interface InlineSchemaMigrationChainEntry {
-  readonly kind: "inline";
+  readonly kind: 'inline';
   readonly latestVersion: SchemaVersion;
   readonly chain: SchemaMigrationChain<unknown>;
 }
 
-export class ExecutableSchemaMigrationChain extends Schema.TaggedClass<ExecutableSchemaMigrationChain>()("ExecutableSchemaMigrationChain", {
-  kind: Schema.Literal("executable"),
-  latestVersion: SchemaVersion,
-  chainEntry: Schema.String,
-}) {}
+export class ExecutableSchemaMigrationChain extends Schema.TaggedClass<ExecutableSchemaMigrationChain>()(
+  'ExecutableSchemaMigrationChain',
+  {
+    kind: Schema.Literal('executable'),
+    latestVersion: SchemaVersion,
+    chainEntry: Schema.String,
+  },
+) {}
 
 export const SchemaMigrationEntry = Schema.Union([
   InlineSchemaMigrationChain,
@@ -387,22 +537,31 @@ export const SchemaMigrationEntry = Schema.Union([
 ]);
 export type SchemaMigrationEntry = InlineSchemaMigrationChainEntry | ExecutableSchemaMigrationChain;
 
-export class MigrationsTable extends Schema.Class<MigrationsTable>("MigrationsTable")({
+export class MigrationsTable extends Schema.Class<MigrationsTable>('MigrationsTable')({
   entries: Schema.Record(Schema.String, SchemaMigrationEntry),
 }) {}
 
-export class PluginContributions extends Schema.Class<PluginContributions>("PluginContributions")({
+export class PluginContributions extends Schema.Class<PluginContributions>('PluginContributions')({
+  // `optional` preserves schema-v1 manifest compatibility for non-mode plugins;
+  // mode plugins opt in explicitly with this one registration slot.
+  gameModes: Schema.optional(Schema.Array(GameModeContribution)),
   panels: Schema.OptionFromUndefinedOr(Schema.Array(PluginPanelContribution)),
   tools: Schema.OptionFromUndefinedOr(Schema.Array(PluginToolContribution)),
   assetPacks: Schema.OptionFromUndefinedOr(Schema.Array(AssetPackContribution)),
   tilesetPacks: Schema.OptionFromUndefinedOr(Schema.Array(TilesetPackContribution)),
   tiledImportProfiles: Schema.optional(Schema.Array(TiledImportProfileContribution)),
+  /** Genre-neutral blocks materialized into both the SDK compiler and event editor. */
+  behaviorEntries: Schema.optional(Schema.Array(BehaviorRegistryEntry)),
+  /** Optional visual starter sheets; orchestration never branches on plugin id. */
+  behaviorTemplates: Schema.optional(Schema.Array(BehaviorTemplate)),
   editor: Schema.OptionFromUndefinedOr(EditorContributions),
   runtime: Schema.OptionFromUndefinedOr(RuntimeContributions),
   server: Schema.OptionFromUndefinedOr(ServerContributions),
 }) {}
 
-const optionalArray = <A>(value: Option.Option<readonly A[]> | readonly A[] | undefined): readonly A[] => {
+const optionalArray = <A>(
+  value: Option.Option<readonly A[]> | readonly A[] | undefined,
+): readonly A[] => {
   if (Array.isArray(value)) {
     return value;
   }
@@ -435,11 +594,75 @@ export const validatePluginContributions = (
   pluginId: PluginId,
   contributions: PluginContributions,
 ): void => {
-  assertUniqueContributionIds(pluginId, "panel", optionalArray(contributions.panels));
-  assertUniqueContributionIds(pluginId, "tool", optionalArray(contributions.tools));
+  const gameModes = optionalArray(contributions.gameModes);
+  assertUniqueContributionIds(pluginId, 'game mode', gameModes);
+  if (gameModes.length > 1) {
+    throw new DuplicateContributionError({
+      pluginId,
+      contributionId: gameModes[1]!.id,
+      message: `plugin ${pluginId} declares ${gameModes.length} game modes; exactly one gameModes registration is supported per plugin`,
+    });
+  }
+  assertUniqueContributionIds(pluginId, 'panel', optionalArray(contributions.panels));
+  assertUniqueContributionIds(pluginId, 'tool', optionalArray(contributions.tools));
   assertUniqueContributionIds(
     pluginId,
-    "tiled import profile",
+    'tiled import profile',
     optionalArray(contributions.tiledImportProfiles),
   );
+  const behaviorEntryIds = new Set<string>();
+  for (const entry of optionalArray(contributions.behaviorEntries)) {
+    if (behaviorEntryIds.has(entry.id)) {
+      throw new DuplicateContributionError({
+        pluginId,
+        contributionId: entry.id,
+        message: `duplicate behavior registry entry id: ${entry.id}`,
+      });
+    }
+    behaviorEntryIds.add(entry.id);
+  }
+  const behaviorTemplateIds = new Set<string>();
+  for (const template of optionalArray(contributions.behaviorTemplates)) {
+    if (behaviorTemplateIds.has(template.id)) {
+      throw new DuplicateContributionError({
+        pluginId,
+        contributionId: template.id,
+        message: `duplicate behavior template id: ${template.id}`,
+      });
+    }
+    behaviorTemplateIds.add(template.id);
+  }
+
+  const runtime = Option.getOrUndefined(contributions.runtime);
+  const editor = Option.getOrUndefined(contributions.editor);
+  const server = Option.getOrUndefined(contributions.server);
+  const runtimeSystemIds = new Set(optionalArray(runtime?.systems).map(({ id }) => id));
+  const panelIds = new Set(optionalArray(contributions.panels).map(({ id }) => id));
+  const settingsFormIds = new Set(optionalArray(editor?.gameSettingsForms).map(({ id }) => id));
+  // Readiness executes in the main/server host. A game-mode validator link is
+  // therefore authoritative only when it targets an executable server slot;
+  // editor validators are separate UI contributions and cannot satisfy it.
+  const validatorIds = new Set(optionalArray(server?.mapValidators).map(({ id }) => id));
+  const hudLayoutIds = new Set(optionalArray(runtime?.hudLayouts).map(({ id }) => id));
+
+  for (const mode of gameModes) {
+    const requireReference = (
+      point: string,
+      id: ContributionId | undefined,
+      ids: ReadonlySet<string>,
+    ): void => {
+      if (id !== undefined && !ids.has(id)) {
+        throw new DuplicateContributionError({
+          pluginId,
+          contributionId: mode.id,
+          message: `game mode ${mode.id} references missing ${point} contribution: ${id}`,
+        });
+      }
+    };
+    requireReference('runtime system', mode.runtimeSystemId, runtimeSystemIds);
+    requireReference('settings panel', mode.settingsPanelId, panelIds);
+    requireReference('settings form', mode.settingsFormId, settingsFormIds);
+    requireReference('map validator', mode.mapValidatorId, validatorIds);
+    requireReference('HUD layout', mode.hudLayoutId, hudLayoutIds);
+  }
 };

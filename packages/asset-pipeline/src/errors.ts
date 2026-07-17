@@ -1,8 +1,8 @@
-import { AssetId, PackId } from "@tileborne/core";
-import { Schema } from "effect";
+import { AssetId, PackId } from '@tileborne/core';
+import { Schema } from 'effect';
 
 export class AssetMimeRejectedError extends Schema.TaggedErrorClass<AssetMimeRejectedError>()(
-  "AssetMimeRejectedError",
+  'AssetMimeRejectedError',
   {
     mime: Schema.String,
     message: Schema.String,
@@ -10,7 +10,7 @@ export class AssetMimeRejectedError extends Schema.TaggedErrorClass<AssetMimeRej
 ) {}
 
 export class AssetExtensionMismatchError extends Schema.TaggedErrorClass<AssetExtensionMismatchError>()(
-  "AssetExtensionMismatchError",
+  'AssetExtensionMismatchError',
   {
     filename: Schema.String,
     mime: Schema.String,
@@ -20,7 +20,7 @@ export class AssetExtensionMismatchError extends Schema.TaggedErrorClass<AssetEx
 ) {}
 
 export class AssetMagicByteMismatchError extends Schema.TaggedErrorClass<AssetMagicByteMismatchError>()(
-  "AssetMagicByteMismatchError",
+  'AssetMagicByteMismatchError',
   {
     mime: Schema.String,
     message: Schema.String,
@@ -28,7 +28,7 @@ export class AssetMagicByteMismatchError extends Schema.TaggedErrorClass<AssetMa
 ) {}
 
 export class AssetTooLargeError extends Schema.TaggedErrorClass<AssetTooLargeError>()(
-  "AssetTooLargeError",
+  'AssetTooLargeError',
   {
     size: Schema.Number,
     maxSize: Schema.Number,
@@ -38,7 +38,7 @@ export class AssetTooLargeError extends Schema.TaggedErrorClass<AssetTooLargeErr
 ) {}
 
 export class TilesetGridMismatchError extends Schema.TaggedErrorClass<TilesetGridMismatchError>()(
-  "TilesetGridMismatchError",
+  'TilesetGridMismatchError',
   {
     imageWidth: Schema.Number,
     imageHeight: Schema.Number,
@@ -51,7 +51,7 @@ export class TilesetGridMismatchError extends Schema.TaggedErrorClass<TilesetGri
 ) {}
 
 export class LicenseNotAllowlistedError extends Schema.TaggedErrorClass<LicenseNotAllowlistedError>()(
-  "LicenseNotAllowlistedError",
+  'LicenseNotAllowlistedError',
   {
     spdxId: Schema.String,
     message: Schema.String,
@@ -59,7 +59,7 @@ export class LicenseNotAllowlistedError extends Schema.TaggedErrorClass<LicenseN
 ) {}
 
 export class UnsupportedImporterInputError extends Schema.TaggedErrorClass<UnsupportedImporterInputError>()(
-  "UnsupportedImporterInputError",
+  'UnsupportedImporterInputError',
   {
     importerId: Schema.String,
     mime: Schema.String,
@@ -68,7 +68,7 @@ export class UnsupportedImporterInputError extends Schema.TaggedErrorClass<Unsup
 ) {}
 
 export class PackManifestIntegrityError extends Schema.TaggedErrorClass<PackManifestIntegrityError>()(
-  "PackManifestIntegrityError",
+  'PackManifestIntegrityError',
   {
     path: Schema.String,
     message: Schema.String,
@@ -77,7 +77,7 @@ export class PackManifestIntegrityError extends Schema.TaggedErrorClass<PackMani
 
 /** Raised when multiple packs expose the same asset id. */
 export class PackAssetIdCollisionError extends Schema.TaggedErrorClass<PackAssetIdCollisionError>()(
-  "PackAssetIdCollisionError",
+  'PackAssetIdCollisionError',
   {
     id: AssetId,
     packs: Schema.Array(PackId),
@@ -87,7 +87,7 @@ export class PackAssetIdCollisionError extends Schema.TaggedErrorClass<PackAsset
 
 /** Raised when a pack delta cannot be applied to a catalog. */
 export class PackDeltaApplyError extends Schema.TaggedErrorClass<PackDeltaApplyError>()(
-  "PackDeltaApplyError",
+  'PackDeltaApplyError',
   {
     packId: PackId,
     message: Schema.String,
@@ -96,7 +96,7 @@ export class PackDeltaApplyError extends Schema.TaggedErrorClass<PackDeltaApplyE
 
 /** Raised when license reporting cannot summarize the supplied catalog. */
 export class LicenseReportError extends Schema.TaggedErrorClass<LicenseReportError>()(
-  "LicenseReportError",
+  'LicenseReportError',
   {
     message: Schema.String,
   },

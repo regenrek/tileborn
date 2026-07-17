@@ -302,11 +302,7 @@ const displayNameFromIdentifier = (
     options.dropTerrainSuffix && normalized.split(' ').length > 1
       ? normalized.replace(/\s+terrain$/i, '')
       : normalized;
-  const displayName = withoutTerrainSuffix
-    .split(' ')
-    .filter(Boolean)
-    .map(titleCaseWord)
-    .join(' ');
+  const displayName = withoutTerrainSuffix.split(' ').filter(Boolean).map(titleCaseWord).join(' ');
   return displayName.length > 0 ? displayName : value;
 };
 
@@ -758,10 +754,7 @@ function TilesetPaletteContent({
     [animationTimeMs, frameIndex, objectOnlyTileIds, pack],
   );
   const objectPaletteModel = useMemo(() => groupPlaceables(pack), [pack]);
-  const brushPreviewModel = useMemo(
-    () => buildBrushPreviewModel(paletteModels),
-    [paletteModels],
-  );
+  const brushPreviewModel = useMemo(() => buildBrushPreviewModel(paletteModels), [paletteModels]);
 
   const selectedEntry = useMemo(() => {
     if (brushIntent.kind === 'placeable') {

@@ -54,20 +54,22 @@ function PackListItem({
   readonly onActivate: () => void;
 }) {
   const paintable = capability?.paintable === true;
+  const hasPlaceables = (capability?.placeableCount ?? 0) > 0;
+  const browsable = paintable || hasPlaceables;
   const probing = capability === undefined;
   return (
     <button
       type="button"
       aria-pressed={isActive}
       onClick={onActivate}
-      disabled={!paintable && !probing}
+      disabled={!browsable && !probing}
       data-testid={`sidebar-pack-${pack.id}`}
       className={cn(
         'flex w-full min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors',
         isActive
           ? 'border-primary bg-primary/10 text-foreground'
           : 'border-transparent hover:border-border hover:bg-accent/30',
-        !paintable && !probing && 'cursor-not-allowed opacity-60',
+        !browsable && !probing && 'cursor-not-allowed opacity-60',
       )}
     >
       {paintable ? (
@@ -83,9 +85,11 @@ function PackListItem({
         <span className={typography.rowMeta}>
           {paintable
             ? `${capability!.tilesetCount} tilesets · ${capability!.tileCount} tiles · ${capability!.placeableCount} objects`
-            : probing
-              ? `${pack.assetCount} assets`
-              : `${pack.assetCount} assets · no tilesets`}
+            : hasPlaceables
+              ? `${pack.assetCount} assets · ${capability!.placeableCount} objects · no tilesets`
+              : probing
+                ? `${pack.assetCount} assets`
+                : `${pack.assetCount} assets · no tilesets`}
         </span>
       </span>
       {isActive ? <CheckIcon aria-hidden className="size-3.5 shrink-0 text-primary" /> : null}

@@ -7,8 +7,10 @@ export function MapSelectionStep({ plan }: { readonly plan?: TiledImportPlanView
   return (
     <Card>
       <CardHeader>
-          <CardTitle>Import plan review</CardTitle>
-          <CardDescription>The first scanned map is imported first. Additional maps remain registered in the plan.</CardDescription>
+        <CardTitle>Import plan review</CardTitle>
+        <CardDescription>
+          The first scanned map is imported first. Additional maps remain registered in the plan.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2">

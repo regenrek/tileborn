@@ -2,7 +2,11 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type { AssetPacksListResponse } from '@/lib/bridge-types';
-import { queryKeys } from '@/lib/query-client';
+import {
+  invalidateAssetUseSites,
+  invalidateBehaviorReferences,
+  queryKeys,
+} from '@/lib/query-client';
 
 export const isMapsListQuery = (queryKey: readonly unknown[]): boolean =>
   queryKey[0] === queryKeys.maps.all[0] && queryKey[2] === 'list';
@@ -15,14 +19,24 @@ export function useEventInvalidations() {
     const unsubscribers = [
       window.tileborne.events.onProjectsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+        void invalidateAssetUseSites(queryClient);
+        void invalidateBehaviorReferences(queryClient);
       }),
       window.tileborne.events.onMapsChanged(() => {
         void queryClient.invalidateQueries({
           predicate: (query) => isMapsListQuery(query.queryKey),
         });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+        void invalidateAssetUseSites(queryClient);
+        void invalidateBehaviorReferences(queryClient);
       }),
       window.tileborne.events.onAssetsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.assets.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+        void invalidateAssetUseSites(queryClient);
+        void invalidateBehaviorReferences(queryClient);
       }),
       window.tileborne.events.onAssetsCapabilityRefreshed((payload) => {
         // Merge updated capability into the cached listPacks response so the
@@ -34,15 +48,14 @@ export function useEventInvalidations() {
           const next: AssetPacksListResponse = {
             ...cached,
             packs: cached.packs.map((pack) =>
-              pack.id === payload.packId
-                ? { ...pack, capability: payload.capability }
-                : pack,
+              pack.id === payload.packId ? { ...pack, capability: payload.capability } : pack,
             ),
           };
           queryClient.setQueryData(queryKey, next);
         } else {
           void queryClient.invalidateQueries({ queryKey });
         }
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
       }),
       window.tileborne.events.onPluginsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
@@ -50,6 +63,10 @@ export function useEventInvalidations() {
         // installed/enabled, so a plugin change must refresh both the resolve
         // projection and the validation report (ADR-0025 slice 8).
         void queryClient.invalidateQueries({ queryKey: queryKeys.catalog.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
+        void invalidateAssetUseSites(queryClient);
+        void invalidateBehaviorReferences(queryClient);
       }),
       window.tileborne.events.onJobsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });

@@ -1,21 +1,21 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic } from "../diagnostics.js";
-import { TilesetPack, TilesetPackLicense } from "../schemas/tileset-pack.js";
-import { inferAssetSemanticRoles } from "../manifest/semantic-roles.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
+import { TilesetPack, TilesetPackLicense } from '../schemas/tileset-pack.js';
+import { inferAssetSemanticRoles } from '../manifest/semantic-roles.js';
 
 import {
   isSupportedTilesetSource,
   readExternalText,
   resolvePath,
   tilesetIdFromSource,
-} from "./external-resolve.js";
-import { parseTmj } from "./tmj-parse.js";
-import { parseTmx } from "./tmx-parse.js";
-import { inferTiledImportSuggestions } from "./infer.js";
-import { deterministicPackId } from "./deterministic-ids.js";
-import { parseTsj } from "./tsj-parse.js";
-import { parseTsx } from "./tsx-parse.js";
+} from './external-resolve.js';
+import { parseTmj } from './tmj-parse.js';
+import { parseTmx } from './tmx-parse.js';
+import { inferTiledImportSuggestions } from './infer.js';
+import { deterministicPackId } from './deterministic-ids.js';
+import { parseTsj } from './tsj-parse.js';
+import { parseTsx } from './tsx-parse.js';
 import type {
   TiledAppliedImportPlan,
   TiledAnyCanonicalImport,
@@ -28,13 +28,13 @@ import type {
   TiledSourcePackImport,
   TiledSourcePackRuleRef,
   TiledTilesetPackImport,
-} from "./types.js";
-import { scanTiledSource } from "./scan.js";
-import { unsupportedFeatureDiagnostic } from "./support-policy.js";
+} from './types.js';
+import { scanTiledSource } from './scan.js';
+import { unsupportedFeatureDiagnostic } from './support-policy.js';
 
 type DirectoryEntry = {
   readonly path: string;
-  readonly kind: "file" | "directory";
+  readonly kind: 'file' | 'directory';
 };
 
 const planDiagnostics = (
@@ -45,7 +45,7 @@ const planDiagnostics = (
   return scan.unsupportedFeatures.map((feature) => ({
     ...unsupportedFeatureDiagnostic(feature),
     message:
-      typeof profile === "object"
+      typeof profile === 'object'
         ? feature.message
         : `${feature.message} Choose a plugin profile only when that plugin explicitly supports this feature.`,
   }));
@@ -53,10 +53,10 @@ const planDiagnostics = (
 
 export const buildImportPlan = (
   scan: TiledImportScan,
-  profile: TiledImportProfile = "standard",
+  profile: TiledImportProfile = 'standard',
   hints: TiledImportPlanHints = {},
 ): TiledImportPlan => {
-  const suggestions = profile === "assistive-infer" ? inferTiledImportSuggestions(scan) : [];
+  const suggestions = profile === 'assistive-infer' ? inferTiledImportSuggestions(scan) : [];
   const accepted = new Set(hints.acceptedSuggestionIds ?? []);
   const acceptedSuggestionIds = suggestions
     .filter((suggestion) => accepted.has(suggestion.id))
@@ -78,8 +78,8 @@ export const buildImportPlan = (
         name: tileset.name,
         kind: tileset.kind,
         categoryIds: tileset.categories,
-        paintable: tileset.kind === "grid",
-        placeable: tileset.kind === "image-collection",
+        paintable: tileset.kind === 'grid',
+        placeable: tileset.kind === 'image-collection',
         confidence: tileset.confidence,
       })),
     },
@@ -113,25 +113,25 @@ const isTilesetSourcePath = (sourcePath: string): boolean => isSupportedTilesetS
 
 const isMapSourcePath = (sourcePath: string): boolean => {
   const lower = lowerSourcePath(sourcePath);
-  return lower.endsWith(".tmx") || lower.endsWith(".tmj") || lower.endsWith(".json");
+  return lower.endsWith('.tmx') || lower.endsWith('.tmj') || lower.endsWith('.json');
 };
 
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
-  diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  diagnostics.some((diagnostic) => diagnostic.severity === 'error');
 
 const buildPack = (
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion">,
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion'>,
   sourcePath: string,
-  compiled: readonly NonNullable<ReturnType<typeof parseTsj>["value"]>[],
+  compiled: readonly NonNullable<ReturnType<typeof parseTsj>['value']>[],
 ): TilesetPack => {
   const pack = new TilesetPack({
     schemaVersion: 1,
     id: deterministicPackId(options.packIdSeed),
-    name: options.packName ?? compiled[0]?.tileset.name ?? "Tiled Import",
-    version: options.packVersion ?? "1.0.0",
+    name: options.packName ?? compiled[0]?.tileset.name ?? 'Tiled Import',
+    version: options.packVersion ?? '1.0.0',
     license: new TilesetPackLicense({
-      spdxId: "UNKNOWN",
-      attribution: Option.some("Imported from Tiled"),
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Imported from Tiled'),
       sourceUrl: Option.none(),
       notes: Option.some(sourcePath),
       redistributable: false,
@@ -144,22 +144,25 @@ const buildPack = (
 };
 
 const importStandaloneTileset = async (
-  source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader"> & {
+  source: Pick<TiledImportOptions, 'sourcePath' | 'projectRoot' | 'reader'> & {
     readonly raw?: string;
   },
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion" | "profile">,
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion' | 'profile'>,
   scan: TiledImportScan,
   raw: string,
-): Promise<{ readonly value?: TiledTilesetPackImport; readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<{
+  readonly value?: TiledTilesetPackImport;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> => {
   const tilesetSeed = tilesetIdFromSource(source.sourcePath);
   const lower = lowerSourcePath(source.sourcePath);
-  const parsed = lower.endsWith(".tsx")
+  const parsed = lower.endsWith('.tsx')
     ? parseTsx(raw, {
         packIdSeed: options.packIdSeed,
         tilesetSeed,
         projectRoot: source.projectRoot,
         basePath: source.sourcePath,
-        profile: options.profile === "assistive-infer" ? "standard" : options.profile,
+        profile: options.profile === 'assistive-infer' ? 'standard' : options.profile,
         validateImagePaths: true,
       })
     : parseTsj(raw, {
@@ -167,7 +170,7 @@ const importStandaloneTileset = async (
         tilesetSeed,
         projectRoot: source.projectRoot,
         basePath: source.sourcePath,
-        profile: options.profile === "assistive-infer" ? "standard" : options.profile,
+        profile: options.profile === 'assistive-infer' ? 'standard' : options.profile,
         validateImagePaths: true,
       });
   if (!parsed.value || hasBlockingDiagnostics(parsed.diagnostics)) {
@@ -176,7 +179,7 @@ const importStandaloneTileset = async (
   const diagnostics = parsed.diagnostics;
   return {
     value: {
-      kind: "tileset-pack",
+      kind: 'tileset-pack',
       scan,
       pack: buildPack(options, source.sourcePath, [parsed.value]),
       diagnostics,
@@ -185,21 +188,35 @@ const importStandaloneTileset = async (
   };
 };
 
-const normalizeDirectoryEntries = (basePath: string, entries: readonly unknown[]): readonly DirectoryEntry[] =>
+const normalizeDirectoryEntries = (
+  basePath: string,
+  entries: readonly unknown[],
+): readonly DirectoryEntry[] =>
   entries.flatMap((entry): readonly DirectoryEntry[] => {
-    if (typeof entry === "string") {
-      return [{ path: resolvePath(basePath, entry), kind: entry.endsWith("/") ? "directory" : "file" }];
+    if (typeof entry === 'string') {
+      return [
+        { path: resolvePath(basePath, entry), kind: entry.endsWith('/') ? 'directory' : 'file' },
+      ];
     }
-    if (!entry || typeof entry !== "object") return [];
-    const value = entry as { readonly name?: unknown; readonly path?: unknown; readonly kind?: unknown };
-    if (value.kind !== "file" && value.kind !== "directory") return [];
-    const name = typeof value.path === "string" ? value.path : typeof value.name === "string" ? value.name : undefined;
+    if (!entry || typeof entry !== 'object') return [];
+    const value = entry as {
+      readonly name?: unknown;
+      readonly path?: unknown;
+      readonly kind?: unknown;
+    };
+    if (value.kind !== 'file' && value.kind !== 'directory') return [];
+    const name =
+      typeof value.path === 'string'
+        ? value.path
+        : typeof value.name === 'string'
+          ? value.name
+          : undefined;
     return name === undefined ? [] : [{ path: resolvePath(basePath, name), kind: value.kind }];
   });
 
 const walkDirectory = async (
   rootPath: string,
-  reader: NonNullable<TiledImportOptions["reader"]>,
+  reader: NonNullable<TiledImportOptions['reader']>,
 ): Promise<readonly DirectoryEntry[]> => {
   if (!reader.readDirectory) return [];
   const visited = new Set<string>();
@@ -208,7 +225,7 @@ const walkDirectory = async (
     visited.add(dir);
     const entries = normalizeDirectoryEntries(dir, await reader.readDirectory!(dir));
     const nested = await Promise.all(
-      entries.filter((entry) => entry.kind === "directory").map((entry) => walk(entry.path)),
+      entries.filter((entry) => entry.kind === 'directory').map((entry) => walk(entry.path)),
     );
     return [...entries, ...nested.flat()];
   };
@@ -216,19 +233,22 @@ const walkDirectory = async (
 };
 
 const importSourceFolder = async (
-  source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader">,
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion" | "profile">,
+  source: Pick<TiledImportOptions, 'sourcePath' | 'projectRoot' | 'reader'>,
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion' | 'profile'>,
   scan: TiledImportScan,
-): Promise<{ readonly value?: TiledSourcePackImport; readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<{
+  readonly value?: TiledSourcePackImport;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> => {
   if (!source.reader?.readDirectory) {
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: source.sourcePath,
-          message: "Tiled source-folder import requires a reader with readDirectory",
-          severity: "error",
-          format: "tmj",
+          message: 'Tiled source-folder import requires a reader with readDirectory',
+          severity: 'error',
+          format: 'tmj',
         },
       ],
     };
@@ -236,27 +256,30 @@ const importSourceFolder = async (
 
   const entries = await walkDirectory(source.sourcePath, source.reader);
   const tileSources = entries
-    .filter((entry) => entry.kind === "file" && isTilesetSourcePath(entry.path))
+    .filter((entry) => entry.kind === 'file' && isTilesetSourcePath(entry.path))
     .sort((left, right) => left.path.localeCompare(right.path));
   const ruleSources = entries
     .filter((entry) => {
       const lower = lowerSourcePath(entry.path);
-      return entry.kind === "file" && (lower.endsWith("/rules.txt") || /\/rules\/[^/]+\.(tmx|tmj)$/.test(lower));
+      return (
+        entry.kind === 'file' &&
+        (lower.endsWith('/rules.txt') || /\/rules\/[^/]+\.(tmx|tmj)$/.test(lower))
+      );
     })
     .sort((left, right) => left.path.localeCompare(right.path));
 
-  const compiled: NonNullable<ReturnType<typeof parseTsj>["value"]>[] = [];
+  const compiled: NonNullable<ReturnType<typeof parseTsj>['value']>[] = [];
   const diagnostics: ParseDiagnostic[] = [];
   for (const tileSource of tileSources) {
     const raw = await readExternalText(source.reader.readFile, tileSource.path);
     const tilesetSeed = tilesetIdFromSource(tileSource.path);
-    const parsed = lowerSourcePath(tileSource.path).endsWith(".tsx")
+    const parsed = lowerSourcePath(tileSource.path).endsWith('.tsx')
       ? parseTsx(raw, {
           packIdSeed: options.packIdSeed,
           tilesetSeed,
           projectRoot: source.projectRoot,
           basePath: tileSource.path,
-          profile: options.profile === "assistive-infer" ? "standard" : options.profile,
+          profile: options.profile === 'assistive-infer' ? 'standard' : options.profile,
           validateImagePaths: true,
         })
       : parseTsj(raw, {
@@ -264,7 +287,7 @@ const importSourceFolder = async (
           tilesetSeed,
           projectRoot: source.projectRoot,
           basePath: tileSource.path,
-          profile: options.profile === "assistive-infer" ? "standard" : options.profile,
+          profile: options.profile === 'assistive-infer' ? 'standard' : options.profile,
           validateImagePaths: true,
         });
     diagnostics.push(...parsed.diagnostics);
@@ -275,7 +298,7 @@ const importSourceFolder = async (
   for (const ruleSource of ruleSources) {
     rules.push({
       path: ruleSource.path,
-      kind: lowerSourcePath(ruleSource.path).endsWith("/rules.txt") ? "rules-index" : "rule-map",
+      kind: lowerSourcePath(ruleSource.path).endsWith('/rules.txt') ? 'rules-index' : 'rule-map',
       raw: await readExternalText(source.reader.readFile, ruleSource.path),
     });
   }
@@ -286,7 +309,7 @@ const importSourceFolder = async (
 
   return {
     value: {
-      kind: "source-pack",
+      kind: 'source-pack',
       scan,
       pack: buildPack(options, source.sourcePath, compiled),
       sourceRoot: source.sourcePath,
@@ -298,24 +321,33 @@ const importSourceFolder = async (
 };
 
 export function importTiled(
-  source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader"> & {
+  source: Pick<TiledImportOptions, 'sourcePath' | 'projectRoot' | 'reader'> & {
     readonly sourcePath: `${string}.tsx` | `${string}.tsj`;
     readonly raw?: string;
   },
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion" | "profile">,
-): Promise<{ readonly value?: TiledTilesetPackImport; readonly diagnostics: readonly ParseDiagnostic[] }>;
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion' | 'profile'>,
+): Promise<{
+  readonly value?: TiledTilesetPackImport;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}>;
 export function importTiled(
-  source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader"> & {
+  source: Pick<TiledImportOptions, 'sourcePath' | 'projectRoot' | 'reader'> & {
     readonly raw?: string;
   },
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion" | "profile">,
-): Promise<{ readonly value?: TiledCanonicalImport; readonly diagnostics: readonly ParseDiagnostic[] }>;
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion' | 'profile'>,
+): Promise<{
+  readonly value?: TiledCanonicalImport;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}>;
 export async function importTiled(
-  source: Pick<TiledImportOptions, "sourcePath" | "projectRoot" | "reader"> & {
+  source: Pick<TiledImportOptions, 'sourcePath' | 'projectRoot' | 'reader'> & {
     readonly raw?: string;
   },
-  options: Pick<TiledImportOptions, "packIdSeed" | "packName" | "packVersion" | "profile">,
-): Promise<{ readonly value?: TiledAnyCanonicalImport; readonly diagnostics: readonly ParseDiagnostic[] }> {
+  options: Pick<TiledImportOptions, 'packIdSeed' | 'packName' | 'packVersion' | 'profile'>,
+): Promise<{
+  readonly value?: TiledAnyCanonicalImport;
+  readonly diagnostics: readonly ParseDiagnostic[];
+}> {
   if (
     source.raw === undefined &&
     !isMapSourcePath(source.sourcePath) &&
@@ -323,7 +355,7 @@ export async function importTiled(
     source.reader?.readDirectory
   ) {
     const scan = await scanTiledSource(source);
-    if (!scan.scan || scan.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+    if (!scan.scan || scan.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
       return { diagnostics: scan.diagnostics };
     }
     return importSourceFolder(source, options, scan.scan);
@@ -335,22 +367,22 @@ export async function importTiled(
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: source.sourcePath,
-          message: "importTiled requires raw input or a reader",
-          severity: "error",
-          format: source.sourcePath.toLowerCase().endsWith(".tmx") ? "tmx" : "tmj",
+          message: 'importTiled requires raw input or a reader',
+          severity: 'error',
+          format: source.sourcePath.toLowerCase().endsWith('.tmx') ? 'tmx' : 'tmj',
         },
       ],
     };
   }
 
   const scan = await scanTiledSource({ ...source, raw });
-  if (!scan.scan || scan.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (!scan.scan || scan.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     return { diagnostics: scan.diagnostics };
   }
 
-  if (scan.scan.sourceKind === "tileset") {
+  if (scan.scan.sourceKind === 'tileset') {
     return importStandaloneTileset(source, options, scan.scan, raw);
   }
 
@@ -359,22 +391,19 @@ export async function importTiled(
     projectRoot: source.projectRoot,
     ...(source.reader === undefined ? {} : { reader: source.reader }),
     ...options,
-    profile:
-      options.profile === "assistive-infer"
-        ? "standard"
-        : options.profile,
+    profile: options.profile === 'assistive-infer' ? 'standard' : options.profile,
     validateImagePaths: true,
   };
   const parsed =
-    source.sourcePath.toLowerCase().endsWith(".tmx") || raw.trimStart().startsWith("<")
+    source.sourcePath.toLowerCase().endsWith('.tmx') || raw.trimStart().startsWith('<')
       ? await parseTmx(raw, parseOptions)
       : await parseTmj(raw, parseOptions);
-  if (!parsed.value || parsed.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (!parsed.value || parsed.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     return { diagnostics: [...scan.diagnostics, ...parsed.diagnostics] };
   }
   return {
     value: {
-      kind: "map",
+      kind: 'map',
       scan: scan.scan,
       pack: parsed.value.pack,
       map: parsed.value.map,

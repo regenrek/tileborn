@@ -11,6 +11,7 @@ import {
   AssetLibraryReference,
   ContentHash,
   PackId,
+  PERSISTED_SCHEMA_VERSIONS,
   ProjectId,
   Uuid,
   WorkingPalette,
@@ -34,7 +35,10 @@ import {
   type LibraryPreviewRef,
 } from '@tileborne/sdk-tileset/renderer';
 import type { AutotileRule, TilesetPack } from '@tileborne/sdk-tileset/schemas';
-import type { TiledAppliedImportPlan, TiledImportRecommendation } from '@tileborne/sdk-tileset/tiled';
+import type {
+  TiledAppliedImportPlan,
+  TiledImportRecommendation,
+} from '@tileborne/sdk-tileset/tiled';
 import { ConfigService, HomeService, writeJsonAtomic } from '@tileborne/services-foundation';
 import { Context, Effect, Layer, Option, Schema } from 'effect';
 
@@ -61,7 +65,7 @@ const DEFAULT_GROUP_LIMIT = 100;
 const MAX_GROUP_LIMIT = 200;
 const PREVIEW_REF_LIMIT = 8;
 const DEFAULT_PALETTE_ITEM_LIMIT = 24;
-export const ASSET_LIBRARY_INDEX_SCHEMA_VERSION = 1;
+export const ASSET_LIBRARY_INDEX_SCHEMA_VERSION = PERSISTED_SCHEMA_VERSIONS.assetLibraryIndex;
 const ASSET_LIBRARY_MEMORY_CACHE_LIMIT = 6;
 const ASSET_LIBRARY_CACHE_DIR = 'asset-library/index-metadata';
 const EDITOR_INDEX_CACHE_DIR = 'asset-library/editor-index';
@@ -221,6 +225,23 @@ export class AssetLibraryService extends Context.Service<
   }
 >()('@tileborne/services-app/AssetLibraryService') {}
 
+export interface AssetLibraryServiceObserver {
+  readonly onPageCompleted?:
+    | ((input: {
+        readonly packAssets: number;
+        readonly records: number;
+        readonly previewReferencesPerGroup: readonly number[];
+      }) => void)
+    | undefined;
+  readonly onPreviewResolutionCompleted?:
+    | ((input: {
+        readonly requested: number;
+        readonly resolved: number;
+        readonly fullCorpusRequest: boolean;
+      }) => void)
+    | undefined;
+}
+
 export class WorkingPaletteService extends Context.Service<
   WorkingPaletteService,
   {
@@ -293,6 +314,16 @@ const clampLimit = (limit: number | undefined): number => {
 
 const normalizeOffset = (offset: number | undefined): number =>
   offset === undefined || !Number.isFinite(offset) ? 0 : Math.max(0, Math.trunc(offset));
+
+/** Canonical bounded page owner shared by the service and deterministic performance gate. */
+export const paginateAssetLibraryGroups = <T>(
+  groups: readonly T[],
+  input: { readonly offset?: number | undefined; readonly limit?: number | undefined },
+) => {
+  const offset = normalizeOffset(input.offset);
+  const limit = clampLimit(input.limit);
+  return { offset, limit, total: groups.length, groups: groups.slice(offset, offset + limit) };
+};
 
 const humanizeIdentifier = (value: string): string => {
   const raw = value.includes(':') ? value.slice(value.lastIndexOf(':') + 1) : value;
@@ -557,6 +588,14 @@ const buildLibraryGroups = (
       ['objectType', objectType],
       ['tags', placeable.tags.join(', ')],
       ['placementMode', placeable.placementMode],
+      ['width', placeable.size.width],
+      ['height', placeable.size.height],
+      [
+        'clipsJson',
+        JSON.stringify(
+          (placeable.clips ?? []).map((clip) => ({ id: String(clip.id), name: clip.name })),
+        ),
+      ],
       ...(isSprite
         ? ([
             ['clipCount', String(placeable.clips?.length ?? 0)],
@@ -742,7 +781,9 @@ const writeEditorIndexToDisk = (
       catch: (cause) => new AssetLibraryError({ path: filePath, message: errorMessage(cause) }),
     });
     yield* writeJsonAtomic(filePath, index).pipe(
-      Effect.mapError((error) => new AssetLibraryError({ path: error.path, message: error.message })),
+      Effect.mapError(
+        (error) => new AssetLibraryError({ path: error.path, message: error.message }),
+      ),
     );
   });
 
@@ -1178,10 +1219,7 @@ const isContainedPath = (root: string, candidate: string): boolean => {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 };
 
-const resolveMaterializedAssetPath = (
-  root: string,
-  assetPath: string,
-): string => {
+const resolveMaterializedAssetPath = (root: string, assetPath: string): string => {
   if (assetPath.includes('\0')) {
     throw new AssetLibraryError({ path: assetPath, message: 'NUL path segment is not allowed' });
   }
@@ -1216,27 +1254,45 @@ export const starterPaletteDraftsFromPack = (
     .slice(0, 8);
   const placeableDrafts = byKind('placeable', 8);
   if (importRecommendation.browseTarget === 'objects') {
-    return [...placeableDrafts, ...byKind('autotile', 8), ...byKind('terrain', 8), ...tileDrafts]
-      .slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
+    return [
+      ...placeableDrafts,
+      ...byKind('autotile', 8),
+      ...byKind('terrain', 8),
+      ...tileDrafts,
+    ].slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
   }
-  return [...byKind('autotile', 8), ...byKind('terrain', 8), ...tileDrafts, ...placeableDrafts]
-    .slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
+  return [
+    ...byKind('autotile', 8),
+    ...byKind('terrain', 8),
+    ...tileDrafts,
+    ...placeableDrafts,
+  ].slice(0, DEFAULT_PALETTE_ITEM_LIMIT);
 };
 
 export const materializeTiledImport = (
   input: MaterializeTiledImportInput,
-): Effect.Effect<MaterializeTiledImportResult, AssetLibraryServiceError, HomeService | AssetService> =>
+): Effect.Effect<
+  MaterializeTiledImportResult,
+  AssetLibraryServiceError,
+  HomeService | AssetService
+> =>
   Effect.gen(function* () {
     const home = yield* HomeService;
     const assets = yield* AssetService;
     const paths = yield* home.init();
-    const stagingPath = path.join(paths.cache, 'tiled-import-materialize', `${input.pack.id}-${randomUUID()}`);
+    const stagingPath = path.join(
+      paths.cache,
+      'tiled-import-materialize',
+      `${input.pack.id}-${randomUUID()}`,
+    );
     yield* Effect.tryPromise({
       try: () => mkdir(stagingPath, { recursive: true }),
       catch: (cause) => new AssetLibraryError({ path: stagingPath, message: errorMessage(cause) }),
     });
     const sourceRoot = path.resolve(input.sourceRoot);
-    const folderHash = hashBytes(encoder.encode(`${sourceRoot}:${input.plan.scan.inventory.mapCount}:${input.pack.id}`));
+    const folderHash = hashBytes(
+      encoder.encode(`${sourceRoot}:${input.plan.scan.inventory.mapCount}:${input.pack.id}`),
+    );
     const manifest = writeTilesetManifest(input.pack, {
       provenance: {
         sourcePath: sourceRoot,
@@ -1244,7 +1300,11 @@ export const materializeTiledImport = (
         importedAt: new Date().toISOString(),
       },
     }) as {
-      readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
+      readonly assets?: readonly {
+        readonly id: string;
+        readonly path: string;
+        readonly mime: string;
+      }[];
     } & Record<string, unknown>;
     const copiedAssets: Array<{
       readonly id: string;
@@ -1269,7 +1329,8 @@ export const materializeTiledImport = (
           await mkdir(path.dirname(destination), { recursive: true });
           await cp(source, destination, { force: true });
         },
-        catch: (cause) => new AssetLibraryError({ path: destination, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new AssetLibraryError({ path: destination, message: errorMessage(cause) }),
       });
       copiedAssets.push({
         ...asset,
@@ -1289,359 +1350,385 @@ export const materializeTiledImport = (
           'utf8',
         ),
       catch: (cause) =>
-        new AssetLibraryError({ path: path.join(stagingPath, MANIFEST_FILENAME), message: errorMessage(cause) }),
+        new AssetLibraryError({
+          path: path.join(stagingPath, MANIFEST_FILENAME),
+          message: errorMessage(cause),
+        }),
     });
     const packId = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: stagingPath }));
-    yield* Effect.promise(() => rm(stagingPath, { recursive: true, force: true }).catch(() => undefined));
+    yield* Effect.promise(() =>
+      rm(stagingPath, { recursive: true, force: true }).catch(() => undefined),
+    );
     return { packId, stagingPath };
   });
 
-export const AssetLibraryServiceLive = Layer.effect(
-  AssetLibraryService,
-  Effect.gen(function* () {
-    const home = yield* HomeService;
-    const assets = yield* AssetService;
-    const paths = yield* home.init();
-    const memoryCache = new Map<string, CachedLibraryIndex>();
-    const buildingKeys = new Set<string>();
-    const lastErrors = new Map<string, string>();
-    // Parsed pack + preview resolver, keyed by `cacheKeyForPack`. The parse and
-    // preview index build run on the main process (off the renderer UI thread)
-    // and are reused across palette opens / item changes.
-    const previewIndexCache = new Map<string, LibraryPreviewIndex>();
-    // Serialized editor index JSON keyed by `cacheKeyForPack`. Built once on the
-    // main process from the parsed pack and served to the renderer so it no
-    // longer Effect-Schema decodes the full manifest on the viewport hot path.
-    const editorIndexCache = new Map<string, { readonly integrityHash: ContentHash; readonly indexJson: string }>();
+export const makeAssetLibraryServiceLive = (observer: AssetLibraryServiceObserver = {}) =>
+  Layer.effect(
+    AssetLibraryService,
+    Effect.gen(function* () {
+      const home = yield* HomeService;
+      const assets = yield* AssetService;
+      const paths = yield* home.init();
+      const memoryCache = new Map<string, CachedLibraryIndex>();
+      const buildingKeys = new Set<string>();
+      const lastErrors = new Map<string, string>();
+      // Parsed pack + preview resolver, keyed by `cacheKeyForPack`. The parse and
+      // preview index build run on the main process (off the renderer UI thread)
+      // and are reused across palette opens / item changes.
+      const previewIndexCache = new Map<string, LibraryPreviewIndex>();
+      // Serialized editor index JSON keyed by `cacheKeyForPack`. Built once on the
+      // main process from the parsed pack and served to the renderer so it no
+      // longer Effect-Schema decodes the full manifest on the viewport hot path.
+      const editorIndexCache = new Map<
+        string,
+        { readonly integrityHash: ContentHash; readonly indexJson: string }
+      >();
 
-    const rememberEditorIndex = (
-      key: string,
-      value: { readonly integrityHash: ContentHash; readonly indexJson: string },
-    ): { readonly integrityHash: ContentHash; readonly indexJson: string } => {
-      if (editorIndexCache.has(key)) {
-        editorIndexCache.delete(key);
-      }
-      editorIndexCache.set(key, value);
-      while (editorIndexCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
-        const oldest = editorIndexCache.keys().next().value as string | undefined;
-        if (oldest === undefined) {
-          break;
+      const rememberEditorIndex = (
+        key: string,
+        value: { readonly integrityHash: ContentHash; readonly indexJson: string },
+      ): { readonly integrityHash: ContentHash; readonly indexJson: string } => {
+        if (editorIndexCache.has(key)) {
+          editorIndexCache.delete(key);
         }
-        editorIndexCache.delete(oldest);
-      }
-      return value;
-    };
-
-    const rememberPreviewIndex = (key: string, index: LibraryPreviewIndex): LibraryPreviewIndex => {
-      if (previewIndexCache.has(key)) {
-        previewIndexCache.delete(key);
-      }
-      previewIndexCache.set(key, index);
-      while (previewIndexCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
-        const oldest = previewIndexCache.keys().next().value as string | undefined;
-        if (oldest === undefined) {
-          break;
-        }
-        previewIndexCache.delete(oldest);
-      }
-      return index;
-    };
-
-    const remember = (cached: CachedLibraryIndex): CachedLibraryIndex => {
-      if (memoryCache.has(cached.key)) {
-        memoryCache.delete(cached.key);
-      }
-      memoryCache.set(cached.key, cached);
-      while (memoryCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
-        const oldest = memoryCache.keys().next().value as string | undefined;
-        if (oldest === undefined) {
-          break;
-        }
-        memoryCache.delete(oldest);
-      }
-      return cached;
-    };
-
-    const recall = (key: string): CachedLibraryIndex | undefined => {
-      const cached = memoryCache.get(key);
-      if (cached === undefined) {
-        return undefined;
-      }
-      return remember(cached);
-    };
-
-    const resolvePackContext = (packId: PackId) =>
-      Effect.gen(function* () {
-        const pack = yield* assets.getPack(packId);
-        const integrityHash = packManifestContentHash(pack);
-        return {
-          pack,
-          integrityHash,
-          key: cacheKeyForPack(pack.id, integrityHash),
-          packRoot: packDirectory(paths.assets, pack.id, pack.version),
-          filePath: cacheFilePath(paths.cache, pack.id, integrityHash),
-        };
-      });
-
-    const buildCachedIndex = (input: {
-      readonly packId: PackId;
-      readonly packRoot: string;
-      readonly key: string;
-      readonly integrityHash: ContentHash;
-      readonly filePath: string;
-    }): Effect.Effect<CachedLibraryIndex, AssetLibraryError> =>
-      Effect.gen(function* () {
-        buildingKeys.add(input.key);
-        const index = yield* libraryIndexForPack(
-          input.packId,
-          input.packRoot,
-          input.integrityHash,
-        ).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              buildingKeys.delete(input.key);
-            }),
-          ),
-        );
-        const cached: CachedLibraryIndex = {
-          key: input.key,
-          packId: input.packId,
-          integrityHash: input.integrityHash,
-          updatedAt: new Date().toISOString(),
-          previewRefCount: previewRefCount(index),
-          index,
-        };
-        yield* writeDiskCache(input.filePath, cached);
-        lastErrors.delete(input.key);
-        return remember(cached);
-      });
-
-    const loadOrBuildCachedIndex = (input: {
-      readonly packId: PackId;
-      readonly packRoot: string;
-      readonly key: string;
-      readonly integrityHash: ContentHash;
-      readonly filePath: string;
-      readonly force?: boolean | undefined;
-    }): Effect.Effect<CachedLibraryIndex, AssetLibraryServiceError> =>
-      Effect.gen(function* () {
-        if (input.force !== true) {
-          const cached = recall(input.key);
-          if (cached !== undefined) {
-            return cached;
+        editorIndexCache.set(key, value);
+        while (editorIndexCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
+          const oldest = editorIndexCache.keys().next().value as string | undefined;
+          if (oldest === undefined) {
+            break;
           }
-          const diskCached = yield* readDiskCache(input.filePath, input.key);
-          if (diskCached !== undefined) {
-            return remember(diskCached);
-          }
+          editorIndexCache.delete(oldest);
         }
-        return yield* buildCachedIndex(input).pipe(
-          Effect.tapError((error) =>
-            Effect.sync(() => {
-              lastErrors.set(input.key, error.message);
-            }),
-          ),
-        );
-      });
-
-    const getPackLibrary = Effect.fn('AssetLibraryService.getPackLibrary')(function* (
-      input: GetPackLibraryInput,
-    ) {
-      const context = yield* resolvePackContext(input.packId);
-      const cached = yield* loadOrBuildCachedIndex({
-        packId: context.pack.id,
-        packRoot: context.packRoot,
-        key: context.key,
-        integrityHash: context.integrityHash,
-        filePath: context.filePath,
-      });
-      const filtered = filterLibraryGroups(cached.index.groups, input);
-      const offset = normalizeOffset(input.offset);
-      const limit = clampLimit(input.limit);
-      return {
-        packId: input.packId,
-        integrityHash: context.integrityHash,
-        indexSchemaVersion: ASSET_LIBRARY_INDEX_SCHEMA_VERSION,
-        previewRefLimit: PREVIEW_REF_LIMIT,
-        total: filtered.length,
-        offset,
-        limit,
-        groups: filtered.slice(offset, offset + limit),
+        return value;
       };
-    });
 
-    const getPackCacheStatus = Effect.fn('AssetLibraryService.getPackCacheStatus')(function* (
-      input: PackLibraryCacheInput,
-    ) {
-      const context = yield* resolvePackContext(input.packId);
-      if (buildingKeys.has(context.key)) {
-        return emptyCacheStatus(context.pack.id, 'building', {
-          integrityHash: context.integrityHash,
-        });
-      }
-      const errorMessage = lastErrors.get(context.key);
-      if (errorMessage !== undefined) {
-        return emptyCacheStatus(context.pack.id, 'error', {
-          integrityHash: context.integrityHash,
-          errorMessage,
-        });
-      }
-      const cached = recall(context.key);
-      if (cached !== undefined) {
-        return statusFromCachedIndex(cached, 'cached');
-      }
-      const diskCached = yield* readDiskCache(context.filePath, context.key);
-      if (diskCached !== undefined) {
-        return statusFromCachedIndex(remember(diskCached), 'cached');
-      }
-      const stale = yield* hasStaleDiskCache(paths.cache, context.pack.id, context.integrityHash);
-      return emptyCacheStatus(context.pack.id, stale ? 'stale' : 'cold', {
-        integrityHash: context.integrityHash,
-      });
-    });
-
-    const reloadPackCache = Effect.fn('AssetLibraryService.reloadPackCache')(function* (
-      input: PackLibraryCacheInput,
-    ) {
-      const context = yield* resolvePackContext(input.packId);
-      memoryCache.delete(context.key);
-      lastErrors.delete(context.key);
-      const cached = yield* loadOrBuildCachedIndex({
-        packId: context.pack.id,
-        packRoot: context.packRoot,
-        key: context.key,
-        integrityHash: context.integrityHash,
-        filePath: context.filePath,
-        force: true,
-      });
-      return statusFromCachedIndex(cached, 'cached');
-    });
-
-    const invalidatePackCache = Effect.fn('AssetLibraryService.invalidatePackCache')(function* (
-      input: PackLibraryCacheInput,
-    ) {
-      let removedEntries = 0;
-      for (const [key, cached] of memoryCache.entries()) {
-        if (cached.packId === input.packId) {
-          memoryCache.delete(key);
-          lastErrors.delete(key);
-          buildingKeys.delete(key);
+      const rememberPreviewIndex = (
+        key: string,
+        index: LibraryPreviewIndex,
+      ): LibraryPreviewIndex => {
+        if (previewIndexCache.has(key)) {
           previewIndexCache.delete(key);
-          editorIndexCache.delete(key);
-          removedEntries += 1;
         }
-      }
-      // Editor-index cache entries are keyed by integrity hash too, so a changed
-      // pack uses a different `cacheKeyForPack`; drop every entry for this pack
-      // regardless of which hash it was built for.
-      for (const key of [...editorIndexCache.keys()]) {
-        if (key.includes(`:${input.packId}:`)) {
-          editorIndexCache.delete(key);
-        }
-      }
-      const removeFromDir = (dir: string, prefix: string) =>
-        Effect.gen(function* () {
-          const entries = yield* Effect.tryPromise({
-            try: async () => {
-              try {
-                return await readdir(dir);
-              } catch (cause) {
-                if (isNotFound(cause)) {
-                  return [];
-                }
-                throw cause;
-              }
-            },
-            catch: (cause) => new AssetLibraryError({ path: dir, message: errorMessage(cause) }),
-          });
-          let removed = 0;
-          for (const entry of entries) {
-            if (!entry.startsWith(prefix)) {
-              continue;
-            }
-            const filePath = path.join(dir, entry);
-            yield* Effect.tryPromise({
-              try: () => rm(filePath, { force: true }),
-              catch: (cause) =>
-                new AssetLibraryError({ path: filePath, message: errorMessage(cause) }),
-            });
-            removed += 1;
+        previewIndexCache.set(key, index);
+        while (previewIndexCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
+          const oldest = previewIndexCache.keys().next().value as string | undefined;
+          if (oldest === undefined) {
+            break;
           }
-          return removed;
+          previewIndexCache.delete(oldest);
+        }
+        return index;
+      };
+
+      const remember = (cached: CachedLibraryIndex): CachedLibraryIndex => {
+        if (memoryCache.has(cached.key)) {
+          memoryCache.delete(cached.key);
+        }
+        memoryCache.set(cached.key, cached);
+        while (memoryCache.size > ASSET_LIBRARY_MEMORY_CACHE_LIMIT) {
+          const oldest = memoryCache.keys().next().value as string | undefined;
+          if (oldest === undefined) {
+            break;
+          }
+          memoryCache.delete(oldest);
+        }
+        return cached;
+      };
+
+      const recall = (key: string): CachedLibraryIndex | undefined => {
+        const cached = memoryCache.get(key);
+        if (cached === undefined) {
+          return undefined;
+        }
+        return remember(cached);
+      };
+
+      const resolvePackContext = (packId: PackId) =>
+        Effect.gen(function* () {
+          const pack = yield* assets.getPack(packId);
+          const integrityHash = packManifestContentHash(pack);
+          return {
+            pack,
+            integrityHash,
+            key: cacheKeyForPack(pack.id, integrityHash),
+            packRoot: packDirectory(paths.assets, pack.id, pack.version),
+            filePath: cacheFilePath(paths.cache, pack.id, integrityHash),
+          };
         });
 
-      removedEntries += yield* removeFromDir(cacheDirectory(paths.cache), cacheFilePrefix(input.packId));
-      removedEntries += yield* removeFromDir(
-        path.join(paths.cache, EDITOR_INDEX_CACHE_DIR),
-        editorIndexCacheFilePrefix(input.packId),
-      );
-      return { packId: input.packId, removedEntries };
-    });
+      const buildCachedIndex = (input: {
+        readonly packId: PackId;
+        readonly packRoot: string;
+        readonly key: string;
+        readonly integrityHash: ContentHash;
+        readonly filePath: string;
+      }): Effect.Effect<CachedLibraryIndex, AssetLibraryError> =>
+        Effect.gen(function* () {
+          buildingKeys.add(input.key);
+          const index = yield* libraryIndexForPack(
+            input.packId,
+            input.packRoot,
+            input.integrityHash,
+          ).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                buildingKeys.delete(input.key);
+              }),
+            ),
+          );
+          const cached: CachedLibraryIndex = {
+            key: input.key,
+            packId: input.packId,
+            integrityHash: input.integrityHash,
+            updatedAt: new Date().toISOString(),
+            previewRefCount: previewRefCount(index),
+            index,
+          };
+          yield* writeDiskCache(input.filePath, cached);
+          lastErrors.delete(input.key);
+          return remember(cached);
+        });
 
-    const resolvePreviews = Effect.fn('AssetLibraryService.resolvePreviews')(function* (
-      input: ResolvePreviewsInput,
-    ) {
-      const context = yield* resolvePackContext(input.packId);
-      let previewIndex = previewIndexCache.get(context.key);
-      if (previewIndex !== undefined) {
-        rememberPreviewIndex(context.key, previewIndex);
-      } else {
+      const loadOrBuildCachedIndex = (input: {
+        readonly packId: PackId;
+        readonly packRoot: string;
+        readonly key: string;
+        readonly integrityHash: ContentHash;
+        readonly filePath: string;
+        readonly force?: boolean | undefined;
+      }): Effect.Effect<CachedLibraryIndex, AssetLibraryServiceError> =>
+        Effect.gen(function* () {
+          if (input.force !== true) {
+            const cached = recall(input.key);
+            if (cached !== undefined) {
+              return cached;
+            }
+            const diskCached = yield* readDiskCache(input.filePath, input.key);
+            if (diskCached !== undefined) {
+              return remember(diskCached);
+            }
+          }
+          return yield* buildCachedIndex(input).pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() => {
+                lastErrors.set(input.key, error.message);
+              }),
+            ),
+          );
+        });
+
+      const getPackLibrary = Effect.fn('AssetLibraryService.getPackLibrary')(function* (
+        input: GetPackLibraryInput,
+      ) {
+        const context = yield* resolvePackContext(input.packId);
+        const cached = yield* loadOrBuildCachedIndex({
+          packId: context.pack.id,
+          packRoot: context.packRoot,
+          key: context.key,
+          integrityHash: context.integrityHash,
+          filePath: context.filePath,
+        });
+        const filtered = filterLibraryGroups(cached.index.groups, input);
+        const page = paginateAssetLibraryGroups(filtered, input);
+        observer.onPageCompleted?.({
+          packAssets: context.pack.assets.length,
+          records: page.groups.length,
+          previewReferencesPerGroup: page.groups.map((group) => group.previewRefs.length),
+        });
+        return {
+          packId: input.packId,
+          integrityHash: context.integrityHash,
+          indexSchemaVersion: ASSET_LIBRARY_INDEX_SCHEMA_VERSION,
+          previewRefLimit: PREVIEW_REF_LIMIT,
+          ...page,
+        };
+      });
+
+      const getPackCacheStatus = Effect.fn('AssetLibraryService.getPackCacheStatus')(function* (
+        input: PackLibraryCacheInput,
+      ) {
+        const context = yield* resolvePackContext(input.packId);
+        if (buildingKeys.has(context.key)) {
+          return emptyCacheStatus(context.pack.id, 'building', {
+            integrityHash: context.integrityHash,
+          });
+        }
+        const errorMessage = lastErrors.get(context.key);
+        if (errorMessage !== undefined) {
+          return emptyCacheStatus(context.pack.id, 'error', {
+            integrityHash: context.integrityHash,
+            errorMessage,
+          });
+        }
+        const cached = recall(context.key);
+        if (cached !== undefined) {
+          return statusFromCachedIndex(cached, 'cached');
+        }
+        const diskCached = yield* readDiskCache(context.filePath, context.key);
+        if (diskCached !== undefined) {
+          return statusFromCachedIndex(remember(diskCached), 'cached');
+        }
+        const stale = yield* hasStaleDiskCache(paths.cache, context.pack.id, context.integrityHash);
+        return emptyCacheStatus(context.pack.id, stale ? 'stale' : 'cold', {
+          integrityHash: context.integrityHash,
+        });
+      });
+
+      const reloadPackCache = Effect.fn('AssetLibraryService.reloadPackCache')(function* (
+        input: PackLibraryCacheInput,
+      ) {
+        const context = yield* resolvePackContext(input.packId);
+        memoryCache.delete(context.key);
+        lastErrors.delete(context.key);
+        const cached = yield* loadOrBuildCachedIndex({
+          packId: context.pack.id,
+          packRoot: context.packRoot,
+          key: context.key,
+          integrityHash: context.integrityHash,
+          filePath: context.filePath,
+          force: true,
+        });
+        return statusFromCachedIndex(cached, 'cached');
+      });
+
+      const invalidatePackCache = Effect.fn('AssetLibraryService.invalidatePackCache')(function* (
+        input: PackLibraryCacheInput,
+      ) {
+        let removedEntries = 0;
+        for (const [key, cached] of memoryCache.entries()) {
+          if (cached.packId === input.packId) {
+            memoryCache.delete(key);
+            lastErrors.delete(key);
+            buildingKeys.delete(key);
+            previewIndexCache.delete(key);
+            editorIndexCache.delete(key);
+            removedEntries += 1;
+          }
+        }
+        // Editor-index cache entries are keyed by integrity hash too, so a changed
+        // pack uses a different `cacheKeyForPack`; drop every entry for this pack
+        // regardless of which hash it was built for.
+        for (const key of [...editorIndexCache.keys()]) {
+          if (key.includes(`:${input.packId}:`)) {
+            editorIndexCache.delete(key);
+          }
+        }
+        const removeFromDir = (dir: string, prefix: string) =>
+          Effect.gen(function* () {
+            const entries = yield* Effect.tryPromise({
+              try: async () => {
+                try {
+                  return await readdir(dir);
+                } catch (cause) {
+                  if (isNotFound(cause)) {
+                    return [];
+                  }
+                  throw cause;
+                }
+              },
+              catch: (cause) => new AssetLibraryError({ path: dir, message: errorMessage(cause) }),
+            });
+            let removed = 0;
+            for (const entry of entries) {
+              if (!entry.startsWith(prefix)) {
+                continue;
+              }
+              const filePath = path.join(dir, entry);
+              yield* Effect.tryPromise({
+                try: () => rm(filePath, { force: true }),
+                catch: (cause) =>
+                  new AssetLibraryError({ path: filePath, message: errorMessage(cause) }),
+              });
+              removed += 1;
+            }
+            return removed;
+          });
+
+        removedEntries += yield* removeFromDir(
+          cacheDirectory(paths.cache),
+          cacheFilePrefix(input.packId),
+        );
+        removedEntries += yield* removeFromDir(
+          path.join(paths.cache, EDITOR_INDEX_CACHE_DIR),
+          editorIndexCacheFilePrefix(input.packId),
+        );
+        return { packId: input.packId, removedEntries };
+      });
+
+      const resolvePreviews = Effect.fn('AssetLibraryService.resolvePreviews')(function* (
+        input: ResolvePreviewsInput,
+      ) {
+        const context = yield* resolvePackContext(input.packId);
+        let previewIndex = previewIndexCache.get(context.key);
+        if (previewIndex !== undefined) {
+          rememberPreviewIndex(context.key, previewIndex);
+        } else {
+          const pack = yield* readTilesetPack(path.join(context.packRoot, MANIFEST_FILENAME));
+          previewIndex = rememberPreviewIndex(context.key, buildLibraryPreviewIndex(pack));
+        }
+        const previews = input.refs.map((ref) => {
+          const preview = previewIndex!.previewForRef(ref);
+          return { key: assetLibraryReferenceKey(ref), preview: preview ?? undefined };
+        });
+        observer.onPreviewResolutionCompleted?.({
+          requested: input.refs.length,
+          resolved: previews.filter(({ preview }) => preview !== undefined).length,
+          fullCorpusRequest: input.refs.length >= context.pack.assets.length,
+        });
+        return { previews } satisfies ResolvePreviewsResult;
+      });
+
+      const getEditorIndex = Effect.fn('AssetLibraryService.getEditorIndex')(function* (
+        input: GetEditorIndexInput,
+      ) {
+        const context = yield* resolvePackContext(input.packId);
+        const result = (indexJson: string): GetEditorIndexResult => ({
+          packId: context.pack.id,
+          integrityHash: context.integrityHash,
+          schemaVersion: EDITOR_TILESET_INDEX_SCHEMA_VERSION,
+          indexJson,
+        });
+
+        const cached = editorIndexCache.get(context.key);
+        if (cached !== undefined && cached.integrityHash === context.integrityHash) {
+          rememberEditorIndex(context.key, cached);
+          return result(cached.indexJson);
+        }
+
+        const filePath = editorIndexCacheFilePath(
+          paths.cache,
+          context.pack.id,
+          context.integrityHash,
+        );
+        const diskJson = yield* readEditorIndexFromDisk(filePath, context.integrityHash);
+        if (diskJson !== undefined) {
+          rememberEditorIndex(context.key, {
+            integrityHash: context.integrityHash,
+            indexJson: diskJson,
+          });
+          return result(diskJson);
+        }
+
         const pack = yield* readTilesetPack(path.join(context.packRoot, MANIFEST_FILENAME));
-        previewIndex = rememberPreviewIndex(context.key, buildLibraryPreviewIndex(pack));
-      }
-      const previews = input.refs.map((ref) => {
-        const preview = previewIndex!.previewForRef(ref);
-        return { key: assetLibraryReferenceKey(ref), preview: preview ?? undefined };
-      });
-      return { previews } satisfies ResolvePreviewsResult;
-    });
-
-    const getEditorIndex = Effect.fn('AssetLibraryService.getEditorIndex')(function* (
-      input: GetEditorIndexInput,
-    ) {
-      const context = yield* resolvePackContext(input.packId);
-      const result = (indexJson: string): GetEditorIndexResult => ({
-        packId: context.pack.id,
-        integrityHash: context.integrityHash,
-        schemaVersion: EDITOR_TILESET_INDEX_SCHEMA_VERSION,
-        indexJson,
+        const index = buildEditorTilesetIndex(pack, context.integrityHash);
+        const indexJson = JSON.stringify(index);
+        yield* writeEditorIndexToDisk(filePath, index);
+        rememberEditorIndex(context.key, { integrityHash: context.integrityHash, indexJson });
+        return result(indexJson);
       });
 
-      const cached = editorIndexCache.get(context.key);
-      if (cached !== undefined && cached.integrityHash === context.integrityHash) {
-        rememberEditorIndex(context.key, cached);
-        return result(cached.indexJson);
-      }
+      return {
+        getPackLibrary,
+        getPackCacheStatus,
+        reloadPackCache,
+        invalidatePackCache,
+        resolvePreviews,
+        getEditorIndex,
+      };
+    }),
+  );
 
-      const filePath = editorIndexCacheFilePath(
-        paths.cache,
-        context.pack.id,
-        context.integrityHash,
-      );
-      const diskJson = yield* readEditorIndexFromDisk(filePath, context.integrityHash);
-      if (diskJson !== undefined) {
-        rememberEditorIndex(context.key, { integrityHash: context.integrityHash, indexJson: diskJson });
-        return result(diskJson);
-      }
-
-      const pack = yield* readTilesetPack(path.join(context.packRoot, MANIFEST_FILENAME));
-      const index = buildEditorTilesetIndex(pack, context.integrityHash);
-      const indexJson = JSON.stringify(index);
-      yield* writeEditorIndexToDisk(filePath, index);
-      rememberEditorIndex(context.key, { integrityHash: context.integrityHash, indexJson });
-      return result(indexJson);
-    });
-
-    return {
-      getPackLibrary,
-      getPackCacheStatus,
-      reloadPackCache,
-      invalidatePackCache,
-      resolvePreviews,
-      getEditorIndex,
-    };
-  }),
-);
+export const AssetLibraryServiceLive = makeAssetLibraryServiceLive();
 
 export const WorkingPaletteServiceLive = Layer.effect(
   WorkingPaletteService,

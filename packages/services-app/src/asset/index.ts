@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -42,6 +42,7 @@ import {
   PackCapability,
   PackDuplicateIdDiagnostic,
   PackId,
+  PERSISTED_SCHEMA_VERSIONS,
   type PackCapabilityDiagnostic,
   ProjectId,
   ProjectManifest,
@@ -66,6 +67,7 @@ import {
   type ImportSpriteSheetInput,
   type SpriteAnchorName,
   type SpriteSheetClipInput,
+  type SpriteSheetPlayerModelMetadata,
   type SpriteSheetSliceConfig,
 } from '@tileborne/sdk-tileset/importers/sprite-sheet';
 import { writeTilesetManifest, type ManifestProvenance } from '@tileborne/sdk-tileset/manifest';
@@ -113,7 +115,7 @@ export class AssetIndexEntry extends Schema.Class<AssetIndexEntry>('AssetIndexEn
 }) {}
 
 export class ProjectAssetIndex extends Schema.Class<ProjectAssetIndex>('ProjectAssetIndex')({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(PERSISTED_SCHEMA_VERSIONS.projectAssetIndex),
   projectId: ProjectId,
   packs: Schema.Array(AssetIndexEntry),
 }) {}
@@ -178,6 +180,7 @@ export interface SpriteSheetImportInput {
   readonly anchor?: SpriteAnchorName;
   readonly packName?: string;
   readonly clips?: readonly SpriteSheetClipInput[];
+  readonly playerModel?: SpriteSheetPlayerModelMetadata | undefined;
   /** Pre-decoded Aseprite JSON sidecar (drives slicing + clips when present). */
   readonly aseprite?: unknown;
 }
@@ -193,7 +196,9 @@ export class AssetService extends Context.Service<
     readonly importPack: (source: AssetPackSource) => Effect.Effect<JobId, AssetServiceError>;
     readonly importPackNow: (source: AssetPackSource) => Effect.Effect<PackId, AssetServiceError>;
     readonly importTiledSourcePack: (sourceRoot: string) => Effect.Effect<JobId, AssetServiceError>;
-    readonly importTiledSourcePackNow: (sourceRoot: string) => Effect.Effect<PackId, AssetServiceError>;
+    readonly importTiledSourcePackNow: (
+      sourceRoot: string,
+    ) => Effect.Effect<PackId, AssetServiceError>;
     readonly importSpriteSheetPackNow: (
       input: SpriteSheetImportInput,
     ) => Effect.Effect<PackId, AssetServiceError>;
@@ -299,10 +304,7 @@ type TiledSourceInputFiles = {
   readonly ruleFiles: readonly string[];
 };
 
-const containsTiledSourceFile = async (
-  rootPath: string,
-  maxDepth = 3,
-): Promise<boolean> => {
+const containsTiledSourceFile = async (rootPath: string, maxDepth = 3): Promise<boolean> => {
   const scan = async (directory: string, depth: number): Promise<boolean> => {
     try {
       const entries = await readdir(directory, { withFileTypes: true, encoding: 'utf8' });
@@ -483,6 +485,56 @@ const dropLegacyCapabilityCache = (value: unknown): unknown => {
   return next;
 };
 
+const legacyCapabilityDiagnosticSeverity = (tag: unknown): 'error' | 'warning' | undefined => {
+  switch (tag) {
+    case 'PACK.no-tilesets':
+    case 'PACK.flip-flag-dropped':
+      return 'warning';
+    case 'PACK.duplicate-id':
+    case 'PACK.unsupported-schema':
+    case 'PACK.missing-asset':
+      return 'error';
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * v6 capability locks predate diagnostic severity. Normalize only this durable
+ * persistence shape before strict schema decoding; IPC/wire contracts continue
+ * to require severity and the v7 integrity hash then forces a fresh SDK probe.
+ */
+const migrateLegacyCapabilityDiagnosticSeverities = (value: unknown): unknown => {
+  if (!isRecord(value) || !isRecord(value.capability) || !isRecord(value.capability.capability)) {
+    return value;
+  }
+  const capability = value.capability.capability;
+  if (!Array.isArray(capability.diagnostics)) {
+    return value;
+  }
+  let changed = false;
+  const diagnostics = capability.diagnostics.map((diagnostic) => {
+    if (!isRecord(diagnostic) || 'severity' in diagnostic) {
+      return diagnostic;
+    }
+    const severity = legacyCapabilityDiagnosticSeverity(diagnostic._tag);
+    if (severity === undefined) {
+      return diagnostic;
+    }
+    changed = true;
+    return { ...diagnostic, severity };
+  });
+  return changed
+    ? {
+        ...value,
+        capability: {
+          ...value.capability,
+          capability: { ...capability, diagnostics },
+        },
+      }
+    : value;
+};
+
 const decodePackLock = (
   filePath: string,
   value: unknown,
@@ -505,7 +557,10 @@ const readPackLock = (
       try: (): unknown => JSON.parse(raw),
       catch: (cause) => new AssetIntegrityError({ path: filePath, message: errorMessage(cause) }),
     });
-    return yield* decodePackLock(filePath, parsed).pipe(
+    return yield* decodePackLock(
+      filePath,
+      migrateLegacyCapabilityDiagnosticSeverities(parsed),
+    ).pipe(
       Effect.catch((error) =>
         hasLegacyCapabilityWithoutPlaceableCount(parsed)
           ? decodePackLock(filePath, dropLegacyCapabilityCache(parsed))
@@ -638,6 +693,7 @@ const duplicatePackDiagnostics = (
     .map((pack) => {
       const integrityHashesMatch = hashAssetPackManifest(pack) === newIntegrityHash;
       return new PackDuplicateIdDiagnostic({
+        severity: 'error',
         packId: manifest.id,
         existingPackId: pack.id,
         newPackId: manifest.id,
@@ -726,7 +782,9 @@ const ensurePackCapabilityCached = (
       version: lock.version,
       manifestHash: lock.manifestHash,
       files: lock.files,
-      capability: Option.some(new AssetPackCapabilityLock({ integrityHash: probe.integrityHash, capability })),
+      capability: Option.some(
+        new AssetPackCapabilityLock({ integrityHash: probe.integrityHash, capability }),
+      ),
     });
     yield* writePackLock(packRoot, nextLock);
     return { capability, refreshed: true };
@@ -839,7 +897,15 @@ const readSourceManifest = (
 
 const preflightImportSource = (source: AssetPackSource): Effect.Effect<void, AssetImportError> =>
   source._tag === 'directory'
-    ? readSourceManifest(path.resolve(source.path)).pipe(Effect.asVoid)
+    ? Effect.gen(function* () {
+        const sourceRoot = path.resolve(source.path);
+        yield* Effect.tryPromise({
+          try: () => stat(sourceRoot),
+          catch: (cause) =>
+            new AssetImportError({ path: sourceRoot, message: errorMessage(cause) }),
+        });
+        yield* readSourceManifest(sourceRoot).pipe(Effect.asVoid);
+      })
     : Effect.void;
 
 const runTarCommand = (args: readonly string[], cwd: string): Promise<void> =>
@@ -899,7 +965,11 @@ const manifestWithTilesetAssetIntegrity = async (
   sourceInventory: TiledSourceInventory,
 ): Promise<unknown> => {
   const manifest = writeTilesetManifest(pack, { provenance }) as {
-    readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
+    readonly assets?: readonly {
+      readonly id: string;
+      readonly path: string;
+      readonly mime: string;
+    }[];
   } & Record<string, unknown>;
   const assets = [];
   for (const asset of manifest.assets ?? []) {
@@ -943,7 +1013,8 @@ const stageTiledSourcePack = (
     const resolvedSource = path.resolve(sourceRoot);
     const sourceFiles = yield* Effect.tryPromise({
       try: () => discoverTiledSourceInputFiles(resolvedSource),
-      catch: (cause) => new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
+      catch: (cause) =>
+        new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
     });
     if (sourceFiles.mapFiles.length === 0 && sourceFiles.tsxFiles.length === 0) {
       yield* new AssetImportError({
@@ -962,7 +1033,8 @@ const stageTiledSourcePack = (
           ruleFiles: sourceFiles.ruleFiles,
           importedAt: new Date().toISOString(),
         }),
-      catch: (cause) => new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
+      catch: (cause) =>
+        new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
     });
     const blocking = imported.diagnostics.find((diagnostic) => diagnostic.severity === 'error');
     if (blocking !== undefined || imported.value === undefined) {
@@ -1028,6 +1100,7 @@ const stageSpriteSheetPack = (
       ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
       ...(input.packName === undefined ? {} : { packName: input.packName }),
       ...(input.clips === undefined ? {} : { clips: input.clips }),
+      ...(input.playerModel === undefined ? {} : { playerModel: input.playerModel }),
       ...(input.aseprite === undefined ? {} : { aseprite: input.aseprite }),
       importedAt: new Date().toISOString(),
     } satisfies ImportSpriteSheetInput);
@@ -1049,7 +1122,11 @@ const stageSpriteSheetPack = (
     const manifest = writeTilesetManifest(imported.value.pack, {
       provenance: imported.value.provenance,
     }) as {
-      readonly assets?: readonly { readonly id: string; readonly path: string; readonly mime: string }[];
+      readonly assets?: readonly {
+        readonly id: string;
+        readonly path: string;
+        readonly mime: string;
+      }[];
     } & Record<string, unknown>;
 
     const assets: Array<Record<string, unknown>> = [];
@@ -1127,7 +1204,12 @@ const importDirectoryPack = (
       probed.capability,
       duplicatePackDiagnostics(installedPacks, stagedPack.manifest),
     );
-    const lock = makePackLock(stagedPack.manifest, stagedPack.files, capability, probed.integrityHash);
+    const lock = makePackLock(
+      stagedPack.manifest,
+      stagedPack.files,
+      capability,
+      probed.integrityHash,
+    );
     const encodedLock = yield* encodeJson(
       AssetPackIntegrityLock,
       lock,
@@ -1516,6 +1598,7 @@ export const AssetServiceLive = Layer.effect(
     const importPackNow = Effect.fn('AssetService.importPackNow')(function* (
       source: AssetPackSource,
     ) {
+      yield* preflightImportSource(source);
       const pack = yield* source._tag === 'directory'
         ? importDirectoryPack(paths.assets, source.path)
         : Effect.gen(function* () {
@@ -1544,31 +1627,16 @@ export const AssetServiceLive = Layer.effect(
       });
     });
 
-    const importTiledSourcePackNow = Effect.fn(
-      'AssetService.importTiledSourcePackNow',
-    )(function* (sourceRoot: string) {
+    const importTiledSourcePackNow = Effect.fn('AssetService.importTiledSourcePackNow')(function* (
+      sourceRoot: string,
+    ) {
       const staging = path.join(paths.cache, 'assets', 'tiled-source', randomUUID());
       yield* stageTiledSourcePack(sourceRoot, staging);
       const pack = yield* importDirectoryPack(paths.assets, staging).pipe(
-        Effect.ensuring(Effect.promise(() => rm(staging, { recursive: true, force: true }).catch(() => undefined))),
-      );
-      invalidateVerifiedPackCache();
-      yield* PubSub.publish(trigger, void 0);
-      yield* PubSub.publish(capabilityTrigger, {
-        packId: pack.id,
-        capability: pack.capability,
-      });
-      return pack.id;
-    });
-
-    const importSpriteSheetPackNow = Effect.fn(
-      'AssetService.importSpriteSheetPackNow',
-    )(function* (input: SpriteSheetImportInput) {
-      const staging = path.join(paths.cache, 'assets', 'sprite-sheet', randomUUID());
-      yield* stageSpriteSheetPack(input, staging);
-      const pack = yield* importDirectoryPack(paths.assets, staging).pipe(
         Effect.ensuring(
-          Effect.promise(() => rm(staging, { recursive: true, force: true }).catch(() => undefined)),
+          Effect.promise(() =>
+            rm(staging, { recursive: true, force: true }).catch(() => undefined),
+          ),
         ),
       );
       invalidateVerifiedPackCache();
@@ -1580,13 +1648,35 @@ export const AssetServiceLive = Layer.effect(
       return pack.id;
     });
 
-    const importTiledSourcePack = Effect.fn(
-      'AssetService.importTiledSourcePack',
-    )(function* (sourceRoot: string) {
+    const importSpriteSheetPackNow = Effect.fn('AssetService.importSpriteSheetPackNow')(function* (
+      input: SpriteSheetImportInput,
+    ) {
+      const staging = path.join(paths.cache, 'assets', 'sprite-sheet', randomUUID());
+      yield* stageSpriteSheetPack(input, staging);
+      const pack = yield* importDirectoryPack(paths.assets, staging).pipe(
+        Effect.ensuring(
+          Effect.promise(() =>
+            rm(staging, { recursive: true, force: true }).catch(() => undefined),
+          ),
+        ),
+      );
+      invalidateVerifiedPackCache();
+      yield* PubSub.publish(trigger, void 0);
+      yield* PubSub.publish(capabilityTrigger, {
+        packId: pack.id,
+        capability: pack.capability,
+      });
+      return pack.id;
+    });
+
+    const importTiledSourcePack = Effect.fn('AssetService.importTiledSourcePack')(function* (
+      sourceRoot: string,
+    ) {
       const resolvedSource = path.resolve(sourceRoot);
       const sourceFiles = yield* Effect.tryPromise({
         try: () => discoverTiledSourceInputFiles(resolvedSource),
-        catch: (cause) => new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
+        catch: (cause) =>
+          new AssetImportError({ path: resolvedSource, message: errorMessage(cause) }),
       });
       if (sourceFiles.mapFiles.length === 0 && sourceFiles.tsxFiles.length === 0) {
         yield* new AssetImportError({

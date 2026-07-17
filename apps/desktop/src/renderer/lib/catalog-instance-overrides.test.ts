@@ -36,7 +36,10 @@ const lootSource = () =>
     grants: { primary: true, bonus: false },
   });
 
-const objectType = (components: readonly GameObjectComponent[], instanceDefaults = {}): GameObjectType =>
+const objectType = (
+  components: readonly GameObjectComponent[],
+  instanceDefaults = {},
+): GameObjectType =>
   new GameObjectType({
     id: OBJECT_TYPE_ID,
     schemaVersion: 1,
@@ -90,7 +93,10 @@ describe('instance overrides form', () => {
 
 describe('loot binding', () => {
   it('finds the loot-source component', () => {
-    const type = objectType([new CollisionFootprintComponent({ source: 'manual', reviewed: true, parts: [] }), lootSource()]);
+    const type = objectType([
+      new CollisionFootprintComponent({ source: 'manual', reviewed: true, parts: [] }),
+      lootSource(),
+    ]);
     expect(findLootSource(type)?._tag).toBe('loot-source');
     expect(findLootSource(objectType([]))).toBeUndefined();
   });
@@ -146,7 +152,9 @@ describe('loot binding', () => {
   });
 
   it('serializes inherit (undefined) as an explicit null table id', () => {
-    expect(lootBindingRecord({ lootTableId: undefined, interactionMode: 'auto', grants: {} })).toEqual({
+    expect(
+      lootBindingRecord({ lootTableId: undefined, interactionMode: 'auto', grants: {} }),
+    ).toEqual({
       lootTableId: null,
       interactionMode: 'auto',
       grants: {},

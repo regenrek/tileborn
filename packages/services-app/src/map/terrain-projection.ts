@@ -9,7 +9,10 @@ import type {
   TilesetPack,
 } from '@tileborne/sdk-tileset/schemas';
 
-export type GeneratedTerrainSemantic = Extract<AssetSemanticRoleNameType, 'floor' | 'wall' | 'path'>;
+export type GeneratedTerrainSemantic = Extract<
+  AssetSemanticRoleNameType,
+  'floor' | 'wall' | 'path'
+>;
 
 export interface TerrainProjectionDiagnostic {
   readonly severity: 'warning' | 'error';
@@ -65,6 +68,31 @@ const toProjectedTile = (
 const rolePriority = (role: AssetSemanticRole): number =>
   role.source === 'user' ? role.confidence + 1 : role.confidence;
 
+const semanticRoleFromTerrainText = (value: string): GeneratedTerrainSemantic | undefined => {
+  const text = value.toLowerCase();
+  if (/\bwater\b|\briver\b|\blake\b|\bshore\b/.test(text)) return undefined;
+  if (/\bwall\b|wall-/.test(text)) return 'wall';
+  if (/\bpath\b|\broad\b|\btrail\b/.test(text)) return 'path';
+  if (/\bfloor\b|\bground\b|\bgrass\b|\bterrain\b/.test(text)) return 'floor';
+  return undefined;
+};
+
+const addInferredRole = (
+  rolesByTileId: Map<string, AssetSemanticRole[]>,
+  tileId: TileIdType,
+  semantic: GeneratedTerrainSemantic,
+): void => {
+  const key = String(tileId);
+  const roles = rolesByTileId.get(key) ?? [];
+  roles.push({
+    role: semantic,
+    tileId,
+    source: 'tiled-metadata',
+    confidence: 0.7,
+  });
+  rolesByTileId.set(key, roles);
+};
+
 const chooseTile = (
   semantic: GeneratedTerrainSemantic,
   candidates: readonly TileCandidate[],
@@ -93,10 +121,25 @@ const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
     roles.push(role);
     rolesByTileId.set(key, roles);
   }
+  for (const tileset of pack.tilesets) {
+    for (const rule of tileset.autotileRules) {
+      const semantic = [rule.name, ...rule.terrainClasses]
+        .map(semanticRoleFromTerrainText)
+        .find((role): role is GeneratedTerrainSemantic => role !== undefined);
+      if (semantic === undefined) {
+        continue;
+      }
+      const tileIds = new Set(Object.values(rule.maskToTileIds).flat());
+      for (const tileId of tileIds) {
+        addInferredRole(rolesByTileId, tileId, semantic);
+      }
+    }
+  }
   const candidates: TileCandidate[] = [];
   let tileIndex = 1;
   for (const tileset of pack.tilesets) {
-    const atlasAssetPath = assetPathById.get(String(tileset.atlasAssetId)) ?? String(tileset.atlasAssetId);
+    const atlasAssetPath =
+      assetPathById.get(String(tileset.atlasAssetId)) ?? String(tileset.atlasAssetId);
     for (const tile of tileset.tiles) {
       candidates.push({
         tile,
@@ -111,7 +154,9 @@ const collectCandidates = (pack: TilesetPack): readonly TileCandidate[] => {
   return candidates;
 };
 
-const collectRequiredSemantics = (layers: readonly MapLayer[]): ReadonlySet<GeneratedTerrainSemantic> => {
+const collectRequiredSemantics = (
+  layers: readonly MapLayer[],
+): ReadonlySet<GeneratedTerrainSemantic> => {
   const required = new Set<GeneratedTerrainSemantic>();
   for (const layer of layers) {
     if (layer._tag !== 'tile' || layer.name !== 'terrain') {
@@ -197,7 +242,8 @@ export const projectGeneratedTerrainLayers = (input: {
     diagnostics.push({
       severity: 'warning',
       code: 'TERRAIN_PROJECTION.no-path-tile',
-      message: 'Could not resolve a path semantic role; generated path cells will use the floor role.',
+      message:
+        'Could not resolve a path semantic role; generated path cells will use the floor role.',
     });
   }
 

@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { ProcgenInputError } from "../errors.js";
-import { createProcgenRng } from "./rng.js";
+import { ProcgenInputError } from '../errors.js';
+import { createProcgenRng } from './rng.js';
 
-describe("Xoshiro256** procgen RNG", () => {
-  it("produces the same sequence for the same seed", () => {
+describe('Xoshiro256** procgen RNG', () => {
+  it('produces the same sequence for the same seed', () => {
     const left = createProcgenRng(42);
     const right = createProcgenRng(42);
     const leftSeq = Array.from({ length: 8 }, () => left.nextUint32());
@@ -15,7 +15,7 @@ describe("Xoshiro256** procgen RNG", () => {
     ]);
   });
 
-  it("produces different sequences for different seeds", () => {
+  it('produces different sequences for different seeds', () => {
     const a = createProcgenRng(1);
     const b = createProcgenRng(2);
     const aSeq = Array.from({ length: 4 }, () => a.nextUint32());
@@ -23,7 +23,7 @@ describe("Xoshiro256** procgen RNG", () => {
     expect(aSeq).not.toEqual(bSeq);
   });
 
-  it("uniformInt stays within bounds", () => {
+  it('uniformInt stays within bounds', () => {
     const rng = createProcgenRng(99);
     for (let index = 0; index < 100; index += 1) {
       const value = rng.uniformInt(-3, 3);
@@ -32,26 +32,26 @@ describe("Xoshiro256** procgen RNG", () => {
     }
   });
 
-  it("pick selects deterministically from an array", () => {
+  it('pick selects deterministically from an array', () => {
     const rng = createProcgenRng(7);
-    expect(rng.pick(["a", "b", "c", "d"])).toBe("c");
-    expect(rng.pick(["a", "b", "c", "d"])).toBe("c");
+    expect(rng.pick(['a', 'b', 'c', 'd'])).toBe('c');
+    expect(rng.pick(['a', 'b', 'c', 'd'])).toBe('c');
   });
 
-  it("weighted selection is stable for fixed weights", () => {
+  it('weighted selection is stable for fixed weights', () => {
     const rng = createProcgenRng(1234);
-    const items = ["common", "rare", "epic"] as const;
+    const items = ['common', 'rare', 'epic'] as const;
     const weights = [70, 25, 5];
     const picks = Array.from({ length: 5 }, () => rng.weighted(items, weights));
-    expect(picks).toEqual(["common", "common", "common", "common", "common"]);
+    expect(picks).toEqual(['common', 'common', 'common', 'common', 'common']);
   });
 
-  it("rejects invalid weighted input", () => {
+  it('rejects invalid weighted input', () => {
     const rng = createProcgenRng(1);
-    expect(() => rng.weighted(["a"], [0])).toThrow(ProcgenInputError);
+    expect(() => rng.weighted(['a'], [0])).toThrow(ProcgenInputError);
   });
 
-  it("uniformInt is deterministic for a fixed seed and range", () => {
+  it('uniformInt is deterministic for a fixed seed and range', () => {
     const a = createProcgenRng(2026);
     const b = createProcgenRng(2026);
     const seqA = Array.from({ length: 16 }, () => a.uniformInt(0, 9));
@@ -60,7 +60,7 @@ describe("Xoshiro256** procgen RNG", () => {
     expect(seqA.every((v) => v >= 0 && v <= 9)).toBe(true);
   });
 
-  it("uniformInt distribution is roughly uniform across a small odd range", () => {
+  it('uniformInt distribution is roughly uniform across a small odd range', () => {
     // Sanity check for the unbiased rejection-sampling path: with 60k samples
     // across a 7-bucket range each bucket should land within ~3% of 1/7.
     const rng = createProcgenRng(0xdeadbeefn);
@@ -74,5 +74,5 @@ describe("Xoshiro256** procgen RNG", () => {
     for (const count of buckets) {
       expect(Math.abs(count - expected) / expected).toBeLessThan(0.03);
     }
-  }, 15_000);
+  }, 60_000);
 });

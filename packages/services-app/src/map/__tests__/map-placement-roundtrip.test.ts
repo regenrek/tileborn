@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   MapObject,
@@ -16,45 +16,45 @@ import {
   makePlaceableId,
   makeTileId,
   type ProjectId,
-} from "@tileborne/core";
-import { FoundationLayer } from "@tileborne/services-foundation";
-import { Effect, Layer, Option } from "effect";
-import { describe, expect, it } from "vitest";
+} from '@tileborne/core';
+import { FoundationLayer } from '@tileborne/services-foundation';
+import { Effect, Layer, Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { ServicesAppLayer } from "../../index.js";
-import { ProjectService } from "../../project/index.js";
-import { withTempHome } from "../../test-utils.js";
-import { MapService, toMapIpcPayload } from "../index.js";
+import { ServicesAppLayer } from '../../index.js';
+import { ProjectService } from '../../project/index.js';
+import { withTempHome } from '../../test-utils.js';
+import { MapService, toMapIpcPayload } from '../index.js';
 
 const appLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
 
 const runApp = <A, E>(effect: Effect.Effect<A, E, ProjectService | MapService>) =>
   Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
 
-const projectDir = (home: string, projectId: ProjectId) => path.join(home, "projects", projectId);
+const projectDir = (home: string, projectId: ProjectId) => path.join(home, 'projects', projectId);
 
-describe("MapService placement persistence", () => {
-  it("loads persisted objects that omit optional object fields", () =>
+describe('MapService placement persistence', () => {
+  it('loads persisted objects that omit optional object fields', () =>
     withTempHome(async () => {
       await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Optional Object Fields" });
+          const projectId = yield* projects.create({ name: 'Optional Object Fields' });
           const mapId = yield* maps.create(projectId, { width: 8, height: 8 });
           const base = yield* maps.load(projectId, mapId);
-          const layerId = makeLayerId("00000000-0000-4000-8000-000000000062" as Uuid);
-          const objectId = makeObjectId("00000000-0000-4000-8000-000000000063" as Uuid);
+          const layerId = makeLayerId('00000000-0000-4000-8000-000000000062' as Uuid);
+          const objectId = makeObjectId('00000000-0000-4000-8000-000000000063' as Uuid);
           const objectLayer = new ObjectLayer({
             id: layerId,
-            name: "objects",
+            name: 'objects',
             visible: true,
             opacity: 1,
             objectIds: [objectId],
           });
           const object = new MapObject({
             id: objectId,
-            kind: gameObjectTypeIdForKey("prop"),
+            kind: gameObjectTypeIdForKey('prop'),
             x: 64,
             y: 96,
             width: Option.none(),
@@ -79,41 +79,46 @@ describe("MapService placement persistence", () => {
           expect(Option.isNone(loaded.objects[0]?.width ?? Option.some(0))).toBe(true);
           expect(Option.isNone(loaded.objects[0]?.height ?? Option.some(0))).toBe(true);
           expect(loaded.objects[0]?.placement).toBeUndefined();
-          expect(toMapIpcPayload(loaded)).toMatchObject({
-            objects: [{ width: undefined, height: undefined, placement: undefined }],
-          });
+          // Optional-key encoding: none-options encode as ABSENT keys, so the
+          // IPC payload (plain JSON wire) carries no width/height/placement.
+          const payload = toMapIpcPayload(loaded) as {
+            objects: readonly Record<string, unknown>[];
+          };
+          expect(payload.objects[0]).not.toHaveProperty('width');
+          expect(payload.objects[0]).not.toHaveProperty('height');
+          expect(payload.objects[0]).not.toHaveProperty('placement');
         }),
       );
     }));
 
-  it("round-trips MapObjectPlacement through save and load", () =>
+  it('round-trips MapObjectPlacement through save and load', () =>
     withTempHome(async (home) => {
       const ids = {
-        layer: makeLayerId("00000000-0000-4000-8000-000000000052" as Uuid),
-        object: makeObjectId("00000000-0000-4000-8000-000000000053" as Uuid),
-        placeable: makePlaceableId("00000000-0000-4000-8000-000000000054" as Uuid),
-        asset: makeAssetId("00000000-0000-4000-8000-000000000055" as Uuid),
-        tile: makeTileId("00000000-0000-4000-8000-000000000056" as Uuid),
-        pack: makePackId("00000000-0000-4000-8000-000000000057" as Uuid),
+        layer: makeLayerId('00000000-0000-4000-8000-000000000052' as Uuid),
+        object: makeObjectId('00000000-0000-4000-8000-000000000053' as Uuid),
+        placeable: makePlaceableId('00000000-0000-4000-8000-000000000054' as Uuid),
+        asset: makeAssetId('00000000-0000-4000-8000-000000000055' as Uuid),
+        tile: makeTileId('00000000-0000-4000-8000-000000000056' as Uuid),
+        pack: makePackId('00000000-0000-4000-8000-000000000057' as Uuid),
       };
 
       const { projectId, mapId, loaded } = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Placement Roundtrip" });
+          const projectId = yield* projects.create({ name: 'Placement Roundtrip' });
           const mapId = yield* maps.create(projectId, { width: 8, height: 8 });
           const base = yield* maps.load(projectId, mapId);
           const objectLayer = new ObjectLayer({
             id: ids.layer,
-            name: "objects",
+            name: 'objects',
             visible: true,
             opacity: 1,
             objectIds: [ids.object],
           });
           const object = new MapObject({
             id: ids.object,
-            kind: gameObjectTypeIdForKey("placeable"),
+            kind: gameObjectTypeIdForKey('placeable'),
             x: 64,
             y: 96,
             width: Option.some(96),
@@ -123,7 +128,7 @@ describe("MapService placement persistence", () => {
             placement: new MapObjectPlacement({
               packId: Option.some(ids.pack),
               placeableId: ids.placeable,
-              source: "manual",
+              source: 'manual',
               assetId: Option.some(ids.asset),
               tileId: Option.some(ids.tile),
               gid: Option.some(7),
@@ -151,7 +156,7 @@ describe("MapService placement persistence", () => {
       );
 
       const persisted = JSON.parse(
-        await readFile(path.join(projectDir(home, projectId), "maps", `${mapId}.json`), "utf8"),
+        await readFile(path.join(projectDir(home, projectId), 'maps', `${mapId}.json`), 'utf8'),
       ) as {
         readonly objects?: readonly {
           readonly placement?: {
@@ -174,7 +179,7 @@ describe("MapService placement persistence", () => {
       expect(persisted.objects?.[0]?.placement).toStrictEqual({
         packId: ids.pack,
         placeableId: ids.placeable,
-        source: "manual",
+        source: 'manual',
         assetId: ids.asset,
         tileId: ids.tile,
         gid: 7,
@@ -189,7 +194,7 @@ describe("MapService placement persistence", () => {
       const placement = loaded.objects[0]?.placement;
       expect(Option.getOrUndefined(placement?.packId ?? Option.none())).toBe(ids.pack);
       expect(placement?.placeableId).toBe(ids.placeable);
-      expect(placement?.source).toBe("manual");
+      expect(placement?.source).toBe('manual');
       expect(Option.getOrUndefined(placement?.assetId ?? Option.none())).toBe(ids.asset);
       expect(Option.getOrUndefined(placement?.tileId ?? Option.none())).toBe(ids.tile);
       expect(Option.getOrUndefined(placement?.gid ?? Option.none())).toBe(7);
@@ -201,31 +206,31 @@ describe("MapService placement persistence", () => {
       });
     }));
 
-  it("round-trips placements that omit optional nested refs", () =>
+  it('round-trips placements that omit optional nested refs', () =>
     withTempHome(async (home) => {
       const ids = {
-        layer: makeLayerId("00000000-0000-4000-8000-000000000072" as Uuid),
-        object: makeObjectId("00000000-0000-4000-8000-000000000073" as Uuid),
-        placeable: makePlaceableId("00000000-0000-4000-8000-000000000074" as Uuid),
+        layer: makeLayerId('00000000-0000-4000-8000-000000000072' as Uuid),
+        object: makeObjectId('00000000-0000-4000-8000-000000000073' as Uuid),
+        placeable: makePlaceableId('00000000-0000-4000-8000-000000000074' as Uuid),
       };
 
       const { projectId, mapId, loaded } = await runApp(
         Effect.gen(function* () {
           const projects = yield* ProjectService;
           const maps = yield* MapService;
-          const projectId = yield* projects.create({ name: "Placement Optional Refs" });
+          const projectId = yield* projects.create({ name: 'Placement Optional Refs' });
           const mapId = yield* maps.create(projectId, { width: 8, height: 8 });
           const base = yield* maps.load(projectId, mapId);
           const objectLayer = new ObjectLayer({
             id: ids.layer,
-            name: "objects",
+            name: 'objects',
             visible: true,
             opacity: 1,
             objectIds: [ids.object],
           });
           const object = new MapObject({
             id: ids.object,
-            kind: gameObjectTypeIdForKey("placeable"),
+            kind: gameObjectTypeIdForKey('placeable'),
             x: 64,
             y: 96,
             width: Option.some(96),
@@ -235,7 +240,7 @@ describe("MapService placement persistence", () => {
             placement: new MapObjectPlacement({
               packId: Option.none(),
               placeableId: ids.placeable,
-              source: "manual",
+              source: 'manual',
               assetId: Option.none(),
               tileId: Option.none(),
               gid: Option.none(),
@@ -257,7 +262,7 @@ describe("MapService placement persistence", () => {
       );
 
       const persisted = JSON.parse(
-        await readFile(path.join(projectDir(home, projectId), "maps", `${mapId}.json`), "utf8"),
+        await readFile(path.join(projectDir(home, projectId), 'maps', `${mapId}.json`), 'utf8'),
       ) as {
         readonly objects?: readonly {
           readonly placement?: Record<string, unknown>;
@@ -266,25 +271,23 @@ describe("MapService placement persistence", () => {
 
       expect(persisted.objects?.[0]?.placement).toStrictEqual({
         placeableId: ids.placeable,
-        source: "manual",
+        source: 'manual',
       });
 
       const placement = loaded.objects[0]?.placement;
       expect(placement?.placeableId).toBe(ids.placeable);
-      expect(placement?.source).toBe("manual");
-      expect(Option.isNone(placement?.assetId ?? Option.some(""))).toBe(true);
-      expect(Option.isNone(placement?.tileId ?? Option.some(""))).toBe(true);
+      expect(placement?.source).toBe('manual');
+      expect(Option.isNone(placement?.assetId ?? Option.some(''))).toBe(true);
+      expect(Option.isNone(placement?.tileId ?? Option.some(''))).toBe(true);
       expect(Option.isNone(placement?.gid ?? Option.some(0))).toBe(true);
-      expect(toMapIpcPayload(loaded)).toMatchObject({
-        objects: [
-          {
-            placement: {
-              assetId: undefined,
-              tileId: undefined,
-              gid: undefined,
-            },
-          },
-        ],
-      });
+      // Optional-key encoding: none-options encode as ABSENT keys on the wire.
+      const payload = toMapIpcPayload(loaded) as {
+        objects: readonly { placement?: Record<string, unknown> }[];
+      };
+      const payloadPlacement = payload.objects[0]?.placement;
+      expect(payloadPlacement).toBeDefined();
+      expect(payloadPlacement).not.toHaveProperty('assetId');
+      expect(payloadPlacement).not.toHaveProperty('tileId');
+      expect(payloadPlacement).not.toHaveProperty('gid');
     }));
 });

@@ -1,4 +1,4 @@
-import { ProcgenInputError } from "../errors.js";
+import { ProcgenInputError } from '../errors.js';
 
 const MASK64 = (1n << 64n) - 1n;
 
@@ -34,7 +34,7 @@ export class Xoshiro256StarStarRng implements ProcgenRng {
   private s3: bigint;
 
   constructor(seed: bigint | number) {
-    this.seed = typeof seed === "number" ? BigInt(seed) : seed;
+    this.seed = typeof seed === 'number' ? BigInt(seed) : seed;
     const [s0, s1, s2, s3] = splitSeed(this.seed);
     this.s0 = s0;
     this.s1 = s1;
@@ -67,10 +67,10 @@ export class Xoshiro256StarStarRng implements ProcgenRng {
 
   uniformInt(min: number, max: number): number {
     if (!Number.isInteger(min) || !Number.isInteger(max)) {
-      throw new ProcgenInputError({ message: "uniformInt bounds must be integers" });
+      throw new ProcgenInputError({ message: 'uniformInt bounds must be integers' });
     }
     if (max < min) {
-      throw new ProcgenInputError({ message: "uniformInt max must be >= min" });
+      throw new ProcgenInputError({ message: 'uniformInt max must be >= min' });
     }
     const span = max - min + 1;
     // Unbiased rejection sampling: discard any uint32 draw that falls in the
@@ -87,32 +87,32 @@ export class Xoshiro256StarStarRng implements ProcgenRng {
 
   pick<T>(items: readonly T[]): T {
     if (items.length === 0) {
-      throw new ProcgenInputError({ message: "pick requires a non-empty array" });
+      throw new ProcgenInputError({ message: 'pick requires a non-empty array' });
     }
     const index = this.uniformInt(0, items.length - 1);
     const value = items[index];
     if (value === undefined) {
-      throw new ProcgenInputError({ message: "pick index out of range" });
+      throw new ProcgenInputError({ message: 'pick index out of range' });
     }
     return value;
   }
 
   weighted<T>(items: readonly T[], weights: readonly number[]): T {
     if (items.length === 0) {
-      throw new ProcgenInputError({ message: "weighted requires non-empty items" });
+      throw new ProcgenInputError({ message: 'weighted requires non-empty items' });
     }
     if (items.length !== weights.length) {
-      throw new ProcgenInputError({ message: "weighted items and weights length mismatch" });
+      throw new ProcgenInputError({ message: 'weighted items and weights length mismatch' });
     }
     let total = 0;
     for (const weight of weights) {
       if (!Number.isFinite(weight) || weight < 0) {
-        throw new ProcgenInputError({ message: "weighted values must be finite and non-negative" });
+        throw new ProcgenInputError({ message: 'weighted values must be finite and non-negative' });
       }
       total += weight;
     }
     if (total <= 0) {
-      throw new ProcgenInputError({ message: "weighted total must be positive" });
+      throw new ProcgenInputError({ message: 'weighted total must be positive' });
     }
     let target = this.nextFloat() * total;
     for (let index = 0; index < items.length; index += 1) {
@@ -121,17 +121,18 @@ export class Xoshiro256StarStarRng implements ProcgenRng {
       if (target <= 0) {
         const item = items[index];
         if (item === undefined) {
-          throw new ProcgenInputError({ message: "weighted index out of range" });
+          throw new ProcgenInputError({ message: 'weighted index out of range' });
         }
         return item;
       }
     }
     const fallback = items[items.length - 1];
     if (fallback === undefined) {
-      throw new ProcgenInputError({ message: "weighted fallback out of range" });
+      throw new ProcgenInputError({ message: 'weighted fallback out of range' });
     }
     return fallback;
   }
 }
 
-export const createProcgenRng = (seed: bigint | number): ProcgenRng => new Xoshiro256StarStarRng(seed);
+export const createProcgenRng = (seed: bigint | number): ProcgenRng =>
+  new Xoshiro256StarStarRng(seed);

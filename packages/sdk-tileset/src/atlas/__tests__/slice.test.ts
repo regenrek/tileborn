@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { diagnosticTag } from "../../diagnostics.js";
-import { atlasSliceFixtures } from "../__fixtures__/slice-fixtures.js";
-import { createPngBuffer, readPngDimensions } from "../image-info.js";
-import { sliceAtlas, type SliceAtlasParams } from "../slice.js";
+import { diagnosticTag } from '../../diagnostics.js';
+import { atlasSliceFixtures } from '../__fixtures__/slice-fixtures.js';
+import { createPngBuffer, readPngDimensions } from '../image-info.js';
+import { sliceAtlas, type SliceAtlasParams } from '../slice.js';
 
-describe("readPngDimensions", () => {
-  it("reads width and height from a minimal PNG buffer", () => {
+describe('readPngDimensions', () => {
+  it('reads width and height from a minimal PNG buffer', () => {
     const buffer = createPngBuffer(128, 96);
     const result = readPngDimensions(buffer);
 
@@ -14,15 +14,15 @@ describe("readPngDimensions", () => {
     expect(result.value).toEqual({ width: 128, height: 96 });
   });
 
-  it("rejects buffers without a PNG signature", () => {
+  it('rejects buffers without a PNG signature', () => {
     const result = readPngDimensions(new Uint8Array([1, 2, 3, 4]));
 
     expect(result.value).toBeUndefined();
-    expect(diagnosticTag(result.diagnostics[0]!)).toBe("InvalidPngImage");
+    expect(diagnosticTag(result.diagnostics[0]!)).toBe('InvalidPngImage');
   });
 });
 
-describe("sliceAtlas fixtures", () => {
+describe('sliceAtlas fixtures', () => {
   for (const fixture of atlasSliceFixtures) {
     it(`handles ${fixture.name}`, () => {
       if (fixture.png) {
@@ -51,8 +51,8 @@ describe("sliceAtlas fixtures", () => {
   }
 });
 
-describe("sliceAtlas properties", () => {
-  it("derives columns and rows from image dimensions when omitted", () => {
+describe('sliceAtlas properties', () => {
+  it('derives columns and rows from image dimensions when omitted', () => {
     const result = sliceAtlas({
       imageWidth: 72,
       imageHeight: 44,
@@ -68,7 +68,7 @@ describe("sliceAtlas properties", () => {
     expect(result.value?.totalTiles).toBe(6);
   });
 
-  it("passes through firstGid when provided", () => {
+  it('passes through firstGid when provided', () => {
     const result = sliceAtlas({
       imageWidth: 32,
       imageHeight: 32,
@@ -82,7 +82,7 @@ describe("sliceAtlas properties", () => {
     expect(result.value?.firstGid).toBe(17);
   });
 
-  it("rejects negative margin with InvalidMarginSpacing", () => {
+  it('rejects negative margin with InvalidMarginSpacing', () => {
     const result = sliceAtlas({
       imageWidth: 64,
       imageHeight: 64,
@@ -92,7 +92,7 @@ describe("sliceAtlas properties", () => {
       spacing: 0,
     });
 
-    expect(diagnosticTag(result.diagnostics[0]!)).toBe("InvalidMarginSpacing");
+    expect(diagnosticTag(result.diagnostics[0]!)).toBe('InvalidMarginSpacing');
   });
 });
 
@@ -103,17 +103,26 @@ const isValidSliceConfig = (params: SliceAtlasParams): boolean => {
     (params.imageWidth - params.margin * 2 + params.spacing) / (params.cellWidth + params.spacing),
   );
   const rows = Math.floor(
-    (params.imageHeight - params.margin * 2 + params.spacing) / (params.cellHeight + params.spacing),
+    (params.imageHeight - params.margin * 2 + params.spacing) /
+      (params.cellHeight + params.spacing),
   );
   return columns > 0 && rows > 0;
 };
 
-describe("sliceAtlas arbitrary valid configs", () => {
-  it("returns one UV rect per grid cell for valid dimensions", () => {
+describe('sliceAtlas arbitrary valid configs', () => {
+  it('returns one UV rect per grid cell for valid dimensions', () => {
     const configs: SliceAtlasParams[] = [
       { imageWidth: 48, imageHeight: 48, cellWidth: 16, cellHeight: 16, margin: 0, spacing: 0 },
       { imageWidth: 70, imageHeight: 46, cellWidth: 16, cellHeight: 16, margin: 4, spacing: 2 },
-      { imageWidth: 100, imageHeight: 50, cellWidth: 10, cellHeight: 10, margin: 0, spacing: 0, tileCount: 15 },
+      {
+        imageWidth: 100,
+        imageHeight: 50,
+        cellWidth: 10,
+        cellHeight: 10,
+        margin: 0,
+        spacing: 0,
+        tileCount: 15,
+      },
     ];
 
     for (const params of configs) {

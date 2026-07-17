@@ -129,10 +129,7 @@ export function CatalogImportExport({ projectId }: CatalogImportExportProps) {
   };
 
   return (
-    <div
-      className="flex flex-col gap-1.5 px-1"
-      data-testid="catalog-import-export"
-    >
+    <div className="flex flex-col gap-1.5 px-1" data-testid="catalog-import-export">
       <p className={cn('px-1', typography.sectionLabelMicro)}>Catalog</p>
       <div className="flex items-center gap-1 px-1">
         <Button

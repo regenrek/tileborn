@@ -1,6 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { MapId, PackId, PluginId } from "../ids.js";
+import { MapId, PackId, PluginId } from '../ids.js';
+import { PERSISTED_SCHEMA_VERSIONS } from '../versioning/persisted-schema-registry.js';
 
 /**
  * Brand-injected configuration for the shipped game client. The shape mirrors
@@ -16,7 +17,7 @@ import { MapId, PackId, PluginId } from "../ids.js";
 const NonEmptyString = Schema.String.check(Schema.isMinLength(1));
 
 /** HUD/menu palette. Values are CSS color strings mapped to CSS variables. */
-export class BrandPalette extends Schema.Class<BrandPalette>("BrandPalette")({
+export class BrandPalette extends Schema.Class<BrandPalette>('BrandPalette')({
   background: NonEmptyString,
   surface: NonEmptyString,
   accent: NonEmptyString,
@@ -26,34 +27,34 @@ export class BrandPalette extends Schema.Class<BrandPalette>("BrandPalette")({
   textMuted: NonEmptyString,
 }) {}
 
-export class BrandLogo extends Schema.Class<BrandLogo>("BrandLogo")({
+export class BrandLogo extends Schema.Class<BrandLogo>('BrandLogo')({
   src: NonEmptyString,
   alt: NonEmptyString,
 }) {}
 
-export class BrandLobbyCopy extends Schema.Class<BrandLobbyCopy>("BrandLobbyCopy")({
+export class BrandLobbyCopy extends Schema.Class<BrandLobbyCopy>('BrandLobbyCopy')({
   tagline: Schema.String,
   cta: Schema.String,
 }) {}
 
-export class BrandLegal extends Schema.Class<BrandLegal>("BrandLegal")({
+export class BrandLegal extends Schema.Class<BrandLegal>('BrandLegal')({
   tos: Schema.String,
   privacy: Schema.String,
 }) {}
 
-export class BrandRoomRules extends Schema.Class<BrandRoomRules>("BrandRoomRules")({
+export class BrandRoomRules extends Schema.Class<BrandRoomRules>('BrandRoomRules')({
   maxPlayers: Schema.Int,
   timeLimitSeconds: Schema.Int,
   friendlyFire: Schema.Boolean,
 }) {}
 
-export class BrandReplayConfig extends Schema.Class<BrandReplayConfig>("BrandReplayConfig")({
+export class BrandReplayConfig extends Schema.Class<BrandReplayConfig>('BrandReplayConfig')({
   enabled: Schema.Boolean,
   prefix: Schema.optional(Schema.String),
 }) {}
 
 /** Server wiring: which plugin + room rules a brand runs. */
-export class BrandServers extends Schema.Class<BrandServers>("BrandServers")({
+export class BrandServers extends Schema.Class<BrandServers>('BrandServers')({
   plugin: PluginId,
   roomRules: Schema.optional(BrandRoomRules),
   lootTable: Schema.optional(Schema.String),
@@ -67,15 +68,15 @@ export class BrandServers extends Schema.Class<BrandServers>("BrandServers")({
  * `@tileborne/core` stays a leaf with no dependency on the contracts package.
  * The component for each extension is registered by the product at build time.
  */
-export class BrandMenuExtension extends Schema.Class<BrandMenuExtension>("BrandMenuExtension")({
+export class BrandMenuExtension extends Schema.Class<BrandMenuExtension>('BrandMenuExtension')({
   id: NonEmptyString,
   slot: NonEmptyString,
   label: NonEmptyString,
   order: Schema.optional(Schema.Number),
 }) {}
 
-export class BrandConfig extends Schema.Class<BrandConfig>("BrandConfig")({
-  schemaVersion: Schema.optional(Schema.Int),
+export class BrandConfig extends Schema.Class<BrandConfig>('BrandConfig')({
+  schemaVersion: Schema.optional(Schema.Literal(PERSISTED_SCHEMA_VERSIONS.brandConfig)),
   title: NonEmptyString,
   logo: Schema.optional(BrandLogo),
   palette: BrandPalette,

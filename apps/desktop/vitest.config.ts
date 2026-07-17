@@ -11,12 +11,18 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src/renderer'),
+      '@tileborne/game-client': path.resolve(
+        import.meta.dirname,
+        '../../packages/game-client/src/index.ts',
+      ),
     },
+    dedupe: ['react', 'react-dom'],
   },
   test: {
     environment: 'jsdom',
     include: [
       'src/main/**/*.test.ts',
+      'src/preload/**/*.test.ts',
       'src/renderer/**/*.test.ts',
       'src/renderer/**/*.test.tsx',
       'src/smoke/**/*.test.ts',

@@ -1,5 +1,5 @@
-import type { ComponentDefinition } from "./components.js";
-import type { World } from "./world.js";
+import type { ComponentDefinition } from './components.js';
+import type { World } from './world.js';
 
 export interface SystemContext {
   readonly tick: number;

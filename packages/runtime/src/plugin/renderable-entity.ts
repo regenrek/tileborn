@@ -38,6 +38,20 @@ export interface RenderableEntityAnchor {
   readonly y: number;
 }
 
+export interface RenderableEntityTextStyle {
+  readonly fontFamily?: string;
+  readonly fontSize?: number;
+  readonly fontWeight?: 'normal' | 'bold';
+  readonly fill?: number;
+  readonly stroke?: number;
+  readonly strokeWidth?: number;
+}
+
+export interface RenderableEntityText {
+  readonly value: string;
+  readonly style?: RenderableEntityTextStyle;
+}
+
 export interface RenderableEntity {
   readonly id: string;
   readonly assetId: RenderableAssetId;
@@ -45,11 +59,17 @@ export interface RenderableEntity {
   readonly y: number;
   readonly rotation?: number;
   readonly scale?: number;
+  readonly scaleX?: number;
+  readonly scaleY?: number;
+  readonly opacity?: number;
+  readonly tint?: number;
   readonly layerIndex?: number;
   /** Optional normalized pivot honored by the renderer when positioning the sprite. */
   readonly anchor?: RenderableEntityAnchor;
   /** Optional animation component; when present and multi-frame, the renderer cycles frames. */
   readonly animation?: RenderableEntityAnimation;
+  /** Optional text layer. When present, renderers draw text and ignore the sprite texture for this entity. */
+  readonly text?: RenderableEntityText;
 }
 
 export interface RuntimePluginRenderManifest {

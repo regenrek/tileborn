@@ -1,11 +1,11 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import { Animation, AnimationFrame } from "../../schemas/animation.js";
-import { Tile } from "../../schemas/tile.js";
-import { Tileset } from "../../schemas/tileset.js";
-import type { TiledJsonTileset } from "../../tiled/types.js";
-import { deterministicAnimationId } from "../../tiled/deterministic-ids.js";
-import type { UnityMetaSprite } from "../../metadata/types.js";
+import { Animation, AnimationFrame } from '../../schemas/animation.js';
+import { Tile } from '../../schemas/tile.js';
+import { Tileset } from '../../schemas/tileset.js';
+import type { TiledJsonTileset } from '../../tiled/types.js';
+import { deterministicAnimationId } from '../../tiled/deterministic-ids.js';
+import type { UnityMetaSprite } from '../../metadata/types.js';
 
 type PartialSprite = {
   name?: string;
@@ -85,10 +85,10 @@ export const parseUnityMetaSprites = (raw: string): readonly UnityMetaSprite[] =
       continue;
     }
 
-    const x = readNumber(line, "x");
-    const y = readNumber(line, "y");
-    const width = readNumber(line, "width");
-    const height = readNumber(line, "height");
+    const x = readNumber(line, 'x');
+    const y = readNumber(line, 'y');
+    const width = readNumber(line, 'width');
+    const height = readNumber(line, 'height');
     if (x !== undefined) current.rect.x = x;
     if (y !== undefined) current.rect.y = y;
     if (width !== undefined) current.rect.width = width;
@@ -99,7 +99,9 @@ export const parseUnityMetaSprites = (raw: string): readonly UnityMetaSprite[] =
   return sprites;
 };
 
-const animationGroupKey = (name: string): { readonly prefix: string; readonly order: number } | undefined => {
+const animationGroupKey = (
+  name: string,
+): { readonly prefix: string; readonly order: number } | undefined => {
   const match = /^(.*?)[_\-\s]?(\d+)$/.exec(name);
   if (match?.[1] === undefined || match[2] === undefined) {
     return undefined;
@@ -163,11 +165,10 @@ export const applyUnityMetaAnimationFallback = (input: {
     if (firstTile === undefined || tileHasAnimation(firstTile)) {
       continue;
     }
-    const frames = sorted
-      .flatMap((entry) => {
-        const tile = tileByIndex.get(entry.localTileId);
-        return tile === undefined ? [] : [new AnimationFrame({ tileId: tile.id, durationMs: 100 })];
-      });
+    const frames = sorted.flatMap((entry) => {
+      const tile = tileByIndex.get(entry.localTileId);
+      return tile === undefined ? [] : [new AnimationFrame({ tileId: tile.id, durationMs: 100 })];
+    });
     if (frames.length === 0) {
       continue;
     }

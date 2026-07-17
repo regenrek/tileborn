@@ -1,15 +1,12 @@
-import type { PlayerModelRef } from '@tileborne/core';
-import { resolvePlayerModelClipId } from '@tileborne/core';
+import type { PlayerModelClipKey, PlayerModelRef } from '@tileborne/core';
+import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
 import type { TilesetPack } from '@tileborne/sdk-tileset/schemas';
-import {
-  BundledAssetIdSchema,
-  type BundledAssetSpec,
-  type RenderableAnimationFrame,
-} from '@tileborne/runtime';
-import { Option, Schema } from 'effect';
+import type { BundledAssetSpec, RenderableAnimationFrame } from '@tileborne/runtime';
+import { Option } from 'effect';
 
-import { assetProtocolUrl } from '@/lib/asset-url';
 import type { PlayerModelRenderData } from '@/lib/playtest-plugin-bridge';
+import type { PlayerModelClipRenderData } from '@/lib/playtest-plugin-bridge';
+import { loadPackAssetBundledSpec, renderablePackAssetId } from '@/lib/runtime-asset-spec';
 
 /** A built player model: render data + the installed-pack atlas(es) it needs. */
 export interface BuiltPlayerModel {
@@ -25,7 +22,12 @@ export interface BuiltPlayerModel {
 
 /** Stable runtime-renderable id for an installed-pack atlas asset. */
 const renderableAtlasId = (packId: string, assetId: string): string =>
-  `playermodel:${packId}:${assetId}`;
+  renderablePackAssetId('playermodel', packId, assetId);
+
+const renderScaleFor = (properties: Readonly<Record<string, unknown>>): number | undefined => {
+  const value = properties['tileborne.player.renderScale'];
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+};
 
 /**
  * Build runtime render data (atlas id + per-frame UV animation + anchor) for a
@@ -41,58 +43,86 @@ export const buildPlayerModelRenderData = (
   if (placeable === undefined) {
     return undefined;
   }
-  const assetPathById = new Map<string, string>(
-    pack.assets.map((asset) => [String(asset.id), asset.path]),
+  const assetById = new Map<string, { readonly path: string; readonly mime: string }>(
+    pack.assets.map((asset) => [
+      String(asset.id),
+      { path: asset.path, mime: asset.mime ?? 'image/png' },
+    ]),
   );
-  const clipId = resolvePlayerModelClipId(model);
-  const clip =
-    (clipId === undefined
-      ? undefined
-      : placeable.clips?.find((entry) => String(entry.id) === String(clipId))) ??
-    placeable.clips?.[0];
-  const clipFrames = clip?.frames ?? placeable.frames;
-  const loop = clip?.loop ?? true;
-  const defaultDurationMs = clip?.defaultDurationMs;
-
   const atlases = new Map<
     string,
     { renderableAssetId: string; packId: string; assetPath: string; mime: string }
   >();
-  const frames: RenderableAnimationFrame[] = [];
-  for (const frame of clipFrames) {
-    const atlasAssetId = String(frame.assetId);
-    const assetPath = assetPathById.get(atlasAssetId);
-    if (assetPath === undefined) {
-      continue;
+  const buildClip = (key: PlayerModelClipKey): PlayerModelClipRenderData | undefined => {
+    const clipId = model.clips[key];
+    const clip = placeable.clips?.find((entry) => String(entry.id) === String(clipId));
+    if (clip === undefined) {
+      return undefined;
     }
-    const renderableId = renderableAtlasId(model.ref.packId, atlasAssetId);
-    if (!atlases.has(atlasAssetId)) {
-      atlases.set(atlasAssetId, {
-        renderableAssetId: renderableId,
-        packId: model.ref.packId,
-        assetPath,
-        mime: 'image/png',
+    const frames: RenderableAnimationFrame[] = [];
+    for (const frame of clip.frames) {
+      const atlasAssetId = String(frame.assetId);
+      const asset = assetById.get(atlasAssetId);
+      if (asset === undefined) {
+        continue;
+      }
+      const renderableId = renderableAtlasId(model.ref.packId, atlasAssetId);
+      if (!atlases.has(atlasAssetId)) {
+        atlases.set(atlasAssetId, {
+          renderableAssetId: renderableId,
+          packId: model.ref.packId,
+          assetPath: asset.path,
+          mime: asset.mime,
+        });
+      }
+      frames.push({
+        assetId: renderableId,
+        uv: { x: frame.uv.x, y: frame.uv.y, w: frame.uv.w, h: frame.uv.h },
+        ...(Option.isSome(frame.durationMs) ? { durationMs: frame.durationMs.value } : {}),
       });
     }
-    frames.push({
-      assetId: renderableId,
-      uv: { x: frame.uv.x, y: frame.uv.y, w: frame.uv.w, h: frame.uv.h },
-      ...(Option.isSome(frame.durationMs) ? { durationMs: frame.durationMs.value } : {}),
-    });
-  }
+    if (frames.length === 0) {
+      return undefined;
+    }
+    return {
+      frames,
+      loop: clip.loop,
+      ...(clip.defaultDurationMs === undefined
+        ? {}
+        : { defaultDurationMs: clip.defaultDurationMs }),
+    };
+  };
 
-  if (frames.length === 0) {
+  const clips = Object.fromEntries(
+    REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, buildClip(key)] as const),
+  ) as Record<PlayerModelClipKey, PlayerModelClipRenderData | undefined>;
+  if (REQUIRED_PLAYER_MODEL_CLIP_KEYS.some((key) => clips[key] === undefined)) {
     return undefined;
   }
+  const renderScale = model.renderScale ?? renderScaleFor(placeable.source.properties);
+  const anchorEntries = Object.entries(model.anchors).map(
+    ([name, anchor]) =>
+      [
+        name,
+        {
+          point: { x: anchor.point.x, y: anchor.point.y },
+          rotationDeg: anchor.rotationDeg,
+          zOffset: anchor.zOffset,
+        },
+      ] as const,
+  );
 
   return {
     modelId: model.id,
     data: {
-      assetId: frames[0]!.assetId,
-      frames,
-      loop,
-      ...(defaultDurationMs === undefined ? {} : { defaultDurationMs }),
+      assetId: clips.idle!.frames[0]!.assetId,
+      clips: clips as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
       anchor: { x: model.anchor.x, y: model.anchor.y },
+      ...(anchorEntries.length === 0 ? {} : { anchors: Object.fromEntries(anchorEntries) }),
+      ...(renderScale === undefined ? {} : { renderScale }),
+      ...(model.worldSize === undefined
+        ? {}
+        : { worldSize: { width: model.worldSize.width, height: model.worldSize.height } }),
     },
     atlases: [...atlases.values()],
   };
@@ -109,20 +139,4 @@ export const loadPlayerModelAtlasSpec = async (atlas: {
   readonly packId: string;
   readonly assetPath: string;
   readonly mime: string;
-}): Promise<BundledAssetSpec> => {
-  const response = await fetch(assetProtocolUrl(atlas.packId, atlas.assetPath));
-  if (!response.ok) {
-    throw new Error(`failed to load player-model atlas ${atlas.assetPath}: ${response.status}`);
-  }
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  let binary = '';
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  const dataUrl = `data:${atlas.mime};base64,${btoa(binary)}`;
-  return {
-    assetId: Schema.decodeUnknownSync(BundledAssetIdSchema)(atlas.renderableAssetId),
-    path: dataUrl,
-    mime: atlas.mime,
-  };
-};
+}): Promise<BundledAssetSpec> => loadPackAssetBundledSpec(atlas);

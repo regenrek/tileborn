@@ -11,11 +11,11 @@ import {
 } from '@tileborne/ui';
 import { PuzzleIcon } from 'lucide-react';
 
+import { ActiveGameModePicker } from '@/components/sidebar/active-game-mode-picker';
 import { SidebarPluginContributions } from '@/components/sidebar/plugin-contribution-zone';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
 import { usePluginsList } from '@/hooks/queries';
-import { BATTLE_ROYALE_PLUGIN_ID } from '@/lib/battle-royale-plugin';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 interface PluginsTabProps {
@@ -26,51 +26,23 @@ export function PluginsTab({ projectId }: PluginsTabProps) {
   const pluginsQuery = usePluginsList();
   const setPluginInstallDialogOpen = useEditorUiStore((s) => s.setPluginInstallDialogOpen);
   const installedPlugins = pluginsQuery.data?.plugins ?? [];
-  const battleRoyalePlugin = installedPlugins.find(
-    (plugin) => plugin.id === BATTLE_ROYALE_PLUGIN_ID,
-  );
 
   return (
     <ScrollArea className="h-full min-h-0">
       <div className="space-y-3 py-2">
-        <div className="space-y-2 rounded-md border border-border bg-card p-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className={typography.sectionLabelMicro}>Bundled plugins</p>
-            {installedPlugins.length > 0 ? (
-              <Badge
-                variant="secondary"
-                className={cn('px-1.5 py-0 font-normal', typography.rowMeta)}
-              >
-                {installedPlugins.length}
-              </Badge>
-            ) : null}
-          </div>
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className={cn(typography.caption, 'truncate font-medium text-foreground')}>
-                Battle Royale
-              </p>
-              <p className={typography.bodyCompact}>
-                {battleRoyalePlugin
-                  ? battleRoyalePlugin.enabled
-                    ? 'Installed · Enabled'
-                    : 'Installed · Disabled'
-                  : 'Not installed'}
-              </p>
-            </div>
-            {battleRoyalePlugin ? null : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0"
-                data-testid="install-battle-royale-sidebar"
-                onClick={() => setPluginInstallDialogOpen(true)}
-              >
-                Install
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center justify-between gap-2">
+          <p className={typography.sectionLabelMicro}>Bundled plugins</p>
+          {installedPlugins.length > 0 ? (
+            <Badge
+              variant="secondary"
+              className={cn('px-1.5 py-0 font-normal', typography.rowMeta)}
+            >
+              {installedPlugins.length}
+            </Badge>
+          ) : null}
         </div>
+
+        <ActiveGameModePicker projectId={projectId} />
 
         <SidebarPluginContributions zone="plugins" title="Plugin settings" />
 

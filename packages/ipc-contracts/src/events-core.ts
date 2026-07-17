@@ -1,11 +1,10 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { IpcChannel, makeIpcChannel } from "./channel.js";
+import { IpcChannel, makeIpcChannel } from './channel.js';
 
-export class IpcEvent<
-  Payload,
-  Channel extends IpcChannel = IpcChannel,
-> extends Schema.Class<IpcEvent<unknown, IpcChannel>>("IpcEvent")({
+export class IpcEvent<Payload, Channel extends IpcChannel = IpcChannel> extends Schema.Class<
+  IpcEvent<unknown, IpcChannel>
+>('IpcEvent')({
   channel: IpcChannel,
   payload: Schema.Any,
 }) {
@@ -15,11 +14,11 @@ export class IpcEvent<
 
 export type AnyIpcEvent = IpcEvent<unknown, IpcChannel>;
 
-export type EventPayloadOf<Event> = Event extends IpcEvent<infer Payload, IpcChannel>
-  ? Payload
-  : never;
+export type EventPayloadOf<Event> =
+  Event extends IpcEvent<infer Payload, IpcChannel> ? Payload : never;
 
-export type EventChannelOf<Event> = Event extends IpcEvent<unknown, infer Channel> ? Channel : never;
+export type EventChannelOf<Event> =
+  Event extends IpcEvent<unknown, infer Channel> ? Channel : never;
 
 type ChannelKey<Channel> = Channel extends infer Key & IpcChannel
   ? Key extends string
@@ -40,11 +39,11 @@ export const defineEvent = <
   PayloadSchema extends Schema.Top,
 >(
   definition: IpcEventDefinition<Channel, PayloadSchema>,
-): IpcEvent<PayloadSchema["Type"], Channel & IpcChannel> & { readonly payload: PayloadSchema } =>
+): IpcEvent<PayloadSchema['Type'], Channel & IpcChannel> & { readonly payload: PayloadSchema } =>
   new IpcEvent({
     channel: makeIpcChannel(definition.channel),
     payload: definition.payload,
-  }) as IpcEvent<PayloadSchema["Type"], Channel & IpcChannel> & { readonly payload: PayloadSchema };
+  }) as IpcEvent<PayloadSchema['Type'], Channel & IpcChannel> & { readonly payload: PayloadSchema };
 
 export type EventByChannel<Events extends readonly AnyIpcEvent[]> = {
   readonly [Event in Events[number] as ChannelKey<EventChannelOf<Event>>]: Event;

@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   Button,
   Kbd,
@@ -53,7 +53,8 @@ function BottomDrawerTabTrigger({
 }
 
 export function BottomDrawer() {
-  const [activeTab, setActiveTab] = useState<BottomDrawerTabValue>(DEFAULT_BOTTOM_DRAWER_TAB);
+  const activeTab = useEditorUiStore((s) => s.bottomDrawerTab ?? DEFAULT_BOTTOM_DRAWER_TAB);
+  const setActiveTab = useEditorUiStore((s) => s.setBottomDrawerTab);
   const setBottomDrawerOpen = useEditorUiStore((s) => s.setBottomDrawerOpen);
 
   useEffect(() => {
@@ -102,10 +103,7 @@ export function BottomDrawer() {
             </TabsList>
             <div className="flex shrink-0 items-center gap-2">
               <div
-                className={cn(
-                  typography.inlineHint,
-                  'hidden items-center gap-1 lg:inline-flex',
-                )}
+                className={cn(typography.inlineHint, 'hidden items-center gap-1 lg:inline-flex')}
               >
                 <span>Switch tabs</span>
                 <KbdGroup>

@@ -1,16 +1,16 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { IpcContractErrors } from "./common.js";
-import { JobId } from "./assets.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { IpcContractErrors } from './common.js';
+import { JobId } from './assets.js';
 
 export const JobStatusTag = Schema.Union([
-  Schema.Literal("Pending"),
-  Schema.Literal("Running"),
-  Schema.Literal("Completed"),
-  Schema.Literal("Failed"),
-  Schema.Literal("Cancelled"),
+  Schema.Literal('Pending'),
+  Schema.Literal('Running'),
+  Schema.Literal('Completed'),
+  Schema.Literal('Failed'),
+  Schema.Literal('Cancelled'),
 ]);
 
 export const JobStateView = Schema.Struct({
@@ -19,6 +19,7 @@ export const JobStateView = Schema.Struct({
   progress: Schema.optional(Schema.Number),
   result: Schema.optional(Schema.Unknown),
   errorMessage: Schema.optional(Schema.String),
+  logs: Schema.optional(Schema.Array(Schema.String)),
 });
 
 export const JobsListRequest = Schema.Struct({});
@@ -41,21 +42,21 @@ export const JobsCancelResponse = Schema.Struct({
 });
 
 export const JobsListContract = defineContract({
-  channel: "tileborne:jobs:list",
+  channel: 'tileborne:jobs:list',
   request: JobsListRequest,
   response: JobsListResponse,
   errors: IpcContractErrors,
 });
 
 export const JobsGetContract = defineContract({
-  channel: "tileborne:jobs:get",
+  channel: 'tileborne:jobs:get',
   request: JobsGetRequest,
   response: JobsGetResponse,
   errors: IpcContractErrors,
 });
 
 export const JobsCancelContract = defineContract({
-  channel: "tileborne:jobs:cancel",
+  channel: 'tileborne:jobs:cancel',
   request: JobsCancelRequest,
   response: JobsCancelResponse,
   errors: IpcContractErrors,

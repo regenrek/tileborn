@@ -1,15 +1,18 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
-import { Context, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from 'effect';
 
-import { HomeService, type HomeServiceError } from "../home/index.js";
-import { writeJsonAtomic } from "../internal/atomic-json.js";
+import { HomeService, type HomeServiceError } from '../home/index.js';
+import { writeJsonAtomic } from '../internal/atomic-json.js';
 
-export const LoggerLevel = Schema.Literals(["trace", "debug", "info", "warn", "error", "silent"]);
+export const LoggerLevel = Schema.Literals(['trace', 'debug', 'info', 'warn', 'error', 'silent']);
 export type LoggerLevel = Schema.Schema.Type<typeof LoggerLevel>;
 
+/** Dependency-local config codec version, drift-checked against the release registry. */
+export const TILEBORNE_CONFIG_SCHEMA_VERSION = 1;
+
 export const TileborneConfig = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: Schema.Literal(TILEBORNE_CONFIG_SCHEMA_VERSION),
   homePath: Schema.OptionFromOptional(Schema.String),
   lastOpenedProject: Schema.OptionFromOptional(Schema.String),
   pluginPreferences: Schema.Record(Schema.String, Schema.Boolean),
@@ -26,43 +29,58 @@ export interface TileborneConfigPatch {
   readonly telemetryOptIn?: boolean;
 }
 
-export class ConfigReadError extends Schema.TaggedErrorClass<ConfigReadError>()("ConfigReadError", {
+export class ConfigReadError extends Schema.TaggedErrorClass<ConfigReadError>()('ConfigReadError', {
   path: Schema.String,
   message: Schema.String,
 }) {}
 
-export class ConfigWriteError extends Schema.TaggedErrorClass<ConfigWriteError>()("ConfigWriteError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class ConfigWriteError extends Schema.TaggedErrorClass<ConfigWriteError>()(
+  'ConfigWriteError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
-export class ConfigParseError extends Schema.TaggedErrorClass<ConfigParseError>()("ConfigParseError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class ConfigParseError extends Schema.TaggedErrorClass<ConfigParseError>()(
+  'ConfigParseError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
-export type ConfigServiceError = ConfigReadError | ConfigWriteError | ConfigParseError | HomeServiceError;
+export type ConfigServiceError =
+  | ConfigReadError
+  | ConfigWriteError
+  | ConfigParseError
+  | HomeServiceError;
 
-export class ConfigService extends Context.Service<ConfigService, {
-  readonly get: Effect.Effect<TileborneConfig, ConfigServiceError>;
-  readonly set: (partial: TileborneConfigPatch) => Effect.Effect<TileborneConfig, ConfigServiceError>;
-  readonly subscribe: Stream.Stream<TileborneConfig>;
-}>()("@tileborne/services-foundation/ConfigService") {}
+export class ConfigService extends Context.Service<
+  ConfigService,
+  {
+    readonly get: Effect.Effect<TileborneConfig, ConfigServiceError>;
+    readonly set: (
+      partial: TileborneConfigPatch,
+    ) => Effect.Effect<TileborneConfig, ConfigServiceError>;
+    readonly subscribe: Stream.Stream<TileborneConfig>;
+  }
+>()('@tileborne/services-foundation/ConfigService') {}
 
 export const defaultConfig: TileborneConfig = {
-  schemaVersion: 1,
+  schemaVersion: TILEBORNE_CONFIG_SCHEMA_VERSION,
   homePath: Option.none(),
   lastOpenedProject: Option.none(),
   pluginPreferences: {},
-  loggerLevel: "info",
+  loggerLevel: 'info',
   telemetryOptIn: false,
 };
 
 const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" &&
+  typeof cause === 'object' &&
   cause !== null &&
-  "code" in cause &&
-  (cause as { readonly code?: unknown }).code === "ENOENT";
+  'code' in cause &&
+  (cause as { readonly code?: unknown }).code === 'ENOENT';
 
 const readConfigFile = (
   filePath: string,
@@ -71,7 +89,7 @@ const readConfigFile = (
     const raw = yield* Effect.tryPromise({
       try: async () => {
         try {
-          return await readFile(filePath, "utf8");
+          return await readFile(filePath, 'utf8');
         } catch (cause) {
           if (isNotFound(cause)) {
             return undefined;
@@ -123,12 +141,14 @@ const writeConfigFile = (
         }),
     });
     yield* writeJsonAtomic(filePath, encoded).pipe(
-      Effect.mapError((error) => new ConfigWriteError({ path: error.path, message: error.message })),
+      Effect.mapError(
+        (error) => new ConfigWriteError({ path: error.path, message: error.message }),
+      ),
     );
   });
 
 const mergeConfig = (current: TileborneConfig, patch: TileborneConfigPatch): TileborneConfig => ({
-  schemaVersion: 1,
+  schemaVersion: TILEBORNE_CONFIG_SCHEMA_VERSION,
   homePath: patch.homePath ?? current.homePath,
   lastOpenedProject: patch.lastOpenedProject ?? current.lastOpenedProject,
   pluginPreferences: patch.pluginPreferences
@@ -148,7 +168,7 @@ export const ConfigServiceLive = Layer.effect(
 
     return {
       get: SubscriptionRef.get(ref),
-      set: Effect.fn("ConfigService.set")(function* (partial: TileborneConfigPatch) {
+      set: Effect.fn('ConfigService.set')(function* (partial: TileborneConfigPatch) {
         const next = mergeConfig(yield* SubscriptionRef.get(ref), partial);
         yield* writeConfigFile(paths.config, next);
         yield* SubscriptionRef.set(ref, next);

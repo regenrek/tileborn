@@ -28,7 +28,11 @@ export function LootSourceBinding({ lootTables, value, onChange }: LootSourceBin
     'h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
 
   return (
-    <section className="space-y-2" data-testid="loot-source-binding" aria-label="Loot source binding">
+    <section
+      className="space-y-2"
+      data-testid="loot-source-binding"
+      aria-label="Loot source binding"
+    >
       <p className={cn('px-0.5', typography.sectionLabelMicro)}>Loot source</p>
 
       <label className="block min-w-0 space-y-1">

@@ -1,3 +1,9 @@
+import {
+  createGameHostLobbyClient,
+  type LobbyCreateRequest,
+  type RoomLobbySummary,
+} from '@tileborne/game-client';
+
 const PLAYTEST_DEEPLINK_PREFIX = 'tileborne://playtest/';
 
 export interface ParsedPlaytestRoomRef {
@@ -11,6 +17,8 @@ export interface LocalMultiplayerRoomReady {
   readonly roomUrl: string;
   readonly wsUrl: string;
   readonly deeplink: string;
+  readonly joinCode?: string;
+  readonly joinUrl?: string;
 }
 
 export const buildPlaytestDeeplink = (roomId: string): string =>
@@ -62,40 +70,137 @@ export const parsePlaytestRoomInput = (
   return null;
 };
 
+export interface LocalRoomPlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
 export const createLocalMultiplayerRoom = async (
   baseUrl: string,
   mapId: string,
-  options: { readonly artifactPath?: string; readonly maxPlayers?: number } = {},
+  options: {
+    /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from. */
+    readonly mapPackage?: LobbyCreateRequest['mapPackage'];
+    readonly playerModelSelections?: readonly LocalRoomPlayerModelSelection[];
+    readonly maxPlayers?: number;
+  } = {},
 ): Promise<LocalMultiplayerRoomReady> => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/rooms/create`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      mapId,
-      options: {
-        ...(options.artifactPath ? { artifactPath: options.artifactPath } : {}),
-        ...(options.maxPlayers ? { maxPlayers: options.maxPlayers } : {}),
-      },
-    }),
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const lobbyClient = createGameHostLobbyClient({ baseUrl: normalizedBaseUrl });
+  const roomOptions =
+    options.maxPlayers === undefined
+      ? undefined
+      : {
+          maxPlayers: options.maxPlayers,
+        };
+  const created = await lobbyClient.createLobby({
+    mapId,
+    visibility: 'private',
+    ...(options.mapPackage === undefined ? {} : { mapPackage: options.mapPackage }),
+    ...(options.playerModelSelections === undefined || options.playerModelSelections.length === 0
+      ? {}
+      : { playerModelSelections: options.playerModelSelections }),
+    ...(roomOptions === undefined ? {} : { options: roomOptions }),
   });
-  if (!response.ok) {
-    throw new Error(`Room create failed: HTTP ${response.status}`);
-  }
-  const created = (await response.json()) as { readonly roomId: string; readonly wsUrl: string };
-  const wsUrl = toWebSocketUrl(created.wsUrl);
   return {
-    baseUrl: baseUrl.replace(/\/$/, ''),
+    baseUrl: normalizedBaseUrl,
     roomId: created.roomId,
     roomUrl: buildRoomUrl(baseUrl, created.roomId),
-    wsUrl,
+    wsUrl: created.wsUrl,
     deeplink: buildPlaytestDeeplink(created.roomId),
+    joinCode: created.joinCode,
+    joinUrl: created.joinUrl,
   };
 };
 
 export interface PlaytestJoinSession {
   readonly wsUrl: string;
   readonly playerId: string;
+  readonly handoffToken: string;
+  readonly reconnectToken?: string;
 }
+
+export interface LocalMultiplayerParticipantSession extends PlaytestJoinSession {
+  readonly baseUrl: string;
+  readonly roomId: string;
+}
+
+export interface LocalMultiplayerPlayerResult {
+  readonly playerId: string;
+  readonly outcome?: string;
+  readonly placement?: number;
+  readonly score?: number;
+}
+
+export interface LocalMultiplayerRoomResults {
+  readonly completedAt: string;
+  readonly reason?: string;
+  readonly players: readonly LocalMultiplayerPlayerResult[];
+}
+
+const REQUEST_TIMEOUT_MS = 3_000;
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abort = (): void => controller.abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+    init.signal?.removeEventListener('abort', abort);
+  }
+};
+
+export const getLocalMultiplayerLobby = (
+  baseUrl: string,
+  roomId: string,
+  signal?: AbortSignal,
+): Promise<RoomLobbySummary> =>
+  createGameHostLobbyClient({
+    baseUrl,
+    fetch: (input, init) =>
+      fetchWithTimeout(input, { ...init, ...(signal === undefined ? {} : { signal }) }),
+  }).getLobby(roomId);
+
+export const setLocalMultiplayerReady = async (
+  session: LocalMultiplayerParticipantSession,
+  ready: boolean,
+  signal?: AbortSignal,
+): Promise<RoomLobbySummary> => {
+  const response = await createGameHostLobbyClient({
+    baseUrl: session.baseUrl,
+    fetch: (input, init) =>
+      fetchWithTimeout(input, { ...init, ...(signal === undefined ? {} : { signal }) }),
+  }).setReady(session.roomId, {
+    playerId: session.playerId,
+    ready,
+    ...(session.reconnectToken === undefined ? {} : { reconnectToken: session.reconnectToken }),
+  });
+  return response.lobby;
+};
+
+export const getLocalMultiplayerResults = async (
+  baseUrl: string,
+  roomId: string,
+  signal?: AbortSignal,
+): Promise<LocalMultiplayerRoomResults | null> => {
+  const response = await fetchWithTimeout(
+    `${baseUrl.replace(/\/$/, '')}/rooms/${encodeURIComponent(roomId)}/results`,
+    signal === undefined ? {} : { signal },
+  );
+  if (!response.ok) {
+    throw new Error(`Playtest results failed: HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as {
+    readonly results: LocalMultiplayerRoomResults | null;
+  };
+  return body.results;
+};
 
 export const startPlaytestJoinSession = async (
   baseUrl: string,
@@ -116,9 +221,13 @@ export const startPlaytestJoinSession = async (
   const started = (await response.json()) as {
     readonly wsUrl: string;
     readonly playerId: string;
+    readonly handoffToken: string;
+    readonly reconnectToken?: string;
   };
   return {
     wsUrl: toWebSocketUrl(started.wsUrl),
     playerId: started.playerId,
+    handoffToken: started.handoffToken,
+    ...(started.reconnectToken === undefined ? {} : { reconnectToken: started.reconnectToken }),
   };
 };

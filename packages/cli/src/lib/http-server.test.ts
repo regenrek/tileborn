@@ -1,9 +1,9 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { serveStaticDirectory } from "./http-server.js";
+import { serveStaticDirectory } from './http-server.js';
 
 const servers: Array<{ close: () => Promise<void> }> = [];
 
@@ -16,20 +16,20 @@ afterEach(async () => {
   }
 });
 
-describe("serveStaticDirectory", () => {
-  it("serves index.html on port 0", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "tileborne-http-"));
-    await writeFile(path.join(dir, "index.html"), "<html>ok</html>\n");
+describe('serveStaticDirectory', () => {
+  it('serves index.html on port 0', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tileborne-http-'));
+    await writeFile(path.join(dir, 'index.html'), '<html>ok</html>\n');
     const server = await serveStaticDirectory(dir, 0);
     servers.push(server);
     const response = await fetch(server.url);
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toContain("ok");
+    await expect(response.text()).resolves.toContain('ok');
   });
 
-  it("returns 404 for missing files", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "tileborne-http-miss-"));
-    await writeFile(path.join(dir, "index.html"), "ok\n");
+  it('returns 404 for missing files', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tileborne-http-miss-'));
+    await writeFile(path.join(dir, 'index.html'), 'ok\n');
     const server = await serveStaticDirectory(dir, 0);
     servers.push(server);
     const response = await fetch(`${server.url}missing.txt`);

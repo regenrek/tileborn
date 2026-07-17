@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
+import { PLUGIN_ID } from '@tileborne/plugin-battle-royale/constants';
 
 import {
   formatPlaytestRuntimeStatus,
@@ -39,9 +39,9 @@ describe('playtest runtime status', () => {
 
   it('resolves connection status from session state', () => {
     expect(resolvePlaytestConnectionStatus(undefined)).toBe('idle');
-    expect(
-      resolvePlaytestConnectionStatus({ status: 'Starting', runtimeMetrics: undefined }),
-    ).toBe('connecting');
+    expect(resolvePlaytestConnectionStatus({ status: 'Starting', runtimeMetrics: undefined })).toBe(
+      'connecting',
+    );
     expect(
       resolvePlaytestConnectionStatus({
         status: 'Running',

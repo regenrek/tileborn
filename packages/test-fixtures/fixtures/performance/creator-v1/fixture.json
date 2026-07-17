@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "creator-performance-v1",
+  "seed": 20260716,
+  "generator": {
+    "algorithm": "tileborne-creator-performance-v1",
+    "ordering": "lexicographic-index",
+    "textEncoding": "utf8"
+  },
+  "project": {
+    "projectManifestBytes": 32768,
+    "maps": {
+      "count": 8,
+      "widthTiles": 256,
+      "heightTiles": 256,
+      "objectsPerMap": 512
+    },
+    "assets": {
+      "packCount": 4,
+      "groupCount": 256,
+      "assetCount": 2048,
+      "payloadBytesPerAsset": 4096,
+      "workingPaletteItems": 2048
+    },
+    "behaviors": {
+      "count": 512,
+      "visualCount": 256,
+      "typescriptCount": 256,
+      "referencesPerBehavior": 16,
+      "totalReferences": 8192,
+      "sourceBytesPerBehavior": 4096,
+      "nodesPerVisualBehavior": 32
+    },
+    "validation": {
+      "validVariantFaults": 0,
+      "invalidVariantFaults": 64,
+      "faultKinds": ["missing-asset", "missing-behavior", "missing-entity", "missing-map"]
+    }
+  }
+}

@@ -10,12 +10,7 @@ import {
   cn,
   typography,
 } from '@tileborne/ui';
-import {
-  FolderOpenIcon,
-  ImportIcon,
-  LayoutGridIcon,
-  PlusIcon,
-} from 'lucide-react';
+import { FolderOpenIcon, ImportIcon, LayoutGridIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { CreateProjectDialog } from '@/components/create-project-dialog';
@@ -29,16 +24,22 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 function HomeLoadingSkeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading projects">
-      {Array.from({ length: 3 }, (_, cardNumber) => `home-skeleton-card-${cardNumber}`).map((cardKey) => (
-        <Card key={cardKey} className="gap-3 py-3">
-          <CardHeader className="gap-2 px-3 pt-0">
-            <Skeleton className="aspect-video w-full rounded-md" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-1/2" />
-          </CardHeader>
-        </Card>
-      ))}
+    <div
+      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      aria-busy="true"
+      aria-label="Loading projects"
+    >
+      {Array.from({ length: 3 }, (_, cardNumber) => `home-skeleton-card-${cardNumber}`).map(
+        (cardKey) => (
+          <Card key={cardKey} className="gap-3 py-3">
+            <CardHeader className="gap-2 px-3 pt-0">
+              <Skeleton className="aspect-video w-full rounded-md" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </CardHeader>
+          </Card>
+        ),
+      )}
     </div>
   );
 }
@@ -111,7 +112,7 @@ export function HomePage() {
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button size="lg" onClick={() => setCreateProjectDialogOpen(true)}>
           <PlusIcon />
-          Create project
+          New game
         </Button>
         <Button
           variant="outline"

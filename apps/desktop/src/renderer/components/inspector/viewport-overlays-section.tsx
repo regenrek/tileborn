@@ -1,8 +1,4 @@
-import {
-  Label,
-  Switch,
-  typography,
-} from '@tileborne/ui';
+import { Label, Switch, typography } from '@tileborne/ui';
 import { Settings2Icon } from 'lucide-react';
 
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -47,10 +43,7 @@ export function ViewportOverlaysSection() {
   const setShowMinimapOverlay = useEditorUiStore((s) => s.setShowMinimapOverlay);
 
   return (
-    <section
-      className="space-y-1.5"
-      data-testid="inspector-viewport-overlays-section"
-    >
+    <section className="space-y-1.5" data-testid="inspector-viewport-overlays-section">
       <div className="flex items-center gap-2">
         <Settings2Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className={typography.panelTitle}>Viewport overlays</span>

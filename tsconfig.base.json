@@ -15,24 +15,40 @@
     "sourceMap": true,
     "paths": {
       "@tileborne/core": ["./packages/core/src/index.ts"],
+      "@tileborne/game-sdk": ["./packages/game-sdk/src/index.ts"],
+      "@tileborne/game-sdk/authoring": ["./packages/game-sdk/src/authoring/index.ts"],
+      "@tileborne/game-sdk/capabilities": ["./packages/game-sdk/src/generated/capabilities.ts"],
       "@tileborne/plugin-api": ["./packages/plugin-api/src/index.ts"],
+      "@tileborne/plugin-api/project-content": ["./packages/plugin-api/src/project-content.ts"],
+      "@tileborne/plugin-api/preload": ["./packages/plugin-api/src/preload.ts"],
       "@tileborne/ipc-contracts": ["./packages/ipc-contracts/src/index.ts"],
+      "@tileborne/ipc-contracts/preload": ["./packages/ipc-contracts/src/preload.ts"],
       "@tileborne/sdk-tileset": ["./packages/sdk-tileset/src/index.ts"],
       "@tileborne/cli": ["./packages/cli/src/main.ts"],
       "@tileborne/asset-pipeline": ["./packages/asset-pipeline/src/index.ts"],
       "@tileborne/runtime": ["./packages/runtime/src/index.ts"],
+      "@tileborne/runtime/behavior": ["./packages/runtime/src/behavior/index.ts"],
+      "@tileborne/game-host/behavior-node": ["./apps/game-host/src/behavior/node/index.ts"],
       "@tileborne/runtime/worker": ["./packages/runtime/src/worker.ts"],
       "@tileborne/runtime-wasm": ["./packages/runtime-wasm/src/index.ts"],
       "@tileborne/simulation": ["./packages/simulation/src/index.ts"],
       "@tileborne/services-foundation": ["./packages/services-foundation/src/index.ts"],
       "@tileborne/services-app": ["./packages/services-app/src/index.ts"],
       "@tileborne/services-plugin": ["./packages/services-plugin/src/index.ts"],
-      "@tileborne/services-build/local-game-host": ["./packages/services-build/src/local-game-host.ts"],
+      "@tileborne/services-build/local-game-host": [
+        "./packages/services-build/src/local-game-host.ts"
+      ],
       "@tileborne/ui": ["./packages/ui/src/index.ts"],
       "@tileborne/game-client": ["./packages/game-client/src/index.ts"],
       "@tileborne/test-fixtures": ["./packages/test-fixtures/src/index.ts"],
       "@tileborne/plugin-battle-royale": ["./packages/plugin-battle-royale/src/index.ts"],
-      "@tileborne/plugin-battle-royale/menu": ["./packages/plugin-battle-royale/src/menu/index.tsx"],
+      "@tileborne/plugin-battle-royale/menu": [
+        "./packages/plugin-battle-royale/src/menu/index.tsx"
+      ],
+      "@tileborne/plugin-battle-royale/authoring": [
+        "./packages/plugin-battle-royale/src/authoring/index.ts"
+      ],
+      "@tileborne/plugin-battle-royale/policy": ["./packages/plugin-battle-royale/src/policy.ts"],
       "@tileborne/desktop": ["./apps/desktop/src/renderer/main.tsx"],
       "@tileborne/game-host": ["./apps/game-host/src/index.ts"]
     }

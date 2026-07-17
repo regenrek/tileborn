@@ -5,8 +5,8 @@ Shared shadcn/Radix UI primitives for Tileborne apps. All desktop renderer compo
 ## Usage
 
 ```tsx
-import { Button, Tabs, TabsList, TabsTrigger, TabsContent } from "@tileborne/ui"
-import "@tileborne/ui/styles/index.css"
+import { Button, Tabs, TabsList, TabsTrigger, TabsContent } from '@tileborne/ui';
+import '@tileborne/ui/styles/index.css';
 ```
 
 Build the package before typechecking dependents:

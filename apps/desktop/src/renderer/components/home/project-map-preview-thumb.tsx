@@ -35,12 +35,7 @@ export function ProjectMapPreviewThumb({
       )}
       aria-hidden
     >
-      <div
-        className={cn(
-          'absolute inset-0 bg-gradient-to-br',
-          gradientVariant(projectId),
-        )}
-      />
+      <div className={cn('absolute inset-0 bg-gradient-to-br', gradientVariant(projectId))} />
       <div className="absolute inset-0 flex items-center justify-center opacity-40">
         <MapIcon className="size-8 text-foreground/70" />
       </div>

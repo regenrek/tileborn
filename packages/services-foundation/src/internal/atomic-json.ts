@@ -1,13 +1,17 @@
-import { rename, writeFile } from "node:fs/promises";
+import { rename, writeFile } from 'node:fs/promises';
 
-import { Effect, Schema } from "effect";
+import { Effect, Schema } from 'effect';
 
-export class AtomicWriteError extends Schema.TaggedErrorClass<AtomicWriteError>()("AtomicWriteError", {
-  path: Schema.String,
-  message: Schema.String,
-}) {}
+export class AtomicWriteError extends Schema.TaggedErrorClass<AtomicWriteError>()(
+  'AtomicWriteError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
-const errorMessage = (cause: unknown): string => cause instanceof Error ? cause.message : String(cause);
+const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 const writeQueues = new Map<string, Promise<void>>();
 
@@ -33,7 +37,7 @@ export const writeJsonAtomic = (
       withWriteQueue(filePath, async () => {
         const tempPath = `${filePath}.tmp`;
         const json = `${JSON.stringify(value, null, 2)}\n`;
-        await writeFile(tempPath, json, { encoding: "utf8", flag: "w" });
+        await writeFile(tempPath, json, { encoding: 'utf8', flag: 'w' });
         await rename(tempPath, filePath);
       }),
     catch: (cause) => new AtomicWriteError({ path: filePath, message: errorMessage(cause) }),

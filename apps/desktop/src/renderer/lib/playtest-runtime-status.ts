@@ -1,4 +1,4 @@
-import type { PlaytestHudState } from '@/lib/playtest-hud-utils';
+import type { HudState as PlaytestHudState } from '@tileborne/game-client';
 
 export const PLAYTEST_RUNTIME_STARTING_MESSAGE = 'Starting plugin runtime…';
 
@@ -12,12 +12,7 @@ export interface PlaytestRuntimeStatusMetrics {
   readonly hud?: PlaytestHudState | undefined;
 }
 
-export type PlaytestConnectionStatus =
-  | 'idle'
-  | 'connecting'
-  | 'live'
-  | 'error'
-  | 'disconnected';
+export type PlaytestConnectionStatus = 'idle' | 'connecting' | 'live' | 'error' | 'disconnected';
 
 export interface PlaytestSessionConnectionInput {
   readonly status: 'Starting' | 'Running' | 'Stopped';

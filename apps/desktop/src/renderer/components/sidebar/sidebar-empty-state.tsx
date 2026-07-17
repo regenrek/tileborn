@@ -40,12 +40,7 @@ export function SidebarEmptyState({
         <p className={typography.bodyCompact}>{description}</p>
       </div>
       {actionLabel && onAction ? (
-        <Button
-          size="sm"
-          data-testid={actionTestId}
-          disabled={actionDisabled}
-          onClick={onAction}
-        >
+        <Button size="sm" data-testid={actionTestId} disabled={actionDisabled} onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}

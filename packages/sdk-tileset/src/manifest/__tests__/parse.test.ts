@@ -1,49 +1,49 @@
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { hashJsonStable } from "@tileborne/core";
+import { hashJsonStable } from '@tileborne/core';
 
-import { diagnosticTag } from "../../diagnostics.js";
-import { CustomAutotileRule } from "../../schemas/autotile-rule.js";
-import { customAutotilePack, meadowPack } from "../__fixtures__/fixtures.js";
-import { parseTilesetManifest } from "../parse.js";
-import { writeTilesetManifest } from "../write.js";
+import { diagnosticTag } from '../../diagnostics.js';
+import { CustomAutotileRule } from '../../schemas/autotile-rule.js';
+import { customAutotilePack, meadowPack } from '../__fixtures__/fixtures.js';
+import { parseTilesetManifest } from '../parse.js';
+import { writeTilesetManifest } from '../write.js';
 
-describe("parseTilesetManifest", () => {
-  it("round-trips the meadow golden fixture into a TilesetPack", () => {
+describe('parseTilesetManifest', () => {
+  it('round-trips the meadow golden fixture into a TilesetPack', () => {
     const result = parseTilesetManifest(meadowPack);
 
     expect(result.diagnostics).toEqual([]);
     expect(result.value).toBeDefined();
     expect(result.value?.schemaVersion).toBe(1);
-    expect(result.value?.name).toBe("Meadow Pack");
+    expect(result.value?.name).toBe('Meadow Pack');
     expect(result.value?.tilesets).toHaveLength(1);
     expect(result.value?.tilesets[0]?.tiles).toHaveLength(2);
-    expect(result.value?.tilesets[0]?.autotileRules[0]?._tag).toBe("wang2corner");
+    expect(result.value?.tilesets[0]?.autotileRules[0]?._tag).toBe('wang2corner');
     expect(Option.isSome(result.value?.tilesets[0]?.tiles[0]?.collisionMask ?? Option.none())).toBe(
       true,
     );
   });
 
-  it("decodes custom autotile rules with preserved source metadata", () => {
+  it('decodes custom autotile rules with preserved source metadata', () => {
     const result = parseTilesetManifest(customAutotilePack);
 
     expect(result.diagnostics).toEqual([]);
     expect(result.value?.tilesets[0]?.autotileRules[0]).toBeInstanceOf(CustomAutotileRule);
     expect(result.value?.tilesets[0]?.autotileRules[0]?.source).toEqual({
-      kind: "tiled",
-      ruleMap: "Rules/wall-1-rule1.tmx",
+      kind: 'tiled',
+      ruleMap: 'Rules/wall-1-rule1.tmx',
     });
   });
 
-  it("infers and round-trips asset semantic roles", () => {
+  it('infers and round-trips asset semantic roles', () => {
     const inferred = parseTilesetManifest(meadowPack);
-    expect(inferred.value?.semanticRoles?.map((role) => role.role)).toContain("floor");
+    expect(inferred.value?.semanticRoles?.map((role) => role.role)).toContain('floor');
 
     const userRole = {
-      role: "wall",
+      role: 'wall',
       tileId: meadowPack.tiles[0]!.id,
-      source: "user",
+      source: 'user',
       confidence: 1,
     };
     const explicit = parseTilesetManifest({
@@ -53,17 +53,15 @@ describe("parseTilesetManifest", () => {
     const written = writeTilesetManifest(explicit.value!);
     const reparsed = parseTilesetManifest(written);
 
-    expect(explicit.value?.semanticRoles).toEqual([
-      expect.objectContaining(userRole),
-    ]);
+    expect(explicit.value?.semanticRoles).toEqual([expect.objectContaining(userRole)]);
     expect(written).toMatchObject({ assetSemanticRoles: [userRole] });
     expect(reparsed.value?.semanticRoles).toEqual(explicit.value?.semanticRoles);
   });
 
-  it("round-trips manifest placeables into TilesetPack objects", () => {
+  it('round-trips manifest placeables into TilesetPack objects', () => {
     const placeable = {
-      id: "placeable:62656465-0000-4000-8000-000000000009",
-      name: "Sample Statue",
+      id: 'placeable:62656465-0000-4000-8000-000000000009',
+      name: 'Sample Statue',
       size: { width: 96, height: 128 },
       frames: [
         {
@@ -72,14 +70,14 @@ describe("parseTilesetManifest", () => {
           uv: { x: 0, y: 0, w: 96, h: 128 },
         },
       ],
-      tags: ["prop", "tiled:type=statue"],
-      placementMode: "object",
+      tags: ['prop', 'tiled:type=statue'],
+      placementMode: 'object',
       source: {
-        format: "tiled",
-        tilesetName: "Props",
+        format: 'tiled',
+        tilesetName: 'Props',
         localTileId: 0,
-        objectClass: "statue",
-        image: "Props/statue.png",
+        objectClass: 'statue',
+        image: 'Props/statue.png',
         imageWidth: 96,
         imageHeight: 128,
         properties: {},
@@ -99,14 +97,14 @@ describe("parseTilesetManifest", () => {
     expect(first.value?.placeables).toHaveLength(1);
     expect(first.value?.placeables?.[0]).toMatchObject({
       id: placeable.id,
-      name: "Sample Statue",
+      name: 'Sample Statue',
       size: { width: 96, height: 128 },
     });
     expect(second.value?.placeables?.[0]).toEqual(first.value?.placeables?.[0]);
     expect(written).toMatchObject({ placeables: [placeable] });
   });
 
-  it("round-trips placeables with named animation clips", () => {
+  it('round-trips placeables with named animation clips', () => {
     const clipFrame = (durationMs?: number) => ({
       assetId: meadowPack.assets[0]!.id,
       tileId: meadowPack.tiles[0]!.id,
@@ -114,31 +112,31 @@ describe("parseTilesetManifest", () => {
       ...(durationMs === undefined ? {} : { durationMs }),
     });
     const placeable = {
-      id: "placeable:62656465-0000-4000-8000-000000000020",
-      name: "Hero",
+      id: 'placeable:62656465-0000-4000-8000-000000000020',
+      name: 'Hero',
       size: { width: 32, height: 32 },
       frames: [clipFrame()],
       clips: [
         {
-          id: "clip:62656465-0000-4000-8000-000000000021",
-          name: "idle",
+          id: 'clip:62656465-0000-4000-8000-000000000021',
+          name: 'idle',
           frames: [clipFrame(150), clipFrame(150)],
           loop: true,
           defaultDurationMs: 150,
         },
         {
-          id: "clip:62656465-0000-4000-8000-000000000022",
-          name: "run",
+          id: 'clip:62656465-0000-4000-8000-000000000022',
+          name: 'run',
           frames: [clipFrame(80), clipFrame(80), clipFrame(80)],
           loop: true,
           defaultDurationMs: 80,
         },
       ],
-      tags: ["sprite"],
-      placementMode: "object",
+      tags: ['sprite'],
+      placementMode: 'object',
       source: {
-        format: "tiled",
-        tilesetName: "Heroes",
+        format: 'tiled',
+        tilesetName: 'Heroes',
         localTileId: 0,
         properties: {},
       },
@@ -147,7 +145,7 @@ describe("parseTilesetManifest", () => {
     const first = parseTilesetManifest({ ...meadowPack, placeables: [placeable] });
     expect(first.diagnostics).toEqual([]);
     expect(first.value?.placeables?.[0]?.clips).toHaveLength(2);
-    expect(first.value?.placeables?.[0]?.clips?.[0]?.name).toBe("idle");
+    expect(first.value?.placeables?.[0]?.clips?.[0]?.name).toBe('idle');
     expect(first.value?.placeables?.[0]?.clips?.[1]?.frames).toHaveLength(3);
 
     const written = writeTilesetManifest(first.value!, { provenance: meadowPack.provenance });
@@ -158,13 +156,13 @@ describe("parseTilesetManifest", () => {
     expect(written).toMatchObject({ placeables: [placeable] });
   });
 
-  it("rejects clip frames that reference unknown assets", () => {
+  it('rejects clip frames that reference unknown assets', () => {
     const result = parseTilesetManifest({
       ...meadowPack,
       placeables: [
         {
-          id: "placeable:62656465-0000-4000-8000-000000000023",
-          name: "Broken Sprite",
+          id: 'placeable:62656465-0000-4000-8000-000000000023',
+          name: 'Broken Sprite',
           size: { width: 32, height: 32 },
           frames: [
             {
@@ -175,11 +173,11 @@ describe("parseTilesetManifest", () => {
           ],
           clips: [
             {
-              id: "clip:62656465-0000-4000-8000-000000000024",
-              name: "idle",
+              id: 'clip:62656465-0000-4000-8000-000000000024',
+              name: 'idle',
               frames: [
                 {
-                  assetId: "asset:62656465-0000-4000-8000-000000009999",
+                  assetId: 'asset:62656465-0000-4000-8000-000000009999',
                   tileId: meadowPack.tiles[0]!.id,
                   uv: { x: 0, y: 0, w: 32, h: 32 },
                 },
@@ -188,11 +186,11 @@ describe("parseTilesetManifest", () => {
               defaultDurationMs: 100,
             },
           ],
-          tags: ["sprite"],
-          placementMode: "object",
+          tags: ['sprite'],
+          placementMode: 'object',
           source: {
-            format: "tiled",
-            tilesetName: "Heroes",
+            format: 'tiled',
+            tilesetName: 'Heroes',
             localTileId: 0,
             properties: {},
           },
@@ -204,33 +202,33 @@ describe("parseTilesetManifest", () => {
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          _tag: "InvalidManifestField",
-          path: "/placeables/0/clips/0/frames/0/assetId",
+          _tag: 'InvalidManifestField',
+          path: '/placeables/0/clips/0/frames/0/assetId',
         }),
       ]),
     );
   });
 
-  it("rejects placeables with unknown frame assets", () => {
+  it('rejects placeables with unknown frame assets', () => {
     const result = parseTilesetManifest({
       ...meadowPack,
       placeables: [
         {
-          id: "placeable:62656465-0000-4000-8000-000000000010",
-          name: "Broken Statue",
+          id: 'placeable:62656465-0000-4000-8000-000000000010',
+          name: 'Broken Statue',
           size: { width: 96, height: 128 },
           frames: [
             {
-              assetId: "asset:62656465-0000-4000-8000-000000009999",
+              assetId: 'asset:62656465-0000-4000-8000-000000009999',
               tileId: meadowPack.tiles[0]!.id,
               uv: { x: 0, y: 0, w: 96, h: 128 },
             },
           ],
-          tags: ["prop"],
-          placementMode: "object",
+          tags: ['prop'],
+          placementMode: 'object',
           source: {
-            format: "tiled",
-            tilesetName: "Props",
+            format: 'tiled',
+            tilesetName: 'Props',
             localTileId: 0,
             properties: {},
           },
@@ -242,33 +240,33 @@ describe("parseTilesetManifest", () => {
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          _tag: "InvalidManifestField",
-          path: "/placeables/0/frames/0/assetId",
+          _tag: 'InvalidManifestField',
+          path: '/placeables/0/frames/0/assetId',
         }),
       ]),
     );
   });
 
-  it("keeps parsing when a placeable frame tile is object-only", () => {
+  it('keeps parsing when a placeable frame tile is object-only', () => {
     const result = parseTilesetManifest({
       ...meadowPack,
       placeables: [
         {
-          id: "placeable:62656465-0000-4000-8000-000000000011",
-          name: "External Tile Statue",
+          id: 'placeable:62656465-0000-4000-8000-000000000011',
+          name: 'External Tile Statue',
           size: { width: 96, height: 128 },
           frames: [
             {
               assetId: meadowPack.assets[0]!.id,
-              tileId: "tile:62656465-0000-4000-8000-000000009999",
+              tileId: 'tile:62656465-0000-4000-8000-000000009999',
               uv: { x: 0, y: 0, w: 96, h: 128 },
             },
           ],
-          tags: ["prop"],
-          placementMode: "object",
+          tags: ['prop'],
+          placementMode: 'object',
           source: {
-            format: "tiled",
-            tilesetName: "Props",
+            format: 'tiled',
+            tilesetName: 'Props',
             localTileId: 0,
             properties: {},
           },
@@ -281,34 +279,34 @@ describe("parseTilesetManifest", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("rejects unknown autotile patterns with a typed diagnostic", () => {
+  it('rejects unknown autotile patterns with a typed diagnostic', () => {
     const result = parseTilesetManifest({
       ...meadowPack,
       autotileRules: [
         {
-          _tag: "wang3corner",
+          _tag: 'wang3corner',
           tilesetId: meadowPack.tilesets[0]!.id,
           id: meadowPack.autotileRules[0]!.id,
-          name: "bad",
-          terrainClasses: ["grass"],
-          maskToTileIds: { "0001": [meadowPack.tiles[0]!.id] },
+          name: 'bad',
+          terrainClasses: ['grass'],
+          maskToTileIds: { '0001': [meadowPack.tiles[0]!.id] },
         },
       ],
     });
 
     expect(result.value).toBeUndefined();
-    expect(diagnosticTag(result.diagnostics[0]!)).toBe("UnknownAutotilePattern");
+    expect(diagnosticTag(result.diagnostics[0]!)).toBe('UnknownAutotilePattern');
   });
 
-  it("sanitizes dangling autotile tile refs without rejecting the pack", () => {
-    const missingTileId = "tile:62656465-0000-4000-8000-000000009999";
+  it('sanitizes dangling autotile tile refs without rejecting the pack', () => {
+    const missingTileId = 'tile:62656465-0000-4000-8000-000000009999';
     const result = parseTilesetManifest({
       ...meadowPack,
       autotileRules: [
         {
           ...meadowPack.autotileRules[0]!,
           maskToTileIds: {
-            "1111": [meadowPack.tiles[0]!.id, missingTileId],
+            '1111': [meadowPack.tiles[0]!.id, missingTileId],
           },
         },
       ],
@@ -318,48 +316,50 @@ describe("parseTilesetManifest", () => {
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          _tag: "InvalidManifestField",
-          severity: "warning",
-          message: "Autotile rule references an unknown tile",
+          _tag: 'InvalidManifestField',
+          severity: 'warning',
+          message: 'Autotile rule references an unknown tile',
         }),
       ]),
     );
-    expect(result.value?.tilesets[0]?.autotileRules[0]?.maskToTileIds["1111"]).toEqual([
+    expect(result.value?.tilesets[0]?.autotileRules[0]?.maskToTileIds['1111']).toEqual([
       meadowPack.tiles[0]!.id,
     ]);
   });
 
-  it("rejects manifests with missing terrain class declarations", () => {
+  it('rejects manifests with missing terrain class declarations', () => {
     const result = parseTilesetManifest({
       ...meadowPack,
-      terrainClasses: ["grass"],
+      terrainClasses: ['grass'],
       tiles: [
         {
           ...meadowPack.tiles[0]!,
-          terrainClass: "sand",
+          terrainClass: 'sand',
         },
       ],
     });
 
     expect(result.value).toBeUndefined();
-    expect(diagnosticTag(result.diagnostics[0]!)).toBe("MissingTerrainClassRef");
-    expect(result.diagnostics[0]?.path).toBe("/tiles/0/terrainClass");
+    expect(diagnosticTag(result.diagnostics[0]!)).toBe('MissingTerrainClassRef');
+    expect(result.diagnostics[0]?.path).toBe('/tiles/0/terrainClass');
   });
 
-  it("rejects malformed manifests with schema diagnostics", () => {
+  it('rejects malformed manifests with schema diagnostics', () => {
     const result = parseTilesetManifest({
       schemaVersion: 1,
-      name: "Missing required pack fields",
+      name: 'Missing required pack fields',
     });
 
     expect(result.value).toBeUndefined();
     expect(result.diagnostics.length).toBeGreaterThan(0);
-    expect(result.diagnostics.every((diagnostic) => diagnosticTag(diagnostic) === "InvalidManifestField")).toBe(
-      true,
-    );
+    expect(
+      result.diagnostics.every(
+        (diagnostic) => diagnosticTag(diagnostic) === 'InvalidManifestField',
+      ),
+    ).toBe(true);
   });
 
-  it("is idempotent under parse -> write -> parse for pack semantics", () => {
+  it('is idempotent under parse -> write -> parse for pack semantics', () => {
     const first = parseTilesetManifest(meadowPack);
     const written = writeTilesetManifest(first.value!, {
       provenance: meadowPack.provenance,
@@ -370,10 +370,10 @@ describe("parseTilesetManifest", () => {
     expect(second.value).toEqual(first.value);
   });
 
-  it("keeps canonical manifest hashes stable through write and read", () => {
+  it('keeps canonical manifest hashes stable through write and read', () => {
     const placeable = {
-      id: "placeable:62656465-0000-4000-8000-000000000012",
-      name: "Hash Stable Statue",
+      id: 'placeable:62656465-0000-4000-8000-000000000012',
+      name: 'Hash Stable Statue',
       size: { width: 96, height: 128 },
       frames: [
         {
@@ -382,14 +382,14 @@ describe("parseTilesetManifest", () => {
           uv: { x: 0, y: 0, w: 96, h: 128 },
         },
       ],
-      tags: ["prop", "hash-stable"],
-      placementMode: "object",
+      tags: ['prop', 'hash-stable'],
+      placementMode: 'object',
       source: {
-        format: "tiled",
-        tilesetName: "Props",
+        format: 'tiled',
+        tilesetName: 'Props',
         localTileId: 0,
-        objectClass: "statue",
-        image: "Props/statue.png",
+        objectClass: 'statue',
+        image: 'Props/statue.png',
         imageWidth: 96,
         imageHeight: 128,
         properties: {},
@@ -412,11 +412,11 @@ describe("parseTilesetManifest", () => {
     expect(written).toMatchObject({
       license: expect.objectContaining({ redistributable: false }),
       provenance: meadowPack.provenance,
-      placeables: [expect.objectContaining({ placementMode: "object" })],
+      placeables: [expect.objectContaining({ placementMode: 'object' })],
     });
   });
 
-  it("matches a stable written manifest snapshot", () => {
+  it('matches a stable written manifest snapshot', () => {
     const parsed = parseTilesetManifest(meadowPack);
     const written = writeTilesetManifest(parsed.value!, {
       provenance: meadowPack.provenance,

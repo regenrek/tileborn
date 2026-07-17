@@ -5,9 +5,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -21,9 +19,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -38,9 +34,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -55,9 +49,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -72,9 +64,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -88,9 +78,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -106,9 +94,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -122,9 +108,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -138,9 +122,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -155,9 +137,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -172,9 +152,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -189,9 +167,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -205,9 +181,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -223,9 +197,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -239,9 +211,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -256,9 +226,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -273,9 +241,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -290,9 +256,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -307,9 +271,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -323,9 +285,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -341,9 +301,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -357,9 +315,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -374,9 +330,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -391,9 +345,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -408,9 +360,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -425,9 +375,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -441,9 +389,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -459,9 +405,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -475,9 +419,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -492,9 +434,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -509,9 +449,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -526,9 +464,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -543,9 +479,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -559,9 +493,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -577,9 +509,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -593,9 +523,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -610,9 +538,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -627,9 +553,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -644,9 +568,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -660,9 +582,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -676,9 +596,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -694,9 +612,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -710,9 +626,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -727,9 +641,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -744,9 +656,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -761,9 +671,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -777,9 +685,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -795,9 +701,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -813,9 +717,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -829,9 +731,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -846,9 +746,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -863,9 +761,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -880,9 +776,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -896,9 +790,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -914,9 +806,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -930,9 +820,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -946,9 +834,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -963,9 +849,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -980,9 +864,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -997,9 +879,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -1013,9 +893,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -1031,9 +909,7 @@
       "flipH": true,
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,
@@ -1047,9 +923,7 @@
     {
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000002",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000002",
       "uv": {
         "h": 32,
@@ -1064,9 +938,7 @@
       "animationId": "animation:62656465-0000-4000-8000-000000000006",
       "imageAssetId": "asset:62656465-0000-4000-8000-000000000007",
       "resolvedTileId": "tile:62656465-0000-4000-8000-000000000001",
-      "sourceAssetPaths": [
-        "atlases/meadow.png"
-      ],
+      "sourceAssetPaths": ["atlases/meadow.png"],
       "tileId": "tile:62656465-0000-4000-8000-000000000001",
       "uv": {
         "h": 32,

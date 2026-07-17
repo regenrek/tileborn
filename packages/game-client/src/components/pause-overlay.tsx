@@ -1,9 +1,9 @@
-import type { BrandConfig } from "@tileborne/core";
-import { Button } from "@tileborne/ui";
-import type { ReactElement } from "react";
+import type { BrandConfig } from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import type { ReactElement } from 'react';
 
-import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
-import { SlotHost } from "./slot-host.js";
+import type { MenuSectionRegistration } from '../contributions/menu-registry.js';
+import { SlotHost } from './slot-host.js';
 
 export interface PauseOverlayProps {
   readonly brand: BrandConfig;

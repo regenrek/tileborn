@@ -1,17 +1,17 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 import {
   CustomAutotileRule,
   Wang2EdgeAutotileRule,
   type AutotileRule,
-} from "../schemas/autotile-rule.js";
-import type { TileId } from "../schemas/ids.js";
-import type { TerrainClass } from "../schemas/terrain-class.js";
-import { formatMaskKey } from "../autotile/mask.js";
-import { Around8Bits, Edge4Bits, NEIGHBORHOODS } from "../autotile/neighborhoods.js";
+} from '../schemas/autotile-rule.js';
+import type { TileId } from '../schemas/ids.js';
+import type { TerrainClass } from '../schemas/terrain-class.js';
+import { formatMaskKey } from '../autotile/mask.js';
+import { Around8Bits, Edge4Bits, NEIGHBORHOODS } from '../autotile/neighborhoods.js';
 
-import { ldtkAutotileRuleId } from "./deterministic-id.js";
+import { ldtkAutotileRuleId } from './deterministic-id.js';
 
 type LdtkAutoRule = {
   readonly uid: number;
@@ -52,8 +52,8 @@ const CORNER_PATTERN_INDICES = [0, 2, 6, 8] as const;
 const isExoticRule = (rule: LdtkAutoRule): boolean =>
   !rule.active ||
   rule.size !== 3 ||
-  rule.tileMode !== "Single" ||
-  rule.checker !== "None" ||
+  rule.tileMode !== 'Single' ||
+  rule.checker !== 'None' ||
   rule.perlinActive ||
   rule.chance < 1 ||
   rule.xModulo !== 1 ||
@@ -109,10 +109,7 @@ const buildWang2EdgeMask = (pattern: readonly number[]): string | undefined => {
   return formatMaskKey(mask, NEIGHBORHOODS.edge4);
 };
 
-const tileIndexFromRect = (
-  rect: readonly number[],
-  columns: number,
-): number | undefined => {
+const tileIndexFromRect = (rect: readonly number[], columns: number): number | undefined => {
   if (rect.length === 1) {
     return rect[0];
   }
@@ -166,13 +163,13 @@ export const compileLdtkAutoRules = (params: CompileAutoRulesParams): CompileAut
 
       if (isExoticRule(rule)) {
         diagnostics.push({
-          _tag: "LdtkUnmappedAutoRule",
+          _tag: 'LdtkUnmappedAutoRule',
           path,
-          message: "Auto-layer rule uses unsupported LDtk features",
-          severity: "warning",
+          message: 'Auto-layer rule uses unsupported LDtk features',
+          severity: 'warning',
           ruleUid: rule.uid,
           layerUid: params.layerUid,
-          reason: "exotic-features",
+          reason: 'exotic-features',
         });
         continue;
       }
@@ -183,13 +180,13 @@ export const compileLdtkAutoRules = (params: CompileAutoRulesParams): CompileAut
 
       if (mask === undefined) {
         diagnostics.push({
-          _tag: "LdtkUnmappedAutoRule",
+          _tag: 'LdtkUnmappedAutoRule',
           path,
-          message: "Auto-layer rule pattern could not be mapped to a Wang mask",
-          severity: "warning",
+          message: 'Auto-layer rule pattern could not be mapped to a Wang mask',
+          severity: 'warning',
           ruleUid: rule.uid,
           layerUid: params.layerUid,
-          reason: "unmapped-pattern",
+          reason: 'unmapped-pattern',
         });
         continue;
       }
@@ -197,13 +194,13 @@ export const compileLdtkAutoRules = (params: CompileAutoRulesParams): CompileAut
       const tileIds = tileIdsFromRects(rule.tileRectsIds, params.columns, params.tileIdForIndex);
       if (tileIds.length === 0) {
         diagnostics.push({
-          _tag: "LdtkUnmappedAutoRule",
+          _tag: 'LdtkUnmappedAutoRule',
           path,
-          message: "Auto-layer rule has no resolvable tile rectangles",
-          severity: "warning",
+          message: 'Auto-layer rule has no resolvable tile rectangles',
+          severity: 'warning',
           ruleUid: rule.uid,
           layerUid: params.layerUid,
-          reason: "missing-tiles",
+          reason: 'missing-tiles',
         });
         continue;
       }
@@ -224,10 +221,10 @@ export const compileLdtkAutoRules = (params: CompileAutoRulesParams): CompileAut
   );
 
   const ruleTag = [...maskAccumulator.keys()].every((mask) => mask.length === 4)
-    ? "wang2edge"
-    : "custom";
+    ? 'wang2edge'
+    : 'custom';
 
-  if (ruleTag === "wang2edge") {
+  if (ruleTag === 'wang2edge') {
     rules.push(
       new Wang2EdgeAutotileRule({
         id: ldtkAutotileRuleId(params.projectPath, params.layerUid, params.layerUid),
@@ -248,7 +245,7 @@ export const compileLdtkAutoRules = (params: CompileAutoRulesParams): CompileAut
       maskToTileIds,
       fallbackTileId: Option.none(),
       source: {
-        provider: "ldtk",
+        provider: 'ldtk',
         layerUid: params.layerUid,
         tilesetUid: params.tilesetUid,
       },

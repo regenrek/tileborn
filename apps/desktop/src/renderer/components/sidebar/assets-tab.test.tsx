@@ -62,7 +62,7 @@ vi.mock('@/lib/pack-capability-client', () => ({
     byId: new Map([
       ['pack-paintable-1', { paintable: true, tilesetCount: 1, tileCount: 16, placeableCount: 67 }],
       ['pack-paintable-2', { paintable: true, tilesetCount: 1, tileCount: 8, placeableCount: 0 }],
-      ['pack-asset-only', { paintable: false, tilesetCount: 0, tileCount: 0, placeableCount: 0 }],
+      ['pack-asset-only', { paintable: false, tilesetCount: 0, tileCount: 0, placeableCount: 11 }],
     ]),
     isLoading: false,
   }),
@@ -117,15 +117,17 @@ describe('AssetsTab pack click wiring', () => {
     expect(setMapTilesetPackMutateMock).not.toHaveBeenCalled();
   });
 
-  it('does not fire mutation for non-paintable (asset-only) packs', () => {
+  it('allows object-only packs to be selected without setting the map tileset pack', () => {
     useParamsMock.mockReturnValue({
       projectId: 'project-1',
       mapId: 'map-1',
     });
     render(<AssetsTab projectId="project-1" />);
     const button = screen.getByTestId('sidebar-pack-pack-asset-only');
-    expect(button).toHaveProperty('disabled', true);
+    expect(button).toHaveProperty('disabled', false);
+    expect(screen.getByText('2 assets · 11 objects · no tilesets')).toBeTruthy();
     fireEvent.click(button);
+    expect(setActivePalettePackIdMock).toHaveBeenCalledWith('pack-asset-only');
     expect(setMapTilesetPackMutateMock).not.toHaveBeenCalled();
   });
 

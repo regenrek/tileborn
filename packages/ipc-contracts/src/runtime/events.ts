@@ -1,23 +1,19 @@
-import { Effect, Fiber, Schema } from "effect";
-import type { ManagedRuntime } from "effect/ManagedRuntime";
+import { Effect, Fiber, Schema } from 'effect';
+import type { ManagedRuntime } from 'effect/ManagedRuntime';
 
-import type {
-  AnyIpcEvent,
-  EventPayloadOf,
-  IpcEventRegistry,
-} from "../events-core.js";
-import { decodeEventPayload } from "./boundary.js";
-import type { IpcClientTransport, IpcServerTransport } from "./transport.js";
+import type { AnyIpcEvent, EventPayloadOf, IpcEventRegistry } from '../events-core.js';
+import { decodeEventPayload } from './boundary.js';
+import type { IpcClientTransport, IpcServerTransport } from './transport.js';
 
 export type IpcEventEmitterOf<Registry extends IpcEventRegistry> = {
-  readonly [Channel in keyof Registry["byChannel"] & string]: (
-    payload: EventPayloadOf<Registry["byChannel"][Channel]>,
+  readonly [Channel in keyof Registry['byChannel'] & string]: (
+    payload: EventPayloadOf<Registry['byChannel'][Channel]>,
   ) => Effect.Effect<void>;
 };
 
 export type IpcEventSubscriberOf<Registry extends IpcEventRegistry> = {
-  readonly [Channel in keyof Registry["byChannel"] & string]: (
-    handler: (payload: EventPayloadOf<Registry["byChannel"][Channel]>) => void,
+  readonly [Channel in keyof Registry['byChannel'] & string]: (
+    handler: (payload: EventPayloadOf<Registry['byChannel'][Channel]>) => void,
   ) => () => void;
 };
 
@@ -55,13 +51,11 @@ export const createEventSubscriber = <Registry extends IpcEventRegistry>(
     subscriber[event.channel] = (handler) =>
       transport.subscribe(event.channel, (raw) => {
         Effect.runSync(
-          decodeEventPayload<EventPayloadOf<typeof event>>(
-            event.payload,
-            event.channel,
-            raw,
-          ).pipe(Effect.map((payload) => {
-            handler(payload);
-          })),
+          decodeEventPayload<EventPayloadOf<typeof event>>(event.payload, event.channel, raw).pipe(
+            Effect.map((payload) => {
+              handler(payload);
+            }),
+          ),
         );
       });
   }
@@ -78,7 +72,7 @@ export interface RegisterIpcEventsOptions<R> {
 }
 
 export type IpcEventWiringOf<Registry extends IpcEventRegistry> = {
-  readonly [Channel in keyof Registry["byChannel"] & string]: (
+  readonly [Channel in keyof Registry['byChannel'] & string]: (
     emit: IpcEventEmitterOf<Registry>[Channel],
   ) => Effect.Effect<void, unknown, unknown>;
 };

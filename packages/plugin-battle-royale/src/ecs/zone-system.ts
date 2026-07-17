@@ -1,9 +1,4 @@
-import {
-  PLAYER_COMPONENT,
-  POSITION_COMPONENT,
-  type Player,
-  type Position,
-} from "./components.js";
+import { PLAYER_COMPONENT, POSITION_COMPONENT, type Player, type Position } from './components.js';
 import {
   DEFAULT_ZONE_SCHEDULE,
   getZone,
@@ -14,13 +9,18 @@ import {
   ZONE_COMPONENT,
   type Zone,
   type ZoneScheduleConfig,
-} from "./zone.js";
-import { applyDamage, type DamageSystemState } from "./damage-system.js";
-import type { PluginWorld } from "../types/runtime-plugin.js";
+} from './zone.js';
+import type { CombatWorldView, HitResolutionPolicy } from '@tileborne/simulation';
+
+import { applyEnvironmentDamage } from './combat-system.js';
+import { type DamageSystemState } from './damage-system.js';
+import type { PluginWorld } from '../types/runtime-plugin.js';
 
 export interface ZoneSystemContext {
   readonly schedule?: ZoneScheduleConfig;
   readonly damageState: DamageSystemState;
+  readonly worldView: CombatWorldView;
+  readonly policy: HitResolutionPolicy;
 }
 
 const interpolateShrinkRadius = (zone: Zone, tick: number): number => {
@@ -111,7 +111,8 @@ const applyZoneDamage = (
   world: PluginWorld,
   zone: Zone,
   dt: number,
-  damageState: DamageSystemState,
+  tick: number,
+  ctx: ZoneSystemContext,
 ): void => {
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const positions = world.getComponent<Position>(POSITION_COMPONENT);
@@ -126,7 +127,15 @@ const applyZoneDamage = (
       continue;
     }
 
-    applyDamage(world, entity, zone.damagePerSecOutside * dt, "zone", damageState);
+    applyEnvironmentDamage(
+      world,
+      ctx.worldView,
+      ctx.policy,
+      ctx.damageState,
+      entity,
+      zone.damagePerSecOutside * dt,
+      tick,
+    );
   }
 };
 
@@ -150,5 +159,5 @@ export const runZoneSystem = (
   const zones = world.getComponent<Zone>(ZONE_COMPONENT);
   const updated = updateZoneRadius(zone, tick, schedule);
   zones.set(zoneEntity, updated);
-  applyZoneDamage(world, updated, dt, ctx.damageState);
+  applyZoneDamage(world, updated, dt, tick, ctx);
 };

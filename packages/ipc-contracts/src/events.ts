@@ -1,17 +1,18 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { createEventRegistry, defineEvent, type IpcEventRegistry } from "./events-core.js";
+import { createEventRegistry, defineEvent, type IpcEventRegistry } from './events-core.js';
+import { Uint8ArraySchema } from './bytes.js';
 
-export * from "./events-core.js";
-export { TriggerEventPayload } from "./contracts/trigger.js";
+export * from './events-core.js';
+export { TriggerEventPayload } from './contracts/trigger.js';
 
-import { AssetsCapabilityRefreshedEventPayload } from "./contracts/assets.js";
+import { AssetsCapabilityRefreshedEventPayload } from './contracts/assets.js';
 import {
   TiledSourceRulesCompileProgressEventPayload,
   TiledSourceRulesDiagnosticsEventPayload,
   TiledSourceRulesRuntimeApplyProgressEventPayload,
-} from "./contracts/tiled-source-rules.js";
-import { TriggerEventPayload } from "./contracts/trigger.js";
+} from './contracts/tiled-source-rules.js';
+import { TriggerEventPayload } from './contracts/trigger.js';
 
 /**
  * Payload for `tileborne:runtime:snapshot`. The runtime worker forwards opaque
@@ -19,11 +20,6 @@ import { TriggerEventPayload } from "./contracts/trigger.js";
  * the renderer; the shell treats `frame` as unknown bytes and lets the active
  * plugin's projector narrow them. See ADR-0014.
  */
-const Uint8ArraySchema: Schema.Schema<Uint8Array> = Schema.declare<Uint8Array>(
-  (value): value is Uint8Array => value instanceof Uint8Array,
-  { title: "Uint8Array" },
-);
-
 export const RuntimeSnapshotEventPayload = Schema.Struct({
   sessionId: Schema.String,
   frame: Uint8ArraySchema,
@@ -32,82 +28,82 @@ export const RuntimeSnapshotEventPayload = Schema.Struct({
 export type RuntimeSnapshotEventPayload = Schema.Schema.Type<typeof RuntimeSnapshotEventPayload>;
 
 export const ProjectsChangedEvent = defineEvent({
-  channel: "tileborne:projects:changed",
+  channel: 'tileborne:projects:changed',
   payload: TriggerEventPayload,
 });
 
 export const MapsChangedEvent = defineEvent({
-  channel: "tileborne:maps:changed",
+  channel: 'tileborne:maps:changed',
   payload: TriggerEventPayload,
 });
 
 export const AssetsChangedEvent = defineEvent({
-  channel: "tileborne:assets:changed",
+  channel: 'tileborne:assets:changed',
   payload: TriggerEventPayload,
 });
 
 export const AssetsCapabilityRefreshedEvent = defineEvent({
-  channel: "tileborne:assets:capabilityRefreshed",
+  channel: 'tileborne:assets:capabilityRefreshed',
   payload: AssetsCapabilityRefreshedEventPayload,
 });
 
 export const PluginsChangedEvent = defineEvent({
-  channel: "tileborne:plugins:changed",
+  channel: 'tileborne:plugins:changed',
   payload: TriggerEventPayload,
 });
 
 export const JobsChangedEvent = defineEvent({
-  channel: "tileborne:jobs:changed",
+  channel: 'tileborne:jobs:changed',
   payload: TriggerEventPayload,
 });
 
 export const BuildsChangedEvent = defineEvent({
-  channel: "tileborne:builds:changed",
+  channel: 'tileborne:builds:changed',
   payload: TriggerEventPayload,
 });
 
 export const ExportsChangedEvent = defineEvent({
-  channel: "tileborne:exports:changed",
+  channel: 'tileborne:exports:changed',
   payload: TriggerEventPayload,
 });
 
 export const PlaytestChangedEvent = defineEvent({
-  channel: "tileborne:playtest:changed",
+  channel: 'tileborne:playtest:changed',
   payload: TriggerEventPayload,
 });
 
 export const DeploymentsChangedEvent = defineEvent({
-  channel: "tileborne:deployments:changed",
+  channel: 'tileborne:deployments:changed',
   payload: TriggerEventPayload,
 });
 
 export const SupportChangedEvent = defineEvent({
-  channel: "tileborne:support:changed",
+  channel: 'tileborne:support:changed',
   payload: TriggerEventPayload,
 });
 
 export const LogsAppendedEvent = defineEvent({
-  channel: "tileborne:logs:appended",
+  channel: 'tileborne:logs:appended',
   payload: TriggerEventPayload,
 });
 
 export const RuntimeSnapshotEvent = defineEvent({
-  channel: "tileborne:runtime:snapshot",
+  channel: 'tileborne:runtime:snapshot',
   payload: RuntimeSnapshotEventPayload,
 });
 
 export const TiledSourceRulesCompileProgressEvent = defineEvent({
-  channel: "tileborne:tiled-source-rules:compile-progress",
+  channel: 'tileborne:tiled-source-rules:compile-progress',
   payload: TiledSourceRulesCompileProgressEventPayload,
 });
 
 export const TiledSourceRulesRuntimeApplyProgressEvent = defineEvent({
-  channel: "tileborne:tiled-source-rules:runtime-apply-progress",
+  channel: 'tileborne:tiled-source-rules:runtime-apply-progress',
   payload: TiledSourceRulesRuntimeApplyProgressEventPayload,
 });
 
 export const TiledSourceRulesDiagnosticsEvent = defineEvent({
-  channel: "tileborne:tiled-source-rules:diagnostics",
+  channel: 'tileborne:tiled-source-rules:diagnostics',
   payload: TiledSourceRulesDiagnosticsEventPayload,
 });
 

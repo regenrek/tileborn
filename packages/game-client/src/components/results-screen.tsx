@@ -1,9 +1,9 @@
-import type { BrandConfig } from "@tileborne/core";
-import { Button } from "@tileborne/ui";
-import type { ReactElement } from "react";
+import type { BrandConfig } from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import type { ReactElement } from 'react';
 
-import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
-import { SlotHost } from "./slot-host.js";
+import type { MenuSectionRegistration } from '../contributions/menu-registry.js';
+import { SlotHost } from './slot-host.js';
 
 /** A single neutral results row. Plugins/products enrich via the results slot. */
 export interface MatchResultRow {
@@ -36,15 +36,20 @@ export function ResultsScreen({
   const rows = results?.rows ?? [];
   return (
     <div className="tb-scrim">
-      <div className="tb-panel" role="dialog" aria-label="Match results" data-testid="results-screen">
-        <h2 className="tb-title">{results?.title ?? "Match complete"}</h2>
+      <div
+        className="tb-panel"
+        role="dialog"
+        aria-label="Match results"
+        data-testid="results-screen"
+      >
+        <h2 className="tb-title">{results?.title ?? 'Match complete'}</h2>
         {rows.length > 0 ? (
-          <table style={{ width: "100%", borderCollapse: "collapse", margin: "0.75rem 0" }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', margin: '0.75rem 0' }}>
             <thead>
-              <tr style={{ textAlign: "left", color: "var(--tb-menu-text-muted)" }}>
+              <tr style={{ textAlign: 'left', color: 'var(--tb-menu-text-muted)' }}>
                 <th>#</th>
                 <th>Player</th>
-                <th style={{ textAlign: "right" }}>Score</th>
+                <th style={{ textAlign: 'right' }}>Score</th>
               </tr>
             </thead>
             <tbody>
@@ -52,7 +57,7 @@ export function ResultsScreen({
                 <tr key={`${row.rank}-${row.name}`}>
                   <td>{row.rank}</td>
                   <td>{row.name}</td>
-                  <td style={{ textAlign: "right" }}>{row.score}</td>
+                  <td style={{ textAlign: 'right' }}>{row.score}</td>
                 </tr>
               ))}
             </tbody>

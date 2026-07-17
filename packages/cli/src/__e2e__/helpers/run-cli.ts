@@ -1,8 +1,8 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
-import { cliEntrypoint } from "./paths.js";
-import { tileborneHome } from "./temp-home.js";
+import { cliEntrypoint } from './paths.js';
+import { tileborneHome } from './temp-home.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +25,7 @@ export interface RunCliOptions {
 }
 
 const appendJsonFlag = (args: readonly string[], json: boolean): string[] =>
-  json && !args.includes("--json") ? [...args, "--json"] : [...args];
+  json && !args.includes('--json') ? [...args, '--json'] : [...args];
 
 const assertStderrClean = (stderr: string, allowStderr: boolean): void => {
   if (allowStderr || stderr.trim().length === 0) {
@@ -63,8 +63,8 @@ export const runCli = async (
       return { stdout, stderr, code: 0 };
     } catch (error) {
       const failed = error as { stdout?: string; stderr?: string; code?: number };
-      const stdout = String(failed.stdout ?? "");
-      const stderr = String(failed.stderr ?? "");
+      const stdout = String(failed.stdout ?? '');
+      const stderr = String(failed.stderr ?? '');
       return {
         stdout,
         stderr,
@@ -78,7 +78,7 @@ export const runCli = async (
 
 export const runCliJson = async <T>(
   args: readonly string[],
-  opts: Omit<RunCliOptions, "json"> = {},
+  opts: Omit<RunCliOptions, 'json'> = {},
 ): Promise<{ result: CliRunResult; payload: T }> => {
   const result = await runCli(args, { ...opts, json: true });
   const payload = JSON.parse(result.stdout) as T;
@@ -87,9 +87,12 @@ export const runCliJson = async <T>(
 
 export const expectCliJsonData = async <T>(
   args: readonly string[],
-  opts: Omit<RunCliOptions, "json"> = {},
+  opts: Omit<RunCliOptions, 'json'> = {},
 ): Promise<T> => {
-  const { result, payload } = await runCliJson<{ readonly ok: boolean; readonly data: T }>(args, opts);
+  const { result, payload } = await runCliJson<{ readonly ok: boolean; readonly data: T }>(
+    args,
+    opts,
+  );
   if (result.code !== 0) {
     throw new Error(`CLI failed (${result.code}): ${result.stderr}\n${result.stdout}`);
   }
@@ -110,15 +113,19 @@ export interface CliJsonErrorPayload {
 export const expectCliJsonError = async (
   args: readonly string[],
   expected: { readonly exitCode: number; readonly code: string },
-  opts: Omit<RunCliOptions, "json"> = {},
+  opts: Omit<RunCliOptions, 'json'> = {},
 ): Promise<CliJsonErrorPayload> => {
   const result = await runCli(args, { ...opts, json: true, allowStderr: true });
   if (result.code !== expected.exitCode) {
-    throw new Error(`expected exit ${expected.exitCode}, got ${result.code}: ${result.stderr}\n${result.stdout}`);
+    throw new Error(
+      `expected exit ${expected.exitCode}, got ${result.code}: ${result.stderr}\n${result.stdout}`,
+    );
   }
   const payload = JSON.parse(result.stderr) as CliJsonErrorPayload;
   if (payload.error.code !== expected.code) {
-    throw new Error(`expected error.code ${expected.code}, got ${payload.error.code}: ${result.stderr}`);
+    throw new Error(
+      `expected error.code ${expected.code}, got ${payload.error.code}: ${result.stderr}`,
+    );
   }
   if (payload.error.exitCode !== expected.exitCode) {
     throw new Error(`expected error.exitCode ${expected.exitCode}, got ${payload.error.exitCode}`);

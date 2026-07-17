@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "catalog": {
+    "id": "catalog:0b1e7e6e-9c4a-4f1e-8a2b-2f1c3d4e5f62",
+    "schemaVersion": 1,
+    "objectTypes": [],
+    "lootTables": [],
+    "items": []
+  },
+  "weapons": { "schemaVersion": 1, "weapons": [] },
+  "weaponLabels": {},
+  "provenance": {},
+  "futureField": true
+}

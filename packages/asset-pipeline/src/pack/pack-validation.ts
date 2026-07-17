@@ -1,10 +1,10 @@
-import { hashBytes } from "@tileborne/core";
-import { Result } from "effect";
+import { hashBytes } from '@tileborne/core';
+import { Result } from 'effect';
 
-import { AssetTooLargeError, PackManifestIntegrityError } from "../errors.js";
-import { validateAssetCandidate } from "../security/security.js";
-import { MAX_PACK_BYTES } from "../security/size-limits.js";
-import type { AssetPackManifest } from "./pack-manifest.js";
+import { AssetTooLargeError, PackManifestIntegrityError } from '../errors.js';
+import { validateAssetCandidate } from '../security/security.js';
+import { MAX_PACK_BYTES } from '../security/size-limits.js';
+import type { AssetPackManifest } from './pack-manifest.js';
 
 export interface AssetPackFile {
   readonly path: string;
@@ -49,7 +49,7 @@ export const validatePackManifest = (
       new AssetTooLargeError({
         size: totalBytes,
         maxSize: MAX_PACK_BYTES,
-        scope: "pack",
+        scope: 'pack',
         message: `Pack exceeds ${MAX_PACK_BYTES} bytes`,
       }),
     );
@@ -61,7 +61,7 @@ export const validatePackManifest = (
       return Result.fail(
         new PackManifestIntegrityError({
           path: asset.path,
-          message: "Manifest references a missing asset file",
+          message: 'Manifest references a missing asset file',
         }),
       );
     }
@@ -94,7 +94,7 @@ export const validatePackManifest = (
       return Result.fail(
         new PackManifestIntegrityError({
           path: asset.path,
-          message: "Asset failed security validation",
+          message: 'Asset failed security validation',
         }),
       );
     }
@@ -105,7 +105,7 @@ export const validatePackManifest = (
       return Result.fail(
         new PackManifestIntegrityError({
           path: file.path,
-          message: "Pack contains a file not listed in the manifest",
+          message: 'Pack contains a file not listed in the manifest',
         }),
       );
     }

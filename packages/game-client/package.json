@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/game-client",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -25,7 +25,9 @@
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",
+    "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
+    "@tileborne/runtime": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "effect": "4.0.0-beta.70"
   },

@@ -84,7 +84,8 @@ const scan = {
     recommendedProfile: 'standard',
     primaryAction: 'import-paintable-tilesets',
     browseTarget: 'tilesets',
-    rationale: 'The source is a grid tileset, so imported content should open as paintable Tilesets.',
+    rationale:
+      'The source is a grid tileset, so imported content should open as paintable Tilesets.',
     reviewRequired: false,
   },
 } as const;
@@ -236,8 +237,10 @@ describe('tiled import IPC contracts', () => {
         {
           feature: 'class-properties',
           path: '/properties/0',
-          message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
-          action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+          message:
+            'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+          action:
+            'Flatten class properties to primitive string, number, or boolean properties before importing.',
         },
       ],
     } as const;
@@ -249,9 +252,11 @@ describe('tiled import IPC contracts', () => {
           _tag: 'TiledUnsupportedFeature',
           severity: 'error',
           path: '/properties/0',
-          message: 'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
+          message:
+            'Tiled class-typed custom properties require Tiled project class definitions and are not imported.',
           feature: 'class-properties',
-          action: 'Flatten class properties to primitive string, number, or boolean properties before importing.',
+          action:
+            'Flatten class properties to primitive string, number, or boolean properties before importing.',
         },
       ],
       inventoryPreview: { ...inventoryPreview, unsupportedFeatureCount: 1 },

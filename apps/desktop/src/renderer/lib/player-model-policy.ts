@@ -1,4 +1,9 @@
-import type { PlayerModelRef, ProjectManifest, TileborneMap } from '@tileborne/core';
+import type {
+  PlayerModelClipKey,
+  PlayerModelRef,
+  ProjectManifest,
+  TileborneMap,
+} from '@tileborne/core';
 
 /**
  * Player-model policy resolution, mirroring the catalog-driven palette
@@ -21,17 +26,49 @@ export interface PlayerModelPolicyContext {
 export interface PlayerModelPolicyContribution {
   readonly pluginId: string;
   readonly mode: PlayerModelPolicyMode;
+  readonly requiredClipKeys?: readonly PlayerModelClipKey[] | undefined;
+  readonly defaultGeometry?:
+    | {
+        readonly anchor: { readonly x: number; readonly y: number };
+        /** Model-local "hand" attachment anchor where equipped entities mount (ADR-0028). */
+        readonly hand: { readonly x: number; readonly y: number };
+        readonly hitbox: {
+          readonly x: number;
+          readonly y: number;
+          readonly width: number;
+          readonly height: number;
+        };
+        readonly renderScale?: number | undefined;
+        readonly worldSize?: { readonly width: number; readonly height: number } | undefined;
+      }
+    | undefined;
+  readonly placeholderModelIds?: readonly string[] | undefined;
   /**
    * Resolves the declared models for the given context. For `fixed` policies
    * this should return a single model; for `selectable` it returns the roster.
    */
   readonly resolveModels: (context: PlayerModelPolicyContext) => readonly PlayerModelRef[];
+  /**
+   * Persist a complete model roster back to the project. Optional because fixed
+   * model policies may be read-only.
+   */
+  readonly applyModels?: (
+    project: ProjectManifest,
+    models: readonly PlayerModelRef[],
+  ) => ProjectManifest;
 }
 
 export interface ResolvedPlayerModelPolicy {
   readonly pluginId: string;
   readonly mode: PlayerModelPolicyMode;
+  readonly requiredClipKeys?: readonly PlayerModelClipKey[] | undefined;
+  readonly defaultGeometry?: PlayerModelPolicyContribution['defaultGeometry'];
+  readonly placeholderModelIds: readonly string[];
   readonly models: readonly PlayerModelRef[];
+  readonly applyModels?: (
+    project: ProjectManifest,
+    models: readonly PlayerModelRef[],
+  ) => ProjectManifest;
 }
 
 /**
@@ -52,7 +89,15 @@ export const resolvePlayerModelPolicy = (
   return {
     pluginId: contribution.pluginId,
     mode: contribution.mode,
+    ...(contribution.requiredClipKeys === undefined
+      ? {}
+      : { requiredClipKeys: contribution.requiredClipKeys }),
+    ...(contribution.defaultGeometry === undefined
+      ? {}
+      : { defaultGeometry: contribution.defaultGeometry }),
+    placeholderModelIds: contribution.placeholderModelIds ?? [],
     models: contribution.resolveModels(context),
+    ...(contribution.applyModels === undefined ? {} : { applyModels: contribution.applyModels }),
   };
 };
 

@@ -2,6 +2,16 @@
 node_modules/
 dist/
 build/
+# This CC0 fixture intentionally models an installed plugin's compiled entry.
+!packages/test-fixtures/fixtures/plugins/smoke-fixture/dist/
+!packages/test-fixtures/fixtures/plugins/smoke-fixture/dist/runtime.js
+# `src/build/` directories are SOURCE (e.g. apps/game-host/src/build,
+# packages/services-build/src/build), not build output — re-include them.
+!**/src/build/
+!**/src/build/**
+# Planr build plans are durable planning contracts, not generated build output.
+!/.planr/plans/build/
+!/.planr/plans/build/*.plan.md
 out/
 coverage/
 *.lcov
@@ -22,7 +32,7 @@ coverage/
 !.env.example
 
 # Logs and diagnostics
-logs/
+/logs/
 *.log
 *.err
 npm-debug.log*
@@ -31,16 +41,37 @@ pnpm-debug.log*
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 test-results/
 
-# Internal agent documentation, not for the OSS repo
-/docs/
+# Internal agent documentation, not for the OSS repo. Keep the directory
+# traversable so the public creator/release contracts and the canonical
+# docs-build inputs can ship from a clean checkout.
+/docs/*
+!/docs/battle-royale-creator-guide.md
+!/docs/battle-royale-release-evidence.md
+!/docs/desktop-release-capability-audit.md
+!/docs/desktop-release-runbook.md
+!/docs/game-mode-extension.md
+!/docs/persisted-schema-compatibility.md
+!/docs/03-runtime-game-host.md
+!/docs/follow-ups.md
+!/docs/adrs/
+!/docs/adrs/**
 
 # Package artifacts and caches
 *.tgz
 .npm/
+/.pnpm-store/
 .parcel-cache/
 .eslintcache
 .stylelintcache
 dist-smoke/
+
+# Planr durable plans, project contracts, agent profiles, and the archived
+# review baseline are tracked explicitly. The SQLite database and newly emitted
+# review projections are local orchestration state and must not dirty product
+# branches.
+/.planr/planr.sqlite
+/.planr/planr.sqlite-*
+/.planr/reviews/*.review.md
 
 # Third-party local asset imports, not for the OSS repo
 packages/test-fixtures/fixtures/asset-packs/[a]ncient/

@@ -20,6 +20,14 @@
       "@/*": ["./src/renderer/*"]
     }
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts", "vite.renderer.config.ts"],
-  "references": [{ "path": "../../packages/ipc-contracts" }]
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx",
+    "src/shared/**/*.ts",
+    "vite.renderer.config.ts"
+  ],
+  "references": [
+    { "path": "../../packages/game-client" },
+    { "path": "../../packages/ipc-contracts" }
+  ]
 }

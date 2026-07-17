@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 import {
@@ -41,17 +41,17 @@ describe.sequential('project creation flow', () => {
   it('boots without main-process crash and mounts home route', async () => {
     const { page } = smokeContext!;
     await expect(page).toHaveTitle(/Tileborne/i);
-    await expect(
-      page.getByRole('heading', { name: /Tileborne|Projects/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Tileborne|Projects/i })).toBeVisible();
   });
 
   it('creates a project from the home CTA and persists project.json', async () => {
     const { page, tileborneHome } = smokeContext!;
 
-    const createButton = page.getByRole('button', {
-      name: /Create project/i,
-    }).first();
+    const createButton = page
+      .getByRole('button', {
+        name: /New game/i,
+      })
+      .first();
     await expect(createButton).toBeVisible();
     await createButton.click();
     await page.getByLabel('Project name').fill('Untitled Project');

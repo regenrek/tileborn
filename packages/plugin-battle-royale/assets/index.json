@@ -1,25 +1,263 @@
 {
   "schemaVersion": 1,
+  "pack": {
+    "id": "pack:b4111e00-0000-4000-8000-000000000001",
+    "path": "./core",
+    "version": "0.1.0"
+  },
   "assets": [
     {
-      "id": "loot-crate-icon",
-      "path": "./assets/loot-crate.png",
+      "id": "asset:b4111e00-0000-4000-8000-000000000002",
+      "path": "./core/atlases/player-models/maltipoo-mae.png",
       "kind": "image",
       "license": {
         "spdxId": "MIT",
-        "attribution": "Tileborne Plugins",
-        "notes": "Placeholder asset reference; binary deferred."
+        "attribution": "Tileborne / Petwars generated Maltipoo assets",
+        "notes": "Maltipoo player sprites are reused from Petwars upright hatch-pet exports by Kevin Kern; BR object sprites are generated in-repo.",
+        "redistributable": true
       }
     },
     {
-      "id": "spawn-marker",
-      "path": "./assets/spawn-marker.png",
+      "id": "asset:b4111e00-0000-4000-8000-000000000004",
+      "path": "./core/atlases/player-models/maltipoo-max.png",
       "kind": "image",
       "license": {
         "spdxId": "MIT",
-        "attribution": "Tileborne Plugins",
-        "notes": "Placeholder asset reference; binary deferred."
+        "attribution": "Tileborne / Petwars generated Maltipoo assets",
+        "notes": "Maltipoo player sprites are reused from Petwars upright hatch-pet exports by Kevin Kern; BR object sprites are generated in-repo.",
+        "redistributable": true
       }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000100",
+      "path": "./core/atlases/weapons/ion-blaster.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000101",
+      "path": "./core/atlases/weapons/pulse-ranger.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000102",
+      "path": "./core/atlases/weapons/arc-burst.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000103",
+      "path": "./core/atlases/weapons/pulse-carbine.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000104",
+      "path": "./core/atlases/weapons/scatter-lance.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000105",
+      "path": "./core/atlases/weapons/arc-charger.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000106",
+      "path": "./core/atlases/weapons/ricochet-disc.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000107",
+      "path": "./core/atlases/weapons/rail-needle.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000108",
+      "path": "./core/atlases/weapons/nova-launcher.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000109",
+      "path": "./core/atlases/weapons/prism-beam.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-00000000010a",
+      "path": "./core/atlases/weapons/plasma-sabre.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne / Petwars generated weapon assets",
+        "notes": "Petwars default weapon sprites generated for Kevin Kern and imported from app/public/assets/graphics/weapons.",
+        "redistributable": true
+      }
+    },
+    {
+      "id": "asset:b4111e00-0000-4000-8000-000000000003",
+      "path": "./core/atlases/objects.png",
+      "kind": "image",
+      "license": {
+        "spdxId": "MIT",
+        "attribution": "Tileborne",
+        "notes": "Programmatically generated Battle Royale pixel-art object content; no third-party source assets.",
+        "redistributable": true
+      }
+    }
+  ],
+  "playerModels": [
+    {
+      "id": "maltipoo-mae",
+      "label": "Maltipoo Mae",
+      "assetFormat": "codex_pet",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000002000",
+      "sourcePath": "./core/sources/player-models/maltipoo-mae/spritesheet.png",
+      "contactSheetPath": "./core/sources/player-models/maltipoo-mae/contact-sheet.png",
+      "validationPath": "./core/sources/player-models/maltipoo-mae/validation.json"
+    },
+    {
+      "id": "maltipoo-max",
+      "label": "Maltipoo Max",
+      "assetFormat": "codex_pet",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000002001",
+      "sourcePath": "./core/sources/player-models/maltipoo-max/spritesheet.png",
+      "contactSheetPath": "./core/sources/player-models/maltipoo-max/contact-sheet.png",
+      "validationPath": "./core/sources/player-models/maltipoo-max/validation.json"
+    }
+  ],
+  "weapons": [
+    {
+      "slug": "ion-blaster",
+      "label": "Ion Blaster",
+      "kind": "hitscan",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007000",
+      "path": "./core/atlases/weapons/ion-blaster.png"
+    },
+    {
+      "slug": "pulse-ranger",
+      "label": "Pulse Ranger",
+      "kind": "hitscan",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007001",
+      "path": "./core/atlases/weapons/pulse-ranger.png"
+    },
+    {
+      "slug": "arc-burst",
+      "label": "Arc Burst",
+      "kind": "hitscan",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007002",
+      "path": "./core/atlases/weapons/arc-burst.png"
+    },
+    {
+      "slug": "pulse-carbine",
+      "label": "Pulse Carbine",
+      "kind": "projectile",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007003",
+      "path": "./core/atlases/weapons/pulse-carbine.png"
+    },
+    {
+      "slug": "scatter-lance",
+      "label": "Scatter Lance",
+      "kind": "pellet",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007004",
+      "path": "./core/atlases/weapons/scatter-lance.png"
+    },
+    {
+      "slug": "arc-charger",
+      "label": "Arc Charger",
+      "kind": "charge",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007005",
+      "path": "./core/atlases/weapons/arc-charger.png"
+    },
+    {
+      "slug": "ricochet-disc",
+      "label": "Ricochet Disc",
+      "kind": "bounce",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007006",
+      "path": "./core/atlases/weapons/ricochet-disc.png"
+    },
+    {
+      "slug": "rail-needle",
+      "label": "Rail Needle",
+      "kind": "pierce",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007007",
+      "path": "./core/atlases/weapons/rail-needle.png"
+    },
+    {
+      "slug": "nova-launcher",
+      "label": "Nova Launcher",
+      "kind": "explosive",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007008",
+      "path": "./core/atlases/weapons/nova-launcher.png"
+    },
+    {
+      "slug": "prism-beam",
+      "label": "Prism Beam",
+      "kind": "beam",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-000000007009",
+      "path": "./core/atlases/weapons/prism-beam.png"
+    },
+    {
+      "slug": "plasma-sabre",
+      "label": "Plasma Sabre",
+      "kind": "melee",
+      "placeableId": "placeable:b4111e00-0000-4000-8000-00000000700a",
+      "path": "./core/atlases/weapons/plasma-sabre.png"
     }
   ]
 }

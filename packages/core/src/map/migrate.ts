@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { gameObjectTypeIdForKey } from "../catalog/well-known.js";
-import type { GameObjectTypeId } from "../ids.js";
+import { gameObjectTypeIdForKey } from '../catalog/well-known.js';
+import type { GameObjectTypeId } from '../ids.js';
 
 /**
  * Raised when a persisted `MapObject.kind` cannot be migrated to a catalog
@@ -9,14 +9,15 @@ import type { GameObjectTypeId } from "../ids.js";
  * silently corrupting the user's map data (ADR-0019 / hard-cut migration).
  */
 export class LegacyMapObjectKindError extends Schema.TaggedErrorClass<LegacyMapObjectKindError>()(
-  "LegacyMapObjectKindError",
+  'LegacyMapObjectKindError',
   {
     kind: Schema.String,
     message: Schema.String,
   },
 ) {}
 
-const GOBJ_PATTERN = /^gobj:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const GOBJ_PATTERN =
+  /^gobj:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** A safe legacy "kind" slug: lowercase letters/digits/hyphens, e.g. "spawn-point". */
 const LEGACY_KIND_SLUG = /^[a-z][a-z0-9-]*$/;
@@ -47,7 +48,7 @@ export const migrateLegacyMapObjectKind = (kind: string): GameObjectTypeId => {
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * One-time, read-time migration applied to raw persisted map JSON *before*
@@ -65,7 +66,7 @@ export const migrateLegacyMapJson = (value: unknown): unknown => {
   return {
     ...value,
     objects: value.objects.map((object) => {
-      if (!isRecord(object) || typeof object.kind !== "string") {
+      if (!isRecord(object) || typeof object.kind !== 'string') {
         return object;
       }
       return { ...object, kind: migrateLegacyMapObjectKind(object.kind) };

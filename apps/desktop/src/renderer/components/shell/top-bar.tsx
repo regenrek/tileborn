@@ -1,5 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
+import type { ReadinessReport } from '@tileborne/ipc-contracts';
 import type { ReactElement } from 'react';
 import {
   Breadcrumb,
@@ -25,6 +26,7 @@ import {
 } from '@tileborne/ui';
 import {
   ArchiveIcon,
+  CircleCheckIcon,
   ChevronDownIcon,
   CommandIcon,
   FolderInputIcon,
@@ -37,17 +39,23 @@ import {
   SettingsIcon,
   SquareIcon,
   UsersIcon,
+  TriangleAlertIcon,
 } from 'lucide-react';
 
 import { PlaytestHostDialog, PlaytestJoinDialog } from '@/components/playtest-multiplayer-dialogs';
-import {
-  useExportProjectArchive,
-  useImportProjectFromDirectory,
-  useStartBuild,
-} from '@/hooks/mutations';
-import { notifyError, notifySuccess } from '@/stores/app-notifications-store';
-import { useMap, useProject } from '@/hooks/queries';
+import { useExportProjectArchive, useImportProjectFromDirectory } from '@/hooks/mutations';
+import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
+import { useMap, usePluginContributions, useProject, useReadiness } from '@/hooks/queries';
+import { resolveProjectActiveGameMode } from '@/lib/active-game-mode-selection';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
+import {
+  blockingReadinessDiagnostics,
+  readinessGateMessage,
+  readinessWarnings,
+  rendererExecutionAction,
+  type RendererExecutionEntryPoint,
+  showReadinessProblems,
+} from '@/lib/readiness-gate';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 import { usePlaytestMultiplayerStore } from '@/stores/playtest-multiplayer-store';
 
@@ -249,33 +257,35 @@ function PlaytestMenu({
 
 function BuildMenu({
   projectId,
-  buildPending,
   exportPending,
-  onStartBuild,
+  onShipGame,
   onExport,
 }: {
   readonly projectId: string | undefined;
-  readonly buildPending: boolean;
   readonly exportPending: boolean;
-  readonly onStartBuild: () => void;
+  readonly onShipGame: () => void;
   readonly onExport: () => void;
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="default" size="sm" disabled={!projectId} aria-label="Build">
+          <Button variant="default" size="sm" disabled={!projectId} aria-label="Ship Game">
             <RocketIcon />
-            <span className="hidden md:inline">Build</span>
+            <span className="hidden md:inline">Ship</span>
             <ChevronDownIcon className="hidden size-3 opacity-70 md:inline" />
           </Button>
         }
       />
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
-          <DropdownMenuItem disabled={!projectId || buildPending} onClick={onStartBuild}>
+          <DropdownMenuItem
+            disabled={!projectId}
+            onClick={onShipGame}
+            data-testid="topbar-ship-game"
+          >
             <HammerIcon />
-            Start build
+            Ship Game…
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!projectId || exportPending} onClick={onExport}>
             <ArchiveIcon />
@@ -287,10 +297,50 @@ function BuildMenu({
   );
 }
 
+function ReadinessStatus({
+  errors,
+  warnings,
+  checking,
+  onOpen,
+}: {
+  readonly errors: number;
+  readonly warnings: number;
+  readonly checking: boolean;
+  readonly onOpen: () => void;
+}) {
+  const ready = !checking && errors === 0;
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onOpen}
+      data-testid="readiness-status"
+      aria-label="Open game readiness problems"
+    >
+      {ready ? (
+        <CircleCheckIcon className="text-success" />
+      ) : (
+        <TriangleAlertIcon className="text-destructive" />
+      )}
+      <span className="hidden lg:inline">
+        {checking
+          ? 'Checking…'
+          : errors > 0
+            ? `${errors} blocked`
+            : warnings > 0
+              ? `${warnings} warnings`
+              : 'Ready'}
+      </span>
+    </Button>
+  );
+}
+
 export function TopBar({ projectId, mapId }: TopBarProps) {
   const navigate = useNavigate();
   const setCommandPaletteOpen = useEditorUiStore((s) => s.setCommandPaletteOpen);
   const setGenerateMapDialogOpen = useEditorUiStore((s) => s.setGenerateMapDialogOpen);
+  const setBottomDrawerOpen = useEditorUiStore((s) => s.setBottomDrawerOpen);
+  const setShipGameDialogOpen = useEditorUiStore((s) => s.setShipGameDialogOpen);
   const localHostSession = useEditorUiStore((s) => s.localHostSession);
   const hostModalOpen = useEditorUiStore((s) => s.playtestHostModalOpen);
   const joinModalOpen = useEditorUiStore((s) => s.playtestJoinModalOpen);
@@ -298,10 +348,18 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
   const setPlaytestJoinModalOpen = useEditorUiStore((s) => s.setPlaytestJoinModalOpen);
   const projectQuery = useProject(projectId);
   const mapQuery = useMap(projectId, mapId);
-  const startBuild = useStartBuild();
+  const contributionsQuery = usePluginContributions();
+  // ADR-0023 section B: multiplayer join runs the ACTIVE game mode's
+  // discovered playtest runtime, resolved from the project selection.
+  const activeMode = resolveProjectActiveGameMode(
+    contributionsQuery.data?.gameModes ?? [],
+    projectQuery.data?.project,
+  );
+  const activeModeRendererCapabilityId = activeMode?.rendererCapabilityId;
   const importProject = useImportProjectFromDirectory();
   const exportProject = useExportProjectArchive();
   const { start: startPlaytest, isStarting: isStartingPlaytest } = usePlaytestControls();
+  const playtestReadiness = useReadiness(projectId, mapId, 'playtest');
   const hostLocalMatch = usePlaytestMultiplayerStore((state) => state.hostLocalMatch);
   const joinFromInput = usePlaytestMultiplayerStore((state) => state.joinFromInput);
   const joinHostAsPlayer = usePlaytestMultiplayerStore((state) => state.joinHostAsPlayer);
@@ -355,6 +413,30 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
       },
     );
   };
+  const openProblems = () => {
+    setBottomDrawerOpen(true);
+    window.setTimeout(showReadinessProblems, 0);
+  };
+  const canExecute = (
+    report: ReadinessReport | undefined,
+    pending: boolean,
+    entryPoint: RendererExecutionEntryPoint,
+  ): boolean => {
+    const action = rendererExecutionAction(entryPoint);
+    const message = readinessGateMessage(report, action);
+    if (pending || message.length > 0) {
+      notifyError(message || `Readiness is still being checked before ${action}.`);
+      openProblems();
+      return false;
+    }
+    const warnings = readinessWarnings(report);
+    if (warnings.length > 0) {
+      notifyInfo(
+        `${action === 'playtest' ? 'Playtest' : 'Build'} has ${warnings.length} readiness warning${warnings.length === 1 ? '' : 's'}.`,
+      );
+    }
+    return true;
+  };
 
   return (
     <TooltipProvider>
@@ -371,6 +453,14 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         <ProjectBreadcrumbs projectId={projectId} projectName={projectName} />
 
         <div className="flex shrink-0 items-center gap-1">
+          {projectId ? (
+            <ReadinessStatus
+              errors={blockingReadinessDiagnostics(playtestReadiness.data?.report).length}
+              warnings={readinessWarnings(playtestReadiness.data?.report).length}
+              checking={playtestReadiness.isLoading}
+              onOpen={openProblems}
+            />
+          ) : null}
           {isHosting ? (
             <HostingStatus
               roomId={localHostSession.roomId}
@@ -399,13 +489,29 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
             isStartingPlaytest={isStartingPlaytest}
             flowPhase={flowPhase}
             onSinglePlayer={() => {
-              if (projectId && mapId) {
+              if (
+                projectId &&
+                mapId &&
+                canExecute(
+                  playtestReadiness.data?.report,
+                  playtestReadiness.isLoading,
+                  'topbar.playtest.single',
+                )
+              ) {
                 void startPlaytest(projectId, mapId);
               }
             }}
             onHost={() => {
-              if (mapId) {
-                void hostLocalMatch(mapId);
+              if (
+                projectId &&
+                mapId &&
+                canExecute(
+                  playtestReadiness.data?.report,
+                  playtestReadiness.isLoading,
+                  'topbar.playtest.host',
+                )
+              ) {
+                void hostLocalMatch(projectId, mapId);
               }
             }}
             onJoin={() => setPlaytestJoinModalOpen(true)}
@@ -413,13 +519,8 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
 
           <BuildMenu
             projectId={projectId}
-            buildPending={startBuild.isPending}
             exportPending={exportProject.isPending}
-            onStartBuild={() => {
-              if (projectId) {
-                void startBuild.mutateAsync({ projectId: projectId as ProjectId });
-              }
-            }}
+            onShipGame={() => setShipGameDialogOpen(true)}
             onExport={exportCurrentProject}
           />
 
@@ -442,7 +543,7 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         }}
         onJoinAsHost={() => {
           if (mapId) {
-            void joinHostAsPlayer(mapId, mapWidth, mapHeight);
+            void joinHostAsPlayer(activeModeRendererCapabilityId, mapId, mapWidth, mapHeight);
           }
         }}
         onStopHosting={() => void stopHosting()}
@@ -454,7 +555,14 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         fallbackBaseUrl={localHostSession?.baseUrl}
         onJoin={(input) => {
           if (mapId) {
-            void joinFromInput(input, mapId, mapWidth, mapHeight, localHostSession?.baseUrl);
+            void joinFromInput(
+              input,
+              activeModeRendererCapabilityId,
+              mapId,
+              mapWidth,
+              mapHeight,
+              localHostSession?.baseUrl,
+            );
           }
         }}
       />

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { MapId, ProjectId } from '@tileborne/core';
 
 import { useStartPlaytest, useStopPlaytest } from '@/hooks/mutations';
+import { readLobbyModelSelection } from '@/lib/lobby-model-selection';
 import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notifications-store';
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
@@ -16,12 +17,19 @@ export function usePlaytestControls() {
   const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
 
   const start = useCallback(
-    async (projectId: string, mapId: string) => {
+    async (
+      projectId: string,
+      mapId: string,
+      options: { readonly selectedPlayerModelId?: string } = {},
+    ) => {
       try {
-        await useEditorCommandsBridge.getState().flushPersist?.();
+        await useEditorCommandsBridge.getState().flushPersistFor(projectId, mapId);
+        const selectedPlayerModelId =
+          options.selectedPlayerModelId ?? readLobbyModelSelection(projectId);
         const result = await startPlaytest.mutateAsync({
           projectId: projectId as ProjectId,
           mapId: mapId as MapId,
+          ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
         });
         setPlaytestSessionId(result.session.id);
         setPlaytestActivePlugins(result.session.activePlugins ?? []);
@@ -29,16 +37,20 @@ export function usePlaytestControls() {
         setPlaytestActive(result.session.status === 'Running');
         notifyInfo(`Playtest session ${result.session.id} started`);
         if (result.session.runtimeMetrics) {
-          notifySuccess(
-            `Plugin runtime active · Tick ${result.session.runtimeMetrics.tickCount}`,
-          );
+          notifySuccess(`Plugin runtime active · Tick ${result.session.runtimeMetrics.tickCount}`);
         }
       } catch (error) {
         notifyError(error instanceof Error ? error.message : 'Failed to start playtest');
         throw error;
       }
     },
-    [setPlaytestActive, setPlaytestActivePlugins, setPlaytestMode, setPlaytestSessionId, startPlaytest],
+    [
+      setPlaytestActive,
+      setPlaytestActivePlugins,
+      setPlaytestMode,
+      setPlaytestSessionId,
+      startPlaytest,
+    ],
   );
 
   const stop = useCallback(async () => {

@@ -16,9 +16,7 @@ export function AssetLibraryEmptyState({
     <div
       className={cn(
         'flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-6 py-16 text-center',
-        isDragActive
-          ? 'border-primary bg-primary/5'
-          : 'border-border bg-card/50',
+        isDragActive ? 'border-primary bg-primary/5' : 'border-border bg-card/50',
       )}
     >
       <div className="flex size-12 items-center justify-center rounded-lg bg-muted">

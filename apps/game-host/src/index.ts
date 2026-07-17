@@ -1,19 +1,45 @@
-export { buildCloudflareGameHost, type CloudflareGameHostBuildInput, type CloudflareGameHostBuildResult } from "./build/cloudflare.js";
+export {
+  buildCloudflareGameHost,
+  type CloudflareGameHostBuildInput,
+  type CloudflareGameHostBuildResult,
+} from './build/cloudflare.js';
 export type {
   BundledAssetPackSummary,
   BundledManifest,
   BundledManifestDiscoverSummary,
   BundledManifestFileEntry,
+  BundledMapPackage,
+  BundledMapPackageSummary,
   BundledPluginSummary,
   Env,
+  LobbyCreateRequest,
+  LobbyCreateResponse,
+  LobbyJoinRequest,
+  LobbyJoinResponse,
+  LobbyReadyRequest,
+  LobbyReadyResponse,
   PlaytestRoomMeta,
   PlaytestStartRequest,
   PlaytestStartResponse,
   PlaytestSummary,
   RoomCreateRequest,
   RoomCreateResponse,
-  RoomLifecycleStatus,
-} from "./types.js";
-export { buildBundledManifest, hashFileSha256, hashManifestPayload } from "./build/manifest.js";
-export { createWorkerApp } from "./worker.js";
-export { PlaytestRoom, broadcastBinaryFrame, createRoomMeta, parsePlaytestInitBody, toPlaytestSummary } from "./room.js";
+  RoomJoinCode,
+  RoomLifecyclePhase,
+  RoomLobbyState,
+  RoomLobbySummary,
+  RoomPresenceProjection,
+  RoomReconnectRequest,
+  RoomReconnectResponse,
+  RoomResultsResponse,
+  RoomResultsSummary,
+} from './types.js';
+export { buildBundledManifest, hashFileSha256, hashManifestPayload } from './build/manifest.js';
+export { createWorkerApp } from './worker.js';
+export {
+  PlaytestRoom,
+  broadcastBinaryFrame,
+  createRoomMeta,
+  parsePlaytestInitBody,
+  toPlaytestSummary,
+} from './room.js';

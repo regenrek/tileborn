@@ -1,4 +1,4 @@
-import type { PackId } from '@tileborne/core';
+import { PERSISTED_SCHEMA_VERSIONS, type PackId } from '@tileborne/core';
 
 export const TILE_PALETTE_METADATA_PATH = 'metadata/tileborne-palette.json';
 
@@ -17,7 +17,7 @@ export interface TilePaletteFrame {
 }
 
 export interface TilePaletteMetadata {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof PERSISTED_SCHEMA_VERSIONS.tilePaletteMetadata;
   readonly name: string;
   readonly tileWidth: number;
   readonly tileHeight: number;
@@ -56,7 +56,7 @@ const decodePaletteMetadata = (value: unknown): TilePaletteMetadata => {
   }
   const candidate = value as Record<string, unknown>;
   if (
-    candidate.schemaVersion !== 1 ||
+    candidate.schemaVersion !== PERSISTED_SCHEMA_VERSIONS.tilePaletteMetadata ||
     typeof candidate.name !== 'string' ||
     typeof candidate.tileWidth !== 'number' ||
     typeof candidate.tileHeight !== 'number' ||

@@ -1,18 +1,18 @@
-import { pathToFileURL } from "node:url";
-import path from "node:path";
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
 
-import { rejectPathTraversal, rejectSymlinkEscape } from "@tileborne/asset-pipeline";
-import { BuildId, PluginId } from "@tileborne/core";
-import type { EditorExporterContribution } from "@tileborne/plugin-api";
-import { JobId, JobService, HomeService } from "@tileborne/services-foundation";
+import { rejectPathTraversal, rejectSymlinkEscape } from '@tileborne/asset-pipeline';
+import { BuildId, PluginId } from '@tileborne/core';
+import type { EditorExporterContribution } from '@tileborne/plugin-api';
+import { JobId, JobService, HomeService } from '@tileborne/services-foundation';
 import {
   PluginLoaderService,
   PluginRegistryService,
   type InstalledPlugin,
-} from "@tileborne/services-plugin";
-import { Context, Effect, Layer, Option, PubSub, Stream } from "effect";
+} from '@tileborne/services-plugin';
+import { Context, Effect, Layer, Option, PubSub, Stream } from 'effect';
 
-import { BuildService } from "../build/index.js";
+import { BuildService } from '../build/index.js';
 import {
   ExportArtifact,
   ExportId,
@@ -25,7 +25,7 @@ import {
   emptyExportOptions,
   ServicesBuildError,
   makeExportId,
-} from "../model.js";
+} from '../model.js';
 import {
   deleteDirectory,
   ensureDirectory,
@@ -37,15 +37,15 @@ import {
   verifiedChildPath,
   writeTextFile,
   writeVerifiedJson,
-} from "../internal/persistence.js";
+} from '../internal/persistence.js';
 
 const isExecutableExporter = (
   contribution: EditorExporterContribution,
-): contribution is Extract<EditorExporterContribution, { readonly kind: "executable" }> =>
-  contribution.kind === "executable";
+): contribution is Extract<EditorExporterContribution, { readonly kind: 'executable' }> =>
+  contribution.kind === 'executable';
 
 const editorExporters = (
-  contributions: InstalledPlugin["manifest"]["contributes"],
+  contributions: InstalledPlugin['manifest']['contributes'],
 ): readonly EditorExporterContribution[] => {
   const editor = contributions.editor;
   if (Option.isNone(editor)) {
@@ -73,37 +73,46 @@ const resolvePluginEntry = (
 const loadExportHook = (
   pluginRoot: string,
   entry: string,
-): Effect.Effect<(context: EditorExporterContext) => Promise<unknown> | unknown, ServicesBuildError> =>
+): Effect.Effect<
+  (context: EditorExporterContext) => Promise<unknown> | unknown,
+  ServicesBuildError
+> =>
   Effect.gen(function* () {
     const entryPath = yield* resolvePluginEntry(pluginRoot, entry);
     const module = yield* Effect.tryPromise({
       try: () => import(pathToFileURL(entryPath).href) as Promise<Record<string, unknown>>,
       catch: (cause) => serviceError(errorMessage(cause), entryPath),
     });
-    const hook = module["default"] ?? module[path.basename(entry, path.extname(entry))];
-    if (typeof hook !== "function") {
+    const hook = module['default'] ?? module[path.basename(entry, path.extname(entry))];
+    if (typeof hook !== 'function') {
       return yield* Effect.fail(serviceError(`export hook is not callable: ${entry}`, entryPath));
     }
     return hook as (context: EditorExporterContext) => Promise<unknown> | unknown;
   });
 
-export class ExportService extends Context.Service<ExportService, {
-  readonly exportBuild: (
-    buildId: BuildId,
-    target: ExportTarget,
-    options?: ExportOptions,
-  ) => Effect.Effect<JobId>;
-  readonly getExport: (
-    exportId: ExportId,
-  ) => Effect.Effect<ExportArtifact, ServicesBuildError | ExportNotFoundError | IntegrityMismatchError>;
-  readonly listExports: (
-    buildId: BuildId,
-  ) => Effect.Effect<readonly ExportArtifact[], ServicesBuildError | IntegrityMismatchError>;
-  readonly deleteExport: (exportId: ExportId) => Effect.Effect<void, ServicesBuildError>;
-  readonly subscribe: Stream.Stream<void>;
-}>()("@tileborne/services-build/ExportService") {}
+export class ExportService extends Context.Service<
+  ExportService,
+  {
+    readonly exportBuild: (
+      buildId: BuildId,
+      target: ExportTarget,
+      options?: ExportOptions,
+    ) => Effect.Effect<JobId>;
+    readonly getExport: (
+      exportId: ExportId,
+    ) => Effect.Effect<
+      ExportArtifact,
+      ServicesBuildError | ExportNotFoundError | IntegrityMismatchError
+    >;
+    readonly listExports: (
+      buildId: BuildId,
+    ) => Effect.Effect<readonly ExportArtifact[], ServicesBuildError | IntegrityMismatchError>;
+    readonly deleteExport: (exportId: ExportId) => Effect.Effect<void, ServicesBuildError>;
+    readonly subscribe: Stream.Stream<void>;
+  }
+>()('@tileborne/services-build/ExportService') {}
 
-const exportRoot = (cachePath: string): string => path.join(cachePath, "exports");
+const exportRoot = (cachePath: string): string => path.join(cachePath, 'exports');
 
 export const ExportServiceLive = Layer.effect(
   ExportService,
@@ -117,34 +126,36 @@ export const ExportServiceLive = Layer.effect(
     const root = exportRoot(home.paths.cache);
     yield* ensureDirectory(root);
 
-    const getExport = Effect.fn("ExportService.getExport")(function* (exportId: ExportId) {
+    const getExport = Effect.fn('ExportService.getExport')(function* (exportId: ExportId) {
       const filePath = yield* verifiedChildPath(root, exportId, metadataFileName);
       return yield* readVerifiedJson(filePath, ExportArtifact).pipe(
         Effect.mapError((error) =>
-          error._tag === "ServicesBuildError"
+          error._tag === 'ServicesBuildError'
             ? new ExportNotFoundError({ exportId, message: `export not found: ${exportId}` })
             : error,
         ),
       );
     });
 
-    const runPluginExportHooks = Effect.fn("ExportService.runPluginExportHooks")(function* (
+    const runPluginExportHooks = Effect.fn('ExportService.runPluginExportHooks')(function* (
       context: EditorExporterContext,
     ) {
       const build = context.build;
       const enabledIds = new Set(
-        (yield* registry.list())
-          .filter((plugin) => plugin.enabled)
-          .map((plugin) => plugin.id),
+        (yield* registry.list()).filter((plugin) => plugin.enabled).map((plugin) => plugin.id),
       );
       const projectPluginIds = build.project.plugins
         .map((ref) => ref.id as PluginId)
         .filter((id) => enabledIds.has(id));
       const invoked: string[] = [];
       for (const pluginId of projectPluginIds) {
-        const loaded = yield* loader.loadDeclarative(pluginId).pipe(
-          Effect.mapError((error) => new ServicesBuildError({ path: Option.none(), message: error.message })),
-        );
+        const loaded = yield* loader
+          .loadDeclarative(pluginId)
+          .pipe(
+            Effect.mapError(
+              (error) => new ServicesBuildError({ path: Option.none(), message: error.message }),
+            ),
+          );
         const exporters = editorExporters(loaded.manifest.contributes).filter(isExecutableExporter);
         const installed = (yield* registry.list()).find((plugin) => plugin.id === pluginId);
         if (!installed) {
@@ -156,7 +167,9 @@ export const ExportServiceLive = Layer.effect(
             try: async () => hook(context),
             catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
           }).pipe(
-            Effect.mapError((error) => new ServicesBuildError({ path: Option.none(), message: error.message })),
+            Effect.mapError(
+              (error) => new ServicesBuildError({ path: Option.none(), message: error.message }),
+            ),
           );
           invoked.push(exporter.entry);
         }
@@ -164,7 +177,7 @@ export const ExportServiceLive = Layer.effect(
       return invoked;
     });
 
-    const writeExport = Effect.fn("ExportService.writeExport")(function* (
+    const writeExport = Effect.fn('ExportService.writeExport')(function* (
       buildId: BuildId,
       target: ExportTarget,
       options: ExportOptions,
@@ -185,7 +198,7 @@ export const ExportServiceLive = Layer.effect(
       };
       const invokedHooks = yield* runPluginExportHooks(exportContext);
       yield* writeTextFile(
-        yield* verifiedChildPath(directory, "target.txt"),
+        yield* verifiedChildPath(directory, 'target.txt'),
         `Tileborne export ${exportId}\nTarget: ${target._tag}\n`,
       );
       const manifestPath = yield* verifiedChildPath(directory, metadataFileName);
@@ -204,7 +217,7 @@ export const ExportServiceLive = Layer.effect(
       return new ExportArtifact({ ...artifact, integrityHash });
     });
 
-    const exportBuild = Effect.fn("ExportService.exportBuild")(function* (
+    const exportBuild = Effect.fn('ExportService.exportBuild')(function* (
       buildId: BuildId,
       target: ExportTarget,
       options: ExportOptions = emptyExportOptions,
@@ -215,12 +228,12 @@ export const ExportServiceLive = Layer.effect(
       });
     });
 
-    const listExports = Effect.fn("ExportService.listExports")(function* (buildId: BuildId) {
+    const listExports = Effect.fn('ExportService.listExports')(function* (buildId: BuildId) {
       const exports = yield* listVerifiedJson(root, ExportArtifact);
       return exports.filter((artifact) => artifact.buildId === buildId);
     });
 
-    const deleteExport = Effect.fn("ExportService.deleteExport")(function* (exportId: ExportId) {
+    const deleteExport = Effect.fn('ExportService.deleteExport')(function* (exportId: ExportId) {
       yield* deleteDirectory(yield* verifiedChildPath(root, exportId));
       yield* PubSub.publish(events, void 0);
     });

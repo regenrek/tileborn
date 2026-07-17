@@ -17,10 +17,7 @@ export type PluginSlotId = (typeof PLUGIN_SLOTS)[keyof typeof PLUGIN_SLOTS];
  * surfaces (`drawerPanels`) — never plain `panels`, which previously caused
  * Battle Royale Settings to render in both sidebar and drawer simultaneously.
  */
-export const SLOT_CONTRIBUTION_KEYS: Record<
-  PluginSlotId,
-  readonly string[]
-> = {
+export const SLOT_CONTRIBUTION_KEYS: Record<PluginSlotId, readonly string[]> = {
   [PLUGIN_SLOTS.sidebarLeft]: ['tabs', 'panels'],
   [PLUGIN_SLOTS.inspectorRight]: ['inspectorPanels', 'inspectors'],
   [PLUGIN_SLOTS.commandPalette]: ['commands'],
@@ -38,10 +35,7 @@ export interface PluginContributionView {
   requiresMap: boolean;
 }
 
-function readDisplayLabel(
-  display: unknown,
-  fallback: string,
-): string {
+function readDisplayLabel(display: unknown, fallback: string): string {
   if (
     typeof display === 'object' &&
     display !== null &&

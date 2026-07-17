@@ -112,9 +112,7 @@ function StartupScreen({ snapshot }: { readonly snapshot: StartupStatusSnapshot 
   const tasks = snapshot?.tasks ?? [];
   const progress = useMemo(() => taskProgress(tasks), [tasks]);
   const headline =
-    snapshot?.state === 'failed'
-      ? 'Tileborne could not finish starting'
-      : 'Starting Tileborne';
+    snapshot?.state === 'failed' ? 'Tileborne could not finish starting' : 'Starting Tileborne';
   const description =
     snapshot?.state === 'failed'
       ? 'The Electron shell is running, but a required startup phase failed. Check the terminal logs for the matching [tileborne:start] entry.'
@@ -140,7 +138,10 @@ function StartupScreen({ snapshot }: { readonly snapshot: StartupStatusSnapshot 
         <CardContent className="space-y-4">
           <ul className="space-y-2" aria-label="Startup phases">
             {tasks.map((task) => (
-              <li key={task.id} className="flex items-start justify-between gap-3 rounded-md border border-border/70 p-2">
+              <li
+                key={task.id}
+                className="flex items-start justify-between gap-3 rounded-md border border-border/70 p-2"
+              >
                 <div className="flex min-w-0 items-start gap-2">
                   <StartupTaskIcon status={task.status} />
                   <div className="min-w-0">

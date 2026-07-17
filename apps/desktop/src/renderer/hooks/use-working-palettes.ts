@@ -1,10 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 
-import type {
-  WorkingPalette,
-  WorkingPaletteItemDraft,
-} from '@/lib/working-palettes-bridge';
+import type { WorkingPalette, WorkingPaletteItemDraft } from '@/lib/working-palettes-bridge';
 import { useWorkingPalettesStore } from '@/stores/working-palettes-store';
 
 export interface WorkingPalettesScope {
@@ -17,9 +14,7 @@ export function useWorkingPalettes(scope: WorkingPalettesScope): readonly Workin
   }, [scope.projectId]);
 
   return useWorkingPalettesStore(
-    useShallow((state) =>
-      state.list({ projectId: scope.projectId ?? null }),
-    ),
+    useShallow((state) => state.list({ projectId: scope.projectId ?? null })),
   );
 }
 
@@ -30,9 +25,7 @@ export function useActiveWorkingPalette(
     void useWorkingPalettesStore.getState().load({ projectId: projectId ?? null });
   }, [projectId]);
 
-  return useWorkingPalettesStore((state) =>
-    state.getActive({ projectId: projectId ?? null }),
-  );
+  return useWorkingPalettesStore((state) => state.getActive({ projectId: projectId ?? null }));
 }
 
 export function useWorkingPaletteActions() {

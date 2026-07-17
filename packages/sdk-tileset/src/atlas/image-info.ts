@@ -1,4 +1,4 @@
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
 
 const PNG_SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const IHDR_TYPE = Uint8Array.from([0x49, 0x48, 0x44, 0x52]); // "IHDR"
@@ -54,10 +54,10 @@ export const readPngDimensions = (buffer: Uint8Array): ParseResult<PngImageInfo>
     return {
       diagnostics: [
         {
-          _tag: "InvalidPngImage",
-          path: "/atlas/png",
-          message: "PNG buffer is too short to contain an IHDR chunk",
-          severity: "error",
+          _tag: 'InvalidPngImage',
+          path: '/atlas/png',
+          message: 'PNG buffer is too short to contain an IHDR chunk',
+          severity: 'error',
         },
       ],
     };
@@ -67,10 +67,10 @@ export const readPngDimensions = (buffer: Uint8Array): ParseResult<PngImageInfo>
     return {
       diagnostics: [
         {
-          _tag: "InvalidPngImage",
-          path: "/atlas/png",
-          message: "PNG signature is invalid",
-          severity: "error",
+          _tag: 'InvalidPngImage',
+          path: '/atlas/png',
+          message: 'PNG signature is invalid',
+          severity: 'error',
         },
       ],
     };
@@ -84,10 +84,10 @@ export const readPngDimensions = (buffer: Uint8Array): ParseResult<PngImageInfo>
     return {
       diagnostics: [
         {
-          _tag: "InvalidPngImage",
-          path: "/atlas/png",
-          message: "First PNG chunk must be IHDR",
-          severity: "error",
+          _tag: 'InvalidPngImage',
+          path: '/atlas/png',
+          message: 'First PNG chunk must be IHDR',
+          severity: 'error',
         },
       ],
     };
@@ -101,10 +101,10 @@ export const readPngDimensions = (buffer: Uint8Array): ParseResult<PngImageInfo>
     return {
       diagnostics: [
         {
-          _tag: "InvalidPngImage",
-          path: "/atlas/png",
-          message: "PNG IHDR dimensions must be positive",
-          severity: "error",
+          _tag: 'InvalidPngImage',
+          path: '/atlas/png',
+          message: 'PNG IHDR dimensions must be positive',
+          severity: 'error',
           width,
           height,
         },

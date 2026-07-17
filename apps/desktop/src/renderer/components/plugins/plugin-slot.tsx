@@ -1,21 +1,12 @@
 import { useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import {
-  Card,
-  CardContent,
-  cn,
-  typography,
-} from '@tileborne/ui';
+import { Card, CardContent, cn, typography } from '@tileborne/ui';
 
 import { usePluginsList } from '@/hooks/queries';
 import type { PluginManifestResponse } from '@/lib/bridge-types';
 import { invokeIpc } from '@/lib/ipc';
-import {
-  collectPluginContributions,
-  PLUGIN_SLOTS,
-  type PluginSlotId,
-} from '@/lib/plugin-slots';
+import { collectPluginContributions, PLUGIN_SLOTS, type PluginSlotId } from '@/lib/plugin-slots';
 import { queryKeys } from '@/lib/query-client';
 
 interface PluginSlotProps {
@@ -36,9 +27,7 @@ export function PluginSlot({ id, projectId, mapId, className }: PluginSlotProps)
     queries: enabledPlugins.map((plugin) => ({
       queryKey: queryKeys.plugins.manifest(plugin.id),
       queryFn: (): Promise<PluginManifestResponse> =>
-        invokeIpc(() =>
-          window.tileborne.plugins.getManifest({ pluginId: plugin.id }),
-        ),
+        invokeIpc(() => window.tileborne.plugins.getManifest({ pluginId: plugin.id })),
       enabled: enabledPlugins.length > 0,
     })),
   });
@@ -87,12 +76,8 @@ export function PluginSlot({ id, projectId, mapId, className }: PluginSlotProps)
             className="gap-1 py-2.5"
           >
             <CardContent className="space-y-1 px-3 py-0">
-              <p className={cn('break-words', typography.rowTitle)}>
-                {contribution.label}
-              </p>
-              <p className={cn('break-words', typography.rowMeta)}>
-                {contribution.pluginName}
-              </p>
+              <p className={cn('break-words', typography.rowTitle)}>{contribution.label}</p>
+              <p className={cn('break-words', typography.rowMeta)}>{contribution.pluginName}</p>
             </CardContent>
           </Card>
         ))}

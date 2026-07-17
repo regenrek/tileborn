@@ -1,5 +1,5 @@
-export { transitionCellsToRefresh, type TransitionRefreshInput } from "./refresh.js";
-export { resolveTerrainCell } from "./transitions.js";
+export { transitionCellsToRefresh, type TransitionRefreshInput } from './refresh.js';
+export { resolveTerrainCell } from './transitions.js';
 export type {
   GridCell,
   ResolveTerrainCellInput,
@@ -10,4 +10,4 @@ export type {
   TerrainResolveResult,
   TileRef,
   TransitionMode,
-} from "./types.js";
+} from './types.js';

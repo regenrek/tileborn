@@ -39,8 +39,16 @@ describe('workingPaletteItemToBrushIntent', () => {
       }),
     });
 
-    expect(workingPaletteItemToBrushIntent(autotileItem)).toEqual({ kind: 'autotile', packId, ruleId });
-    expect(workingPaletteItemToBrushIntent(terrainItem)).toEqual({ kind: 'terrain', packId, classId });
+    expect(workingPaletteItemToBrushIntent(autotileItem)).toEqual({
+      kind: 'autotile',
+      packId,
+      ruleId,
+    });
+    expect(workingPaletteItemToBrushIntent(terrainItem)).toEqual({
+      kind: 'terrain',
+      packId,
+      classId,
+    });
   });
 
   it('keeps duplicate placeable ids in different packs distinct', () => {

@@ -1,7 +1,7 @@
-import type { AssetId } from "@tileborne/core";
+import type { AssetId } from '@tileborne/core';
 
-import type { AnimationId } from "../schemas/ids.js";
-import type { UVRect } from "../schemas/uv-rect.js";
+import type { AnimationId } from '../schemas/ids.js';
+import type { UVRect } from '../schemas/uv-rect.js';
 
 /** Renderer-neutral frame lookup for one tile id. */
 export type FrameLookupResult = {

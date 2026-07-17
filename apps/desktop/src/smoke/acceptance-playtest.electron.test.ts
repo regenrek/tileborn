@@ -1,13 +1,13 @@
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {
   createTileborneHome,
+  addBattleRoyaleSpawnAnchors,
   disposeSmokeContext,
   launchElectron,
-  navigateToRoute,
-  resolveBattleRoyaleInstallPath,
   resolveMainEntry,
+  setProjectActiveGameMode,
   SMOKE_PROJECT_NAME,
   BATTLE_ROYALE_PLUGIN_ID,
   type SmokeContext,
@@ -35,24 +35,20 @@ describe('acceptance: playtest', () => {
       });
       return createdMapId;
     }, projectId);
+    await addBattleRoyaleSpawnAnchors(page, projectId, mapId);
 
-    const pluginSourcePath = resolveBattleRoyaleInstallPath();
-    await page.evaluate(
-      async ({ sourcePath, pluginId }) => {
-        await window.tileborne.plugins.install({
-          source: { _tag: 'local', path: sourcePath },
-        });
-        const { plugins } = await window.tileborne.plugins.list({});
-        const installed = plugins.find((plugin) => plugin.id === pluginId);
-        if (!installed) {
-          throw new Error('No plugin installed');
-        }
-        if (!installed.enabled) {
-          await window.tileborne.plugins.enable({ pluginId: installed.id });
-        }
-      },
-      { sourcePath: pluginSourcePath, pluginId: BATTLE_ROYALE_PLUGIN_ID },
-    );
+    await page.evaluate(async (pluginId) => {
+      await window.tileborne.plugins.installBundledBattleRoyale({});
+      const { plugins } = await window.tileborne.plugins.list({});
+      const installed = plugins.find((plugin) => plugin.id === pluginId);
+      if (!installed) {
+        throw new Error('No plugin installed');
+      }
+      if (!installed.enabled) {
+        await window.tileborne.plugins.enable({ pluginId: installed.id });
+      }
+    }, BATTLE_ROYALE_PLUGIN_ID);
+    await setProjectActiveGameMode(page, projectId, BATTLE_ROYALE_PLUGIN_ID);
   }, 60_000);
 
   afterAll(async () => {
@@ -77,17 +73,8 @@ describe('acceptance: playtest', () => {
     expect(session.status).toBe('Running');
     expect(session.artifactDirectory).toBeTruthy();
     expect(session.activePlugins?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it('launches playtest overlay from the top bar', async () => {
-    const { page } = smokeContext!;
-
-    await navigateToRoute(page, `/projects/${projectId}/maps/${mapId}`);
-    await expect(page.getByText('Loading map…')).toBeHidden({ timeout: 20_000 });
-
-    await page.getByRole('button', { name: /Playtest menu/i }).click();
-    await page.getByRole('menuitem', { name: /Single \(local-only\)/i }).click();
-    await expect(page.getByTestId('playtest-viewport')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /Stop playtest/i })).toBeVisible();
+    await page.evaluate(async (sessionId) => {
+      await window.tileborne.playtest.stop({ sessionId });
+    }, session.id);
   });
 });

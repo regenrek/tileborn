@@ -15,12 +15,16 @@ import {
   type TileId,
   type TileChunk,
   type TileborneMap,
-} from "@tileborne/core";
-import { Option } from "effect";
+} from '@tileborne/core';
+import { Option } from 'effect';
 
-import { deterministicLayerId, deterministicMapId, deterministicObjectId } from "./deterministic-ids.js";
-import { isIdentityTiledTransform } from "./gid.js";
-import type { TiledGidTransform, TiledMapImport, TiledMapObject } from "./types.js";
+import {
+  deterministicLayerId,
+  deterministicMapId,
+  deterministicObjectId,
+} from './deterministic-ids.js';
+import { isIdentityTiledTransform } from './gid.js';
+import type { TiledGidTransform, TiledMapImport, TiledMapObject } from './types.js';
 
 const coreTransform = (transform: TiledGidTransform): TileTransform =>
   new TileTransform({
@@ -81,7 +85,7 @@ const objectIdFor = (seed: string, sourceId: string): ObjectId =>
   deterministicObjectId(`${seed}/object/${sourceId}`);
 
 const corePlacement = (
-  placement: TiledMapObject["placement"] | undefined,
+  placement: TiledMapObject['placement'] | undefined,
   packId: PackId | undefined,
 ): MapObjectPlacement | undefined =>
   placement === undefined
@@ -93,7 +97,9 @@ const corePlacement = (
         assetId: Option.some(placement.assetId as AssetId),
         tileId: Option.some(placement.tileId as TileId),
         gid: Option.some(placement.gid),
-        ...(isIdentityTiledTransform(placement.transform) ? {} : { transform: coreTransform(placement.transform) }),
+        ...(isIdentityTiledTransform(placement.transform)
+          ? {}
+          : { transform: coreTransform(placement.transform) }),
       });
 
 export const compileTileborneMap = (input: {
@@ -103,7 +109,7 @@ export const compileTileborneMap = (input: {
   readonly packId?: PackId;
 }): TileborneMap => {
   const seed = input.mapIdSeed ?? input.sourcePath;
-  const layers: Array<TileborneMap["layers"][number]> = [];
+  const layers: Array<TileborneMap['layers'][number]> = [];
   const objects: MapObject[] = [];
   const objectIdsByLayerId = new Map<string, ObjectId[]>();
   const objectLayerMeta = new Map<
@@ -112,13 +118,21 @@ export const compileTileborneMap = (input: {
   >();
 
   for (const layer of input.map.layers) {
-    if (layer.kind === "tile") {
+    if (layer.kind === 'tile') {
       const id = layerIdFor(seed, layer.id);
       const chunks = chunkFromCells(layer.width, layer.height, layer.cells);
-      layers.push(new TileLayer({ id, name: layer.name, visible: layer.visible, opacity: layer.opacity, chunks: [...chunks] }));
+      layers.push(
+        new TileLayer({
+          id,
+          name: layer.name,
+          visible: layer.visible,
+          opacity: layer.opacity,
+          chunks: [...chunks],
+        }),
+      );
       continue;
     }
-    if (layer.kind === "image") {
+    if (layer.kind === 'image') {
       layers.push(
         new ImageLayer({
           id: layerIdFor(seed, layer.id),
@@ -132,7 +146,7 @@ export const compileTileborneMap = (input: {
       );
       continue;
     }
-    if (layer.kind === "group") {
+    if (layer.kind === 'group') {
       continue;
     }
     const layerId = layerIdFor(seed, layer.layerId);
@@ -142,21 +156,26 @@ export const compileTileborneMap = (input: {
       visible: layer.layerVisible,
       opacity: layer.layerOpacity,
     });
-    objectIdsByLayerId.set(String(layerId), [...(objectIdsByLayerId.get(String(layerId)) ?? []), objectId]);
+    objectIdsByLayerId.set(String(layerId), [
+      ...(objectIdsByLayerId.get(String(layerId)) ?? []),
+      objectId,
+    ]);
     objects.push(
       new MapObject({
         id: objectId,
         // Tiled object class/role is a free string; resolve it to a catalog
         // GameObjectTypeId via the shared deterministic derivation so imported
         // objects reference the same catalog type a plugin registers for the key.
-        kind: gameObjectTypeIdForKey(layer.class ?? layer.role ?? "object"),
+        kind: gameObjectTypeIdForKey(layer.class ?? layer.role ?? 'object'),
         x: layer.x,
         y: layer.y,
         width: layer.width === undefined ? Option.none() : Option.some(layer.width),
         height: layer.height === undefined ? Option.none() : Option.some(layer.height),
         layerId,
         properties: layer.properties,
-        ...(layer.placement === undefined ? {} : { placement: corePlacement(layer.placement, input.packId) }),
+        ...(layer.placement === undefined
+          ? {}
+          : { placement: corePlacement(layer.placement, input.packId) }),
       }),
     );
   }
@@ -166,7 +185,7 @@ export const compileTileborneMap = (input: {
     layers.push(
       new ObjectLayer({
         id: layerId as LayerId,
-        name: meta?.name ?? "objects",
+        name: meta?.name ?? 'objects',
         visible: meta?.visible ?? true,
         opacity: meta?.opacity ?? 1,
         objectIds,

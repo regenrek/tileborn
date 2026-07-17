@@ -1,18 +1,18 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { BuildId, ContentHash } from "@tileborne/core";
+import { BuildId, ContentHash } from '@tileborne/core';
 
-import { defineContract } from "../contract.js";
-import { createRegistry } from "../registry.js";
-import { EmptyResponse, IpcContractErrors } from "./common.js";
-import { JobId } from "./assets.js";
+import { defineContract } from '../contract.js';
+import { createRegistry } from '../registry.js';
+import { EmptyResponse, IpcContractErrors } from './common.js';
+import { JobId } from './assets.js';
 
-export const DeploymentId = Schema.String.check(Schema.isPattern(/^deployment:[0-9a-f-]{36}$/)).pipe(
-  Schema.brand("DeploymentId"),
-);
+export const DeploymentId = Schema.String.check(
+  Schema.isPattern(/^deployment:[0-9a-f-]{36}$/),
+).pipe(Schema.brand('DeploymentId'));
 
 export const RuntimeDeployTargetView = Schema.Struct({
-  stage: Schema.Literals(["local", "dev", "staging", "production"]),
+  stage: Schema.Literals(['local', 'dev', 'staging', 'production']),
   workerName: Schema.String,
 });
 
@@ -51,7 +51,7 @@ export const RuntimeDeployDeleteDeploymentRequest = Schema.Struct({
 });
 
 export const RuntimeDeployDeployContract = defineContract({
-  channel: "tileborne:runtime-deploy:deploy",
+  channel: 'tileborne:runtime-deploy:deploy',
   request: RuntimeDeployDeployRequest,
   response: RuntimeDeployDeployResponse,
   errors: IpcContractErrors,
@@ -59,21 +59,21 @@ export const RuntimeDeployDeployContract = defineContract({
 });
 
 export const RuntimeDeployGetDeploymentContract = defineContract({
-  channel: "tileborne:runtime-deploy:getDeployment",
+  channel: 'tileborne:runtime-deploy:getDeployment',
   request: RuntimeDeployGetDeploymentRequest,
   response: RuntimeDeployGetDeploymentResponse,
   errors: IpcContractErrors,
 });
 
 export const RuntimeDeployListDeploymentsContract = defineContract({
-  channel: "tileborne:runtime-deploy:listDeployments",
+  channel: 'tileborne:runtime-deploy:listDeployments',
   request: RuntimeDeployListDeploymentsRequest,
   response: RuntimeDeployListDeploymentsResponse,
   errors: IpcContractErrors,
 });
 
 export const RuntimeDeployDeleteDeploymentContract = defineContract({
-  channel: "tileborne:runtime-deploy:deleteDeployment",
+  channel: 'tileborne:runtime-deploy:deleteDeployment',
   request: RuntimeDeployDeleteDeploymentRequest,
   response: EmptyResponse,
   errors: IpcContractErrors,

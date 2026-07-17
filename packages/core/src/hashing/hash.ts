@@ -1,5 +1,5 @@
-import { canonicalJson } from "./canonical-json.js";
-import { ContentHash } from "../ids.js";
+import { canonicalJson } from './canonical-json.js';
+import { ContentHash } from '../ids.js';
 
 const SHA256_K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -15,9 +15,9 @@ const SHA256_K = new Uint32Array([
 const rotr = (value: number, bits: number): number => (value >>> bits) | (value << (32 - bits));
 
 const toSha256Bytes = (input: string | Uint8Array): Uint8Array =>
-  typeof input === "string" ? new TextEncoder().encode(input) : input;
+  typeof input === 'string' ? new TextEncoder().encode(input) : input;
 
-const toHexWord = (word: number): string => word.toString(16).padStart(8, "0");
+const toHexWord = (word: number): string => word.toString(16).padStart(8, '0');
 
 /** SHA-256 digest rendered as lowercase hex (no prefix). */
 export const sha256Hex = (input: string | Uint8Array): string => {
@@ -102,7 +102,7 @@ export const sha256Hex = (input: string | Uint8Array): string => {
     h7 = (h7 + h) >>> 0;
   }
 
-  return [h0, h1, h2, h3, h4, h5, h6, h7].map(toHexWord).join("");
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map(toHexWord).join('');
 };
 
 /** Hash canonical JSON and return a branded `sha256:<hex>` content hash. */
@@ -118,4 +118,4 @@ export const hashBytes = (input: Uint8Array): ContentHash => {
 };
 
 /** Documented hashing algorithm identifier for manifests and lock metadata. */
-export const CONTENT_HASH_ALGORITHM = "sha256" as const;
+export const CONTENT_HASH_ALGORITHM = 'sha256' as const;

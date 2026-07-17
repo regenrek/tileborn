@@ -1,9 +1,9 @@
-import { cellsNeedingRefresh, NEIGHBORHOODS, neighborhoodForRule } from "../autotile/index.js";
-import type { AutotileRuleId } from "../schemas/ids.js";
-import type { AutotileRule } from "../schemas/autotile-rule.js";
-import type { TerrainTransition } from "../schemas/terrain-transition.js";
+import { cellsNeedingRefresh, NEIGHBORHOODS, neighborhoodForRule } from '../autotile/index.js';
+import type { AutotileRuleId } from '../schemas/ids.js';
+import type { AutotileRule } from '../schemas/autotile-rule.js';
+import type { TerrainTransition } from '../schemas/terrain-transition.js';
 
-import type { GridCell } from "./types.js";
+import type { GridCell } from './types.js';
 
 const cellKey = (cell: GridCell): string => `${cell.x},${cell.y}`;
 

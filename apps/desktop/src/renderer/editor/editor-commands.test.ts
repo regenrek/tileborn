@@ -8,8 +8,6 @@ import {
   type IpcClientTransport,
 } from '@tileborne/ipc-contracts';
 
-import { mapToIpcJson, normalizeMapForIpc } from '@/lib/map-ipc-normalization';
-
 import {
   createCollisionPaintCommand,
   createEraseCommand,
@@ -216,38 +214,11 @@ describe('editor commands', () => {
     ).not.toThrow();
   });
 
-  it('normalizes edited maps before maps:update IPC persistence', () => {
-    const map = decodeMap(mapToIpcJson(createTestMap()));
-    const command = createTileEditCommand(map, TEST_TILE_LAYER_ID, 2, 3, 4);
-    const edited = command.apply(map);
-    const normalized = normalizeMapForIpc(edited);
-
-    expect(() =>
-      Schema.decodeUnknownSync(MapsUpdateRequest)({
-        projectId: 'project:00000000-0000-4000-8000-000000000030',
-        map: normalized,
-      }),
-    ).not.toThrow();
-  });
-
-  it('normalizes generated map edits into contextBridge-safe maps:update requests', async () => {
+  it('encodes generated map edits into plain maps:update wire payloads', async () => {
     const map = createGeneratedTerrainProjectionMap();
     const propsLayerId = makeLayerId('00000000-0000-4000-8000-000000000033');
     const command = createTileEditCommand(map, propsLayerId, 2, 3, 28971);
     const edited = command.apply(map);
-    const normalized = normalizeMapForIpc(edited);
-    const bridged = structuredClone(normalized) as {
-      readonly layers: readonly Record<string, unknown>[];
-    };
-
-    expect(bridged.layers[1]?.kind).toBe('tile');
-    expect(bridged.layers[1]).not.toHaveProperty('_tag');
-    expect(() =>
-      Schema.decodeUnknownSync(MapsUpdateRequest)({
-        projectId: TEST_PROJECT_ID,
-        map: bridged,
-      }),
-    ).not.toThrow();
 
     const captured: { readonly channel: string; readonly payload: unknown }[] = [];
     const transport: IpcClientTransport = {
@@ -259,15 +230,22 @@ describe('editor commands', () => {
     };
     const client = createIpcClient(MapsIpcRegistry, transport);
 
+    // The renderer-realm client owns the instance→wire encode; edited map
+    // instances go in directly, plain wire JSON (`kind`, no `_tag`) comes out.
     await Effect.runPromise(
       client['tileborne:maps:update']({
         projectId: TEST_PROJECT_ID,
-        map: bridged as unknown as TileborneMap,
+        map: edited,
       }),
     );
 
     expect(captured).toHaveLength(1);
     expect(captured[0]?.channel).toBe('tileborne:maps:update');
+    const payload = captured[0]?.payload as {
+      readonly map: { readonly layers: readonly Record<string, unknown>[] };
+    };
+    expect(payload.map.layers[1]?.kind).toBe('tile');
+    expect(payload.map.layers[1]).not.toHaveProperty('_tag');
     expect(() => Schema.decodeUnknownSync(MapsUpdateRequest)(captured[0]?.payload)).not.toThrow();
   });
 

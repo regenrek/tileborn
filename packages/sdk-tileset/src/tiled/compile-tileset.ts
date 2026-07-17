@@ -1,26 +1,26 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import { sliceAtlas } from "../atlas/slice.js";
-import { Animation, AnimationFrame } from "../schemas/animation.js";
-import type { CollisionMask } from "../schemas/collision-mask.js";
-import { PolygonCollisionMask } from "../schemas/collision-mask.js";
-import type { TilesetPackAsset } from "../schemas/tileset-pack.js";
-import { TilesetPackAsset as TilesetPackAssetClass } from "../schemas/tileset-pack.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
+import { sliceAtlas } from '../atlas/slice.js';
+import { Animation, AnimationFrame } from '../schemas/animation.js';
+import type { CollisionMask } from '../schemas/collision-mask.js';
+import { PolygonCollisionMask } from '../schemas/collision-mask.js';
+import type { TilesetPackAsset } from '../schemas/tileset-pack.js';
+import { TilesetPackAsset as TilesetPackAssetClass } from '../schemas/tileset-pack.js';
 import {
   Placeable,
   PlaceableFrameRef,
   PlaceableSize,
   TiledPlaceableSource,
-} from "../schemas/placeable.js";
-import { CellSize, Tileset } from "../schemas/tileset.js";
-import { Tile } from "../schemas/tile.js";
-import { UVRect } from "../schemas/uv-rect.js";
-import { VariantFilter } from "../schemas/variant-filter.js";
-import { TerrainClass } from "../schemas/terrain-class.js";
-import { Schema } from "effect";
+} from '../schemas/placeable.js';
+import { CellSize, Tileset } from '../schemas/tileset.js';
+import { Tile } from '../schemas/tile.js';
+import { UVRect } from '../schemas/uv-rect.js';
+import { VariantFilter } from '../schemas/variant-filter.js';
+import { TerrainClass } from '../schemas/terrain-class.js';
+import { Schema } from 'effect';
 
-import { compileWangSets } from "./compile-wang.js";
+import { compileWangSets } from './compile-wang.js';
 import {
   deterministicAnimationId,
   deterministicAssetId,
@@ -28,18 +28,23 @@ import {
   deterministicTilesetId,
   deterministicPlaceableId,
   deterministicVariantFilterId,
-} from "./deterministic-ids.js";
+} from './deterministic-ids.js';
 import {
   primitivePropertyValue,
   propertiesToPrimitiveRecord,
   unsupportedClassPropertyFeaturesForTileset,
   unsupportedFeatureDiagnostic,
-} from "./support-policy.js";
-import type { TiledJsonObject, TiledJsonProperty, TiledJsonTile, TiledJsonTileset } from "./types.js";
-import type { TiledImportProfile } from "./types.js";
+} from './support-policy.js';
+import type {
+  TiledJsonObject,
+  TiledJsonProperty,
+  TiledJsonTile,
+  TiledJsonTileset,
+} from './types.js';
+import type { TiledImportProfile } from './types.js';
 
 const terrainFromProperty = (seed: string, value: string): typeof TerrainClass.Type =>
-  Schema.decodeUnknownSync(TerrainClass)(`${seed}:${value}`.replace(/[^A-Za-z0-9:_-]+/g, "-"));
+  Schema.decodeUnknownSync(TerrainClass)(`${seed}:${value}`.replace(/[^A-Za-z0-9:_-]+/g, '-'));
 
 const propertiesToRecord = propertiesToPrimitiveRecord;
 
@@ -49,17 +54,20 @@ const propertyTags = (properties: readonly TiledJsonProperty[] | undefined): rea
 const propertyValue = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
-): string | number | boolean | undefined => primitivePropertyValue(properties?.find((property) => property.name === name));
+): string | number | boolean | undefined =>
+  primitivePropertyValue(properties?.find((property) => property.name === name));
 
-const boolProperty = (properties: readonly TiledJsonProperty[] | undefined, name: string): boolean =>
-  propertyValue(properties, name) === true;
+const boolProperty = (
+  properties: readonly TiledJsonProperty[] | undefined,
+  name: string,
+): boolean => propertyValue(properties, name) === true;
 
 const numberProperty = (
   properties: readonly TiledJsonProperty[] | undefined,
   name: string,
 ): number | undefined => {
   const value = propertyValue(properties, name);
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 
 const stringProperty = (
@@ -67,7 +75,7 @@ const stringProperty = (
   name: string,
 ): string | undefined => {
   const value = propertyValue(properties, name);
-  return typeof value === "string" ? value : undefined;
+  return typeof value === 'string' ? value : undefined;
 };
 
 const compileCollision = (object: TiledJsonObject): CollisionMask | undefined => {
@@ -113,8 +121,10 @@ export const compileTiledTileset = (input: {
 }): ParseResult<CompiledTileset> & { readonly diagnostics: readonly ParseDiagnostic[] } => {
   const diagnostics: ParseDiagnostic[] = [];
   const source = input.source;
-  diagnostics.push(...unsupportedClassPropertyFeaturesForTileset(source).map(unsupportedFeatureDiagnostic));
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) return { diagnostics };
+  diagnostics.push(
+    ...unsupportedClassPropertyFeaturesForTileset(source).map(unsupportedFeatureDiagnostic),
+  );
+  if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) return { diagnostics };
 
   const isImageCollection = source.columns === 0;
   const margin = source.margin ?? 0;
@@ -130,7 +140,7 @@ export const compileTiledTileset = (input: {
       new TilesetPackAssetClass({
         id: atlasAssetId,
         path: source.image,
-        mime: "image/png",
+        mime: 'image/png',
       }),
     );
   }
@@ -141,7 +151,9 @@ export const compileTiledTileset = (input: {
   const tileIds = new Map<number, ReturnType<typeof deterministicTileId>>();
   const declaredTileIds = Array.from({ length: source.tilecount }, (_, index) => index);
   const sourceTileIds = isImageCollection
-    ? [...new Set([...declaredTileIds, ...explicitTiles.keys()])].sort((left, right) => left - right)
+    ? [...new Set([...declaredTileIds, ...explicitTiles.keys()])].sort(
+        (left, right) => left - right,
+      )
     : declaredTileIds;
   const referencedTileIds = new Set<number>(sourceTileIds);
   for (const tile of explicitTiles.values()) {
@@ -159,7 +171,9 @@ export const compileTiledTileset = (input: {
   if (isImageCollection) {
     for (const tile of explicitTiles.values()) {
       if (!tile.image) continue;
-      const tileAssetId = deterministicAssetId(`${input.packSeed}/${input.tilesetSeed}/${tile.image}`);
+      const tileAssetId = deterministicAssetId(
+        `${input.packSeed}/${input.tilesetSeed}/${tile.image}`,
+      );
       uvByIndex.set(
         tile.id,
         new UVRect({
@@ -174,7 +188,7 @@ export const compileTiledTileset = (input: {
         new TilesetPackAssetClass({
           id: tileAssetId,
           path: tile.image,
-          mime: "image/png",
+          mime: 'image/png',
         }),
       );
     }
@@ -222,7 +236,9 @@ export const compileTiledTileset = (input: {
       ...(explicit?.type ? [`tiled:type=${explicit.type}`] : []),
       ...(explicit?.class ? [`tiled:class=${explicit.class}`] : []),
     ];
-    const terrainProperty = props?.find((property) => property.name === "terrain" || property.name === "terrainClass");
+    const terrainProperty = props?.find(
+      (property) => property.name === 'terrain' || property.name === 'terrainClass',
+    );
     const animation =
       explicit?.animation && explicit.animation.length > 0
         ? new Animation({
@@ -231,7 +247,9 @@ export const compileTiledTileset = (input: {
             frames: explicit.animation.map(
               (frame) =>
                 new AnimationFrame({
-                  tileId: tileIds.get(frame.tileid) ?? deterministicTileId(`${input.tilesetSeed}/tile/${frame.tileid}`),
+                  tileId:
+                    tileIds.get(frame.tileid) ??
+                    deterministicTileId(`${input.tilesetSeed}/tile/${frame.tileid}`),
                   durationMs: frame.duration,
                 }),
             ) as [AnimationFrame, ...AnimationFrame[]],
@@ -257,15 +275,18 @@ export const compileTiledTileset = (input: {
 
     const hintedPlaceable =
       !isImageCollection &&
-      input.profile === "standard-plus-hints" &&
-      boolProperty(props, "tileborne.placeable");
+      input.profile === 'standard-plus-hints' &&
+      boolProperty(props, 'tileborne.placeable');
     if ((isImageCollection && explicit?.image) || hintedPlaceable) {
       const assetId =
-        assetIdByIndex.get(index) ?? atlasAssetId ?? assets[0]?.id ?? deterministicAssetId(`${input.tilesetSeed}/atlas`);
-      const hintedWidth = numberProperty(props, "tileborne.objectWidth");
-      const hintedHeight = numberProperty(props, "tileborne.objectHeight");
-      const category = stringProperty(props, "tileborne.category");
-      const paintable = !isImageCollection && propertyValue(props, "tileborne.paintable") !== false;
+        assetIdByIndex.get(index) ??
+        atlasAssetId ??
+        assets[0]?.id ??
+        deterministicAssetId(`${input.tilesetSeed}/atlas`);
+      const hintedWidth = numberProperty(props, 'tileborne.objectWidth');
+      const hintedHeight = numberProperty(props, 'tileborne.objectHeight');
+      const category = stringProperty(props, 'tileborne.category');
+      const paintable = !isImageCollection && propertyValue(props, 'tileborne.paintable') !== false;
       placeables.push(
         new Placeable({
           id: deterministicPlaceableId(`${input.tilesetSeed}/placeable/${index}`),
@@ -285,12 +306,15 @@ export const compileTiledTileset = (input: {
             }),
           ],
           tags: category === undefined ? tags : [category, ...tags],
-          placementMode: paintable && !isImageCollection ? "tile-and-object" : "object",
+          placementMode: paintable && !isImageCollection ? 'tile-and-object' : 'object',
           source: new TiledPlaceableSource({
-            format: "tiled",
+            format: 'tiled',
             tilesetName: source.name,
             localTileId: index,
-            image: explicit?.image === undefined ? Option.fromNullishOr(source.image) : Option.some(explicit.image),
+            image:
+              explicit?.image === undefined
+                ? Option.fromNullishOr(source.image)
+                : Option.some(explicit.image),
             imageWidth:
               explicit?.imagewidth === undefined
                 ? hintedWidth === undefined
@@ -304,10 +328,11 @@ export const compileTiledTileset = (input: {
                   : Option.some(hintedHeight)
                 : Option.some(explicit.imageheight),
             objectType: explicit?.type === undefined ? Option.none() : Option.some(explicit.type),
-            objectClass: explicit?.class === undefined ? Option.none() : Option.some(explicit.class),
+            objectClass:
+              explicit?.class === undefined ? Option.none() : Option.some(explicit.class),
             properties: {
               ...propertiesToRecord(props),
-              "tileborne.anchor": "top-left",
+              'tileborne.anchor': 'top-left',
             },
           }),
         }),
@@ -349,7 +374,8 @@ export const compileTiledTileset = (input: {
   const tileset = new Tileset({
     id: deterministicTilesetId(`${input.packSeed}/${input.tilesetSeed}`),
     name: source.name,
-    atlasAssetId: atlasAssetId ?? assets[0]?.id ?? deterministicAssetId(`${input.tilesetSeed}/atlas`),
+    atlasAssetId:
+      atlasAssetId ?? assets[0]?.id ?? deterministicAssetId(`${input.tilesetSeed}/atlas`),
     cellSize: new CellSize({ width: source.tilewidth, height: source.tileheight }),
     margin,
     spacing,

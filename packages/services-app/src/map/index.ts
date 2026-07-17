@@ -6,6 +6,7 @@ import {
   MapId,
   PackId,
   ProjectId,
+  ProjectManifestSchema,
   ProjectMapRef,
   TileLayer,
   TileborneMap,
@@ -15,26 +16,27 @@ import {
   makeLayerId,
   makeMapId,
   makeTileborneMap,
-  normalizeAndMigratePersistedMapJson,
 } from '@tileborne/core';
 import {
   HomeService,
   writeJsonAtomic,
   type HomeServiceError,
 } from '@tileborne/services-foundation';
-import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect';
+import { Context, Effect, Layer, PubSub, Schema, Semaphore, Stream } from 'effect';
 
 import { verifiedChildPath } from '../internal/path-security.js';
 import { exportMapToTiled } from '../internal/tiled.js';
 import {
   MapIntegrityEntry,
+  ProjectIntegrityLock,
   mapPath,
   packDirectory,
   packManifestPath,
   projectLockPath,
   relativeMapPath,
 } from '../internal/layout.js';
-import { errorMessage } from '../internal/files.js';
+import { encodeJson, errorMessage } from '../internal/files.js';
+import { commitMapProjectRevision } from '../internal/project-revision-transaction.js';
 import {
   readProjectLock,
   readVerifiedProjectAtRoot,
@@ -136,6 +138,7 @@ export type MapTiledImportResult =
 
 export interface MapSummary {
   readonly id: MapId;
+  readonly label?: string;
   readonly path: string;
   readonly width: number;
   readonly height: number;
@@ -472,7 +475,10 @@ const writeMapFile = (filePath: string, map: TileborneMap): Effect.Effect<void, 
 
 const TILED_DIRECT_FILE_EXTENSIONS = new Set(['.tmx', '.tmj', '.json']);
 const TILED_TILESET_EXTENSIONS = new Set(['.tsx', '.tsj']);
-const TILED_IMPORT_FILE_EXTENSIONS = new Set([...TILED_DIRECT_FILE_EXTENSIONS, ...TILED_TILESET_EXTENSIONS]);
+const TILED_IMPORT_FILE_EXTENSIONS = new Set([
+  ...TILED_DIRECT_FILE_EXTENSIONS,
+  ...TILED_TILESET_EXTENSIONS,
+]);
 
 const isContainedPath = (root: string, candidate: string): boolean => {
   const relative = path.relative(root, candidate);
@@ -553,7 +559,12 @@ const inferImportRootFromTiledFiles = async (
     const raw = await readFile(filePath, 'utf8');
     for (const source of directTiledTextSources(raw, filePath)) {
       const boundedTraversal = Math.min(parentTraversalDepth(source), 2);
-      candidates.push(path.resolve(path.dirname(filePath), ...Array.from({ length: boundedTraversal }, () => '..')));
+      candidates.push(
+        path.resolve(
+          path.dirname(filePath),
+          ...Array.from({ length: boundedTraversal }, () => '..'),
+        ),
+      );
     }
   }
   return commonAncestor(candidates);
@@ -596,7 +607,10 @@ const inferTiledDirectoryImportRoot = async (sourcePath: string): Promise<string
 const resolveTiledImportSource = (
   projectDir: string,
   srcPath: string,
-): Effect.Effect<{ readonly sourcePath: string; readonly importRoot: string }, MapValidationError> =>
+): Effect.Effect<
+  { readonly sourcePath: string; readonly importRoot: string },
+  MapValidationError
+> =>
   Effect.gen(function* () {
     if (srcPath.includes('\0')) {
       yield* new MapValidationError({ path: srcPath, message: 'NUL path segment is not allowed' });
@@ -605,43 +619,43 @@ const resolveTiledImportSource = (
     const resolvedInput = inputWasAbsolute
       ? path.resolve(srcPath)
       : yield* verifiedChildPath(projectDir, srcPath).pipe(
-          Effect.mapError((error) => new MapValidationError({ path: srcPath, message: error.message })),
+          Effect.mapError(
+            (error) => new MapValidationError({ path: srcPath, message: error.message }),
+          ),
         );
     return yield* Effect.tryPromise({
       try: async () => {
-      const inputStat = await stat(resolvedInput);
-      if (inputStat.isDirectory()) {
+        const inputStat = await stat(resolvedInput);
+        if (inputStat.isDirectory()) {
+          const sourcePath = await realpath(resolvedInput);
+          const importRoot = await inferTiledDirectoryImportRoot(sourcePath);
+          return { sourcePath, importRoot };
+        }
+        if (!inputStat.isFile() || !isDirectTiledImportFile(resolvedInput)) {
+          throw new MapValidationError({
+            path: resolvedInput,
+            message:
+              'Choose a Tiled map file (.tmx, .tmj, or .json), Tiled tileset file (.tsx or .tsj), or source folder.',
+          });
+        }
         const sourcePath = await realpath(resolvedInput);
-        const importRoot = await inferTiledDirectoryImportRoot(sourcePath);
-        return { sourcePath, importRoot };
-      }
-      if (!inputStat.isFile() || !isDirectTiledImportFile(resolvedInput)) {
-        throw new MapValidationError({
-          path: resolvedInput,
-          message: 'Choose a Tiled map file (.tmx, .tmj, or .json), Tiled tileset file (.tsx or .tsj), or source folder.',
-        });
-      }
-      const sourcePath = await realpath(resolvedInput);
-      return {
-        sourcePath,
-        importRoot: isDirectTiledTilesetFile(sourcePath)
-          ? await inferDirectTilesetImportRoot(sourcePath)
-          : inputWasAbsolute
-            ? path.dirname(path.dirname(sourcePath))
-            : projectDir,
-      };
-    },
-    catch: (cause) =>
-      cause instanceof MapValidationError
-        ? cause
-        : new MapValidationError({ path: srcPath, message: errorMessage(cause) }),
+        return {
+          sourcePath,
+          importRoot: isDirectTiledTilesetFile(sourcePath)
+            ? await inferDirectTilesetImportRoot(sourcePath)
+            : inputWasAbsolute
+              ? path.dirname(path.dirname(sourcePath))
+              : projectDir,
+        };
+      },
+      catch: (cause) =>
+        cause instanceof MapValidationError
+          ? cause
+          : new MapValidationError({ path: srcPath, message: errorMessage(cause) }),
     });
   });
 
-const resolveContainedTiledAssetSource = (
-  sourceDir: string,
-  assetPath: string,
-): string => {
+const resolveContainedTiledAssetSource = (sourceDir: string, assetPath: string): string => {
   const root = path.resolve(sourceDir);
   const resolved = path.resolve(root, assetPath);
   if (!isContainedPath(root, resolved)) {
@@ -675,7 +689,11 @@ const makeTiledReader = () => ({
     })),
 });
 
-const sourceRootForImport = (value: TiledAnyCanonicalImport, resolvedSrc: string, importRoot: string): string => {
+const sourceRootForImport = (
+  value: TiledAnyCanonicalImport,
+  resolvedSrc: string,
+  importRoot: string,
+): string => {
   if (value.kind === 'source-pack') {
     return importRoot;
   }
@@ -706,10 +724,12 @@ const profileForTiledImport = (
     }
     const recommendedProfile = scan.importRecommendation.recommendedProfile;
     if (recommendedProfile === 'plugin-required') {
-      return yield* Effect.fail(new MapValidationError({
-        path: scan.sourcePath,
-        message: scan.importRecommendation.rationale,
-      }));
+      return yield* Effect.fail(
+        new MapValidationError({
+          path: scan.sourcePath,
+          message: scan.importRecommendation.rationale,
+        }),
+      );
     } else {
       return recommendedProfile;
     }
@@ -763,9 +783,9 @@ const materializeImportedPack = (
     readonly projectId: ProjectId;
   },
   services: {
-    readonly home: HomeService["Service"];
-    readonly assets: AssetService["Service"];
-    readonly workingPalettes: WorkingPaletteService["Service"];
+    readonly home: HomeService['Service'];
+    readonly assets: AssetService['Service'];
+    readonly workingPalettes: WorkingPaletteService['Service'];
   },
 ): Effect.Effect<PackId, MapServiceError> =>
   Effect.gen(function* () {
@@ -803,7 +823,10 @@ const materializeImportedPack = (
         name: `${input.value.pack.name} Starter Palette`,
         items: paletteDrafts,
       });
-      yield* services.workingPalettes.setActive({ projectId: input.projectId, paletteId: palette.id });
+      yield* services.workingPalettes.setActive({
+        projectId: input.projectId,
+        paletteId: palette.id,
+      });
     }
     return materialized.packId;
   });
@@ -836,8 +859,7 @@ const readTilesetPackManifest = (
 
 export const toMapIpcView = (map: TileborneMap): TileborneMap => mapToIpcView(map);
 
-export const toMapIpcPayload = (map: TileborneMap): unknown =>
-  normalizeAndMigratePersistedMapJson(mapToJson(map));
+export const toMapIpcPayload = (map: TileborneMap): unknown => mapToJson(map);
 
 export const readVerifiedMap = (
   projectDir: string,
@@ -889,6 +911,9 @@ export const readVerifiedMap = (
 
 const summaryFromMap = (ref: ProjectMapRef, map: TileborneMap): MapSummary => ({
   id: map.id,
+  ...(typeof map.properties.title === 'string' && map.properties.title.trim().length > 0
+    ? { label: map.properties.title }
+    : {}),
   path: ref.path,
   width: map.size.width,
   height: map.size.height,
@@ -943,6 +968,10 @@ export const MapServiceLive = Layer.effect(
     const workingPalettes = yield* WorkingPaletteService;
     const paths = yield* home.init();
     const triggers = new Map<ProjectId, PubSub.PubSub<void>>();
+    // A map save updates two integrity-coupled files (map JSON + project lock).
+    // Serialize verified readers with that transition so no IPC request can
+    // observe the short, invalid midpoint between the two atomic writes.
+    const mapIoGate = yield* Semaphore.make(1);
 
     const cwd = process.cwd();
 
@@ -982,34 +1011,86 @@ export const MapServiceLive = Layer.effect(
       return mapId;
     });
 
-    const load = Effect.fn('MapService.load')(function* (projectId: ProjectId, mapId: MapId) {
+    const loadUnlocked = Effect.fn('MapService.loadUnlocked')(function* (
+      projectId: ProjectId,
+      mapId: MapId,
+    ) {
       const projectDir = yield* projectDirFor(projectId);
       return yield* readVerifiedMap(projectDir, projectId, mapId);
     });
 
-    const save = Effect.fn('MapService.save')(function* (projectId: ProjectId, map: TileborneMap) {
+    const saveUnlocked = Effect.fn('MapService.saveUnlocked')(function* (
+      projectId: ProjectId,
+      map: TileborneMap,
+    ) {
       const projectDir = yield* projectDirFor(projectId);
-      const project = yield* readVerifiedProjectAtRoot(projectDir);
-      if (!project.maps.some((entry) => entry.id === map.id)) {
-        yield* new MapNotFoundError({
-          projectId,
-          mapId: map.id,
-          message: `map not found: ${map.id}`,
-        });
-      }
-      yield* writeMapFile(mapPath(projectDir, map.id), map);
-      const lock = yield* readProjectLock(projectLockPath(projectDir));
-      const hash = hashMap(map);
-      yield* writeProjectWithLock(
-        projectDir,
-        project,
-        upsertMapLock(
-          lock.maps,
-          new MapIntegrityEntry({ id: map.id, path: relativeMapPath(map.id), hash }),
-        ),
-      );
+      yield* Effect.tryPromise({
+        try: () =>
+          commitMapProjectRevision({
+            projectRoot: projectDir,
+            projectId,
+            mapId: map.id,
+            mapTarget: mapPath(projectDir, map.id),
+            buildSnapshots: async (current) => {
+              const project = Schema.decodeUnknownSync(ProjectManifestSchema)(current.project);
+              if (!project.maps.some((entry) => entry.id === map.id)) {
+                throw new MapNotFoundError({
+                  projectId,
+                  mapId: map.id,
+                  message: `map not found: ${map.id}`,
+                });
+              }
+              const lock = Schema.decodeUnknownSync(ProjectIntegrityLock)(current.lock);
+              const mapSnapshot = await Effect.runPromise(
+                encodeMapJson(mapPath(projectDir, map.id), map),
+              );
+              const projectSnapshot = await Effect.runPromise(
+                encodeJson(
+                  ProjectManifestSchema,
+                  project,
+                  (message) => new MapSaveError({ path: projectDir, message }),
+                ),
+              );
+              const nextLock = new ProjectIntegrityLock({
+                schemaVersion: 1,
+                projectHash: hashJsonStable(projectSnapshot),
+                maps: upsertMapLock(
+                  lock.maps,
+                  new MapIntegrityEntry({
+                    id: map.id,
+                    path: relativeMapPath(map.id),
+                    hash: hashJsonStable(mapSnapshot),
+                  }),
+                ),
+              });
+              return {
+                map: mapSnapshot,
+                project: projectSnapshot,
+                lock: await Effect.runPromise(
+                  encodeJson(
+                    ProjectIntegrityLock,
+                    nextLock,
+                    (message) => new MapSaveError({ path: projectLockPath(projectDir), message }),
+                  ),
+                ),
+              };
+            },
+          }),
+        catch: (cause) =>
+          cause instanceof MapNotFoundError
+            ? cause
+            : new MapSaveError({ path: mapPath(projectDir, map.id), message: errorMessage(cause) }),
+      });
       yield* PubSub.publish(yield* getProjectTrigger(triggers, projectId), void 0);
     });
+
+    const load = Effect.fn('MapService.load')((projectId: ProjectId, mapId: MapId) =>
+      mapIoGate.withPermit(loadUnlocked(projectId, mapId)),
+    );
+
+    const save = Effect.fn('MapService.save')((projectId: ProjectId, map: TileborneMap) =>
+      mapIoGate.withPermit(saveUnlocked(projectId, map)),
+    );
 
     const setMapTilesetPack = Effect.fn('MapService.setMapTilesetPack')(function* (
       projectId: ProjectId,
@@ -1113,10 +1194,14 @@ export const MapServiceLive = Layer.effect(
       return yield* load(projectId, mapId);
     });
 
-    const list = Effect.fn('MapService.list')(function* (projectId: ProjectId) {
+    const listUnlocked = Effect.fn('MapService.listUnlocked')(function* (projectId: ProjectId) {
       const projectDir = yield* projectDirFor(projectId);
       return yield* listVerifiedMapsAt(projectDir, projectId);
     });
+
+    const list = Effect.fn('MapService.list')((projectId: ProjectId) =>
+      mapIoGate.withPermit(listUnlocked(projectId)),
+    );
 
     const deleteMap = Effect.fn('MapService.delete')(function* (
       projectId: ProjectId,
@@ -1171,7 +1256,10 @@ export const MapServiceLive = Layer.effect(
       srcPath: string,
     ) {
       const projectDir = yield* projectDirFor(projectId);
-      const { sourcePath: resolvedSrc, importRoot } = yield* resolveTiledImportSource(projectDir, srcPath);
+      const { sourcePath: resolvedSrc, importRoot } = yield* resolveTiledImportSource(
+        projectDir,
+        srcPath,
+      );
       const reader = makeTiledReader();
       const scanned = yield* Effect.tryPromise({
         try: () =>
@@ -1229,19 +1317,26 @@ export const MapServiceLive = Layer.effect(
       options?: MapTiledImportOptions,
     ) {
       const projectDir = yield* projectDirFor(projectId);
-      const { sourcePath: resolvedSrc, importRoot } = yield* resolveTiledImportSource(projectDir, srcPath);
+      const { sourcePath: resolvedSrc, importRoot } = yield* resolveTiledImportSource(
+        projectDir,
+        srcPath,
+      );
       const reader = makeTiledReader();
       const scan = yield* scanTiledFile(projectId, srcPath);
       const profile = yield* profileForTiledImport(scan, options?.profile);
       const plan = buildImportPlan(scan, profile, options?.hints ?? {});
       const appliedPlan = applyImportPlan(plan);
-      const planBlocking = appliedPlan.diagnostics.find((diagnostic) => diagnostic.severity === 'error');
+      const planBlocking = appliedPlan.diagnostics.find(
+        (diagnostic) => diagnostic.severity === 'error',
+      );
       if (planBlocking !== undefined) {
         yield* new MapValidationError({ path: resolvedSrc, message: planBlocking.message });
       }
       const imported = yield* Effect.tryPromise({
         try: async () => {
-          const raw = isDirectTiledImportFile(resolvedSrc) ? await readFile(resolvedSrc, 'utf8') : undefined;
+          const raw = isDirectTiledImportFile(resolvedSrc)
+            ? await readFile(resolvedSrc, 'utf8')
+            : undefined;
           return importTiled(
             {
               sourcePath: resolvedSrc,
@@ -1267,7 +1362,10 @@ export const MapServiceLive = Layer.effect(
         });
       }
       const value = imported.value!;
-      const sourceIdentity = yield* sourceIdentityFor(importCenterSourceKind(appliedPlan.scan), resolvedSrc);
+      const sourceIdentity = yield* sourceIdentityFor(
+        importCenterSourceKind(appliedPlan.scan),
+        resolvedSrc,
+      );
       const sourceRoot = sourceRootForImport(value, resolvedSrc, importRoot);
       const importedPackId =
         value.kind === 'map' && value.pack.assets.length === 0
@@ -1281,7 +1379,7 @@ export const MapServiceLive = Layer.effect(
                 projectId,
               },
               { home, assets, workingPalettes },
-      );
+            );
       if (value.kind !== 'map') {
         if (importedPackId === undefined) {
           return yield* new MapValidationError({
@@ -1376,17 +1474,22 @@ export const MapServiceLive = Layer.effect(
     ): Stream.Stream<readonly MapSummary[], MapServiceError> =>
       Stream.unwrap(
         getProjectTrigger(triggers, projectId).pipe(
-          Effect.map((trigger) =>
-            Stream.concat(
-              Stream.fromEffect(
-                projectDirFor(projectId).pipe(
-                  Effect.flatMap((projectDir) => listVerifiedMapsAt(projectDir, projectId)),
-                ),
-              ),
-              Stream.fromPubSub(trigger).pipe(
-                Stream.mapEffect(() =>
-                  projectDirFor(projectId).pipe(
-                    Effect.flatMap((projectDir) => listVerifiedMapsAt(projectDir, projectId)),
+          Effect.flatMap((trigger) =>
+            PubSub.subscribe(trigger).pipe(
+              Effect.map((subscription) =>
+                Stream.concat(
+                  Stream.fromEffect(
+                    projectDirFor(projectId).pipe(
+                      Effect.flatMap((projectDir) => listVerifiedMapsAt(projectDir, projectId)),
+                    ),
+                  ),
+                  Stream.fromEffect(PubSub.take(subscription)).pipe(
+                    Stream.forever,
+                    Stream.mapEffect(() =>
+                      projectDirFor(projectId).pipe(
+                        Effect.flatMap((projectDir) => listVerifiedMapsAt(projectDir, projectId)),
+                      ),
+                    ),
                   ),
                 ),
               ),

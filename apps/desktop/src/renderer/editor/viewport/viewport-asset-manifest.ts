@@ -65,7 +65,7 @@ export interface ViewportAssetBundle {
   readonly autotileRules: readonly AutotileRule[];
   readonly terrainTransitions: readonly TerrainTransition[];
   // Aggregated across the loaded packs.
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId>;
   readonly placeables: readonly ViewportPlaceableEntry[];
   readonly assetPathByPackAndId: ReadonlyMap<string, string>;
   readonly assetPathById: ReadonlyMap<string, string>;
@@ -147,9 +147,7 @@ export const loadViewportAssetManifest = (
  * autotile rules) so the controller can resolve real atlas textures instead of
  * falling back to the missing-texture diagnostic tiles.
  */
-export const viewportControllerAtlas = (
-  bundle: ViewportAssetBundle,
-): EditorViewportTileAtlas => ({
+export const viewportControllerAtlas = (bundle: ViewportAssetBundle): EditorViewportTileAtlas => ({
   tileFramesByIndex: bundle.tileFramesByIndex,
   collisionMaskByTileIndex: bundle.collisionMaskByTileIndex,
   renderableAssetIdByPath: bundle.renderableAssetIdByPath,
@@ -169,11 +167,13 @@ export const loadViewportAssetBundle = (
       catch: (cause) => new Error(String(cause)),
     });
     if (packId === undefined) {
-      console.info('[tileborne] no asset pack available for viewport; using blank texture fallback');
+      console.info(
+        '[tileborne] no asset pack available for viewport; using blank texture fallback',
+      );
       return emptyViewportAssetBundle();
     }
 
-    const renderablePlaceableRefs = resolveRenderablePlaceableRefs(request, packId);
+    const renderablePlaceableRefs = resolveRenderablePlaceableRefs(request);
     // Object placeables can reference a pack that is neither the map's tileset
     // pack nor part of the working palette (`extraPackIds`). Those packs must
     // still be loaded so existing map objects resolve their placeable frames and
@@ -183,14 +183,29 @@ export const loadViewportAssetBundle = (
     const seenPackIds = new Set<string>([String(packId)]);
     for (const candidate of [
       ...(request.extraPackIds ?? []),
-      ...renderablePlaceableRefs.flatMap((ref) =>
-        ref.packId === undefined ? [] : [ref.packId],
-      ),
+      ...renderablePlaceableRefs.flatMap((ref) => (ref.packId === undefined ? [] : [ref.packId])),
     ]) {
       const key = String(candidate);
       if (!seenPackIds.has(key)) {
         seenPackIds.add(key);
         packIds.push(candidate);
+      }
+    }
+    // Catalog visual-refs identify globally unique placeables without coupling
+    // the catalog to an asset-pack id. Search installed pack indexes only when
+    // such an unscoped ref is actually needed; selected frame assets remain
+    // bounded to the matched placeables below.
+    if (renderablePlaceableRefs.some((ref) => ref.packId === undefined)) {
+      const installed = yield* Effect.tryPromise({
+        try: () => window.tileborne.assets.listPacks({}),
+        catch: (cause) => new Error(String(cause)),
+      });
+      for (const candidate of installed.packs.map((entry) => entry.id)) {
+        const key = String(candidate);
+        if (!seenPackIds.has(key)) {
+          seenPackIds.add(key);
+          packIds.push(candidate);
+        }
       }
     }
     const cacheKey = [
@@ -242,12 +257,10 @@ const loadEditorIndexForPack = async (
 
 const resolveRenderablePlaceableRefs = (
   request: ViewportAssetManifestRequest,
-  primaryPackId: PackId,
 ): readonly ViewportPlaceableRef[] => {
   const refs = new Map<string, ViewportPlaceableRef>();
   const add = (ref: ViewportPlaceableRef) => {
-    const packId = ref.packId ?? primaryPackId;
-    refs.set(`${packId}:${ref.placeableId}`, { packId, placeableId: ref.placeableId });
+    refs.set(`${ref.packId ?? '*'}:${ref.placeableId}`, ref);
   };
 
   for (const ref of request.renderablePlaceableRefs ?? []) {
@@ -300,14 +313,14 @@ const loadViewportAssetBundleForPacks = (
       return emptyViewportAssetBundle();
     }
 
-    // Renderable atlas + selected placeable-frame paths, in pack order, matching
-    // the previous `loadViewportAssetBundleForPacks` ordering so the 1-based
-    // `renderableAssetIdByPath` stays stable.
+    // Renderable atlas + selected placeable-frame paths, in pack order. The
+    // controller resolves by original asset path, then asks the Pixi adapter for
+    // the manifest asset id that `loadAssets` registers as a loaded texture key.
     const renderableAssets: { readonly packId: PackId; readonly asset: EditorIndexAsset }[] = [];
     for (const index of indexes) {
       const selectedPlaceableIds = new Set(
         renderablePlaceableRefs
-          .filter((ref) => (ref.packId ?? primary.packId) === index.packId)
+          .filter((ref) => ref.packId === undefined || ref.packId === index.packId)
           .map((ref) => String(ref.placeableId)),
       );
       const assetPathById = new Map(index.assets.map((asset) => [asset.id, asset.path]));
@@ -333,9 +346,9 @@ const loadViewportAssetBundleForPacks = (
       }
     }
 
-    const renderableAssetIdByPath = new Map<string, number>();
-    renderableAssets.forEach(({ asset }, position) => {
-      renderableAssetIdByPath.set(asset.path, position + 1);
+    const renderableAssetIdByPath = new Map<string, AssetId>();
+    renderableAssets.forEach(({ asset }) => {
+      renderableAssetIdByPath.set(asset.path, asset.id as AssetId);
     });
 
     // Atlases stream via the `tileborne-asset` protocol and are decoded off the

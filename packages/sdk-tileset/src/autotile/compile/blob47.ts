@@ -1,8 +1,8 @@
-import { Blob47AutotileRule } from "../../schemas/autotile-rule.js";
-import type { TileId } from "../../schemas/ids.js";
+import { Blob47AutotileRule } from '../../schemas/autotile-rule.js';
+import type { TileId } from '../../schemas/ids.js';
 
-import { formatMaskKey } from "../mask.js";
-import { NEIGHBORHOODS } from "../neighborhoods.js";
+import { formatMaskKey } from '../mask.js';
+import { NEIGHBORHOODS } from '../neighborhoods.js';
 import {
   appendTileForMask,
   around8Neighborhood,
@@ -12,8 +12,8 @@ import {
   ruleBase,
   type CompileResult,
   type RuleBaseInput,
-} from "./shared.js";
-import { BLOB47_MASK_TO_TILE_INDEX, BLOB47_TILE_COUNT } from "./tables.js";
+} from './shared.js';
+import { BLOB47_MASK_TO_TILE_INDEX, BLOB47_TILE_COUNT } from './tables.js';
 
 export type CompileBlob47Input = RuleBaseInput & {
   readonly path?: string;
@@ -22,10 +22,10 @@ export type CompileBlob47Input = RuleBaseInput & {
 
 /** Compile a standard 47-tile blob manifest into a {@link Blob47AutotileRule}. */
 export const compileBlob47 = (input: CompileBlob47Input): CompileResult => {
-  const path = input.path ?? "/autotile/blob47";
+  const path = input.path ?? '/autotile/blob47';
   const { maskToTileIds, sourceTileIndexes, diagnostics } = compileFromMaskIndexTable({
     path,
-    pattern: "blob47",
+    pattern: 'blob47',
     cells: input.cells,
     expectedCells: BLOB47_TILE_COUNT,
     neighborhood: around8Neighborhood,
@@ -33,16 +33,16 @@ export const compileBlob47 = (input: CompileBlob47Input): CompileResult => {
     projectMask: blobProjectMask,
   });
 
-  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
   if (hasErrors) {
     return {
-      debug: { pattern: "blob47", mappedMaskCount: 0, sourceTileIndexes },
+      debug: { pattern: 'blob47', mappedMaskCount: 0, sourceTileIndexes },
       diagnostics,
     };
   }
 
   const rule = new Blob47AutotileRule(ruleBase(input, maskToTileIds));
-  return finalizeRule(rule, { pattern: "blob47", sourceTileIndexes }, diagnostics);
+  return finalizeRule(rule, { pattern: 'blob47', sourceTileIndexes }, diagnostics);
 };
 
 /** Map a projected around-8 mask to a blob47 atlas cell index, if known. */

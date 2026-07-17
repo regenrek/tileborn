@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TILEBORNE_SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
+export TILEBORNE_SOURCE_COMMIT
 SCRIPT_PATH="scripts/clean-checkout-smoke.sh"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tileborne-clean-checkout.XXXXXX")"
 MODE="smoke"
@@ -110,6 +112,8 @@ kill_port_listeners() {
     pids="$(lsof -ti :"$CDP_PORT" 2>/dev/null || true)"
   fi
   if [[ -n "$pids" ]]; then
+    # lsof may return multiple PIDs, each of which must remain a separate kill argument.
+    # shellcheck disable=SC2086
     kill $pids 2>/dev/null || true
     sleep 1
   fi

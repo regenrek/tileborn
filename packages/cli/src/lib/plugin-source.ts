@@ -1,10 +1,10 @@
-import path from "node:path";
-import { Schema } from "effect";
+import path from 'node:path';
+import { Schema } from 'effect';
 
-import { ContentHash } from "@tileborne/core";
-import { PluginSource } from "@tileborne/services-plugin";
+import { ContentHash } from '@tileborne/core';
+import { PluginSource } from '@tileborne/services-plugin';
 
-import { CliUsageError } from "../render/errors.js";
+import { CliUsageError } from '../render/errors.js';
 
 const NPM_SPEC = /^(@[^/]+\/[^@]+|[^/@]+)(?:@(.+))?$/;
 
@@ -36,7 +36,7 @@ export const parseNpmPluginSpec = (spec: string): PluginSource => {
   const packageName = match[1] as string;
   const version = match[2];
   return decodePluginSource({
-    _tag: "npm",
+    _tag: 'npm',
     packageName,
     version: version && version.length > 0 ? version : undefined,
   });
@@ -45,19 +45,19 @@ export const parseNpmPluginSpec = (spec: string): PluginSource => {
 export const resolvePluginInstallSource = (args: PluginInstallArgs): PluginSource => {
   const flags = [args.local, args.tarball, args.git, args.devSymlink].filter(Boolean);
   if (flags.length > 1) {
-    throw new CliUsageError({ message: "plugin install accepts only one source flag at a time" });
+    throw new CliUsageError({ message: 'plugin install accepts only one source flag at a time' });
   }
   if (args.local) {
-    return decodePluginSource({ _tag: "local", path: path.resolve(args.local) });
+    return decodePluginSource({ _tag: 'local', path: path.resolve(args.local) });
   }
   if (args.devSymlink) {
-    return decodePluginSource({ _tag: "dev-symlink", linkPath: path.resolve(args.devSymlink) });
+    return decodePluginSource({ _tag: 'dev-symlink', linkPath: path.resolve(args.devSymlink) });
   }
   if (args.tarball) {
     const resolved = path.resolve(args.tarball);
     const url = path.isAbsolute(resolved) ? resolved : args.tarball;
     return decodePluginSource({
-      _tag: "tarball",
+      _tag: 'tarball',
       url,
       integrity:
         args.integrity && args.integrity.length > 0
@@ -67,7 +67,7 @@ export const resolvePluginInstallSource = (args: PluginInstallArgs): PluginSourc
   }
   if (args.git) {
     return decodePluginSource({
-      _tag: "git",
+      _tag: 'git',
       repo: args.git,
       ref: args.ref && args.ref.length > 0 ? args.ref : undefined,
     });
@@ -76,6 +76,6 @@ export const resolvePluginInstallSource = (args: PluginInstallArgs): PluginSourc
     return parseNpmPluginSpec(args.spec);
   }
   throw new CliUsageError({
-    message: "plugin install requires <spec> or one of --local, --tarball, --git, --dev-symlink",
+    message: 'plugin install requires <spec> or one of --local, --tarball, --git, --dev-symlink',
   });
 };

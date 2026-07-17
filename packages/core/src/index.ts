@@ -8,9 +8,16 @@ export * from './versioning/index.js';
 
 export * from './asset/index.js';
 export * from './asset/library.js';
+export * from './authoring/index.js';
 export * from './branding/index.js';
+export * from './behavior/index.js';
+export * from './game-mode/active-mode.js';
+export * from './hud/index.js';
+export * from './input/index.js';
 export * from './project/index.js';
+export * from './settings/plugin-settings.js';
 export * from './catalog/index.js';
+export * from './map-package/index.js';
 export * from './map/index.js';
 export * from './map/decode.js';
 export * from './map/migrate.js';

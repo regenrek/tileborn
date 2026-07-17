@@ -32,7 +32,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const sampleFixture = path.join(repoRoot, 'packages/test-fixtures/fixtures/asset-packs/smoke-pack');
 const cacheSegment = (value: string): string => value.replace(/[^a-zA-Z0-9.-]/g, '_');
 const cacheDir = (home: string): string => path.join(home, 'cache/asset-library/index-metadata');
-const editorIndexDir = (home: string): string => path.join(home, 'cache/asset-library/editor-index');
+const editorIndexDir = (home: string): string =>
+  path.join(home, 'cache/asset-library/editor-index');
 const editorIndexFiles = async (home: string): Promise<readonly string[]> => {
   try {
     return (await readdir(editorIndexDir(home))).filter((entry) => entry.endsWith('.json')).sort();
@@ -302,9 +303,7 @@ describe('AssetLibraryService', () => {
                     properties: {},
                     placement: new MapObjectPlacement({
                       packId: Option.some(removedPackId),
-                      placeableId: makePlaceableId(
-                        '00000000-0000-4000-8000-000000000092' as Uuid,
-                      ),
+                      placeableId: makePlaceableId('00000000-0000-4000-8000-000000000092' as Uuid),
                       source: 'tiled-object',
                       assetId: Option.none(),
                       tileId: Option.none(),

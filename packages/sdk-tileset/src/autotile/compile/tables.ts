@@ -1,4 +1,4 @@
-import { Around8Bits } from "../neighborhoods.js";
+import { Around8Bits } from '../neighborhoods.js';
 
 /** Edge bit flags in around-8 clockwise layout (phaser3-autotile / cr31 blob reference). */
 export const EdgeMaskBits = {

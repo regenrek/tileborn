@@ -1,0 +1,10 @@
+{
+  "id": "map:5b1901ca-1abd-42d6-aeac-553b34b9bda8",
+  "schemaVersion": 2,
+  "size": { "width": 4, "height": 4 },
+  "tileSize": { "width": 32, "height": 32 },
+  "layers": [],
+  "objects": [],
+  "properties": { "migrationSentinel": "must-not-be-rewritten" },
+  "futureField": true
+}

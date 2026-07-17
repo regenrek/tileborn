@@ -1,1 +1,1 @@
-export * from "./pixi-renderer-adapter.js";
+export * from './pixi-renderer-adapter.js';

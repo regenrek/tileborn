@@ -1,4 +1,4 @@
-import type { BrandConfig } from "@tileborne/core";
+import type { BrandConfig } from '@tileborne/core';
 
 /**
  * Map a {@link BrandConfig} palette to CSS custom properties consumed by the
@@ -17,31 +17,31 @@ export const brandThemeVars = (brand: BrandConfig): BrandThemeVars => {
   const p = brand.palette;
   return {
     // Menu chassis tokens
-    "--tb-menu-bg": p.background,
-    "--tb-menu-surface": p.surface,
-    "--tb-menu-accent": p.accent,
-    "--tb-menu-accent-hostile": p.accentHostile,
-    "--tb-menu-accent-friendly": p.accentFriendly,
-    "--tb-menu-text": p.textPrimary,
-    "--tb-menu-text-muted": p.textMuted,
+    '--tb-menu-bg': p.background,
+    '--tb-menu-surface': p.surface,
+    '--tb-menu-accent': p.accent,
+    '--tb-menu-accent-hostile': p.accentHostile,
+    '--tb-menu-accent-friendly': p.accentFriendly,
+    '--tb-menu-text': p.textPrimary,
+    '--tb-menu-text-muted': p.textMuted,
     // shadcn/@tileborne/ui compatible aliases (so reused UI inherits the brand)
-    "--background": p.background,
-    "--foreground": p.textPrimary,
-    "--card": p.surface,
-    "--card-foreground": p.textPrimary,
-    "--popover": p.surface,
-    "--popover-foreground": p.textPrimary,
-    "--primary": p.accent,
-    "--primary-foreground": p.background,
-    "--secondary": p.surface,
-    "--secondary-foreground": p.textPrimary,
-    "--muted": p.surface,
-    "--muted-foreground": p.textMuted,
-    "--accent": p.accent,
-    "--accent-foreground": p.background,
-    "--destructive": p.accentHostile,
-    "--border": p.textMuted,
-    "--input": p.surface,
-    "--ring": p.accent,
+    '--background': p.background,
+    '--foreground': p.textPrimary,
+    '--card': p.surface,
+    '--card-foreground': p.textPrimary,
+    '--popover': p.surface,
+    '--popover-foreground': p.textPrimary,
+    '--primary': p.accent,
+    '--primary-foreground': p.background,
+    '--secondary': p.surface,
+    '--secondary-foreground': p.textPrimary,
+    '--muted': p.surface,
+    '--muted-foreground': p.textMuted,
+    '--accent': p.accent,
+    '--accent-foreground': p.background,
+    '--destructive': p.accentHostile,
+    '--border': p.textMuted,
+    '--input': p.surface,
+    '--ring': p.accent,
   };
 };

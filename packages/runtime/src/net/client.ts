@@ -1,4 +1,4 @@
-import { Effect, Match, Option, Stream } from "effect";
+import { Effect, Match, Option, Stream } from 'effect';
 
 import {
   decodeMessage,
@@ -6,8 +6,13 @@ import {
   ProtocolError,
   RuntimeMessage,
   TransportError,
-} from "./protocol.js";
-import { isReconnectableCloseCode, type Transport, type TransportCloseEvent, type TransportEvent } from "./transport.js";
+} from './protocol.js';
+import {
+  isReconnectableCloseCode,
+  type Transport,
+  type TransportCloseEvent,
+  type TransportEvent,
+} from './transport.js';
 
 export interface NetClientOptions {
   readonly roomId?: string;
@@ -20,26 +25,30 @@ export interface NetClient {
   readonly close: () => Effect.Effect<void, TransportError>;
 }
 
-export const encodeMessageEffect = (message: RuntimeMessage): Effect.Effect<Uint8Array, ProtocolError> =>
+export const encodeMessageEffect = (
+  message: RuntimeMessage,
+): Effect.Effect<Uint8Array, ProtocolError> =>
   Effect.try({
     try: () => encodeMessage(message),
     catch: (cause) =>
       cause instanceof ProtocolError
         ? cause
         : new ProtocolError({
-            message: "failed to encode runtime message",
+            message: 'failed to encode runtime message',
             cause: Option.some(cause),
           }),
   });
 
-export const decodeMessageEffect = (frame: Uint8Array): Effect.Effect<RuntimeMessage, ProtocolError> =>
+export const decodeMessageEffect = (
+  frame: Uint8Array,
+): Effect.Effect<RuntimeMessage, ProtocolError> =>
   Effect.try({
     try: () => decodeMessage(frame),
     catch: (cause) =>
       cause instanceof ProtocolError
         ? cause
         : new ProtocolError({
-            message: "failed to decode runtime message",
+            message: 'failed to decode runtime message',
             cause: Option.some(cause),
           }),
   });
@@ -67,7 +76,8 @@ export const makeNetClient = (transport: Transport, options: NetClientOptions = 
   const toMessageStream = (event: TransportEvent) =>
     Match.valueTags(event, {
       message: ({ data }) => Stream.fromEffect(decodeMessageEffect(data)),
-      close: (close) => Stream.fromEffect(reconnect(close)).pipe(Stream.flatMap(() => Stream.empty)),
+      close: (close) =>
+        Stream.fromEffect(reconnect(close)).pipe(Stream.flatMap(() => Stream.empty)),
     });
 
   return {

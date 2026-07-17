@@ -25,10 +25,7 @@ export const useAppNotificationsStore = create<AppNotificationsState>((set) => (
   notifications: [],
   push: (notification) =>
     set((state) => ({
-      notifications: [
-        ...state.notifications,
-        { ...notification, id: nextNotificationId() },
-      ],
+      notifications: [...state.notifications, { ...notification, id: nextNotificationId() }],
     })),
   dismiss: (id) =>
     set((state) => ({

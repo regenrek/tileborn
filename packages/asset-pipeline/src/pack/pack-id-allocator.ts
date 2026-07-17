@@ -1,10 +1,10 @@
-import { AssetId, canonicalJson, sha256Hex } from "@tileborne/core";
+import { AssetId, canonicalJson, sha256Hex } from '@tileborne/core';
 
 const uuidFromSha256 = (hex: string): string => {
-  const chars = hex.slice(0, 32).split("");
-  chars[12] = "4";
-  chars[16] = ((Number.parseInt(chars[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
-  const id = chars.join("");
+  const chars = hex.slice(0, 32).split('');
+  chars[12] = '4';
+  chars[16] = ((Number.parseInt(chars[16] ?? '0', 16) & 0x3) | 0x8).toString(16);
+  const id = chars.join('');
   return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20, 32)}`;
 };
 

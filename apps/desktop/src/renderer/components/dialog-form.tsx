@@ -4,16 +4,18 @@ import { useCallback, type ReactNode } from 'react';
 
 export function FormMessage({
   message,
+  id,
   className,
 }: {
   readonly message?: string | undefined;
+  readonly id?: string | undefined;
   readonly className?: string;
 }) {
   if (message === undefined || message.length === 0) {
     return null;
   }
   return (
-    <p role="alert" className={cn('text-xs text-destructive', className)}>
+    <p id={id} role="alert" className={cn('text-xs text-destructive', className)}>
       {message}
     </p>
   );
@@ -24,19 +26,21 @@ export function FormField({
   htmlFor,
   children,
   message,
+  messageId,
   className,
 }: {
   readonly label: string;
   readonly htmlFor: string;
   readonly children: ReactNode;
   readonly message?: string | undefined;
+  readonly messageId?: string | undefined;
   readonly className?: string;
 }) {
   return (
     <div className={cn('grid gap-2', className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      <FormMessage message={message} />
+      <FormMessage id={messageId} message={message} />
     </div>
   );
 }

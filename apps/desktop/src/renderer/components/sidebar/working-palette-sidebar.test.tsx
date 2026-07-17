@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   AssetLibraryReference,
   GameObjectType,
@@ -111,18 +111,21 @@ vi.mock('@/stores/app-notifications-store', () => ({
 
 // The sidebar now mounts the catalog import/export controls, which set up
 // TanStack mutations and therefore require a QueryClient in scope.
-const makeTestClient = () =>
-  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const makeTestClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 // We render the real working-palettes-store (zustand) but stub the editor UI
 // store so the sidebar can read brushIntent / selectBrush deterministically.
-let editorState: { brushIntent: { kind: string; tileId?: unknown }; selectBrush: (...args: unknown[]) => void };
+let editorState: {
+  brushIntent: { kind: string; tileId?: unknown };
+  selectBrush: (...args: unknown[]) => void;
+};
 vi.mock('@/stores/editor-ui-store', () => ({
   useEditorUiStore: (selector: (state: typeof editorState) => unknown) => selector(editorState),
 }));
 
 import { useWorkingPalettesStore } from '@/stores/working-palettes-store';
 import { WorkingPaletteSidebar } from '@/components/sidebar/working-palette-sidebar';
+import { workingPaletteItemKey } from '@/lib/working-palettes-bridge';
 
 const projectId = makeProjectId('550e8400-e29b-41d4-a716-446655440101');
 const packId = makePackId('550e8400-e29b-41d4-a716-446655440201');
@@ -152,6 +155,16 @@ const placeableItem = (n: number): WorkingPaletteItem => {
       refId: placeableId,
     }),
     label: n === 1 ? 'Rock' : `Object ${n}`,
+  };
+};
+
+const largeTileItem = (index: number): WorkingPaletteItem => {
+  const suffix = index.toString(16).padStart(12, '0');
+  const tileId = makeTileId(`550e8400-e29b-41d4-a716-${suffix}`);
+  return {
+    id: makeWorkingPaletteItemId(`650e8400-e29b-41d4-a716-${suffix}`),
+    ref: new AssetLibraryReference({ packId, kind: 'tile', refId: tileId, tileId }),
+    label: `Tile ${index}`,
   };
 };
 
@@ -195,7 +208,20 @@ const installWorkingPaletteBridge = () => {
 };
 
 describe('WorkingPaletteSidebar', () => {
+  let originalOffsetHeight: PropertyDescriptor | undefined;
+  let originalOffsetWidth: PropertyDescriptor | undefined;
+
   beforeEach(() => {
+    originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+    originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 384,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 240,
+    });
     selectBrushMock.mockReset();
     useWorkingPalettePreviewsMock.mockReset();
     useResolvedCatalogMock.mockReturnValue({
@@ -215,17 +241,23 @@ describe('WorkingPaletteSidebar', () => {
   });
 
   afterEach(() => {
+    if (originalOffsetHeight !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeight);
+    } else {
+      delete (HTMLElement.prototype as { offsetHeight?: number }).offsetHeight;
+    }
+    if (originalOffsetWidth !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    } else {
+      delete (HTMLElement.prototype as { offsetWidth?: number }).offsetWidth;
+    }
     cleanup();
   });
 
   it('shows the empty state when no working palette exists', () => {
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
     expect(screen.getAllByText(/No working palette/i).length).toBeGreaterThan(0);
@@ -236,15 +268,56 @@ describe('WorkingPaletteSidebar', () => {
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
     const itemButtons = screen.getAllByTestId(/^working-palette-sidebar-item-/);
     expect(itemButtons).toHaveLength(2);
+  });
+
+  it('virtualizes a 2,000-item palette and exposes ordered items on demand while scrolling', async () => {
+    bridgePalettes = [
+      makePalette(Array.from({ length: 2_000 }, (_, index) => largeTileItem(index))),
+    ];
+    useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
+
+    render(
+      <QueryClientProvider client={makeTestClient()}>
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
+      </QueryClientProvider>,
+    );
+
+    const renderedItems = screen.getAllByTestId(/^working-palette-sidebar-item-/);
+    expect(renderedItems.length).toBeGreaterThan(0);
+    expect(renderedItems.length).toBeLessThan(100);
+    const refs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly unknown[];
+    expect(refs).toHaveLength(64);
+    expect(Number.parseFloat(screen.getByTestId('working-palette-sidebar-grid').style.height)).toBe(
+      17_600,
+    );
+
+    const lastItem = largeTileItem(1_999);
+    expect(
+      screen.queryByTestId(`working-palette-sidebar-item-${workingPaletteItemKey(lastItem)}`),
+    ).toBeNull();
+
+    const viewport = screen.getByTestId('working-palette-sidebar-grid-viewport');
+    fireEvent.scroll(viewport, { target: { scrollTop: 17_216 } });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId(`working-palette-sidebar-item-${workingPaletteItemKey(lastItem)}`),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.queryByTestId(
+        `working-palette-sidebar-item-${workingPaletteItemKey(largeTileItem(0))}`,
+      ),
+    ).toBeNull();
+    const finalWindowRefs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly {
+      refId: string;
+    }[];
+    expect(finalWindowRefs.some((ref) => ref.refId === lastItem.ref.refId)).toBe(true);
   });
 
   it('resolves previews for the palette item refs via the main-process IPC hook', () => {
@@ -252,14 +325,12 @@ describe('WorkingPaletteSidebar', () => {
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
-    const refs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly { refId: string }[];
+    const refs = useWorkingPalettePreviewsMock.mock.calls.at(-1)?.[0] as readonly {
+      refId: string;
+    }[];
     expect(refs).toHaveLength(3);
     expect(screen.getAllByTestId(/^working-palette-sidebar-item-/)).toHaveLength(3);
   });
@@ -270,11 +341,7 @@ describe('WorkingPaletteSidebar', () => {
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
     const button = screen.getByTestId(
@@ -293,11 +360,7 @@ describe('WorkingPaletteSidebar', () => {
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
     expect(screen.getByTestId('working-palette-sidebar-grid')).toBeTruthy();
@@ -346,12 +409,12 @@ describe('WorkingPaletteSidebar', () => {
         <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
-    expect(
-      screen.getByTestId(`palette-action-${SPAWN_TYPE_ID}`).getAttribute('data-active'),
-    ).toBe('true');
-    expect(
-      screen.getByTestId(`palette-action-${LOOT_TYPE_ID}`).getAttribute('data-active'),
-    ).toBe('false');
+    expect(screen.getByTestId(`palette-action-${SPAWN_TYPE_ID}`).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(screen.getByTestId(`palette-action-${LOOT_TYPE_ID}`).getAttribute('data-active')).toBe(
+      'false',
+    );
   });
 
   it('humanises long internal identifiers in labels coming from the working palette', () => {
@@ -359,11 +422,7 @@ describe('WorkingPaletteSidebar', () => {
     useWorkingPalettesStore.setState({ palettes: bridgePalettes, activePaletteId: paletteId });
     render(
       <QueryClientProvider client={makeTestClient()}>
-        <WorkingPaletteSidebar
-          projectId={projectId}
-          packId={packId}
-          packName="Test pack"
-        />
+        <WorkingPaletteSidebar projectId={projectId} packId={packId} packName="Test pack" />
       </QueryClientProvider>,
     );
     expect(screen.getByRole('button', { name: /Grass Terrain/i })).toBeTruthy();

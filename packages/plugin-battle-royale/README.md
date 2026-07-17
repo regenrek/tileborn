@@ -16,44 +16,44 @@ local-first battle royale loop:
 
 ## Capabilities
 
-| Capability | Entry / contribution |
-| --- | --- |
-| `runtime.adapter` | `entry.runtime` → `./dist/runtime.js` |
-| `map.validate` | `validateMap` in `./dist/server.js` |
-| `map.generate` | `generateMap` in `./dist/server.js` |
+| Capability        | Entry / contribution                      |
+| ----------------- | ----------------------------------------- |
+| `runtime.adapter` | `entry.runtime` → `./dist/runtime.js`     |
+| `map.validate`    | `validateMap` in `./dist/server.js`       |
+| `map.generate`    | `generateMap` in `./dist/server.js`       |
 | `assets.metadata` | declarative asset pack + metadata indexes |
 
 ## Tunable gameplay constants
 
 Canonical defaults live in `src/constants.ts` as grouped sub-objects:
 
-| Group | Keys | Default | Used by |
-| --- | --- | --- | --- |
-| `MOVEMENT` | `speed` | `120` | Player movement (world units / sec) |
-| | `radius` | `12` | Player collision circle |
-| | `footprintOffsetY` | `0` | Vertical offset to collision center |
-| | `tickRate` | `20` | Simulation tick rate (Hz) |
-| `ZONE` | `damagePerSecond` | `5` | Outside-zone damage at init |
-| | `schedule.waitSec` | `60` | Initial safe-zone wait |
-| | `schedule.shrinkSec` | `30` | Shrink animation duration |
-| | `schedule.holdSec` | `30` | Hold after each shrink |
-| | `schedule.shrinkPhases` | `3` | Number of shrink phases |
-| | `schedule.radiusFactor` | `0.5` | Radius multiplier per phase |
-| `PROJECTILE` | `speed` | `400` | Projectile travel speed |
-| | `damage` | `25` | Hit damage |
-| | `ttlTicks` | `40` | Lifetime (~2s at 20Hz) |
-| | `shootCooldownTicks` | `8` | Min ticks between shots |
-| | `radius` | `4` | Projectile hit radius |
-| `DAMAGE` | `playerHealth` | `100` | Spawn / respawn health |
-| `RESPAWN` | `delayTicks` | `100` | Respawn delay when enabled (5s at 20Hz) |
+| Group        | Keys                    | Default | Used by                                 |
+| ------------ | ----------------------- | ------- | --------------------------------------- |
+| `MOVEMENT`   | `speed`                 | `120`   | Player movement (world units / sec)     |
+|              | `radius`                | `12`    | Player collision circle                 |
+|              | `footprintOffsetY`      | `0`     | Vertical offset to collision center     |
+|              | `tickRate`              | `20`    | Simulation tick rate (Hz)               |
+| `ZONE`       | `damagePerSecond`       | `5`     | Outside-zone damage at init             |
+|              | `schedule.waitSec`      | `60`    | Initial safe-zone wait                  |
+|              | `schedule.shrinkSec`    | `30`    | Shrink animation duration               |
+|              | `schedule.holdSec`      | `30`    | Hold after each shrink                  |
+|              | `schedule.shrinkPhases` | `3`     | Number of shrink phases                 |
+|              | `schedule.radiusFactor` | `0.5`   | Radius multiplier per phase             |
+| `PROJECTILE` | `speed`                 | `400`   | Projectile travel speed                 |
+|              | `damage`                | `25`    | Hit damage                              |
+|              | `ttlTicks`              | `40`    | Lifetime (~2s at 20Hz)                  |
+|              | `shootCooldownTicks`    | `8`     | Min ticks between shots                 |
+|              | `radius`                | `4`     | Projectile hit radius                   |
+| `DAMAGE`     | `playerHealth`          | `100`   | Spawn / respawn health                  |
+| `RESPAWN`    | `delayTicks`            | `100`   | Respawn delay when enabled (5s at 20Hz) |
 
 ## Per-room overrides
 
 Runtime merges overrides in this order (later wins):
 
 1. Package defaults (`constants.ts`)
-2. Exported artifact shrink schedule (anchor / export options)
-3. `map.properties.battleRoyale` (parsed at export, stored on artifact)
+2. Authored shrink schedule (zone anchor placement in the runtime map package)
+3. `map.properties.battleRoyale` (read from the package map at boot)
 4. `RuntimePluginHost.config` (room / host factory overrides)
 
 ### Map property path
@@ -78,7 +78,7 @@ Set on the map root:
 
 ```typescript
 createRuntimeAdapter({
-  getArtifact: () => artifact,
+  getMapPackage: () => mapPackage,
   config: {
     projectile: { speed: 600 },
     roomRules: { respawnEnabled: true },

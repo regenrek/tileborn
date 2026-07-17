@@ -29,9 +29,7 @@
         }
       ],
       "pack": {
-        "assetPaths": [
-          "terrain.png"
-        ],
+        "assetPaths": ["terrain.png"],
         "autotileRules": [],
         "terrainClasses": [],
         "tileCount": 4,
@@ -101,9 +99,7 @@
         "cells": [
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -116,9 +112,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -131,9 +125,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -146,9 +138,7 @@
           },
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -164,22 +154,15 @@
         "width": 2
       },
       "pack": {
-        "assetPaths": [
-          "terrain.png"
-        ],
+        "assetPaths": ["terrain.png"],
         "autotileRules": [],
-        "terrainClasses": [
-          "grass",
-          "water"
-        ],
+        "terrainClasses": ["grass", "water"],
         "tileCount": 2,
         "tiles": [
           {
             "hasAnimation": false,
             "key": "0,16,16,16",
-            "tags": [
-              "water"
-            ],
+            "tags": ["water"],
             "terrainClass": "water",
             "uv": {
               "h": 16,
@@ -196,9 +179,7 @@
             },
             "hasAnimation": false,
             "key": "16,0,16,16",
-            "tags": [
-              "grass"
-            ],
+            "tags": ["grass"],
             "terrainClass": "grass",
             "uv": {
               "h": 16,
@@ -228,9 +209,7 @@
         "cells": [
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -243,9 +222,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -258,9 +235,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -273,9 +248,7 @@
           },
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -313,14 +286,9 @@
         }
       ],
       "pack": {
-        "assetPaths": [
-          "terrain.png"
-        ],
+        "assetPaths": ["terrain.png"],
         "autotileRules": [],
-        "terrainClasses": [
-          "terrain:grass",
-          "terrain:water"
-        ],
+        "terrainClasses": ["terrain:grass", "terrain:water"],
         "tileCount": 4,
         "tiles": [
           {
@@ -337,9 +305,7 @@
           {
             "hasAnimation": false,
             "key": "0,16,16,16",
-            "tags": [
-              "tiled:terrain=water"
-            ],
+            "tags": ["tiled:terrain=water"],
             "terrainClass": "terrain:water",
             "uv": {
               "h": 16,
@@ -356,9 +322,7 @@
             },
             "hasAnimation": false,
             "key": "16,0,16,16",
-            "tags": [
-              "tiled:terrain=grass"
-            ],
+            "tags": ["tiled:terrain=grass"],
             "terrainClass": "terrain:grass",
             "uv": {
               "h": 16,
@@ -399,9 +363,7 @@
         "cells": [
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -414,9 +376,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -429,9 +389,7 @@
           },
           {
             "resolvedTileKey": "0,16,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "0,16,16,16",
             "uv": {
               "h": 16,
@@ -444,9 +402,7 @@
           },
           {
             "resolvedTileKey": "16,0,16,16",
-            "sourceAssetPaths": [
-              "terrain.png"
-            ],
+            "sourceAssetPaths": ["terrain.png"],
             "tileKey": "16,0,16,16",
             "uv": {
               "h": 16,
@@ -484,14 +440,9 @@
         }
       ],
       "pack": {
-        "assetPaths": [
-          "terrain.png"
-        ],
+        "assetPaths": ["terrain.png"],
         "autotileRules": [],
-        "terrainClasses": [
-          "terrain:grass",
-          "terrain:water"
-        ],
+        "terrainClasses": ["terrain:grass", "terrain:water"],
         "tileCount": 4,
         "tiles": [
           {
@@ -508,9 +459,7 @@
           {
             "hasAnimation": false,
             "key": "0,16,16,16",
-            "tags": [
-              "tiled:terrain=water"
-            ],
+            "tags": ["tiled:terrain=water"],
             "terrainClass": "terrain:water",
             "uv": {
               "h": 16,
@@ -527,9 +476,7 @@
             },
             "hasAnimation": false,
             "key": "16,0,16,16",
-            "tags": [
-              "tiled:terrain=grass"
-            ],
+            "tags": ["tiled:terrain=grass"],
             "terrainClass": "terrain:grass",
             "uv": {
               "h": 16,
@@ -571,9 +518,7 @@
       "cells": [
         {
           "resolvedTileKey": "16,0,16,16",
-          "sourceAssetPaths": [
-            "terrain.png"
-          ],
+          "sourceAssetPaths": ["terrain.png"],
           "tileKey": "16,0,16,16",
           "uv": {
             "h": 16,
@@ -586,9 +531,7 @@
         },
         {
           "resolvedTileKey": "0,16,16,16",
-          "sourceAssetPaths": [
-            "terrain.png"
-          ],
+          "sourceAssetPaths": ["terrain.png"],
           "tileKey": "0,16,16,16",
           "uv": {
             "h": 16,
@@ -601,9 +544,7 @@
         },
         {
           "resolvedTileKey": "0,16,16,16",
-          "sourceAssetPaths": [
-            "terrain.png"
-          ],
+          "sourceAssetPaths": ["terrain.png"],
           "tileKey": "0,16,16,16",
           "uv": {
             "h": 16,
@@ -616,9 +557,7 @@
         },
         {
           "resolvedTileKey": "16,0,16,16",
-          "sourceAssetPaths": [
-            "terrain.png"
-          ],
+          "sourceAssetPaths": ["terrain.png"],
           "tileKey": "16,0,16,16",
           "uv": {
             "h": 16,
@@ -656,14 +595,9 @@
       }
     ],
     "pack": {
-      "assetPaths": [
-        "terrain.png"
-      ],
+      "assetPaths": ["terrain.png"],
       "autotileRules": [],
-      "terrainClasses": [
-        "terrain:grass",
-        "terrain:water"
-      ],
+      "terrainClasses": ["terrain:grass", "terrain:water"],
       "tileCount": 4,
       "tiles": [
         {
@@ -680,9 +614,7 @@
         {
           "hasAnimation": false,
           "key": "0,16,16,16",
-          "tags": [
-            "tiled:terrain=water"
-          ],
+          "tags": ["tiled:terrain=water"],
           "terrainClass": "terrain:water",
           "uv": {
             "h": 16,
@@ -699,9 +631,7 @@
           },
           "hasAnimation": false,
           "key": "16,0,16,16",
-          "tags": [
-            "tiled:terrain=grass"
-          ],
+          "tags": ["tiled:terrain=grass"],
           "terrainClass": "terrain:grass",
           "uv": {
             "h": 16,

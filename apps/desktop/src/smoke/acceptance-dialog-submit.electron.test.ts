@@ -1,7 +1,5 @@
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, describe, it } from 'vitest';
-import process from 'node:process';
-
 import {
   createTileborneHome,
   disposeSmokeContext,
@@ -55,12 +53,14 @@ describe('acceptance: generate map dialog submit', () => {
     const { page } = smokeContext!;
 
     await navigateToRoute(page, `/projects/${projectId}`);
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+KeyG' : 'Control+KeyG');
+    await page.getByRole('button', { name: 'Generate Map', exact: true }).click();
     await expect(page.getByRole('dialog', { name: /Generate map/i })).toBeVisible();
 
     await expect(page.getByTestId('generate-map-submit')).toBeEnabled({ timeout: 20_000 });
     await page.getByTestId('generate-map-submit').click();
-    await expect(page.getByRole('dialog', { name: /Generate map/i })).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByRole('dialog', { name: /Generate map/i })).toBeHidden({
+      timeout: 20_000,
+    });
 
     const sidebarMaps = page.getByTestId('sidebar-map-list');
     await expect(sidebarMaps.locator('a')).not.toHaveCount(0, { timeout: 5_000 });

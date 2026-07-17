@@ -1,8 +1,14 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-export const IMAGE_MIME_TYPES = ["image/png", "image/webp", "image/jpeg"] as const;
-export const AUDIO_MIME_TYPES = ["audio/wav", "audio/wave", "audio/x-wav", "audio/ogg", "audio/mpeg"] as const;
-export const DATA_MIME_TYPES = ["application/json", "text/plain"] as const;
+export const IMAGE_MIME_TYPES = ['image/png', 'image/webp', 'image/jpeg'] as const;
+export const AUDIO_MIME_TYPES = [
+  'audio/wav',
+  'audio/wave',
+  'audio/x-wav',
+  'audio/ogg',
+  'audio/mpeg',
+] as const;
+export const DATA_MIME_TYPES = ['application/json', 'text/plain'] as const;
 
 export const ALLOWED_MIME_TYPES = [
   ...IMAGE_MIME_TYPES,

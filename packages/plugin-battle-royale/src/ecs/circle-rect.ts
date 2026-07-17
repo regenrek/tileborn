@@ -1,14 +1,14 @@
-import type { CollisionRect } from "./rect.js";
+import type { CollisionRect } from './rect.js';
 
 /** Lifted from `@tileborne/runtime` collision parity helper. */
 export const resolveCircleRect = (
   player: { x: number; y: number },
   rect: CollisionRect,
   playerRadius: number,
-  offsetY: number,
+  offset: { readonly x: number; readonly y: number },
 ): void => {
-  const centerX = player.x;
-  const centerY = player.y + offsetY;
+  const centerX = player.x + offset.x;
+  const centerY = player.y + offset.y;
   const closestX = clamp(centerX, rect.x, rect.x + rect.width);
   const closestY = clamp(centerY, rect.y, rect.y + rect.height);
   const dx = centerX - closestX;
@@ -23,10 +23,10 @@ export const resolveCircleRect = (
     const top = Math.abs(centerY - rect.y);
     const bottom = Math.abs(centerY - (rect.y + rect.height));
     const min = Math.min(left, right, top, bottom);
-    if (min === left) player.x = rect.x - playerRadius;
-    else if (min === right) player.x = rect.x + rect.width + playerRadius;
-    else if (min === top) player.y = rect.y - offsetY - playerRadius;
-    else player.y = rect.y + rect.height - offsetY + playerRadius;
+    if (min === left) player.x = rect.x - offset.x - playerRadius;
+    else if (min === right) player.x = rect.x + rect.width - offset.x + playerRadius;
+    else if (min === top) player.y = rect.y - offset.y - playerRadius;
+    else player.y = rect.y + rect.height - offset.y + playerRadius;
     return;
   }
   const push = playerRadius - distance;
@@ -34,17 +34,5 @@ export const resolveCircleRect = (
   player.y += (dy / distance) * push;
 };
 
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
-
-export const circleOverlapsRect = (
-  centerX: number,
-  centerY: number,
-  radius: number,
-  rect: CollisionRect,
-): boolean => {
-  const closestX = clamp(centerX, rect.x, rect.x + rect.width);
-  const closestY = clamp(centerY, rect.y, rect.y + rect.height);
-  const dx = centerX - closestX;
-  const dy = centerY - closestY;
-  return dx * dx + dy * dy < radius * radius;
-};
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));

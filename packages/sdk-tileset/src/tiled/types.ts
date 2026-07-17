@@ -1,10 +1,10 @@
-import type { AssetId, TileborneMap } from "@tileborne/core";
+import type { AssetId, TileborneMap } from '@tileborne/core';
 
 /** Raw Tiled JSON shapes consumed by the Tileborne SDK importer. */
 
 export type TiledJsonProperty = {
   readonly name: string;
-  readonly type: "string" | "int" | "float" | "bool" | "color" | "file" | "object" | "class";
+  readonly type: 'string' | 'int' | 'float' | 'bool' | 'color' | 'file' | 'object' | 'class';
   readonly value: string | number | boolean;
   readonly propertytype?: string;
 };
@@ -34,11 +34,11 @@ export type TiledJsonObject = {
 };
 
 export type TiledJsonObjectGroup = {
-  readonly type: "objectgroup";
+  readonly type: 'objectgroup';
   readonly id?: number;
   readonly name?: string;
   readonly class?: string;
-  readonly draworder?: "topdown" | "index";
+  readonly draworder?: 'topdown' | 'index';
   readonly objects: readonly TiledJsonObject[];
 };
 
@@ -70,7 +70,7 @@ export type TiledJsonWangTile = {
 
 export type TiledJsonWangSet = {
   readonly name: string;
-  readonly type?: "corner" | "edge" | "mixed";
+  readonly type?: 'corner' | 'edge' | 'mixed';
   readonly class?: string;
   readonly tile?: number;
   readonly colors: readonly TiledJsonWangColor[];
@@ -78,7 +78,7 @@ export type TiledJsonWangSet = {
 };
 
 export type TiledJsonTileset = {
-  readonly type?: "tileset";
+  readonly type?: 'tileset';
   readonly name: string;
   readonly tilewidth: number;
   readonly tileheight: number;
@@ -116,24 +116,24 @@ export type TiledJsonLayerBase = {
 };
 
 export type TiledJsonTileLayer = TiledJsonLayerBase & {
-  readonly type: "tilelayer";
+  readonly type: 'tilelayer';
   readonly width: number;
   readonly height: number;
   readonly data: readonly number[];
-  readonly encoding?: "csv" | "base64";
+  readonly encoding?: 'csv' | 'base64';
   readonly compression?: string;
   readonly chunks?: readonly unknown[];
 };
 
 export type TiledJsonImageLayer = TiledJsonLayerBase & {
-  readonly type: "imagelayer";
+  readonly type: 'imagelayer';
   readonly image: string;
   readonly x?: number;
   readonly y?: number;
 };
 
 export type TiledJsonGroupLayer = TiledJsonLayerBase & {
-  readonly type: "group";
+  readonly type: 'group';
   readonly layers: readonly TiledJsonAnyLayer[];
 };
 
@@ -144,10 +144,10 @@ export type TiledJsonAnyLayer =
   | TiledJsonGroupLayer;
 
 export type TiledJsonMap = {
-  readonly type: "map";
+  readonly type: 'map';
   readonly version: string;
   readonly tiledversion?: string;
-  readonly orientation: "orthogonal" | "isometric" | "staggered" | "hexagonal";
+  readonly orientation: 'orthogonal' | 'isometric' | 'staggered' | 'hexagonal';
   readonly width: number;
   readonly height: number;
   readonly tilewidth: number;
@@ -169,9 +169,7 @@ export type TiledExternalReader = {
   readonly readFile: (path: string) => Promise<string | Uint8Array> | string | Uint8Array;
   readonly readDirectory?: (
     path: string,
-  ) =>
-    | Promise<readonly TiledExternalDirectoryEntry[]>
-    | readonly TiledExternalDirectoryEntry[];
+  ) => Promise<readonly TiledExternalDirectoryEntry[]> | readonly TiledExternalDirectoryEntry[];
   readonly realpath?: (path: string) => Promise<string> | string;
 };
 
@@ -180,7 +178,7 @@ export type TiledExternalDirectoryEntry =
   | {
       readonly name: string;
       readonly path?: string;
-      readonly kind: "file" | "directory";
+      readonly kind: 'file' | 'directory';
     };
 
 export type TiledImportOptions = {
@@ -195,12 +193,12 @@ export type TiledImportOptions = {
 };
 
 export type TiledImportProfile =
-  | "standard"
-  | "standard-plus-hints"
-  | "assistive-infer"
-  | { readonly kind: "plugin"; readonly id: string };
-export type TiledObjectAnchor = "top-left" | "bottom-left" | "center";
-export type TiledCanonicalObjectAnchor = "top-left";
+  | 'standard'
+  | 'standard-plus-hints'
+  | 'assistive-infer'
+  | { readonly kind: 'plugin'; readonly id: string };
+export type TiledObjectAnchor = 'top-left' | 'bottom-left' | 'center';
+export type TiledCanonicalObjectAnchor = 'top-left';
 
 export type TiledMapCell = {
   readonly rawGid: number;
@@ -219,7 +217,7 @@ export type TiledGidTransform = {
 };
 
 export type TiledMapTileLayer = {
-  readonly kind: "tile";
+  readonly kind: 'tile';
   readonly id: string;
   readonly name: string;
   readonly class?: string;
@@ -231,7 +229,7 @@ export type TiledMapTileLayer = {
   readonly properties: Readonly<Record<string, string | number | boolean>>;
 };
 
-export type TiledMapObjectRole = "spawn" | "prop" | "object";
+export type TiledMapObjectRole = 'spawn' | 'prop' | 'object';
 
 export type TiledObjectTileRef = {
   readonly rawGid: number;
@@ -243,7 +241,7 @@ export type TiledObjectTileRef = {
 
 export type TiledObjectPlacementRef = {
   readonly placeableId: string;
-  readonly source: "tiled-object";
+  readonly source: 'tiled-object';
   readonly assetId: string;
   readonly tileId: string;
   readonly gid: number;
@@ -252,7 +250,7 @@ export type TiledObjectPlacementRef = {
 };
 
 export type TiledMapObject = {
-  readonly kind: "object";
+  readonly kind: 'object';
   readonly id: string;
   readonly layerId: string;
   readonly layerName: string;
@@ -273,7 +271,7 @@ export type TiledMapObject = {
 };
 
 export type TiledMapImageLayer = {
-  readonly kind: "image";
+  readonly kind: 'image';
   readonly id: string;
   readonly name: string;
   readonly image: string;
@@ -286,7 +284,7 @@ export type TiledMapImageLayer = {
 };
 
 export type TiledMapGroupLayer = {
-  readonly kind: "group";
+  readonly kind: 'group';
   readonly id: string;
   readonly name: string;
   readonly visible: boolean;
@@ -295,41 +293,45 @@ export type TiledMapGroupLayer = {
   readonly properties: Readonly<Record<string, string | number | boolean>>;
 };
 
-export type TiledMapLayer = TiledMapTileLayer | TiledMapObject | TiledMapImageLayer | TiledMapGroupLayer;
+export type TiledMapLayer =
+  | TiledMapTileLayer
+  | TiledMapObject
+  | TiledMapImageLayer
+  | TiledMapGroupLayer;
 
 export type TiledMapImport = {
   readonly width: number;
   readonly height: number;
   readonly tileWidth: number;
   readonly tileHeight: number;
-  readonly orientation: TiledJsonMap["orientation"];
+  readonly orientation: TiledJsonMap['orientation'];
   readonly layers: readonly TiledMapLayer[];
   readonly properties: Readonly<Record<string, string | number | boolean>>;
 };
 
 export type TiledImportSuccess = {
-  readonly pack: import("../schemas/tileset-pack.js").TilesetPack;
+  readonly pack: import('../schemas/tileset-pack.js').TilesetPack;
   readonly map: TileborneMap;
   readonly tiledMap: TiledMapImport;
 };
 
-export type TiledImportRecommendedProfile = TiledImportProfile | "plugin-required";
+export type TiledImportRecommendedProfile = TiledImportProfile | 'plugin-required';
 
 export type TiledImportSourceRoleKind =
-  | "paintable-tileset"
-  | "placeable-object"
-  | "map-context"
-  | "review-required";
+  | 'paintable-tileset'
+  | 'placeable-object'
+  | 'map-context'
+  | 'review-required';
 
 export type TiledImportSourceRoleEvidence =
-  | "grid-tileset"
-  | "image-collection"
-  | "tileborne-placeable-hint"
-  | "object-layer"
-  | "ambiguous-atlas-object"
-  | "unsupported-feature";
+  | 'grid-tileset'
+  | 'image-collection'
+  | 'tileborne-placeable-hint'
+  | 'object-layer'
+  | 'ambiguous-atlas-object'
+  | 'unsupported-feature';
 
-export type TiledImportBrowseTarget = "tilesets" | "objects" | "maps" | "review";
+export type TiledImportBrowseTarget = 'tilesets' | 'objects' | 'maps' | 'review';
 
 export type TiledImportSourceRole = {
   readonly kind: TiledImportSourceRoleKind;
@@ -344,11 +346,11 @@ export type TiledImportSourceRole = {
 };
 
 export type TiledImportPrimaryAction =
-  | "import-paintable-tilesets"
-  | "import-placeable-objects"
-  | "import-mixed-assets"
-  | "review-before-import"
-  | "choose-plugin-profile";
+  | 'import-paintable-tilesets'
+  | 'import-placeable-objects'
+  | 'import-mixed-assets'
+  | 'review-before-import'
+  | 'choose-plugin-profile';
 
 export type TiledImportRecommendation = {
   readonly sourceRoles: readonly TiledImportSourceRole[];
@@ -362,7 +364,7 @@ export type TiledImportRecommendation = {
 export type TiledScanTileset = {
   readonly name: string;
   readonly firstgid: number;
-  readonly kind: "grid" | "image-collection";
+  readonly kind: 'grid' | 'image-collection';
   readonly tileCount: number;
   readonly columns: number;
   readonly wangSetCount: number;
@@ -394,7 +396,7 @@ export type TilesetFrameIndex = {
 export type TiledSourceInventoryTileset = {
   readonly name: string;
   readonly path?: string;
-  readonly kind: "grid" | "image-collection";
+  readonly kind: 'grid' | 'image-collection';
   readonly tileCount: number;
   readonly frameCount: number;
   readonly imageCollectionTileCount: number;
@@ -408,7 +410,7 @@ export type TiledSourceInventoryTileset = {
 
 export type TiledSourceInventoryRule = {
   readonly path: string;
-  readonly kind: "rules-index" | "rule-map";
+  readonly kind: 'rules-index' | 'rule-map';
 };
 
 export type TiledSourceInventory = {
@@ -450,7 +452,7 @@ export type TiledScanObjectLayer = {
 export type TiledScanPlaceableCandidate = {
   readonly tilesetName: string;
   readonly localTileId: number;
-  readonly source: "image-collection" | "tileborne-hint";
+  readonly source: 'image-collection' | 'tileborne-hint';
   readonly image?: string;
   readonly width: number;
   readonly height: number;
@@ -461,7 +463,7 @@ export type TiledScanPlaceableCandidate = {
 export type TiledScanCategory = {
   readonly id: string;
   readonly label: string;
-  readonly source: "class" | "type" | "property" | "tileborne-hint";
+  readonly source: 'class' | 'type' | 'property' | 'tileborne-hint';
   readonly count: number;
   readonly confidence: number;
 };
@@ -483,13 +485,13 @@ export type TiledScanFeatureFlags = {
 };
 
 export type TiledUnsupportedFeatureId =
-  | "templates"
-  | "infinite-chunks"
-  | "rotation"
-  | "parallax"
-  | "orientation"
-  | "class-properties"
-  | "project-files";
+  | 'templates'
+  | 'infinite-chunks'
+  | 'rotation'
+  | 'parallax'
+  | 'orientation'
+  | 'class-properties'
+  | 'project-files';
 
 export type TiledScanUnsupportedFeature = {
   readonly feature: TiledUnsupportedFeatureId;
@@ -507,7 +509,7 @@ export type TiledScanAmbiguousAtlasObject = {
 };
 
 export type TiledImportScan = {
-  readonly sourceKind: "map" | "tileset" | "source-folder";
+  readonly sourceKind: 'map' | 'tileset' | 'source-folder';
   readonly sourcePath: string;
   readonly maps: readonly {
     readonly path: string;
@@ -547,7 +549,7 @@ export type TiledImportScan = {
 export type TiledImportPlanMapping = {
   readonly tilesets: readonly {
     readonly name: string;
-    readonly kind: TiledScanTileset["kind"];
+    readonly kind: TiledScanTileset['kind'];
     readonly categoryIds: readonly string[];
     readonly paintable: boolean;
     readonly placeable: boolean;
@@ -555,17 +557,17 @@ export type TiledImportPlanMapping = {
   }[];
   readonly categories: readonly TiledScanCategory[];
   readonly placeables: readonly TiledScanPlaceableCandidate[];
-  readonly maps: TiledImportScan["maps"];
+  readonly maps: TiledImportScan['maps'];
 };
 
 export type TiledImportPlanSuggestion = {
   readonly id: string;
-  readonly block: "tileset" | "placeable" | "category" | "object-layer";
+  readonly block: 'tileset' | 'placeable' | 'category' | 'object-layer';
   readonly target: string;
   readonly action: string;
   readonly reason: string;
   readonly confidence: number;
-  readonly source: "assistive-infer";
+  readonly source: 'assistive-infer';
 };
 
 export type TiledImportPlanHints = {
@@ -581,7 +583,7 @@ export type TiledImportPlan = {
   readonly mappings: TiledImportPlanMapping;
   readonly suggestions: readonly TiledImportPlanSuggestion[];
   readonly acceptedSuggestionIds: readonly string[];
-  readonly diagnostics: readonly import("../diagnostics.js").ParseDiagnostic[];
+  readonly diagnostics: readonly import('../diagnostics.js').ParseDiagnostic[];
 };
 
 export type TiledAppliedImportPlan = {
@@ -593,38 +595,38 @@ export type TiledAppliedImportPlan = {
   readonly importRecommendation: TiledImportRecommendation;
   readonly mappings: TiledImportPlanMapping;
   readonly acceptedSuggestions: readonly TiledImportPlanSuggestion[];
-  readonly diagnostics: readonly import("../diagnostics.js").ParseDiagnostic[];
+  readonly diagnostics: readonly import('../diagnostics.js').ParseDiagnostic[];
 };
 
 export type TiledCanonicalImport = {
-  readonly kind: "map";
+  readonly kind: 'map';
   readonly scan: TiledImportScan;
-  readonly pack: import("../schemas/tileset-pack.js").TilesetPack;
+  readonly pack: import('../schemas/tileset-pack.js').TilesetPack;
   readonly map: TileborneMap;
   readonly tiledMap: TiledMapImport;
-  readonly diagnostics: readonly import("../diagnostics.js").ParseDiagnostic[];
+  readonly diagnostics: readonly import('../diagnostics.js').ParseDiagnostic[];
 };
 
 export type TiledSourcePackRuleRef = {
   readonly path: string;
-  readonly kind: "rules-index" | "rule-map";
+  readonly kind: 'rules-index' | 'rule-map';
   readonly raw: string;
 };
 
 export type TiledTilesetPackImport = {
-  readonly kind: "tileset-pack";
+  readonly kind: 'tileset-pack';
   readonly scan: TiledImportScan;
-  readonly pack: import("../schemas/tileset-pack.js").TilesetPack;
-  readonly diagnostics: readonly import("../diagnostics.js").ParseDiagnostic[];
+  readonly pack: import('../schemas/tileset-pack.js').TilesetPack;
+  readonly diagnostics: readonly import('../diagnostics.js').ParseDiagnostic[];
 };
 
 export type TiledSourcePackImport = {
-  readonly kind: "source-pack";
+  readonly kind: 'source-pack';
   readonly scan: TiledImportScan;
-  readonly pack: import("../schemas/tileset-pack.js").TilesetPack;
+  readonly pack: import('../schemas/tileset-pack.js').TilesetPack;
   readonly sourceRoot: string;
   readonly rules: readonly TiledSourcePackRuleRef[];
-  readonly diagnostics: readonly import("../diagnostics.js").ParseDiagnostic[];
+  readonly diagnostics: readonly import('../diagnostics.js').ParseDiagnostic[];
 };
 
 export type TiledAnyCanonicalImport =

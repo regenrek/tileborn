@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["TILEBORNE_SOURCE_COMMIT"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -17,7 +18,10 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/services-build#test": {
+      "dependsOn": ["^build", "build"]
     },
     "test:cli-e2e": {
       "dependsOn": ["^build", "build"]

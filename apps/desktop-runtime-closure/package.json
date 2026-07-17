@@ -1,0 +1,11 @@
+{
+  "name": "@tileborne/desktop-runtime-closure",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Production-only binary runtime closure deployed into the packaged Tileborne desktop app.",
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260603.0"
+  }
+}

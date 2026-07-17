@@ -1,4 +1,4 @@
-import type { AnyIpcContract, ChannelOf } from "./contract.js";
+import type { AnyIpcContract, ChannelOf } from './contract.js';
 
 type ChannelKey<Channel> = Channel extends infer Key & ChannelOf<AnyIpcContract>
   ? Key extends string
@@ -35,9 +35,9 @@ export const createRegistry = <const Contracts extends readonly AnyIpcContract[]
 
 export const getContract = <
   Registry extends IpcRegistry,
-  Channel extends keyof Registry["byChannel"] & string,
+  Channel extends keyof Registry['byChannel'] & string,
 >(
   registry: Registry,
   channel: Channel,
-): Registry["byChannel"][Channel] =>
-  (registry.byChannel as Record<Channel, Registry["byChannel"][Channel]>)[channel];
+): Registry['byChannel'][Channel] =>
+  (registry.byChannel as Record<Channel, Registry['byChannel'][Channel]>)[channel];

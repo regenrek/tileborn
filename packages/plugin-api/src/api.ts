@@ -13,7 +13,7 @@ import type {
   ServerMatchmakingContribution,
   ServerRuleContribution,
   ServerScoringContribution,
-} from "./contributions.js";
+} from './contributions.js';
 
 export interface EditorContext {
   readonly registerTab: (contribution: EditorTabContribution) => void;
@@ -43,4 +43,3 @@ export interface TilebornePluginContext {
   readonly runtime: RuntimeContext;
   readonly server: ServerContext;
 }
-

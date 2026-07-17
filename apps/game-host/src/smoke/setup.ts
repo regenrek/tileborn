@@ -1,24 +1,27 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import type { WebSocket as MiniflareWebSocket } from "miniflare";
+import type { WebSocket as MiniflareWebSocket } from 'miniflare';
 
-import { createLocalGameHost, type LocalGameHost } from "../local/launcher.js";
-import { smokeDistDir } from "./build-worker.js";
-import { SMOKE_SIGNING_KEY } from "./wire-helpers.js";
+import { createLocalGameHost, type LocalGameHost } from '../local/launcher.js';
+import { smokeDistDir } from './build-worker.js';
+import { SMOKE_SIGNING_KEY } from './wire-helpers.js';
 
 export interface BootMiniflareOptions {
   readonly workerPath?: string;
-  readonly bindings?: Record<string, import("miniflare").Json>;
+  readonly bindings?: Record<string, import('miniflare').Json>;
   readonly heartbeatTimeoutSeconds?: number;
   readonly includeSigningKey?: boolean;
 }
 
-type MiniflareFetchInit = NonNullable<Parameters<LocalGameHost["fetch"]>[1]>;
-type MiniflareFetchResponse = Awaited<ReturnType<LocalGameHost["fetch"]>>;
+type MiniflareFetchInit = NonNullable<Parameters<LocalGameHost['fetch']>[1]>;
+type MiniflareFetchResponse = Awaited<ReturnType<LocalGameHost['fetch']>>;
 
 export interface MiniflareHarness {
-  readonly fetch: (input: string | URL, init?: MiniflareFetchInit) => Promise<MiniflareFetchResponse>;
+  readonly fetch: (
+    input: string | URL,
+    init?: MiniflareFetchInit,
+  ) => Promise<MiniflareFetchResponse>;
   readonly mfDispose: () => Promise<void>;
   readonly websocketConnect: (
     wsUrl: string,
@@ -32,7 +35,7 @@ export interface MiniflareHarness {
   ) => Promise<{ readonly code: number; readonly reason: string }>;
 }
 
-const defaultWorkerPath = path.join(smokeDistDir, "worker.js");
+const defaultWorkerPath = path.join(smokeDistDir, 'worker.js');
 
 export const bootMiniflare = async (opts: BootMiniflareOptions = {}): Promise<MiniflareHarness> => {
   const workerPath = opts.workerPath ?? defaultWorkerPath;
@@ -63,7 +66,7 @@ export const bootMiniflare = async (opts: BootMiniflareOptions = {}): Promise<Mi
         }, timeoutMs);
         void websocketConnect(wsUrl, {
           beforeAccept: (socket) => {
-            socket.addEventListener("close", (event) => {
+            socket.addEventListener('close', (event) => {
               clearTimeout(timer);
               resolve({ code: event.code, reason: event.reason });
             });
@@ -76,5 +79,5 @@ export const bootMiniflare = async (opts: BootMiniflareOptions = {}): Promise<Mi
 export const smokePaths = {
   distDir: smokeDistDir,
   workerPath: defaultWorkerPath,
-  repoRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."),
+  repoRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'),
 };

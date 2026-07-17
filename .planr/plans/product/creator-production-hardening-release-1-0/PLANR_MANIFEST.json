@@ -1,0 +1,31 @@
+{
+  "ai": false,
+  "assumptions": [
+    "Completed source plans pln-d39bcb7f and pln-059cc827 remain accepted functional evidence",
+    "The dirty worktree contains user-owned changes and must be preserved without destructive git cleanup",
+    "External publish, deploy, signing, tag, and push operations require separate maintainer approval"
+  ],
+  "backend": true,
+  "generated_at": "2026-07-16T01:04:59.333974Z",
+  "included_documents": [
+    "README.md",
+    "PRODUCT_SPEC.md",
+    "UX_FLOWS.md",
+    "DESIGN_SYSTEM_SPEC.md",
+    "TECH_ARCHITECTURE.md",
+    "ADRS.md",
+    "AI_SPEC.md",
+    "SAFETY_PRIVACY_SECURITY.md",
+    "API_AND_DATA_MODEL.md",
+    "CLIENT_IMPLEMENTATION_SPEC.md",
+    "BACKEND_IMPLEMENTATION_SPEC.md",
+    "ANALYTICS_OBSERVABILITY_SPEC.md",
+    "QA_ACCEPTANCE_TESTS.md",
+    "RELEASE_READINESS.md",
+    "TASKS.md",
+    "REFERENCES.md"
+  ],
+  "platform": "desktop",
+  "source_prompt": "Creator Production Hardening & Release 1.0",
+  "title": "Creator Production Hardening & Release 1.0"
+}

@@ -22,16 +22,10 @@ import {
 
 import { TOOL_LABELS, toolShortcut } from '@/lib/editor-tool-labels';
 import { SHORTCUTS } from '@/lib/keyboard-shortcuts';
+import { WORKSPACE_VIEWS } from '@/lib/workspace-views';
 import type { EditorTool } from '@/stores/editor-ui-store';
 
-export type ShellCommandGroupId =
-  | 'recent'
-  | 'file'
-  | 'edit'
-  | 'view'
-  | 'map'
-  | 'plugins'
-  | 'help';
+export type ShellCommandGroupId = 'recent' | 'file' | 'edit' | 'view' | 'map' | 'plugins' | 'help';
 
 export const SHELL_COMMAND_GROUP_ORDER: readonly ShellCommandGroupId[] = [
   'recent',
@@ -97,13 +91,29 @@ const toolCommands: ShellCommandDef[] = COMMAND_TOOL_IDS.map((tool) => ({
   requiresMap: true,
 }));
 
+/**
+ * View commands generated from the workspace-view SSOT (`workspace-views.ts`).
+ * Label/icon/keywords are owned there; the palette executes them by navigating
+ * to the view's registered route.
+ */
+const workspaceViewCommands: ShellCommandDef[] = WORKSPACE_VIEWS.filter(
+  (view) => view.commandId !== undefined,
+).map((view) => ({
+  id: view.commandId!,
+  label: view.label,
+  group: 'view',
+  icon: view.icon,
+  requiresProject: true,
+  ...(view.keywords === undefined ? {} : { keywords: view.keywords }),
+}));
+
 export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
   {
     id: 'file.create-project',
-    label: 'Create project',
+    label: 'New game',
     group: 'file',
     icon: FolderOpenIcon,
-    keywords: ['new', 'project'],
+    keywords: ['new', 'game', 'project'],
   },
   {
     id: 'file.import-asset-pack',
@@ -150,30 +160,7 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
     icon: SettingsIcon,
     keywords: ['preferences', 'theme'],
   },
-  {
-    id: 'view.project-overview',
-    label: 'Project overview',
-    group: 'view',
-    icon: MapIcon,
-    requiresProject: true,
-    keywords: ['project'],
-  },
-  {
-    id: 'view.asset-library',
-    label: 'Asset library',
-    group: 'view',
-    icon: PackageIcon,
-    requiresProject: true,
-    keywords: ['assets', 'import'],
-  },
-  {
-    id: 'view.plugin-manager',
-    label: 'Plugin manager',
-    group: 'view',
-    icon: PuzzleIcon,
-    requiresProject: true,
-    keywords: ['extensions', 'plugins'],
-  },
+  ...workspaceViewCommands,
   {
     id: 'view.toggle-grid',
     label: 'Toggle grid',
@@ -209,11 +196,11 @@ export const SHELL_COMMANDS: readonly ShellCommandDef[] = [
   },
   {
     id: 'map.start-build',
-    label: 'Start build',
+    label: 'Ship Game…',
     group: 'map',
     icon: HammerIcon,
     requiresProject: true,
-    keywords: ['build', 'compile'],
+    keywords: ['build', 'compile', 'ship', 'package', 'artifact'],
   },
   {
     id: 'map.start-playtest',

@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/asset-pipeline",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -9,6 +9,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./license": {
+      "types": "./dist/license/index.d.ts",
+      "default": "./dist/license/index.js"
+    },
+    "./pack": {
+      "types": "./dist/pack/index.d.ts",
+      "default": "./dist/pack/index.js"
     }
   },
   "scripts": {

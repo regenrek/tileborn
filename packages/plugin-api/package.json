@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/plugin-api",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -9,10 +9,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./preload": {
+      "types": "./dist/preload.d.ts",
+      "default": "./dist/preload.js"
+    },
+    "./project-content": {
+      "types": "./dist/project-content.d.ts",
+      "default": "./dist/project-content.js"
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "build": "tsc -b tsconfig.json --force"
@@ -20,6 +28,7 @@
   "dependencies": {
     "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
+    "@tileborne/simulation": "workspace:*",
     "effect": "4.0.0-beta.70"
   },
   "devDependencies": {

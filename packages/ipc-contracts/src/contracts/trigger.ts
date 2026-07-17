@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 /** Trigger-only event payload: renderer refetches via canonical query channels. */
 export type TriggerEventPayloadType = Record<string, never>;

@@ -7,7 +7,6 @@ import {
   useEditorUiStore,
   workspaceTabId,
   type BrushIntent,
-  type WorkspaceTab,
 } from './editor-ui-store';
 
 describe('editor-ui-store workspace tabs', () => {
@@ -16,11 +15,13 @@ describe('editor-ui-store workspace tabs', () => {
   });
 
   it('normalizes persisted tab ids and removes duplicate workspace tabs', () => {
-    const tabs: WorkspaceTab[] = [
+    const tabs: unknown[] = [
       { id: 'legacy-assets-id', kind: 'assets', projectId: 'project-1' },
       { id: 'assets:project-1', kind: 'assets', projectId: 'project-1' },
       { id: 'encoded-overview-id', kind: 'overview', projectId: 'project%3Aencoded' },
       { id: 'overview:project:encoded', kind: 'overview', projectId: 'project:encoded' },
+      { id: 'legacy-player-model-id', kind: 'player-model-editor', projectId: 'project%3Aencoded' },
+      { id: 'removed-editor-id', kind: 'removed-editor', projectId: 'project-1' },
       { id: 'broken-map', kind: 'map', projectId: 'project-1' },
       { id: 'legacy-settings-id', kind: 'settings' },
       { id: 'settings:global', kind: 'settings' },
@@ -29,8 +30,25 @@ describe('editor-ui-store workspace tabs', () => {
     expect(normalizeWorkspaceTabs(tabs)).toEqual([
       { id: 'assets:project-1', kind: 'assets', projectId: 'project-1' },
       { id: 'overview:project:encoded', kind: 'overview', projectId: 'project:encoded' },
+      {
+        id: 'player-model-editor:project:encoded',
+        kind: 'player-model-editor',
+        projectId: 'project:encoded',
+      },
       { id: 'settings:global', kind: 'settings' },
     ]);
+  });
+
+  it('drops malformed persisted workspace tabs before they reach workspace view lookup', () => {
+    expect(
+      normalizeWorkspaceTabs([
+        null,
+        undefined,
+        {},
+        { id: 'bad-kind', kind: 42, projectId: 'project-1' },
+        { id: 'map-missing-id', kind: 'map', projectId: 'project-1' },
+      ]),
+    ).toEqual([]);
   });
 
   it('deduplicates existing tabs before ensuring the active route tab', () => {

@@ -1,11 +1,27 @@
-import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-import { PluginManifest } from "@tileborne/plugin-api";
-import { MapService, ProjectService } from "@tileborne/services-app";
-import { ConfigLayer, HomeServiceLive, JobService, JobServiceLive } from "@tileborne/services-foundation";
-import { withTempHome } from "../../services-foundation/src/test-utils.js";
+import { ProjectManifest } from '@tileborne/core';
+import { PluginManifest } from '@tileborne/plugin-api';
+import { MapService, ProjectService } from '@tileborne/services-app';
+import {
+  ConfigLayer,
+  HomeService,
+  HomeServiceLive,
+  JobService,
+} from '@tileborne/services-foundation';
+import { withTempHome } from '../../services-foundation/src/test-utils.js';
 import {
   LocalPluginSource,
   PluginInstallerLayer,
@@ -14,15 +30,15 @@ import {
   PluginLoaderService,
   PluginRegistryLayer,
   PluginRegistryService,
-} from "@tileborne/services-plugin";
-import { materializePluginManifestInput } from "../../services-plugin/src/filesystem.js";
-import { describe, expect, it } from "vitest";
-import { Effect, Fiber, Layer, Option, Schema, Stream } from "effect";
+} from '@tileborne/services-plugin';
+import { materializePluginManifestInput } from '../../services-plugin/src/filesystem.js';
+import { describe, expect, it } from 'vitest';
+import { Effect, Fiber, Layer, Option, Result, Schema, Stream } from 'effect';
 
 import {
   BuildOptions,
   BuildService,
-  BATTLE_ROYALE_PLUGIN_ID,
+  GameBuildOptions,
   CloudflareWorkerExportTarget,
   ExportOptions,
   ExportService,
@@ -37,9 +53,15 @@ import {
   SupportService,
   WebExportTarget,
   ServicesBuildLayer,
-} from "./index.js";
-import { metadataFileName } from "./internal/persistence.js";
-import { makeNewBuildId } from "./model.js";
+  makeServicesBuildLayer,
+  gameArtifactBuildId,
+  type BuildPromotionOperations,
+} from './index.js';
+
+const BATTLE_ROYALE_PLUGIN_ID = '@tileborne-plugins/battle-royale';
+import { metadataFileName } from './internal/persistence.js';
+import { createLocalGameHost } from './local-game-host.js';
+import { makeNewBuildId } from './model.js';
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -50,30 +72,49 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   }
 };
 
-const foundationLayer = Layer.mergeAll(HomeServiceLive, JobServiceLive, ConfigLayer);
+// ServicesBuildLayer owns the canonical persistent JobService. Providing a
+// second in-memory JobService here splits create from list/cancel and makes
+// every async job appear permanently absent to the assertions.
+const foundationLayer = Layer.mergeAll(HomeServiceLive, ConfigLayer);
 const pluginLayer = Layer.mergeAll(PluginLoaderMainLayer, PluginInstallerLayer).pipe(
   Layer.provideMerge(PluginRegistryLayer),
   Layer.provideMerge(foundationLayer),
 );
-const testLayer = ServicesBuildLayer.pipe(Layer.provideMerge(pluginLayer), Layer.provideMerge(foundationLayer));
+const testLayer = ServicesBuildLayer.pipe(
+  Layer.provideMerge(pluginLayer),
+  Layer.provideMerge(foundationLayer),
+);
+const testLayerWithPromotion = (operations: BuildPromotionOperations) =>
+  makeServicesBuildLayer(operations).pipe(
+    Layer.provideMerge(pluginLayer),
+    Layer.provideMerge(foundationLayer),
+  );
+const EXAMPLE_ARENA_PLUGIN_ID = '@tileborne-plugins/example-arena';
 
 const waitForJob = (jobId: string) =>
   Effect.gen(function* () {
     const jobs = yield* JobService;
-    for (let attempt = 0; attempt < 50; attempt++) {
+    const deadline = performance.now() + 5_000;
+    let lastObserved: string | undefined;
+    while (performance.now() < deadline) {
       const job = (yield* jobs.list()).find((entry) => entry.id === jobId);
+      lastObserved = job?.status._tag;
       if (
         job &&
-        (job.status._tag === "Completed" || job.status._tag === "Failed" || job.status._tag === "Cancelled")
+        (job.status._tag === 'Completed' ||
+          job.status._tag === 'Failed' ||
+          job.status._tag === 'Cancelled')
       ) {
         return job;
       }
       yield* Effect.sleep(10);
     }
-    throw new Error(`job did not finish: ${jobId}`);
+    throw new Error(
+      `job did not finish within 5000ms: ${jobId}; last status=${lastObserved ?? 'not listed'}`,
+    );
   });
 
-const seedProject = (name = "Arena") =>
+const seedProject = (name = 'Arena') =>
   Effect.gen(function* () {
     const projects = yield* ProjectService;
     const maps = yield* MapService;
@@ -84,31 +125,33 @@ const seedProject = (name = "Arena") =>
 
 const installExportPlugin = (entryBody: string) =>
   Effect.gen(function* () {
-    const source = yield* Effect.promise(() => mkdtemp(path.join(tmpdir(), "tileborne-export-plugin-")));
+    const source = yield* Effect.promise(() =>
+      mkdtemp(path.join(tmpdir(), 'tileborne-export-plugin-')),
+    );
     const manifestInput = materializePluginManifestInput({
       schemaVersion: 1,
-      id: "@tileborne-plugins/export",
-      name: "@tileborne-plugins/export",
-      version: "0.1.0",
-      displayName: "Export Plugin",
-      description: "Export hook fixture",
-      author: "Tileborne",
-      license: "MIT",
-      engines: { tileborne: "^0.1.0" },
+      id: '@tileborne-plugins/export',
+      name: '@tileborne-plugins/export',
+      version: '0.1.0',
+      displayName: 'Export Plugin',
+      description: 'Export hook fixture',
+      author: 'Tileborne',
+      license: 'MIT',
+      engines: { tileborne: '^0.1.0' },
       contributes: {
         editor: {
           exporters: [
             {
-              _tag: "ExecutableEditorExporterContribution",
-              id: "web-export",
-              kind: "executable",
+              _tag: 'ExecutableEditorExporterContribution',
+              id: 'web-export',
+              kind: 'executable',
               display: {
-                label: "Web Export",
-                description: "Fixture export hook",
-                icon: "lucide:download",
+                label: 'Web Export',
+                description: 'Fixture export hook',
+                icon: 'lucide:download',
                 order: 1,
               },
-              entry: "export.mjs",
+              entry: 'export.mjs',
             },
           ],
         },
@@ -118,9 +161,12 @@ const installExportPlugin = (entryBody: string) =>
     });
     yield* Effect.promise(async () => {
       await mkdir(source, { recursive: true });
-      await writeFile(path.join(source, "tileborne-plugin.json"), `${JSON.stringify(manifestInput, null, 2)}\n`);
-      await writeFile(path.join(source, "export.mjs"), entryBody);
-      await writeFile(path.join(source, "README.md"), "export fixture\n");
+      await writeFile(
+        path.join(source, 'tileborne-plugin.json'),
+        `${JSON.stringify(manifestInput, null, 2)}\n`,
+      );
+      await writeFile(path.join(source, 'export.mjs'), entryBody);
+      await writeFile(path.join(source, 'README.md'), 'export fixture\n');
     });
     const installer = yield* PluginInstallerService;
     yield* installer.install(new LocalPluginSource({ path: source }));
@@ -128,94 +174,546 @@ const installExportPlugin = (entryBody: string) =>
     return source;
   });
 
-const runBuild = (projectId: import("@tileborne/core").ProjectId, options?: BuildOptions) =>
+const installRuntimePlugin = (input: {
+  readonly pluginId: string;
+  readonly runtimeSystemId: string;
+  readonly runtimeLabel: string;
+}) =>
+  Effect.gen(function* () {
+    const source = yield* Effect.promise(() =>
+      mkdtemp(path.join(tmpdir(), 'tileborne-runtime-plugin-')),
+    );
+    const manifest = Schema.decodeUnknownSync(PluginManifest)(
+      materializePluginManifestInput({
+        schemaVersion: 1,
+        id: input.pluginId,
+        name: input.pluginId,
+        version: '0.0.1',
+        displayName: input.runtimeLabel,
+        description: 'Runtime fixture plugin',
+        author: 'Tileborne',
+        license: 'MIT',
+        engines: { tileborne: '^0.1.0' },
+        entry: { editor: './node.js', runtime: './runtime.js' },
+        permissions: [],
+        dependsOn: [],
+        contributes: {
+          gameModes: [
+            {
+              _tag: 'GameModeContribution',
+              id: 'fixture-mode',
+              kind: 'declarative',
+              display: { label: input.runtimeLabel },
+              runtimeSystemId: input.runtimeSystemId,
+            },
+          ],
+          runtime: {
+            systems: [
+              {
+                _tag: 'ExecutableRuntimeSystemContribution',
+                id: input.runtimeSystemId,
+                kind: 'executable',
+                display: { label: input.runtimeLabel },
+                entry: './runtime.js',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    yield* Effect.promise(async () => {
+      await mkdir(source, { recursive: true });
+      await writeFile(
+        path.join(source, 'tileborne-plugin.json'),
+        `${JSON.stringify(Schema.encodeSync(PluginManifest)(manifest), null, 2)}\n`,
+      );
+      await writeFile(path.join(source, 'node.js'), 'export {};\n');
+      await writeFile(path.join(source, 'runtime.js'), 'export {};\n');
+    });
+    const installer = yield* PluginInstallerService;
+    yield* installer.install(new LocalPluginSource({ path: source }));
+    return source;
+  });
+
+const SHIP_PLUGIN_ID = '@tileborne-plugins/ship-mode';
+
+/**
+ * Mode plugin fixture for the M5 S1 ship build: declares a runtime system (so
+ * it is discoverable as a game mode) and a node entry exposing the generic
+ * `exportModeData` + `resolvePlayerModels` exports the build host discovers.
+ */
+const installShipModePlugin = () =>
+  Effect.gen(function* () {
+    const source = yield* Effect.promise(() =>
+      mkdtemp(path.join(tmpdir(), 'tileborne-ship-plugin-')),
+    );
+    const manifest = Schema.decodeUnknownSync(PluginManifest)(
+      materializePluginManifestInput({
+        schemaVersion: 1,
+        id: SHIP_PLUGIN_ID,
+        name: SHIP_PLUGIN_ID,
+        version: '0.0.1',
+        displayName: 'Ship Mode',
+        description: 'Ship pipeline fixture plugin',
+        author: 'Tileborne',
+        license: 'MIT',
+        engines: { tileborne: '^0.1.0' },
+        entry: { server: './server.mjs', runtime: './dist/runtime.js' },
+        permissions: [],
+        dependsOn: [],
+        contributes: {
+          gameModes: [
+            {
+              _tag: 'GameModeContribution',
+              id: 'ship-mode',
+              kind: 'declarative',
+              display: { label: 'Ship Mode' },
+              runtimeSystemId: 'ship-mode-runtime',
+            },
+          ],
+          runtime: {
+            systems: [
+              {
+                _tag: 'ExecutableRuntimeSystemContribution',
+                id: 'ship-mode-runtime',
+                kind: 'executable',
+                display: { label: 'Ship Mode Runtime' },
+                entry: './dist/runtime.js',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    yield* Effect.promise(async () => {
+      await mkdir(path.join(source, 'dist'), { recursive: true });
+      await writeFile(
+        path.join(source, 'tileborne-plugin.json'),
+        `${JSON.stringify(Schema.encodeSync(PluginManifest)(manifest), null, 2)}\n`,
+      );
+      await writeFile(
+        path.join(source, 'dist', 'runtime.js'),
+        'export const createRuntimeAdapter = () => ({});\n',
+      );
+      await writeFile(
+        path.join(source, 'server.mjs'),
+        "export const exportModeData = () => ({ _tag: 'Success', success: { fixture: true } });\nexport const resolvePlayerModels = () => [];\n",
+      );
+    });
+    const installer = yield* PluginInstallerService;
+    yield* installer.install(new LocalPluginSource({ path: source }));
+    return source;
+  });
+
+const runBuild = (projectId: import('@tileborne/core').ProjectId, options?: BuildOptions) =>
   Effect.gen(function* () {
     const builds = yield* BuildService;
     const jobId = yield* builds.build(projectId, options);
     const job = yield* waitForJob(jobId);
-    expect(job.status._tag).toBe("Completed");
+    expect(job.status._tag).toBe('Completed');
     const [summary] = yield* builds.listBuilds(projectId);
     if (!summary) {
-      throw new Error("missing build summary");
+      throw new Error('missing build summary');
     }
     return yield* builds.getBuild(summary.id);
   });
 
-describe("BuildService", () => {
-  it("builds a project into the builds cache from services-app snapshots", () =>
+describe('BuildService', () => {
+  it('builds a project into the builds cache from services-app snapshots', () =>
     withTempHome(async () => {
       const artifact = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
-          return yield* runBuild(projectId, new BuildOptions({ target: Option.some("cloudflare"), delayMs: Option.none() }));
+          const { projectId } = yield* seedProject('Arena');
+          return yield* runBuild(
+            projectId,
+            new BuildOptions({ target: Option.some('cloudflare'), delayMs: Option.none() }),
+          );
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(artifact.project.name).toBe("Arena");
-      expect(artifact.target).toBe("cloudflare");
+      expect(artifact.project.name).toBe('Arena');
+      expect(artifact.target).toBe('cloudflare');
     }));
 
-  it("lists builds verified on read", () =>
+  it('lists builds verified on read', () =>
     withTempHome(async () => {
       const summaries = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           yield* runBuild(projectId);
           const builds = yield* BuildService;
           return yield* builds.listBuilds(projectId);
         }).pipe(Effect.provide(testLayer)),
       );
       expect(summaries).toHaveLength(1);
-      expect(summaries[0]?.integrityHash.startsWith("sha256:")).toBe(true);
+      expect(summaries[0]?.integrityHash.startsWith('sha256:')).toBe(true);
     }));
 
-  it("reads a build by id", () =>
+  it('reads a build by id', () =>
     withTempHome(async () => {
       const artifact = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           return yield* runBuild(projectId);
         }).pipe(Effect.provide(testLayer)),
       );
       expect(artifact.maps).toHaveLength(1);
     }));
 
-  it("reads project data from ProjectService instead of inline options", () =>
+  it('reads project data from ProjectService instead of inline options', () =>
     withTempHome(async () => {
       const artifact = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("From Services");
+          const { projectId } = yield* seedProject('From Services');
           return yield* runBuild(projectId);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(artifact.project.name).toBe("From Services");
+      expect(artifact.project.name).toBe('From Services');
     }));
 
-  it("detects manifest tampering on get", () =>
+  it(
+    'buildGame cloudflare --project assembles + bakes the runtime map package (M5 S1)',
+    () =>
+      withTempHome(async () => {
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId, mapId } = yield* seedProject('Ship Arena');
+            yield* installShipModePlugin();
+            const outDir = yield* Effect.promise(() =>
+              mkdtemp(path.join(tmpdir(), 'tileborne-ship-out-')),
+            );
+            const builds = yield* BuildService;
+            const artifact = yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: 'cloudflare',
+                outputDirectory: Option.some(outDir),
+                assetPackIds: Option.none(),
+                siteName: Option.none(),
+                projectId: Option.some(projectId),
+                mapIds: Option.none(),
+              }),
+            );
+            const mapDir = `maps/${mapId.replaceAll(':', '-')}`;
+            expect(artifact.files).toContain(`${mapDir}/manifest.json`);
+            expect(artifact.files).toContain(`${mapDir}/map.json`);
+            const manifest = JSON.parse(
+              yield* Effect.promise(() => readFile(path.join(outDir, 'manifest.json'), 'utf8')),
+            ) as {
+              readonly maps: readonly {
+                readonly mapId: string;
+                readonly packageId: string;
+                readonly files: readonly {
+                  readonly path: string;
+                  readonly hash: string;
+                  readonly size: number;
+                }[];
+              }[];
+            };
+            expect(manifest.maps).toHaveLength(1);
+            expect(manifest.maps[0]?.mapId).toBe(mapId);
+            expect(manifest.maps[0]?.packageId).toMatch(/^mappkg:/);
+            expect(manifest.maps[0]?.files.length).toBeGreaterThan(0);
+            for (const entry of manifest.maps[0]?.files ?? []) {
+              expect(entry.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+              expect(entry.size).toBeGreaterThan(0);
+            }
+            // The mode's exporter section + the package id are baked into the
+            // worker bundle for packageless /rooms/create resolution.
+            const worker = yield* Effect.promise(() =>
+              readFile(path.join(outDir, 'worker.js'), 'utf8'),
+            );
+            expect(worker).toContain(manifest.maps[0]!.packageId);
+            const packageManifest = JSON.parse(
+              yield* Effect.promise(() =>
+                readFile(path.join(outDir, mapDir, 'manifest.json'), 'utf8'),
+              ),
+            ) as { readonly mapId: string; readonly entryHashes: Record<string, string> };
+            expect(packageManifest.mapId).toBe(mapId);
+            expect(Object.keys(packageManifest.entryHashes)).toContain('modeData');
+          }).pipe(Effect.provide(testLayer)),
+        );
+      }),
+    120_000,
+  );
+
+  it(
+    'buildGame local emits the canonical artifact plus serve README and boots a joinable room in miniflare (M5 S2)',
+    () =>
+      withTempHome(async () => {
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId, mapId } = yield* seedProject('Local Ship Arena');
+            yield* installShipModePlugin();
+            const outDir = yield* Effect.promise(() =>
+              mkdtemp(path.join(tmpdir(), 'tileborne-local-out-')),
+            );
+            const builds = yield* BuildService;
+            const artifact = yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: 'local',
+                outputDirectory: Option.some(outDir),
+                assetPackIds: Option.none(),
+                siteName: Option.none(),
+                projectId: Option.some(projectId),
+                mapIds: Option.none(),
+              }),
+            );
+            expect(artifact.target).toBe('local');
+            // The local target is the SAME canonical export as cloudflare …
+            expect(artifact.files).toContain('worker.js');
+            expect(artifact.files).toContain('manifest.json');
+            expect(artifact.files).toContain(`maps/${mapId.replaceAll(':', '-')}/map.json`);
+            expect(artifact.bundlePath).toBe(path.join(outDir, 'worker.js'));
+            // … plus the local serve convention.
+            expect(artifact.files).toContain('README.md');
+            const readme = yield* Effect.promise(() =>
+              readFile(path.join(outDir, 'README.md'), 'utf8'),
+            );
+            expect(readme).toContain('tileborne game serve --dir .');
+
+            // The artifact boots locally into a joinable room (no Cloudflare).
+            const host = yield* Effect.promise(() =>
+              createLocalGameHost({ port: 18092, workerPath: path.join(outDir, 'worker.js') }),
+            );
+            try {
+              const health = yield* Effect.promise(() => host.fetch(`${host.baseUrl}/health`));
+              expect(health.status).toBe(200);
+              const created = yield* Effect.promise(() =>
+                host.fetch(`${host.baseUrl}/rooms/create`, {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ mapId }),
+                }),
+              );
+              expect(created.status).toBe(201);
+              const room = (yield* Effect.promise(() => created.json())) as {
+                readonly roomId: string;
+                readonly wsUrl: string;
+              };
+              expect(room.roomId.length).toBeGreaterThan(0);
+              expect(room.wsUrl).toContain(`/rooms/${room.roomId}/connect`);
+            } finally {
+              yield* Effect.promise(() => host.stop());
+            }
+          }).pipe(Effect.provide(testLayer)),
+        );
+      }),
+    180_000,
+  );
+
+  it(
+    'reuses deterministic managed builds and rejects tampered or arbitrary artifacts',
+    () =>
+      withTempHome(async () => {
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId } = yield* seedProject('Managed Ship Arena');
+            yield* installShipModePlugin();
+            const builds = yield* BuildService;
+            const options = new GameBuildOptions({
+              pluginId: SHIP_PLUGIN_ID,
+              target: 'local',
+              outputDirectory: Option.none(),
+              assetPackIds: Option.none(),
+              siteName: Option.some('Unsafe " Arena\n[vars]'),
+              projectId: Option.some(projectId),
+              mapIds: Option.none(),
+            });
+            const first = yield* builds.buildGame(options);
+            const repeat = yield* builds.buildGame(options);
+            expect(repeat.directory).toBe(first.directory);
+            expect(repeat.buildId).toBe(first.buildId);
+            expect(repeat.fileHashes).toEqual(first.fileHashes);
+            expect((yield* builds.verifyGameArtifact(repeat)).buildId).toBe(first.buildId);
+            expect(
+              gameArtifactBuildId({ target: 'cloudflare', fileHashes: first.fileHashes }),
+            ).not.toBe(first.buildId);
+
+            const differentSite = yield* builds.buildGame(
+              new GameBuildOptions({
+                ...options,
+                siteName: Option.some('Managed Ship Arena Beta'),
+              }),
+            );
+            expect(differentSite.runtimeBuildId).toBe(first.runtimeBuildId);
+            expect(differentSite.buildId).not.toBe(first.buildId);
+            expect(differentSite.directory).not.toBe(first.directory);
+            expect(differentSite.fileHashes['wrangler.toml']).not.toBe(
+              first.fileHashes['wrangler.toml'],
+            );
+
+            const gamesRoot = path.dirname(first.directory);
+            for (const relativePath of first.files) {
+              const bytes = yield* Effect.promise(() =>
+                readFile(path.join(first.directory, relativePath)),
+              );
+              expect(bytes.includes(Buffer.from('.building-'))).toBe(false);
+              expect(bytes.includes(Buffer.from(gamesRoot))).toBe(false);
+            }
+
+            const failedReplacement = yield* Effect.result(
+              builds.buildGame(
+                new GameBuildOptions({
+                  ...options,
+                  mapIds: Option.some(['map:00000000-0000-4000-8000-000000000099']),
+                }),
+              ),
+            );
+            expect(Result.isFailure(failedReplacement)).toBe(true);
+            expect((yield* builds.verifyGameArtifact(first)).buildId).toBe(first.buildId);
+            expect(
+              (yield* Effect.promise(() => readdir(gamesRoot))).filter((entry) =>
+                entry.includes('.building-'),
+              ),
+            ).toEqual([]);
+
+            yield* Effect.promise(() => writeFile(repeat.bundlePath, 'tampered', 'utf8'));
+            const tampered = yield* Effect.result(builds.verifyGameArtifact(repeat));
+            expect(Result.isFailure(tampered)).toBe(true);
+            const arbitrary = yield* Effect.result(builds.verifyGameArtifact(tmpdir()));
+            expect(Result.isFailure(arbitrary)).toBe(true);
+          }).pipe(Effect.provide(testLayer)),
+        );
+      }),
+    180_000,
+  );
+
+  it(
+    'rolls back a managed-root promotion failure, cleans residue, and retries',
+    () =>
+      withTempHome(async () => {
+        let failFinalRename = false;
+        const operations: BuildPromotionOperations = {
+          rename: async (from, to) => {
+            if (failFinalRename && from.includes('.building-')) {
+              failFinalRename = false;
+              throw new Error('injected final promotion rename failure');
+            }
+            await rename(from, to);
+          },
+          remove: (target) => rm(target, { recursive: true, force: true }),
+        };
+        const faultLayer = testLayerWithPromotion(operations);
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId } = yield* seedProject('Promotion Transaction Arena');
+            yield* installShipModePlugin();
+            const home = yield* HomeService;
+            const builds = yield* BuildService;
+            const directory = path.join(home.paths.cache, 'builds', 'games', 'promotion-slot');
+            const options = (siteName: string) =>
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: 'local',
+                outputDirectory: Option.some(directory),
+                assetPackIds: Option.none(),
+                siteName: Option.some(siteName),
+                projectId: Option.some(projectId),
+                mapIds: Option.none(),
+              });
+
+            const prior = yield* builds.buildGame(options('Promotion Arena Alpha'));
+            yield* builds.verifyGameArtifact(prior);
+            const metadataBefore = yield* Effect.promise(() =>
+              readFile(path.join(directory, 'build-artifact.json')),
+            );
+            failFinalRename = true;
+            const failed = yield* Effect.result(builds.buildGame(options('Promotion Arena Beta')));
+            expect(Result.isFailure(failed)).toBe(true);
+            expect(failFinalRename).toBe(false);
+            expect((yield* builds.verifyGameArtifact(prior)).buildId).toBe(prior.buildId);
+            expect(
+              yield* Effect.promise(() => readFile(path.join(directory, 'build-artifact.json'))),
+            ).toEqual(metadataBefore);
+            expect(
+              (yield* Effect.promise(() => readdir(path.dirname(directory)))).filter(
+                (entry) => entry.includes('.building-') || entry.includes('.previous-'),
+              ),
+            ).toEqual([]);
+
+            const retry = yield* builds.buildGame(options('Promotion Arena Beta'));
+            expect(retry.buildId).not.toBe(prior.buildId);
+            expect((yield* builds.verifyGameArtifact(retry)).buildId).toBe(retry.buildId);
+            expect(
+              (yield* Effect.promise(() => readdir(path.dirname(directory)))).filter(
+                (entry) => entry.includes('.building-') || entry.includes('.previous-'),
+              ),
+            ).toEqual([]);
+          }).pipe(Effect.provide(faultLayer)),
+        );
+      }),
+    180_000,
+  );
+
+  it(
+    'buildGame cloudflare --project fails fast when the selected map is not in the project',
+    () =>
+      withTempHome(async () => {
+        const result = await Effect.runPromise(
+          Effect.result(
+            Effect.gen(function* () {
+              const { projectId } = yield* seedProject('Ship Arena');
+              yield* installShipModePlugin();
+              const builds = yield* BuildService;
+              return yield* builds.buildGame(
+                new GameBuildOptions({
+                  pluginId: SHIP_PLUGIN_ID,
+                  target: 'cloudflare',
+                  outputDirectory: Option.none(),
+                  assetPackIds: Option.none(),
+                  siteName: Option.none(),
+                  projectId: Option.some(projectId),
+                  mapIds: Option.some(['map:00000000-0000-4000-8000-00000000dead']),
+                }),
+              );
+            }).pipe(Effect.provide(testLayer)),
+          ),
+        );
+        expect(Result.isFailure(result)).toBe(true);
+        if (Result.isFailure(result)) {
+          expect(String((result.failure as { message?: string }).message)).toContain(
+            'is not part of project',
+          );
+        }
+      }),
+    60_000,
+  );
+
+  it('detects manifest tampering on get', () =>
     withTempHome(async () => {
       await expect(
         Effect.runPromise(
           Effect.gen(function* () {
-            const { projectId } = yield* seedProject("Arena");
+            const { projectId } = yield* seedProject('Arena');
             const artifact = yield* runBuild(projectId);
-            const raw = JSON.parse(yield* Effect.promise(() => readFile(artifact.manifestPath, "utf8"))) as {
+            const raw = JSON.parse(
+              yield* Effect.promise(() => readFile(artifact.manifestPath, 'utf8')),
+            ) as {
               project: { name: string };
             };
-            raw.project.name = "Tampered";
-            yield* Effect.promise(() => writeFile(artifact.manifestPath, JSON.stringify(raw), "utf8"));
+            raw.project.name = 'Tampered';
+            yield* Effect.promise(() =>
+              writeFile(artifact.manifestPath, JSON.stringify(raw), 'utf8'),
+            );
             const builds = yield* BuildService;
             return yield* builds.getBuild(artifact.id);
           }).pipe(Effect.provide(testLayer)),
         ),
-      ).rejects.toMatchObject({ _tag: "IntegrityMismatchError" });
+      ).rejects.toMatchObject({ _tag: 'IntegrityMismatchError' });
     }));
 
-  it("publishes a trigger-only build event", () =>
+  it('publishes a trigger-only build event', () =>
     withTempHome(async () => {
       const events = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const builds = yield* BuildService;
-          const fiber = yield* builds.subscribe.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+          const fiber = yield* builds.subscribe.pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild,
+          );
           yield* runBuild(projectId);
           return yield* Fiber.join(fiber);
         }).pipe(Effect.provide(testLayer)),
@@ -223,11 +721,11 @@ describe("BuildService", () => {
       expect(Array.from(events)).toEqual([undefined]);
     }));
 
-  it("cancels a delayed build and proves the job reaches Cancelled", () =>
+  it('cancels a delayed build and proves the job reaches Cancelled', () =>
     withTempHome(async () => {
       const result = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const builds = yield* BuildService;
           const jobs = yield* JobService;
           const jobId = yield* builds.build(
@@ -240,17 +738,17 @@ describe("BuildService", () => {
           return { cancelled: cancelled.status._tag };
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(result.cancelled).toBe("Cancelled");
+      expect(result.cancelled).toBe('Cancelled');
     }));
 
-  it("rejects symlink escape when BuildService reads a planted build entry", () =>
+  it('rejects symlink escape when BuildService reads a planted build entry', () =>
     withTempHome(async (home) => {
       // Plant a symlinked build directory under the canonical builds root whose target
       // escapes the home cache. Then call BuildService.getBuild through the real service
       // layer and assert the verifiedChildPath rejection surfaces as a ServicesBuildError.
-      const buildsRoot = path.join(home, "cache", "builds");
+      const buildsRoot = path.join(home, 'cache', 'builds');
       await mkdir(buildsRoot, { recursive: true });
-      const outsideDir = path.join(home, "outside-build");
+      const outsideDir = path.join(home, 'outside-build');
       await mkdir(outsideDir, { recursive: true });
       await writeFile(path.join(outsideDir, metadataFileName), JSON.stringify({ leak: true }));
       const plantedId = makeNewBuildId();
@@ -259,19 +757,19 @@ describe("BuildService", () => {
         Effect.gen(function* () {
           const builds = yield* BuildService;
           return yield* builds.getBuild(plantedId).pipe(
-            Effect.map(() => new Error("expected symlink rejection")),
+            Effect.map(() => new Error('expected symlink rejection')),
             Effect.catch((cause) => Effect.succeed(cause)),
           );
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(error).toMatchObject({ _tag: "ServicesBuildError" });
+      expect(error).toMatchObject({ _tag: 'ServicesBuildError' });
     }));
 
-  it("deletes a build directory", () =>
+  it('deletes a build directory', () =>
     withTempHome(async () => {
       const remaining = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const artifact = yield* runBuild(projectId);
           const builds = yield* BuildService;
           yield* builds.deleteBuild(artifact.id);
@@ -282,79 +780,82 @@ describe("BuildService", () => {
     }));
 });
 
-describe("ExportService", () => {
-  it("exports a Cloudflare Worker target", () =>
+describe('ExportService', () => {
+  it('exports a Cloudflare Worker target', () =>
     withTempHome(async () => {
       const artifact = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
           const jobId = yield* exports.exportBuild(
             build.id,
-            new CloudflareWorkerExportTarget({ environment: Option.some("dev") }),
+            new CloudflareWorkerExportTarget({ environment: Option.some('dev') }),
           );
           yield* waitForJob(jobId);
           return (yield* exports.listExports(build.id))[0];
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(artifact?.target._tag).toBe("CloudflareWorkerExportTarget");
+      expect(artifact?.target._tag).toBe('CloudflareWorkerExportTarget');
     }));
 
-  it("exports a Node target", () =>
+  it('exports a Node target', () =>
     withTempHome(async () => {
       const targetTag = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
           const jobId = yield* exports.exportBuild(
             build.id,
-            new NodeExportTarget({ entrypoint: Option.some("server.js") }),
+            new NodeExportTarget({ entrypoint: Option.some('server.js') }),
           );
           yield* waitForJob(jobId);
           return (yield* exports.listExports(build.id))[0]?.target._tag;
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(targetTag).toBe("NodeExportTarget");
+      expect(targetTag).toBe('NodeExportTarget');
     }));
 
-  it("exports a Web target", () =>
+  it('exports a Web target', () =>
     withTempHome(async () => {
       const targetTag = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
           const jobId = yield* exports.exportBuild(
             build.id,
-            new WebExportTarget({ basePath: Option.some("/play") }),
+            new WebExportTarget({ basePath: Option.some('/play') }),
           );
           yield* waitForJob(jobId);
           return (yield* exports.listExports(build.id))[0]?.target._tag;
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(targetTag).toBe("WebExportTarget");
+      expect(targetTag).toBe('WebExportTarget');
     }));
 
-  it("reads an export by id", () =>
+  it('reads an export by id', () =>
     withTempHome(async () => {
       const read = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
-          const jobId = yield* exports.exportBuild(build.id, new WebExportTarget({ basePath: Option.none() }));
+          const jobId = yield* exports.exportBuild(
+            build.id,
+            new WebExportTarget({ basePath: Option.none() }),
+          );
           yield* waitForJob(jobId);
           const [artifact] = yield* exports.listExports(build.id);
-          if (!artifact) throw new Error("missing export");
+          if (!artifact) throw new Error('missing export');
           return yield* exports.getExport(artifact.id);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(read.id.startsWith("export:")).toBe(true);
+      expect(read.id.startsWith('export:')).toBe(true);
     }));
 
-  it("invokes export hooks through PluginLoaderService", () =>
+  it('invokes export hooks through PluginLoaderService', () =>
     withTempHome(async () => {
       const invoked = await Effect.runPromise(
         Effect.gen(function* () {
@@ -363,8 +864,8 @@ describe("ExportService", () => {
           yield* registry.discover();
           const projects = yield* ProjectService;
           const projectId = yield* projects.create({
-            name: "Export Plugin Project",
-            plugins: [{ id: "@tileborne-plugins/export", version: "0.1.0" }],
+            name: 'Export Plugin Project',
+            plugins: [{ id: '@tileborne-plugins/export', version: '0.1.0' }],
           });
           const maps = yield* MapService;
           yield* maps.create(projectId, { width: 8, height: 8 });
@@ -380,23 +881,32 @@ describe("ExportService", () => {
           const loaded = yield* loader.listDeclarative();
           return {
             hooks: (yield* exports.listExports(build.id))[0]?.invokedHooks,
-            loaderConsulted: loaded.some((plugin) => plugin.pluginId === "@tileborne-plugins/export"),
+            loaderConsulted: loaded.some(
+              (plugin) => plugin.pluginId === '@tileborne-plugins/export',
+            ),
           };
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(invoked.hooks).toEqual(["export.mjs"]);
+      expect(invoked.hooks).toEqual(['export.mjs']);
       expect(invoked.loaderConsulted).toBe(true);
     }));
 
-  it("publishes export events", () =>
+  it('publishes export events', () =>
     withTempHome(async () => {
       const events = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
-          const fiber = yield* exports.subscribe.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
-          const jobId = yield* exports.exportBuild(build.id, new WebExportTarget({ basePath: Option.none() }));
+          const fiber = yield* exports.subscribe.pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild,
+          );
+          const jobId = yield* exports.exportBuild(
+            build.id,
+            new WebExportTarget({ basePath: Option.none() }),
+          );
           yield* waitForJob(jobId);
           return yield* Fiber.join(fiber);
         }).pipe(Effect.provide(testLayer)),
@@ -404,17 +914,20 @@ describe("ExportService", () => {
       expect(Array.from(events)).toEqual([undefined]);
     }));
 
-  it("deletes an export", () =>
+  it('deletes an export', () =>
     withTempHome(async () => {
       const count = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
-          const jobId = yield* exports.exportBuild(build.id, new WebExportTarget({ basePath: Option.none() }));
+          const jobId = yield* exports.exportBuild(
+            build.id,
+            new WebExportTarget({ basePath: Option.none() }),
+          );
           yield* waitForJob(jobId);
           const [artifact] = yield* exports.listExports(build.id);
-          if (!artifact) throw new Error("missing export");
+          if (!artifact) throw new Error('missing export');
           yield* exports.deleteExport(artifact.id);
           return (yield* exports.listExports(build.id)).length;
         }).pipe(Effect.provide(testLayer)),
@@ -423,51 +936,72 @@ describe("ExportService", () => {
     }));
 });
 
-describe("PlaytestService", () => {
-  it("starts a session and reaches running", () =>
+describe('PlaytestService', () => {
+  it('starts a session and reaches running', () =>
     withTempHome(async () => {
       const session = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject("Arena");
+          const { projectId, mapId } = yield* seedProject('Arena');
           const playtest = yield* PlaytestService;
           return yield* playtest.start(projectId, mapId);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(session.status._tag).toBe("Running");
+      expect(session.status._tag).toBe('Running');
       expect(Option.isSome(session.artifactDirectory)).toBe(true);
     }));
 
-  it("assembles artifact with the enabled battle royale plugin on start", () =>
+  it('assembles artifact with the enabled battle royale plugin on start', () =>
     withTempHome(async (home) => {
-      const pluginRoot = path.join(home, "plugin-fixture");
+      const pluginRoot = path.join(home, 'plugin-fixture');
       await mkdir(pluginRoot, { recursive: true });
       const manifest = Schema.decodeUnknownSync(PluginManifest)(
         materializePluginManifestInput({
           schemaVersion: 1,
           id: BATTLE_ROYALE_PLUGIN_ID,
           name: BATTLE_ROYALE_PLUGIN_ID,
-          version: "0.0.1",
-          displayName: "CLI Playtest",
-          description: "Fixture plugin",
-          author: "Tileborne",
-          license: "MIT",
-          engines: { tileborne: "^0.1.0" },
-          entry: { editor: "./node.js", runtime: "./runtime.js" },
+          version: '0.0.1',
+          displayName: 'CLI Playtest',
+          description: 'Fixture plugin',
+          author: 'Tileborne',
+          license: 'MIT',
+          engines: { tileborne: '^0.1.0' },
+          entry: { editor: './node.js', runtime: './runtime.js' },
           permissions: [],
           dependsOn: [],
-          contributes: {},
+          contributes: {
+            gameModes: [
+              {
+                _tag: 'GameModeContribution',
+                id: 'battle-royale',
+                kind: 'declarative',
+                display: { label: 'Battle Royale' },
+                runtimeSystemId: 'battle-royale-runtime',
+              },
+            ],
+            runtime: {
+              systems: [
+                {
+                  _tag: 'ExecutableRuntimeSystemContribution',
+                  id: 'battle-royale-runtime',
+                  kind: 'executable',
+                  display: { label: 'Battle Royale Runtime Adapter' },
+                  entry: './runtime.js',
+                },
+              ],
+            },
+          },
         }),
       );
       await writeFile(
-        path.join(pluginRoot, "tileborne-plugin.json"),
+        path.join(pluginRoot, 'tileborne-plugin.json'),
         `${JSON.stringify(Schema.encodeSync(PluginManifest)(manifest), null, 2)}\n`,
       );
-      await writeFile(path.join(pluginRoot, "node.js"), "export {};\n");
-      await writeFile(path.join(pluginRoot, "runtime.js"), "export {};\n");
+      await writeFile(path.join(pluginRoot, 'node.js'), 'export {};\n');
+      await writeFile(path.join(pluginRoot, 'runtime.js'), 'export {};\n');
 
       const session = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject("Arena");
+          const { projectId, mapId } = yield* seedProject('Arena');
           const installer = yield* PluginInstallerService;
           yield* installer.install(new LocalPluginSource({ path: pluginRoot }));
           const playtest = yield* PlaytestService;
@@ -476,27 +1010,140 @@ describe("PlaytestService", () => {
       );
       expect(session.activePlugins).toContain(BATTLE_ROYALE_PLUGIN_ID);
       const artifactDirectory = Option.getOrThrow(session.artifactDirectory);
-      expect(await fileExists(path.join(artifactDirectory, "map.json"))).toBe(true);
+      // The artifact scaffold never writes map.json: assembleRuntimeMapPackage
+      // is the single writer of the package directory's map entry.
+      expect(await fileExists(path.join(artifactDirectory, 'map.json'))).toBe(false);
+      expect(await fileExists(path.join(artifactDirectory, 'index.html'))).toBe(true);
     }));
 
-  it("stops a running session", () =>
+  it('assembles artifact with the selected active game mode plugin on start', () =>
+    withTempHome(async () => {
+      const session = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject('Arena');
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: 'battle-royale-runtime',
+            runtimeLabel: 'Battle Royale Runtime Adapter',
+          });
+          yield* installRuntimePlugin({
+            pluginId: EXAMPLE_ARENA_PLUGIN_ID,
+            runtimeSystemId: 'arena-runtime',
+            runtimeLabel: 'Example Arena Runtime Adapter',
+          });
+          const projects = yield* ProjectService;
+          const project = yield* projects.open(projectId);
+          yield* projects.save(
+            new ProjectManifest({
+              ...project,
+              settings: {
+                ...(project.settings ?? {}),
+                activeGameMode: EXAMPLE_ARENA_PLUGIN_ID,
+              },
+            }),
+          );
+          const playtest = yield* PlaytestService;
+          return yield* playtest.start(projectId, mapId);
+        }).pipe(Effect.provide(testLayer)),
+      );
+
+      expect(session.activePlugins).toEqual([EXAMPLE_ARENA_PLUGIN_ID]);
+    }));
+
+  it('fails fast when multiple enabled game modes have no active selection', () =>
+    withTempHome(async () => {
+      const sessions = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject('Arena');
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: 'battle-royale-runtime',
+            runtimeLabel: 'Battle Royale Runtime Adapter',
+          });
+          yield* installRuntimePlugin({
+            pluginId: EXAMPLE_ARENA_PLUGIN_ID,
+            runtimeSystemId: 'arena-runtime',
+            runtimeLabel: 'Example Arena Runtime Adapter',
+          });
+          const playtest = yield* PlaytestService;
+          let failed = false;
+          yield* playtest.start(projectId, mapId).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                failed = true;
+                expect(error).toMatchObject({
+                  _tag: 'ServicesBuildError',
+                  message: expect.stringContaining('Multiple enabled game modes are available'),
+                });
+              }),
+            ),
+          );
+          expect(failed).toBe(true);
+          return yield* playtest.list();
+        }).pipe(Effect.provide(testLayer)),
+      );
+      expect(sessions).toHaveLength(0);
+    }));
+
+  it('fails fast when the selected active game mode is unavailable', () =>
+    withTempHome(async () => {
+      const sessions = await Effect.runPromise(
+        Effect.gen(function* () {
+          const { projectId, mapId } = yield* seedProject('Arena');
+          yield* installRuntimePlugin({
+            pluginId: BATTLE_ROYALE_PLUGIN_ID,
+            runtimeSystemId: 'battle-royale-runtime',
+            runtimeLabel: 'Battle Royale Runtime Adapter',
+          });
+          const projects = yield* ProjectService;
+          const project = yield* projects.open(projectId);
+          yield* projects.save(
+            new ProjectManifest({
+              ...project,
+              settings: {
+                ...(project.settings ?? {}),
+                activeGameMode: EXAMPLE_ARENA_PLUGIN_ID,
+              },
+            }),
+          );
+          const playtest = yield* PlaytestService;
+          let failed = false;
+          yield* playtest.start(projectId, mapId).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                failed = true;
+                expect(error).toMatchObject({
+                  _tag: 'ServicesBuildError',
+                  message: expect.stringContaining('Selected active game mode'),
+                });
+              }),
+            ),
+          );
+          expect(failed).toBe(true);
+          return yield* playtest.list();
+        }).pipe(Effect.provide(testLayer)),
+      );
+      expect(sessions).toHaveLength(0);
+    }));
+
+  it('stops a running session', () =>
     withTempHome(async () => {
       const stopped = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject("Arena");
+          const { projectId, mapId } = yield* seedProject('Arena');
           const playtest = yield* PlaytestService;
           const session = yield* playtest.start(projectId, mapId);
           return yield* playtest.stop(session.id);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(stopped.status._tag).toBe("Stopped");
+      expect(stopped.status._tag).toBe('Stopped');
     }));
 
-  it("lists sessions", () =>
+  it('lists sessions', () =>
     withTempHome(async () => {
       const sessions = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject("Arena");
+          const { projectId, mapId } = yield* seedProject('Arena');
           const playtest = yield* PlaytestService;
           yield* playtest.start(projectId, mapId);
           return yield* playtest.list();
@@ -505,17 +1152,25 @@ describe("PlaytestService", () => {
       expect(sessions).toHaveLength(1);
     }));
 
-  it("publishes start and running triggers", () =>
+  it('publishes start and running triggers', () =>
     withTempHome(async () => {
       const events = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject("Arena");
+          const { projectId, mapId } = yield* seedProject('Arena');
           const playtest = yield* PlaytestService;
-          const fiber = yield* playtest.subscribe.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+          const fiber = yield* playtest.subscribe.pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild,
+          );
           yield* playtest.start(
             projectId,
             mapId,
-            new PlaytestOptions({ slot: Option.none(), runtimeUrl: Option.none(), delayMs: Option.none() }),
+            new PlaytestOptions({
+              slot: Option.none(),
+              runtimeUrl: Option.none(),
+              delayMs: Option.none(),
+            }),
           );
           return yield* Fiber.join(fiber);
         }).pipe(Effect.provide(testLayer)),
@@ -523,97 +1178,111 @@ describe("PlaytestService", () => {
       expect(Array.from(events)).toEqual([undefined]);
     }));
 
-  it("fails to stop an unknown session", () =>
+  it('fails to stop an unknown session', () =>
     withTempHome(async () => {
       await expect(
         Effect.runPromise(
           Effect.gen(function* () {
             const playtest = yield* PlaytestService;
-            return yield* playtest.stop("playtest:00000000-0000-4000-8000-000000000000" as never);
+            return yield* playtest.stop('playtest:00000000-0000-4000-8000-000000000000' as never);
           }).pipe(Effect.provide(testLayer)),
         ),
-      ).rejects.toMatchObject({ _tag: "PlaytestSessionNotFoundError" });
+      ).rejects.toMatchObject({ _tag: 'PlaytestSessionNotFoundError' });
     }));
 });
 
-describe("RuntimeDeployService", () => {
-  it("deploys a build with credentials", () =>
+describe('RuntimeDeployService', () => {
+  it('deploys a build with credentials', () =>
     withTempHome(async () => {
       const deployment = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const deploy = yield* RuntimeDeployService;
           const jobId = yield* deploy.deploy(
             build.id,
             new RuntimeDeployTarget({
-              stage: "dev",
-              workerName: "tileborne-test",
-              credentials: Option.some(new RuntimeDeployCredentials({ accountId: "acct", apiToken: "token" })),
+              stage: 'dev',
+              workerName: 'tileborne-test',
+              credentials: Option.some(
+                new RuntimeDeployCredentials({ accountId: 'acct', apiToken: 'token' }),
+              ),
             }),
           );
           yield* waitForJob(jobId);
           return (yield* deploy.listDeployments(build.id))[0];
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(deployment?.endpoint).toContain("tileborne-test");
+      expect(deployment?.endpoint).toContain('tileborne-test');
     }));
 
-  it("records missing auth as a typed job error", () =>
+  it('records missing auth as a typed job error', () =>
     withTempHome(async () => {
       const status = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const deploy = yield* RuntimeDeployService;
           const jobId = yield* deploy.deploy(
             build.id,
-            new RuntimeDeployTarget({ stage: "dev", workerName: "tileborne-test", credentials: Option.none() }),
+            new RuntimeDeployTarget({
+              stage: 'dev',
+              workerName: 'tileborne-test',
+              credentials: Option.none(),
+            }),
           );
           return yield* waitForJob(jobId);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(status.status._tag).toBe("Failed");
+      expect(status.status._tag).toBe('Failed');
     }));
 
-  it("reads a deployment by id", () =>
+  it('reads a deployment by id', () =>
     withTempHome(async () => {
       const read = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const deploy = yield* RuntimeDeployService;
           const jobId = yield* deploy.deploy(
             build.id,
             new RuntimeDeployTarget({
-              stage: "staging",
-              workerName: "tileborne-test",
-              credentials: Option.some(new RuntimeDeployCredentials({ accountId: "acct", apiToken: "token" })),
+              stage: 'staging',
+              workerName: 'tileborne-test',
+              credentials: Option.some(
+                new RuntimeDeployCredentials({ accountId: 'acct', apiToken: 'token' }),
+              ),
             }),
           );
           yield* waitForJob(jobId);
           const [deployment] = yield* deploy.listDeployments(build.id);
-          if (!deployment) throw new Error("missing deployment");
+          if (!deployment) throw new Error('missing deployment');
           return yield* deploy.getDeployment(deployment.id);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(read.target.stage).toBe("staging");
+      expect(read.target.stage).toBe('staging');
     }));
 
-  it("publishes deploy events", () =>
+  it('publishes deploy events', () =>
     withTempHome(async () => {
       const events = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const deploy = yield* RuntimeDeployService;
-          const fiber = yield* deploy.subscribe.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+          const fiber = yield* deploy.subscribe.pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild,
+          );
           const jobId = yield* deploy.deploy(
             build.id,
             new RuntimeDeployTarget({
-              stage: "dev",
-              workerName: "tileborne-test",
-              credentials: Option.some(new RuntimeDeployCredentials({ accountId: "acct", apiToken: "token" })),
+              stage: 'dev',
+              workerName: 'tileborne-test',
+              credentials: Option.some(
+                new RuntimeDeployCredentials({ accountId: 'acct', apiToken: 'token' }),
+              ),
             }),
           );
           yield* waitForJob(jobId);
@@ -623,24 +1292,26 @@ describe("RuntimeDeployService", () => {
       expect(Array.from(events)).toEqual([undefined]);
     }));
 
-  it("deletes a deployment", () =>
+  it('deletes a deployment', () =>
     withTempHome(async () => {
       const remaining = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const deploy = yield* RuntimeDeployService;
           const jobId = yield* deploy.deploy(
             build.id,
             new RuntimeDeployTarget({
-              stage: "dev",
-              workerName: "tileborne-test",
-              credentials: Option.some(new RuntimeDeployCredentials({ accountId: "acct", apiToken: "token" })),
+              stage: 'dev',
+              workerName: 'tileborne-test',
+              credentials: Option.some(
+                new RuntimeDeployCredentials({ accountId: 'acct', apiToken: 'token' }),
+              ),
             }),
           );
           yield* waitForJob(jobId);
           const [deployment] = yield* deploy.listDeployments(build.id);
-          if (!deployment) throw new Error("missing deployment");
+          if (!deployment) throw new Error('missing deployment');
           yield* deploy.deleteDeployment(deployment.id);
           return yield* deploy.listDeployments(build.id);
         }).pipe(Effect.provide(testLayer)),
@@ -649,8 +1320,8 @@ describe("RuntimeDeployService", () => {
     }));
 });
 
-describe("SupportService", () => {
-  it("creates a support bundle", () =>
+describe('SupportService', () => {
+  it('creates a support bundle', () =>
     withTempHome(async () => {
       const bundle = await Effect.runPromise(
         Effect.gen(function* () {
@@ -660,10 +1331,10 @@ describe("SupportService", () => {
           return (yield* support.listBundles())[0];
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(bundle?.redactedFiles).toContain("config.redacted.json");
+      expect(bundle?.redactedFiles).toContain('config.redacted.json');
     }));
 
-  it("respects bundle options", () =>
+  it('respects bundle options', () =>
     withTempHome(async () => {
       const bundle = await Effect.runPromise(
         Effect.gen(function* () {
@@ -679,10 +1350,10 @@ describe("SupportService", () => {
           return (yield* support.listBundles())[0];
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(bundle?.redactedFiles).toEqual(["config.redacted.json"]);
+      expect(bundle?.redactedFiles).toEqual(['config.redacted.json']);
     }));
 
-  it("reads a support bundle by id", () =>
+  it('reads a support bundle by id', () =>
     withTempHome(async () => {
       const read = await Effect.runPromise(
         Effect.gen(function* () {
@@ -690,19 +1361,23 @@ describe("SupportService", () => {
           const jobId = yield* support.createBundle();
           yield* waitForJob(jobId);
           const [bundle] = yield* support.listBundles();
-          if (!bundle) throw new Error("missing support bundle");
+          if (!bundle) throw new Error('missing support bundle');
           return yield* support.getBundle(bundle.id);
         }).pipe(Effect.provide(testLayer)),
       );
-      expect(read.id.startsWith("support:")).toBe(true);
+      expect(read.id.startsWith('support:')).toBe(true);
     }));
 
-  it("publishes support events", () =>
+  it('publishes support events', () =>
     withTempHome(async () => {
       const events = await Effect.runPromise(
         Effect.gen(function* () {
           const support = yield* SupportService;
-          const fiber = yield* support.subscribe.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+          const fiber = yield* support.subscribe.pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild,
+          );
           const jobId = yield* support.createBundle();
           yield* waitForJob(jobId);
           return yield* Fiber.join(fiber);
@@ -711,7 +1386,7 @@ describe("SupportService", () => {
       expect(Array.from(events)).toEqual([undefined]);
     }));
 
-  it("deletes a support bundle", () =>
+  it('deletes a support bundle', () =>
     withTempHome(async () => {
       const remaining = await Effect.runPromise(
         Effect.gen(function* () {
@@ -719,7 +1394,7 @@ describe("SupportService", () => {
           const jobId = yield* support.createBundle();
           yield* waitForJob(jobId);
           const [bundle] = yield* support.listBundles();
-          if (!bundle) throw new Error("missing support bundle");
+          if (!bundle) throw new Error('missing support bundle');
           yield* support.deleteBundle(bundle.id);
           return yield* support.listBundles();
         }).pipe(Effect.provide(testLayer)),
@@ -728,23 +1403,28 @@ describe("SupportService", () => {
     }));
 });
 
-describe("cross-service workflow", () => {
-  it("runs project build export deploy support chain", () =>
+describe('cross-service workflow', () => {
+  it('runs project build export deploy support chain', () =>
     withTempHome(async () => {
       const result = await Effect.runPromise(
         Effect.gen(function* () {
-          const { projectId } = yield* seedProject("Arena");
+          const { projectId } = yield* seedProject('Arena');
           const build = yield* runBuild(projectId);
           const exports = yield* ExportService;
-          const exportJob = yield* exports.exportBuild(build.id, new WebExportTarget({ basePath: Option.none() }));
+          const exportJob = yield* exports.exportBuild(
+            build.id,
+            new WebExportTarget({ basePath: Option.none() }),
+          );
           yield* waitForJob(exportJob);
           const deploy = yield* RuntimeDeployService;
           const deployJob = yield* deploy.deploy(
             build.id,
             new RuntimeDeployTarget({
-              stage: "dev",
-              workerName: "tileborne-test",
-              credentials: Option.some(new RuntimeDeployCredentials({ accountId: "acct", apiToken: "token" })),
+              stage: 'dev',
+              workerName: 'tileborne-test',
+              credentials: Option.some(
+                new RuntimeDeployCredentials({ accountId: 'acct', apiToken: 'token' }),
+              ),
             }),
             new RuntimeDeployOptions({ delayMs: Option.none() }),
           );

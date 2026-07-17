@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "id": "@tileborne-plugins/example-arena",
+  "name": "@tileborne-plugins/example-arena",
+  "version": "0.1.0",
+  "displayName": "Example Arena",
+  "description": "Minimal top-down melee arena example mode. Proof that a second game genre is discovered and decodes against the engine schemas with zero engine edits.",
+  "author": "Tileborne",
+  "license": "MIT",
+  "engines": {
+    "tileborne": "^0.1.0"
+  },
+  "entry": {
+    "runtime": "./dist/runtime.js",
+    "server": "./dist/server.js"
+  },
+  "permissions": [
+    {
+      "_tag": "RegisterRuntimeSystem",
+      "systemId": "arena-runtime"
+    }
+  ],
+  "dependsOn": [],
+  "contributes": {
+    "gameModes": [
+      {
+        "_tag": "GameModeContribution",
+        "id": "example-arena",
+        "kind": "declarative",
+        "display": {
+          "label": "Example Arena",
+          "description": "Small melee arena used as the non-Battle-Royale extension contract proof."
+        },
+        "runtimeSystemId": "arena-runtime",
+        "settingsPanelId": "arena-settings",
+        "settingsFormId": "arena-settings-form",
+        "mapValidatorId": "arena-map-validator",
+        "starter": {
+          "templateId": "example-arena-starter-v1",
+          "label": "Example Arena Starter",
+          "description": "Minimal arena with a player spawn and health pickup."
+        },
+        "checklistFacts": [
+          { "id": "arena-map", "label": "Arena map", "sources": ["map", "game-mode"] },
+          { "id": "arena-catalog", "label": "Arena combat catalog", "sources": ["catalog"] }
+        ],
+        "capabilities": {
+          "renderer": "example-arena.renderer",
+          "starter": "example-arena.starter"
+        }
+      }
+    ],
+    "behaviorEntries": [
+      {
+        "id": "example-arena.enemy-defeated",
+        "kind": "event",
+        "label": "Enemy defeated",
+        "category": "Arena",
+        "description": "Runs when an arena enemy is defeated.",
+        "capability": "example-arena.combat",
+        "icon": "swords",
+        "inputs": [],
+        "outputs": []
+      },
+      {
+        "id": "example-arena.spawn-enemy",
+        "kind": "action",
+        "label": "Spawn arena enemy",
+        "category": "Arena",
+        "description": "Spawns an enemy from a catalog object type.",
+        "capability": "example-arena.combat",
+        "icon": "bot",
+        "inputs": [
+          {
+            "key": "objectType",
+            "label": "Enemy type",
+            "valueKind": "catalog-reference",
+            "required": true
+          }
+        ],
+        "outputs": []
+      }
+    ],
+    "behaviorTemplates": [
+      {
+        "id": "example-arena.next-wave",
+        "label": "Next enemy wave",
+        "description": "Spawn another enemy after one is defeated.",
+        "category": "Arena",
+        "icon": "swords",
+        "requiredCapabilities": ["example-arena.combat"],
+        "when": { "entryId": "example-arena.enemy-defeated", "arguments": {} },
+        "do": [{ "entryId": "example-arena.spawn-enemy", "arguments": {} }]
+      }
+    ],
+    "panels": [
+      {
+        "id": "arena-settings",
+        "zone": "plugins",
+        "title": "Arena Settings",
+        "description": "Per-map arena tuning fields.",
+        "group": "gameplay",
+        "order": 10,
+        "capabilities": ["settings"]
+      }
+    ],
+    "editor": {
+      "gameSettingsForms": [
+        {
+          "_tag": "DeclarativeEditorGameSettingsFormContribution",
+          "id": "arena-settings-form",
+          "kind": "declarative",
+          "display": {
+            "label": "Arena Settings"
+          },
+          "data": {
+            "scope": "map",
+            "invalidMessage": "Arena settings must be valid numbers within range.",
+            "fields": [
+              {
+                "key": "arenaRadius",
+                "label": "Arena radius",
+                "min": 4,
+                "max": 256,
+                "step": 1,
+                "default": 32
+              },
+              {
+                "key": "enemyCount",
+                "label": "Enemy count",
+                "min": 0,
+                "max": 64,
+                "step": 1,
+                "default": 8
+              }
+            ]
+          }
+        }
+      ],
+      "validators": [
+        {
+          "_tag": "ExecutableEditorValidatorContribution",
+          "id": "arena-map-validator",
+          "kind": "executable",
+          "display": { "label": "Example Arena Map Validator" },
+          "entry": "./dist/server.js"
+        }
+      ]
+    },
+    "runtime": {
+      "systems": [
+        {
+          "_tag": "ExecutableRuntimeSystemContribution",
+          "id": "arena-runtime",
+          "kind": "executable",
+          "display": {
+            "label": "Example Arena Runtime Adapter"
+          },
+          "entry": "./dist/runtime.js"
+        }
+      ],
+      "gameObjectCatalogs": [
+        {
+          "_tag": "DeclarativeRuntimeGameObjectCatalogContribution",
+          "id": "arena-game-object-catalog",
+          "kind": "declarative",
+          "display": {
+            "label": "Arena Object Types",
+            "description": "Spawn point and a health pickup that grants an item on collection."
+          },
+          "data": {
+            "indexPath": "./schemas/game-object-catalog.json"
+          }
+        }
+      ],
+      "weaponCatalogs": [
+        {
+          "_tag": "DeclarativeRuntimeWeaponCatalogContribution",
+          "id": "arena-weapon-catalog",
+          "kind": "declarative",
+          "display": {
+            "label": "Arena Weapons",
+            "description": "Single melee weapon (sword swing) via MeleeDelivery."
+          },
+          "data": {
+            "schemaVersion": 1,
+            "weapons": [
+              {
+                "weapon": {
+                  "id": "weapon:c1111111-1111-4111-8111-111111111111",
+                  "damage": 15,
+                  "cooldownTicks": 12,
+                  "magazineSize": 1,
+                  "reloadTicks": 0
+                },
+                "delivery": {
+                  "_tag": "MeleeDelivery",
+                  "damage": 15,
+                  "range": 28,
+                  "arc": 1.5708,
+                  "knockback": 4
+                },
+                "appliesStatus": []
+              }
+            ]
+          }
+        }
+      ],
+      "inputMaps": [
+        {
+          "_tag": "DeclarativeRuntimeInputMapContribution",
+          "id": "arena-input-map",
+          "kind": "declarative",
+          "display": {
+            "label": "Arena Controls",
+            "description": "Top-down arena bindings: WASD move, pointer aim, mouse-0 melee swing, Shift dash."
+          },
+          "data": {
+            "id": "arena-default-bindings",
+            "actions": [
+              { "action": "core.Move", "valueKind": "analog2d" },
+              { "action": "core.Aim", "valueKind": "pointer" },
+              { "action": "core.PrimaryAction", "valueKind": "digital" },
+              { "action": "core.Dash", "valueKind": "digital" }
+            ],
+            "schemeDefaults": {
+              "keyboard-mouse": [
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyW" },
+                  "axisRole": "y-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyS" },
+                  "axisRole": "y+"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyA" },
+                  "axisRole": "x-"
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Move",
+                  "trigger": { "_tag": "key", "code": "KeyD" },
+                  "axisRole": "x+"
+                },
+                { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.PrimaryAction",
+                  "trigger": { "_tag": "mouseButton", "button": 0 }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Dash",
+                  "trigger": { "_tag": "key", "code": "ShiftLeft" }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "server": {
+      "mapValidators": [
+        {
+          "_tag": "ExecutableServerMapValidatorContribution",
+          "id": "arena-map-validator",
+          "kind": "executable",
+          "display": { "label": "Example Arena Map Validator" },
+          "entry": "./dist/server.js"
+        }
+      ]
+    }
+  }
+}

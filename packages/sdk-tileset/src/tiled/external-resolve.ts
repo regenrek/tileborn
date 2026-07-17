@@ -1,4 +1,4 @@
-import type { ParseDiagnostic } from "../diagnostics.js";
+import type { ParseDiagnostic } from '../diagnostics.js';
 
 export type NormalizedPath = {
   readonly path: string;
@@ -7,56 +7,60 @@ export type NormalizedPath = {
 };
 
 export const normalizePath = (path: string): NormalizedPath => {
-  const source = path.replaceAll("\\", "/");
-  const absolute = source.startsWith("/") || /^[A-Za-z]:\//.test(source);
-  const prefix = source.startsWith("/") ? "/" : /^[A-Za-z]:\//.test(source) ? source.slice(0, 3) : "";
-  const rawSegments = source.slice(prefix.length).split("/");
+  const source = path.replaceAll('\\', '/');
+  const absolute = source.startsWith('/') || /^[A-Za-z]:\//.test(source);
+  const prefix = source.startsWith('/')
+    ? '/'
+    : /^[A-Za-z]:\//.test(source)
+      ? source.slice(0, 3)
+      : '';
+  const rawSegments = source.slice(prefix.length).split('/');
   const segments: string[] = [];
   let hasTraversal = false;
   for (const segment of rawSegments) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
       hasTraversal = true;
       continue;
     }
     segments.push(segment);
   }
   return {
-    path: `${prefix}${segments.join("/")}`,
+    path: `${prefix}${segments.join('/')}`,
     absolute,
     hasTraversal,
   };
 };
 
 export const directoryName = (path: string): string => {
-  const normalized = path.replaceAll("\\", "/");
-  const index = normalized.lastIndexOf("/");
-  if (index <= 0) return ".";
+  const normalized = path.replaceAll('\\', '/');
+  const index = normalized.lastIndexOf('/');
+  if (index <= 0) return '.';
   return normalized.slice(0, index);
 };
 
 export const trimTrailingSlash = (value: string): string =>
-  value.length > 1 && value.endsWith("/") ? value.slice(0, -1) : value;
+  value.length > 1 && value.endsWith('/') ? value.slice(0, -1) : value;
 
-export const PATH_SEP = "/";
+export const PATH_SEP = '/';
 
 export const isAbsoluteFilesystemPath = (value: string): boolean => normalizePath(value).absolute;
 
 const normalizeCanonicalAbsolutePath = (value: string): string => {
-  const source = value.replaceAll("\\", "/");
-  const prefix = source.startsWith("/")
-    ? "/"
+  const source = value.replaceAll('\\', '/');
+  const prefix = source.startsWith('/')
+    ? '/'
     : /^[A-Za-z]:\//.test(source)
       ? source.slice(0, 3)
-      : "";
-  if (prefix === "") {
+      : '';
+  if (prefix === '') {
     return source;
   }
 
   const segments: string[] = [];
-  for (const segment of source.slice(prefix.length).split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
+  for (const segment of source.slice(prefix.length).split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
       if (segments.length > 0) {
         segments.pop();
       }
@@ -65,16 +69,16 @@ const normalizeCanonicalAbsolutePath = (value: string): string => {
     segments.push(segment);
   }
 
-  const path = segments.length === 0 && prefix === "/" ? "/" : `${prefix}${segments.join("/")}`;
+  const path = segments.length === 0 && prefix === '/' ? '/' : `${prefix}${segments.join('/')}`;
   return trimTrailingSlash(path);
 };
 
 const currentWorkingDirectory = (): string => {
   const runtime = globalThis as { process?: { cwd?: () => string } };
-  if (typeof runtime.process?.cwd === "function") {
+  if (typeof runtime.process?.cwd === 'function') {
     return normalizePath(runtime.process.cwd()).path;
   }
-  return "";
+  return '';
 };
 
 export const resolvePath = (base: string, ...segments: string[]): string => {
@@ -94,7 +98,7 @@ export const resolvePath = (base: string, ...segments: string[]): string => {
 /** Resolve a project root to an absolute directory path. */
 export const resolveAbsoluteProjectRoot = (projectRoot: string): string => {
   const normalized = trimTrailingSlash(normalizePath(projectRoot).path);
-  if (normalized === "" || normalized === ".") {
+  if (normalized === '' || normalized === '.') {
     return currentWorkingDirectory();
   }
   return isAbsoluteFilesystemPath(normalized)
@@ -131,10 +135,10 @@ export const resolveExternalPath = async (
     return {
       ok: false,
       diagnostic: {
-        _tag: "TiledExternalRefBlocked",
+        _tag: 'TiledExternalRefBlocked',
         path: input.source,
-        message: "External reference must not contain path traversal segments",
-        severity: "error",
+        message: 'External reference must not contain path traversal segments',
+        severity: 'error',
         source: input.source,
         resolvedPath: normalizedSource.path,
       },
@@ -155,10 +159,10 @@ export const resolveExternalPath = async (
     return {
       ok: false,
       diagnostic: {
-        _tag: "TiledExternalRefBlocked",
+        _tag: 'TiledExternalRefBlocked',
         path: input.source,
-        message: "External reference must resolve to an absolute path inside the project root",
-        severity: "error",
+        message: 'External reference must resolve to an absolute path inside the project root',
+        severity: 'error',
         source: input.source,
         resolvedPath: resolved,
       },
@@ -169,10 +173,10 @@ export const resolveExternalPath = async (
     return {
       ok: false,
       diagnostic: {
-        _tag: "TiledExternalRefBlocked",
+        _tag: 'TiledExternalRefBlocked',
         path: input.source,
-        message: "External reference resolves outside the project root",
-        severity: "error",
+        message: 'External reference resolves outside the project root',
+        severity: 'error',
         source: input.source,
         resolvedPath: resolved,
       },
@@ -187,15 +191,15 @@ export const readExternalText = async (
   absolutePath: string,
 ): Promise<string> => {
   const raw = await readFile(absolutePath);
-  return typeof raw === "string" ? raw : new TextDecoder().decode(raw);
+  return typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
 };
 
 export const isJsonTilesetSource = (source: string): boolean => {
   const lower = source.toLowerCase();
-  return lower.endsWith(".json") || lower.endsWith(".tsj");
+  return lower.endsWith('.json') || lower.endsWith('.tsj');
 };
 
-export const isXmlTilesetSource = (source: string): boolean => lowerEndsWith(source, ".tsx");
+export const isXmlTilesetSource = (source: string): boolean => lowerEndsWith(source, '.tsx');
 
 export const isSupportedTilesetSource = (source: string): boolean =>
   isJsonTilesetSource(source) || isXmlTilesetSource(source);
@@ -204,11 +208,11 @@ const lowerEndsWith = (value: string, suffix: string): boolean =>
   value.toLowerCase().endsWith(suffix);
 
 export const tilesetIdFromSource = (source: string): string => {
-  const filename = source.replaceAll("\\", "/").split("/").pop() ?? source;
+  const filename = source.replaceAll('\\', '/').split('/').pop() ?? source;
   return filename
-    .replace(/\.tileset\.tsx$/i, "")
-    .replace(/\.tileset\.json$/i, "")
-    .replace(/\.tsx$/i, "")
-    .replace(/\.tsj$/i, "")
-    .replace(/\.json$/i, "");
+    .replace(/\.tileset\.tsx$/i, '')
+    .replace(/\.tileset\.json$/i, '')
+    .replace(/\.tsx$/i, '')
+    .replace(/\.tsj$/i, '')
+    .replace(/\.json$/i, '');
 };

@@ -1,25 +1,32 @@
-import { Option } from "effect";
+import { Option } from 'effect';
 
-import type { ParseDiagnostic, ParseResult } from "../diagnostics.js";
-import type { TilesetPackAsset as TilesetPackAssetType } from "../schemas/tileset-pack.js";
-import { TilesetPack, TilesetPackAsset as TilesetPackAssetClass, TilesetPackLicense } from "../schemas/tileset-pack.js";
+import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
+import type { TilesetPackAsset as TilesetPackAssetType } from '../schemas/tileset-pack.js';
+import {
+  TilesetPack,
+  TilesetPackAsset as TilesetPackAssetClass,
+  TilesetPackLicense,
+} from '../schemas/tileset-pack.js';
 
-import { buildTilesetWindows, compileTiledMap, tiledImageLayerAssetId } from "./compile-map.js";
-import { compileTiledTileset } from "./compile-tileset.js";
-import { compileTileborneMap } from "./core-map.js";
-import { deterministicPackId } from "./deterministic-ids.js";
+import { buildTilesetWindows, compileTiledMap, tiledImageLayerAssetId } from './compile-map.js';
+import { compileTiledTileset } from './compile-tileset.js';
+import { compileTileborneMap } from './core-map.js';
+import { deterministicPackId } from './deterministic-ids.js';
 import {
   isSupportedTilesetSource,
   readExternalText,
   resolveExternalPath,
   tilesetIdFromSource,
-} from "./external-resolve.js";
-import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from "./tile-data.js";
-import { validateTiledJsonMap } from "./validate.js";
-import { parseTsj } from "./tsj-parse.js";
-import { parseTsx } from "./tsx-parse.js";
-import { unsupportedClassPropertyFeaturesForMap, unsupportedFeatureDiagnostic } from "./support-policy.js";
-import { normalizeTiledTilesetImageAssetPaths } from "./image-paths.js";
+} from './external-resolve.js';
+import { decodeTileLayerDataAsync, decodeTileLayerDataSync } from './tile-data.js';
+import { validateTiledJsonMap } from './validate.js';
+import { parseTsj } from './tsj-parse.js';
+import { parseTsx } from './tsx-parse.js';
+import {
+  unsupportedClassPropertyFeaturesForMap,
+  unsupportedFeatureDiagnostic,
+} from './support-policy.js';
+import { normalizeTiledTilesetImageAssetPaths } from './image-paths.js';
 import {
   childNode,
   convertTiledXmlObjectGroup,
@@ -29,28 +36,36 @@ import {
   readTiledXmlLayerDataNode,
   toArray,
   xmlMapRoot,
-} from "./xml-common.js";
-import type { TiledImportOptions, TiledImportSuccess, TiledJsonAnyLayer, TiledJsonMap, TiledJsonTileset } from "./types.js";
+} from './xml-common.js';
+import type {
+  TiledImportOptions,
+  TiledImportSuccess,
+  TiledJsonAnyLayer,
+  TiledJsonMap,
+  TiledJsonTileset,
+} from './types.js';
 
 const hasBlockingDiagnostics = (diagnostics: readonly ParseDiagnostic[]): boolean =>
-  diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  diagnostics.some((diagnostic) => diagnostic.severity === 'error');
 
-const imageLayerPackAssets = (layers: readonly TiledJsonAnyLayer[]): readonly TilesetPackAssetType[] =>
+const imageLayerPackAssets = (
+  layers: readonly TiledJsonAnyLayer[],
+): readonly TilesetPackAssetType[] =>
   layers.flatMap((layer) => {
-    if (layer.type === "group") return imageLayerPackAssets(layer.layers);
-    if (layer.type !== "imagelayer") return [];
+    if (layer.type === 'group') return imageLayerPackAssets(layer.layers);
+    if (layer.type !== 'imagelayer') return [];
     return [
       new TilesetPackAssetClass({
         id: tiledImageLayerAssetId(layer.image),
         path: layer.image,
-        mime: "image/png",
+        mime: 'image/png',
       }),
     ];
   });
 
 type TiledXmlNode = Record<string, unknown>;
 
-const inlineTilesetSource = (ref: TiledJsonMap["tilesets"][number]): TiledJsonTileset =>
+const inlineTilesetSource = (ref: TiledJsonMap['tilesets'][number]): TiledJsonTileset =>
   ref as TiledJsonTileset;
 
 const xmlLayerDecodeInput = (input: {
@@ -60,7 +75,7 @@ const xmlLayerDecodeInput = (input: {
   readonly encoding?: string;
   readonly compression?: string;
   readonly text?: string;
-}): import("./tile-data.js").DecodeTileLayerDataInput => ({
+}): import('./tile-data.js').DecodeTileLayerDataInput => ({
   layerName: input.layerName,
   width: input.width,
   height: input.height,
@@ -80,25 +95,27 @@ const resolveTilesets = async (
   const diagnostics: ParseDiagnostic[] = [];
 
   for (const ref of map.tilesets) {
-    const tilesetSeed = ref.source ? tilesetIdFromSource(ref.source) : ref.name ?? `firstgid-${ref.firstgid}`;
+    const tilesetSeed = ref.source
+      ? tilesetIdFromSource(ref.source)
+      : (ref.name ?? `firstgid-${ref.firstgid}`);
     if (ref.source) {
       if (!options.reader) {
         diagnostics.push({
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: ref.source,
-          message: "External tileset reference requires an injected reader",
-          severity: "error",
-          format: "tmx",
+          message: 'External tileset reference requires an injected reader',
+          severity: 'error',
+          format: 'tmx',
         });
         continue;
       }
       if (!isSupportedTilesetSource(ref.source)) {
         diagnostics.push({
-          _tag: "TiledParseError",
+          _tag: 'TiledParseError',
           path: ref.source,
-          message: "External tileset source must be .json, .tsj, or .tsx",
-          severity: "error",
-          format: "tmx",
+          message: 'External tileset source must be .json, .tsj, or .tsx',
+          severity: 'error',
+          format: 'tmx',
         });
         continue;
       }
@@ -116,7 +133,7 @@ const resolveTilesets = async (
 
       const raw = await readExternalText(options.reader.readFile, resolved.absolutePath);
       const lower = ref.source.toLowerCase();
-      const result = lower.endsWith(".tsx")
+      const result = lower.endsWith('.tsx')
         ? parseTsx(raw, {
             packIdSeed: options.packIdSeed,
             tilesetSeed,
@@ -166,63 +183,75 @@ const resolveTilesets = async (
 const hydrateXmlLayers = async (
   root: TiledXmlNode,
   syncOnly: boolean,
-): Promise<{ readonly layers: readonly TiledJsonAnyLayer[]; readonly diagnostics: ParseDiagnostic[] }> => {
+): Promise<{
+  readonly layers: readonly TiledJsonAnyLayer[];
+  readonly diagnostics: ParseDiagnostic[];
+}> => {
   const diagnostics: ParseDiagnostic[] = [];
 
   const hydrateNode = async (node: TiledXmlNode, kind: string): Promise<TiledJsonAnyLayer> => {
-    if (kind === "group") {
+    if (kind === 'group') {
       const nested = await Promise.all(
-        collectXmlLayerEntries(node).map((entry) => hydrateNode(requiredNode(entry.value, entry.kind), entry.kind)),
+        collectXmlLayerEntries(node).map((entry) =>
+          hydrateNode(requiredNode(entry.value, entry.kind), entry.kind),
+        ),
       );
       return {
         ...(optionalInteger(node.id) === undefined ? {} : { id: optionalInteger(node.id) }),
-        name: requiredString(node.name, "layer.name"),
+        name: requiredString(node.name, 'layer.name'),
         ...(optionalString(node.class) === undefined ? {} : { class: optionalString(node.class) }),
-        ...(optionalNumber(node.opacity) === undefined ? {} : { opacity: optionalNumber(node.opacity) }),
-        ...(optionalBoolean(node.visible) === undefined ? {} : { visible: optionalBoolean(node.visible) }),
-        type: "group",
+        ...(optionalNumber(node.opacity) === undefined
+          ? {}
+          : { opacity: optionalNumber(node.opacity) }),
+        ...(optionalBoolean(node.visible) === undefined
+          ? {}
+          : { visible: optionalBoolean(node.visible) }),
+        type: 'group',
         layers: nested,
       } as TiledJsonAnyLayer;
     }
 
-    if (kind === "objectgroup") {
+    if (kind === 'objectgroup') {
       return convertTiledXmlObjectGroup(node) as TiledJsonAnyLayer;
     }
 
-    if (kind === "imagelayer") {
-      const image = childNode(node.image, "image");
+    if (kind === 'imagelayer') {
+      const image = childNode(node.image, 'image');
       return {
-        type: "imagelayer",
+        type: 'imagelayer',
         ...(optionalInteger(node.id) === undefined ? {} : { id: optionalInteger(node.id) }),
-        name: requiredString(node.name, "layer.name"),
+        name: requiredString(node.name, 'layer.name'),
         ...(optionalString(node.class) === undefined ? {} : { class: optionalString(node.class) }),
-        ...(optionalNumber(node.opacity) === undefined ? {} : { opacity: optionalNumber(node.opacity) }),
-        ...(optionalBoolean(node.visible) === undefined ? {} : { visible: optionalBoolean(node.visible) }),
-        image: image ? requiredString(image.source, "imagelayer.image.source") : "",
+        ...(optionalNumber(node.opacity) === undefined
+          ? {}
+          : { opacity: optionalNumber(node.opacity) }),
+        ...(optionalBoolean(node.visible) === undefined
+          ? {}
+          : { visible: optionalBoolean(node.visible) }),
+        image: image ? requiredString(image.source, 'imagelayer.image.source') : '',
       } as TiledJsonAnyLayer;
     }
 
     const dataNode = readTiledXmlLayerDataNode(node);
     const decodeInput = xmlLayerDecodeInput({
-      layerName: requiredString(node.name, "layer.name"),
-      width: requiredInteger(node.width, "layer.width"),
-      height: requiredInteger(node.height, "layer.height"),
+      layerName: requiredString(node.name, 'layer.name'),
+      width: requiredInteger(node.width, 'layer.width'),
+      height: requiredInteger(node.height, 'layer.height'),
       ...(dataNode.encoding === undefined ? {} : { encoding: dataNode.encoding }),
       ...(dataNode.compression === undefined ? {} : { compression: dataNode.compression }),
       ...(dataNode.text === undefined ? {} : { text: dataNode.text }),
     });
-    const decoded = syncOnly ? decodeTileLayerDataSync(decodeInput) : await decodeTileLayerDataAsync(decodeInput);
+    const decoded = syncOnly
+      ? decodeTileLayerDataSync(decodeInput)
+      : await decodeTileLayerDataAsync(decodeInput);
     diagnostics.push(...decoded.diagnostics);
-    return convertTiledXmlTileLayer(
-      node,
-      decoded.data,
-      dataNode.encoding,
-      dataNode.compression,
-    );
+    return convertTiledXmlTileLayer(node, decoded.data, dataNode.encoding, dataNode.compression);
   };
 
   const layers = await Promise.all(
-    collectXmlLayerEntries(root).map((entry) => hydrateNode(requiredNode(entry.value, entry.kind), entry.kind)),
+    collectXmlLayerEntries(root).map((entry) =>
+      hydrateNode(requiredNode(entry.value, entry.kind), entry.kind),
+    ),
   );
   return { layers, diagnostics };
 };
@@ -230,66 +259,68 @@ const hydrateXmlLayers = async (
 type XmlLayerEntry = { readonly kind: string; readonly value: unknown };
 
 const collectXmlLayerEntries = (node: TiledXmlNode): readonly XmlLayerEntry[] => [
-  ...toArray(node.layer).map((value) => ({ kind: "layer", value })),
-  ...toArray(node.objectgroup).map((value) => ({ kind: "objectgroup", value })),
-  ...toArray(node.imagelayer).map((value) => ({ kind: "imagelayer", value })),
-  ...toArray(node.group).map((value) => ({ kind: "group", value })),
+  ...toArray(node.layer).map((value) => ({ kind: 'layer', value })),
+  ...toArray(node.objectgroup).map((value) => ({ kind: 'objectgroup', value })),
+  ...toArray(node.imagelayer).map((value) => ({ kind: 'imagelayer', value })),
+  ...toArray(node.group).map((value) => ({ kind: 'group', value })),
 ];
 
 const requiredNode = (value: unknown, label: string): TiledXmlNode => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`Tiled XML ${label} must be an object`);
   }
   return value as TiledXmlNode;
 };
 
 const requiredString = (value: unknown, label: string): string => {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   throw new Error(`Tiled XML ${label} must be a string`);
 };
 
 const optionalString = (value: unknown): string | undefined =>
-  value === undefined ? undefined : requiredString(value, "value");
+  value === undefined ? undefined : requiredString(value, 'value');
 
 const requiredInteger = (value: unknown, label: string): number => {
-  const number = typeof value === "number" ? value : Number(String(value));
+  const number = typeof value === 'number' ? value : Number(String(value));
   if (!Number.isSafeInteger(number)) throw new Error(`Tiled XML ${label} must be an integer`);
   return number;
 };
 
 const optionalInteger = (value: unknown): number | undefined =>
-  value === undefined ? undefined : requiredInteger(value, "value");
+  value === undefined ? undefined : requiredInteger(value, 'value');
 
 const optionalNumber = (value: unknown): number | undefined => {
   if (value === undefined) return undefined;
-  const number = typeof value === "number" ? value : Number(String(value));
-  if (!Number.isFinite(number)) throw new Error("Tiled XML value must be finite");
+  const number = typeof value === 'number' ? value : Number(String(value));
+  if (!Number.isFinite(number)) throw new Error('Tiled XML value must be finite');
   return number;
 };
 
 const optionalBoolean = (value: unknown): boolean | undefined => {
   if (value === undefined) return undefined;
-  if (typeof value === "boolean") return value;
-  if (value === 1 || value === "1" || value === "true") return true;
-  if (value === 0 || value === "0" || value === "false") return false;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
   return undefined;
 };
 
 export const parseTmx = async (
   raw: string,
   options: TiledImportOptions,
-): Promise<ParseResult<TiledImportSuccess> & { readonly diagnostics: readonly ParseDiagnostic[] }> => {
+): Promise<
+  ParseResult<TiledImportSuccess> & { readonly diagnostics: readonly ParseDiagnostic[] }
+> => {
   const parsed = parseTiledXmlDocument(raw);
   if (!parsed.ok) {
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: parsed.error,
-          severity: "error",
-          format: "tmx",
+          severity: 'error',
+          format: 'tmx',
         },
       ],
     };
@@ -300,11 +331,11 @@ export const parseTmx = async (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
-          message: "Tiled XML map is missing <map> root",
-          severity: "error",
-          format: "tmx",
+          _tag: 'TiledParseError',
+          path: '/',
+          message: 'Tiled XML map is missing <map> root',
+          severity: 'error',
+          format: 'tmx',
         },
       ],
     };
@@ -320,7 +351,9 @@ export const parseTmx = async (
     const tilesets = await resolveTilesets(map, options);
     const diagnostics = [...hydrated.diagnostics, ...tilesets.diagnostics];
     diagnostics.push(
-      ...unsupportedClassPropertyFeaturesForMap(map, map.tilesets).map(unsupportedFeatureDiagnostic),
+      ...unsupportedClassPropertyFeaturesForMap(map, map.tilesets).map(
+        unsupportedFeatureDiagnostic,
+      ),
     );
     if (hasBlockingDiagnostics(diagnostics)) {
       return { diagnostics };
@@ -333,17 +366,20 @@ export const parseTmx = async (
     const pack = new TilesetPack({
       schemaVersion: 1,
       id: deterministicPackId(options.packIdSeed),
-      name: options.packName ?? map.class ?? "Tiled Import",
-      version: options.packVersion ?? map.version ?? "1.0.0",
+      name: options.packName ?? map.class ?? 'Tiled Import',
+      version: options.packVersion ?? map.version ?? '1.0.0',
       license: new TilesetPackLicense({
-        spdxId: "UNKNOWN",
-        attribution: Option.some("Imported from Tiled"),
+        spdxId: 'UNKNOWN',
+        attribution: Option.some('Imported from Tiled'),
         sourceUrl: Option.none(),
         notes: Option.some(options.sourcePath),
         redistributable: false,
       }),
       tilesets: tilesetValues.map((entry) => entry.tileset),
-      assets: [...tilesetValues.flatMap((entry) => entry.assets), ...imageLayerPackAssets(map.layers)],
+      assets: [
+        ...tilesetValues.flatMap((entry) => entry.assets),
+        ...imageLayerPackAssets(map.layers),
+      ],
       placeables: tilesetValues.flatMap((entry) => entry.placeables),
     });
 
@@ -355,7 +391,12 @@ export const parseTmx = async (
         name: ref.name ?? tilesetValues[index]?.tileset.name ?? `tileset-${ref.firstgid}`,
       })),
     );
-    const compiledMap = compileTiledMap({ map, windows, placeables: pack.placeables, profile: options.profile });
+    const compiledMap = compileTiledMap({
+      map,
+      windows,
+      placeables: pack.placeables,
+      profile: options.profile,
+    });
     if (hasBlockingDiagnostics(compiledMap.diagnostics)) {
       return { diagnostics: [...diagnostics, ...compiledMap.diagnostics] };
     }
@@ -373,11 +414,11 @@ export const parseTmx = async (
     return {
       diagnostics: [
         {
-          _tag: "TiledParseError",
-          path: "/",
+          _tag: 'TiledParseError',
+          path: '/',
           message: (error as Error).message,
-          severity: "error",
-          format: "tmx",
+          severity: 'error',
+          format: 'tmx',
         },
       ],
     };

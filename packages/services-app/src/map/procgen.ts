@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
 import {
   makeLayerId,
@@ -7,12 +7,12 @@ import {
   TileLayer,
   type MapLayer,
   type Uuid,
-} from "@tileborne/core";
+} from '@tileborne/core';
 import {
   generatePresetTiles,
   MAP_GENERATE_PRESETS,
   type MapGeneratePreset,
-} from "@tileborne/runtime-wasm";
+} from '@tileborne/runtime-wasm';
 
 export { MAP_GENERATE_PRESETS };
 export type { MapGeneratePreset };
@@ -55,7 +55,7 @@ export const makeGeneratedLayers = (
   return [
     new TileLayer({
       id: makeLayerId(randomUUID() as Uuid),
-      name: "terrain",
+      name: 'terrain',
       visible: true,
       opacity: 1,
       chunks: makeChunks(width, height, tiles),
@@ -65,14 +65,14 @@ export const makeGeneratedLayers = (
     // ship these as object layers so placeable brushes have a valid target.
     new ObjectLayer({
       id: makeLayerId(randomUUID() as Uuid),
-      name: "props",
+      name: 'props',
       visible: true,
       opacity: 1,
       objectIds: [],
     }),
     new ObjectLayer({
       id: makeLayerId(randomUUID() as Uuid),
-      name: "entities",
+      name: 'entities',
       visible: true,
       opacity: 1,
       objectIds: [],

@@ -1,9 +1,9 @@
-import type { BrandConfig } from "@tileborne/core";
-import { Button } from "@tileborne/ui";
-import type { ReactElement } from "react";
+import type { BrandConfig } from '@tileborne/core';
+import { Button } from '@tileborne/ui';
+import type { ReactElement } from 'react';
 
-import type { MenuSectionRegistration } from "../contributions/menu-registry.js";
-import { SlotHost } from "./slot-host.js";
+import type { MenuSectionRegistration } from '../contributions/menu-registry.js';
+import { SlotHost } from './slot-host.js';
 
 export interface MainMenuProps {
   readonly brand: BrandConfig;
@@ -29,17 +29,15 @@ export function MainMenu({
     <div className="tb-scrim">
       <div className="tb-panel" data-testid="main-menu">
         {brand.logo ? (
-          <img src={brand.logo.src} alt={brand.logo.alt} style={{ maxHeight: "4rem" }} />
+          <img src={brand.logo.src} alt={brand.logo.alt} style={{ maxHeight: '4rem' }} />
         ) : (
           <h1 className="tb-title">{brand.title}</h1>
         )}
-        {brand.lobbyCopy.tagline ? (
-          <p className="tb-tagline">{brand.lobbyCopy.tagline}</p>
-        ) : null}
+        {brand.lobbyCopy.tagline ? <p className="tb-tagline">{brand.lobbyCopy.tagline}</p> : null}
 
         <div className="tb-actions">
           <Button size="lg" onClick={onPlay} data-testid="play-button">
-            {brand.lobbyCopy.cta || "Play"}
+            {brand.lobbyCopy.cta || 'Play'}
           </Button>
           <SlotHost slot="main.primaryActions" sections={sections} {...slotProps} />
         </div>

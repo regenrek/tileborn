@@ -1,4 +1,6 @@
-import type { PlayerModelRef } from "@tileborne/core";
+import type { PlayerModelRef } from '@tileborne/core';
+
+import { DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS } from '../content-assets.js';
 
 /**
  * Canonical lightweight identity of a selectable Battle Royale player model.
@@ -9,9 +11,9 @@ import type { PlayerModelRef } from "@tileborne/core";
  *    project manifest) — see {@link toSelectableModel}
  *  - the shipped-client loadout (persisted to localStorage) — see `loadout.ts`
  *
- * Brand-neutral by construction (id + label only, no product names).
+ * Identity-only by construction (id + label only, no renderer/runtime policy).
  */
-export type BattleRoyaleSelectableModel = Pick<PlayerModelRef, "id" | "label">;
+export type BattleRoyaleSelectableModel = Pick<PlayerModelRef, 'id' | 'label'>;
 
 /** Project a full authored player-model ref down to its selectable identity. */
 export const toSelectableModel = (ref: PlayerModelRef): BattleRoyaleSelectableModel => ({
@@ -20,12 +22,9 @@ export const toSelectableModel = (ref: PlayerModelRef): BattleRoyaleSelectableMo
 });
 
 /**
- * Shipped-client default roster (brand-neutral archetypes). Used by the menu
- * loadout when no authored project roster is present; products override with
- * their own models.
+ * Shipped-client default roster. Used by the menu loadout when no authored
+ * project roster is present; products override with their own models.
  */
 export const DEFAULT_BATTLE_ROYALE_MODELS: readonly BattleRoyaleSelectableModel[] = [
-  { id: "runner", label: "Runner" },
-  { id: "scout", label: "Scout" },
-  { id: "tank", label: "Tank" },
+  ...DEFAULT_BATTLE_ROYALE_PLAYER_MODEL_REFS.map(toSelectableModel),
 ];

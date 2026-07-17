@@ -1,4 +1,21 @@
-import { Result } from "effect";
+import { Result } from 'effect';
+
+export * from './persisted-schema-registry.js';
+
+import { PERSISTED_SCHEMA_VERSIONS } from './persisted-schema-registry.js';
+
+/** @deprecated Use `PERSISTED_SCHEMA_VERSIONS` and registry ids directly. */
+export const CORE_SCHEMA_VERSIONS = {
+  project: PERSISTED_SCHEMA_VERSIONS.projectManifest,
+  map: PERSISTED_SCHEMA_VERSIONS.tileborneMap,
+  // The legacy name predates the registry and did not identify the generic
+  // (currently unversioned) pack codec. Preserve its public numeric value only.
+  assetPackManifest: 1,
+  brandConfig: PERSISTED_SCHEMA_VERSIONS.brandConfig,
+} as const;
+
+/** @deprecated Use `VersionedPersistedSchemaId`. */
+export type CoreSchemaEntity = keyof typeof CORE_SCHEMA_VERSIONS;
 
 /** Single-step schema migrator between two integer versions. */
 export interface SchemaMigrator<From, To> {
@@ -60,19 +77,9 @@ export const defineMigrationChain = <T>(args: {
 
 /** Read `schemaVersion` from unknown persisted JSON. */
 export const readSchemaVersion = (input: unknown): number | undefined => {
-  if (typeof input !== "object" || input === null || !("schemaVersion" in input)) {
+  if (typeof input !== 'object' || input === null || !('schemaVersion' in input)) {
     return undefined;
   }
   const version = (input as { schemaVersion: unknown }).schemaVersion;
-  return typeof version === "number" && Number.isInteger(version) ? version : undefined;
+  return typeof version === 'number' && Number.isInteger(version) ? version : undefined;
 };
-
-/** Current schema versions for core persisted entities. */
-export const CORE_SCHEMA_VERSIONS = {
-  project: 1,
-  map: 1,
-  assetPackManifest: 1,
-  brandConfig: 1,
-} as const;
-
-export type CoreSchemaEntity = keyof typeof CORE_SCHEMA_VERSIONS;

@@ -15,6 +15,26 @@ export const queryKeys = {
     list: () => [...queryKeys.projects.all, 'list'] as const,
     detail: (projectId: string) => [...queryKeys.projects.all, projectId] as const,
   },
+  behaviors: {
+    all: ['behaviors'] as const,
+    project: (projectId: string) => [...queryKeys.behaviors.all, projectId] as const,
+    documents: (projectId: string) =>
+      [...queryKeys.behaviors.project(projectId), 'documents'] as const,
+    registry: (projectId: string) =>
+      [...queryKeys.behaviors.project(projectId), 'registry'] as const,
+  },
+  behaviorReferences: {
+    all: ['behaviorReferences'] as const,
+    project: (projectId: string) => [...queryKeys.behaviorReferences.all, projectId] as const,
+    kind: (projectId: string, kind: string) =>
+      [...queryKeys.behaviorReferences.project(projectId), kind] as const,
+    resolveAll: (projectId: string) =>
+      [...queryKeys.behaviorReferences.project(projectId), 'resolve'] as const,
+    resolve: (projectId: string, referencesKey: string) =>
+      [...queryKeys.behaviorReferences.resolveAll(projectId), referencesKey] as const,
+    page: (projectId: string, kind: string, query: string, offset: number, limit: number) =>
+      [...queryKeys.behaviorReferences.kind(projectId, kind), query, offset, limit] as const,
+  },
   maps: {
     all: ['maps'] as const,
     list: (projectId: string) => [...queryKeys.maps.all, projectId, 'list'] as const,
@@ -52,6 +72,9 @@ export const queryKeys = {
   },
   assetLibrary: {
     all: ['assetLibrary'] as const,
+    useSitesAll: () => [...queryKeys.assetLibrary.all, 'useSites'] as const,
+    useSitesProject: (projectId: string) =>
+      [...queryKeys.assetLibrary.useSitesAll(), projectId] as const,
     status: (packId: string, integrityHash: string) =>
       [...queryKeys.assetLibrary.all, packId, integrityHash, 'status'] as const,
     packLibraryPage: (
@@ -76,6 +99,8 @@ export const queryKeys = {
       ] as const,
     previews: (packId: string, refsKey: string) =>
       [...queryKeys.assetLibrary.all, packId, 'previews', refsKey] as const,
+    useSites: (projectId: string, packId: string, limit: number) =>
+      [...queryKeys.assetLibrary.useSitesProject(projectId), packId, limit] as const,
   },
   workingPalettes: {
     all: ['workingPalettes'] as const,
@@ -91,6 +116,11 @@ export const queryKeys = {
     all: ['catalog'] as const,
     resolve: (projectId: string) => [...queryKeys.catalog.all, projectId, 'resolve'] as const,
     validate: (projectId: string) => [...queryKeys.catalog.all, projectId, 'validate'] as const,
+  },
+  readiness: {
+    all: ['readiness'] as const,
+    check: (projectId: string, mapId: string, purpose: string) =>
+      [...queryKeys.readiness.all, projectId, mapId, purpose] as const,
   },
   jobs: {
     all: ['jobs'] as const,
@@ -115,6 +145,8 @@ export const queryKeys = {
   playtest: {
     all: ['playtest'] as const,
     list: () => [...queryKeys.playtest.all, 'list'] as const,
+    behaviorDebug: (sessionId: string) =>
+      [...queryKeys.playtest.all, sessionId, 'behavior-debug'] as const,
   },
   support: {
     all: ['support'] as const,
@@ -131,3 +163,30 @@ export const queryKeys = {
     list: () => [...queryKeys.logs.all, 'list'] as const,
   },
 } as const;
+
+/** Invalidate the canonical dependency/use-site projection after a consumer write. */
+export const invalidateAssetUseSites = (
+  client: Pick<QueryClient, 'invalidateQueries'>,
+  projectId?: string,
+) =>
+  client.invalidateQueries({
+    queryKey:
+      projectId === undefined
+        ? queryKeys.assetLibrary.useSitesAll()
+        : queryKeys.assetLibrary.useSitesProject(projectId),
+  });
+
+/** Refresh only on-demand reference pages; the static authoring registry has separate ownership. */
+export const invalidateBehaviorReferences = (
+  client: Pick<QueryClient, 'invalidateQueries'>,
+  projectId?: string,
+  kind?: string,
+) =>
+  client.invalidateQueries({
+    queryKey:
+      projectId === undefined
+        ? queryKeys.behaviorReferences.all
+        : kind === undefined
+          ? queryKeys.behaviorReferences.project(projectId)
+          : queryKeys.behaviorReferences.kind(projectId, kind),
+  });

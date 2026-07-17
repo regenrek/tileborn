@@ -1,24 +1,58 @@
-import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from "@tileborne/core";
-import { Option } from "effect";
-import { describe, expect, it } from "vitest";
-
-import { MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from "./constants.js";
 import {
-  LAST_FACING_COMPONENT,
+  AssetLibraryReference,
+  MapObject,
+  PlayerModelClipSet,
+  PlayerModelRef,
+  gameObjectTypeIdForKey,
+  makeClipId,
+  makePackId,
+  makeTileborneMap,
+} from '@tileborne/core';
+import { Option } from 'effect';
+import { describe, expect, it } from 'vitest';
+
+import { MOVEMENT, PROJECTILE, SPAWN_POINT_KIND } from './constants.js';
+import {
+  FACING_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
   PROJECTILE_COMPONENT,
   VELOCITY_COMPONENT,
   type Position,
   type Projectile,
-} from "./ecs/components.js";
-import { exportArtifact } from "./export-artifact.js";
-import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from "./id-utils.js";
-import { createRuntimeAdapter } from "./runtime-adapter.js";
-import { createTestPluginWorld } from "./test-plugin-world.js";
+} from './ecs/components.js';
+import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
+import { createRuntimeAdapter } from './runtime-adapter.js';
+import { buildTestMapPackage } from './test-map-package.js';
+import { createTestPluginWorld } from './test-plugin-world.js';
 
 const OVERRIDE_PROJECTILE_SPEED = 600;
 const DT = 1 / MOVEMENT.tickRate;
+const clipIdAt = (index: number) => makeClipId(`550e8400-e29b-41d4-a716-44665544040${index}`);
+const playerModel = new PlayerModelRef({
+  id: 'model:runtime-config',
+  label: 'Runtime Config',
+  ref: new AssetLibraryReference({
+    packId: makePackId('550e8400-e29b-41d4-a716-446655440499'),
+    kind: 'sprite',
+    refId: 'placeable:runtime-config',
+    clipId: clipIdAt(0),
+  }),
+  defaultClipId: clipIdAt(0),
+  clips: new PlayerModelClipSet({
+    idle: clipIdAt(0),
+    walk: clipIdAt(1),
+    run: clipIdAt(2),
+    shoot: clipIdAt(3),
+    reload: clipIdAt(4),
+    hit: clipIdAt(5),
+    death: clipIdAt(6),
+    dash: clipIdAt(7),
+    pickup: clipIdAt(8),
+  }),
+  anchor: { x: 0.5, y: 1 },
+  hitbox: { x: 0.25, y: 0.1, width: 0.5, height: 0.85 },
+});
 
 const makeTestObject = (
   id: (typeof TEST_OBJECT_IDS)[number],
@@ -37,6 +71,9 @@ const makeTestObject = (
     properties: {},
   });
 
+// A single spawn point isolates one shooter so the fired projectile flies
+// unobstructed (no neighbor for the neutral engine's swept hit-test to strike),
+// keeping this a focused test of projectile-speed config propagation.
 const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
   makeTileborneMap({
     id: TEST_MAP_ID,
@@ -46,26 +83,36 @@ const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
     tileHeight: 32,
     objects: [
       makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], "shrink-zone-anchor", 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
     ],
     ...(battleRoyale ? { properties: { battleRoyale } } : {}),
   });
 
-describe("BattleRoyaleConfig overrides", () => {
-  it("propagates host projectile.speed override through createRuntimeAdapter", () => {
-    const artifact = exportArtifact(makeSpawnFixtureMap());
+describe('BattleRoyaleConfig overrides', () => {
+  it('propagates host projectile.speed override through createRuntimeAdapter', () => {
+    const mapPackage = buildTestMapPackage({
+      map: makeSpawnFixtureMap(),
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
     world.registerComponent(PLAYER_COMPONENT);
-    world.registerComponent(LAST_FACING_COMPONENT);
+    world.registerComponent(FACING_COMPONENT);
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true }),
+      getMapPackage: () => mapPackage,
+      getPlayerInput: () => ({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      }),
       config: {
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       },
@@ -86,22 +133,32 @@ describe("BattleRoyaleConfig overrides", () => {
     expect(end.x - start.x).not.toBeCloseTo(PROJECTILE.speed * DT);
   });
 
-  it("merges map.properties.battleRoyale.projectile.speed at adapter init", () => {
-    const artifact = exportArtifact(
-      makeSpawnFixtureMap({
+  it('merges map.properties.battleRoyale.projectile.speed at adapter init', () => {
+    const mapPackage = buildTestMapPackage({
+      map: makeSpawnFixtureMap({
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
       }),
-    );
+      playerModels: [playerModel],
+    });
     const world = createTestPluginWorld();
     world.registerComponent(POSITION_COMPONENT);
     world.registerComponent(VELOCITY_COMPONENT);
     world.registerComponent(PLAYER_COMPONENT);
-    world.registerComponent(LAST_FACING_COMPONENT);
+    world.registerComponent(FACING_COMPONENT);
     world.registerComponent(PROJECTILE_COMPONENT);
 
     const plugin = createRuntimeAdapter({
-      getArtifact: () => artifact,
-      getPlayerInput: () => ({ tick: 1, seq: 1, dir: 0, shoot: true }),
+      getMapPackage: () => mapPackage,
+      getPlayerInput: () => ({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+      }),
     });
 
     plugin.onTick?.(world, DT, 1);

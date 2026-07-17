@@ -2,12 +2,14 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| --- | --- |
-| 0.1.x | Yes |
-| < 0.1.0 | No |
+| Version                | Supported   |
+| ---------------------- | ----------- |
+| 1.0 release candidates | Yes         |
+| main pre-1.0 snapshots | Best effort |
+| < 0.1.0                | No          |
 
-v0.1.0 is a local-first OSS snapshot. Security fixes target the `main` branch.
+Production 1.0 security fixes target the `main` branch until a release branch
+exists.
 
 ## Reporting a Vulnerability
 
@@ -26,7 +28,8 @@ We aim to acknowledge reports within **5 business days** and will coordinate dis
 
 ## Security Boundaries
 
-Tileborne v0.1.0 defines these trust boundaries. Understanding them helps scope valid reports.
+Tileborne defines these trust boundaries. Understanding them helps scope valid
+reports.
 
 ### Plugin runtime isolation
 
@@ -51,12 +54,47 @@ Tileborne v0.1.0 defines these trust boundaries. Understanding them helps scope 
 - Multiplayer playtest uses HMAC-signed handoff tokens for WebSocket join.
 - Tokens are ephemeral and scoped to a single playtest session; tampered tokens are rejected with connection close.
 
-### Out of scope for v0.1.0
+### Operator-owned production setup
 
-- Cloudflare production deployment hardening (local miniflare only)
-- npm package supply-chain signing (packages not yet published)
-- Electron auto-update channel security
+- Cloudflare, Alchemy, and handoff signing secrets must be provided through the
+  operator's secret store or Wrangler/Alchemy environment. Plaintext production
+  secrets must not be committed.
+- Credential rotation, Cloudflare account policy, and production resource
+  deletion approvals remain operator-owned.
+- npm package publishing and Electron auto-update channel security are not
+  executed by this repository without explicit release approval.
+
+### Desktop release credentials and private evidence
+
+- Desktop signing/notarization inputs (`TILEBORNE_APPLE_SIGNING_IDENTITY`,
+  `TILEBORNE_APPLE_TEAM_ID`, `TILEBORNE_APPLE_API_KEY_PATH`,
+  `TILEBORNE_APPLE_API_KEY_ID`, and `TILEBORNE_APPLE_API_ISSUER`) and the scoped
+  GitHub publication token are supplied only through an approved operator/CI
+  secret store. Key files, `.env` files, token values, shell transcripts that
+  expose values, and notarization credentials must not be committed.
+- `TILEBORNE_DESKTOP_PUBLISH_APPROVED=1` represents a specific maintainer
+  approval; it is not a durable configuration default. Credential presence is
+  insufficient: the release contract verifies the active GitHub auth boundary.
+- Native release status receipts, Playwright traces, support bundles, and project
+  backup archives may contain local paths or user project metadata. Keep them
+  restricted, inspect redaction before sharing through a private channel, and
+  delete them according to the release owner retention policy.
+- Remote crash reporting is unsupported in desktop 1.0. Local fail-fast logs,
+  main-process recovery, and an opt-in manual redacted support bundle are not
+  consent for automatic upload.
+
+The exact procedure is in [`docs/desktop-release-runbook.md`](docs/desktop-release-runbook.md).
 
 ## Dependency Audits
 
-The monorepo runs `pnpm audit` in CI. Known transitive advisories in dev/build tooling (Electron Forge, Playwright, Wrangler) are tracked in [`.refs/v0.1.0-security-scan.md`](.refs/v0.1.0-security-scan.md).
+Release candidates must run `pnpm audit --audit-level moderate` locally before
+handoff. CI currently runs install, lint, typecheck, tests, builds, and boundary
+checks; dependency audit is a release gate, not a CI job, until the advisory
+set is clear enough to make it non-flaky.
+
+The Production 1.0 audit refresh removes mature patched advisories for
+Playwright, Wrangler, Hono, Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`,
+`js-yaml`, and `@babel/core`. The remaining release blocker on 2026-06-15 is
+`esbuild >=0.17.0 <0.28.1`: the patched `0.28.1` release is required by the
+advisory, but the repository's seven-day `minimumReleaseAge` policy still
+blocks adopting it without an explicit operator override.

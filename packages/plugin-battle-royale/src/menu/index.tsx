@@ -1,11 +1,11 @@
-import type { MenuSectionRegistration } from "@tileborne/game-client";
+import type { MenuSectionRegistration } from '@tileborne/game-client';
 
 import {
   BattleRoyaleLoadoutSection,
   BattleRoyaleLobbySection,
   BattleRoyaleMatchRulesSection,
   BattleRoyalePrivateRoomSection,
-} from "./sections.js";
+} from './sections.js';
 
 /**
  * Battle Royale menu sections, registered into the generic shell's named slots
@@ -15,31 +15,31 @@ import {
  */
 export const battleRoyaleMenuSections: readonly MenuSectionRegistration[] = [
   {
-    id: "br-lobby",
-    slot: "main.primaryActions",
+    id: 'br-lobby',
+    slot: 'main.primaryActions',
     order: 10,
-    source: "plugin",
+    source: 'plugin',
     Component: BattleRoyaleLobbySection,
   },
   {
-    id: "br-loadout",
-    slot: "main.tabs",
+    id: 'br-loadout',
+    slot: 'main.tabs',
     order: 20,
-    source: "plugin",
+    source: 'plugin',
     Component: BattleRoyaleLoadoutSection,
   },
   {
-    id: "br-private-room",
-    slot: "main.secondaryActions",
+    id: 'br-private-room',
+    slot: 'main.secondaryActions',
     order: 30,
-    source: "plugin",
+    source: 'plugin',
     Component: BattleRoyalePrivateRoomSection,
   },
   {
-    id: "br-match-rules",
-    slot: "settings.tabs",
+    id: 'br-match-rules',
+    slot: 'settings.tabs',
     order: 40,
-    source: "plugin",
+    source: 'plugin',
     Component: BattleRoyaleMatchRulesSection,
   },
 ];
@@ -49,13 +49,13 @@ export {
   BattleRoyaleLobbySection,
   BattleRoyaleMatchRulesSection,
   BattleRoyalePrivateRoomSection,
-} from "./sections.js";
+} from './sections.js';
 export {
   DEFAULT_BATTLE_ROYALE_MODELS,
   type BattleRoyaleSelectableModel,
-} from "../player-models/models.js";
+} from '../player-models/models.js';
 export {
   readSelectedModelId,
   resolveSelectedModelId,
   writeSelectedModelId,
-} from "../player-models/loadout.js";
+} from '../player-models/loadout.js';

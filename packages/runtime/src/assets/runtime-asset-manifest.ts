@@ -1,8 +1,9 @@
-import { AssetPackManifest, AssetPackManifestAsset, License } from "@tileborne/asset-pipeline";
-import type { AssetId, ContentHash, PackId } from "@tileborne/core";
-import { Option } from "effect";
+import type { AssetId, ContentHash, PackId } from '@tileborne/core';
+import { License } from '@tileborne/asset-pipeline/license';
+import { AssetPackManifest, AssetPackManifestAsset } from '@tileborne/asset-pipeline/pack';
+import { Option } from 'effect';
 
-import type { RuntimeAssetManifest } from "./runtime-asset-loader.js";
+import type { RuntimeAssetManifest } from './runtime-asset-loader.js';
 
 export interface RuntimeAssetLicenseInput {
   readonly spdxId: string;
@@ -46,7 +47,9 @@ export const createRuntimeAssetEntry = (input: RuntimeAssetEntryInput): AssetPac
     license: input.license ?? Option.none(),
   });
 
-export const createRuntimeAssetManifest = (input: RuntimeAssetManifestInput): RuntimeAssetManifest =>
+export const createRuntimeAssetManifest = (
+  input: RuntimeAssetManifestInput,
+): RuntimeAssetManifest =>
   new AssetPackManifest({
     id: input.id,
     name: input.name,

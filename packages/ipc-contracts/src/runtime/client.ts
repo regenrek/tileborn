@@ -1,16 +1,16 @@
-import { Effect, Option } from "effect";
+import { Effect, Option } from 'effect';
 
-import type { IpcClientOf } from "../codegen-shape.js";
-import type { AnyIpcContract, RequestOf } from "../contract.js";
-import { IpcTimeoutError, IpcValidationError } from "../errors.js";
-import type { IpcRegistry } from "../registry.js";
+import type { IpcClientOf } from '../codegen-shape.js';
+import type { AnyIpcContract, RequestOf } from '../contract.js';
+import { IpcTimeoutError, IpcValidationError } from '../errors.js';
+import type { IpcRegistry } from '../registry.js';
 import {
   decodeResponseOrError,
   decodeUnknown,
   encodeUnknown,
   formatSchemaError,
-} from "./boundary.js";
-import type { IpcClientTransport } from "./transport.js";
+} from './boundary.js';
+import type { IpcClientTransport } from './transport.js';
 
 const validationError = (contract: AnyIpcContract, error: unknown): IpcValidationError =>
   new IpcValidationError({

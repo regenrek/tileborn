@@ -1,8 +1,8 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema } from 'effect';
 
-import { IpcChannel } from "../channel.js";
-import type { AnyIpcContract, ErrorOf, ResponseOf } from "../contract.js";
-import { IpcContractError, IpcDecodeError } from "../errors.js";
+import { IpcChannel } from '../channel.js';
+import type { AnyIpcContract, ErrorOf, ResponseOf } from '../contract.js';
+import { IpcContractError, IpcDecodeError } from '../errors.js';
 
 export const formatSchemaError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -10,7 +10,10 @@ export const formatSchemaError = (error: unknown): string =>
 export const decodeUnknown = <A>(schema: Schema.Top, input: unknown): Effect.Effect<A, unknown> =>
   Schema.decodeUnknownEffect(schema)(input) as Effect.Effect<A, unknown>;
 
-export const encodeUnknown = (schema: Schema.Top, input: unknown): Effect.Effect<unknown, unknown> =>
+export const encodeUnknown = (
+  schema: Schema.Top,
+  input: unknown,
+): Effect.Effect<unknown, unknown> =>
   Schema.encodeUnknownEffect(schema)(input) as Effect.Effect<unknown, unknown>;
 
 export const toIpcChannelOption = (channel: string): Option.Option<IpcChannel> =>
@@ -20,12 +23,12 @@ export const toIpcContractError = (error: unknown): IpcContractError => {
   if (error instanceof IpcContractError) {
     return error;
   }
-  if (typeof error === "object" && error !== null && "_tag" in error) {
+  if (typeof error === 'object' && error !== null && '_tag' in error) {
     const tagged = error as { readonly _tag: string; readonly message?: string };
     return new IpcContractError(tagged);
   }
   return new IpcContractError({
-    _tag: "IpcContractError",
+    _tag: 'IpcContractError',
     message: formatSchemaError(error),
   });
 };

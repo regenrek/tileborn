@@ -15,6 +15,7 @@
     { "path": "../ipc-contracts" },
     { "path": "../runtime" },
     { "path": "../plugin-api" },
+    { "path": "../simulation" },
     { "path": "../ui" },
     { "path": "../game-client" }
   ]

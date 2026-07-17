@@ -1,10 +1,10 @@
-import { AssetId, ContentHash, PackId, hashJsonStable } from "@tileborne/core";
-import { Option, Schema } from "effect";
+import { AssetId, ContentHash, PackId, hashJsonStable } from '@tileborne/core';
+import { Option, Schema } from 'effect';
 
-import { License } from "../license/license.js";
+import { License } from '../license/license.js';
 
 export class AssetPackManifestAsset extends Schema.Class<AssetPackManifestAsset>(
-  "AssetPackManifestAsset",
+  'AssetPackManifestAsset',
 )({
   id: AssetId,
   path: Schema.String,
@@ -16,7 +16,7 @@ export class AssetPackManifestAsset extends Schema.Class<AssetPackManifestAsset>
 
 export type Asset = AssetPackManifestAsset;
 
-export class AssetPackManifest extends Schema.Class<AssetPackManifest>("AssetPackManifest")({
+export class AssetPackManifest extends Schema.Class<AssetPackManifest>('AssetPackManifest')({
   id: PackId,
   name: Schema.String,
   version: Schema.String,
@@ -41,7 +41,7 @@ export interface AssetPackManifestJson {
     readonly mime: string;
     readonly size: number;
     readonly hash: string;
-    readonly license?: AssetPackManifestJson["license"];
+    readonly license?: AssetPackManifestJson['license'];
   }[];
 }
 
@@ -54,11 +54,11 @@ const optionProperty = <K extends string>(
     onSome: (inner) => ({ [key]: inner }) as Record<K, string>,
   });
 
-const licenseToJson = (license: License): AssetPackManifestJson["license"] => ({
+const licenseToJson = (license: License): AssetPackManifestJson['license'] => ({
   spdxId: license.spdxId,
-  ...optionProperty("attribution", license.attribution),
-  ...optionProperty("sourceUrl", license.sourceUrl),
-  ...optionProperty("notes", license.notes),
+  ...optionProperty('attribution', license.attribution),
+  ...optionProperty('sourceUrl', license.sourceUrl),
+  ...optionProperty('notes', license.notes),
   redistributable: license.redistributable ?? false,
 });
 
@@ -83,4 +83,5 @@ export const assetPackManifestToJson = (manifest: AssetPackManifest): AssetPackM
 export const hashAssetPackManifest = (manifest: AssetPackManifest): ContentHash =>
   hashJsonStable(assetPackManifestToJson(manifest));
 
-export const assetsFromManifest = (manifest: AssetPackManifest): readonly Asset[] => manifest.assets;
+export const assetsFromManifest = (manifest: AssetPackManifest): readonly Asset[] =>
+  manifest.assets;

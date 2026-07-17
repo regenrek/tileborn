@@ -2,9 +2,9 @@ import {
   Wang2CornerAutotileRule,
   Wang2EdgeAutotileRule,
   Wang4CornerAutotileRule,
-} from "../../schemas/autotile-rule.js";
-import type { TileId } from "../../schemas/ids.js";
-import { wangIdToMaskKey } from "../../tiled/compile-wang.js";
+} from '../../schemas/autotile-rule.js';
+import type { TileId } from '../../schemas/ids.js';
+import { wangIdToMaskKey } from '../../tiled/compile-wang.js';
 
 import {
   appendTileForMask,
@@ -16,10 +16,14 @@ import {
   type CompileResult,
   type MaskToTileIds,
   type RuleBaseInput,
-} from "./shared.js";
-import { CORNER16_MASK_TO_TILE_INDEX, EDGE16_MASK_TO_TILE_INDEX, RPGM_EDGE_TILE_COUNT } from "./tables.js";
+} from './shared.js';
+import {
+  CORNER16_MASK_TO_TILE_INDEX,
+  EDGE16_MASK_TO_TILE_INDEX,
+  RPGM_EDGE_TILE_COUNT,
+} from './tables.js';
 
-export type WangPattern = "wang2edge" | "wang2corner" | "wang4corner";
+export type WangPattern = 'wang2edge' | 'wang2corner' | 'wang4corner';
 
 export type WangTileEntry = {
   readonly wangid: readonly number[];
@@ -36,11 +40,11 @@ export type CompileWangInput = RuleBaseInput & {
 
 const wangRuleCtor = (pattern: WangPattern) => {
   switch (pattern) {
-    case "wang2edge":
+    case 'wang2edge':
       return Wang2EdgeAutotileRule;
-    case "wang4corner":
+    case 'wang4corner':
       return Wang4CornerAutotileRule;
-    case "wang2corner":
+    case 'wang2corner':
     default:
       return Wang2CornerAutotileRule;
   }
@@ -48,13 +52,13 @@ const wangRuleCtor = (pattern: WangPattern) => {
 
 const layoutTableForPattern = (pattern: WangPattern) => {
   switch (pattern) {
-    case "wang2edge":
+    case 'wang2edge':
       return {
         neighborhood: edge4Neighborhood,
         maskToIndex: EDGE16_MASK_TO_TILE_INDEX,
       };
-    case "wang4corner":
-    case "wang2corner":
+    case 'wang4corner':
+    case 'wang2corner':
     default:
       return {
         neighborhood: corner4Neighborhood,
@@ -66,11 +70,16 @@ const layoutTableForPattern = (pattern: WangPattern) => {
 const compileFromEntries = (
   input: CompileWangInput,
   path: string,
-): { readonly maskToTileIds: MaskToTileIds; readonly sourceTileIndexes: number[]; readonly sourceWangIds: readonly number[][]; readonly diagnostics: CompileResult["diagnostics"] } => {
+): {
+  readonly maskToTileIds: MaskToTileIds;
+  readonly sourceTileIndexes: number[];
+  readonly sourceWangIds: readonly number[][];
+  readonly diagnostics: CompileResult['diagnostics'];
+} => {
   const maskToTileIds: MaskToTileIds = {};
   const sourceTileIndexes: number[] = [];
   const sourceWangIds: number[][] = [];
-  const diagnostics: import("../../diagnostics.js").ParseDiagnostic[] = [];
+  const diagnostics: import('../../diagnostics.js').ParseDiagnostic[] = [];
 
   for (const [index, entry] of (input.entries ?? []).entries()) {
     const key = wangIdToMaskKey(entry.wangid, input.pattern);
@@ -81,10 +90,10 @@ const compileFromEntries = (
 
   if (sourceTileIndexes.length === 0) {
     diagnostics.push({
-      _tag: "MalformedAutotileLayout",
+      _tag: 'MalformedAutotileLayout',
       path,
       message: `Wang ${input.pattern} compile requires wang tile entries or a ${RPGM_EDGE_TILE_COUNT}-cell atlas layout`,
-      severity: "error",
+      severity: 'error',
       pattern: input.pattern,
       expectedCells: RPGM_EDGE_TILE_COUNT,
       actualCells: 0,
@@ -100,7 +109,7 @@ export const compileWang = (input: CompileWangInput): CompileResult => {
 
   if (input.entries && input.entries.length > 0) {
     const compiled = compileFromEntries(input, path);
-    const hasErrors = compiled.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+    const hasErrors = compiled.diagnostics.some((diagnostic) => diagnostic.severity === 'error');
     if (hasErrors) {
       return {
         debug: {
@@ -136,7 +145,7 @@ export const compileWang = (input: CompileWangInput): CompileResult => {
     maskToIndex: layout.maskToIndex,
   });
 
-  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
   if (hasErrors) {
     return {
       debug: { pattern: input.pattern, mappedMaskCount: 0, sourceTileIndexes },

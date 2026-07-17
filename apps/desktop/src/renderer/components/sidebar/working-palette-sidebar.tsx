@@ -1,40 +1,31 @@
-import { Button, ScrollArea, Skeleton, cn, typography } from '@tileborne/ui';
-import {
-  EraserIcon,
-  FilmIcon,
-  ImagesIcon,
-  ShapesIcon,
-  SproutIcon,
-  TrashIcon,
-} from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { Button, Skeleton, cn, typography } from '@tileborne/ui';
+import { EraserIcon, FilmIcon, ImagesIcon, ShapesIcon, SproutIcon, TrashIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AnimatedPaletteThumb } from '@/components/asset-library/animated-palette-thumb';
 import { CatalogImportExport } from '@/components/sidebar/catalog-import-export';
 import { CatalogValidationDrawer } from '@/components/sidebar/catalog-validation-drawer';
-import { LibraryPreviewMosaic, LibraryPreviewThumb } from '@/components/asset-library/library-preview-thumb';
+import {
+  LibraryPreviewMosaic,
+  LibraryPreviewThumb,
+} from '@/components/asset-library/library-preview-thumb';
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { PaletteSwitcher } from '@/components/sidebar/palette-switcher';
 import { useTilesetPacks, useWorkingPalettePreviews } from '@/hooks/queries';
 import { useCatalogPaletteGroups } from '@/hooks/use-palette-actions';
 import type { LibraryPreviewRef } from '@/lib/asset-library-bridge';
 import { spriteClipPreviewFrames, type SpriteThumbnailFrames } from '@/lib/sprite-thumbnail-frames';
-import {
-  brushIntentMatchesPaletteAction,
-  paletteActionBrushIntent,
-} from '@/lib/palette-actions';
+import { brushIntentMatchesPaletteAction, paletteActionBrushIntent } from '@/lib/palette-actions';
 import {
   brushIntentMatchesItem,
   workingPaletteItemKey,
   workingPaletteItemToBrushIntent,
   type WorkingPaletteItem,
 } from '@/lib/working-palettes-bridge';
-import {
-  useActiveWorkingPalette,
-  useWorkingPaletteActions,
-} from '@/hooks/use-working-palettes';
+import { useActiveWorkingPalette, useWorkingPaletteActions } from '@/hooks/use-working-palettes';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 type PaletteItemKind = WorkingPaletteItem['ref']['kind'];
@@ -66,6 +57,14 @@ const KIND_LABEL: Record<PaletteItemKind, string> = {
 };
 
 const GRID_THUMB_PX = 32;
+const GRID_CELL_PX = 40;
+const GRID_GAP_PX = 4;
+const GRID_ROW_PX = GRID_CELL_PX + GRID_GAP_PX;
+const GRID_OVERSCAN_ROWS = 3;
+const GRID_INITIAL_COLUMNS = 5;
+const GRID_INITIAL_VIEWPORT_HEIGHT_PX = 384;
+const GRID_VIRTUALIZATION_THRESHOLD = 64;
+const PREVIEW_WINDOW_ITEMS = 64;
 
 /**
  * Sidebar palette. Renders ONLY the items in the active working palette so
@@ -87,45 +86,6 @@ export function WorkingPaletteSidebar({
   const activePalette = useActiveWorkingPalette(projectId);
   const paletteActions = useWorkingPaletteActions();
   const selectBrush = useEditorUiStore((state) => state.selectBrush);
-  const paletteItems = activePalette?.items ?? [];
-  const paletteRefs = useMemo(() => paletteItems.map((item) => item.ref), [paletteItems]);
-  const { previewByKey, isLoading: previewsLoading } = useWorkingPalettePreviews(paletteRefs);
-
-  // Sprite/placeable items can animate their thumbnail: load the source packs
-  // (cheap, cached) and derive the clip frames so the thumbnail cycles frames
-  // via the shared animation clock instead of showing the static first frame.
-  const animatablePackIds = useMemo(
-    () => [
-      ...new Set(
-        paletteItems
-          .filter((item) => item.ref.kind === 'sprite' || item.ref.kind === 'placeable')
-          .map((item) => item.ref.packId),
-      ),
-    ],
-    [paletteItems],
-  );
-  const packResults = useTilesetPacks(animatablePackIds);
-  const animatedFramesByKey = useMemo(() => {
-    const packByPackId = new Map<string, (typeof packResults)[number]['data']>();
-    animatablePackIds.forEach((packId, index) => {
-      const data = packResults[index]?.data;
-      if (data !== undefined) {
-        packByPackId.set(packId, data);
-      }
-    });
-    const map = new Map<string, SpriteThumbnailFrames>();
-    for (const item of paletteItems) {
-      const pack = packByPackId.get(item.ref.packId);
-      if (pack === undefined) {
-        continue;
-      }
-      const frames = spriteClipPreviewFrames(pack, item.ref);
-      if (frames !== undefined && frames.frames.length > 1) {
-        map.set(workingPaletteItemKey(item), frames);
-      }
-    }
-    return map;
-  }, [paletteItems, animatablePackIds, packResults]);
 
   return (
     <section className="flex flex-col gap-2 px-1" data-testid="working-palette-sidebar">
@@ -176,27 +136,7 @@ export function WorkingPaletteSidebar({
               </span>
             </button>
           </p>
-          <ScrollArea className="max-h-[60vh]">
-            <ul
-              className="grid gap-1 px-1 pb-2"
-              data-testid="working-palette-sidebar-grid"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(2.5rem, 1fr))' }}
-            >
-              {activePalette.items.map((item) => {
-                const key = workingPaletteItemKey(item);
-                const preview = previewByKey.get(key);
-                return (
-                  <WorkingPaletteSidebarItem
-                    key={key}
-                    item={item}
-                    packLoading={preview === undefined && previewsLoading}
-                    preview={preview}
-                    animatedFrames={animatedFramesByKey.get(key)}
-                  />
-                );
-              })}
-            </ul>
-          </ScrollArea>
+          <WorkingPaletteGrid items={activePalette.items} />
           <div className="flex items-center justify-between gap-2 px-1 pt-1">
             {libraryLink ?? <span />}
             <Button
@@ -216,6 +156,203 @@ export function WorkingPaletteSidebar({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Row-virtualized compact grid. A working palette may intentionally contain a
+ * complete imported group, so mounting one React tree node (and eventually one
+ * image) per item is not safe. The virtual spacer keeps every item reachable by
+ * scrolling while only visible and nearby rows are mounted.
+ */
+function WorkingPaletteGrid({ items }: { readonly items: readonly WorkingPaletteItem[] }) {
+  if (items.length > GRID_VIRTUALIZATION_THRESHOLD) {
+    return <VirtualizedWorkingPaletteGrid items={items} />;
+  }
+
+  return <StaticWorkingPaletteGrid items={items} />;
+}
+
+function useWorkingPaletteWindowData(items: readonly WorkingPaletteItem[]) {
+  const refs = useMemo(() => items.map((item) => item.ref), [items]);
+  const previews = useWorkingPalettePreviews(refs);
+
+  // Sprite/placeable items can animate their thumbnail. Keep source-pack loads
+  // inside the same bounded window as preview metadata so offscreen palette
+  // entries cannot pull whole pack manifests into the renderer.
+  const animatablePackIds = useMemo(
+    () => [
+      ...new Set(
+        items
+          .filter((item) => item.ref.kind === 'sprite' || item.ref.kind === 'placeable')
+          .map((item) => item.ref.packId),
+      ),
+    ],
+    [items],
+  );
+  const packResults = useTilesetPacks(animatablePackIds);
+  const animatedFramesByKey = useMemo(() => {
+    const packByPackId = new Map<string, (typeof packResults)[number]['data']>();
+    animatablePackIds.forEach((packId, index) => {
+      const data = packResults[index]?.data;
+      if (data !== undefined) {
+        packByPackId.set(packId, data);
+      }
+    });
+    const map = new Map<string, SpriteThumbnailFrames>();
+    for (const item of items) {
+      const pack = packByPackId.get(item.ref.packId);
+      if (pack === undefined) {
+        continue;
+      }
+      const frames = spriteClipPreviewFrames(pack, item.ref);
+      if (frames !== undefined && frames.frames.length > 1) {
+        map.set(workingPaletteItemKey(item), frames);
+      }
+    }
+    return map;
+  }, [items, animatablePackIds, packResults]);
+
+  return { ...previews, animatedFramesByKey };
+}
+
+function StaticWorkingPaletteGrid({ items }: { readonly items: readonly WorkingPaletteItem[] }) {
+  const {
+    previewByKey,
+    isLoading: previewsLoading,
+    animatedFramesByKey,
+  } = useWorkingPaletteWindowData(items);
+
+  return (
+    <div
+      role="list"
+      className="grid gap-1 px-1 pb-2"
+      data-testid="working-palette-sidebar-grid"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(2.5rem, 1fr))' }}
+    >
+      {items.map((item) => {
+        const key = workingPaletteItemKey(item);
+        const preview = previewByKey.get(key);
+        return (
+          <WorkingPaletteSidebarItem
+            key={key}
+            item={item}
+            packLoading={preview === undefined && previewsLoading}
+            preview={preview}
+            animatedFrames={animatedFramesByKey.get(key)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function VirtualizedWorkingPaletteGrid({
+  items,
+}: {
+  readonly items: readonly WorkingPaletteItem[];
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [columns, setColumns] = useState(GRID_INITIAL_COLUMNS);
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (node === null) {
+      return;
+    }
+    const measure = () => {
+      const width = node.clientWidth || node.offsetWidth;
+      if (width <= 0) {
+        return;
+      }
+      setColumns(Math.max(1, Math.floor((width + GRID_GAP_PX) / (GRID_CELL_PX + GRID_GAP_PX))));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const rowCount = Math.ceil(items.length / columns);
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: () => GRID_ROW_PX,
+    overscan: GRID_OVERSCAN_ROWS,
+    initialRect: {
+      width: GRID_INITIAL_COLUMNS * GRID_CELL_PX,
+      height: GRID_INITIAL_VIEWPORT_HEIGHT_PX,
+    },
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+  const firstVirtualRow = virtualRows.at(0)?.index ?? 0;
+  const lastVirtualRow = virtualRows.at(-1)?.index ?? firstVirtualRow;
+  const windowItems = useMemo(() => {
+    const visibleStart = firstVirtualRow * columns;
+    const visibleEnd = Math.min(items.length, (lastVirtualRow + 1) * columns);
+    const windowStart = Math.floor(visibleStart / PREVIEW_WINDOW_ITEMS) * PREVIEW_WINDOW_ITEMS;
+    const windowEnd = Math.min(
+      items.length,
+      Math.max(
+        windowStart + PREVIEW_WINDOW_ITEMS,
+        Math.ceil(visibleEnd / PREVIEW_WINDOW_ITEMS) * PREVIEW_WINDOW_ITEMS,
+      ),
+    );
+    return items.slice(windowStart, windowEnd);
+  }, [columns, firstVirtualRow, items, lastVirtualRow]);
+  const {
+    previewByKey,
+    isLoading: previewsLoading,
+    animatedFramesByKey,
+  } = useWorkingPaletteWindowData(windowItems);
+
+  return (
+    <div
+      ref={viewportRef}
+      className="max-h-[60vh] overflow-y-auto"
+      data-testid="working-palette-sidebar-grid-viewport"
+    >
+      <div
+        role="list"
+        className="relative px-1 pb-2"
+        data-testid="working-palette-sidebar-grid"
+        style={{ height: virtualizer.getTotalSize() }}
+      >
+        {virtualRows.map((virtualRow) => {
+          const start = virtualRow.index * columns;
+          return (
+            <div
+              key={virtualRow.key}
+              role="presentation"
+              className="absolute left-1 right-1 grid"
+              style={{
+                gridTemplateColumns: `repeat(${columns}, ${GRID_CELL_PX}px)`,
+                gap: GRID_GAP_PX,
+                height: GRID_CELL_PX,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              {items.slice(start, start + columns).map((item) => {
+                const key = workingPaletteItemKey(item);
+                const preview = previewByKey.get(key);
+                return (
+                  <WorkingPaletteSidebarItem
+                    key={key}
+                    item={item}
+                    packLoading={preview === undefined && previewsLoading}
+                    preview={preview}
+                    animatedFrames={animatedFramesByKey.get(key)}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -240,7 +377,11 @@ function ObjectsGroup({ projectId }: { readonly projectId: string | null | undef
     <div className="flex flex-col gap-1.5 px-1" data-testid="working-palette-objects-group">
       <p className={cn('px-1', typography.sectionLabelMicro)}>Objects</p>
       {groups.map((group) => (
-        <div key={group.id} className="flex flex-col gap-1" data-testid={`palette-group-${group.id}`}>
+        <div
+          key={group.id}
+          className="flex flex-col gap-1"
+          data-testid={`palette-group-${group.id}`}
+        >
           <p className={cn('px-1', typography.bodyMicro)}>{group.label}</p>
           <div
             className="flex flex-wrap gap-1 px-1"
@@ -298,7 +439,7 @@ function WorkingPaletteSidebarItem({
   const Icon = KIND_ICON[kind];
 
   return (
-    <li className="min-w-0">
+    <div role="listitem" className="min-w-0">
       <button
         type="button"
         data-testid={`working-palette-sidebar-item-${key}`}
@@ -308,7 +449,7 @@ function WorkingPaletteSidebarItem({
         title={`${item.label} (${KIND_LABEL[kind]})`}
         onClick={() => selectBrush(workingPaletteItemToBrushIntent(item))}
         className={cn(
-          'flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-md border bg-card p-1 transition-colors hover:border-primary/70 hover:bg-accent/20',
+          'flex size-10 min-w-0 items-center justify-center overflow-hidden rounded-md border bg-card p-1 transition-colors hover:border-primary/70 hover:bg-accent/20',
           active ? 'border-primary ring-1 ring-primary/60' : 'border-border',
         )}
       >
@@ -350,7 +491,6 @@ function WorkingPaletteSidebarItem({
           {item.label} ({KIND_LABEL[kind]})
         </span>
       </button>
-    </li>
+    </div>
   );
 }
-

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 const BUNDLED_ASSET_ID_PATTERN =
   /^(?!asset:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)[^\s:]+:[^\s]+$/i;
@@ -9,7 +9,7 @@ const BUNDLED_ASSET_ID_PATTERN =
  */
 export const BundledAssetIdSchema = Schema.String.check(
   Schema.isPattern(BUNDLED_ASSET_ID_PATTERN),
-).pipe(Schema.brand("BundledAssetId"));
+).pipe(Schema.brand('BundledAssetId'));
 
 export type BundledAssetId = typeof BundledAssetIdSchema.Type;
 

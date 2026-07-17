@@ -10,26 +10,30 @@ const diagnosticsMessage = (diagnostics: readonly { readonly message: string }[]
   diagnostics.map((diagnostic) => diagnostic.message).join('; ');
 
 const normalizeInstalledTilesetManifestJson = (json: unknown): unknown => {
-  if (typeof json !== 'object' || json === null || !Array.isArray((json as { placeables?: unknown }).placeables)) {
+  if (
+    typeof json !== 'object' ||
+    json === null ||
+    !Array.isArray((json as { placeables?: unknown }).placeables)
+  ) {
     return json;
   }
   return {
     ...(json as Record<string, unknown>),
-    placeables: (json as { readonly placeables: readonly unknown[] }).placeables.map((placeable) => {
-      if (typeof placeable !== 'object' || placeable === null || 'placementMode' in placeable) {
-        return placeable;
-      }
-      return { ...placeable, placementMode: 'object' };
-    }),
+    placeables: (json as { readonly placeables: readonly unknown[] }).placeables.map(
+      (placeable) => {
+        if (typeof placeable !== 'object' || placeable === null || 'placementMode' in placeable) {
+          return placeable;
+        }
+        return { ...placeable, placementMode: 'object' };
+      },
+    ),
   };
 };
 
 export const parseTilesetPackJson = (json: unknown): TilesetPack => {
   const result = parseTilesetManifest(normalizeInstalledTilesetManifestJson(json));
   if (result.value === undefined) {
-    throw new Error(
-      `invalid tileset manifest: ${diagnosticsMessage(result.diagnostics)}`,
-    );
+    throw new Error(`invalid tileset manifest: ${diagnosticsMessage(result.diagnostics)}`);
   }
   return result.value;
 };

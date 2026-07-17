@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import ts from "typescript";
+import fs from 'node:fs';
+import ts from 'typescript';
 
 export type CollectedImport = {
   readonly moduleSpecifier: string;
@@ -26,11 +26,19 @@ export function collectImports(sourceFile: ts.SourceFile): CollectedImport[] {
   const imports: CollectedImport[] = [];
 
   const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node) && node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier)) {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
       pushStringLiteralImport(imports, sourceFile, node, node.moduleSpecifier);
     }
 
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier)) {
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
       pushStringLiteralImport(imports, sourceFile, node, node.moduleSpecifier);
     }
 
@@ -45,7 +53,11 @@ export function collectImports(sourceFile: ts.SourceFile): CollectedImport[] {
       }
     }
 
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "require") {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'require'
+    ) {
       const firstArgument = node.arguments[0];
       if (firstArgument !== undefined && ts.isStringLiteral(firstArgument)) {
         pushStringLiteralImport(imports, sourceFile, node, firstArgument);
@@ -106,18 +118,24 @@ export function collectNamedImports(sourceFile: ts.SourceFile): CollectedNamedIm
 }
 
 export function parseSourceFile(filePath: string): ts.SourceFile {
-  const sourceText = fs.readFileSync(filePath, "utf8");
-  return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath));
+  const sourceText = fs.readFileSync(filePath, 'utf8');
+  return ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindForPath(filePath),
+  );
 }
 
 const scriptKindForPath = (filePath: string): ts.ScriptKind => {
-  if (filePath.endsWith(".tsx")) {
+  if (filePath.endsWith('.tsx')) {
     return ts.ScriptKind.TSX;
   }
-  if (filePath.endsWith(".jsx")) {
+  if (filePath.endsWith('.jsx')) {
     return ts.ScriptKind.JSX;
   }
-  if (filePath.endsWith(".js")) {
+  if (filePath.endsWith('.js')) {
     return ts.ScriptKind.JS;
   }
   return ts.ScriptKind.TS;

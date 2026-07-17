@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   makeAssetId,
   makePackId,
@@ -89,6 +91,8 @@ vi.mock('@/editor/viewport/editor-viewport-controller', () => ({
     setShowDebug = vi.fn();
     setSelection = vi.fn();
     setActiveLayerId = vi.fn();
+    setCollisionFootprints = vi.fn();
+    setCatalogObjectVisuals = vi.fn();
     setHoverTile = vi.fn();
     setBrushPreview = vi.fn();
     syncMapContent = vi.fn();
@@ -143,6 +147,20 @@ const viewportBundle = {
   placeables: [],
   assetPathByPackAndId: new Map(),
   assetPathById: new Map(),
+};
+
+// MapEditorViewport calls `useResolvedCatalog` (TanStack Query), so it needs a
+// QueryClient in scope. Mirrors the working-palette-sidebar test setup; the
+// `wrapper` option keeps `rerender` calls wrapped in the same provider too.
+const makeTestClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+const renderViewport = (ui: ReactElement) => {
+  const client = makeTestClient();
+  return render(ui, {
+    wrapper: ({ children }: { readonly children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
 };
 
 /**
@@ -345,7 +363,7 @@ describe('MapEditorViewport initial map sync', () => {
       initialMap,
     );
 
-    const { rerender } = render(
+    const { rerender } = renderViewport(
       <MapEditorViewport projectId="project-1" mapId="map-1" map={initialMap} />,
     );
 
@@ -388,7 +406,7 @@ describe('MapEditorViewport initial map sync', () => {
       properties: { tilesetPackId: paintablePack.id },
     };
 
-    render(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
+    renderViewport(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
 
     await waitFor(() => {
       expect(loadViewportAssetBundleMock).toHaveBeenCalledWith({
@@ -412,7 +430,7 @@ describe('MapEditorViewport initial map sync', () => {
       properties: { tilesetPackId: paintablePack.id },
     };
 
-    render(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
+    renderViewport(<MapEditorViewport projectId="project-1" mapId="map-1" map={map} />);
 
     await waitFor(() => {
       expect(loadViewportAssetBundleMock).toHaveBeenCalledWith({
@@ -427,7 +445,7 @@ describe('MapEditorViewport initial map sync', () => {
   it('keeps minimap pointer movement out of the underlying viewport tool handlers', async () => {
     loadViewportAssetBundleMock.mockReturnValue(Effect.succeed(viewportBundle));
 
-    const { getByLabelText } = render(
+    const { getByLabelText } = renderViewport(
       <MapEditorViewport projectId="project-1" mapId="map-1" map={createTestMap()} />,
     );
 
@@ -517,7 +535,7 @@ describe('MapEditorViewport mount lifecycle', () => {
     };
     const map = { ...createTestMap(), properties: { tilesetPackId: paintablePack.id } };
 
-    const { rerender } = render(
+    const { rerender } = renderViewport(
       <MapEditorViewport projectId="project-1" mapId="map-1" map={map} />,
     );
 
@@ -547,9 +565,11 @@ describe('MapEditorViewport mount lifecycle', () => {
 
   it('mounts a fresh viewport when the map id changes', async () => {
     const makeBundleForCall = makeBundleFor();
-    loadViewportAssetBundleMock.mockImplementation((request) => Effect.succeed(makeBundleForCall(request)));
+    loadViewportAssetBundleMock.mockImplementation((request) =>
+      Effect.succeed(makeBundleForCall(request)),
+    );
 
-    const { rerender } = render(
+    const { rerender } = renderViewport(
       <MapEditorViewport projectId="project-1" mapId="map-1" map={createTestMap()} />,
     );
     await waitFor(() => {
@@ -630,7 +650,9 @@ describe('resolveBrushAction', () => {
       ...placeablePack,
       id: makePackId(uuid('32')),
       name: 'Other Props Pack',
-      assets: [new TilesetPackAsset({ id: otherAssetId, path: 'props/other.png', mime: 'image/png' })],
+      assets: [
+        new TilesetPackAsset({ id: otherAssetId, path: 'props/other.png', mime: 'image/png' }),
+      ],
       placeables: [
         new Placeable({
           ...sourcePlaceable!,

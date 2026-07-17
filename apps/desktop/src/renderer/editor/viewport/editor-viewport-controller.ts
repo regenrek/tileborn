@@ -1,11 +1,13 @@
 import { PixiRendererAdapter, type RuntimeAssetManifest } from '@tileborne/runtime';
 import { TRIGGER_REGION_OBJECT_TYPE_ID } from '@tileborne/core';
 import type {
+  AssetId,
   CollisionFootprintComponent,
   LayerId,
   MapLayer,
   MapObject,
   PackId,
+  PlaceableId,
   TileborneMap,
 } from '@tileborne/core';
 import {
@@ -173,8 +175,7 @@ const activeClipForPlacement = (
   const clip =
     (requestedClipId === undefined
       ? undefined
-      : clips.find((candidate) => String(candidate.id) === String(requestedClipId))) ??
-    clips[0];
+      : clips.find((candidate) => String(candidate.id) === String(requestedClipId))) ?? clips[0];
   if (clip !== undefined) {
     return {
       frames: clip.frames,
@@ -222,7 +223,7 @@ export interface EditorViewportTileAtlas {
   /** tileIndex → atlas frame, precomputed from the editor index. */
   readonly tileFramesByIndex?: ReadonlyMap<number, EditorTileFrame> | undefined;
   readonly collisionMaskByTileIndex?: ReadonlyMap<number, CollisionMaskType> | undefined;
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   /** Placeables aggregated across the loaded packs (for object rendering). */
   readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
   readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
@@ -235,10 +236,21 @@ export interface EditorViewportTileAtlas {
 /** Subset of a viewport asset bundle merged into a live controller post-mount. */
 export interface MergeableAssetBundle {
   readonly manifest: RuntimeAssetManifest;
-  readonly renderableAssetIdByPath: ReadonlyMap<string, number>;
+  readonly renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   readonly placeables?: readonly EditorViewportPlaceableEntry[] | undefined;
   readonly assetPathByPackAndId?: ReadonlyMap<string, string> | undefined;
   readonly assetPathById?: ReadonlyMap<string, string> | undefined;
+}
+
+/**
+ * Read-only render projection for a catalog object type. Gameplay objects keep
+ * their visual identity on the catalog's `visual-ref`; this projection lets the
+ * viewport render that identity without duplicating it into every MapObject.
+ */
+export interface EditorCatalogObjectVisual {
+  readonly placeableId: PlaceableId;
+  readonly width: number;
+  readonly height: number;
 }
 
 export class EditorViewportController {
@@ -263,7 +275,7 @@ export class EditorViewportController {
   private readonly tileFramesByIndex: ReadonlyMap<number, EditorTileFrame>;
   private readonly tileTextureCache = new Map<number, Texture>();
   private readonly objectTextureCache = new Map<string, Texture>();
-  private renderableAssetIdByPath: ReadonlyMap<string, number>;
+  private renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>;
   private assetPathByPackAndId: ReadonlyMap<string, string>;
   private assetPathById: ReadonlyMap<string, string>;
   private map: TileborneMap | undefined;
@@ -280,6 +292,7 @@ export class EditorViewportController {
   // overlay under the same "Collision" toggle as tile collision masks.
   private collisionFootprintByObjectType: ReadonlyMap<string, CollisionFootprintComponent> =
     new Map();
+  private catalogVisualByObjectType: ReadonlyMap<string, EditorCatalogObjectVisual> = new Map();
   private activeLayerId: LayerId | null = null;
   private selection = new Set<EntityId>();
   private hoverTile: { x: number; y: number } | null = null;
@@ -436,11 +449,20 @@ export class EditorViewportController {
    * in the viewport, gated by the same "Collision" overlay toggle as tile masks
    * (ADR-0025 slice 6 / decisions `c-q83p`, `c-cgsd`).
    */
-  setCollisionFootprints(
-    footprints: ReadonlyMap<string, CollisionFootprintComponent>,
-  ): void {
+  setCollisionFootprints(footprints: ReadonlyMap<string, CollisionFootprintComponent>): void {
     this.collisionFootprintByObjectType = footprints;
     this.renderCollision();
+    this.requestRender();
+  }
+
+  /**
+   * Supplies catalog-owned visuals keyed by `MapObject.kind`. Explicit
+   * `MapObject.placement` sprites still win; this is the canonical fallback for
+   * gameplay objects such as spawn points, loot crates, and traps.
+   */
+  setCatalogObjectVisuals(visuals: ReadonlyMap<string, EditorCatalogObjectVisual>): void {
+    this.catalogVisualByObjectType = visuals;
+    this.renderObjects();
     this.requestRender();
   }
 
@@ -927,6 +949,7 @@ export class EditorViewportController {
 
   private objectDimensions(object: MapObject): { readonly width: number; readonly height: number } {
     const placement = object.placement;
+    const catalogVisual = this.catalogVisualByObjectType.get(String(object.kind));
     const placementPackId = optionValue(placement?.packId);
     const placeable =
       placement === undefined
@@ -944,8 +967,13 @@ export class EditorViewportController {
         ? object.properties.tileHeight * tileH
         : tileH;
     return {
-      width: optionValue(object.width) ?? placeable?.size.width ?? legacyWidth,
-      height: optionValue(object.height) ?? placeable?.size.height ?? legacyHeight,
+      width:
+        optionValue(object.width) ?? placeable?.size.width ?? catalogVisual?.width ?? legacyWidth,
+      height:
+        optionValue(object.height) ??
+        placeable?.size.height ??
+        catalogVisual?.height ??
+        legacyHeight,
     };
   }
 
@@ -954,13 +982,15 @@ export class EditorViewportController {
     dimensions: { readonly width: number; readonly height: number },
   ): Sprite | undefined {
     const placement = object.placement;
-    if (placement === undefined) {
+    const catalogVisual = this.catalogVisualByObjectType.get(String(object.kind));
+    const placeableId = placement?.placeableId ?? catalogVisual?.placeableId;
+    if (placeableId === undefined) {
       return undefined;
     }
-    const placementPackId = optionValue(placement.packId);
+    const placementPackId = optionValue(placement?.packId);
     const placeableEntry = this.placeables
       .filter((entry) => placementPackId === undefined || entry.packId === placementPackId)
-      .find((candidate) => candidate.placeable.id === placement.placeableId);
+      .find((candidate) => candidate.placeable.id === placeableId);
     if (placeableEntry === undefined) {
       return undefined;
     }
@@ -980,7 +1010,7 @@ export class EditorViewportController {
     };
 
     const activeClip = activeClipForPlacement(placeable, placement);
-    const autoplay = placement.autoplay ?? true;
+    const autoplay = placement?.autoplay ?? true;
     const animated = autoplay && activeClip.frames.length > 1;
 
     if (animated) {
@@ -997,7 +1027,7 @@ export class EditorViewportController {
           { loop: activeClip.loop, defaultDurationMs: activeClip.defaultDurationMs },
         );
         const offsetMs = offsetForObjectId(String(object.id));
-        const speed = placement.speed ?? 1;
+        const speed = placement?.speed ?? 1;
         const initialIndex = resolveClipFrameIndex(clip, this.animationClockMs, {
           speed,
           offsetMs,
@@ -1014,14 +1044,16 @@ export class EditorViewportController {
     }
 
     // Static fallback: respect the placement's pinned asset/tile selection.
-    const placementAssetId = optionValue(placement.assetId);
-    const placementTileId = optionValue(placement.tileId);
+    const placementAssetId = optionValue(placement?.assetId);
+    const placementTileId = optionValue(placement?.tileId);
     const frame =
       activeClip.frames.find(
         (candidate) =>
           (placementAssetId === undefined || candidate.assetId === placementAssetId) &&
           (placementTileId === undefined || candidate.tileId === placementTileId),
-      ) ?? activeClip.frames[0] ?? placeable.frames[0];
+      ) ??
+      activeClip.frames[0] ??
+      placeable.frames[0];
     if (frame === undefined) {
       return undefined;
     }

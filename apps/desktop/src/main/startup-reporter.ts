@@ -2,14 +2,14 @@ import type {
   StartupStatusStore,
   StartupTaskId,
   StartupTaskStatus,
-} from "../shared/startup-status.js";
+} from '../shared/startup-status.js';
 
 export interface StartupReporter {
   readonly begin: (taskId: StartupTaskId, message?: string) => void;
   readonly complete: (taskId: StartupTaskId, message?: string) => void;
   readonly fail: (
     taskId: StartupTaskId,
-    status: Extract<StartupTaskStatus, "failed" | "timed-out">,
+    status: Extract<StartupTaskStatus, 'failed' | 'timed-out'>,
     cause: unknown,
   ) => void;
 }
@@ -28,15 +28,15 @@ export const createStartupReporter = (store: StartupStatusStore): StartupReporte
   begin: (taskId, message) => {
     const task = store.beginTask(taskId, message);
     console.info(
-      `[tileborne:start] ${task.label} started${message === undefined ? "" : `: ${message}`}`,
+      `[tileborne:start] ${task.label} started${message === undefined ? '' : `: ${message}`}`,
     );
   },
   complete: (taskId, message) => {
     const task = store.completeTask(taskId, message);
-    const duration = task.durationMs === undefined ? "unknown duration" : `${task.durationMs}ms`;
+    const duration = task.durationMs === undefined ? 'unknown duration' : `${task.durationMs}ms`;
     console.info(
       `[tileborne:start] ${task.label} completed in ${duration}${
-        message === undefined ? "" : `: ${message}`
+        message === undefined ? '' : `: ${message}`
       }`,
     );
   },
@@ -44,7 +44,7 @@ export const createStartupReporter = (store: StartupStatusStore): StartupReporte
     const label = getTaskLabel(store, taskId);
     const message = formatCause(cause);
     const task = store.failTask(taskId, status, message);
-    const duration = task.durationMs === undefined ? "unknown duration" : `${task.durationMs}ms`;
+    const duration = task.durationMs === undefined ? 'unknown duration' : `${task.durationMs}ms`;
     console.error(`[tileborne:start] ${label} ${status} after ${duration}: ${message}`);
   },
 });

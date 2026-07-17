@@ -61,7 +61,9 @@ export function MappingReviewStep({
   const accepted = new Set(acceptedSuggestionIds);
   const toggleSuggestion = (id: string, checked: boolean) => {
     onAcceptedSuggestionIdsChange(
-      checked ? [...acceptedSuggestionIds, id] : acceptedSuggestionIds.filter((entry) => entry !== id),
+      checked
+        ? [...acceptedSuggestionIds, id]
+        : acceptedSuggestionIds.filter((entry) => entry !== id),
     );
   };
   const mappedTilesets = plan?.mappings?.tilesets ?? [];
@@ -72,7 +74,9 @@ export function MappingReviewStep({
   const wangTilesets = scanTilesets.filter((tileset) => (tileset.wangSetCount ?? 0) > 0);
   const terrainTilesets = scanTilesets.filter((tileset) => (tileset.terrainClassCount ?? 0) > 0);
   const animationTilesets = scanTilesets.filter((tileset) => (tileset.animationCount ?? 0) > 0);
-  const collisionTilesets = scanTilesets.filter((tileset) => (tileset.collisionObjectCount ?? 0) > 0);
+  const collisionTilesets = scanTilesets.filter(
+    (tileset) => (tileset.collisionObjectCount ?? 0) > 0,
+  );
   const objectLayers = scan?.objectLayers ?? [];
 
   const groups: readonly TabGroup[] = [
@@ -115,14 +119,18 @@ export function MappingReviewStep({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor={`tileset-categories-${tileset.name}`}>Categories</FieldLabel>
+                      <FieldLabel htmlFor={`tileset-categories-${tileset.name}`}>
+                        Categories
+                      </FieldLabel>
                       <Input
                         id={`tileset-categories-${tileset.name}`}
                         defaultValue={tilesetCategories(tileset).join(', ')}
                         placeholder="e.g. terrain, walls"
                         aria-label={`Categories for ${tileset.name}`}
                       />
-                      <FieldDescription>Comma-separated tags used to group this tileset in the asset library.</FieldDescription>
+                      <FieldDescription>
+                        Comma-separated tags used to group this tileset in the asset library.
+                      </FieldDescription>
                     </Field>
                   </FieldGroup>
                 </CardContent>
@@ -151,7 +159,10 @@ export function MappingReviewStep({
     {
       value: 'terrain',
       label: 'Terrain',
-      count: terrainTilesets.reduce((count, tileset) => count + (tileset.terrainClassCount ?? 0), 0),
+      count: terrainTilesets.reduce(
+        (count, tileset) => count + (tileset.terrainClassCount ?? 0),
+        0,
+      ),
       content:
         terrainTilesets.length === 0
           ? emptyDescription('Terrain')
@@ -161,7 +172,9 @@ export function MappingReviewStep({
                   <CardTitle className="truncate">{tileset.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{tileset.terrainClassCount ?? 0} terrain classes</Badge>
+                  <Badge variant="secondary">
+                    {tileset.terrainClassCount ?? 0} terrain classes
+                  </Badge>
                   {confidenceBadge(tileset.confidence)}
                 </CardContent>
               </Card>
@@ -183,14 +196,18 @@ export function MappingReviewStep({
                     <Badge variant="outline">
                       {placeable.width}×{placeable.height}
                     </Badge>
-                    {placeable.category ? <Badge variant="outline">{placeable.category}</Badge> : null}
+                    {placeable.category ? (
+                      <Badge variant="outline">{placeable.category}</Badge>
+                    ) : null}
                     {confidenceBadge(placeable.confidence)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <FieldGroup>
                     <Field>
-                      <FieldLabel htmlFor={`placeable-name-${placeable.tilesetName}-${placeable.localTileId}`}>
+                      <FieldLabel
+                        htmlFor={`placeable-name-${placeable.tilesetName}-${placeable.localTileId}`}
+                      >
                         Display name
                       </FieldLabel>
                       <Input
@@ -200,7 +217,9 @@ export function MappingReviewStep({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor={`placeable-category-${placeable.tilesetName}-${placeable.localTileId}`}>
+                      <FieldLabel
+                        htmlFor={`placeable-category-${placeable.tilesetName}-${placeable.localTileId}`}
+                      >
                         Category
                       </FieldLabel>
                       <Input
@@ -279,7 +298,10 @@ export function MappingReviewStep({
     {
       value: 'collisions',
       label: 'Collisions',
-      count: collisionTilesets.reduce((count, tileset) => count + (tileset.collisionObjectCount ?? 0), 0),
+      count: collisionTilesets.reduce(
+        (count, tileset) => count + (tileset.collisionObjectCount ?? 0),
+        0,
+      ),
       content:
         collisionTilesets.length === 0
           ? emptyDescription('Collisions')
@@ -289,7 +311,9 @@ export function MappingReviewStep({
                   <CardTitle className="truncate">{tileset.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{tileset.collisionObjectCount ?? 0} collision objects</Badge>
+                  <Badge variant="secondary">
+                    {tileset.collisionObjectCount ?? 0} collision objects
+                  </Badge>
                   {confidenceBadge(tileset.confidence)}
                 </CardContent>
               </Card>
@@ -303,7 +327,10 @@ export function MappingReviewStep({
         (plan?.suggestions ?? []).length === 0
           ? emptyDescription('Suggestions')
           : (plan?.suggestions ?? []).map((suggestion) => (
-              <label key={suggestion.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
+              <label
+                key={suggestion.id}
+                className="flex items-start gap-2 rounded-md border p-2 text-sm"
+              >
                 <Checkbox
                   checked={accepted.has(suggestion.id)}
                   onCheckedChange={(checked) => toggleSuggestion(suggestion.id, checked)}
@@ -313,7 +340,9 @@ export function MappingReviewStep({
                   <span className="font-medium">{suggestion.action}</span>
                   <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span>{suggestion.reason}</span>
-                    <Badge variant="outline">Confidence {Math.round(suggestion.confidence * 100)}%</Badge>
+                    <Badge variant="outline">
+                      Confidence {Math.round(suggestion.confidence * 100)}%
+                    </Badge>
                   </span>
                 </span>
               </label>

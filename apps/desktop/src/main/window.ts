@@ -1,7 +1,20 @@
-import path from "node:path";
-import process from "node:process";
+import path from 'node:path';
+import process from 'node:process';
+import { randomUUID } from 'node:crypto';
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
+
+import {
+  APP_CLOSE_REQUESTED_CHANNEL,
+  APP_CLOSE_RESOLVED_CHANNEL,
+  type AppCloseResolution,
+} from '../shared/app-lifecycle.js';
+
+import {
+  installContentSecurityPolicy,
+  installNavigationGuards,
+  type SecurityContext,
+} from './security.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -10,12 +23,12 @@ const WINDOW_WIDTH = 1440;
 const WINDOW_HEIGHT = 900;
 const WINDOW_MIN_WIDTH = 1024;
 const WINDOW_MIN_HEIGHT = 640;
-const DEFAULT_RENDERER_WINDOW_NAME = "main_window";
+const DEFAULT_RENDERER_WINDOW_NAME = 'main_window';
 
 const resolveRuntimeIconPath = (): string =>
   app.isPackaged
-    ? path.join(process.resourcesPath, "icon.png")
-    : path.resolve(__dirname, "../../assets/icon.png");
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.resolve(__dirname, '../../assets/icon.png');
 
 export interface MainWindowLifecycleHooks {
   readonly onRendererLoadStart?: () => void;
@@ -25,38 +38,69 @@ export interface MainWindowLifecycleHooks {
     readonly errorDescription: string;
     readonly validatedURL: string;
   }) => void;
+  readonly onCloseCancelled?: () => void;
+  readonly onClosed?: () => void;
 }
 
 export interface CreateMainWindowOptions extends MainWindowLifecycleHooks {
   readonly initialRoutePath?: string;
 }
 
-const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
+const resolveDevServerUrl = (): string | undefined => {
   const devServerUrl =
-    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === "undefined"
+    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
       ? undefined
       : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  // Smoke runs load the packaged-style bundle (loadFile) even though the dev
+  // server constant may be defined, so it is not "dev" for security purposes.
+  if (!devServerUrl || process.env.TILEBORNE_SMOKE === 'true') {
+    return undefined;
+  }
+  return devServerUrl;
+};
+
+/**
+ * Resolve the renderer trust context: dev (Vite dev server origin, permissive
+ * CSP + HMR) vs prod/smoke (packaged `file://` bundle, strict CSP). Mirrors the
+ * dev-vs-packaged branch in {@link loadRendererRoute}.
+ */
+const resolveSecurityContext = (): SecurityContext => {
+  const devServerUrl = resolveDevServerUrl();
+  if (devServerUrl === undefined) {
+    return { isDev: false, devServerOrigin: undefined };
+  }
+  try {
+    return { isDev: true, devServerOrigin: new URL(devServerUrl).origin };
+  } catch {
+    return { isDev: false, devServerOrigin: undefined };
+  }
+};
+
+const loadRendererRoute = (window: BrowserWindow, routePath: string): void => {
+  const devServerUrl = resolveDevServerUrl();
   const rendererName =
-    typeof MAIN_WINDOW_VITE_NAME === "undefined"
+    typeof MAIN_WINDOW_VITE_NAME === 'undefined'
       ? DEFAULT_RENDERER_WINDOW_NAME
       : MAIN_WINDOW_VITE_NAME;
 
-  if (devServerUrl && process.env.TILEBORNE_SMOKE !== "true") {
+  if (devServerUrl) {
     const url = new URL(routePath, devServerUrl);
     void window.loadURL(url.toString());
     return;
   }
-  void window.loadFile(
-    path.join(__dirname, `../renderer/${rendererName}/index.html`),
-    { hash: routePath },
-  );
+  void window.loadFile(path.join(__dirname, `../renderer/${rendererName}/index.html`), {
+    hash: routePath,
+  });
 };
 
 export const createMainWindow = (options: CreateMainWindowOptions | string = {}): BrowserWindow => {
   const resolvedOptions =
-    typeof options === "string" ? ({ initialRoutePath: options } satisfies CreateMainWindowOptions) : options;
-  const initialRoutePath = resolvedOptions.initialRoutePath ?? "/";
+    typeof options === 'string'
+      ? ({ initialRoutePath: options } satisfies CreateMainWindowOptions)
+      : options;
+  const initialRoutePath = resolvedOptions.initialRoutePath ?? '/';
   const iconPath = resolveRuntimeIconPath();
+  const devServerUrl = resolveDevServerUrl();
   const mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
@@ -64,32 +108,78 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
     minHeight: WINDOW_MIN_HEIGHT,
     show: true,
     icon: iconPath,
-    backgroundColor: "#0f172a",
+    backgroundColor: '#0f172a',
     // ADR-0012 option A: native OS frame for v1 (custom chrome deferred).
     frame: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // Preload bundle transitively imports node:crypto (Effect / ipc-contracts).
-      // Sandboxed preloads cannot load node:crypto, so preload fails and window.tileborne
-      // is never exposed. contextIsolation + nodeIntegration:false remains secure.
-      sandbox: false,
-      preload: path.join(__dirname, "preload.cjs"),
+      // Keep the packaged/smoke preload sandboxed. Electron Forge dev loads the
+      // renderer from Vite's http origin; with the current Vite/Rolldown/esbuild
+      // stack, the sandboxed preload bridge does not reach that renderer, so dev
+      // uses the standard isolated preload context instead.
+      sandbox: devServerUrl === undefined,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
+  let rendererLoaded = false;
+  let closeAllowed = false;
+  let pendingCloseRequestId: string | undefined;
 
-  if (process.platform === "darwin" && !app.isPackaged) {
+  const resolveClose = (event: Electron.IpcMainEvent, resolution: AppCloseResolution): void => {
+    if (event.sender !== mainWindow.webContents || resolution.requestId !== pendingCloseRequestId) {
+      return;
+    }
+    pendingCloseRequestId = undefined;
+    if (!resolution.allow) {
+      resolvedOptions.onCloseCancelled?.();
+      return;
+    }
+    closeAllowed = true;
+    mainWindow.close();
+  };
+  ipcMain.on(APP_CLOSE_RESOLVED_CHANNEL, resolveClose);
+  mainWindow.on('close', (event) => {
+    if (closeAllowed || !rendererLoaded || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+    event.preventDefault();
+    if (pendingCloseRequestId !== undefined) {
+      return;
+    }
+    pendingCloseRequestId = randomUUID();
+    mainWindow.webContents.send(APP_CLOSE_REQUESTED_CHANNEL, {
+      requestId: pendingCloseRequestId,
+    });
+  });
+  mainWindow.once('closed', () => {
+    ipcMain.removeListener(APP_CLOSE_RESOLVED_CHANNEL, resolveClose);
+    resolvedOptions.onClosed?.();
+  });
+
+  if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(iconPath);
   }
 
-  mainWindow.webContents.once("did-start-loading", () => {
+  // ADR-0003 trust boundary: lock down navigation, contain window.open, and set
+  // a Content-Security-Policy on the renderer document. The CSP is applied to
+  // the window's session (shared default session; re-registration is
+  // idempotent) and the navigation guards to this window's webContents.
+  const securityContext = resolveSecurityContext();
+  installContentSecurityPolicy(mainWindow.webContents.session, securityContext);
+  installNavigationGuards(mainWindow.webContents, securityContext, (url) => {
+    void shell.openExternal(url);
+  });
+
+  mainWindow.webContents.once('did-start-loading', () => {
     resolvedOptions.onRendererLoadStart?.();
   });
-  mainWindow.webContents.once("did-finish-load", () => {
+  mainWindow.webContents.once('did-finish-load', () => {
+    rendererLoaded = true;
     resolvedOptions.onRendererLoaded?.();
   });
   mainWindow.webContents.once(
-    "did-fail-load",
+    'did-fail-load',
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) {
         return;
@@ -97,7 +187,7 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
       resolvedOptions.onRendererLoadFailed?.({ errorCode, errorDescription, validatedURL });
     },
   );
-  mainWindow.once("ready-to-show", () => {
+  mainWindow.once('ready-to-show', () => {
     if (!mainWindow.isVisible()) {
       mainWindow.show();
     }
@@ -105,8 +195,8 @@ export const createMainWindow = (options: CreateMainWindowOptions | string = {})
 
   loadRendererRoute(mainWindow, initialRoutePath);
 
-  if (!app.isPackaged && process.env.TILEBORNE_DISABLE_DEVTOOLS !== "true") {
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+  if (!app.isPackaged && process.env.TILEBORNE_DISABLE_DEVTOOLS !== 'true') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   return mainWindow;

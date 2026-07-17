@@ -1,11 +1,16 @@
-import { createPngBuffer } from "../image-info.js";
-import type { SliceAtlasParams } from "../slice.js";
+import { createPngBuffer } from '../image-info.js';
+import type { SliceAtlasParams } from '../slice.js';
 
 export type AtlasSliceFixture = {
   readonly name: string;
   readonly params: SliceAtlasParams;
   readonly png?: Uint8Array;
-  readonly expectedTiles?: readonly { readonly x: number; readonly y: number; readonly w: number; readonly h: number }[];
+  readonly expectedTiles?: readonly {
+    readonly x: number;
+    readonly y: number;
+    readonly w: number;
+    readonly h: number;
+  }[];
   readonly expectedColumns?: number;
   readonly expectedRows?: number;
   readonly expectedTotalTiles?: number;
@@ -14,7 +19,7 @@ export type AtlasSliceFixture = {
 
 /** 64x64 image, 16x16 cells, no margin or spacing — 4x4 perfect grid. */
 export const perfectGrid16: AtlasSliceFixture = {
-  name: "perfect-grid-16",
+  name: 'perfect-grid-16',
   params: {
     imageWidth: 64,
     imageHeight: 64,
@@ -49,7 +54,7 @@ export const perfectGrid16: AtlasSliceFixture = {
 
 /** 68x68 image, 32x32 cells, 1px margin and 2px spacing — 2x2 grid. */
 export const grid32MarginSpacing: AtlasSliceFixture = {
-  name: "grid-32-margin-spacing",
+  name: 'grid-32-margin-spacing',
   params: {
     imageWidth: 68,
     imageHeight: 68,
@@ -72,7 +77,7 @@ export const grid32MarginSpacing: AtlasSliceFixture = {
 
 /** 72x44 image, 16x16 cells, 4px margin and 2px spacing — 3x2 grid. */
 export const grid16Margin4Spacing2: AtlasSliceFixture = {
-  name: "grid-16-margin4-spacing2",
+  name: 'grid-16-margin4-spacing2',
   params: {
     imageWidth: 72,
     imageHeight: 44,
@@ -97,7 +102,7 @@ export const grid16Margin4Spacing2: AtlasSliceFixture = {
 
 /** 64x32 image, 16x16 cells, 7 tiles in a 4-column layout (incomplete last row). */
 export const incompleteLastRow: AtlasSliceFixture = {
-  name: "incomplete-last-row",
+  name: 'incomplete-last-row',
   params: {
     imageWidth: 64,
     imageHeight: 32,
@@ -125,7 +130,7 @@ export const incompleteLastRow: AtlasSliceFixture = {
 
 /** Invalid cell width. */
 export const invalidCellWidthZero: AtlasSliceFixture = {
-  name: "invalid-cell-width-zero",
+  name: 'invalid-cell-width-zero',
   params: {
     imageWidth: 64,
     imageHeight: 64,
@@ -134,12 +139,12 @@ export const invalidCellWidthZero: AtlasSliceFixture = {
     margin: 0,
     spacing: 0,
   },
-  expectedDiagnosticTag: "InvalidCellSize",
+  expectedDiagnosticTag: 'InvalidCellSize',
 };
 
 /** Image too small for declared tile count. */
 export const invalidImageTooSmall: AtlasSliceFixture = {
-  name: "invalid-image-too-small",
+  name: 'invalid-image-too-small',
   params: {
     imageWidth: 32,
     imageHeight: 32,
@@ -150,7 +155,7 @@ export const invalidImageTooSmall: AtlasSliceFixture = {
     columns: 4,
     tileCount: 8,
   },
-  expectedDiagnosticTag: "InvalidAtlasGrid",
+  expectedDiagnosticTag: 'InvalidAtlasGrid',
 };
 
 export const atlasSliceFixtures = [

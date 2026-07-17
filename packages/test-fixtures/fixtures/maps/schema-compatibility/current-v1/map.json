@@ -1,0 +1,9 @@
+{
+  "id": "map:5b1901ca-1abd-42d6-aeac-553b34b9bda7",
+  "schemaVersion": 1,
+  "size": { "width": 4, "height": 4 },
+  "tileSize": { "width": 32, "height": 32 },
+  "layers": [],
+  "objects": [],
+  "properties": { "migrationSentinel": "preserve-current-map" }
+}

@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const useParamsMock = vi.hoisted(() => vi.fn());
+const navigateMock = vi.hoisted(() => vi.fn());
 const useAssetPackMock = vi.hoisted(() => vi.fn());
+const useAssetPackUseSitesMock = vi.hoisted(() => vi.fn());
 const removePackMutateAsyncMock = vi.hoisted(() => vi.fn());
 const useRemoveAssetPackMock = vi.hoisted(() => vi.fn());
 const setMapTilesetPackMutateMock = vi.hoisted(() => vi.fn());
@@ -13,14 +15,19 @@ const setActivePalettePackIdMock = vi.hoisted(() => vi.fn());
 const editorUiState = vi.hoisted(() => ({
   activePalettePackId: null as string | null,
   setActivePalettePackId: setActivePalettePackIdMock,
+  setSelection: vi.fn(),
+  selectTool: vi.fn(),
+  setCatalogTargetObjectTypeId: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
   useParams: useParamsMock,
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/hooks/queries', () => ({
   useAssetPack: useAssetPackMock,
+  useAssetPackUseSites: useAssetPackUseSitesMock,
   useAssetDataUrl: () => ({ data: undefined, isLoading: false }),
   useTilesetPack: () => ({ data: undefined, isLoading: false }),
   useAssetPackLibraryPages: () => ({ data: undefined, isLoading: false, isError: false }),
@@ -72,6 +79,10 @@ describe('AssetPackDetailsPane remove action', () => {
   beforeEach(() => {
     useParamsMock.mockReturnValue({});
     useAssetPackMock.mockReturnValue({ data: { pack }, isLoading: false });
+    useAssetPackUseSitesMock.mockReturnValue({
+      data: { useSites: [], total: 0, truncated: false },
+      isLoading: false,
+    });
     removePackMutateAsyncMock.mockReset();
     removePackMutateAsyncMock.mockResolvedValue({});
     useRemoveAssetPackMock.mockReset();
@@ -82,6 +93,10 @@ describe('AssetPackDetailsPane remove action', () => {
     setMapTilesetPackMutateMock.mockReset();
     notifySuccessMock.mockReset();
     setActivePalettePackIdMock.mockReset();
+    navigateMock.mockReset();
+    editorUiState.setSelection.mockReset();
+    editorUiState.selectTool.mockReset();
+    editorUiState.setCatalogTargetObjectTypeId.mockReset();
     editorUiState.activePalettePackId = null;
   });
 
@@ -111,5 +126,80 @@ describe('AssetPackDetailsPane remove action', () => {
     render(<AssetPackDetailsPane packId={pack.id} />);
 
     expect(screen.getByTestId('asset-pack-remove')).toHaveProperty('disabled', true);
+  });
+
+  it('shows exact canonical consumers and navigates to the owning entity', () => {
+    useParamsMock.mockReturnValue({ projectId: 'project:test' });
+    useAssetPackUseSitesMock.mockReturnValue({
+      data: {
+        useSites: [
+          {
+            id: 'entity:crate',
+            kind: 'entity',
+            label: 'Loot crate',
+            detail: 'Entity visual uses placeable:crate',
+            navigation: {
+              kind: 'catalog',
+              projectId: 'project:test',
+              objectTypeId: 'object-type:crate',
+            },
+          },
+        ],
+        total: 1,
+        truncated: false,
+      },
+      isLoading: false,
+    });
+
+    render(<AssetPackDetailsPane packId={pack.id} />);
+
+    const useSites = screen.getByTestId('asset-pack-use-sites');
+    expect(useSites.textContent).toContain('Dependencies & use sites');
+    expect(useSites.textContent).toContain('Loot crate');
+    expect(useSites.textContent).toContain('Entity visual uses placeable:crate');
+
+    fireEvent.click(screen.getByTestId('asset-pack-use-site-entity'));
+    expect(editorUiState.setCatalogTargetObjectTypeId).toHaveBeenCalledWith('object-type:crate');
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/projects/$projectId/entities',
+      params: { projectId: 'project:test' },
+    });
+  });
+
+  it.each([
+    ['player-model', 'playerModels.max.ref'],
+    ['animation', 'playerModels.max.clips.run'],
+  ] as const)('deep-links a %s use site to its exact model and clip path', (kind, path) => {
+    useParamsMock.mockReturnValue({ projectId: 'project:test' });
+    useAssetPackUseSitesMock.mockReturnValue({
+      data: {
+        useSites: [
+          {
+            id: `${kind}:max`,
+            kind,
+            label: kind === 'animation' ? 'Maltipoo Max · run' : 'Maltipoo Max',
+            detail: path,
+            navigation: {
+              kind: 'player-model',
+              projectId: 'project:test',
+              modelId: 'max',
+              path,
+            },
+          },
+        ],
+        total: 1,
+        truncated: false,
+      },
+      isLoading: false,
+    });
+
+    render(<AssetPackDetailsPane packId={pack.id} />);
+    fireEvent.click(screen.getByTestId(`asset-pack-use-site-${kind}`));
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/projects/$projectId/player-models',
+      params: { projectId: 'project:test' },
+      search: { modelId: 'max', path },
+    });
   });
 });

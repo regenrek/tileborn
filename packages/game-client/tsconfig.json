@@ -13,7 +13,9 @@
   "exclude": ["src/**/*.test.tsx", "src/**/*.test.ts"],
   "references": [
     { "path": "../core" },
+    { "path": "../ipc-contracts" },
     { "path": "../plugin-api" },
+    { "path": "../runtime" },
     { "path": "../ui" }
   ]
 }

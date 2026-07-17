@@ -6,18 +6,17 @@
     "composite": true,
     "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "src/**/*.test.ts"
-  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"],
   "references": [
     {
       "path": "../asset-pipeline"
     },
     {
       "path": "../core"
+    },
+    {
+      "path": "../plugin-api"
     }
   ]
 }

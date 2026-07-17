@@ -1,12 +1,12 @@
-import { Effect, Stream } from "effect";
-import { describe, expect, it } from "vitest";
+import { Effect, Stream } from 'effect';
+import { describe, expect, it } from 'vitest';
 
-import { makeNetClient, type NetClient } from "../net/client.js";
-import { encodeMessage, InputBatch, Welcome } from "../net/protocol.js";
-import type { Transport, TransportEvent } from "../net/transport.js";
-import { InputCommand } from "../input/input.js";
-import { makePluginHost } from "../plugin/plugin-host.js";
-import { makeGameRuntime } from "./game-runtime.js";
+import { makeNetClient, type NetClient } from '../net/client.js';
+import { encodeMessage, InputBatch, Welcome } from '../net/protocol.js';
+import type { Transport, TransportEvent } from '../net/transport.js';
+import { InputCommand } from '../input/input.js';
+import { makePluginHost } from '../plugin/plugin-host.js';
+import { makeGameRuntime } from './game-runtime.js';
 
 class MockTransport implements Transport {
   readonly sent: Uint8Array[] = [];
@@ -38,13 +38,13 @@ class MockTransport implements Transport {
   }
 }
 
-describe("GameRuntime networking and plugin integration", () => {
-  it("dispatches plugin ticks from the fixed update loop", async () => {
+describe('GameRuntime networking and plugin integration', () => {
+  it('dispatches plugin ticks from the fixed update loop', async () => {
     const ticks: number[] = [];
     const pluginHost = makePluginHost();
     await Effect.runPromise(
       pluginHost.register({
-        id: "tick-plugin",
+        id: 'tick-plugin',
         onTick: (_world, _dt, tick) => Effect.sync(() => ticks.push(tick)),
       }),
     );
@@ -54,35 +54,37 @@ describe("GameRuntime networking and plugin integration", () => {
     expect(ticks).toEqual([1, 2]);
   });
 
-  it("connects NetClient and dispatches inbound messages to plugins", async () => {
+  it('connects NetClient and dispatches inbound messages to plugins', async () => {
     const messages: string[] = [];
     const welcome = new Welcome({
-      entityId: "entity-1",
+      entityId: 'entity-1',
       slot: 1,
       mapWidth: 128,
       mapHeight: 64,
       snapshotHz: 20,
-      seed: "seed-1",
+      seed: 'seed-1',
     });
-    const transport = new MockTransport([{ _tag: "message", data: encodeMessage(welcome) }]);
+    const transport = new MockTransport([{ _tag: 'message', data: encodeMessage(welcome) }]);
     const netClient = makeNetClient(transport);
     const pluginHost = makePluginHost();
     await Effect.runPromise(
       pluginHost.register({
-        id: "message-plugin",
+        id: 'message-plugin',
         onMessage: (message) => Effect.sync(() => messages.push(message._tag)),
       }),
     );
 
     const runtime = makeGameRuntime();
-    await Effect.runPromise(runtime.init({ netClient, netUrl: "wss://example.invalid/room", pluginHost }));
+    await Effect.runPromise(
+      runtime.init({ netClient, netUrl: 'wss://example.invalid/room', pluginHost }),
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(transport.connectedUrl).toBe("wss://example.invalid/room");
-    expect(messages).toEqual(["Welcome"]);
+    expect(transport.connectedUrl).toBe('wss://example.invalid/room');
+    expect(messages).toEqual(['Welcome']);
   });
 
-  it("closes the configured NetClient on stop", async () => {
+  it('closes the configured NetClient on stop', async () => {
     let closed = false;
     const netClient: NetClient = {
       connect: () => Effect.succeed(void 0),
@@ -94,18 +96,20 @@ describe("GameRuntime networking and plugin integration", () => {
         }),
     };
     const runtime = makeGameRuntime();
-    await Effect.runPromise(runtime.init({ netClient, netUrl: "wss://example.invalid/room" }));
+    await Effect.runPromise(runtime.init({ netClient, netUrl: 'wss://example.invalid/room' }));
     await Effect.runPromise(runtime.stop());
     expect(closed).toBe(true);
   });
 
-  it("sends typed input messages through the configured NetClient", async () => {
+  it('sends typed input messages through the configured NetClient', async () => {
     const transport = new MockTransport();
     const netClient = makeNetClient(transport);
     await Effect.runPromise(
       netClient.send(
         new InputBatch({
-          commands: [new InputCommand({ tick: 1, buttons: 1, moveX: 1, moveY: 0, aimX: 10, aimY: 20 })],
+          commands: [
+            new InputCommand({ tick: 1, buttons: 1, moveX: 1, moveY: 0, aimX: 10, aimY: 20 }),
+          ],
         }),
       ),
     );

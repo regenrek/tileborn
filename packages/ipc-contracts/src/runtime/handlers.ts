@@ -1,15 +1,15 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema } from 'effect';
 
-import type { IpcHandlerAtChannel, IpcHandlerGroupOf, IpcHandlersOf } from "../codegen-shape.js";
-import type { AnyIpcContract, ErrorOf, RequestOf, ResponseOf } from "../contract.js";
+import type { IpcHandlerAtChannel, IpcHandlerGroupOf, IpcHandlersOf } from '../codegen-shape.js';
+import type { AnyIpcContract, ErrorOf, RequestOf, ResponseOf } from '../contract.js';
 import {
   IpcChannelNotFoundError,
   IpcHandlerThrewError,
   IpcSerializationError,
   IpcValidationError,
-} from "../errors.js";
-import type { IpcRegistry } from "../registry.js";
-import type { IpcServerTransport } from "./transport.js";
+} from '../errors.js';
+import type { IpcRegistry } from '../registry.js';
+import type { IpcServerTransport } from './transport.js';
 
 export interface RegisteredHandlers {
   unregister(): void;
@@ -32,10 +32,7 @@ export class HandlerBuilder<
   add<Channel extends keyof IpcHandlersOf<Registry> & string>(
     channel: Channel,
     handler: IpcHandlerAtChannel<Registry, Channel>,
-  ): HandlerBuilder<
-    Registry,
-    Handlers & Record<Channel, IpcHandlerAtChannel<Registry, Channel>>
-  > {
+  ): HandlerBuilder<Registry, Handlers & Record<Channel, IpcHandlerAtChannel<Registry, Channel>>> {
     return new HandlerBuilder(this._registry, {
       ...this.handlers,
       [channel]: handler,
@@ -72,12 +69,12 @@ const toTransportPayload = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(toTransportPayload);
   }
-  if (typeof value !== "object" || value === null) {
+  if (typeof value !== 'object' || value === null) {
     return value;
   }
 
   const payload: Record<string, unknown> = {};
-  if ("_tag" in value && typeof value._tag === "string") {
+  if ('_tag' in value && typeof value._tag === 'string') {
     payload._tag = value._tag;
   }
   if (value instanceof Error) {
@@ -86,14 +83,23 @@ const toTransportPayload = (value: unknown): unknown => {
   let current: object | null = value;
   while (current !== null && current !== Object.prototype) {
     for (const key of Reflect.ownKeys(current)) {
-      if (typeof key !== "string") {
+      if (typeof key !== 'string') {
         continue;
       }
-      if (key === "constructor" || key === "name" || key === "stack" || key.startsWith("~effect/")) {
+      if (
+        key === 'constructor' ||
+        key === 'name' ||
+        key === 'stack' ||
+        key.startsWith('~effect/')
+      ) {
         continue;
       }
       const descriptor = Object.getOwnPropertyDescriptor(current, key);
-      if (descriptor !== undefined && "value" in descriptor && typeof descriptor.value === "function") {
+      if (
+        descriptor !== undefined &&
+        'value' in descriptor &&
+        typeof descriptor.value === 'function'
+      ) {
         continue;
       }
       payload[key] = toTransportPayload((value as Record<string, unknown>)[key]);
@@ -114,12 +120,7 @@ const encodeResponse = <Contract extends AnyIpcContract>(
 ): Effect.Effect<unknown> =>
   Effect.try({
     try: () => {
-      const codec = contract.response as Schema.Codec<
-        ResponseOf<Contract>,
-        unknown,
-        never,
-        never
-      >;
+      const codec = contract.response as Schema.Codec<ResponseOf<Contract>, unknown, never, never>;
       try {
         const decoded = Schema.decodeUnknownSync(codec)(response);
         return Schema.encodeSync(codec)(decoded);
@@ -144,7 +145,9 @@ const encodeResponse = <Contract extends AnyIpcContract>(
 
 const invokeHandler = <Contract extends AnyIpcContract>(
   contract: Contract,
-  handler: ((request: RequestOf<Contract>) => Effect.Effect<ResponseOf<Contract>, ErrorOf<Contract>>) | undefined,
+  handler:
+    | ((request: RequestOf<Contract>) => Effect.Effect<ResponseOf<Contract>, ErrorOf<Contract>>)
+    | undefined,
   rawRequest: unknown,
 ): Effect.Effect<unknown> =>
   decodeUnknown<RequestOf<Contract>>(contract.request, rawRequest).pipe(
@@ -207,7 +210,9 @@ export const registerIpcHandlers = <Registry extends IpcRegistry>(
         invokeHandler(
           contract,
           channelHandlers[contract.channel] as
-            | ((request: RequestOf<typeof contract>) => Effect.Effect<ResponseOf<typeof contract>, ErrorOf<typeof contract>>)
+            | ((
+                request: RequestOf<typeof contract>,
+              ) => Effect.Effect<ResponseOf<typeof contract>, ErrorOf<typeof contract>>)
             | undefined,
           payload,
         ),
@@ -223,4 +228,3 @@ export const registerIpcHandlers = <Registry extends IpcRegistry>(
     },
   };
 };
-

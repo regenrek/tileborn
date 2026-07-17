@@ -1,18 +1,8 @@
 import { useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
-import {
-  Badge,
-  Button,
-  cn,
-  typography,
-} from '@tileborne/ui';
+import { Badge, Button, cn, typography } from '@tileborne/ui';
 import type { LayerId, MapLayer } from '@tileborne/core';
-import {
-  EyeIcon,
-  EyeOffIcon,
-  LayersIcon,
-  MapIcon,
-} from 'lucide-react';
+import { EyeIcon, EyeOffIcon, LayersIcon, MapIcon } from 'lucide-react';
 
 import { SidebarEmptyState } from '@/components/sidebar/sidebar-empty-state';
 import { SidebarListSkeleton } from '@/components/sidebar/sidebar-list-skeleton';
@@ -47,7 +37,8 @@ function LayerRow({
       className={cn(
         'group/layer-row relative flex h-7 min-w-0 items-stretch overflow-hidden rounded-md',
         'before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity',
-        active && 'bg-accent text-accent-foreground ring-1 ring-inset ring-primary/30 before:opacity-100',
+        active &&
+          'bg-accent text-accent-foreground ring-1 ring-inset ring-primary/30 before:opacity-100',
         !active && 'hover:bg-muted',
         !layer.visible && 'opacity-60',
       )}
@@ -85,11 +76,7 @@ function LayerRow({
         )}
       >
         <span
-          className={cn(
-            'min-w-0 flex-1 truncate',
-            typography.rowTitle,
-            active && 'font-medium',
-          )}
+          className={cn('min-w-0 flex-1 truncate', typography.rowTitle, active && 'font-medium')}
         >
           {layer.name}
         </span>
@@ -139,10 +126,7 @@ export function LayersSection() {
   };
 
   return (
-    <section
-      className="flex min-h-0 flex-col"
-      data-testid="inspector-layers-section"
-    >
+    <section className="flex min-h-0 flex-col" data-testid="inspector-layers-section">
       <div className="flex shrink-0 items-center gap-2 pb-1.5">
         <LayersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className={typography.panelTitle}>Layers</span>

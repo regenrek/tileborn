@@ -1,12 +1,19 @@
 import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { hashJsonStable, makePackId, makeTileId, makeWorkingPaletteId } from '@tileborne/core';
+import {
+  hashJsonStable,
+  makePackId,
+  makeProjectId,
+  makeTileId,
+  makeWorkingPaletteId,
+} from '@tileborne/core';
 
 import {
   AssetLibraryGetPackCacheStatusResponse,
   AssetLibraryGetPackLibraryRequest,
   AssetLibraryGetPackLibraryResponse,
+  AssetLibraryGetPackUseSitesResponse,
   AssetLibraryReloadPackCacheRequest,
 } from './asset-library.js';
 import { WorkingPalettesAddItemsRequest } from './working-palettes.js';
@@ -15,6 +22,7 @@ const packId = makePackId('550e8400-e29b-41d4-a716-446655440001');
 const tileId = makeTileId('550e8400-e29b-41d4-a716-446655440002');
 const paletteId = makeWorkingPaletteId('550e8400-e29b-41d4-a716-446655440003');
 const integrityHash = hashJsonStable({ packId });
+const projectId = makeProjectId('550e8400-e29b-41d4-a716-446655440004');
 
 describe('asset library IPC contracts', () => {
   it('validates pack library query inputs', () => {
@@ -80,6 +88,28 @@ describe('asset library IPC contracts', () => {
     expect(rebuild.packId).toBe(packId);
     expect(status.status.cacheKind).toBe('index-metadata');
     expect(status.status.thumbnailSheetsAvailable).toBe(false);
+  });
+
+  it('validates bounded use sites with actionable navigation', () => {
+    const decoded = Schema.decodeUnknownSync(AssetLibraryGetPackUseSitesResponse)({
+      projectId,
+      packId,
+      useSites: [
+        {
+          id: 'player-model:model:test',
+          kind: 'player-model',
+          label: 'Hero',
+          detail: 'Player model uses placeable:test',
+          navigation: { kind: 'player-model', projectId, modelId: 'model:test' },
+        },
+      ],
+      total: 1,
+      scannedMapCount: 2,
+      truncated: false,
+    });
+
+    expect(decoded.useSites[0]?.navigation.kind).toBe('player-model');
+    expect(decoded.scannedMapCount).toBe(2);
   });
 
   it('validates working-palette item references', () => {

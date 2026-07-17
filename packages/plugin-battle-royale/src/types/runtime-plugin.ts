@@ -1,17 +1,17 @@
-import type { BattleRoyaleConfigInput } from "../battle-royale-config.js";
-import type { ExportedArtifact } from "./artifact.js";
+import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
+import type {
+  RuntimeAdapter,
+  RuntimeAdapterComponentStore,
+  RuntimeAdapterContext,
+  RuntimeAdapterHost,
+  RuntimeAdapterWorld,
+} from '@tileborne/plugin-api';
 
-export interface ComponentStore<T extends object> {
-  readonly get: (entity: number) => T | undefined;
-  readonly set: (entity: number, value: T) => void;
-  readonly has: (entity: number) => boolean;
-  readonly delete: (entity: number) => void;
-  readonly entries: () => Iterable<[number, T]>;
-}
+import type { BattleRoyaleConfigInput } from '../battle-royale-config.js';
 
-export interface PluginWorld {
-  readonly createEntity: () => number;
-  readonly destroyEntity: (entity: number) => void;
+export type ComponentStore<T extends object> = RuntimeAdapterComponentStore<T>;
+
+export interface PluginWorld extends RuntimeAdapterWorld {
   readonly registerComponent: <T extends object>(name: string) => ComponentStore<T>;
   readonly getComponent: <T extends object>(name: string) => ComponentStore<T>;
 }
@@ -25,14 +25,36 @@ export type RuntimeAdapterConfig = BattleRoyaleConfigInput;
 export interface RuntimePlayerInput {
   readonly tick: number;
   readonly seq: number;
-  readonly dir: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   readonly shoot: boolean;
+  readonly reload: boolean;
+  readonly interact: boolean;
+  readonly drop: boolean;
+  readonly abilities: readonly BattleRoyaleAbilityId[];
   readonly aimDeg?: number;
-  readonly weaponSlot?: number;
+  readonly swapSlot?: number;
 }
 
-export interface RuntimePluginHost {
-  readonly getArtifact: () => ExportedArtifact;
+/** Per-session player→model assignment (host session concern, never package data). */
+export interface PlayerModelSelection {
+  readonly playerId: string;
+  readonly modelId: string;
+}
+
+export interface RuntimePluginHost extends RuntimeAdapterHost {
+  /**
+   * The encoded `RuntimeMapPackage` wire JSON (ADR-0030): the ONE payload
+   * every runtime host hands the plugin. The plugin decodes it through the
+   * canonical schema and derives its own runtime state.
+   */
+  readonly getMapPackage: () => unknown;
+  /**
+   * Per-session player-model selections. The package deliberately carries no
+   * per-session data, so hosts that know who picked which model provide it
+   * through this channel.
+   */
+  readonly getPlayerModelSelections?: () => readonly PlayerModelSelection[];
+  readonly getPlayerIds?: () => readonly string[];
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly msgOut?: RuntimeMessageOut;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
@@ -40,13 +62,9 @@ export interface RuntimePluginHost {
   readonly config?: RuntimeAdapterConfig;
 }
 
-export interface RuntimePluginContext {
-  readonly pluginId: string;
-}
+export type RuntimePluginContext = RuntimeAdapterContext;
 
-export interface RuntimePlugin {
-  readonly id: string;
+export interface RuntimePlugin extends RuntimeAdapter {
   readonly onInit?: (ctx: RuntimePluginContext, world: PluginWorld) => void;
   readonly onTick?: (world: PluginWorld, dt: number, tick: number) => void;
-  readonly onShutdown?: () => void;
 }

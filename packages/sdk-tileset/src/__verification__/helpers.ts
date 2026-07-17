@@ -1,10 +1,10 @@
-export const REGEN_COMMAND = "pnpm tsx scripts/regen-goldens.mts";
+export const REGEN_COMMAND = 'pnpm tsx scripts/regen-goldens.mts';
 
 export const sortKeysDeep = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(sortKeysDeep);
   }
-  if (value !== null && typeof value === "object") {
+  if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>;
     return Object.fromEntries(
       Object.keys(record)
@@ -32,5 +32,9 @@ export const assertGoldenMatch = (label: string, actual: unknown, expected: unkn
   }
 };
 
-export const uvKey = (uv: { readonly x: number; readonly y: number; readonly w: number; readonly h: number }): string =>
-  `${uv.x},${uv.y},${uv.w},${uv.h}`;
+export const uvKey = (uv: {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}): string => `${uv.x},${uv.y},${uv.w},${uv.h}`;

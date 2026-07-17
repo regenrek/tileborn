@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { create } from 'zustand';
+import { PERSISTED_SCHEMA_VERSIONS } from '@tileborne/core';
 import { createJSONStorage, persist, subscribeWithSelector } from 'zustand/middleware';
 
 import type { LayerId, PackId } from '@tileborne/core';
@@ -12,6 +13,7 @@ import type {
 } from '@tileborne/sdk-tileset/schemas';
 
 import { assertNever } from '@/lib/assert-never';
+import type { BottomDrawerTabValue } from '@/components/bottom-drawer/constants';
 import { normalizeOptionalRouteParam, normalizeRouteParam } from '@/lib/route-params';
 
 export type EntityId = string;
@@ -29,7 +31,16 @@ export type EditorTool =
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-export type WorkspaceTabKind = 'map' | 'overview' | 'assets' | 'plugins' | 'settings';
+export type WorkspaceTabKind =
+  | 'map'
+  | 'overview'
+  | 'assets'
+  | 'plugins'
+  | 'settings'
+  | 'player-model-editor'
+  | 'entity-editor'
+  | 'game-content'
+  | 'behaviors';
 
 export interface WorkspaceTab {
   readonly id: string;
@@ -37,6 +48,34 @@ export interface WorkspaceTab {
   readonly projectId?: string;
   readonly mapId?: string;
 }
+
+const CURRENT_WORKSPACE_TAB_KINDS = new Set<WorkspaceTabKind>([
+  'map',
+  'overview',
+  'assets',
+  'plugins',
+  'settings',
+  'player-model-editor',
+  'entity-editor',
+  'game-content',
+  'behaviors',
+]);
+
+const isWorkspaceTabRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const normalizeWorkspaceTabKind = (kind: unknown): WorkspaceTabKind | undefined => {
+  if (typeof kind !== 'string') {
+    return undefined;
+  }
+  if (CURRENT_WORKSPACE_TAB_KINDS.has(kind as WorkspaceTabKind)) {
+    return kind as WorkspaceTabKind;
+  }
+  return undefined;
+};
+
+const normalizeWorkspaceTabRouteParam = (value: unknown): string | undefined =>
+  typeof value === 'string' ? normalizeOptionalRouteParam(value) : undefined;
 
 export function workspaceTabId(tab: {
   kind: WorkspaceTabKind;
@@ -54,29 +93,50 @@ export function workspaceTabId(tab: {
       return `plugins:${tab.projectId ?? ''}`;
     case 'settings':
       return `settings:${tab.projectId ?? 'global'}`;
+    case 'player-model-editor':
+      return `player-model-editor:${tab.projectId ?? ''}`;
+    case 'entity-editor':
+      return `entity-editor:${tab.projectId ?? ''}`;
+    case 'game-content':
+      return `game-content:${tab.projectId ?? ''}`;
+    case 'behaviors':
+      return `behaviors:${tab.projectId ?? ''}`;
   }
 }
 
-export function normalizeWorkspaceTabs(tabs: readonly WorkspaceTab[]): WorkspaceTab[] {
+export function normalizeWorkspaceTabs(tabs: readonly unknown[]): WorkspaceTab[] {
   const normalized: WorkspaceTab[] = [];
   const seen = new Set<string>();
 
   for (const tab of tabs) {
-    const projectId = normalizeOptionalRouteParam(tab.projectId);
-    const mapId = normalizeOptionalRouteParam(tab.mapId);
+    if (!isWorkspaceTabRecord(tab)) {
+      continue;
+    }
+    const kind = normalizeWorkspaceTabKind(tab.kind);
+    if (kind === undefined) {
+      continue;
+    }
+    const projectId = normalizeWorkspaceTabRouteParam(tab.projectId);
+    const mapId = normalizeWorkspaceTabRouteParam(tab.mapId);
 
-    if (tab.kind === 'map' && (!projectId || !mapId)) {
+    if (kind === 'map' && (!projectId || !mapId)) {
       continue;
     }
     if (
-      (tab.kind === 'overview' || tab.kind === 'assets' || tab.kind === 'plugins') &&
+      (kind === 'overview' ||
+        kind === 'assets' ||
+        kind === 'plugins' ||
+        kind === 'player-model-editor' ||
+        kind === 'entity-editor' ||
+        kind === 'game-content' ||
+        kind === 'behaviors') &&
       !projectId
     ) {
       continue;
     }
 
     const id = workspaceTabId({
-      kind: tab.kind,
+      kind,
       ...(projectId === undefined ? {} : { projectId }),
       ...(mapId === undefined ? {} : { mapId }),
     });
@@ -86,9 +146,9 @@ export function normalizeWorkspaceTabs(tabs: readonly WorkspaceTab[]): Workspace
     seen.add(id);
     normalized.push({
       id,
-      kind: tab.kind,
+      kind,
       ...(projectId === undefined ? {} : { projectId }),
-      ...(tab.kind === 'map' && mapId !== undefined ? { mapId } : {}),
+      ...(kind === 'map' && mapId !== undefined ? { mapId } : {}),
     });
   }
 
@@ -146,8 +206,16 @@ export type PaletteActionIcon = ComponentType<{ readonly className?: string }>;
 
 export type BrushIntent =
   | { readonly kind: 'tile'; readonly tileId: TileIdType; readonly packId?: PackId | undefined }
-  | { readonly kind: 'autotile'; readonly ruleId: AutotileRuleIdType; readonly packId?: PackId | undefined }
-  | { readonly kind: 'terrain'; readonly classId: TerrainClassType; readonly packId?: PackId | undefined }
+  | {
+      readonly kind: 'autotile';
+      readonly ruleId: AutotileRuleIdType;
+      readonly packId?: PackId | undefined;
+    }
+  | {
+      readonly kind: 'terrain';
+      readonly classId: TerrainClassType;
+      readonly packId?: PackId | undefined;
+    }
   | {
       readonly kind: 'placeable';
       readonly placeableId: PlaceableIdType;
@@ -221,6 +289,7 @@ interface EditorUiState {
   sidebarCollapsed: boolean;
   inspectorCollapsed: boolean;
   bottomDrawerOpen: boolean;
+  bottomDrawerTab: BottomDrawerTabValue;
   commandPaletteOpen: boolean;
   generateMapDialogOpen: boolean;
   createMapDialogOpen: boolean;
@@ -229,6 +298,7 @@ interface EditorUiState {
   assetImportSourcePath: string | null;
   spriteEditorOpen: boolean;
   createProjectDialogOpen: boolean;
+  shipGameDialogOpen: boolean;
   playtestActive: boolean;
   playtestSessionId: string | null;
   playtestActivePlugins: readonly string[];
@@ -240,6 +310,7 @@ interface EditorUiState {
   theme: ThemePreference;
   activePalettePackId: string | null;
   pendingImportJobId: string | null;
+  catalogTargetObjectTypeId: string | null;
   openTabs: readonly WorkspaceTab[];
 }
 
@@ -273,6 +344,7 @@ interface EditorUiActions {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setInspectorCollapsed: (collapsed: boolean) => void;
   setBottomDrawerOpen: (open: boolean) => void;
+  setBottomDrawerTab: (tab: BottomDrawerTabValue) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setGenerateMapDialogOpen: (open: boolean) => void;
   setCreateMapDialogOpen: (open: boolean) => void;
@@ -281,6 +353,7 @@ interface EditorUiActions {
   setSpriteEditorOpen: (open: boolean) => void;
   setAssetImportSourcePath: (path: string | null) => void;
   setCreateProjectDialogOpen: (open: boolean) => void;
+  setShipGameDialogOpen: (open: boolean) => void;
   setPlaytestActive: (active: boolean) => void;
   setPlaytestSessionId: (sessionId: string | null) => void;
   setPlaytestActivePlugins: (plugins: readonly string[]) => void;
@@ -293,6 +366,7 @@ interface EditorUiActions {
   setTheme: (theme: ThemePreference) => void;
   setActivePalettePackId: (packId: string | null) => void;
   setPendingImportJobId: (jobId: string | null) => void;
+  setCatalogTargetObjectTypeId: (objectTypeId: string | null) => void;
   /** Insert a tab if not present; updates position to keep insertion order. */
   ensureTab: (tab: WorkspaceTab) => void;
   /** Remove a tab by id. Returns the neighbor that should become active, or null. */
@@ -332,11 +406,19 @@ const brushIntentEquals = (left: BrushIntent, right: BrushIntent): boolean => {
     case 'tile':
       return left.kind === 'tile' && left.tileId === right.tileId && left.packId === right.packId;
     case 'autotile':
-      return left.kind === 'autotile' && left.ruleId === right.ruleId && left.packId === right.packId;
+      return (
+        left.kind === 'autotile' && left.ruleId === right.ruleId && left.packId === right.packId
+      );
     case 'terrain':
-      return left.kind === 'terrain' && left.classId === right.classId && left.packId === right.packId;
+      return (
+        left.kind === 'terrain' && left.classId === right.classId && left.packId === right.packId
+      );
     case 'placeable':
-      return left.kind === 'placeable' && left.placeableId === right.placeableId && left.packId === right.packId;
+      return (
+        left.kind === 'placeable' &&
+        left.placeableId === right.placeableId &&
+        left.packId === right.packId
+      );
     case 'plugin-object':
       // Identity is the abstract object kind (+ optional pack); the contributed
       // label/icon are presentation and never affect which brush is active.
@@ -433,6 +515,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         sidebarCollapsed: false,
         inspectorCollapsed: false,
         bottomDrawerOpen: false,
+        bottomDrawerTab: 'jobs',
         commandPaletteOpen: false,
         generateMapDialogOpen: false,
         createMapDialogOpen: false,
@@ -441,6 +524,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         spriteEditorOpen: false,
         assetImportSourcePath: null,
         createProjectDialogOpen: false,
+        shipGameDialogOpen: false,
         playtestActive: false,
         playtestSessionId: null,
         playtestActivePlugins: [],
@@ -452,6 +536,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         theme: 'dark',
         activePalettePackId: null,
         pendingImportJobId: null,
+        catalogTargetObjectTypeId: null,
         openTabs: [],
 
         setSelection: (selection) => set({ selection: new Set(selection) }),
@@ -553,6 +638,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
         setInspectorCollapsed: (inspectorCollapsed) => set({ inspectorCollapsed }),
         setBottomDrawerOpen: (bottomDrawerOpen) => set({ bottomDrawerOpen }),
+        setBottomDrawerTab: (bottomDrawerTab) => set({ bottomDrawerTab }),
         setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
         setGenerateMapDialogOpen: (generateMapDialogOpen) => set({ generateMapDialogOpen }),
         setCreateMapDialogOpen: (createMapDialogOpen) => set({ createMapDialogOpen }),
@@ -561,6 +647,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         setSpriteEditorOpen: (spriteEditorOpen) => set({ spriteEditorOpen }),
         setAssetImportSourcePath: (assetImportSourcePath) => set({ assetImportSourcePath }),
         setCreateProjectDialogOpen: (createProjectDialogOpen) => set({ createProjectDialogOpen }),
+        setShipGameDialogOpen: (shipGameDialogOpen) => set({ shipGameDialogOpen }),
         setPlaytestActive: (playtestActive) => set({ playtestActive }),
         setPlaytestSessionId: (playtestSessionId) => set({ playtestSessionId }),
         setPlaytestActivePlugins: (playtestActivePlugins) => set({ playtestActivePlugins }),
@@ -580,6 +667,8 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
         setTheme: (theme) => set({ theme }),
         setActivePalettePackId: (activePalettePackId) => set({ activePalettePackId }),
         setPendingImportJobId: (pendingImportJobId) => set({ pendingImportJobId }),
+        setCatalogTargetObjectTypeId: (catalogTargetObjectTypeId) =>
+          set({ catalogTargetObjectTypeId }),
         ensureTab: (tab) => {
           const current = normalizeWorkspaceTabs(get().openTabs);
           const normalizedTab = normalizeWorkspaceTabs([tab])[0];
@@ -641,6 +730,7 @@ export const useEditorUiStore = create<EditorUiState & EditorUiActions>()(
       }),
       {
         name: 'tileborne-editor-ui',
+        version: PERSISTED_SCHEMA_VERSIONS.editorUiStore,
         storage: editorStorage,
         partialize: (state): PersistedSlice => ({
           camera: state.camera,

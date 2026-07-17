@@ -128,10 +128,10 @@ When pinning a dependency that fails the release-age gate, add a dated comment a
 
 ## Licensing
 
-| Package kind | `license` field | Notes |
-| --- | --- | --- |
-| Public OSS packages and apps | `"MIT"` | Root [`LICENSE`](LICENSE); per-package symlinks where present |
-| Private workspace tools (`boundary-tests`, `test-fixtures`) | `"UNLICENSED"` | `"private": true`; not published |
+| Package kind                                                | `license` field | Notes                                                         |
+| ----------------------------------------------------------- | --------------- | ------------------------------------------------------------- |
+| Public OSS packages and apps                                | `"MIT"`         | Root [`LICENSE`](LICENSE); per-package symlinks where present |
+| Private workspace tools (`boundary-tests`, `test-fixtures`) | `"UNLICENSED"`  | `"private": true`; not published                              |
 
 CC0 sample assets ship under `packages/test-fixtures/fixtures/` with per-fixture `PROVENANCE.md` attribution. The bundled Tiled source pack has separate third-party license notes — see its `PROVENANCE.md`.
 

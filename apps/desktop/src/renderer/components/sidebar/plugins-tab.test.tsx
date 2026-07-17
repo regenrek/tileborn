@@ -13,6 +13,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('@/hooks/queries', () => ({
+  useProject: () => ({ data: undefined }),
   usePluginsList: () => ({
     data: {
       plugins: [
@@ -40,10 +41,15 @@ vi.mock('@/hooks/queries', () => ({
         },
       ],
       tools: [],
+      gameModes: [],
     },
     isLoading: false,
     isError: false,
   }),
+}));
+
+vi.mock('@/hooks/mutations', () => ({
+  useUpdateProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/stores/editor-ui-store', () => {

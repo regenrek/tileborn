@@ -13,9 +13,7 @@ import {
   TiledImportScan,
 } from './import-center.js';
 
-const SafePath = Schema.String.check(
-  Schema.isPattern(/^[^\0]+$/),
-);
+const SafePath = Schema.String.check(Schema.isPattern(/^[^\0]+$/));
 
 export const TiledImportLicense = Schema.Struct({
   id: Schema.optional(Schema.String),

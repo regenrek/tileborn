@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
 import {
   createTsBroadphaseBackend,
@@ -14,7 +14,7 @@ import {
   type SimulationBackend,
   wasmBackendUnavailable,
   wasmBindingsAvailable,
-} from "./backends.js";
+} from './backends.js';
 
 export interface BackendSelectionConfig {
   readonly impl?: BackendImpl;
@@ -23,64 +23,70 @@ export interface BackendSelectionConfig {
 
 export const readBackendImplFromEnv = (
   env: Readonly<Record<string, string | undefined>> = process.env,
-): BackendImpl => (env.TILEBORNE_RT_BACKEND === "wasm" ? "wasm" : "ts");
+): BackendImpl => (env.TILEBORNE_RT_BACKEND === 'wasm' ? 'wasm' : 'ts');
 
 const resolveImpl = (config: BackendSelectionConfig | undefined): BackendImpl =>
   config?.impl ?? readBackendImplFromEnv();
 
-const resolveSeed = (config: BackendSelectionConfig | undefined): bigint | number => config?.seed ?? 0n;
+const resolveSeed = (config: BackendSelectionConfig | undefined): bigint | number =>
+  config?.seed ?? 0n;
 
-const ensureAvailable = (kind: BackendKind, impl: BackendImpl): Effect.Effect<void, import("./errors.js").WasmBackendUnavailableError> =>
-  impl === "wasm" && !wasmBindingsAvailable() ? wasmBackendUnavailable(kind) : Effect.succeed(void 0);
+const ensureAvailable = (
+  kind: BackendKind,
+  impl: BackendImpl,
+): Effect.Effect<void, import('./errors.js').WasmBackendUnavailableError> =>
+  impl === 'wasm' && !wasmBindingsAvailable()
+    ? wasmBackendUnavailable(kind)
+    : Effect.succeed(void 0);
 
 export const selectPathfindingBackend = (
   config?: BackendSelectionConfig,
-): Effect.Effect<PathfindingBackend, import("./errors.js").WasmBackendUnavailableError> =>
+): Effect.Effect<PathfindingBackend, import('./errors.js').WasmBackendUnavailableError> =>
   Effect.gen(function* () {
     const impl = resolveImpl(config);
-    yield* ensureAvailable("pathfinding", impl);
+    yield* ensureAvailable('pathfinding', impl);
     return createTsPathfindingBackend(resolveSeed(config));
   });
 
 export const selectBroadphaseBackend = (
   config?: BackendSelectionConfig,
-): Effect.Effect<BroadphaseBackend, import("./errors.js").WasmBackendUnavailableError> =>
+): Effect.Effect<BroadphaseBackend, import('./errors.js').WasmBackendUnavailableError> =>
   Effect.gen(function* () {
     const impl = resolveImpl(config);
-    yield* ensureAvailable("broadphase", impl);
+    yield* ensureAvailable('broadphase', impl);
     return createTsBroadphaseBackend(resolveSeed(config));
   });
 
 export const selectProcgenBackend = (
   config?: BackendSelectionConfig,
-): Effect.Effect<ProcgenBackend, import("./errors.js").WasmBackendUnavailableError> =>
+): Effect.Effect<ProcgenBackend, import('./errors.js').WasmBackendUnavailableError> =>
   Effect.gen(function* () {
     const impl = resolveImpl(config);
-    yield* ensureAvailable("procgen", impl);
+    yield* ensureAvailable('procgen', impl);
     return createTsProcgenBackend(resolveSeed(config));
   });
 
 export const selectSimulationBackend = (
   config?: BackendSelectionConfig,
-): Effect.Effect<SimulationBackend, import("./errors.js").WasmBackendUnavailableError> =>
+): Effect.Effect<SimulationBackend, import('./errors.js').WasmBackendUnavailableError> =>
   Effect.gen(function* () {
     const impl = resolveImpl(config);
-    yield* ensureAvailable("simulation", impl);
+    yield* ensureAvailable('simulation', impl);
     return createTsSimulationBackend(resolveSeed(config));
   });
 
 export const selectBackend = (
   kind: BackendKind,
   config?: BackendSelectionConfig,
-): Effect.Effect<RuntimeBackend, import("./errors.js").WasmBackendUnavailableError> => {
+): Effect.Effect<RuntimeBackend, import('./errors.js').WasmBackendUnavailableError> => {
   switch (kind) {
-    case "pathfinding":
+    case 'pathfinding':
       return selectPathfindingBackend(config);
-    case "broadphase":
+    case 'broadphase':
       return selectBroadphaseBackend(config);
-    case "procgen":
+    case 'procgen':
       return selectProcgenBackend(config);
-    case "simulation":
+    case 'simulation':
       return selectSimulationBackend(config);
   }
 };

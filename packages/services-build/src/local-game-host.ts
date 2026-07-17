@@ -4,4 +4,4 @@ export {
   resolveBundledGameHostWorkerPath,
   type CreateLocalGameHostOptions,
   type LocalGameHost,
-} from "@tileborne/game-host/local";
+} from '@tileborne/game-host/local';

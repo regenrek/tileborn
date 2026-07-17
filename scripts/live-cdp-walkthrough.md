@@ -36,11 +36,11 @@ prints `PASS`/`FAIL` per step, and saves a screenshot after each step attempt.
 
 Optional env:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TILEBORNE_CDP_URL` | `http://127.0.0.1:9323` | CDP discovery base URL |
-| `WALKTHROUGH_BR_TIMEOUT_MS` | `300000` | Max wait for BR loop (step 8) |
-| `WALKTHROUGH_STEP_TIMEOUT_MS` | `60000` | Default per-step wait |
+| Variable                      | Default                 | Purpose                       |
+| ----------------------------- | ----------------------- | ----------------------------- |
+| `TILEBORNE_CDP_URL`           | `http://127.0.0.1:9323` | CDP discovery base URL        |
+| `WALKTHROUGH_BR_TIMEOUT_MS`   | `300000`                | Max wait for BR loop (step 8) |
+| `WALKTHROUGH_STEP_TIMEOUT_MS` | `60000`                 | Default per-step wait         |
 
 ---
 

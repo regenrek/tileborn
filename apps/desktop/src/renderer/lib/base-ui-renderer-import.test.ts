@@ -8,8 +8,15 @@ const importModule = (specifier: string): Promise<Record<string, unknown>> =>
 
 const browserSafeInternalPackages = [
   '@tileborne/core',
+  '@tileborne/game-client',
   '@tileborne/sdk-tileset',
   '@tileborne/ui',
+] as const;
+const browserSafePluginSubpaths = [
+  '@tileborne/plugin-battle-royale/authoring',
+  '@tileborne/plugin-battle-royale/constants',
+  '@tileborne/plugin-battle-royale/player-models',
+  '@tileborne/plugin-battle-royale/renderer',
 ] as const;
 
 const nodeGraphInternalPackages = [
@@ -46,13 +53,12 @@ const resolveRendererConfig = async (): Promise<UserConfig> => {
 
 describe('Base UI renderer dependency boundary', () => {
   it('loads the Base UI entries and CJS shims used by the renderer graph', async () => {
-    const [tileborneUi, baseUiDialog, syncExternalStoreShim, selectorShim] =
-      await Promise.all([
-        importModule('@tileborne/ui'),
-        importModule('@base-ui/react/dialog'),
-        importModule('use-sync-external-store/shim'),
-        importModule('use-sync-external-store/shim/with-selector'),
-      ]);
+    const [tileborneUi, baseUiDialog, syncExternalStoreShim, selectorShim] = await Promise.all([
+      importModule('@tileborne/ui'),
+      importModule('@base-ui/react/dialog'),
+      importModule('use-sync-external-store/shim'),
+      importModule('use-sync-external-store/shim/with-selector'),
+    ]);
 
     const dialog = baseUiDialog.Dialog as { Root?: unknown } | undefined;
 
@@ -84,10 +90,19 @@ describe('Base UI renderer dependency boundary', () => {
 
     // Pure-browser packages can be served live; Node-graph packages must remain
     // pre-bundled so esbuild can tree-shake Node-only imports out of renderer code.
-    expect(exclude).toEqual([...browserSafeInternalPackages]);
+    expect(exclude).toEqual([...browserSafeInternalPackages, ...browserSafePluginSubpaths]);
 
     for (const packageName of nodeGraphInternalPackages) {
       expect(exclude).not.toContain(packageName);
     }
+  });
+
+  it('serves renderer-owned game-client UI from workspace source', async () => {
+    const config = await resolveRendererConfig();
+    const aliases = config.resolve?.alias;
+
+    expect(aliases).toMatchObject({
+      '@tileborne/game-client': expect.stringContaining('packages/game-client/src/index.ts'),
+    });
   });
 });

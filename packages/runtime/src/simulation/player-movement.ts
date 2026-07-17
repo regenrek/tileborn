@@ -1,6 +1,6 @@
-import { PositionComponent, VelocityComponent } from "../ecs/components.js";
-import type { System } from "../ecs/systems.js";
-import { InputCommand } from "../input/input.js";
+import { PositionComponent, VelocityComponent } from '../ecs/components.js';
+import type { System } from '../ecs/systems.js';
+import { InputCommand } from '../input/input.js';
 
 export const PLAYER_SPEED_PX_PER_SECOND = 260;
 export const MOVEMENT_TICK_RATE_HZ = 60;
@@ -18,7 +18,7 @@ export const normalizeMovementInput = (
 };
 
 export const createPlayerInputMovementSystem = (): System => ({
-  name: "movement",
+  name: 'movement',
   query: [PositionComponent, VelocityComponent],
   update: (world, dt, context) => {
     const command = context.input as InputCommand;
@@ -32,4 +32,5 @@ export const createPlayerInputMovementSystem = (): System => ({
   },
 });
 
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));

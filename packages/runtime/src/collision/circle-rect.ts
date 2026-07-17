@@ -1,4 +1,4 @@
-import type { CollisionRect } from "./rect.js";
+import type { CollisionRect } from './rect.js';
 
 export const resolveCircleRect = (
   player: { x: number; y: number },
@@ -33,4 +33,5 @@ export const resolveCircleRect = (
   player.y += (dy / distance) * push;
 };
 
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));

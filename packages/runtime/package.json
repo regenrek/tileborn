@@ -1,6 +1,6 @@
 {
   "name": "@tileborne/runtime",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,14 @@
     "./worker": {
       "types": "./dist/worker.d.ts",
       "default": "./dist/worker.js"
+    },
+    "./map-package": {
+      "types": "./dist/map-package/index.d.ts",
+      "default": "./dist/map-package/index.js"
+    },
+    "./behavior": {
+      "types": "./dist/behavior/index.d.ts",
+      "default": "./dist/behavior/index.js"
     }
   },
   "scripts": {
@@ -25,6 +33,7 @@
     "@pixi/tilemap": "5.0.2",
     "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
+    "@tileborne/plugin-api": "workspace:*",
     "effect": "4.0.0-beta.70",
     "msgpackr": "2.0.1",
     "pixi.js": "8.18.1"

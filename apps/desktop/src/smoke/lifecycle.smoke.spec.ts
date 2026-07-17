@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 import {
@@ -17,6 +17,7 @@ import {
   readMapJson,
   readProjectManifest,
   resolveMainEntry,
+  setProjectActiveGameMode,
   SMOKE_PROJECT_NAME,
   waitForJob,
   type SmokeContext,
@@ -83,9 +84,7 @@ describe.sequential('desktop smoke lifecycle', () => {
   it('1. app boot — main window appears and renderer mounts', async () => {
     const { page } = smokeContext!;
     await expect(page).toHaveTitle(/Tileborne/i);
-    await expect(
-      page.getByRole('heading', { name: /Tileborne|Projects/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Tileborne|Projects/i })).toBeVisible();
   });
 
   it('2. IPC ping — window.tileborne.system.ping responds', async () => {
@@ -109,9 +108,12 @@ describe.sequential('desktop smoke lifecycle', () => {
     await page.reload();
     await expect(page.getByText(SMOKE_PROJECT_NAME)).toBeVisible();
 
+    await setProjectActiveGameMode(page, projectId, '@tileborne-plugins/example-arena');
+
     const manifest = await readProjectManifest(tileborneHome, projectId);
     expect(manifest.id).toBe(projectId);
     expect(manifest.name).toBe(SMOKE_PROJECT_NAME);
+    expect(manifest.settings?.activeGameMode).toBe('@tileborne-plugins/example-arena');
   });
 
   it('4. install local plugin — bridge install and plugins directory', async () => {
@@ -179,9 +181,9 @@ describe.sequential('desktop smoke lifecycle', () => {
     const { tileborneHome } = smokeContext!;
 
     const saved = await readMapJson(tileborneHome, projectId, mapId);
-    const tileLayer = (saved.layers as Array<{ kind: string; chunks?: Array<{ tiles: number[] }> }>).find(
-      (layer) => layer.kind === 'tile',
-    );
+    const tileLayer = (
+      saved.layers as Array<{ kind: string; chunks?: Array<{ tiles: number[] }> }>
+    ).find((layer) => layer.kind === 'tile');
     expect(tileLayer).toBeDefined();
     expect(tileLayer?.chunks?.[0]?.tiles.length).toBeGreaterThan(0);
   });
@@ -230,7 +232,7 @@ describe.sequential('desktop smoke lifecycle', () => {
     const { page, tileborneHome } = smokeContext!;
 
     const buildJobId = await page.evaluate(async (pid) => {
-      const { jobId } = await window.tileborne.builds.build({ projectId: pid, target: 'node' });
+      const { jobId } = await window.tileborne.builds.build({ projectId: pid, target: 'local' });
       return jobId;
     }, projectId);
 

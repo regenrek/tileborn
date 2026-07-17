@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect } from './playwright-expect.js';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {
@@ -50,9 +50,11 @@ describe('acceptance: map generate', () => {
     );
 
     mapId = generated.id;
-    const tileLayer = generated.layers.find((layer) => layer._tag === 'tile');
-    expect(tileLayer?._tag).toBe('tile');
-    const chunk = tileLayer?._tag === 'tile' ? tileLayer.chunks[0] : undefined;
+    const tileLayer = generated.layers.find(
+      (layer) => layer.kind === 'tile' || layer._tag === 'tile',
+    );
+    expect(tileLayer?.kind ?? tileLayer?._tag).toBe('tile');
+    const chunk = tileLayer?.chunks[0];
     expect(chunk?.tiles.some((value) => value === 1)).toBe(true);
     expect(chunk?.tiles.some((value) => value === 2)).toBe(true);
 

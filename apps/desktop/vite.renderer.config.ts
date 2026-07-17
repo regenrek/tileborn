@@ -1,17 +1,17 @@
-import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { defineConfig } from "vite";
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { defineConfig } from 'vite';
 
 const battleRoyalePluginPath = path.resolve(
   import.meta.dirname,
-  "../../packages/plugin-battle-royale",
+  '../../packages/plugin-battle-royale',
 );
 
 const packageJson = JSON.parse(
-  readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf8"),
+  readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf8'),
 ) as { version: string };
 
 // Internal @tileborne/* packages change their export surface constantly during
@@ -23,35 +23,54 @@ const packageJson = JSON.parse(
 // correct monorepo dev boundary and the real fix for t-vups (replacing the
 // blunt "clear .vite on every start" hack).
 //
-// IMPORTANT: only packages with a *pure browser* dependency graph may be
-// excluded. Excluding a package serves its whole import graph live, so any
+// IMPORTANT: only entries with a *pure browser* dependency graph may be
+// excluded. Excluding an entry serves its whole import graph live, so any
 // transitive Node code reaches the browser and throws ("node:fs/promises has
 // been externalized") => blank. The other internal packages (plugin-api,
 // runtime, plugin-battle-royale, ipc-contracts, services-*) transitively pull
 // @tileborne/asset-pipeline (Node/fs); they MUST stay pre-bundled so esbuild
-// tree-shakes that Node-only code out. If a new renderer-used export on a
-// pre-bundled package serves stale, run:
+// tree-shakes that Node-only code out. Browser-only BR subpaths used by the
+// editor are excluded separately so roster/default changes do not get trapped
+// in stale optimized deps. If a new renderer-used export on a pre-bundled
+// package serves stale, run:
 // pnpm --filter @tileborne/desktop clean:vite-deps
 const browserSafeInternalPackages = [
-  "@tileborne/core",
-  "@tileborne/sdk-tileset",
-  "@tileborne/ui",
+  '@tileborne/core',
+  '@tileborne/game-client',
+  '@tileborne/sdk-tileset',
+  '@tileborne/ui',
 ] as const;
+const browserSafePluginSubpaths = [
+  '@tileborne/plugin-battle-royale/authoring',
+  '@tileborne/plugin-battle-royale/constants',
+  '@tileborne/plugin-battle-royale/player-models',
+  '@tileborne/plugin-battle-royale/renderer',
+] as const;
+
+const liveSourceAliases = {
+  // The desktop renderer consumes the shared HUD shell while live-testing editor
+  // changes. Pointing at source avoids Vite serving a stale transformed `dist`
+  // module for this symlinked workspace package.
+  '@tileborne/game-client': path.resolve(
+    import.meta.dirname,
+    '../../packages/game-client/src/index.ts',
+  ),
+} as const;
 
 function resolveGitCommit(): string {
   try {
-    return execSync("git rev-parse --short HEAD", {
-      cwd: path.resolve(import.meta.dirname, "../.."),
-      encoding: "utf8",
+    return execSync('git rev-parse --short HEAD', {
+      cwd: path.resolve(import.meta.dirname, '../..'),
+      encoding: 'utf8',
     }).trim();
   } catch {
-    return "unknown";
+    return 'unknown';
   }
 }
 
 // Code-based router in src/renderer/router.tsx — @tanstack/router-plugin omitted until file-based routes land.
 export default defineConfig({
-  base: "./",
+  base: './',
   plugins: [react(), tailwindcss()],
   define: {
     __BATTLE_ROYALE_PLUGIN_PATH__: JSON.stringify(battleRoyalePluginPath),
@@ -60,26 +79,33 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "src/renderer"),
+      '@': path.resolve(import.meta.dirname, 'src/renderer'),
+      ...liveSourceAliases,
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
     // Browser-safe internal packages served live (never pre-bundled) so their
     // changing dev export surfaces are always current; Base UI's CJS shims below
     // and Node-graph internal packages must still be prebundled. See
     // browserSafeInternalPackages above (t-vups).
-    exclude: [...browserSafeInternalPackages],
+    exclude: [...browserSafeInternalPackages, ...browserSafePluginSubpaths],
     include: [
-      "@base-ui/react",
-      "@base-ui/react/dialog",
-      "@base-ui/utils/store",
-      "use-sync-external-store/shim",
-      "use-sync-external-store/shim/with-selector",
+      '@base-ui/react',
+      '@base-ui/react/dialog',
+      '@base-ui/utils/store',
+      'use-sync-external-store/shim',
+      'use-sync-external-store/shim/with-selector',
     ],
   },
-  root: path.resolve(import.meta.dirname, "src/renderer"),
+  root: path.resolve(import.meta.dirname, 'src/renderer'),
   server: {
+    // Vite 8's Rolldown-backed React refresh wrapper currently fails in the
+    // Electron renderer dev server with esbuild@0.28.1 ("Missing field
+    // `moduleType`"), blanking the app before React mounts. Disable HMR here
+    // so the renderer uses the normal transform path; production builds and
+    // automated smoke tests are unaffected.
+    hmr: false,
     // fsevents-based watching is unreliable in this electron-forge + Vite dev
     // setup (edits/HMR were intermittently missed, forcing full restarts).
     // Polling detects renderer source changes deterministically. Dev-only; the
@@ -91,7 +117,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, ".vite/renderer/main_window"),
+    outDir: path.resolve(import.meta.dirname, '.vite/renderer/main_window'),
     emptyOutDir: true,
   },
 });

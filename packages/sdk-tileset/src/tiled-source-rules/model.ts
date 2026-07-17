@@ -1,44 +1,44 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { ContentHash } from "@tileborne/core";
+import { ContentHash } from '@tileborne/core';
 
 const NonEmptyBrandedString = <Brand extends string>(brand: Brand) =>
   Schema.String.check(Schema.isMinLength(1)).pipe(Schema.brand(brand));
 
-export const SourceManifestId = NonEmptyBrandedString("TiledSourceManifestId");
+export const SourceManifestId = NonEmptyBrandedString('TiledSourceManifestId');
 export type SourceManifestId = typeof SourceManifestId.Type;
 
-export const SourceDigest = NonEmptyBrandedString("TiledSourceDigest");
+export const SourceDigest = NonEmptyBrandedString('TiledSourceDigest');
 export type SourceDigest = typeof SourceDigest.Type;
 
-export const TilesetId = NonEmptyBrandedString("TiledSourceTilesetId");
+export const TilesetId = NonEmptyBrandedString('TiledSourceTilesetId');
 export type TilesetId = typeof TilesetId.Type;
 
-export const TilesetPath = NonEmptyBrandedString("TiledSourceTilesetPath");
+export const TilesetPath = NonEmptyBrandedString('TiledSourceTilesetPath');
 export type TilesetPath = typeof TilesetPath.Type;
 
-export const WangsetId = NonEmptyBrandedString("TiledSourceWangsetId");
+export const WangsetId = NonEmptyBrandedString('TiledSourceWangsetId');
 export type WangsetId = typeof WangsetId.Type;
 
-export const RuleId = NonEmptyBrandedString("TiledSourceRuleId");
+export const RuleId = NonEmptyBrandedString('TiledSourceRuleId');
 export type RuleId = typeof RuleId.Type;
 
-export const LayerId = NonEmptyBrandedString("TiledSourceLayerId");
+export const LayerId = NonEmptyBrandedString('TiledSourceLayerId');
 export type LayerId = typeof LayerId.Type;
 
-export const WallId = NonEmptyBrandedString("TiledSourceWallId");
+export const WallId = NonEmptyBrandedString('TiledSourceWallId');
 export type WallId = typeof WallId.Type;
 
-export const AssetKey = NonEmptyBrandedString("TiledSourceAssetKey");
+export const AssetKey = NonEmptyBrandedString('TiledSourceAssetKey');
 export type AssetKey = typeof AssetKey.Type;
 
-export const ProjectionDigest = NonEmptyBrandedString("TiledSourceProjectionDigest");
+export const ProjectionDigest = NonEmptyBrandedString('TiledSourceProjectionDigest');
 export type ProjectionDigest = typeof ProjectionDigest.Type;
 
 export const TiledSourceRulePhase = Schema.String.check(Schema.isMinLength(1));
 export type TiledSourceRulePhase = typeof TiledSourceRulePhase.Type;
 
-export const TiledSourceDiagnosticSeverity = Schema.Literals(["error", "warning", "info"] as const);
+export const TiledSourceDiagnosticSeverity = Schema.Literals(['error', 'warning', 'info'] as const);
 export type TiledSourceDiagnosticSeverity = typeof TiledSourceDiagnosticSeverity.Type;
 
 export const TiledPropertyValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean]);
@@ -47,19 +47,25 @@ export type TiledPropertyValue = typeof TiledPropertyValue.Type;
 export const TiledProperties = Schema.Record(Schema.String, TiledPropertyValue);
 export type TiledProperties = typeof TiledProperties.Type;
 
-export class TiledSourceTiledImage extends Schema.Class<TiledSourceTiledImage>("TiledSourceTiledImage")({
+export class TiledSourceTiledImage extends Schema.Class<TiledSourceTiledImage>(
+  'TiledSourceTiledImage',
+)({
   source: Schema.String,
   resolvedSource: Schema.String,
   width: Schema.Number,
   height: Schema.Number,
 }) {}
 
-export class TiledSourceTiledAnimationFrame extends Schema.Class<TiledSourceTiledAnimationFrame>("TiledSourceTiledAnimationFrame")({
+export class TiledSourceTiledAnimationFrame extends Schema.Class<TiledSourceTiledAnimationFrame>(
+  'TiledSourceTiledAnimationFrame',
+)({
   tileId: Schema.Number,
   durationMs: Schema.Number,
 }) {}
 
-export class TiledSourceTiledObject extends Schema.Class<TiledSourceTiledObject>("TiledSourceTiledObject")({
+export class TiledSourceTiledObject extends Schema.Class<TiledSourceTiledObject>(
+  'TiledSourceTiledObject',
+)({
   id: Schema.NullOr(Schema.Number),
   name: Schema.OptionFromOptional(Schema.String),
   type: Schema.OptionFromOptional(Schema.String),
@@ -70,7 +76,9 @@ export class TiledSourceTiledObject extends Schema.Class<TiledSourceTiledObject>
   properties: TiledProperties,
 }) {}
 
-export class TiledSourceTiledTile extends Schema.Class<TiledSourceTiledTile>("TiledSourceTiledTile")({
+export class TiledSourceTiledTile extends Schema.Class<TiledSourceTiledTile>(
+  'TiledSourceTiledTile',
+)({
   id: Schema.Number,
   image: Schema.OptionFromOptional(TiledSourceTiledImage),
   probability: Schema.OptionFromOptional(Schema.Number),
@@ -78,19 +86,25 @@ export class TiledSourceTiledTile extends Schema.Class<TiledSourceTiledTile>("Ti
   objects: Schema.OptionFromOptional(Schema.Array(TiledSourceTiledObject)),
 }) {}
 
-export class TiledSourceTiledWangColor extends Schema.Class<TiledSourceTiledWangColor>("TiledSourceTiledWangColor")({
+export class TiledSourceTiledWangColor extends Schema.Class<TiledSourceTiledWangColor>(
+  'TiledSourceTiledWangColor',
+)({
   name: Schema.String,
   color: Schema.String,
   tile: Schema.Number,
   probability: Schema.Number,
 }) {}
 
-export class TiledSourceTiledWangTile extends Schema.Class<TiledSourceTiledWangTile>("TiledSourceTiledWangTile")({
+export class TiledSourceTiledWangTile extends Schema.Class<TiledSourceTiledWangTile>(
+  'TiledSourceTiledWangTile',
+)({
   tileId: Schema.Number,
   wangId: Schema.String,
 }) {}
 
-export class TiledSourceTiledWangSet extends Schema.Class<TiledSourceTiledWangSet>("TiledSourceTiledWangSet")({
+export class TiledSourceTiledWangSet extends Schema.Class<TiledSourceTiledWangSet>(
+  'TiledSourceTiledWangSet',
+)({
   name: Schema.String,
   type: Schema.String,
   tile: Schema.Number,
@@ -98,7 +112,9 @@ export class TiledSourceTiledWangSet extends Schema.Class<TiledSourceTiledWangSe
   tiles: Schema.Array(TiledSourceTiledWangTile),
 }) {}
 
-export class TiledSourceTiledTileset extends Schema.Class<TiledSourceTiledTileset>("TiledSourceTiledTileset")({
+export class TiledSourceTiledTileset extends Schema.Class<TiledSourceTiledTileset>(
+  'TiledSourceTiledTileset',
+)({
   name: Schema.String,
   path: TilesetPath,
   tileWidth: Schema.Number,
@@ -111,20 +127,26 @@ export class TiledSourceTiledTileset extends Schema.Class<TiledSourceTiledTilese
   wangSets: Schema.Array(TiledSourceTiledWangSet),
 }) {}
 
-export class TiledSourceTiledTilesetRef extends Schema.Class<TiledSourceTiledTilesetRef>("TiledSourceTiledTilesetRef")({
+export class TiledSourceTiledTilesetRef extends Schema.Class<TiledSourceTiledTilesetRef>(
+  'TiledSourceTiledTilesetRef',
+)({
   firstGid: Schema.Number,
   source: Schema.String,
   path: TilesetPath,
   resolvedSource: Schema.String,
 }) {}
 
-export class TiledSourceTiledTileFlipFlags extends Schema.Class<TiledSourceTiledTileFlipFlags>("TiledSourceTiledTileFlipFlags")({
+export class TiledSourceTiledTileFlipFlags extends Schema.Class<TiledSourceTiledTileFlipFlags>(
+  'TiledSourceTiledTileFlipFlags',
+)({
   horizontal: Schema.Boolean,
   vertical: Schema.Boolean,
   diagonal: Schema.Boolean,
 }) {}
 
-export class TiledSourceTiledLayerTile extends Schema.Class<TiledSourceTiledLayerTile>("TiledSourceTiledLayerTile")({
+export class TiledSourceTiledLayerTile extends Schema.Class<TiledSourceTiledLayerTile>(
+  'TiledSourceTiledLayerTile',
+)({
   column: Schema.Number,
   row: Schema.Number,
   rawGid: Schema.Number,
@@ -134,7 +156,9 @@ export class TiledSourceTiledLayerTile extends Schema.Class<TiledSourceTiledLaye
   flipFlags: Schema.OptionFromOptional(TiledSourceTiledTileFlipFlags),
 }) {}
 
-export class TiledSourceTiledTileLayer extends Schema.Class<TiledSourceTiledTileLayer>("TiledSourceTiledTileLayer")({
+export class TiledSourceTiledTileLayer extends Schema.Class<TiledSourceTiledTileLayer>(
+  'TiledSourceTiledTileLayer',
+)({
   id: Schema.NullOr(Schema.Number),
   name: LayerId,
   width: Schema.Number,
@@ -144,7 +168,9 @@ export class TiledSourceTiledTileLayer extends Schema.Class<TiledSourceTiledTile
   tiles: Schema.Array(TiledSourceTiledLayerTile),
 }) {}
 
-export class TiledSourceTiledObjectGroup extends Schema.Class<TiledSourceTiledObjectGroup>("TiledSourceTiledObjectGroup")({
+export class TiledSourceTiledObjectGroup extends Schema.Class<TiledSourceTiledObjectGroup>(
+  'TiledSourceTiledObjectGroup',
+)({
   id: Schema.NullOr(Schema.Number),
   name: LayerId,
   offsetX: Schema.Number,
@@ -152,7 +178,7 @@ export class TiledSourceTiledObjectGroup extends Schema.Class<TiledSourceTiledOb
   objects: Schema.Array(TiledSourceTiledObject),
 }) {}
 
-export class TiledSourceTiledMap extends Schema.Class<TiledSourceTiledMap>("TiledSourceTiledMap")({
+export class TiledSourceTiledMap extends Schema.Class<TiledSourceTiledMap>('TiledSourceTiledMap')({
   name: Schema.String,
   path: RuleId,
   width: Schema.Number,
@@ -168,7 +194,7 @@ export class TiledSourceTiledMap extends Schema.Class<TiledSourceTiledMap>("Tile
 }) {}
 
 export class TiledSourceAutomappingRule extends TiledSourceTiledMap.extend<TiledSourceAutomappingRule>(
-  "TiledSourceAutomappingRule",
+  'TiledSourceAutomappingRule',
 )({
   wall: WallId,
   transparent: Schema.Boolean,
@@ -176,7 +202,9 @@ export class TiledSourceAutomappingRule extends TiledSourceTiledMap.extend<Tiled
   phaseOrder: Schema.Number,
 }) {}
 
-export class TiledSourceSourceSummary extends Schema.Class<TiledSourceSourceSummary>("TiledSourceSourceSummary")({
+export class TiledSourceSourceSummary extends Schema.Class<TiledSourceSourceSummary>(
+  'TiledSourceSourceSummary',
+)({
   tilesets: Schema.Number,
   maps: Schema.Number,
   exampleMaps: Schema.Number,
@@ -200,9 +228,9 @@ export class TiledSourceSourceSummary extends Schema.Class<TiledSourceSourceSumm
 }) {}
 
 export class TiledSourceTiledSourceManifest extends Schema.Class<TiledSourceTiledSourceManifest>(
-  "TiledSourceTiledSourceManifest",
+  'TiledSourceTiledSourceManifest',
 )({
-  schema: Schema.Literal("tileborne.tiled-source-manifest.v1"),
+  schema: Schema.Literal('tileborne.tiled-source-manifest.v1'),
   version: Schema.Literal(1),
   sourceRoot: Schema.String,
   tiledRoot: Schema.String,
@@ -214,19 +242,25 @@ export class TiledSourceTiledSourceManifest extends Schema.Class<TiledSourceTile
   automappingRules: Schema.Array(TiledSourceAutomappingRule),
 }) {}
 
-export class TiledSourceCompiledWangColor extends Schema.Class<TiledSourceCompiledWangColor>("TiledSourceCompiledWangColor")({
+export class TiledSourceCompiledWangColor extends Schema.Class<TiledSourceCompiledWangColor>(
+  'TiledSourceCompiledWangColor',
+)({
   name: Schema.String,
   color: Schema.String,
   tile: Schema.Number,
   probability: Schema.Number,
 }) {}
 
-export class TiledSourceCompiledWangTile extends Schema.Class<TiledSourceCompiledWangTile>("TiledSourceCompiledWangTile")({
+export class TiledSourceCompiledWangTile extends Schema.Class<TiledSourceCompiledWangTile>(
+  'TiledSourceCompiledWangTile',
+)({
   tileId: Schema.Number,
   wangId: Schema.String,
 }) {}
 
-export class TiledSourceCompiledWangSet extends Schema.Class<TiledSourceCompiledWangSet>("TiledSourceCompiledWangSet")({
+export class TiledSourceCompiledWangSet extends Schema.Class<TiledSourceCompiledWangSet>(
+  'TiledSourceCompiledWangSet',
+)({
   id: WangsetId,
   tilesetPath: TilesetPath,
   tilesetName: Schema.String,
@@ -237,7 +271,9 @@ export class TiledSourceCompiledWangSet extends Schema.Class<TiledSourceCompiled
   tiles: Schema.Array(TiledSourceCompiledWangTile),
 }) {}
 
-export class TiledSourceCompiledRuleTile extends Schema.Class<TiledSourceCompiledRuleTile>("TiledSourceCompiledRuleTile")({
+export class TiledSourceCompiledRuleTile extends Schema.Class<TiledSourceCompiledRuleTile>(
+  'TiledSourceCompiledRuleTile',
+)({
   column: Schema.Number,
   row: Schema.Number,
   rawGid: Schema.Number,
@@ -247,7 +283,9 @@ export class TiledSourceCompiledRuleTile extends Schema.Class<TiledSourceCompile
   flipFlags: Schema.OptionFromOptional(TiledSourceTiledTileFlipFlags),
 }) {}
 
-export class TiledSourceCompiledRuleOption extends Schema.Class<TiledSourceCompiledRuleOption>("TiledSourceCompiledRuleOption")({
+export class TiledSourceCompiledRuleOption extends Schema.Class<TiledSourceCompiledRuleOption>(
+  'TiledSourceCompiledRuleOption',
+)({
   id: Schema.NullOr(Schema.Number),
   x: Schema.Number,
   y: Schema.Number,
@@ -258,7 +296,7 @@ export class TiledSourceCompiledRuleOption extends Schema.Class<TiledSourceCompi
 }) {}
 
 export class TiledSourceCompiledAutomappingRule extends Schema.Class<TiledSourceCompiledAutomappingRule>(
-  "TiledSourceCompiledAutomappingRule",
+  'TiledSourceCompiledAutomappingRule',
 )({
   id: RuleId,
   path: RuleId,
@@ -276,14 +314,18 @@ export class TiledSourceCompiledAutomappingRule extends Schema.Class<TiledSource
   options: Schema.Array(TiledSourceCompiledRuleOption),
 }) {}
 
-export class TiledSourceCompiledWallGroup extends Schema.Class<TiledSourceCompiledWallGroup>("TiledSourceCompiledWallGroup")({
+export class TiledSourceCompiledWallGroup extends Schema.Class<TiledSourceCompiledWallGroup>(
+  'TiledSourceCompiledWallGroup',
+)({
   wall: WallId,
   normalPhases: Schema.Array(TiledSourceRulePhase),
   transparentPhases: Schema.Array(TiledSourceRulePhase),
   rulePaths: Schema.Array(RuleId),
 }) {}
 
-export class TiledSourceRulePipelineSummary extends Schema.Class<TiledSourceRulePipelineSummary>("TiledSourceRulePipelineSummary")({
+export class TiledSourceRulePipelineSummary extends Schema.Class<TiledSourceRulePipelineSummary>(
+  'TiledSourceRulePipelineSummary',
+)({
   wangSets: Schema.Number,
   wangTiles: Schema.Number,
   automappingRules: Schema.Number,
@@ -301,7 +343,7 @@ const diagnosticFields = {
 } as const;
 
 export class MissingRuleLayerDiagnostic extends Schema.TaggedClass<MissingRuleLayerDiagnostic>()(
-  "MissingRuleLayer",
+  'MissingRuleLayer',
   {
     ...diagnosticFields,
     ruleId: RuleId,
@@ -309,14 +351,17 @@ export class MissingRuleLayerDiagnostic extends Schema.TaggedClass<MissingRuleLa
   },
 ) {}
 
-export class EmptyRuleLayerDiagnostic extends Schema.TaggedClass<EmptyRuleLayerDiagnostic>()("EmptyRuleLayer", {
-  ...diagnosticFields,
-  ruleId: RuleId,
-  layer: LayerId,
-}) {}
+export class EmptyRuleLayerDiagnostic extends Schema.TaggedClass<EmptyRuleLayerDiagnostic>()(
+  'EmptyRuleLayer',
+  {
+    ...diagnosticFields,
+    ruleId: RuleId,
+    layer: LayerId,
+  },
+) {}
 
 export class UnsupportedRulePhaseDiagnostic extends Schema.TaggedClass<UnsupportedRulePhaseDiagnostic>()(
-  "UnsupportedRulePhase",
+  'UnsupportedRulePhase',
   {
     ...diagnosticFields,
     ruleId: RuleId,
@@ -325,7 +370,7 @@ export class UnsupportedRulePhaseDiagnostic extends Schema.TaggedClass<Unsupport
 ) {}
 
 export class MissingTileReferenceDiagnostic extends Schema.TaggedClass<MissingTileReferenceDiagnostic>()(
-  "MissingTileReference",
+  'MissingTileReference',
   {
     ...diagnosticFields,
     ruleId: RuleId,
@@ -335,7 +380,7 @@ export class MissingTileReferenceDiagnostic extends Schema.TaggedClass<MissingTi
 ) {}
 
 export class InvalidRuleOptionDiagnostic extends Schema.TaggedClass<InvalidRuleOptionDiagnostic>()(
-  "InvalidRuleOption",
+  'InvalidRuleOption',
   {
     ...diagnosticFields,
     ruleId: RuleId,
@@ -344,7 +389,7 @@ export class InvalidRuleOptionDiagnostic extends Schema.TaggedClass<InvalidRuleO
 ) {}
 
 export class ContradictoryRuleDiagnostic extends Schema.TaggedClass<ContradictoryRuleDiagnostic>()(
-  "ContradictoryRule",
+  'ContradictoryRule',
   {
     ...diagnosticFields,
     ruleId: RuleId,
@@ -361,8 +406,10 @@ export const TiledSourceRuleDiagnostic = Schema.Union([
 ]);
 export type TiledSourceRuleDiagnostic = typeof TiledSourceRuleDiagnostic.Type;
 
-export class TiledSourceRulePipeline extends Schema.Class<TiledSourceRulePipeline>("TiledSourceRulePipeline")({
-  schema: Schema.Literal("tileborne.tiled-source-rule-pipeline.v1"),
+export class TiledSourceRulePipeline extends Schema.Class<TiledSourceRulePipeline>(
+  'TiledSourceRulePipeline',
+)({
+  schema: Schema.Literal('tileborne.tiled-source-rule-pipeline.v1'),
   version: Schema.Literal(1),
   sourceDigest: SourceDigest,
   pipelineDigest: ContentHash,
@@ -373,8 +420,8 @@ export class TiledSourceRulePipeline extends Schema.Class<TiledSourceRulePipelin
   diagnostics: Schema.Array(TiledSourceRuleDiagnostic),
 }) {}
 
-export class TiledSourceRulePack extends Schema.Class<TiledSourceRulePack>("TiledSourceRulePack")({
-  schema: Schema.Literal("tileborne.tiled-source-rule-pack.v1"),
+export class TiledSourceRulePack extends Schema.Class<TiledSourceRulePack>('TiledSourceRulePack')({
+  schema: Schema.Literal('tileborne.tiled-source-rule-pack.v1'),
   version: Schema.Literal(1),
   id: SourceManifestId,
   sourceDigest: SourceDigest,
@@ -382,7 +429,9 @@ export class TiledSourceRulePack extends Schema.Class<TiledSourceRulePack>("Tile
   pipeline: TiledSourceRulePipeline,
 }) {}
 
-export class TiledSourceTerrainCell extends Schema.Class<TiledSourceTerrainCell>("TiledSourceTerrainCell")({
+export class TiledSourceTerrainCell extends Schema.Class<TiledSourceTerrainCell>(
+  'TiledSourceTerrainCell',
+)({
   column: Schema.Number,
   row: Schema.Number,
   baseMaterial: Schema.String,
@@ -393,7 +442,9 @@ export class TiledSourceTerrainCell extends Schema.Class<TiledSourceTerrainCell>
   sourceId: Schema.OptionFromOptional(AssetKey),
 }) {}
 
-export class TiledSourceVisualTile extends Schema.Class<TiledSourceVisualTile>("TiledSourceVisualTile")({
+export class TiledSourceVisualTile extends Schema.Class<TiledSourceVisualTile>(
+  'TiledSourceVisualTile',
+)({
   id: Schema.String,
   assetKey: AssetKey,
   x: Schema.Number,
@@ -405,7 +456,9 @@ export class TiledSourceVisualTile extends Schema.Class<TiledSourceVisualTile>("
   transitionTo: Schema.OptionFromOptional(Schema.String),
 }) {}
 
-export class TiledSourceCollisionFootprint extends Schema.Class<TiledSourceCollisionFootprint>("TiledSourceCollisionFootprint")({
+export class TiledSourceCollisionFootprint extends Schema.Class<TiledSourceCollisionFootprint>(
+  'TiledSourceCollisionFootprint',
+)({
   id: Schema.String,
   x: Schema.Number,
   y: Schema.Number,
@@ -417,7 +470,9 @@ export class TiledSourceCollisionFootprint extends Schema.Class<TiledSourceColli
   blocksVision: Schema.Boolean,
 }) {}
 
-export class TiledSourceObjectSpawnHint extends Schema.Class<TiledSourceObjectSpawnHint>("TiledSourceObjectSpawnHint")({
+export class TiledSourceObjectSpawnHint extends Schema.Class<TiledSourceObjectSpawnHint>(
+  'TiledSourceObjectSpawnHint',
+)({
   id: Schema.String,
   kind: Schema.String,
   x: Schema.Number,
@@ -426,8 +481,10 @@ export class TiledSourceObjectSpawnHint extends Schema.Class<TiledSourceObjectSp
   assetKey: Schema.OptionFromOptional(AssetKey),
 }) {}
 
-export class TiledSourceRuleApplicationInput extends Schema.Class<TiledSourceRuleApplicationInput>("TiledSourceRuleApplicationInput")({
-  schema: Schema.Literal("tileborne.tiled-source-rule-application-input.v1"),
+export class TiledSourceRuleApplicationInput extends Schema.Class<TiledSourceRuleApplicationInput>(
+  'TiledSourceRuleApplicationInput',
+)({
+  schema: Schema.Literal('tileborne.tiled-source-rule-application-input.v1'),
   version: Schema.Literal(1),
   sourceDigest: SourceDigest,
   seed: Schema.String,
@@ -436,8 +493,10 @@ export class TiledSourceRuleApplicationInput extends Schema.Class<TiledSourceRul
   terrainCells: Schema.Array(TiledSourceTerrainCell),
 }) {}
 
-export class TiledSourceRuleApplicationOutput extends Schema.Class<TiledSourceRuleApplicationOutput>("TiledSourceRuleApplicationOutput")({
-  schema: Schema.Literal("tileborne.tiled-source-rule-application-output.v1"),
+export class TiledSourceRuleApplicationOutput extends Schema.Class<TiledSourceRuleApplicationOutput>(
+  'TiledSourceRuleApplicationOutput',
+)({
+  schema: Schema.Literal('tileborne.tiled-source-rule-application-output.v1'),
   version: Schema.Literal(1),
   sourceDigest: SourceDigest,
   projectionDigest: ProjectionDigest,
@@ -449,22 +508,25 @@ export class TiledSourceRuleApplicationOutput extends Schema.Class<TiledSourceRu
 }) {}
 
 export class InvalidSourceManifestError extends Schema.TaggedErrorClass<InvalidSourceManifestError>()(
-  "InvalidSourceManifestError",
+  'InvalidSourceManifestError',
   {
     message: Schema.String,
     reason: Schema.String,
   },
 ) {}
 
-export class MissingTilesetError extends Schema.TaggedErrorClass<MissingTilesetError>()("MissingTilesetError", {
-  message: Schema.String,
-  ruleId: RuleId,
-  tilesetPath: TilesetPath,
-  localId: Schema.Number,
-}) {}
+export class MissingTilesetError extends Schema.TaggedErrorClass<MissingTilesetError>()(
+  'MissingTilesetError',
+  {
+    message: Schema.String,
+    ruleId: RuleId,
+    tilesetPath: TilesetPath,
+    localId: Schema.Number,
+  },
+) {}
 
 export class InvalidRuleOptionError extends Schema.TaggedErrorClass<InvalidRuleOptionError>()(
-  "InvalidRuleOptionError",
+  'InvalidRuleOptionError',
   {
     message: Schema.String,
     ruleId: RuleId,
@@ -473,11 +535,14 @@ export class InvalidRuleOptionError extends Schema.TaggedErrorClass<InvalidRuleO
 ) {}
 
 export class ContradictoryRuleError extends Schema.TaggedErrorClass<ContradictoryRuleError>()(
-  "ContradictoryRuleError",
+  'ContradictoryRuleError',
   {
     message: Schema.String,
     ruleId: RuleId,
   },
 ) {}
 
-export type TiledSourceRuleCompileError = MissingTilesetError | InvalidRuleOptionError | ContradictoryRuleError;
+export type TiledSourceRuleCompileError =
+  | MissingTilesetError
+  | InvalidRuleOptionError
+  | ContradictoryRuleError;

@@ -5,6 +5,69 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.1] - 2026-07-16
+
+Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
+
+### Added
+
+- Closed-schema macOS arm64 desktop release policy and verifier for artifact
+  SHA-256/source provenance, Developer ID/notarization/stapling, native
+  install/first-launch/relaunch, verified project backup, approved retained-
+  installer rollback, and explicit GitHub publication authorization.
+- Creator performance release budgets for the canonical 2,048-asset,
+  512-behavior, and 8,192-reference workload, with separate advisory native
+  timing traces.
+- Maintainer runbooks for desktop support, external secrets, stable blocker
+  meanings, project-content recovery, last-known-good approval, rollback, and
+  release handoff.
+
+### Changed
+
+- Desktop support is now stated fail-closed: macOS arm64 is the sole 1.0
+  candidate and remains **NO-GO** without native release evidence. Forge maker
+  entries no longer imply Windows, Linux, or macOS x64 support.
+
+### Security
+
+- Apple signing/notarization and GitHub release credentials remain external;
+  native receipts, support bundles, traces, and project backups are treated as
+  restricted evidence rather than committed artifacts.
+
+### Candidate scope prepared before current hardening
+
+Production 1.0 release candidate. Focus: committed BR vertical proof, BYO
+Cloudflare deploy readiness, release/security docs, and package metadata
+prepared for maintainer go/no-go.
+
+#### Added
+
+- Production release-readiness docs covering local gates, BYO Cloudflare deploy
+  proof, required secrets, rollback, support matrix, and go/no-go criteria.
+- Cloudflare deploy documentation for the local-compatible proof boundary and
+  credentialed deploy blocker.
+- Top-level release handoff checklist in `RELEASE.md`.
+
+#### Changed
+
+- First-party MIT-licensed app and package manifests now use `0.0.1` for
+  source-preview builds.
+- `@tileborne/game-client-app` now declares the monorepo MIT license.
+- Dependency hygiene refreshed for mature patched Playwright, Wrangler, Hono,
+  Miniflare, Vite, `ws`, `qs`, `tmp`, `tar`, `js-yaml`, and `@babel/core`
+  advisories.
+
+#### Security
+
+- Production secret handling now requires Cloudflare, Alchemy, or operator
+  environment secret stores instead of committed plaintext credentials.
+- Release candidates must pass local secret scanning and treat remaining
+  moderate-or-higher dependency advisories as release blockers unless the
+  release owner records an explicit acceptance decision.
+- Known RC blocker: `esbuild >=0.17.0 <0.28.1` remains in the dependency graph
+  until patched `0.28.1` clears the repository's seven-day `minimumReleaseAge`
+  policy or a release owner accepts an override.
+
 ## [0.1.0] - 2026-05-23
 
 First open-source, local-first release. Focus: editor + SDK tileset pipeline + Battle Royale demo + multiplayer playtest on your machine.
@@ -78,3 +141,4 @@ First open-source, local-first release. Focus: editor + SDK tileset pipeline + B
 - Bundled asset loader validates manifest hashes and rejects fetch failures
 
 [0.1.0]: https://github.com/tileborne/tileborne/releases/tag/v0.1.0
+[0.0.1]: https://github.com/regenrek/tileborn/releases/tag/v0.0.1

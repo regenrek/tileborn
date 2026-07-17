@@ -4,6 +4,7 @@ import { Container, Sprite, Text, Texture } from 'pixi.js';
 import { CompositeTilemap, Tilemap, POINT_STRUCT_SIZE } from '@pixi/tilemap';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
 import {
+  type AssetId,
   CollisionFootprintComponent,
   CollisionFootprintPart,
   MapObject,
@@ -48,7 +49,7 @@ import {
 /** Builds index-derived placeable/asset atlas fields from synthetic packs. */
 const atlasFromPacks = (
   packs: readonly TilesetPack[],
-  renderableAssetIdByPath: ReadonlyMap<string, number>,
+  renderableAssetIdByPath: ReadonlyMap<string, AssetId | number>,
 ): EditorViewportTileAtlas => {
   const assetPathByPackAndId = new Map<string, string>();
   const assetPathById = new Map<string, string>();
@@ -164,7 +165,10 @@ describe('EditorViewportController render batching', () => {
   });
 
   it('patches a newly created tile chunk after map content is synced', () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {
@@ -192,7 +196,10 @@ describe('EditorViewportController render batching', () => {
   });
 
   it('patches repeated paint without clearing unrelated existing chunks', () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {
@@ -231,7 +238,10 @@ describe('EditorViewportController render batching', () => {
   });
 
   it('renders hidden tile layers as dimmed map context instead of dropping them', () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {
@@ -257,7 +267,10 @@ describe('EditorViewportController render batching', () => {
   });
 
   it('renders placement objects as sprites', () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const uuid = (suffix: string): Uuid =>
       `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
@@ -279,7 +292,9 @@ describe('EditorViewportController render batching', () => {
         redistributable: true,
       }),
       tilesets: [],
-      assets: [new TilesetPackAsset({ id: assetId, path: 'objects/statue.png', mime: 'image/png' })],
+      assets: [
+        new TilesetPackAsset({ id: assetId, path: 'objects/statue.png', mime: 'image/png' }),
+      ],
       placeables: [
         new Placeable({
           id: placeableId,
@@ -367,7 +382,10 @@ describe('EditorViewportController render batching', () => {
   });
 
   it('renders duplicate placeable ids from the placement pack', () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const uuid = (suffix: string): Uuid =>
       `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
@@ -466,7 +484,10 @@ describe('EditorViewportController render batching', () => {
         textureForRenderableAssetId,
       } as unknown as PixiRendererAdapter,
       atlasFromPacks(
-        [makePack(firstPackId, 'first/statue.png'), makePack(selectedPackId, 'selected/statue.png')],
+        [
+          makePack(firstPackId, 'first/statue.png'),
+          makePack(selectedPackId, 'selected/statue.png'),
+        ],
         new Map([
           ['first/statue.png', 1],
           ['selected/statue.png', 2],
@@ -502,7 +523,9 @@ describe('EditorViewportController render batching', () => {
         redistributable: true,
       }),
       tilesets: [],
-      assets: [new TilesetPackAsset({ id: assetId, path: 'objects/statue.png', mime: 'image/png' })],
+      assets: [
+        new TilesetPackAsset({ id: assetId, path: 'objects/statue.png', mime: 'image/png' }),
+      ],
       placeables: [
         new Placeable({
           id: placeableId,
@@ -570,6 +593,57 @@ describe('EditorViewportController render batching', () => {
     });
     return { map, atlas: atlasFromPacks([pack], new Map([['objects/statue.png', 1]])) };
   };
+
+  it('renders catalog visual-ref objects as their real placeable sprites', () => {
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const { map, atlas } = staticPlacementScene();
+    const sourceObject = map.objects[0]!;
+    const catalogTypeId = makeGameObjectTypeId('62656465-0000-4000-8000-000000000058' as Uuid);
+    const placeableId = atlas.placeables![0]!.placeable.id;
+    const catalogMap = new TileborneMap({
+      ...map,
+      objects: [
+        new MapObject({
+          id: sourceObject.id,
+          kind: catalogTypeId,
+          x: sourceObject.x,
+          y: sourceObject.y,
+          width: Option.none(),
+          height: Option.none(),
+          layerId: sourceObject.layerId,
+          properties: sourceObject.properties,
+        }),
+      ],
+    });
+    const worldRoot = new Container();
+    const textureForRenderableAssetId = vi.fn(() => Texture.WHITE);
+    const controller = new EditorViewportController(
+      {
+        getEditorWorldRoot: () => worldRoot,
+        requestRender: vi.fn(() => Effect.void),
+        textureForRenderableAssetId,
+      } as unknown as PixiRendererAdapter,
+      atlas,
+    );
+    controller.setCatalogObjectVisuals(
+      new Map([[String(catalogTypeId), { placeableId, width: 48, height: 48 }]]),
+    );
+
+    controller.setMap(catalogMap);
+
+    const objectLayerRoot = worldRoot.children.find((child) => child.label === 'objects') as
+      | Container
+      | undefined;
+    const renderedObject = objectLayerRoot?.children[0] as Container | undefined;
+    expect(renderedObject?.children[0]).toBeInstanceOf(Sprite);
+    expect((renderedObject?.children[0] as Sprite | undefined)?.width).toBe(48);
+    expect((renderedObject?.children[0] as Sprite | undefined)?.height).toBe(48);
+    expect(textureForRenderableAssetId).toHaveBeenCalled();
+  });
 
   it('renders placement sprites from IPC-serialized option values', async () => {
     const callbacks: FrameRequestCallback[] = [];
@@ -669,7 +743,10 @@ describe('EditorViewportController chunk culling', () => {
   };
 
   const setup = () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {
@@ -741,11 +818,12 @@ describe('EditorViewportController tilemap chunks', () => {
   // controller batches real tiles instead of falling back to the diagnostic overlay.
   const resolvableAtlas = (): EditorViewportTileAtlas => {
     const tileId = makeTileId(uuid('01'));
+    const assetId = makeAssetId(uuid('02'));
     return {
       tileFramesByIndex: new Map([
         [1, { tileId, assetPath: 'ground.png', x: 0, y: 0, width: 32, height: 32 }],
       ]),
-      renderableAssetIdByPath: new Map([['ground.png', 1]]),
+      renderableAssetIdByPath: new Map([['ground.png', assetId]]),
     };
   };
 
@@ -759,16 +837,20 @@ describe('EditorViewportController tilemap chunks', () => {
     }, 0);
 
   const setup = () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
+    const textureForRenderableAssetId = vi.fn(() => Texture.WHITE);
     const adapter = {
       getEditorWorldRoot: () => worldRoot,
       requestRender: vi.fn(() => Effect.void),
-      textureForRenderableAssetId: vi.fn(() => Texture.WHITE),
+      textureForRenderableAssetId,
     } as unknown as PixiRendererAdapter;
     const controller = new EditorViewportController(adapter, resolvableAtlas());
-    return { worldRoot, controller };
+    return { worldRoot, controller, textureForRenderableAssetId };
   };
 
   const chunkAt = (worldRoot: Container, key: string): CompositeTilemap | undefined => {
@@ -795,6 +877,18 @@ describe('EditorViewportController tilemap chunks', () => {
     const chunk = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
     expect(chunk).toBeInstanceOf(CompositeTilemap);
     expect(tileCount(chunk!)).toBe(2);
+  });
+
+  it('resolves tile frame atlas textures by loaded asset id', () => {
+    const { worldRoot, controller, textureForRenderableAssetId } = setup();
+    const map = setTileIndex(createTestMap(), TEST_TILE_LAYER_ID, 2, 3, 1);
+
+    controller.setMap(map);
+
+    const chunk = chunkAt(worldRoot, `${TEST_TILE_LAYER_ID}:0:0`);
+    expect(chunk).toBeInstanceOf(CompositeTilemap);
+    expect(tileCount(chunk!)).toBe(1);
+    expect(textureForRenderableAssetId).toHaveBeenCalledWith(makeAssetId(uuid('02')));
   });
 
   it('rebuilds the chunk tilemap when patchChunk applies a new edit', () => {
@@ -829,7 +923,10 @@ describe('EditorViewportController debug overlay', () => {
   };
 
   const setup = () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {
@@ -940,7 +1037,10 @@ describe('EditorViewportController collision footprint overlay', () => {
   };
 
   const setup = () => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const worldRoot = new Container();
     const adapter = {

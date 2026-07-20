@@ -40,6 +40,10 @@ export interface MenuState {
   readonly phase: MenuPhase;
   /** Sub-screen while in the `menu` phase. */
   readonly screen: MenuScreen;
+  /** Active authored shell screen id, when a runtime projection is mounted. */
+  readonly shellScreenId: string | undefined;
+  /** Canonical authored shell navigation stack for Back/Esc. */
+  readonly shellScreenHistory: readonly string[];
   /** Esc pause overlay flag, only meaningful while `phase === "in-match"`. */
   readonly paused: boolean;
   readonly settingsTab: SettingsTab;
@@ -60,6 +64,18 @@ export type MenuEvent =
   | { readonly type: 'MATCH_END' }
   | { readonly type: 'PLAY_AGAIN' }
   | { readonly type: 'TO_MENU' }
+  | { readonly type: 'SET_SHELL_ENTRY'; readonly screenId: string | undefined }
+  | {
+      readonly type: 'SET_SHELL_SCREEN';
+      readonly screenId: string | undefined;
+      readonly pushHistory?: boolean | undefined;
+    }
+  | {
+      readonly type: 'NAVIGATE_SHELL_SCREEN';
+      readonly screenId: string | undefined;
+      readonly menuScreen?: MenuScreen | undefined;
+      readonly replaceHistory?: boolean | undefined;
+    }
   | { readonly type: 'SET_SETTINGS_TAB'; readonly tab: SettingsTab }
   | { readonly type: 'ERROR'; readonly error: MenuError }
   | { readonly type: 'DISMISS_ERROR' };
@@ -67,6 +83,8 @@ export type MenuEvent =
 export const initialMenuState: MenuState = {
   phase: 'boot',
   screen: 'main',
+  shellScreenId: undefined,
+  shellScreenHistory: [],
   paused: false,
   settingsTab: 'graphics',
   error: undefined,
@@ -76,9 +94,39 @@ const toMenuMain = (state: MenuState): MenuState => ({
   ...state,
   phase: 'menu',
   screen: 'main',
+  shellScreenHistory: [],
   paused: false,
   error: undefined,
 });
+
+const setShellScreen = (
+  state: MenuState,
+  screenId: string | undefined,
+  pushHistory = false,
+): MenuState => {
+  if (state.shellScreenId === screenId) return state;
+  return {
+    ...state,
+    shellScreenId: screenId,
+    shellScreenHistory:
+      pushHistory && state.shellScreenId !== undefined
+        ? [...state.shellScreenHistory, state.shellScreenId]
+        : state.shellScreenHistory,
+  };
+};
+
+const backThroughShellHistory = (state: MenuState): MenuState | undefined => {
+  const previous = state.shellScreenHistory.at(-1);
+  if (previous === undefined) return undefined;
+  return {
+    ...state,
+    phase: 'menu',
+    screen: previous === 'settings' ? 'settings' : 'main',
+    paused: false,
+    shellScreenId: previous,
+    shellScreenHistory: state.shellScreenHistory.slice(0, -1),
+  };
+};
 
 export const menuReducer = (state: MenuState, event: MenuEvent): MenuState => {
   // Global transitions available from any phase.
@@ -87,6 +135,24 @@ export const menuReducer = (state: MenuState, event: MenuEvent): MenuState => {
       return { ...state, phase: 'error', paused: false, error: event.error };
     case 'SET_SETTINGS_TAB':
       return { ...state, settingsTab: event.tab };
+    case 'SET_SHELL_ENTRY':
+      return { ...state, shellScreenId: event.screenId, shellScreenHistory: [] };
+    case 'SET_SHELL_SCREEN':
+      return setShellScreen(state, event.screenId, event.pushHistory === true);
+    case 'NAVIGATE_SHELL_SCREEN':
+      return {
+        ...state,
+        phase: 'menu',
+        screen: event.menuScreen ?? 'main',
+        paused: false,
+        shellScreenId: event.screenId,
+        shellScreenHistory:
+          event.replaceHistory === true
+            ? []
+            : state.shellScreenId !== undefined && state.shellScreenId !== event.screenId
+              ? [...state.shellScreenHistory, state.shellScreenId]
+              : state.shellScreenHistory,
+      };
     default:
       break;
   }
@@ -109,7 +175,10 @@ export const menuReducer = (state: MenuState, event: MenuEvent): MenuState => {
         case 'OPEN_CREDITS':
           return { ...state, screen: 'credits' };
         case 'BACK':
-          return state.screen === 'main' ? state : { ...state, screen: 'main' };
+          return (
+            backThroughShellHistory(state) ??
+            (state.screen === 'main' ? state : { ...state, screen: 'main' })
+          );
         case 'PLAY':
           return state.screen === 'main' ? { ...state, phase: 'lobby' } : state;
         default:

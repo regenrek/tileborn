@@ -8,6 +8,12 @@ import type { MapId } from '@tileborne/core';
 import type {
   AssetLibraryReloadPackCacheResponse,
   AssetPackRemoveResponse,
+  AudioApplyResponse,
+  AudioPreviewResponse,
+  AudioSaveResponse,
+  GameShellApplyResponse,
+  GameShellPreviewResponse,
+  GameShellSaveResponse,
   AssetPacksListResponse,
   CatalogExportResponse,
   CatalogDuplicateDefinitionResponse,
@@ -137,6 +143,116 @@ export function useCreateGame() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
     },
+  });
+}
+
+const invalidateAudio = (
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): Promise<unknown> =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.audio.document(projectId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all }),
+  ]);
+
+const invalidateGameShell = (
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): Promise<unknown> =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.gameShell.document(projectId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all }),
+  ]);
+
+export function useSaveProjectAudio(): UseMutationResult<
+  AudioSaveResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.audio.save>[0]
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AudioSaveResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.audio.save>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.audio.save(input)),
+    onSuccess: (_data, input) => invalidateAudio(queryClient, input.projectId),
+  });
+}
+
+export function useApplyProjectAudioCommand(): UseMutationResult<
+  AudioApplyResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.audio.apply>[0]
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AudioApplyResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.audio.apply>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.audio.apply(input)),
+    onSuccess: (_data, input) => invalidateAudio(queryClient, input.projectId),
+  });
+}
+
+export function usePreviewProjectAudio(): UseMutationResult<
+  AudioPreviewResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.audio.preview>[0]
+> {
+  return useMutation<
+    AudioPreviewResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.audio.preview>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.audio.preview(input)),
+  });
+}
+
+export function useSaveProjectGameShell(): UseMutationResult<
+  GameShellSaveResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.gameShell.save>[0]
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    GameShellSaveResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.gameShell.save>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.gameShell.save(input)),
+    onSuccess: (_data, input) => invalidateGameShell(queryClient, input.projectId),
+  });
+}
+
+export function useApplyProjectGameShellCommand(): UseMutationResult<
+  GameShellApplyResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.gameShell.apply>[0]
+> {
+  const queryClient = useQueryClient();
+  return useMutation<
+    GameShellApplyResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.gameShell.apply>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.gameShell.apply(input)),
+    onSuccess: (_data, input) => invalidateGameShell(queryClient, input.projectId),
+  });
+}
+
+export function usePreviewProjectGameShell(): UseMutationResult<
+  GameShellPreviewResponse,
+  TileborneQueryError,
+  Parameters<typeof window.tileborne.gameShell.preview>[0]
+> {
+  return useMutation<
+    GameShellPreviewResponse,
+    TileborneQueryError,
+    Parameters<typeof window.tileborne.gameShell.preview>[0]
+  >({
+    mutationFn: (input) => invokeIpc(() => window.tileborne.gameShell.preview(input)),
   });
 }
 

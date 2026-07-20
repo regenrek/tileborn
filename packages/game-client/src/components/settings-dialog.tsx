@@ -11,9 +11,13 @@ import { SlotHost } from './slot-host.js';
 export interface SettingsDialogProps {
   readonly brand: BrandConfig;
   readonly sections: readonly MenuSectionRegistration[];
+  readonly title?: string | undefined;
+  readonly subtitle?: string | undefined;
   readonly activeTab: SettingsTab;
   readonly onSelectTab: (tab: SettingsTab) => void;
   readonly onBack: () => void;
+  readonly chrome?: boolean | undefined;
+  readonly showBackAction?: boolean | undefined;
   /**
    * Wiring for the Controls remap editor (ADR-0024). When provided, the Controls
    * tab renders the live keybind editor (over the active mode's input map +
@@ -43,56 +47,73 @@ const TAB_BLURB: Record<SettingsTab, string> = {
 export function SettingsDialog({
   brand,
   sections,
+  title,
+  subtitle,
   activeTab,
   onSelectTab,
   onBack,
+  chrome = true,
+  showBackAction = true,
   controls,
   audio,
 }: SettingsDialogProps): ReactElement {
   const showControlsEditor = activeTab === 'controls' && controls !== undefined;
   const showAudioEditor = activeTab === 'audio' && audio !== undefined;
-  return (
-    <div className="tb-scrim">
-      <div className="tb-panel" role="dialog" aria-label="Settings" data-testid="settings-dialog">
-        <h2 className="tb-title">Settings</h2>
-        <div className="tb-actions-row" role="tablist" aria-label="Settings tabs">
-          {SETTINGS_TABS.map((tab) => (
-            <Button
-              key={tab}
-              role="tab"
-              aria-selected={tab === activeTab}
-              variant={tab === activeTab ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => onSelectTab(tab)}
-              data-testid={`settings-tab-${tab}`}
-            >
-              {TAB_LABELS[tab]}
-            </Button>
-          ))}
-        </div>
-        {showAudioEditor && audio !== undefined ? (
-          <AudioTab {...audio} />
-        ) : showControlsEditor && controls !== undefined ? (
-          <ControlsTab {...controls} />
-        ) : (
-          <p className="tb-tagline" data-testid="settings-tab-body">
-            {TAB_BLURB[activeTab]}
-          </p>
-        )}
+  const body = (
+    <>
+      {chrome ? (
+        <>
+          <h2 className="tb-title">{title ?? 'Settings'}</h2>
+          {subtitle ? <p className="tb-tagline">{subtitle}</p> : null}
+        </>
+      ) : null}
+      <div className="tb-actions-row" role="tablist" aria-label="Settings tabs">
+        {SETTINGS_TABS.map((tab) => (
+          <Button
+            key={tab}
+            role="tab"
+            aria-selected={tab === activeTab}
+            variant={tab === activeTab ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onSelectTab(tab)}
+            data-testid={`settings-tab-${tab}`}
+          >
+            {TAB_LABELS[tab]}
+          </Button>
+        ))}
+      </div>
+      {showAudioEditor && audio !== undefined ? (
+        <AudioTab {...audio} />
+      ) : showControlsEditor && controls !== undefined ? (
+        <ControlsTab {...controls} />
+      ) : (
+        <p className="tb-tagline" data-testid="settings-tab-body">
+          {TAB_BLURB[activeTab]}
+        </p>
+      )}
 
-        <SlotHost
-          slot="settings.tabs"
-          sections={sections}
-          onPlay={onBack}
-          onBack={onBack}
-          title={brand.title}
-        />
+      <SlotHost
+        slot="settings.tabs"
+        sections={sections}
+        onPlay={onBack}
+        onBack={onBack}
+        title={brand.title}
+      />
 
+      {showBackAction ? (
         <div className="tb-actions">
           <Button variant="outline" onClick={onBack} data-testid="settings-back">
             Back
           </Button>
         </div>
+      ) : null}
+    </>
+  );
+  if (!chrome) return <>{body}</>;
+  return (
+    <div className="tb-scrim">
+      <div className="tb-panel" role="dialog" aria-label="Settings" data-testid="settings-dialog">
+        {body}
       </div>
     </div>
   );

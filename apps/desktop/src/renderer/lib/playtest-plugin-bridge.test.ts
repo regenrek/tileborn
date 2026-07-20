@@ -4,7 +4,7 @@ import {
   requiredBattleRoyaleRenderableAssetIds,
 } from '@tileborne/plugin-battle-royale/renderer';
 import { Schema } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   BATTLE_ROYALE_PLUGIN_ID,
@@ -12,6 +12,8 @@ import {
   EXAMPLE_ARENA_PLUGIN_ID,
   EXAMPLE_ARENA_RENDERER_CAPABILITY_ID,
   KNOWN_PLAYTEST_MODE_IDS,
+  audioCueForRuntimeEvent,
+  dispatchRuntimeAudioEvent,
   resolvePlaytestPlugin,
 } from './playtest-plugin-bridge';
 
@@ -62,6 +64,60 @@ describe('playtest-plugin-bridge', () => {
       fixedZoom: 4,
       hudInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     });
+  });
+
+  it('resolves gameplay and shell audio by neutral binding names', () => {
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
+    const audio = plugin.audio;
+    expect(audio?.buses.map((bus) => bus.id).sort()).toEqual([
+      'battle-royale.music',
+      'battle-royale.sfx',
+    ]);
+
+    expect(audioCueForRuntimeEvent(audio?.cues ?? [], 'shell.menuMusic')).toBe(
+      'battle-royale.shell.menu-music',
+    );
+    expect(audioCueForRuntimeEvent(audio?.cues ?? [], 'item.collect')).toBe(
+      'battle-royale.item.collect',
+    );
+    expect(audioCueForRuntimeEvent(audio?.cues ?? [], 'player.hit')).toBe(
+      'battle-royale.player.hit',
+    );
+    expect(audioCueForRuntimeEvent(audio?.cues ?? [], 'environment.zoneWarning')).toBe(
+      'battle-royale.zone.warning',
+    );
+    expect(audioCueForRuntimeEvent(audio?.cues ?? [], 'match.end')).toBe('battle-royale.match.end');
+  });
+
+  it('dispatches representative neutral runtime audio events to cue playback', () => {
+    const plugin = resolvePlaytestPlugin(BATTLE_ROYALE_RENDERER_CAPABILITY_ID);
+    const cues = plugin.audio?.cues ?? [];
+    const dispatcher = { playCue: vi.fn() };
+
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'shell.menuMusic')).toBe(
+      'battle-royale.shell.menu-music',
+    );
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'weapon.fire')).toBe(
+      'battle-royale.weapon.fire',
+    );
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'item.collect')).toBe(
+      'battle-royale.item.collect',
+    );
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'player.hit')).toBe(
+      'battle-royale.player.hit',
+    );
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'environment.zoneWarning')).toBe(
+      'battle-royale.zone.warning',
+    );
+    expect(dispatchRuntimeAudioEvent(dispatcher, cues, 'match.end')).toBe(
+      'battle-royale.match.end',
+    );
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.shell.menu-music');
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.weapon.fire');
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.item.collect');
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.player.hit');
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.zone.warning');
+    expect(dispatcher.playCue).toHaveBeenCalledWith('battle-royale.match.end');
   });
 
   it('fails playtest resolution before mount if a BR projector asset is missing', () => {

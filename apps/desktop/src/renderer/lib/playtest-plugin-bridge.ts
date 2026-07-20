@@ -20,6 +20,7 @@
 import {
   BR_PRIMARY_WEAPON_ID,
   PLUGIN_ID,
+  battleRoyaleAudioCues,
   battleRoyaleDefaultHudLayout,
   battleRoyaleDefaultInputMap,
   createBattleRoyaleBundledAssets,
@@ -35,11 +36,6 @@ import {
   resolveBattleRoyaleInputIntent,
   serverFrameToView,
 } from '@tileborne/plugin-battle-royale/renderer';
-import {
-  BR_AUDIO_CUES,
-  battleRoyaleAudioCues,
-  battleRoyaleSfxBus,
-} from '@tileborne/plugin-battle-royale';
 import {
   ARENA_INPUT_MAP_CONTRIBUTION_ID,
   ARENA_PLUGIN_ID,
@@ -101,7 +97,36 @@ import type {
   RuntimeAudioBusDefinition,
   RuntimeAudioCueDefinition,
 } from '@tileborne/runtime';
-import { createBundledAssetRegistry } from '@tileborne/runtime';
+import {
+  createBundledAssetRegistry,
+  dispatchRuntimeAudioEvent,
+  runtimeAudioCueForEvent,
+} from '@tileborne/runtime';
+
+const cueByBinding = (
+  cues: readonly RuntimeAudioCueDefinition[],
+  binding: string,
+): string | undefined => cues.find((cue) => cue.binding === binding)?.id;
+
+export const audioCueForResolvedIntent = (
+  cues: readonly RuntimeAudioCueDefinition[],
+  intent: ResolvedInputIntent,
+  previousIntent: ResolvedInputIntent | undefined,
+): string | undefined => {
+  if (intent.shoot && previousIntent?.shoot !== true) return cueByBinding(cues, 'weapon.fire');
+  if (intent.reload && previousIntent?.reload !== true) return cueByBinding(cues, 'weapon.reload');
+  return undefined;
+};
+
+export const audioCueForRuntimeEvent = (
+  cues: readonly RuntimeAudioCueDefinition[],
+  event: Parameters<typeof runtimeAudioCueForEvent>[1],
+): string | undefined => runtimeAudioCueForEvent(cues, event);
+
+export { dispatchRuntimeAudioEvent };
+
+const battleRoyaleRuntimeAudioCues = (): readonly RuntimeAudioCueDefinition[] =>
+  battleRoyaleAudioCues;
 
 /**
  * Bridge-default render manifest used when a resolved plugin's projector does
@@ -350,6 +375,7 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
     requiredBattleRoyaleRenderableAssetIds(),
     BATTLE_ROYALE_PLUGIN_ID,
   );
+  const audioCues = battleRoyaleRuntimeAudioCues();
   return {
     projector,
     bundledAssets,
@@ -373,17 +399,23 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
     controlScheme: scheme,
     inputCaptureProfile: deriveInputCaptureProfile(inputMap, scheme),
     audio: {
-      buses: [battleRoyaleSfxBus],
-      cues: battleRoyaleAudioCues,
-      cueForIntent: (intent, previousIntent) => {
-        if (intent.shoot && previousIntent?.shoot !== true) {
-          return BR_AUDIO_CUES.WeaponFire;
-        }
-        if (intent.reload && previousIntent?.reload !== true) {
-          return BR_AUDIO_CUES.WeaponReload;
-        }
-        return undefined;
-      },
+      buses: [
+        {
+          id: 'battle-royale.music',
+          label: 'Battle Royale Music',
+          kind: 'music',
+          defaultVolume: 0.65,
+        },
+        {
+          id: 'battle-royale.sfx',
+          label: 'Battle Royale SFX',
+          kind: 'sfx',
+          defaultVolume: 0.85,
+        },
+      ],
+      cues: audioCues,
+      cueForIntent: (intent, previousIntent) =>
+        audioCueForResolvedIntent(audioCues, intent, previousIntent),
     },
     resolveInputIntent: (actions, context) => resolveBattleRoyaleInputIntent(actions, context),
   };

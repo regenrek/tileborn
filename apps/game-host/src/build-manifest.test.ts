@@ -233,6 +233,7 @@ describe('buildCloudflareGameHost fixture bundle', () => {
     expect(result.files).toContain('worker.js');
     expect(result.files).toContain('behavior-worker.js');
     expect(result.files).toContain('manifest.json');
+    expect(result.files).toContain('deployment.json');
     expect(result.files).toContain('wrangler.toml');
     expect(result.files).toContain('wrangler.behavior.toml');
     const mapFilePath = 'maps/map-00000000-0000-4000-8000-000000000001/package.json';
@@ -254,6 +255,36 @@ describe('buildCloudflareGameHost fixture bundle', () => {
       unknown
     >;
     expect(copied).toEqual(mapPackageWire);
+    const deployment = JSON.parse(await readFile(path.join(outDir, 'deployment.json'), 'utf8')) as {
+      readonly schemaVersion: number;
+      readonly defaultAdapter: string;
+      readonly artifact: { readonly runtimeBuildId: string };
+      readonly adapters: readonly {
+        readonly id: string;
+        readonly provider: string;
+        readonly operations: readonly string[];
+        readonly credentialRequirements: readonly { readonly name: string }[];
+        readonly ownsConfigFiles: readonly string[];
+      }[];
+    };
+    expect(deployment).toMatchObject({
+      schemaVersion: 1,
+      defaultAdapter: 'local',
+      artifact: { runtimeBuildId: result.manifestHash },
+    });
+    expect(deployment.adapters.find((adapter) => adapter.id === 'local')).toMatchObject({
+      provider: 'local',
+      credentialRequirements: [],
+    });
+    expect(
+      deployment.adapters.find((adapter) => adapter.id === 'alchemy-cloudflare'),
+    ).toMatchObject({
+      provider: 'cloudflare',
+      operations: ['plan', 'preview', 'deploy', 'status', 'logs', 'destroy'],
+      ownsConfigFiles: ['wrangler.toml', 'wrangler.behavior.toml'],
+    });
+    const deploymentJson = await readFile(path.join(outDir, 'deployment.json'), 'utf8');
+    expect(deploymentJson).not.toMatch(/acct-secret|token-secret|secret-value|wrangler deploy/i);
     // The worker bundle bakes in the bundled map package for packageless
     // /rooms/create resolution (M5 S1).
     const workerSource = await readFile(result.bundlePath, 'utf8');

@@ -404,7 +404,15 @@ const rawLicenseIntegrityJson = (value: unknown): Record<string, unknown> => {
     return {};
   }
   const json: Record<string, unknown> = {};
-  for (const key of ['spdxId', 'attribution', 'sourceUrl', 'notes', 'redistributable']) {
+  for (const key of [
+    'spdxId',
+    'attribution',
+    'sourceUrl',
+    'sourcePath',
+    'modifications',
+    'notes',
+    'redistributable',
+  ]) {
     if (key in value) {
       json[key] = value[key];
     }

@@ -34,6 +34,7 @@ const RUNTIME_DEFAULTS = {
   menuSections: undefined,
   inputMaps: undefined,
   audioBuses: undefined,
+  shellDefaults: undefined,
   cameras: undefined,
   interpolators: undefined,
   assetPacks: undefined,

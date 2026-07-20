@@ -1,6 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import type { ProjectId } from '@tileborne/core';
 import type { ReadinessReport } from '@tileborne/ipc-contracts';
+import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import {
   Breadcrumb,
@@ -63,6 +64,33 @@ interface TopBarProps {
   projectId?: string | undefined;
   mapId?: string | undefined;
 }
+
+let topBarInstanceSequence = 0;
+
+type TopBarDebugEvent = {
+  instanceId: number;
+  event: 'mount' | 'unmount' | 'render';
+  projectId?: string | undefined;
+  mapId?: string | undefined;
+  status?: string | undefined;
+  fetchStatus?: string | undefined;
+  dataUpdatedAt?: number | undefined;
+};
+
+type TopBarDebugWindow = Window & {
+  __tileborneTopBarDebug?: {
+    events: TopBarDebugEvent[];
+  };
+};
+
+const appendTopBarDebugEvent = (event: TopBarDebugEvent): void => {
+  const debugWindow = window as TopBarDebugWindow;
+  if (debugWindow.__tileborneTopBarDebug === undefined) return;
+  debugWindow.__tileborneTopBarDebug.events = [
+    ...debugWindow.__tileborneTopBarDebug.events,
+    event,
+  ].slice(-40);
+};
 
 function TruncatedLabelTooltip({
   label,
@@ -298,23 +326,50 @@ function BuildMenu({
 }
 
 function ReadinessStatus({
+  instanceId,
+  queryKey,
+  dataUpdatedAt,
   errors,
   warnings,
   checking,
+  status,
+  fetchStatus,
+  failureCount,
+  failureReason,
+  error,
   onOpen,
+  onRetry,
 }: {
+  readonly instanceId: number;
+  readonly queryKey: string;
+  readonly dataUpdatedAt: number;
   readonly errors: number;
   readonly warnings: number;
   readonly checking: boolean;
+  readonly status: string;
+  readonly fetchStatus: string;
+  readonly failureCount: number;
+  readonly failureReason: string | undefined;
+  readonly error: string | undefined;
   readonly onOpen: () => void;
+  readonly onRetry: () => void;
 }) {
-  const ready = !checking && errors === 0;
+  const failed = status === 'error';
+  const ready = !checking && !failed && errors === 0;
   return (
     <Button
       variant="outline"
       size="sm"
-      onClick={onOpen}
+      onClick={failed ? onRetry : onOpen}
       data-testid="readiness-status"
+      data-topbar-instance-id={String(instanceId)}
+      data-readiness-query-key={queryKey}
+      data-readiness-data-updated-at={String(dataUpdatedAt)}
+      data-readiness-query-status={status}
+      data-readiness-fetch-status={fetchStatus}
+      data-readiness-failure-count={String(failureCount)}
+      data-readiness-failure-reason={failureReason}
+      data-readiness-error={error}
       aria-label="Open game readiness problems"
     >
       {ready ? (
@@ -323,19 +378,26 @@ function ReadinessStatus({
         <TriangleAlertIcon className="text-destructive" />
       )}
       <span className="hidden lg:inline">
-        {checking
-          ? 'Checking…'
-          : errors > 0
-            ? `${errors} blocked`
-            : warnings > 0
-              ? `${warnings} warnings`
-              : 'Ready'}
+        {failed
+          ? 'Retry'
+          : checking
+            ? 'Checking…'
+            : errors > 0
+              ? `${errors} blocked`
+              : warnings > 0
+                ? `${warnings} warnings`
+                : 'Ready'}
       </span>
     </Button>
   );
 }
 
 export function TopBar({ projectId, mapId }: TopBarProps) {
+  const topBarInstanceIdRef = useRef<number | undefined>(undefined);
+  if (topBarInstanceIdRef.current === undefined) {
+    topBarInstanceIdRef.current = ++topBarInstanceSequence;
+  }
+  const topBarInstanceId = topBarInstanceIdRef.current;
   const navigate = useNavigate();
   const setCommandPaletteOpen = useEditorUiStore((s) => s.setCommandPaletteOpen);
   const setGenerateMapDialogOpen = useEditorUiStore((s) => s.setGenerateMapDialogOpen);
@@ -360,6 +422,45 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
   const exportProject = useExportProjectArchive();
   const { start: startPlaytest, isStarting: isStartingPlaytest } = usePlaytestControls();
   const playtestReadiness = useReadiness(projectId, mapId, 'playtest');
+  const readinessQueryKey = JSON.stringify(['readiness', projectId ?? '', mapId ?? '', 'playtest']);
+  appendTopBarDebugEvent({
+    instanceId: topBarInstanceId,
+    event: 'render',
+    projectId,
+    mapId,
+    status: playtestReadiness.status,
+    fetchStatus: playtestReadiness.fetchStatus,
+    dataUpdatedAt: playtestReadiness.dataUpdatedAt,
+  });
+  useEffect(() => {
+    appendTopBarDebugEvent({
+      instanceId: topBarInstanceId,
+      event: 'mount',
+      projectId,
+      mapId,
+      status: playtestReadiness.status,
+      fetchStatus: playtestReadiness.fetchStatus,
+      dataUpdatedAt: playtestReadiness.dataUpdatedAt,
+    });
+    return () => {
+      appendTopBarDebugEvent({
+        instanceId: topBarInstanceId,
+        event: 'unmount',
+        projectId,
+        mapId,
+        status: playtestReadiness.status,
+        fetchStatus: playtestReadiness.fetchStatus,
+        dataUpdatedAt: playtestReadiness.dataUpdatedAt,
+      });
+    };
+  }, [
+    mapId,
+    playtestReadiness.dataUpdatedAt,
+    playtestReadiness.fetchStatus,
+    playtestReadiness.status,
+    projectId,
+    topBarInstanceId,
+  ]);
   const hostLocalMatch = usePlaytestMultiplayerStore((state) => state.hostLocalMatch);
   const joinFromInput = usePlaytestMultiplayerStore((state) => state.joinFromInput);
   const joinHostAsPlayer = usePlaytestMultiplayerStore((state) => state.joinHostAsPlayer);
@@ -455,10 +556,27 @@ export function TopBar({ projectId, mapId }: TopBarProps) {
         <div className="flex shrink-0 items-center gap-1">
           {projectId ? (
             <ReadinessStatus
+              instanceId={topBarInstanceId}
+              queryKey={readinessQueryKey}
+              dataUpdatedAt={playtestReadiness.dataUpdatedAt}
               errors={blockingReadinessDiagnostics(playtestReadiness.data?.report).length}
               warnings={readinessWarnings(playtestReadiness.data?.report).length}
               checking={playtestReadiness.isLoading}
+              status={playtestReadiness.status}
+              fetchStatus={playtestReadiness.fetchStatus}
+              failureCount={playtestReadiness.failureCount}
+              failureReason={
+                playtestReadiness.failureReason instanceof Error
+                  ? playtestReadiness.failureReason.message
+                  : undefined
+              }
+              error={
+                playtestReadiness.error instanceof Error
+                  ? playtestReadiness.error.message
+                  : undefined
+              }
               onOpen={openProblems}
+              onRetry={() => void playtestReadiness.refetch()}
             />
           ) : null}
           {isHosting ? (

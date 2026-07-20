@@ -1,4 +1,10 @@
-import { AssetId, JsonObject, PERSISTED_SCHEMA_VERSIONS, PackId } from '@tileborne/core';
+import {
+  AssetId,
+  assetLicenseOptionalJsonFields,
+  JsonObject,
+  PERSISTED_SCHEMA_VERSIONS,
+  PackId,
+} from '@tileborne/core';
 import { Schema } from 'effect';
 
 import { AutotileRulePattern } from '../schemas/autotile-rule.js';
@@ -25,11 +31,7 @@ export type TilesetManifestSchemaVersion = typeof TILESET_MANIFEST_SCHEMA_VERSIO
 
 /** License block in a Tileborne manifest JSON file. */
 export const TilesetManifestLicense = Schema.Struct({
-  spdxId: Schema.String,
-  attribution: Schema.optional(Schema.String),
-  sourceUrl: Schema.optional(Schema.String),
-  notes: Schema.optional(Schema.String),
-  redistributable: Schema.optional(Schema.Boolean),
+  ...assetLicenseOptionalJsonFields,
 });
 export type TilesetManifestLicense = typeof TilesetManifestLicense.Type;
 
@@ -40,7 +42,7 @@ export const ManifestTilesetPackAsset = Schema.Struct({
   mime: Schema.String,
   size: Schema.optional(Schema.Number),
   hash: Schema.optional(Schema.Unknown),
-  license: Schema.optional(Schema.Unknown),
+  license: Schema.optional(TilesetManifestLicense),
 });
 export type ManifestTilesetPackAsset = typeof ManifestTilesetPackAsset.Type;
 

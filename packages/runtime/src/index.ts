@@ -12,6 +12,7 @@ export * from './loop/game-loop.js';
 export * from './map-package/index.js';
 export * from './net/index.js';
 export * from './plugin/index.js';
+export * from './shell/index.js';
 export * from './renderer/renderer-adapter.js';
 export * from './renderer/interpolate-entities.js';
 export * from './renderer/pixi/index.js';

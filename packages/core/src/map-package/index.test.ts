@@ -73,6 +73,7 @@ const packageJson = {
   settings: { '@tileborne-plugins/example-mode': { maxPlayers: 4 } },
   content: { schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} },
   behaviors: { schemaVersion: 1, manifests: [], visualDefinitions: [], modules: [] },
+  audio: { schemaVersion: 1, buses: [], cues: [], diagnostics: [] },
   visuals: { playerModels: [], overlayVisuals: [], weaponVisuals: [] },
   assets: [{ path: 'assets/ab/cdef.png', hash: HASH, assetId: `asset:${UUID}` }],
   modeData: { '@tileborne-plugins/example-mode': { zone: { phases: 3 } } },

@@ -16,21 +16,28 @@ import type {
   LobbyJoinResponse,
   LobbyReadyRequest,
   LobbyReadyResponse,
+  LobbyStartRequest,
+  LobbyStartResponse,
   PlaytestStartRequest,
   PlaytestStartResponse,
   RoomCreateRequest,
   RoomCreateResponse,
+  RoomDiagnosticsResponse,
   RoomLobbySummary,
+  RoomMetricsResponse,
   RoomPlayerModelSelection,
   RoomPlayerReservationResponse,
   RoomReconnectRequest,
   RoomReconnectResponse,
   RoomResultsResponse,
+  RoomStopRequest,
+  RoomStopResponse,
 } from './types.js';
 import { toDiscoverSummary, workerBuildId, workerVersion } from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
 import { bundledMapPackages } from './.generated/bundled-map-packages.js';
 import { PlaytestRoom } from './room.js';
+import { isRuntimeGameShellProjection } from './behavior/workerd/protocol.js';
 import {
   createRoomJoinCode,
   isRoomJoinCode,
@@ -131,6 +138,13 @@ const readJsonError = async (response: Response, fallback: string): Promise<stri
   }
 };
 
+const passThroughErrorStatus = (status: number): 400 | 401 | 403 | 404 | 409 | 500 => {
+  if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409) {
+    return status;
+  }
+  return 500;
+};
+
 const readJsonRequest = async (request: Request): Promise<unknown> => {
   try {
     return await request.json();
@@ -215,11 +229,18 @@ const parseLobbyCreateRequest = async (request: Request): Promise<LobbyCreateReq
   if (parsed.mapPackage !== undefined && !isRecord(parsed.mapPackage)) {
     throw new Error('mapPackage must be a JSON object');
   }
+  if (
+    parsed.shellProjection !== undefined &&
+    !isRuntimeGameShellProjection(parsed.shellProjection)
+  ) {
+    throw new Error('shellProjection must be a valid RuntimeGameShellProjection');
+  }
   const requestBody: LobbyCreateRequest = {
     mapId,
     ...(seed === undefined ? {} : { seed }),
     ...(options === undefined ? {} : { options }),
     ...(parsed.mapPackage === undefined ? {} : { mapPackage: parsed.mapPackage as JsonObject }),
+    ...(parsed.shellProjection === undefined ? {} : { shellProjection: parsed.shellProjection }),
     ...(parsed.playerModelSelections === undefined
       ? {}
       : {
@@ -265,6 +286,18 @@ const parseLobbyReadyRequest = async (request: Request): Promise<LobbyReadyReque
   }
   const reconnectToken = optionalNonEmptyString(parsed, 'reconnectToken');
   return { playerId, ready, ...(reconnectToken === undefined ? {} : { reconnectToken }) };
+};
+
+const parseRoomOwnerActionRequest = async (
+  request: Request,
+): Promise<LobbyStartRequest | RoomStopRequest> => {
+  const parsed = await readJsonRequest(request);
+  if (!isRecord(parsed)) {
+    throw new Error('request body must be a JSON object');
+  }
+  const playerId = requiredString(parsed, 'playerId');
+  const reconnectToken = optionalNonEmptyString(parsed, 'reconnectToken');
+  return { playerId, ...(reconnectToken === undefined ? {} : { reconnectToken }) };
 };
 
 const parseRoomReconnectRequest = async (request: Request): Promise<RoomReconnectRequest> => {
@@ -379,6 +412,32 @@ const setLobbyReady = async (
   );
 };
 
+const startLobby = async (
+  env: Env,
+  roomId: string,
+  input: LobbyStartRequest,
+): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(`https://playtest-room/lobby/start?roomId=${encodeURIComponent(roomId)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ playerId: input.playerId }),
+    }),
+  );
+};
+
+const stopRoom = async (env: Env, roomId: string, input: RoomStopRequest): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(`https://playtest-room/room/stop?roomId=${encodeURIComponent(roomId)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ playerId: input.playerId }),
+    }),
+  );
+};
+
 const validateRoomReconnect = async (
   env: Env,
   roomId: string,
@@ -398,6 +457,20 @@ const fetchRoomResults = async (env: Env, roomId: string): Promise<Response> => 
   const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
   return stub.fetch(
     new Request(`https://playtest-room/results?roomId=${encodeURIComponent(roomId)}`),
+  );
+};
+
+const fetchRoomDiagnostics = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(`https://playtest-room/diagnostics?roomId=${encodeURIComponent(roomId)}`),
+  );
+};
+
+const fetchRoomMetrics = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(`https://playtest-room/metrics?roomId=${encodeURIComponent(roomId)}`),
   );
 };
 
@@ -492,6 +565,7 @@ export const createWorkerApp = (
           ...(body.seed === undefined ? {} : { seed: body.seed }),
           ...(body.options === undefined ? {} : { options: body.options }),
           mapPackage,
+          ...(body.shellProjection === undefined ? {} : { shellProjection: body.shellProjection }),
           ...(body.playerModelSelections === undefined
             ? {}
             : { playerModelSelections: body.playerModelSelections }),
@@ -558,6 +632,9 @@ export const createWorkerApp = (
             ...(body.seed === undefined ? {} : { seed: body.seed }),
             ...(body.options === undefined ? {} : { options: body.options }),
             mapPackage,
+            ...(body.shellProjection === undefined
+              ? {}
+              : { shellProjection: body.shellProjection }),
             ...(body.playerModelSelections === undefined
               ? {}
               : { playerModelSelections: body.playerModelSelections }),
@@ -770,6 +847,43 @@ export const createWorkerApp = (
     return context.json(payload);
   });
 
+  app.post('/lobbies/:id/start', async (context) => {
+    if (!isHandoffSigningKeyValid(context.env)) {
+      return context.json({ error: 'room service unavailable' }, 503);
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    let body: LobbyStartRequest;
+    try {
+      body = await parseRoomOwnerActionRequest(context.req.raw);
+    } catch (error) {
+      return context.json(
+        { error: error instanceof Error ? error.message : 'invalid start request' },
+        400,
+      );
+    }
+    const startToken = body.reconnectToken ?? readBearerToken(context.req.raw.headers);
+    if (startToken === undefined) {
+      return context.json({ error: 'missing start token' }, 401);
+    }
+    const verified = await verifyHandoffToken(context.env, startToken, {
+      playtestId: roomId,
+      purpose: 'reconnect',
+    });
+    if (!verified || verified.playerId !== body.playerId) {
+      return context.json({ error: 'invalid start token' }, 401);
+    }
+    const startResponse = await startLobby(context.env, roomId, body);
+    if (!startResponse.ok) {
+      const error = await readJsonError(startResponse, 'failed to start lobby');
+      return context.json({ error }, passThroughErrorStatus(startResponse.status));
+    }
+    const payload = (await startResponse.json()) as LobbyStartResponse;
+    return context.json(payload);
+  });
+
   app.get('/lobbies/code/:code', async (context) => {
     if (!isHandoffSigningKeyValid(context.env)) {
       return context.json({ error: 'room service unavailable' }, 503);
@@ -861,6 +975,43 @@ export const createWorkerApp = (
     return context.json(payload);
   });
 
+  app.post('/rooms/:id/stop', async (context) => {
+    if (!isHandoffSigningKeyValid(context.env)) {
+      return context.json({ error: 'room service unavailable' }, 503);
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    let body: RoomStopRequest;
+    try {
+      body = await parseRoomOwnerActionRequest(context.req.raw);
+    } catch (error) {
+      return context.json(
+        { error: error instanceof Error ? error.message : 'invalid stop request' },
+        400,
+      );
+    }
+    const stopToken = body.reconnectToken ?? readBearerToken(context.req.raw.headers);
+    if (stopToken === undefined) {
+      return context.json({ error: 'missing stop token' }, 401);
+    }
+    const verified = await verifyHandoffToken(context.env, stopToken, {
+      playtestId: roomId,
+      purpose: 'reconnect',
+    });
+    if (!verified || verified.playerId !== body.playerId) {
+      return context.json({ error: 'invalid stop token' }, 401);
+    }
+    const stopResponse = await stopRoom(context.env, roomId, body);
+    if (!stopResponse.ok) {
+      const error = await readJsonError(stopResponse, 'failed to stop room');
+      return context.json({ error }, passThroughErrorStatus(stopResponse.status));
+    }
+    const payload = (await stopResponse.json()) as RoomStopResponse;
+    return context.json(payload);
+  });
+
   app.get('/rooms/:id/results', async (context) => {
     if (!isHandoffSigningKeyValid(context.env)) {
       return context.json({ error: 'room service unavailable' }, 503);
@@ -878,6 +1029,40 @@ export const createWorkerApp = (
       return context.json({ error }, 500);
     }
     const payload = (await resultsResponse.json()) as RoomResultsResponse;
+    return context.json(payload);
+  });
+
+  app.get('/rooms/:id/diagnostics', async (context) => {
+    if (!isHandoffSigningKeyValid(context.env)) {
+      return context.json({ error: 'room service unavailable' }, 503);
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    const diagnosticsResponse = await fetchRoomDiagnostics(context.env, roomId);
+    if (!diagnosticsResponse.ok) {
+      const error = await readJsonError(diagnosticsResponse, 'failed to read room diagnostics');
+      return context.json({ error }, passThroughErrorStatus(diagnosticsResponse.status));
+    }
+    const payload = (await diagnosticsResponse.json()) as RoomDiagnosticsResponse;
+    return context.json(payload);
+  });
+
+  app.get('/rooms/:id/metrics', async (context) => {
+    if (!isHandoffSigningKeyValid(context.env)) {
+      return context.json({ error: 'room service unavailable' }, 503);
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    const metricsResponse = await fetchRoomMetrics(context.env, roomId);
+    if (!metricsResponse.ok) {
+      const error = await readJsonError(metricsResponse, 'failed to read room metrics');
+      return context.json({ error }, passThroughErrorStatus(metricsResponse.status));
+    }
+    const payload = (await metricsResponse.json()) as RoomMetricsResponse;
     return context.json(payload);
   });
 

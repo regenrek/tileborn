@@ -11,6 +11,7 @@ import {
   TileborneMap,
   type Uuid,
   gameObjectTypeIdForKey,
+  hashBytes,
   makeObjectId,
   makePlaceableId,
   makeTileId,
@@ -19,7 +20,7 @@ import { FoundationLayer } from '@tileborne/services-foundation';
 import { Effect, Layer, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { AssetService, DirectoryAssetPackSource } from './asset/index.js';
+import { AssetService, DirectoryAssetPackSource, packManifestContentHash } from './asset/index.js';
 import { AssetLibraryService, WorkingPaletteService } from './asset-library/index.js';
 import { ServicesAppLayer } from './index.js';
 import { removeAssetPack } from './asset-removal.js';
@@ -59,6 +60,50 @@ const writeOtherPackFixture = async (home: string): Promise<string> => {
   return destination;
 };
 
+const writeStandaloneAssetPackFixture = async (home: string): Promise<string> => {
+  const destination = path.join(home, 'standalone-asset-smoke-pack');
+  await cp(sampleFixture, destination, { recursive: true });
+  const manifestPath = path.join(destination, 'tileborne-asset-pack.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+    assets: Array<Record<string, unknown>>;
+  } & Record<string, unknown>;
+  manifest.license = {
+    spdxId: 'CC0-1.0',
+    attribution: 'Pack Artist',
+    sourceUrl: 'https://example.invalid/inherited-pack-license',
+    redistributable: true,
+  };
+  const assetPath = 'images/standalone-background.png';
+  const inheritedAssetPath = 'images/inherited-license-background.png';
+  const destinationAsset = path.join(destination, assetPath);
+  const inheritedDestinationAsset = path.join(destination, inheritedAssetPath);
+  await mkdir(path.join(destination, 'images'), { recursive: true });
+  await cp(path.join(destination, 'tiles/terrain.png'), destinationAsset, { force: true });
+  await cp(path.join(destination, 'tiles/terrain.png'), inheritedDestinationAsset, { force: true });
+  const assetBytes = await readFile(destinationAsset);
+  manifest.assets.push({
+    id: 'asset:550e8400-e29b-41d4-a716-446655440020',
+    path: assetPath,
+    mime: 'image/png',
+    size: assetBytes.byteLength,
+    hash: hashBytes(assetBytes),
+    license: {
+      spdxId: 'CC-BY-4.0',
+      attribution: 'Standalone Artist',
+      redistributable: false,
+    },
+  });
+  manifest.assets.push({
+    id: 'asset:550e8400-e29b-41d4-a716-446655440021',
+    path: inheritedAssetPath,
+    mime: 'image/png',
+    size: assetBytes.byteLength,
+    hash: hashBytes(assetBytes),
+  });
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  return destination;
+};
+
 const runApp = <A, E>(
   effect: Effect.Effect<
     A,
@@ -87,7 +132,9 @@ describe('AssetLibraryService', () => {
 
         expect(result.pack.capability.tileCount).toBeGreaterThan(0);
         expect(result.index.groups.length).toBeLessThanOrEqual(50);
-        expect(result.index.total).toBeLessThanOrEqual(result.pack.capability.tileCount);
+        expect(result.index.total).toBeLessThanOrEqual(
+          result.pack.capability.tileCount + result.pack.assets.length,
+        );
         expect(result.index.groups.some((group) => group.kind === 'tileset')).toBe(true);
         expect(result.index.groups.every((group) => group.previewRefs.length <= 8)).toBe(true);
       }),
@@ -123,6 +170,78 @@ describe('AssetLibraryService', () => {
   );
 
   it(
+    'indexes standalone manifest assets with license metadata for diagnostic focus',
+    () =>
+      withTempHome(async (home) => {
+        const fixture = await writeStandaloneAssetPackFixture(home);
+        const result = await runApp(
+          Effect.gen(function* () {
+            const assets = yield* AssetService;
+            const library = yield* AssetLibraryService;
+            const packId = yield* assets.importPackNow(
+              new DirectoryAssetPackSource({ path: fixture }),
+            );
+            return yield* library.getPackLibrary({
+              packId,
+              groupKind: 'asset',
+              query: 'asset:550e8400-e29b-41d4-a716-446655440020',
+              limit: 5,
+            });
+          }),
+        );
+
+        expect(result.groups).toHaveLength(1);
+        expect(result.groups[0]?.kind).toBe('asset');
+        expect(result.groups[0]?.label).toBe('standalone-background.png');
+        expect(result.groups[0]?.metadata).toMatchObject({
+          assetId: 'asset:550e8400-e29b-41d4-a716-446655440020',
+          path: 'images/standalone-background.png',
+          mime: 'image/png',
+          licenseSpdxId: 'CC-BY-4.0',
+          licenseAttribution: 'Standalone Artist',
+          licenseScope: 'asset override',
+          licenseRedistributable: 'false',
+        });
+      }),
+    20_000,
+  );
+
+  it(
+    'indexes inherited pack license metadata on raw manifest assets',
+    () =>
+      withTempHome(async (home) => {
+        const fixture = await writeStandaloneAssetPackFixture(home);
+        const result = await runApp(
+          Effect.gen(function* () {
+            const assets = yield* AssetService;
+            const library = yield* AssetLibraryService;
+            const packId = yield* assets.importPackNow(
+              new DirectoryAssetPackSource({ path: fixture }),
+            );
+            return yield* library.getPackLibrary({
+              packId,
+              groupKind: 'asset',
+              query: 'asset:550e8400-e29b-41d4-a716-446655440021',
+              limit: 5,
+            });
+          }),
+        );
+
+        expect(result.groups).toHaveLength(1);
+        expect(result.groups[0]?.metadata).toMatchObject({
+          assetId: 'asset:550e8400-e29b-41d4-a716-446655440021',
+          path: 'images/inherited-license-background.png',
+          licenseScope: 'inherited from pack',
+          licenseSpdxId: 'CC0-1.0',
+          licenseAttribution: 'Pack Artist',
+          licenseSourceUrl: 'https://example.invalid/inherited-pack-license',
+          licenseRedistributable: 'true',
+        });
+      }),
+    20_000,
+  );
+
+  it(
     'caches a pack index by integrity and serves search/page from the cached index',
     () =>
       withTempHome(async (home) => {
@@ -151,7 +270,7 @@ describe('AssetLibraryService', () => {
 
         expect(result.cold.state).toBe('cold');
         expect(result.first.integrityHash).toMatch(/^sha256:/);
-        expect(result.first.indexSchemaVersion).toBe(1);
+        expect(result.first.indexSchemaVersion).toBe(2);
         expect(result.first.previewRefLimit).toBe(8);
         expect(result.first.groups.every((group) => group.previewRefs.length <= 8)).toBe(true);
         expect(result.first.groups.some((group) => group.previewRefs[0]?.thumbnailCacheKey)).toBe(
@@ -161,7 +280,73 @@ describe('AssetLibraryService', () => {
         expect(result.cached.groupCount).toBeGreaterThanOrEqual(result.first.total);
         expect(result.second.groups.every((group) => group.kind === 'terrain')).toBe(true);
         expect(payload['integrityHash']).toBe(result.first.integrityHash);
-        expect(payload['schemaVersion']).toBe(1);
+        expect(payload['schemaVersion']).toBe(2);
+      }),
+    40_000,
+  );
+
+  it(
+    'ignores seeded v1 metadata caches and rebuilds raw asset groups into v2',
+    () =>
+      withTempHome(async (home) => {
+        const fixture = await writeStandaloneAssetPackFixture(home);
+        const seed = await runApp(
+          Effect.gen(function* () {
+            const assets = yield* AssetService;
+            const packId = yield* assets.importPackNow(
+              new DirectoryAssetPackSource({ path: fixture }),
+            );
+            const pack = yield* assets.getPack(packId);
+            return { packId, integrityHash: packManifestContentHash(pack) };
+          }),
+        );
+        await mkdir(cacheDir(home), { recursive: true });
+        await writeFile(
+          path.join(
+            cacheDir(home),
+            `v1-${cacheSegment(seed.packId)}-${cacheSegment(seed.integrityHash)}.json`,
+          ),
+          `${JSON.stringify(
+            {
+              schemaVersion: 1,
+              packId: seed.packId,
+              integrityHash: seed.integrityHash,
+              updatedAt: '2026-07-17T00:00:00.000Z',
+              previewRefCount: 0,
+              index: { packId: seed.packId, totalGroups: 0, groups: [] },
+            },
+            null,
+            2,
+          )}\n`,
+          'utf8',
+        );
+
+        const rebuilt = await runApp(
+          Effect.gen(function* () {
+            const library = yield* AssetLibraryService;
+            return yield* library.getPackLibrary({
+              packId: seed.packId,
+              groupKind: 'asset',
+              query: 'asset:550e8400-e29b-41d4-a716-446655440021',
+              limit: 5,
+            });
+          }),
+        );
+        const entries = await cacheFiles(home);
+        const rebuiltFile = entries.find((entry) =>
+          entry.startsWith(`v2-${cacheSegment(seed.packId)}-`),
+        );
+        const rebuiltPayload =
+          rebuiltFile === undefined ? undefined : await readCachePayload(home, rebuiltFile);
+
+        expect(rebuilt.groups).toHaveLength(1);
+        expect(rebuilt.groups[0]?.metadata['licenseScope']).toBe('inherited from pack');
+        expect(entries.some((entry) => entry.startsWith(`v1-${cacheSegment(seed.packId)}-`))).toBe(
+          true,
+        );
+        expect(rebuiltFile).toBeDefined();
+        expect(rebuiltPayload?.['schemaVersion']).toBe(2);
+        expect(rebuiltPayload?.['integrityHash']).toBe(seed.integrityHash);
       }),
     40_000,
   );
@@ -182,7 +367,7 @@ describe('AssetLibraryService', () => {
         await writeFile(
           path.join(
             cacheDir(home),
-            `v1-${cacheSegment(packId)}-${cacheSegment(`sha256:${'0'.repeat(64)}`)}.json`,
+            `v2-${cacheSegment(packId)}-${cacheSegment(`sha256:${'0'.repeat(64)}`)}.json`,
           ),
           '{}',
           'utf8',
@@ -236,7 +421,7 @@ describe('AssetLibraryService', () => {
         expect(
           payloads.some(
             (payload) =>
-              payload['schemaVersion'] === 1 &&
+              payload['schemaVersion'] === 2 &&
               payload['integrityHash'] === initial.first.integrityHash,
           ),
         ).toBe(true);
@@ -351,7 +536,7 @@ describe('AssetLibraryService', () => {
         expect(result.afterPacks.map((pack) => pack.id)).toEqual([result.otherPackId]);
         expect(
           cacheEntriesAfterRemoval.some((entry) =>
-            entry.startsWith(`v1-${cacheSegment(result.removedPackId)}-`),
+            entry.startsWith(`v2-${cacheSegment(result.removedPackId)}-`),
           ),
         ).toBe(false);
         const reimported = await runApp(

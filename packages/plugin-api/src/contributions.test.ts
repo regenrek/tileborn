@@ -119,6 +119,7 @@ const linkedModeContributions = (input: {
       menuSections: undefined,
       inputMaps: undefined,
       audioBuses: undefined,
+      shellDefaults: undefined,
       cameras: undefined,
       interpolators: undefined,
       assetPacks: undefined,
@@ -263,6 +264,7 @@ describe('PluginContributions', () => {
         ],
         inputMaps: [declarative('DeclarativeRuntimeInputMapContribution', 'br-inputs')],
         audioBuses: [declarative('DeclarativeRuntimeAudioBusContribution', 'gunfire')],
+        shellDefaults: [declarative('DeclarativeRuntimeGameShellDefaultsContribution', 'br-shell')],
         cameras: [
           executable('ExecutableRuntimeCameraContribution', 'killcam', 'runtime.cameras.killcam'),
         ],
@@ -582,6 +584,7 @@ describe('RuntimeMenuSectionContribution', () => {
         ],
         inputMaps: undefined,
         audioBuses: undefined,
+        shellDefaults: undefined,
         cameras: undefined,
         interpolators: undefined,
         assetPacks: undefined,

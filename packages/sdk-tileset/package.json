@@ -84,11 +84,11 @@
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",
-    "effect": "4.0.0-beta.70",
+    "effect": "4.0.0-beta.78",
     "fast-xml-parser": "5.8.0"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-beta.70",
+    "@effect/vitest": "4.0.0-beta.78",
     "tsup": "8.5.0",
     "typescript": "6.0.3",
     "vitest": "4.1.7"

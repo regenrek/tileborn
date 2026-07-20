@@ -118,6 +118,10 @@ void contract;
         baseUrl: repoRoot,
         paths: {
           '@tileborne/core': ['./packages/core/src/index.ts'],
+          '@tileborne/ipc-contracts': ['./packages/ipc-contracts/src/index.ts'],
+          '@tileborne/ipc-contracts/contracts/multiplayer': [
+            './packages/ipc-contracts/src/contracts/multiplayer.ts',
+          ],
         },
       },
     });
@@ -168,8 +172,61 @@ describe('createGameHostLobbyClient', () => {
       if (url.endsWith('/lobbies/room-1/ready')) {
         return jsonResponse({ lobby, canStart: false, reason: 'waiting' });
       }
+      if (url.endsWith('/lobbies/room-1/start')) {
+        return jsonResponse({ lobby: { ...lobby, phase: 'active' }, started: true });
+      }
+      if (url.endsWith('/rooms/room-1/stop')) {
+        return jsonResponse({
+          roomId: 'room-1',
+          stopped: true,
+          lobby: { ...lobby, phase: 'finished' },
+          results: { completedAt: '2026-01-01T00:00:00.000Z', players: [] },
+        });
+      }
       if (url.endsWith('/lobbies/code/ABC234') || url.endsWith('/lobbies/room-1')) {
         return jsonResponse(lobby);
+      }
+      if (url.endsWith('/rooms/room-1/results')) {
+        return jsonResponse({ roomId: 'room-1', results: null });
+      }
+      if (url.endsWith('/rooms/room-1/diagnostics')) {
+        return jsonResponse({
+          diagnostics: {
+            roomId: 'room-1',
+            phase: 'lobby',
+            playerCount: 1,
+            readyPlayerCount: 0,
+            connectedPlayerCount: 1,
+            reconnectEligiblePlayerCount: 1,
+            generatedAt: '2026-01-01T00:00:00.000Z',
+            issues: [],
+          },
+        });
+      }
+      if (url.endsWith('/rooms/room-1/metrics')) {
+        return jsonResponse({
+          roomId: 'room-1',
+          metrics: {
+            lifecyclePhase: 'lobby',
+            tick: 0,
+            baseTick: 0,
+            lastPersistedTick: 0,
+            playerCount: 1,
+            connectedClients: 1,
+            queuedInputPlayers: 0,
+            queuedInputs: 0,
+            pendingPluginFrames: 0,
+            replayFrames: 0,
+            generatedAt: '2026-01-01T00:00:00.000Z',
+            transport: {
+              trackedClients: 1,
+              maxPendingSnapshotLagTicks: 0,
+              totalDroppedOutboundFrames: 0,
+              totalResyncs: 0,
+              totalStaleSnapshotAcks: 0,
+            },
+          },
+        });
       }
       if (url.endsWith('/rooms/reconnect')) {
         return jsonResponse({
@@ -205,8 +262,22 @@ describe('createGameHostLobbyClient', () => {
       canStart: false,
       reason: 'waiting',
     });
+    await expect(
+      client.start('room-1', { playerId: 'player-1', reconnectToken: 'reconnect' }),
+    ).resolves.toMatchObject({ started: true, lobby: { phase: 'active' } });
+    await expect(
+      client.stop('room-1', { playerId: 'player-1', reconnectToken: 'reconnect' }),
+    ).resolves.toMatchObject({ stopped: true, lobby: { phase: 'finished' } });
     await expect(client.getLobbyByCode('ABC234')).resolves.toMatchObject({ roomId: 'room-1' });
     await expect(client.getLobby('room-1')).resolves.toMatchObject({ roomId: 'room-1' });
+    await expect(client.getResults('room-1')).resolves.toEqual({ roomId: 'room-1', results: null });
+    await expect(client.getDiagnostics('room-1')).resolves.toMatchObject({
+      diagnostics: { roomId: 'room-1', issues: [] },
+    });
+    await expect(client.getMetrics('room-1')).resolves.toMatchObject({
+      roomId: 'room-1',
+      metrics: { lifecyclePhase: 'lobby' },
+    });
     await expect(
       client.reconnect({ roomId: 'room-1', playerId: 'player-1', reconnectToken: 'reconnect' }),
     ).resolves.toMatchObject({
@@ -218,8 +289,13 @@ describe('createGameHostLobbyClient', () => {
       'http://host/lobbies/create',
       'http://host/lobbies/join',
       'http://host/lobbies/room-1/ready',
+      'http://host/lobbies/room-1/start',
+      'http://host/rooms/room-1/stop',
       'http://host/lobbies/code/ABC234',
       'http://host/lobbies/room-1',
+      'http://host/rooms/room-1/results',
+      'http://host/rooms/room-1/diagnostics',
+      'http://host/rooms/room-1/metrics',
       'http://host/rooms/reconnect',
     ]);
     expect(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body))).toEqual({

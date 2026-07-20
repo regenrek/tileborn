@@ -47,6 +47,7 @@ const entryJson: Record<keyof typeof RUNTIME_MAP_PACKAGE_ENTRY_FILES, unknown> =
   settings: { [PLUGIN]: { maxPlayers: 4 } },
   content: { schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} },
   behaviors: { schemaVersion: 1, manifests: [], visualDefinitions: [], modules: [] },
+  audio: { schemaVersion: 1, buses: [], cues: [], diagnostics: [] },
   visuals: { playerModels: [], overlayVisuals: [], weaponVisuals: [] },
   assets: [{ path: 'assets/ab/cdef.png', hash: HASH, assetId: `asset:${UUID}` }],
   modeData: { [PLUGIN]: { zone: { phases: 3 } } },

@@ -19,7 +19,7 @@ import {
 import { CheckIcon, FolderOpenIcon, Link2Icon, PaletteIcon, Trash2Icon } from 'lucide-react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import type { MapId, PackId, ProjectId } from '@tileborne/core';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AssetPackBrowserDialog } from '@/components/asset-library/asset-pack-browser-dialog';
 import { useRemoveAssetPack, useSetMapTilesetPack } from '@/hooks/mutations';
@@ -32,9 +32,29 @@ import { usePackTileStats } from './use-pack-tile-stats';
 
 interface AssetPackDetailsPaneProps {
   readonly packId: string;
+  readonly focusPath?: string | undefined;
 }
 
-export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
+const assetLicenseFocusForPath = (
+  packId: string,
+  focusPath: string | undefined,
+): { readonly licenseFocused: boolean; readonly assetId?: string | undefined } => {
+  if (focusPath === undefined) {
+    return { licenseFocused: false };
+  }
+  if (focusPath === `assetPacks.${packId}.license`) {
+    return { licenseFocused: true };
+  }
+  const match = new RegExp(
+    `^assetPacks\\.${packId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.assets\\.([^.]+)\\.license$`,
+  ).exec(focusPath);
+  if (match?.[1] === undefined) {
+    return { licenseFocused: false };
+  }
+  return { licenseFocused: true, assetId: match[1] };
+};
+
+export function AssetPackDetailsPane({ packId, focusPath }: AssetPackDetailsPaneProps) {
   const { projectId, mapId } = useParams({ strict: false });
   const navigate = useNavigate();
   const packQuery = useAssetPack(packId);
@@ -54,6 +74,17 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
   const pack = packQuery.data?.pack;
   const useSites = useSitesQuery.data?.useSites ?? [];
   const isActive = activePalettePackId === packId;
+  const focusTarget = useMemo(
+    () => assetLicenseFocusForPath(packId, focusPath),
+    [focusPath, packId],
+  );
+  const { licenseFocused } = focusTarget;
+
+  useEffect(() => {
+    if (focusTarget.assetId !== undefined) {
+      setBrowserOpen(true);
+    }
+  }, [focusTarget.assetId]);
   const handleSetActive = () => {
     setActivePalettePackId(packId);
     if (
@@ -161,11 +192,25 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
       <CardContent>
         <dl className="space-y-2">
           <DetailRow label="Version" value={`v${pack.version}`} />
-          <DetailRow label="License" value={pack.licenseSpdxId} />
+          <DetailRow
+            label="License"
+            value={pack.licenseSpdxId}
+            testId="asset-pack-license-row"
+            focused={licenseFocused}
+          />
           <DetailRow label="Tile count" value={statsLoading ? '…' : String(tileCount)} />
           <DetailRow label="Tile size" value={statsLoading ? '…' : (tileSize ?? '—')} />
           <DetailRow label="Total assets" value={String(pack.assetCount)} />
         </dl>
+        {focusTarget.assetId === undefined ? null : (
+          <div
+            className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-2 py-1"
+            data-testid="asset-pack-focused-asset-license"
+            data-asset-id={focusTarget.assetId}
+          >
+            <p className={cn(typography.bodyMicro, 'text-foreground')}>{focusTarget.assetId}</p>
+          </div>
+        )}
         <div
           className="mt-4 rounded-md border border-border/80 bg-muted/25 p-2"
           data-testid="asset-pack-use-sites"
@@ -248,6 +293,7 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
         packId={packId}
         packName={pack.name}
         projectId={projectId ?? null}
+        initialSearch={focusTarget.assetId}
       />
       <Dialog
         open={confirmRemoveOpen}
@@ -290,9 +336,26 @@ export function AssetPackDetailsPane({ packId }: AssetPackDetailsPaneProps) {
   );
 }
 
-function DetailRow({ label, value }: { readonly label: string; readonly value: string }) {
+function DetailRow({
+  label,
+  value,
+  testId,
+  focused = false,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly testId?: string | undefined;
+  readonly focused?: boolean | undefined;
+}) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <div
+      className={cn(
+        'flex items-baseline justify-between gap-3 rounded-sm',
+        focused && 'bg-warning/10 ring-1 ring-warning/40',
+      )}
+      data-testid={testId}
+      data-focused={focused ? 'true' : undefined}
+    >
       <dt className={cn(typography.sectionLabelMicro, 'normal-case tracking-normal')}>{label}</dt>
       <dd className={cn('text-right', typography.caption, 'text-foreground')}>{value}</dd>
     </div>

@@ -10,18 +10,31 @@ import {
 import type { TileborneMap } from '@tileborne/core';
 import { Button } from '@tileborne/ui';
 import { PencilRulerIcon } from 'lucide-react';
+import type { ProjectId } from '@tileborne/core';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 import {
+  audioAuthoringStateFromDocument,
+  buildRuntimeAudioProjectionFromAuthoring,
   defaultRuntimeAudioSettings,
+  decodeRuntimeGameShellProjection,
   interpolateRenderableEntities,
   PixiRendererAdapter,
   SnapshotEntityStore,
+  type RuntimeAudioBusDefinition,
+  type RuntimeAudioCueDefinition,
+  type RuntimeAudioSettings,
+  type RuntimeGameShellProjection,
   type RenderableEntity,
   type RenderableEntityProjector,
 } from '@tileborne/runtime';
 import {
   bindBrowserRuntimeAudioFocusState,
   createBrowserRuntimeAudioEngine,
+  dispatchGameplayLifecycleAudioEvents,
+  initialMenuState,
+  RuntimeRoot,
+  type RuntimeRootProps,
+  type RuntimeShellBehaviorBridge,
 } from '@tileborne/game-client';
 import { Effect } from 'effect';
 
@@ -38,12 +51,24 @@ import {
   viewportControllerAtlas,
 } from '@/editor/viewport/viewport-asset-manifest';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
-import { usePlaytestSessions, usePluginContributions, useProject } from '@/hooks/queries';
+import {
+  usePlaytestSessions,
+  usePluginContributions,
+  useProject,
+  useProjectAudio,
+  useProjectGameShell,
+} from '@/hooks/queries';
 import { useHudEditing } from '@/hooks/use-hud-editing';
 import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playtest-plugin-bridge';
+import {
+  audioCueForResolvedIntent,
+  dispatchRuntimeAudioEvent,
+  resolvePlaytestPlugin,
+  type ResolvedPlaytestPlugin,
+} from '@/lib/playtest-plugin-bridge';
+import { assetProtocolUrl } from '@/lib/asset-url';
 import {
   assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
@@ -58,6 +83,110 @@ import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 const LOCAL_PLAYER_INPUT_ID = 'player-1';
+const SHELL_FALLBACK_TIMEOUT_MS = 10_000;
+
+type ShellFallbackStatus = 'idle' | 'pending' | 'success' | 'invalid' | 'error' | 'timeout';
+
+type ShellMountEvent = {
+  generation: number;
+  event: 'mount' | 'unmount';
+  reason: string;
+  projectId: string;
+  mapId: string;
+  sessionId: string;
+};
+
+type PlaytestShellDebugWindow = Window & {
+  __tileborneShellDebug?: {
+    renderLobbyCount?: number;
+    mountEvents?: ShellMountEvent[];
+  };
+};
+
+type CachedShellProjection = {
+  cacheKey: string;
+  generation: number;
+  projection: RuntimeGameShellProjection | undefined;
+  source: 'query' | 'fallback' | undefined;
+};
+
+const pendingShellRetryKeys = new Set<string>();
+
+const formatShellError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+  return String(error);
+};
+
+const runtimeShellProjectionFromIpc = (value: unknown): RuntimeGameShellProjection | undefined => {
+  const decoded = decodeRuntimeGameShellProjection(value);
+  if (decoded !== undefined) return decoded;
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    Array.isArray((value as { screens?: unknown }).screens) &&
+    Array.isArray((value as { screenOrder?: unknown }).screenOrder) &&
+    Array.isArray((value as { assets?: unknown }).assets) &&
+    Array.isArray((value as { registeredEvents?: unknown }).registeredEvents) &&
+    typeof (value as { entryScreenId?: unknown }).entryScreenId === 'string'
+  ) {
+    return value as RuntimeGameShellProjection;
+  }
+  return undefined;
+};
+
+const appendShellMountEvent = (event: ShellMountEvent): void => {
+  const debugWindow = window as PlaytestShellDebugWindow;
+  if (debugWindow.__tileborneShellDebug === undefined) return;
+  debugWindow.__tileborneShellDebug.mountEvents = [
+    ...(debugWindow.__tileborneShellDebug.mountEvents ?? []),
+    event,
+  ].slice(-20);
+};
+
+function InstrumentedRuntimeRoot({
+  generation,
+  reason,
+  projectId,
+  mapId,
+  sessionId,
+  ...props
+}: RuntimeRootProps & {
+  readonly generation: number;
+  readonly reason: string;
+  readonly projectId: string;
+  readonly mapId: string;
+  readonly sessionId: string;
+}) {
+  useEffect(() => {
+    appendShellMountEvent({
+      generation,
+      event: 'mount',
+      reason,
+      projectId,
+      mapId,
+      sessionId,
+    });
+    return () => {
+      appendShellMountEvent({
+        generation,
+        event: 'unmount',
+        reason,
+        projectId,
+        mapId,
+        sessionId,
+      });
+    };
+  }, [generation, mapId, projectId, reason, sessionId]);
+  return <RuntimeRoot {...props} />;
+}
 
 // Positions are interpolated once in world space before projection, so the
 // renderer performs no second lerp (alpha 1, no previous-by-id map).
@@ -96,7 +225,8 @@ const projectEntity = (
 
 const findLocalPlayerEntity = (
   entities: readonly RenderableEntity[],
-): RenderableEntity | undefined => entities.find((entity) => entity.id.startsWith('br:player:'));
+): RenderableEntity | undefined =>
+  entities.find((entity) => typeof entity.id === 'string' && entity.id.startsWith('br:player:'));
 
 function usePlaytestRuntimeMount({
   containerRef,
@@ -354,11 +484,19 @@ function usePlaytestInputBridge({
   pluginId,
   sessionId,
   tickCount,
+  projectAudio,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly pluginId: string | undefined;
   readonly sessionId: string;
   readonly tickCount: number | undefined;
+  readonly projectAudio:
+    | {
+        readonly buses: readonly RuntimeAudioBusDefinition[];
+        readonly cues: readonly RuntimeAudioCueDefinition[];
+        readonly settings: RuntimeAudioSettings;
+      }
+    | undefined;
 }) {
   // The capture/resolver lifecycle MUST NOT depend on `tickCount`: a tick refresh
   // tearing down + recreating the resolver would drop held mouse/key state (a
@@ -383,18 +521,21 @@ function usePlaytestInputBridge({
     // starts on the freshest saved bindings. The live `setEffectiveMap` seam
     // stays available for a future same-surface remap UI.
     const plugin = resolvePlaytestPlugin(pluginId);
+    const audioBuses = [...(plugin.audio?.buses ?? []), ...(projectAudio?.buses ?? [])];
+    const audioCues = [...(plugin.audio?.cues ?? []), ...(projectAudio?.cues ?? [])];
     const audioEngine =
-      plugin.audio === undefined
+      audioCues.length === 0
         ? undefined
         : createBrowserRuntimeAudioEngine({
-            buses: plugin.audio.buses,
-            cues: plugin.audio.cues,
-            settings: defaultRuntimeAudioSettings(),
+            buses: audioBuses,
+            cues: audioCues,
+            settings: projectAudio?.settings ?? defaultRuntimeAudioSettings(),
           });
     const unbindAudioFocusState =
       audioEngine === undefined ? undefined : bindBrowserRuntimeAudioFocusState(audioEngine);
     if (audioEngine !== undefined) {
       window.__tilebornePlaytestAudio = audioEngine;
+      dispatchRuntimeAudioEvent(audioEngine, audioCues, 'shell.menuMusic');
     }
     let seq = 0;
     let previousIntent: ReturnType<ResolvedPlaytestPlugin['resolveInputIntent']> | undefined;
@@ -407,7 +548,9 @@ function usePlaytestInputBridge({
       resolveIntent: plugin.resolveInputIntent,
       onIntent: (intent) => {
         seq += 1;
-        const audioCueId = plugin.audio?.cueForIntent(intent, previousIntent);
+        const audioCueId =
+          audioCueForResolvedIntent(projectAudio?.cues ?? [], intent, previousIntent) ??
+          plugin.audio?.cueForIntent(intent, previousIntent);
         if (audioCueId !== undefined) {
           audioEngine?.playCue(audioCueId);
         }
@@ -447,7 +590,7 @@ function usePlaytestInputBridge({
       }
       audioEngine?.dispose();
     };
-  }, [containerRef, pluginId, sessionId]);
+  }, [containerRef, pluginId, projectAudio, sessionId]);
 }
 
 export function PlaytestViewport({
@@ -476,7 +619,78 @@ export function PlaytestViewport({
   // The project's designer-authored HUD overlay sits between the plugin
   // default and the player's personal overlay (`pluginDefault ⊕ project ⊕ player`).
   const projectQuery = useProject(projectId);
+  const audioQuery = useProjectAudio(projectId);
+  const shellQuery = useProjectGameShell(projectId);
+  const dispatchedGameplayAudioKeysRef = useRef(new Set<string>());
   const projectHudLayout = readProjectHudLayout(projectQuery.data?.project);
+  const projectAudio = useMemo(() => {
+    const document = audioQuery.data?.document;
+    if (document === undefined) return undefined;
+    const projection = buildRuntimeAudioProjectionFromAuthoring(
+      audioAuthoringStateFromDocument(document),
+      {
+        resolveSource: (source) => {
+          if (source.url !== undefined) return source;
+          if (source.path !== undefined) {
+            return {
+              ...source,
+              url: source.path.startsWith('assets/') ? source.path : `assets/${source.path}`,
+            };
+          }
+          return undefined;
+        },
+      },
+    );
+    return projection.cues.length === 0
+      ? undefined
+      : {
+          buses: projection.buses,
+          cues: projection.cues,
+          settings: {
+            ...projection.settings,
+            busVolumes: projection.settings.busVolumes ?? {},
+          },
+        };
+  }, [audioQuery.data?.document]);
+  const shellProjection = useMemo(
+    () => runtimeShellProjectionFromIpc(shellQuery.data?.projection),
+    [shellQuery.data?.projection],
+  );
+  const shellCacheKey = `${projectId}:${map.id}`;
+  const shellProjectionCacheRef = useRef<CachedShellProjection>({
+    cacheKey: shellCacheKey,
+    generation: 1,
+    projection: undefined,
+    source: undefined,
+  });
+  if (shellProjectionCacheRef.current.cacheKey !== shellCacheKey) {
+    shellProjectionCacheRef.current = {
+      cacheKey: shellCacheKey,
+      generation: shellProjectionCacheRef.current.generation + 1,
+      projection: undefined,
+      source: undefined,
+    };
+  }
+  if (shellProjection !== undefined) {
+    shellProjectionCacheRef.current.projection = shellProjection;
+    shellProjectionCacheRef.current.source = 'query';
+  }
+  const [fallbackShellProjection, setFallbackShellProjection] = useState<
+    RuntimeGameShellProjection | undefined
+  >(undefined);
+  const [fallbackShellStatus, setFallbackShellStatus] = useState<ShellFallbackStatus>('idle');
+  const [fallbackShellError, setFallbackShellError] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setFallbackShellProjection(undefined);
+    setFallbackShellStatus('idle');
+    setFallbackShellError(undefined);
+  }, [shellCacheKey]);
+  useEffect(() => {
+    if (shellProjection !== undefined) {
+      setFallbackShellStatus('idle');
+      setFallbackShellError(undefined);
+    }
+  }, [shellProjection]);
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
   const rendererResolution = useMemo(
     () => {
@@ -516,13 +730,371 @@ export function PlaytestViewport({
   const { builtModels, selectedModelId } = usePlaytestPlayerModels(projectId, map);
   const { builtOverlays } = usePlaytestOverlayVisuals(projectId);
   const { builtWeapons } = usePlaytestWeaponVisuals(projectId);
+  const [shellMatchStarted, setShellMatchStarted] = useState(false);
+  const [shellRetryEpoch, setShellRetryEpoch] = useState(() =>
+    pendingShellRetryKeys.has(shellCacheKey) ? 1 : 0,
+  );
+  const ignoredShellGameOverRef = useRef<unknown | undefined>(undefined);
+  useEffect(() => {
+    pendingShellRetryKeys.delete(shellCacheKey);
+  }, [shellCacheKey]);
+  const playtestHudMetrics = session?.runtimeMetrics
+    ? {
+        playerCount: session.runtimeMetrics.playerCount,
+        tickCount: session.runtimeMetrics.tickCount,
+        hud: session.runtimeMetrics.hud
+          ? {
+              totalPlayers: session.runtimeMetrics.hud.totalPlayers,
+              gameplayEvents: [...session.runtimeMetrics.hud.gameplayEvents],
+              ...(session.runtimeMetrics.hud.localPlayer
+                ? { localPlayer: session.runtimeMetrics.hud.localPlayer }
+                : {}),
+              ...(session.runtimeMetrics.hud.zoneStatus
+                ? { zoneStatus: session.runtimeMetrics.hud.zoneStatus }
+                : {}),
+              ...(session.runtimeMetrics.hud.scoreboard
+                ? { scoreboard: session.runtimeMetrics.hud.scoreboard }
+                : {}),
+              ...(session.runtimeMetrics.hud.minimap
+                ? { minimap: session.runtimeMetrics.hud.minimap }
+                : {}),
+              ...(session.runtimeMetrics.hud.gameOver
+                ? { gameOver: session.runtimeMetrics.hud.gameOver }
+                : {}),
+            }
+          : undefined,
+      }
+    : undefined;
+  const currentShellGameOver = session?.runtimeMetrics?.hud?.gameOver;
+  const currentShellScoreboard = session?.runtimeMetrics?.hud?.scoreboard;
+  const shellGameOver =
+    shellMatchStarted && currentShellGameOver !== ignoredShellGameOverRef.current
+      ? currentShellGameOver
+      : undefined;
+  const shellResults = shellGameOver
+    ? {
+        title: 'Results',
+        rows:
+          currentShellScoreboard?.map((entry, index) => ({
+            rank: index + 1,
+            name: entry.displayName,
+            score: entry.kills,
+          })) ?? [],
+      }
+    : undefined;
+  const shellHudMetrics =
+    shellGameOver === undefined
+      ? undefined
+      : playtestHudMetrics === undefined
+        ? undefined
+        : {
+            ...playtestHudMetrics,
+            hud:
+              playtestHudMetrics.hud === undefined
+                ? undefined
+                : {
+                    ...playtestHudMetrics.hud,
+                    gameOver: shellGameOver,
+                  },
+          };
+  const startCurrentPlaytest = useCallback(async () => {
+    await start(
+      projectId,
+      map.id,
+      selectedModelId === undefined ? {} : { selectedPlayerModelId: selectedModelId },
+    );
+  }, [map.id, projectId, selectedModelId, start]);
+  const restartCurrentPlaytest = useCallback(async () => {
+    ignoredShellGameOverRef.current = currentShellGameOver;
+    setShellMatchStarted(false);
+    pendingShellRetryKeys.add(shellCacheKey);
+    setShellRetryEpoch((epoch) => epoch + 1);
+    await stop();
+    await startCurrentPlaytest();
+  }, [currentShellGameOver, shellCacheKey, startCurrentPlaytest, stop]);
+  const exitCurrentPlaytest = useCallback(() => {
+    void stop();
+  }, [stop]);
+  const noopShellEffect = useCallback(() => undefined, []);
+  const runtimeInitialState = useMemo(
+    () => ({ ...initialMenuState, phase: 'menu' as const, screen: 'main' as const }),
+    [],
+  );
+  const shellInitialState = useMemo(
+    () =>
+      shellRetryEpoch === 0
+        ? runtimeInitialState
+        : { ...initialMenuState, phase: 'lobby' as const, screen: 'main' as const },
+    [runtimeInitialState, shellRetryEpoch],
+  );
+  const [shellNavigationRequests, setShellNavigationRequests] = useState<
+    NonNullable<RuntimeShellBehaviorBridge['shellNavigationRequests']>
+  >([]);
+  const currentShellSessionIdRef = useRef(sessionId);
+  currentShellSessionIdRef.current = sessionId;
+  const playtestShellBridge = useMemo<RuntimeShellBehaviorBridge>(
+    () => ({
+      shellNavigationRequests,
+      emitShellEvent: (event) => {
+        const requestSessionId = sessionId;
+        void window.tileborne.playtest
+          .shellEvent({ sessionId: requestSessionId as PlaytestSessionId, event })
+          .then((response) => {
+            if (currentShellSessionIdRef.current !== requestSessionId) {
+              return;
+            }
+            setShellNavigationRequests((current) => {
+              const epoch = requestSessionId;
+              const seen = new Set(current.map((entry) => `${entry.epoch}:${entry.sequence}`));
+              const next = [...current];
+              for (const entry of response.requests) {
+                const key = `${epoch}:${entry.sequence}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                next.push({
+                  epoch,
+                  sequence: entry.sequence,
+                  sourceEvent: event,
+                  request: entry.request,
+                });
+              }
+              return next.length === current.length ? current : next;
+            });
+          })
+          .catch(() => undefined);
+      },
+    }),
+    [sessionId, shellNavigationRequests],
+  );
+  useEffect(() => {
+    setShellNavigationRequests([]);
+    setShellMatchStarted(false);
+    ignoredShellGameOverRef.current = undefined;
+  }, [sessionId]);
+  if (
+    shellProjectionCacheRef.current.projection === undefined &&
+    fallbackShellProjection !== undefined
+  ) {
+    shellProjectionCacheRef.current.projection = fallbackShellProjection;
+    shellProjectionCacheRef.current.source = 'fallback';
+  }
+  const cachedShellProjection = shellProjectionCacheRef.current.projection;
+  const cachedShellProjectionSource = shellProjectionCacheRef.current.source;
+  const displayedShellProjection = shellProjection ?? cachedShellProjection;
+  const playtestHudOverlayMetrics =
+    displayedShellProjection === undefined ||
+    currentShellGameOver === undefined ||
+    playtestHudMetrics?.hud === undefined
+      ? playtestHudMetrics
+      : (() => {
+          const { gameOver: _gameOver, ...hudWithoutGameOver } = playtestHudMetrics.hud;
+          return {
+            ...playtestHudMetrics,
+            hud: hudWithoutGameOver,
+          };
+        })();
+  useEffect(() => {
+    if (displayedShellProjection !== undefined || projectId.length === 0) return;
+    let cancelled = false;
+    const open = window.tileborne?.gameShell?.open;
+    if (open === undefined) {
+      setFallbackShellStatus('error');
+      setFallbackShellError('Game shell IPC bridge is unavailable in the playtest renderer.');
+      return;
+    }
+    setFallbackShellStatus('pending');
+    setFallbackShellError(undefined);
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return;
+      setFallbackShellStatus('timeout');
+      setFallbackShellError(
+        `Game shell projection did not resolve within ${SHELL_FALLBACK_TIMEOUT_MS}ms.`,
+      );
+    }, SHELL_FALLBACK_TIMEOUT_MS);
+    void open({ projectId: projectId as ProjectId })
+      .then((response) => {
+        if (cancelled) return;
+        window.clearTimeout(timeout);
+        const projection = runtimeShellProjectionFromIpc(response.projection);
+        if (projection !== undefined) {
+          setFallbackShellProjection(projection);
+          setFallbackShellStatus('success');
+          return;
+        }
+        setFallbackShellStatus('invalid');
+        setFallbackShellError('Game shell IPC returned no decodable projection.');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        window.clearTimeout(timeout);
+        setFallbackShellStatus('error');
+        setFallbackShellError(formatShellError(error));
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [displayedShellProjection, projectId]);
+  const shellQueryError =
+    shellQuery.error === null || shellQuery.error === undefined
+      ? undefined
+      : formatShellError(shellQuery.error);
+  const shellUnavailableMessage =
+    displayedShellProjection !== undefined
+      ? undefined
+      : fallbackShellStatus === 'timeout'
+        ? fallbackShellError
+        : fallbackShellStatus === 'error'
+          ? fallbackShellError
+          : fallbackShellStatus === 'invalid'
+            ? fallbackShellError
+            : shellQueryError;
+  const shellProjectionState =
+    displayedShellProjection === undefined
+      ? shellUnavailableMessage !== undefined
+        ? 'unavailable'
+        : shellQuery.data === undefined
+          ? 'loading'
+          : 'invalid'
+      : shellProjection === undefined
+        ? cachedShellProjectionSource === 'fallback'
+          ? 'fallback'
+          : 'retained'
+        : 'fresh';
+  const shellRuntimeRootState =
+    displayedShellProjection === undefined
+      ? shellUnavailableMessage === undefined
+        ? 'loading'
+        : 'unavailable'
+      : 'mounted';
+  const shellAssetUrlResolver = useCallback(
+    (asset: NonNullable<typeof displayedShellProjection>['assets'][number]) =>
+      assetProtocolUrl(asset.packId, asset.path, asset.packVersion),
+    [],
+  );
+  const canStartPlaytestRuntime = displayedShellProjection !== undefined;
+  const renderPlaytestLobby = useCallback(
+    ({
+      matchmaking,
+      onStartMatch,
+      onBack,
+    }: Parameters<NonNullable<RuntimeRootProps['renderLobby']>>[0]) => {
+      const debugWindow = window as PlaytestShellDebugWindow;
+      if (debugWindow.__tileborneShellDebug !== undefined) {
+        debugWindow.__tileborneShellDebug.renderLobbyCount =
+          (debugWindow.__tileborneShellDebug.renderLobbyCount ?? 0) + 1;
+      }
+      return (
+        <div className="tb-menu-card tb-lobby-panel" data-testid="playtest-shell-lobby">
+          <p className="tb-label">Local playtest</p>
+          <h2>Lobby</h2>
+          <p className="tb-tagline">
+            {matchmaking ? 'Starting session...' : 'Ready to enter the active playtest.'}
+          </p>
+          <div className="tb-menu-actions">
+            <Button
+              type="button"
+              size="lg"
+              onClick={onStartMatch}
+              data-testid="playtest-shell-start-match"
+            >
+              Start Match
+            </Button>
+            <Button type="button" variant="outline" size="lg" onClick={onBack}>
+              Back
+            </Button>
+          </div>
+        </div>
+      );
+    },
+    [],
+  );
+  const runtimeShellElement = useMemo(
+    () =>
+      displayedShellProjection === undefined ? (
+        shellUnavailableMessage === undefined ? (
+          <div
+            role="status"
+            className="tb-scrim tb-shell-screen tb-shell-layout-center"
+            data-testid="shell-screen-loading"
+          >
+            <div className="tb-panel">
+              <p className="tb-tagline">Loading shell</p>
+            </div>
+          </div>
+        ) : (
+          <div
+            role="alert"
+            className="tb-scrim tb-shell-screen tb-shell-layout-center"
+            data-testid="shell-screen-unavailable"
+          >
+            <div className="tb-panel">
+              <p className="tb-label">Shell unavailable</p>
+              <p className="tb-tagline">{shellUnavailableMessage}</p>
+            </div>
+          </div>
+        )
+      ) : (
+        <InstrumentedRuntimeRoot
+          key={`${shellCacheKey}:${shellRetryEpoch}`}
+          generation={shellProjectionCacheRef.current.generation}
+          reason={`cache:${shellCacheKey}:${cachedShellProjectionSource ?? 'none'}`}
+          projectId={projectId}
+          mapId={map.id}
+          sessionId={sessionId}
+          canvas={null}
+          initialState={shellInitialState}
+          shellProjection={displayedShellProjection}
+          shellAssetUrlResolver={shellAssetUrlResolver}
+          shellBridge={playtestShellBridge}
+          {...(projectAudio === undefined
+            ? {}
+            : { audio: { ...projectAudio, onChange: noopShellEffect } })}
+          {...(shellHudMetrics === undefined ? {} : { hudMetrics: shellHudMetrics })}
+          {...(shellResults === undefined ? {} : { results: shellResults })}
+          onPlay={noopShellEffect}
+          onMatchStart={() => {
+            ignoredShellGameOverRef.current = currentShellGameOver;
+            setShellMatchStarted(true);
+          }}
+          onPlayAgain={() => {
+            void restartCurrentPlaytest();
+          }}
+          onExitToMenu={exitCurrentPlaytest}
+          onQuit={stop}
+          renderLobby={renderPlaytestLobby}
+        />
+      ),
+    [
+      displayedShellProjection,
+      cachedShellProjectionSource,
+      exitCurrentPlaytest,
+      map.id,
+      noopShellEffect,
+      playtestShellBridge,
+      projectId,
+      projectAudio,
+      renderPlaytestLobby,
+      restartCurrentPlaytest,
+      runtimeInitialState,
+      shellInitialState,
+      shellRetryEpoch,
+      shellAssetUrlResolver,
+      shellCacheKey,
+      shellUnavailableMessage,
+      shellHudMetrics,
+      shellResults,
+      sessionId,
+      stop,
+    ],
+  );
 
   usePlaytestRuntimeMount({
     containerRef,
     runtimeRef,
     projectId,
     map,
-    pluginId: rendererKey,
+    pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
     builtModels,
     builtOverlays,
     builtWeapons,
@@ -531,7 +1103,7 @@ export function PlaytestViewport({
     containerRef,
     runtimeRef,
     map,
-    pluginId: rendererKey,
+    pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
     sessionId,
   });
 
@@ -549,10 +1121,25 @@ export function PlaytestViewport({
 
   usePlaytestInputBridge({
     containerRef,
-    pluginId: rendererKey,
+    pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
     sessionId,
     tickCount: session?.runtimeMetrics?.tickCount,
+    projectAudio,
   });
+
+  useEffect(() => {
+    const pluginAudioCues = resolvedPlugin?.audio?.cues ?? [];
+    dispatchGameplayLifecycleAudioEvents({
+      engine: window.__tilebornePlaytestAudio,
+      cues: [...pluginAudioCues, ...(projectAudio?.cues ?? [])],
+      events: session?.runtimeMetrics?.hud?.gameplayEvents ?? [],
+      seenKeys: dispatchedGameplayAudioKeysRef.current,
+    });
+  }, [
+    projectAudio?.cues,
+    resolvedPlugin?.audio?.cues,
+    session?.runtimeMetrics?.hud?.gameplayEvents,
+  ]);
 
   if (rendererError !== undefined) {
     return (
@@ -581,35 +1168,7 @@ export function PlaytestViewport({
           tabIndex={0}
         />
         <PlaytestHudOverlay
-          metrics={
-            session?.runtimeMetrics
-              ? {
-                  playerCount: session.runtimeMetrics.playerCount,
-                  tickCount: session.runtimeMetrics.tickCount,
-                  hud: session.runtimeMetrics.hud
-                    ? {
-                        totalPlayers: session.runtimeMetrics.hud.totalPlayers,
-                        gameplayEvents: [...session.runtimeMetrics.hud.gameplayEvents],
-                        ...(session.runtimeMetrics.hud.localPlayer
-                          ? { localPlayer: session.runtimeMetrics.hud.localPlayer }
-                          : {}),
-                        ...(session.runtimeMetrics.hud.zoneStatus
-                          ? { zoneStatus: session.runtimeMetrics.hud.zoneStatus }
-                          : {}),
-                        ...(session.runtimeMetrics.hud.scoreboard
-                          ? { scoreboard: session.runtimeMetrics.hud.scoreboard }
-                          : {}),
-                        ...(session.runtimeMetrics.hud.minimap
-                          ? { minimap: session.runtimeMetrics.hud.minimap }
-                          : {}),
-                        ...(session.runtimeMetrics.hud.gameOver
-                          ? { gameOver: session.runtimeMetrics.hud.gameOver }
-                          : {}),
-                      }
-                    : undefined,
-                }
-              : undefined
-          }
+          metrics={playtestHudOverlayMetrics}
           projectId={projectId}
           mapId={map.id}
           isRestarting={isStarting || isStopping}
@@ -631,6 +1190,24 @@ export function PlaytestViewport({
           editing={hudEditing.editing}
           onMoveWidget={hudEditing.moveWidget}
         />
+        <div
+          className="absolute inset-0 z-30"
+          data-testid="playtest-runtime-shell"
+          data-shell-query-status={shellQuery.status}
+          data-shell-query-fetch-status={shellQuery.fetchStatus}
+          data-shell-query-error={shellQueryError}
+          data-shell-fallback-status={fallbackShellStatus}
+          data-shell-fallback-error={fallbackShellError}
+          data-shell-projection-state={shellProjectionState}
+          data-shell-runtime-root-state={shellRuntimeRootState}
+          data-shell-session-state={session?.status ?? 'missing'}
+          data-shell-renderer-key={rendererKey ?? 'missing'}
+          data-shell-cache-key={shellCacheKey}
+          data-shell-projection-source={cachedShellProjectionSource ?? 'none'}
+          data-shell-host-generation={String(shellProjectionCacheRef.current.generation)}
+        >
+          {runtimeShellElement}
+        </div>
         {resolvedPlugin && !hudEditing.editing ? (
           <Button
             type="button"

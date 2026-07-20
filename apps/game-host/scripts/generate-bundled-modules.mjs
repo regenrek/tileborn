@@ -268,6 +268,7 @@ export const generateBundledModules = async (options = {}) => {
 
 export type RuntimeClientFrameView =
   | { readonly kind: "heartbeat"; readonly tick: number }
+  | { readonly kind: "ack"; readonly tick: number; readonly receivedAtMs: number }
   | {
       readonly kind: "input";
       readonly input: RuntimeClientInputFrame;
@@ -294,8 +295,10 @@ export type RuntimeServerLifecycleFrameView = {
 export declare function decodeClientFrame(bytes: Uint8Array): RuntimeClientFrameDecodeResult;
 export declare function decodeClientFrameView(bytes: Uint8Array): RuntimeClientFrameView | undefined;
 export declare function decodeServerLifecycleFrame(bytes: Uint8Array): RuntimeServerLifecycleFrameView | undefined;
+export declare function encodeTransportErrorFrame(code: string, message: string): Uint8Array;
 export declare function encodeInvalidClientFrame(): Uint8Array;
 export declare function isWelcomeFrame(bytes: Uint8Array): boolean;
+export declare function snapshotTickFromServerFrame(bytes: Uint8Array): number | undefined;
 
 export declare function createRuntimeAdapter(host: {
   readonly getMapPackage: () => unknown;

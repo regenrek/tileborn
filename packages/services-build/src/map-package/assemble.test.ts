@@ -11,7 +11,7 @@ import {
   hashBytes,
 } from '@tileborne/core';
 import { ModeDataExportError, RuntimeProjectContent } from '@tileborne/plugin-api';
-import { loadRuntimeMapPackage } from '@tileborne/runtime/map-package';
+import { hashRuntimeMapPackageEntry, loadRuntimeMapPackage } from '@tileborne/runtime/map-package';
 import { Effect, Result, Schema } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -20,6 +20,12 @@ import { assembleRuntimeMapPackage } from './assemble.js';
 const UUID = '12345678-1234-4234-8234-123456789abc';
 const TYPE_UUID = UUID.replace('1234567', 'aaaaaaa');
 const PLUGIN = '@tileborne-plugins/example-mode';
+const validWavBytes = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x2a, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20,
+  0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x80, 0x3e, 0x00, 0x00,
+  0x02, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f,
+  0x00, 0x00,
+]);
 
 const pluginId = Schema.decodeUnknownSync(PluginId)(PLUGIN);
 const modeId = Schema.decodeUnknownSync(GameModeId)(PLUGIN);
@@ -163,12 +169,78 @@ describe('assembleRuntimeMapPackage (ADR-0030)', () => {
       'settings.json',
       'content.json',
       'behaviors.json',
+      'audio.json',
       'visuals.json',
       'assets.json',
       'mode-data.json',
     ]) {
       expect(await readFile(path.join(right, file))).toEqual(await readFile(path.join(left, file)));
     }
+  });
+
+  it('writes authored audio projection as a hashed runtime package entry', async () => {
+    const dir = await makeTempDir();
+    const audio = {
+      schemaVersion: 1,
+      buses: [{ id: 'project.music', label: 'Project Music', kind: 'music', defaultVolume: 0.8 }],
+      cues: [
+        {
+          id: 'project.shell.menuMusic',
+          label: 'Menu Loop',
+          busId: 'project.music',
+          defaultVolume: 0.8,
+          binding: 'shell.menuMusic',
+          classification: 'music',
+          source: { url: 'assets/audio/menu-loop.ogg', mime: 'audio/ogg' },
+          loop: true,
+          maxOverlap: 1,
+        },
+      ],
+      diagnostics: [],
+      settings: {
+        masterVolume: 0.42,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: { 'project.music': 0.25 },
+      },
+    };
+    const menuLoopBytes = validWavBytes;
+
+    const assembled = await Effect.runPromise(
+      assembleRuntimeMapPackage({
+        ...baseInput(dir),
+        audio,
+        assets: [
+          {
+            path: 'assets/audio/menu-loop.ogg',
+            bytes: menuLoopBytes,
+            assetId: 'asset:menu-loop',
+          },
+        ],
+      }),
+    );
+
+    expect(assembled.mapPackage.audio).toEqual(audio);
+    const loaded = Result.getOrThrow(await loadRuntimeMapPackage(fsReader(dir)));
+    expect(loaded.audio).toEqual(audio);
+    const audioBytes = await readFile(path.join(dir, 'audio.json'));
+    expect(loaded.manifest.entryHashes.audio).toBeDefined();
+    expect(loaded.manifest.entryHashes.audio).toBe(
+      await hashRuntimeMapPackageEntry(new Uint8Array(audioBytes)),
+    );
+    expect(await readFile(path.join(dir, 'assets/audio/menu-loop.ogg'))).toEqual(
+      Buffer.from(menuLoopBytes),
+    );
+    expect(loaded.assets).toEqual([
+      {
+        path: 'assets/audio/menu-loop.ogg',
+        hash: await hashRuntimeMapPackageEntry(menuLoopBytes),
+        assetId: 'asset:menu-loop',
+      },
+    ]);
+    expect(loaded.manifest.entryHashes['assets/audio/menu-loop.ogg']).toBe(
+      await hashRuntimeMapPackageEntry(menuLoopBytes),
+    );
   });
 
   it('writes the canonical layout that loadRuntimeMapPackage round-trips', async () => {

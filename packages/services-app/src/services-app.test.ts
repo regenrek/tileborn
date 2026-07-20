@@ -41,6 +41,15 @@ import { Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyAudioAuthoringCommand,
+  audioAuthoringStateFromDocument,
+  createAudioAuthoringState,
+  defaultRuntimeAudioSettings,
+  defaultProjectGameShellState,
+  projectAudioDocumentFromState,
+  projectGameShellDocumentFromState,
+} from '@tileborne/runtime';
+import {
   AssetImportError,
   AssetIntegrityError,
   AssetService,
@@ -48,7 +57,14 @@ import {
 } from './asset/index.js';
 import { MapService } from './map/index.js';
 import { ProjectService } from './project/index.js';
-import { ServicesAppLayer } from './index.js';
+import {
+  ProjectAudioService,
+  ProjectGameShellService,
+  ServicesAppLayer,
+  applyInstalledPluginRuntimeDefaults,
+  resolveInstalledPluginRuntimeDefaults,
+  type InstalledRuntimeDefaultsPlugin,
+} from './index.js';
 import { withTempHome } from './test-utils.js';
 
 const appLayer = ServicesAppLayer.pipe(Layer.provideMerge(FoundationLayer));
@@ -60,7 +76,16 @@ const changedPng = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0a, 0x1a, 0x0
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 const runApp = <A, E>(
-  effect: Effect.Effect<A, E, ProjectService | MapService | AssetService | JobService>,
+  effect: Effect.Effect<
+    A,
+    E,
+    | ProjectService
+    | MapService
+    | AssetService
+    | JobService
+    | ProjectAudioService
+    | ProjectGameShellService
+  >,
 ) => Effect.runPromise(effect.pipe(Effect.provide(appLayer)));
 
 const runAppWithPlugins = <A, E>(
@@ -88,9 +113,12 @@ const projectLockJson = (home: string, projectId: ProjectId) =>
 
 const license = new License({
   spdxId: 'CC0-1.0',
-  attribution: Option.none(),
+  attribution: Option.some('Tileborne Fixture Artist'),
   sourceUrl: Option.some('https://example.invalid/assets'),
+  sourcePath: 'packages/services-app/test-fixtures/tiny-dungeon',
+  modifications: 'Generated for AssetService persistence coverage',
   notes: Option.none(),
+  redistributable: true,
 });
 
 const makeManifest = (
@@ -132,7 +160,15 @@ const writePackSource = async (
 
 const rawLicenseIntegrityJson = (value: Record<string, unknown>): Record<string, unknown> => {
   const json: Record<string, unknown> = {};
-  for (const key of ['spdxId', 'attribution', 'sourceUrl', 'notes', 'redistributable']) {
+  for (const key of [
+    'spdxId',
+    'attribution',
+    'sourceUrl',
+    'sourcePath',
+    'modifications',
+    'notes',
+    'redistributable',
+  ]) {
     if (key in value) {
       json[key] = value[key];
     }
@@ -430,6 +466,158 @@ describe('ProjectService', () => {
       );
       const files = await readdir(projectDir(home, id));
       expect(files.some((file) => file.includes('.tmp-'))).toBe(false);
+    }));
+});
+
+describe('ProjectAudioService', () => {
+  it('persists the versioned audio document across save, apply, and reopen', () =>
+    withTempHome(async () => {
+      const reopened = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const audio = yield* ProjectAudioService;
+          const projectId = yield* projects.create({ name: 'Audio Round Trip' });
+          const initial = yield* audio.open(projectId);
+          expect(initial.schemaVersion).toBe(1);
+
+          const imported = applyAudioAuthoringCommand(
+            createAudioAuthoringState({ settings: defaultRuntimeAudioSettings() }),
+            {
+              type: 'import',
+              label: 'Menu Loop',
+              classification: 'music',
+              source: { path: 'audio/menu-loop.ogg', mime: 'audio/ogg' },
+            },
+          );
+          const bound = applyAudioAuthoringCommand(imported.state, {
+            type: 'bind',
+            binding: 'shell.menuMusic',
+            label: 'Menu Loop',
+          });
+          yield* audio.save(projectId, projectAudioDocumentFromState(bound.state));
+
+          yield* audio.apply(projectId, {
+            type: 'replace',
+            label: 'Menu Loop',
+            source: { path: 'audio/menu-loop-v2.ogg', mime: 'audio/ogg' },
+          });
+
+          return yield* audio.open(projectId);
+        }),
+      );
+
+      expect(reopened.schemaVersion).toBe(1);
+      const state = audioAuthoringStateFromDocument(reopened);
+      expect(state.bindings['shell.menuMusic']).toBe('Menu Loop');
+      expect(state.assetsByLabel['Menu Loop']).toMatchObject({
+        classification: 'music',
+        source: { path: 'audio/menu-loop-v2.ogg', mime: 'audio/ogg' },
+      });
+    }));
+});
+
+describe('installed plugin runtime defaults', () => {
+  const installedPlugin = (): InstalledRuntimeDefaultsPlugin => {
+    const shellState = defaultProjectGameShellState('tileborne.test-runtime');
+    return {
+      id: 'tileborne.test-runtime',
+      enabled: true,
+      manifest: {
+        contributes: {
+          runtime: Option.some({
+            shellDefaults: Option.some([
+              {
+                id: 'test-shell-defaults',
+                data: {
+                  ...projectGameShellDocumentFromState(shellState),
+                  pluginId: undefined,
+                },
+              },
+            ]),
+            audioBuses: Option.some([
+              {
+                id: 'test-audio',
+                data: {
+                  buses: [
+                    { id: 'test.music', label: 'Music', kind: 'music', volume: 0.7 },
+                    { id: 'test.sfx', label: 'SFX', kind: 'sfx', volume: 0.9 },
+                  ],
+                  cues: [
+                    {
+                      id: 'test.menu',
+                      label: 'Menu Loop',
+                      busId: 'test.music',
+                      binding: 'shell.menuMusic',
+                      source: { path: 'audio/menu.ogg', mime: 'audio/ogg' },
+                    },
+                    {
+                      id: 'test.fire',
+                      label: 'Fire',
+                      busId: 'test.sfx',
+                      binding: 'weapon.fire',
+                      source: { path: 'audio/fire.wav', mime: 'audio/wav' },
+                    },
+                  ],
+                },
+              },
+            ]),
+          }),
+        },
+      },
+    };
+  };
+
+  it('resolves and applies shell defaults and audio cues from one canonical installed-plugin surface', () =>
+    withTempHome(async () => {
+      const result = await runApp(
+        Effect.gen(function* () {
+          const projects = yield* ProjectService;
+          const shell = yield* ProjectGameShellService;
+          const audio = yield* ProjectAudioService;
+          const projectId = yield* projects.create({ name: 'Runtime Defaults' });
+          const plugin = installedPlugin();
+          const resolved = resolveInstalledPluginRuntimeDefaults(plugin.id, [plugin]);
+          const applied = yield* applyInstalledPluginRuntimeDefaults(
+            projectId,
+            plugin.id,
+            [plugin],
+            {
+              shell: {
+                mainMenuTitle: 'Reference Menu',
+              },
+            },
+          );
+          return {
+            resolved,
+            applied,
+            shell: yield* shell.open(projectId),
+            audio: yield* audio.open(projectId),
+          };
+        }),
+      );
+
+      expect(result.resolved.shellDefaults?.pluginId).toBe('tileborne.test-runtime');
+      expect(result.resolved.audioDefaults?.cues.map((cue) => cue.binding).sort()).toEqual([
+        'shell.menuMusic',
+        'weapon.fire',
+      ]);
+      expect(result.applied.invalid).toBeUndefined();
+      expect(result.shell.screens.find((screen) => screen.id === 'main-menu')?.title).toBe(
+        'Reference Menu',
+      );
+      const audioState = audioAuthoringStateFromDocument(result.audio);
+      expect(audioState.assetsByLabel['Menu Loop']).toMatchObject({
+        classification: 'music',
+        source: { path: 'audio/menu.ogg', mime: 'audio/ogg' },
+      });
+      expect(audioState.assetsByLabel.Fire).toMatchObject({
+        classification: 'sfx',
+        source: { path: 'audio/fire.wav', mime: 'audio/wav' },
+      });
+      expect(audioState.bindings).toMatchObject({
+        'shell.menuMusic': 'Menu Loop',
+        'weapon.fire': 'Fire',
+      });
     }));
 });
 
@@ -1010,14 +1198,35 @@ describe('AssetService', () => {
     withTempHome(async (home) => {
       const manifest = makeManifest();
       const source = await writePackSource(home, manifest);
+      const packId = await runApp(
+        Effect.gen(function* () {
+          const assets = yield* AssetService;
+          return yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
+        }),
+      );
       const pack = await runApp(
         Effect.gen(function* () {
           const assets = yield* AssetService;
-          const id = yield* assets.importPackNow(new DirectoryAssetPackSource({ path: source }));
-          return yield* assets.getPack(id);
+          return yield* assets.getPack(packId);
         }),
       );
       expect(pack.id).toBe(manifest.id);
+      expect(pack.license).toMatchObject({
+        attribution: Option.some('Tileborne Fixture Artist'),
+        sourcePath: 'packages/services-app/test-fixtures/tiny-dungeon',
+        modifications: 'Generated for AssetService persistence coverage',
+        redistributable: true,
+      });
+      const assetLicense = pack.assets[0]?.license;
+      if (assetLicense === undefined) {
+        throw new Error('expected imported asset license');
+      }
+      expect(Option.getOrUndefined(assetLicense)).toMatchObject({
+        attribution: Option.some('Tileborne Fixture Artist'),
+        sourcePath: 'packages/services-app/test-fixtures/tiny-dungeon',
+        modifications: 'Generated for AssetService persistence coverage',
+        redistributable: true,
+      });
     }));
 
   it('verifies a pack once then serves it from the in-memory cache', () =>

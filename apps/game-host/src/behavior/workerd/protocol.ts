@@ -4,6 +4,13 @@ import type {
   BehaviorRuntimeDiagnostic,
   BehaviorSchedulerSnapshot,
 } from '@tileborne/runtime/behavior';
+import type {
+  GameShellRegisteredEvent,
+  RuntimeGameShellProjection,
+  RuntimeShellBehaviorEventPayload,
+  RuntimeShellNavigationRequest,
+} from '@tileborne/runtime';
+import { decodeRuntimeGameShellProjection, GAME_SHELL_REGISTERED_EVENTS } from '@tileborne/runtime';
 
 export const WORKERD_BEHAVIOR_PROTOCOL_VERSION = 1 as const;
 
@@ -12,6 +19,12 @@ export interface WorkerdBehaviorStepRequest {
   readonly packageId: string;
   readonly seed?: string;
   readonly snapshot?: BehaviorSchedulerSnapshot;
+  readonly shell?:
+    | {
+        readonly projection?: RuntimeGameShellProjection | undefined;
+        readonly events?: ReadonlyArray<RuntimeShellBehaviorEventPayload> | undefined;
+      }
+    | undefined;
   readonly operation: {
     readonly kind: 'step';
     readonly tick: number;
@@ -24,6 +37,7 @@ export interface WorkerdBehaviorSuccessResponse {
   readonly snapshot: BehaviorSchedulerSnapshot;
   readonly traces: ReadonlyArray<BehaviorExecutionTrace>;
   readonly diagnostics: ReadonlyArray<BehaviorRuntimeDiagnostic>;
+  readonly shellNavigationRequests?: ReadonlyArray<RuntimeShellNavigationRequest> | undefined;
 }
 
 export interface WorkerdBehaviorFailureResponse {
@@ -98,6 +112,25 @@ const isDiagnostic = (value: unknown): value is BehaviorRuntimeDiagnostic =>
   typeof value.suggestion === 'string' &&
   (value.details === undefined || (isRecord(value.details) && isJsonValue(value.details)));
 
+const isShellNavigationRequest = (value: unknown): value is RuntimeShellNavigationRequest =>
+  isRecord(value) && value.type === 'navigate' && typeof value.targetScreenId === 'string';
+
+const isRegisteredShellEvent = (value: unknown): value is GameShellRegisteredEvent =>
+  typeof value === 'string' &&
+  GAME_SHELL_REGISTERED_EVENTS.includes(value as GameShellRegisteredEvent);
+
+export const isRuntimeShellBehaviorEventPayload = (
+  value: unknown,
+): value is RuntimeShellBehaviorEventPayload =>
+  isRecord(value) &&
+  isRegisteredShellEvent(value.event) &&
+  typeof value.screenId === 'string' &&
+  (value.actionId === undefined || typeof value.actionId === 'string') &&
+  (value.targetScreenId === undefined || typeof value.targetScreenId === 'string');
+
+export const isRuntimeGameShellProjection = (value: unknown): value is RuntimeGameShellProjection =>
+  decodeRuntimeGameShellProjection(value) !== undefined;
+
 /** Decode the service boundary before any response or snapshot is committed. */
 export const decodeWorkerdBehaviorResponse = (
   value: unknown,
@@ -122,7 +155,10 @@ export const decodeWorkerdBehaviorResponse = (
     !Array.isArray(value.traces) ||
     !value.traces.every(isTrace) ||
     !Array.isArray(value.diagnostics) ||
-    !value.diagnostics.every(isDiagnostic)
+    !value.diagnostics.every(isDiagnostic) ||
+    (value.shellNavigationRequests !== undefined &&
+      (!Array.isArray(value.shellNavigationRequests) ||
+        !value.shellNavigationRequests.every(isShellNavigationRequest)))
   ) {
     return {
       ok: false,

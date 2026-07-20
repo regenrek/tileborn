@@ -1,4 +1,10 @@
-import { AssetId, PERSISTED_SCHEMA_VERSIONS, PackId } from '@tileborne/core';
+import {
+  AssetId,
+  AssetLicense,
+  assetLicenseUndefinedOptionRequiredRedistributableFields,
+  PERSISTED_SCHEMA_VERSIONS,
+  PackId,
+} from '@tileborne/core';
 import { Schema } from 'effect';
 
 import { Placeable } from './placeable.js';
@@ -7,11 +13,7 @@ import { Tileset } from './tileset.js';
 
 /** License metadata attached to a tileset pack. */
 export class TilesetPackLicense extends Schema.Class<TilesetPackLicense>('TilesetPackLicense')({
-  spdxId: Schema.String,
-  attribution: Schema.OptionFromUndefinedOr(Schema.String),
-  sourceUrl: Schema.OptionFromUndefinedOr(Schema.String),
-  notes: Schema.OptionFromUndefinedOr(Schema.String),
-  redistributable: Schema.Boolean,
+  ...assetLicenseUndefinedOptionRequiredRedistributableFields,
 }) {}
 
 /** Image or data asset referenced by a tileset pack. */
@@ -19,6 +21,7 @@ export class TilesetPackAsset extends Schema.Class<TilesetPackAsset>('TilesetPac
   id: AssetId,
   path: Schema.String,
   mime: Schema.String,
+  license: Schema.optional(AssetLicense),
 }) {}
 
 /** Top-level durable tileset pack container. */

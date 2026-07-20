@@ -44,7 +44,9 @@ import {
   AssetLibraryService,
   AssetService,
   MapService,
+  ProjectAudioService,
   ProjectBehaviorService,
+  ProjectGameShellService,
   ProjectService,
   WorkingPaletteService,
   removeAssetPack,
@@ -52,6 +54,17 @@ import {
   type AssetPackWithCapability,
   type ProjectBehaviorSnapshot,
 } from '@tileborne/services-app';
+import {
+  applyAudioAuthoringCommand,
+  audioAuthoringStateFromDocument,
+  buildRuntimeGameShellProjection,
+  decodeProjectAudioDocument,
+  decodeProjectGameShellDocument,
+  gameShellStateFromDocument,
+  resolveRuntimeAudioSource,
+  type GameShellAssetKind,
+  type GameShellAssetRefDefinition,
+} from '@tileborne/runtime';
 import {
   BuildService,
   ExportService,
@@ -96,6 +109,10 @@ import type { TiledImportProfile } from '@tileborne/sdk-tileset/tiled';
 
 import { ipcCatchAll } from './errors.js';
 import {
+  gameShellDefaultsInvalidReadinessDiagnostic,
+  resolveInstalledGameShellDefaults,
+} from '../game-shell-defaults.js';
+import {
   importSourceDialogFilters,
   SPRITE_SHEET_IMAGE_EXTENSIONS,
   TILED_MAP_SOURCE_EXTENSIONS,
@@ -105,6 +122,7 @@ import { createElectronIpcServerTransport } from './transport.js';
 import {
   clearPlaytestRuntimeInput,
   controlPlaytestBehaviorDebug,
+  emitPlaytestShellBehaviorEvent,
   getPlaytestBehaviorDebugSnapshot,
   getPlaytestRuntimeMetrics,
   getPlaytestRuntimeSnapshot,
@@ -126,6 +144,7 @@ import { seedBundledPluginAssetPacksWithServices } from '../seed-plugins.js';
 import { appRuntime } from '../runtime.js';
 import { createPlaytestJoinWindow } from '../window.js';
 import {
+  assetPackLicenseReadinessDiagnosticsForPurpose,
   assertExecutionReadiness,
   behaviorReadinessDiagnostics,
   diagnosePlayerModelReference,
@@ -223,6 +242,37 @@ const resolveProjectGameMode = (
     ),
     readActiveGameModeSetting(project.settings) as GameModeId | undefined,
   );
+
+const shellAssetResolverFromPacks =
+  (installedPacks: readonly AssetPackWithCapability[]) =>
+  (asset: GameShellAssetRefDefinition, _kind: GameShellAssetKind) => {
+    const pack = installedPacks.find(
+      (entry) => String(entry.id) === asset.packId && entry.version === asset.packVersion,
+    );
+    if (pack === undefined) {
+      return {
+        ok: false,
+        message: `Asset pack ${asset.packId}@${asset.packVersion} is not installed.`,
+      };
+    }
+    const installed = pack.assets.find((entry) => String(entry.id) === asset.assetId);
+    if (installed === undefined) {
+      return { ok: false, message: `Asset ${asset.assetId} is not installed in ${asset.packId}.` };
+    }
+    if (installed.path !== asset.path) {
+      return {
+        ok: false,
+        message: `Asset ${asset.assetId} path changed from ${asset.path} to ${installed.path}.`,
+      };
+    }
+    if (installed.mime !== asset.mime) {
+      return {
+        ok: false,
+        message: `Asset ${asset.assetId} type changed from ${asset.mime} to ${installed.mime}.`,
+      };
+    }
+    return { ok: true };
+  };
 
 const toJobView = (job: JobState) => ({
   id: job.id,
@@ -391,6 +441,8 @@ const wireTrigger = <E, R>(
 
 const buildHandlers = Effect.gen(function* () {
   const projects = yield* ProjectService;
+  const projectAudio = yield* ProjectAudioService;
+  const projectGameShell = yield* ProjectGameShellService;
   const projectBehaviors = yield* ProjectBehaviorService;
   const maps = yield* MapService;
   const assets = yield* AssetService;
@@ -744,6 +796,9 @@ const buildHandlers = Effect.gen(function* () {
       for (const pack of installedPacks.filter((entry) =>
         referencedPackIds.has(String(entry.id)),
       )) {
+        diagnostics.push(
+          ...assetPackLicenseReadinessDiagnosticsForPurpose(input.purpose, input.projectId, pack),
+        );
         for (const [index, issue] of pack.capability.diagnostics.entries()) {
           const severity = issue.severity;
           diagnostics.push(
@@ -764,6 +819,70 @@ const buildHandlers = Effect.gen(function* () {
             }),
           );
         }
+      }
+
+      const audioProjection = yield* projectAudio.project(input.projectId, (source) => {
+        if (source.url !== undefined) return source;
+        if (source.path !== undefined) {
+          return {
+            ...source,
+            url: source.path.startsWith('assets/') ? source.path : `assets/${source.path}`,
+          };
+        }
+        return undefined;
+      });
+      for (const issue of audioProjection.diagnostics) {
+        const blocksExecution =
+          issue.code === 'missing-label' ||
+          issue.code === 'missing-source' ||
+          issue.code === 'unresolved-packaged-source';
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:audio:${issue.code}:${issue.path}`,
+            code: `audio.${issue.code}`,
+            severity: blocksExecution ? 'error' : 'warning',
+            source: 'audio',
+            title: blocksExecution ? 'Audio source is not playable' : 'Audio binding is incomplete',
+            message: issue.message,
+            projectId: input.projectId,
+            path: issue.path,
+            navigation: readinessNavigation({
+              kind: 'game-shell',
+              projectId: input.projectId,
+              path: issue.path,
+            }),
+          }),
+        );
+      }
+
+      const shellDefaults = resolveInstalledGameShellDefaults(activeMode, installed);
+      if (shellDefaults.invalid !== undefined) {
+        diagnostics.push(
+          gameShellDefaultsInvalidReadinessDiagnostic(input.projectId, shellDefaults.invalid),
+        );
+      }
+      const shellProjection = yield* projectGameShell.project(input.projectId, {
+        defaults: shellDefaults.defaults,
+        projection: { resolveAsset: shellAssetResolverFromPacks(installedPacks) },
+      });
+      for (const issue of shellProjection.diagnostics) {
+        diagnostics.push(
+          readinessDiagnostic({
+            id: `project:${input.projectId}:game-shell:${issue.code}:${issue.path}`,
+            code: `game-shell.${issue.code}`,
+            severity: 'error',
+            source: 'game-shell',
+            title: 'Game shell is not ready',
+            message: issue.message,
+            projectId: input.projectId,
+            path: issue.path,
+            navigation: readinessNavigation({
+              kind: 'game-shell',
+              projectId: input.projectId,
+              path: issue.path,
+            }),
+          }),
+        );
       }
 
       if (activeMode !== undefined) {
@@ -1151,6 +1270,141 @@ const buildHandlers = Effect.gen(function* () {
     .add('tileborne:projects:exportArchive', ({ projectId, destinationDirectory }) =>
       ipcCatchAll('tileborne:projects:exportArchive')(
         projects.exportArchive(projectId, destinationDirectory),
+      ),
+    )
+    .build();
+
+  const audioHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:audio:open', ({ projectId }) =>
+      ipcCatchAll('tileborne:audio:open')(
+        projectAudio.open(projectId).pipe(Effect.map((document) => ({ document }))),
+      ),
+    )
+    .add('tileborne:audio:save', ({ projectId, document }) =>
+      ipcCatchAll('tileborne:audio:save')(
+        Effect.gen(function* () {
+          const decoded = decodeProjectAudioDocument(document);
+          if (decoded === undefined) {
+            return yield* Effect.fail(new Error('Audio document failed validation.'));
+          }
+          return yield* projectAudio.save(projectId, decoded);
+        }).pipe(Effect.map((saved) => ({ document: saved }))),
+      ),
+    )
+    .add('tileborne:audio:apply', ({ projectId, command }) =>
+      ipcCatchAll('tileborne:audio:apply')(
+        projectAudio.apply(projectId, command).pipe(
+          Effect.map(({ document, projection }) => ({
+            document,
+            projection,
+          })),
+        ),
+      ),
+    )
+    .add('tileborne:audio:preview', ({ projectId, label }) =>
+      ipcCatchAll('tileborne:audio:preview')(
+        Effect.gen(function* () {
+          const document = yield* projectAudio.open(projectId);
+          const result = applyAudioAuthoringCommand(audioAuthoringStateFromDocument(document), {
+            type: 'preview',
+            label,
+          });
+          const source =
+            result.effects[0]?.type === 'preview'
+              ? resolveRuntimeAudioSource(result.effects[0].source, (candidate) =>
+                  candidate.url !== undefined
+                    ? candidate
+                    : candidate.path !== undefined
+                      ? {
+                          ...candidate,
+                          url: candidate.path.startsWith('assets/')
+                            ? candidate.path
+                            : `assets/${candidate.path}`,
+                        }
+                      : undefined,
+                )
+              : undefined;
+          return {
+            playable: source?.url !== undefined,
+            ...(source === undefined ? {} : { source }),
+            diagnostics:
+              source === undefined && result.diagnostics.length === 0
+                ? [
+                    {
+                      code: 'unresolved-packaged-source',
+                      path: `audio.assets.${label}.source`,
+                      message: `Audio label "${label}" does not resolve to a packaged source URL.`,
+                    },
+                  ]
+                : result.diagnostics,
+          };
+        }),
+      ),
+    )
+    .build();
+
+  const gameShellHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:game-shell:open', ({ projectId }) =>
+      ipcCatchAll('tileborne:game-shell:open')(
+        Effect.gen(function* () {
+          const project = yield* projects.open(projectId);
+          const installed = yield* registry.list();
+          const activeMode = resolveProjectGameMode(project, installed);
+          const defaults = resolveInstalledGameShellDefaults(activeMode, installed).defaults;
+          const document = yield* projectGameShell.open(projectId, { defaults });
+          return {
+            document,
+            projection: buildRuntimeGameShellProjection(gameShellStateFromDocument(document)),
+          };
+        }),
+      ),
+    )
+    .add('tileborne:game-shell:save', ({ projectId, document }) =>
+      ipcCatchAll('tileborne:game-shell:save')(
+        Effect.gen(function* () {
+          const decoded = decodeProjectGameShellDocument(document);
+          if (decoded === undefined) {
+            return yield* Effect.fail(new Error('Game shell document failed validation.'));
+          }
+          const project = yield* projects.open(projectId);
+          const installed = yield* registry.list();
+          const activeMode = resolveProjectGameMode(project, installed);
+          const defaults = resolveInstalledGameShellDefaults(activeMode, installed).defaults;
+          const saved = yield* projectGameShell.save(projectId, decoded);
+          return {
+            document: saved,
+            projection: yield* projectGameShell.project(projectId, { defaults }),
+          };
+        }),
+      ),
+    )
+    .add('tileborne:game-shell:apply', ({ projectId, command }) =>
+      ipcCatchAll('tileborne:game-shell:apply')(
+        Effect.gen(function* () {
+          const project = yield* projects.open(projectId);
+          const installed = yield* registry.list();
+          const activeMode = resolveProjectGameMode(project, installed);
+          const defaults = resolveInstalledGameShellDefaults(activeMode, installed).defaults;
+          return yield* projectGameShell.apply(projectId, command, { defaults }).pipe(
+            Effect.map(({ document, projection }) => ({
+              document,
+              projection,
+            })),
+          );
+        }),
+      ),
+    )
+    .add('tileborne:game-shell:preview', ({ document }) =>
+      ipcCatchAll('tileborne:game-shell:preview')(
+        Effect.gen(function* () {
+          const decoded = decodeProjectGameShellDocument(document);
+          if (decoded === undefined) {
+            return yield* Effect.fail(new Error('Game shell preview document failed validation.'));
+          }
+          return {
+            projection: buildRuntimeGameShellProjection(gameShellStateFromDocument(decoded)),
+          };
+        }),
       ),
     )
     .build();
@@ -2556,6 +2810,16 @@ const buildHandlers = Effect.gen(function* () {
         }),
       ),
     )
+    .add('tileborne:playtest:shellEvent', ({ sessionId, event }) =>
+      ipcCatchAll('tileborne:playtest:shellEvent')(
+        Effect.tryPromise({
+          try: async () => ({
+            requests: await emitPlaytestShellBehaviorEvent(sessionId, event),
+          }),
+          catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+        }),
+      ),
+    )
     .build();
 
   const runtimeHandlers = handlerBuilder(MainIpcRegistry)
@@ -2725,18 +2989,46 @@ const buildHandlers = Effect.gen(function* () {
     )
     .build();
 
+  const runtimeDeployTarget = (target: {
+    readonly adapterId?: 'local' | 'alchemy-cloudflare' | undefined;
+    readonly stage: 'local' | 'dev' | 'staging' | 'production';
+    readonly workerName: string;
+  }) =>
+    new RuntimeDeployTarget({
+      adapterId: target.adapterId === undefined ? Option.none() : Option.some(target.adapterId),
+      stage: target.stage,
+      workerName: target.workerName,
+      credentials: Option.none(),
+    });
+
   const deployHandlers = handlerBuilder(MainIpcRegistry)
+    .add('tileborne:runtime-deploy:plan', ({ buildId, target }) =>
+      ipcCatchAll('tileborne:runtime-deploy:plan')(
+        deploy.plan(buildId, runtimeDeployTarget(target)),
+      ),
+    )
+    .add('tileborne:runtime-deploy:preview', ({ buildId, target }) =>
+      ipcCatchAll('tileborne:runtime-deploy:preview')(
+        deploy.preview(buildId, runtimeDeployTarget(target)),
+      ),
+    )
     .add('tileborne:runtime-deploy:deploy', ({ buildId, target }) =>
       ipcCatchAll('tileborne:runtime-deploy:deploy')(
         Effect.gen(function* () {
-          const deployTarget = new RuntimeDeployTarget({
-            stage: target.stage,
-            workerName: target.workerName,
-            credentials: Option.none(),
-          });
-          const jobId = yield* deploy.deploy(buildId, deployTarget);
+          const jobId = yield* deploy.deploy(buildId, runtimeDeployTarget(target));
           return { jobId };
         }),
+      ),
+    )
+    .add('tileborne:runtime-deploy:status', ({ deploymentId }) =>
+      ipcCatchAll('tileborne:runtime-deploy:status')(deploy.status(deploymentId)),
+    )
+    .add('tileborne:runtime-deploy:logs', ({ deploymentId }) =>
+      ipcCatchAll('tileborne:runtime-deploy:logs')(deploy.logs(deploymentId)),
+    )
+    .add('tileborne:runtime-deploy:destroy', ({ deploymentId }) =>
+      ipcCatchAll('tileborne:runtime-deploy:destroy')(
+        deploy.destroy(deploymentId).pipe(Effect.as({})),
       ),
     )
     .add('tileborne:runtime-deploy:getDeployment', ({ deploymentId }) =>
@@ -2747,6 +3039,7 @@ const buildHandlers = Effect.gen(function* () {
               id: deployment.id,
               buildId: deployment.buildId,
               target: {
+                adapterId: deployment.target.adapterId,
                 stage: deployment.target.stage,
                 workerName: deployment.target.workerName,
               },
@@ -2765,6 +3058,7 @@ const buildHandlers = Effect.gen(function* () {
               id: deployment.id,
               buildId: deployment.buildId,
               target: {
+                adapterId: deployment.target.adapterId,
                 stage: deployment.target.stage,
                 workerName: deployment.target.workerName,
               },
@@ -2888,6 +3182,8 @@ const buildHandlers = Effect.gen(function* () {
 
   const handlers = defineHandlers(MainIpcRegistry, {
     ...projectHandlers,
+    ...audioHandlers,
+    ...gameShellHandlers,
     ...behaviorHandlers,
     ...mapHandlers,
     ...tiledImportHandlers,

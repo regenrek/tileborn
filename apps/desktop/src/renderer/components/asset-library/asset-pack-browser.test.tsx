@@ -144,6 +144,64 @@ const sourceGroup = new AssetLibraryGroup({
   previewRefs: [placeableRef, secondPlaceableRef],
 });
 
+const standaloneAssetId = 'asset:550e8400-e29b-41d4-a716-446655440020';
+const secondStandaloneAssetId = 'asset:550e8400-e29b-41d4-a716-446655440021';
+
+const standaloneAssetGroup = new AssetLibraryGroup({
+  id: `asset:${standaloneAssetId}`,
+  packId,
+  kind: 'asset',
+  label: 'standalone-background.png',
+  count: 1,
+  metadata: {
+    assetId: standaloneAssetId,
+    path: 'images/standalone-background.png',
+    mime: 'image/png',
+    licenseScope: 'asset override',
+    licenseSpdxId: 'CC-BY-4.0',
+    licenseAttribution: 'Standalone Artist',
+    licenseRedistributable: 'false',
+  },
+  searchText:
+    'standalone-background.png asset asset:asset:550e8400-e29b-41d4-a716-446655440020 asset:550e8400-e29b-41d4-a716-446655440020 images/standalone-background.png image/png cc-by-4.0 standalone artist false',
+  previewRefs: [],
+});
+
+const secondStandaloneAssetGroup = new AssetLibraryGroup({
+  ...standaloneAssetGroup,
+  id: `asset:${secondStandaloneAssetId}`,
+  label: 'standalone-audio.mp3',
+  metadata: {
+    assetId: secondStandaloneAssetId,
+    path: 'audio/standalone-audio.mp3',
+    mime: 'audio/mpeg',
+    licenseSpdxId: 'MIT',
+    licenseRedistributable: 'true',
+  },
+  searchText:
+    'standalone-audio.mp3 asset asset:asset:550e8400-e29b-41d4-a716-446655440021 asset:550e8400-e29b-41d4-a716-446655440021 audio/standalone-audio.mp3 audio/mpeg mit true',
+});
+
+const inheritedLicenseAssetId = 'asset:550e8400-e29b-41d4-a716-446655440022';
+
+const inheritedLicenseAssetGroup = new AssetLibraryGroup({
+  ...standaloneAssetGroup,
+  id: `asset:${inheritedLicenseAssetId}`,
+  label: 'inherited-license-background.png',
+  metadata: {
+    assetId: inheritedLicenseAssetId,
+    path: 'images/inherited-license-background.png',
+    mime: 'image/png',
+    licenseScope: 'inherited from pack',
+    licenseSpdxId: 'CC0-1.0',
+    licenseAttribution: 'Pack Artist',
+    licenseSourceUrl: 'https://example.invalid/inherited-pack-license',
+    licenseRedistributable: 'true',
+  },
+  searchText:
+    'inherited-license-background.png asset asset:asset:550e8400-e29b-41d4-a716-446655440022 asset:550e8400-e29b-41d4-a716-446655440022 images/inherited-license-background.png image/png inherited from pack cc0-1.0 pack artist https://example.invalid/inherited-pack-license true',
+});
+
 let palettes: WorkingPalette[];
 let activePaletteId: WorkingPaletteId | undefined;
 
@@ -389,7 +447,9 @@ describe('AssetPackBrowser', () => {
                 ? [autotileGroup]
                 : options.groupKind === 'source'
                   ? [sourceGroup]
-                  : [tilesetGroup],
+                  : options.groupKind === 'asset'
+                    ? [standaloneAssetGroup]
+                    : [tilesetGroup],
         },
         isLoading: false,
         isError: false,
@@ -455,11 +515,146 @@ describe('AssetPackBrowser', () => {
     const pack = parseTilesetPackJson(samplePackJson);
     useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
     render(<AssetPackBrowser packId={pack.id} packName="Tiled source" projectId={projectId} />);
+    expect(screen.getByTestId('asset-pack-browser-tab-asset')).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-tileset')).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-terrain')).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-autotile')).toBeTruthy();
     expect(screen.getByTestId('asset-pack-browser-tab-placeable')).toBeTruthy();
     expect(screen.getAllByText('Sample Walls').length).toBeGreaterThan(0);
+  });
+
+  it('renders standalone manifest assets with license metadata for diagnostic focus', async () => {
+    const pack = parseTilesetPackJson(samplePackJson);
+    useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
+    useAssetPackLibraryPagesMock.mockImplementation(
+      (_packId: string, options: { groupKind: string; query?: string }) => {
+        const groups =
+          options.groupKind === 'asset' &&
+          (options.query === undefined || standaloneAssetGroup.searchText.includes(options.query))
+            ? [standaloneAssetGroup]
+            : [];
+        return {
+          data: { packId, total: groups.length, offset: 0, limit: 64, groups },
+          isLoading: false,
+          isError: false,
+        };
+      },
+    );
+
+    render(
+      <AssetPackBrowser
+        packId={pack.id}
+        packName="Tiled source"
+        projectId={projectId}
+        initialSearch={standaloneAssetId}
+      />,
+    );
+
+    const group = await screen.findByTestId(`asset-pack-browser-group-asset:${standaloneAssetId}`);
+    expect(within(group).getByText('standalone-background.png')).toBeTruthy();
+    expect(within(group).getByText(standaloneAssetId)).toBeTruthy();
+    expect(within(group).getByText('CC-BY-4.0')).toBeTruthy();
+    expect(within(group).getByText('Standalone Artist')).toBeTruthy();
+    expect(screen.getByTestId('asset-pack-browser-search')).toHaveProperty(
+      'value',
+      standaloneAssetId,
+    );
+    expect(
+      screen.getByTestId(`asset-pack-browser-add-group-asset:${standaloneAssetId}`),
+    ).toHaveProperty('disabled', true);
+  });
+
+  it('renders inherited pack license metadata for raw manifest assets', async () => {
+    const pack = parseTilesetPackJson(samplePackJson);
+    useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
+    useAssetPackLibraryPagesMock.mockImplementation(
+      (_packId: string, options: { groupKind: string; query?: string }) => {
+        const groups =
+          options.groupKind === 'asset' &&
+          (options.query === undefined ||
+            inheritedLicenseAssetGroup.searchText.includes(options.query))
+            ? [inheritedLicenseAssetGroup]
+            : [];
+        return {
+          data: { packId, total: groups.length, offset: 0, limit: 64, groups },
+          isLoading: false,
+          isError: false,
+        };
+      },
+    );
+
+    render(
+      <AssetPackBrowser
+        packId={pack.id}
+        packName="Tiled source"
+        projectId={projectId}
+        initialSearch={inheritedLicenseAssetId}
+      />,
+    );
+
+    const group = await screen.findByTestId(
+      `asset-pack-browser-group-asset:${inheritedLicenseAssetId}`,
+    );
+    expect(within(group).getByText('inherited-license-background.png')).toBeTruthy();
+    expect(within(group).getByText('inherited from pack')).toBeTruthy();
+    expect(within(group).getByText('CC0-1.0')).toBeTruthy();
+    expect(within(group).getByText('Pack Artist')).toBeTruthy();
+    expect(within(group).getByText('https://example.invalid/inherited-pack-license')).toBeTruthy();
+    expect(within(group).getByText('true')).toBeTruthy();
+  });
+
+  it('synchronizes successive diagnostic asset targets while mounted', async () => {
+    const pack = parseTilesetPackJson(samplePackJson);
+    useTilesetPackMock.mockReturnValue({ data: pack, isLoading: false, isError: false });
+    useAssetPackLibraryPagesMock.mockImplementation(
+      (_packId: string, options: { groupKind: string; query?: string }) => {
+        const allGroups = [standaloneAssetGroup, secondStandaloneAssetGroup];
+        const groups =
+          options.groupKind === 'asset'
+            ? allGroups.filter(
+                (group) =>
+                  options.query === undefined ||
+                  options.query.length === 0 ||
+                  group.searchText.includes(options.query),
+              )
+            : [];
+        return {
+          data: { packId, total: groups.length, offset: 0, limit: 64, groups },
+          isLoading: false,
+          isError: false,
+        };
+      },
+    );
+
+    const { rerender } = render(
+      <AssetPackBrowser
+        packId={pack.id}
+        packName="Tiled source"
+        projectId={projectId}
+        initialSearch={standaloneAssetId}
+      />,
+    );
+    expect(
+      await screen.findByTestId(`asset-pack-browser-group-asset:${standaloneAssetId}`),
+    ).toBeTruthy();
+
+    rerender(
+      <AssetPackBrowser
+        packId={pack.id}
+        packName="Tiled source"
+        projectId={projectId}
+        initialSearch={secondStandaloneAssetId}
+      />,
+    );
+
+    expect(screen.getByTestId('asset-pack-browser-search')).toHaveProperty(
+      'value',
+      secondStandaloneAssetId,
+    );
+    expect(
+      await screen.findByTestId(`asset-pack-browser-group-asset:${secondStandaloneAssetId}`),
+    ).toBeTruthy();
+    expect(screen.queryByTestId(`asset-pack-browser-group-asset:${standaloneAssetId}`)).toBeNull();
   });
 
   it('opens image-collection-only packs on Objects instead of an empty Tilesets tab', async () => {

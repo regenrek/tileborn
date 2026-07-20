@@ -59,7 +59,11 @@ const appIconPath = path.join(iconAssetsRoot, 'icon');
 const runtimeIconPath = path.join(iconAssetsRoot, 'icon.png');
 const workspaceRoot = path.resolve(__dirname, '../..');
 const runtimeClosurePackage = '@tileborne/desktop-runtime-closure';
-const externalRuntimePackages = ['esbuild', 'miniflare'];
+const externalRuntimePackages = ['alchemy', 'esbuild', 'miniflare'];
+const alchemyRuntimeDeployDirectoryName = 'runtime-deploy';
+const runtimePackageResolveTargets = {
+  alchemy: 'alchemy/bin/alchemy.js',
+};
 
 const runPnpm = (args, options = {}) => {
   const npmExecPath = process.env.npm_execpath;
@@ -89,11 +93,25 @@ const assertPackagedRuntimeClosure = (buildPath) => {
   const appRequire = moduleApi.createRequire(path.join(buildPath, 'package.json'));
   const appRoot = path.resolve(buildPath);
   for (const packageName of externalRuntimePackages) {
-    const resolved = path.resolve(appRequire.resolve(packageName));
+    const resolved = path.resolve(
+      appRequire.resolve(runtimePackageResolveTargets[packageName] ?? packageName),
+    );
     const relative = path.relative(appRoot, resolved);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error(`Packaged runtime ${packageName} escaped Resources/app: ${resolved}`);
     }
+  }
+
+  const alchemyStackEntrypoint = path.join(
+    appRoot,
+    alchemyRuntimeDeployDirectoryName,
+    'alchemy-cloudflare-stack.js',
+  );
+  if (!fs.existsSync(alchemyStackEntrypoint)) {
+    throw new Error(
+      'Packaged runtime is missing runtime-deploy/alchemy-cloudflare-stack.js. Run ' +
+        '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+    );
   }
 };
 
@@ -184,6 +202,29 @@ const copyGameHostBuildAssets = (buildPath) => {
   const destinationRoot = path.join(path.dirname(buildPath), gameHostBuildAssetsDirectoryName);
   fs.rmSync(destinationRoot, { recursive: true, force: true });
   fs.cpSync(sourceRoot, destinationRoot, { recursive: true, dereference: true });
+};
+
+const copyAlchemyRuntimeDeployStack = (buildPath) => {
+  const runtimeDeployFiles = [
+    'alchemy-cloudflare-stack.js',
+    'alchemy-bootstrap-probe.js',
+  ];
+  const sourceRoot = path.resolve(__dirname, '../../packages/services-build/dist/runtime-deploy');
+  for (const fileName of runtimeDeployFiles) {
+    const sourcePath = path.join(sourceRoot, fileName);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(
+        `Alchemy runtime deploy ${fileName} is missing. Run ` +
+          '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+      );
+    }
+  }
+  const destinationRoot = path.join(buildPath, alchemyRuntimeDeployDirectoryName);
+  fs.rmSync(destinationRoot, { recursive: true, force: true });
+  fs.mkdirSync(destinationRoot, { recursive: true });
+  for (const fileName of runtimeDeployFiles) {
+    fs.copyFileSync(path.join(sourceRoot, fileName), path.join(destinationRoot, fileName));
+  }
 };
 
 const writeDesktopBuildProvenance = (buildPath) => {
@@ -284,11 +325,12 @@ module.exports = {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       copyBundledPlugins(buildPath);
       copyGameHostBuildAssets(buildPath);
+      copyAlchemyRuntimeDeployStack(buildPath);
       writeDesktopBuildProvenance(buildPath);
     },
     // Packager pruning has finished here. Install a lockfile-derived, portable
-    // production closure for the two binary-backed Vite externals; everything
-    // else in the main process is bundled.
+    // production closure for Vite externals that need real package files;
+    // everything else in the main process is bundled.
     packageAfterPrune: async (_forgeConfig, buildPath) => {
       deployPackagedRuntimeClosure(buildPath);
     },

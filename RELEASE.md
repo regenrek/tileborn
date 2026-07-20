@@ -2,8 +2,11 @@
 
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
-This file is the maintainer handoff for the candidate. No npm publish, Homebrew publish, or
-Cloudflare deploy has happened.
+This file is the maintainer handoff for the candidate. No npm publish,
+Homebrew publish, or persistent production Cloudflare deployment has happened.
+A user-authorized disposable Cloudflare lifecycle proof was executed against
+generated `tileborne-pr-c7ea-*` Workers and confirmed both Workers absent after
+cleanup.
 
 ## Current decision: desktop NO-GO
 
@@ -142,8 +145,9 @@ Tileborne `0.0.1` publishes the BR vertical as a source-only preview:
 
 Known caveats:
 
-- Credentialed Cloudflare deploy is operator-gated and was not executed without
-  explicit publish approval.
+- Persistent or production Cloudflare deploy remains operator-gated. The
+  completed credentialed proof was disposable, name-scoped, and cleaned up; it
+  does not authorize a retained production deployment.
 - Default audio remains synthesized pending final sound assets.
 - Physical speaker output is not externally measured by automated gates.
 - The desktop distribution remains NO-GO; an unpacked Forge `.app` smoke is not

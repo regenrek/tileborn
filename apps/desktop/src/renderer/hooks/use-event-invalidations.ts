@@ -19,6 +19,7 @@ export function useEventInvalidations() {
     const unsubscribers = [
       window.tileborne.events.onProjectsChanged(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.gameShell.all });
         void queryClient.invalidateQueries({ queryKey: queryKeys.behaviors.all });
         void queryClient.invalidateQueries({ queryKey: queryKeys.readiness.all });
         void invalidateAssetUseSites(queryClient);

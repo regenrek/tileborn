@@ -27,6 +27,8 @@ export const ReadinessSource = Schema.Literals([
   'visual-model',
   'behavior',
   'game-mode',
+  'audio',
+  'game-shell',
   'build',
 ]);
 export type ReadinessSource = typeof ReadinessSource.Type;
@@ -39,6 +41,7 @@ export const ReadinessNavigationKind = Schema.Literals([
   'asset-library',
   'player-model',
   'behavior',
+  'game-shell',
 ]);
 export type ReadinessNavigationKind = typeof ReadinessNavigationKind.Type;
 

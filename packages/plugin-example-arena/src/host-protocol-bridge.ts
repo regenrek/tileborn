@@ -74,6 +74,9 @@ export const encodeInvalidClientFrame = (): Uint8Array =>
     }),
   );
 
+export const encodeHostTransportErrorFrame = (code: string, message: string): Uint8Array =>
+  encodeArenaServerMessage(new ArenaWireError({ code, message }));
+
 const rejectInvalidClientFrame = (): RuntimeClientFrameDecodeResult => ({
   kind: 'rejected',
   frame: encodeInvalidClientFrame(),
@@ -95,5 +98,14 @@ export const isHostWelcomeFrame = (bytes: Uint8Array): boolean => {
     return decodeArenaServerMessage(bytes)._tag === 'ArenaSnapshot';
   } catch {
     return false;
+  }
+};
+
+export const snapshotTickFromHostServerFrame = (bytes: Uint8Array): number | undefined => {
+  try {
+    const frame = decodeArenaServerMessage(bytes);
+    return frame._tag === 'ArenaSnapshot' ? frame.tick : undefined;
+  } catch {
+    return undefined;
   }
 };

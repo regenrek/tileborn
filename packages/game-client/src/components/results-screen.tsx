@@ -21,8 +21,13 @@ export interface ResultsScreenProps {
   readonly brand: BrandConfig;
   readonly sections: readonly MenuSectionRegistration[];
   readonly results?: MatchResults | undefined;
+  readonly subtitle?: string | undefined;
+  readonly playAgainLabel?: string | undefined;
+  readonly backLabel?: string | undefined;
   readonly onPlayAgain: () => void;
   readonly onBackToMenu: () => void;
+  readonly chrome?: boolean | undefined;
+  readonly showDefaultActions?: boolean | undefined;
 }
 
 /** End-of-match results screen: optional table + Play again / Back to menu + slot. */
@@ -30,10 +35,65 @@ export function ResultsScreen({
   brand,
   sections,
   results,
+  subtitle,
+  playAgainLabel,
+  backLabel,
   onPlayAgain,
   onBackToMenu,
+  chrome = true,
+  showDefaultActions = true,
 }: ResultsScreenProps): ReactElement {
   const rows = results?.rows ?? [];
+  const body = (
+    <>
+      {chrome ? (
+        <h2 className="tb-title">{results?.title ?? 'Match complete'}</h2>
+      ) : results?.title !== undefined ? (
+        <h2 className="tb-title">{results.title}</h2>
+      ) : null}
+      {rows.length > 0 ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse', margin: '0.75rem 0' }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: 'var(--tb-menu-text-muted)' }}>
+              <th>#</th>
+              <th>Player</th>
+              <th style={{ textAlign: 'right' }}>Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.rank}-${row.name}`}>
+                <td>{row.rank}</td>
+                <td>{row.name}</td>
+                <td style={{ textAlign: 'right' }}>{row.score}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      <p className="tb-tagline">{subtitle ?? 'Thanks for playing.'}</p>
+
+      <SlotHost
+        slot="results.actions"
+        sections={sections}
+        onPlay={onPlayAgain}
+        onBack={onBackToMenu}
+        title={brand.title}
+      />
+
+      {showDefaultActions ? (
+        <div className="tb-actions">
+          <Button onClick={onPlayAgain} data-testid="play-again">
+            {playAgainLabel ?? 'Play again'}
+          </Button>
+          <Button variant="outline" onClick={onBackToMenu} data-testid="results-back">
+            {backLabel ?? 'Back to menu'}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+  if (!chrome) return <>{body}</>;
   return (
     <div className="tb-scrim">
       <div
@@ -42,46 +102,7 @@ export function ResultsScreen({
         aria-label="Match results"
         data-testid="results-screen"
       >
-        <h2 className="tb-title">{results?.title ?? 'Match complete'}</h2>
-        {rows.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', margin: '0.75rem 0' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--tb-menu-text-muted)' }}>
-                <th>#</th>
-                <th>Player</th>
-                <th style={{ textAlign: 'right' }}>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.rank}-${row.name}`}>
-                  <td>{row.rank}</td>
-                  <td>{row.name}</td>
-                  <td style={{ textAlign: 'right' }}>{row.score}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="tb-tagline">Thanks for playing.</p>
-        )}
-
-        <SlotHost
-          slot="results.actions"
-          sections={sections}
-          onPlay={onPlayAgain}
-          onBack={onBackToMenu}
-          title={brand.title}
-        />
-
-        <div className="tb-actions">
-          <Button onClick={onPlayAgain} data-testid="play-again">
-            Play again
-          </Button>
-          <Button variant="outline" onClick={onBackToMenu} data-testid="results-back">
-            Back to menu
-          </Button>
-        </div>
+        {body}
       </div>
     </div>
   );

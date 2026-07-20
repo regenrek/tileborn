@@ -76,19 +76,14 @@ build-artifact.json
 
 ## Deployment via Alchemy
 
-`@tileborne/game-host` is a **building block** — it ships the Worker + `PlaytestRoom` Durable Object code, not a production Cloudflare deployment. Downstream products (games, editors, hosted playtest) own their Alchemy stack and deploy from their repo.
-
-**Canonical template:** [`alchemy.example.run.ts`](./alchemy.example.run.ts)
-
-Copy that file into your consumer project (e.g. `deploy/alchemy.run.ts`), customize resource names, and wire it into your existing Alchemy graph alongside D1, KV, R2, queues, and rate limits as needed.
+`@tileborne/game-host` is a **building block** — it ships the Worker + `PlaytestRoom` Durable Object code, not a production Cloudflare deployment. The committed production graph lives in `packages/services-build/src/runtime-deploy/alchemy-cloudflare-stack.ts` and is executed through the official `node_modules/alchemy/bin/alchemy.js` CLI. Downstream products can compose D1, KV, R2, queues, rate limits, and custom domains around that graph in their own repo.
 
 ### Conventions
 
 - **`alchemy.run.ts` owns Cloudflare resources.** Do not hand-maintain `wrangler.toml` / `wrangler.json` in this package or in consumer app folders — Alchemy generates Wrangler artifacts from the stack.
 - **Build pipeline vs deploy graph:**
   - `tileborne game build --target cloudflare` produces the bundled worker artifact (`worker.js`, `manifest.json`, plugin/assets trees). Default output: `dist/game-host-cloudflare/`.
-  - Your Alchemy `Worker` resource points at that artifact (`script: "dist/game-host-cloudflare/worker.js"` or `TILEBORNE_GAME_HOST_SCRIPT`).
-- **Type drift guard:** `pnpm --filter @tileborne/game-host typecheck` includes `alchemy.example.run.ts`; `src/__tests__/alchemy-example.compile.test.ts` typechecks it without executing the top-level `await alchemy(...)` call.
+  - The services-build Alchemy stack receives that artifact path as `input.workerPath` and the behavior worker path as `input.behaviorWorkerPath`.
 
 ### Required bindings (consumer `Env`)
 

@@ -8,6 +8,7 @@ interface AssetPackBrowserDialogProps {
   readonly packId: string;
   readonly packName: string;
   readonly projectId: string | null;
+  readonly initialSearch?: string | undefined;
 }
 
 /**
@@ -21,6 +22,7 @@ export function AssetPackBrowserDialog({
   packId,
   packName,
   projectId,
+  initialSearch,
 }: AssetPackBrowserDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,6 +42,7 @@ export function AssetPackBrowserDialog({
             packId={packId}
             packName={packName}
             projectId={projectId}
+            initialSearch={initialSearch}
             variant="page"
           />
         </div>

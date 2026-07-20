@@ -34,7 +34,15 @@ interface FakeLobbyRoom {
   results: RoomResultsSummary | null;
 }
 
-const makeLobbyNamespace = (): PlaytestRoomNamespace => {
+const makeLobbyNamespace = (
+  options: {
+    readonly onCreate?: (body: {
+      readonly mapId: string;
+      readonly mapPackage?: unknown;
+      readonly options?: Record<string, string | number | boolean | null>;
+    }) => void;
+  } = {},
+): PlaytestRoomNamespace => {
   const rooms = new Map<string, FakeLobbyRoom>();
   return makePlaytestNamespace(async (request, roomId) => {
     const url = new URL(request.url);
@@ -48,8 +56,10 @@ const makeLobbyNamespace = (): PlaytestRoomNamespace => {
     if (request.method === 'POST' && url.pathname === '/create') {
       const body = (await request.json()) as {
         readonly mapId: string;
+        readonly mapPackage?: unknown;
         readonly options?: Record<string, string | number | boolean | null>;
       };
+      options.onCreate?.(body);
       rooms.set(roomId, {
         roomId,
         mapId: body.mapId,
@@ -145,6 +155,44 @@ const makeLobbyNamespace = (): PlaytestRoomNamespace => {
         ...(canStart ? {} : { reason: 'waiting for required players to ready up' }),
       });
     }
+    if (request.method === 'POST' && url.pathname === '/lobby/start') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as { readonly playerId?: string };
+      if (body.playerId !== room.lobby.createdByPlayerId) {
+        return Response.json(
+          { error: 'only the room owner can perform this action' },
+          { status: 403 },
+        );
+      }
+      room.phase = 'active';
+      return Response.json({ lobby: toFakeLobbySummary(room), started: true });
+    }
+    if (request.method === 'POST' && url.pathname === '/room/stop') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const body = (await request.json()) as { readonly playerId?: string };
+      if (body.playerId !== room.lobby.createdByPlayerId) {
+        return Response.json(
+          { error: 'only the room owner can perform this action' },
+          { status: 403 },
+        );
+      }
+      room.phase = 'finished';
+      room.results = {
+        completedAt: '2026-01-01T00:00:00.000Z',
+        reason: 'owner stopped room',
+        players: Object.keys(room.players).map((playerId) => ({ playerId, outcome: 'abandoned' })),
+      };
+      return Response.json({
+        roomId,
+        stopped: true,
+        lobby: toFakeLobbySummary(room),
+        results: room.results,
+      });
+    }
     if (request.method === 'POST' && url.pathname === '/players/reconnect') {
       if (room === undefined) {
         return Response.json({ error: 'playtest not initialized' }, { status: 404 });
@@ -164,6 +212,57 @@ const makeLobbyNamespace = (): PlaytestRoomNamespace => {
       }
       return Response.json({ roomId, results: room.results });
     }
+    if (request.method === 'GET' && url.pathname === '/diagnostics') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const lobby = toFakeLobbySummary(room);
+      return Response.json({
+        diagnostics: {
+          roomId,
+          phase: room.phase,
+          ...(room.lobby.createdByPlayerId === undefined
+            ? {}
+            : { ownerPlayerId: room.lobby.createdByPlayerId }),
+          playerCount: lobby.playerCount,
+          readyPlayerCount: lobby.players.filter((player) => player.ready).length,
+          connectedPlayerCount: lobby.players.filter((player) => player.status === 'connected')
+            .length,
+          reconnectEligiblePlayerCount: lobby.players.filter((player) => player.reconnectEligible)
+            .length,
+          generatedAt: '2026-01-01T00:00:00.000Z',
+          issues: room.lobby.createdByPlayerId === undefined ? ['missing owner'] : [],
+        },
+      });
+    }
+    if (request.method === 'GET' && url.pathname === '/metrics') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      return Response.json({
+        roomId,
+        metrics: {
+          lifecyclePhase: room.phase,
+          tick: 0,
+          baseTick: 0,
+          lastPersistedTick: 0,
+          playerCount: Object.keys(room.players).length,
+          connectedClients: Object.keys(room.players).length,
+          queuedInputPlayers: 0,
+          queuedInputs: 0,
+          pendingPluginFrames: 0,
+          replayFrames: 0,
+          generatedAt: '2026-01-01T00:00:00.000Z',
+          transport: {
+            trackedClients: Object.keys(room.players).length,
+            maxPendingSnapshotLagTicks: 0,
+            totalDroppedOutboundFrames: 0,
+            totalResyncs: 0,
+            totalStaleSnapshotAcks: 0,
+          },
+        },
+      });
+    }
     return new Response('missing', { status: 404 });
   });
 };
@@ -181,6 +280,7 @@ const toFakeLobbySummary = (room: FakeLobbyRoom): RoomLobbySummary => ({
     .sort((left, right) => left.localeCompare(right))
     .map((playerId) => ({
       playerId,
+      role: room.lobby.createdByPlayerId === playerId ? 'owner' : 'participant',
       status: room.presence[playerId]?.status ?? 'disconnected',
       ready: room.ready[playerId]?.isReady === true,
       reconnectEligible: true,
@@ -782,6 +882,223 @@ describe('game-host worker routes', () => {
     expect(secondBody.canStart).toBe(true);
     expect(secondBody.lobby.phase).toBe('countdown');
     expect(secondBody.lobby.players.map((player) => player.ready)).toEqual([true, true]);
+  });
+
+  it('runs the same shipped lobby flow for an Arena bundled map package', async () => {
+    const arenaMapPackage = {
+      manifest: {
+        schemaVersion: 1,
+        packageId: 'mappkg:arena-fixture',
+        pluginId: '@tileborne-plugins/example-arena',
+        playerCapacity: 2,
+      },
+      modeData: {
+        arena: { ruleset: 'fixture' },
+      },
+    };
+    const createBodies: unknown[] = [];
+    const app = createWorkerApp(runtimeManifest, [
+      {
+        mapId: 'map:arena-fixture',
+        packageId: 'mappkg:arena-fixture',
+        mapPackage: arenaMapPackage,
+      },
+    ]);
+    const lobbyEnv = {
+      ...env,
+      PLAYTEST_ROOM: makeLobbyNamespace({ onCreate: (body) => createBodies.push(body) }),
+    };
+
+    const created = await app.request(
+      'http://localhost/lobbies/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mapId: 'map:arena-fixture',
+          reserveCreator: true,
+          playerDisplayName: 'Arena Owner',
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      readonly roomId: string;
+      readonly joinCode: string;
+      readonly playerId: string;
+      readonly reconnectToken: string;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(createdBody.lobby.mapId).toBe('map:arena-fixture');
+    expect(createdBody.lobby.players[0]).toMatchObject({
+      playerId: createdBody.playerId,
+      displayName: 'Arena Owner',
+      ready: false,
+    });
+
+    const joined = await app.request(
+      'http://localhost/lobbies/join',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          joinCode: createdBody.joinCode,
+          displayName: 'Arena Participant',
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(joined.status).toBe(201);
+    const joinedBody = (await joined.json()) as {
+      readonly playerId: string;
+      readonly reconnectToken: string;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(joinedBody.lobby.players.map((player) => player.displayName)).toEqual([
+      'Arena Owner',
+      'Arena Participant',
+    ]);
+
+    const ownerReady = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: createdBody.playerId,
+          ready: true,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(ownerReady.status).toBe(200);
+    const participantReady = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/ready`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: joinedBody.playerId,
+          ready: true,
+          reconnectToken: joinedBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(participantReady.status).toBe(200);
+    const readyBody = (await participantReady.json()) as {
+      readonly canStart: boolean;
+      readonly lobby: RoomLobbySummary;
+    };
+    expect(readyBody.canStart).toBe(true);
+    expect(readyBody.lobby.phase).toBe('countdown');
+
+    const participantStart = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: joinedBody.playerId,
+          reconnectToken: joinedBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(participantStart.status).toBe(403);
+
+    const ownerStart = await app.request(
+      `http://localhost/lobbies/${createdBody.roomId}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: createdBody.playerId,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(ownerStart.status).toBe(200);
+    const ownerStartBody = (await ownerStart.json()) as {
+      readonly lobby: RoomLobbySummary;
+      readonly started: boolean;
+    };
+    expect(ownerStartBody.started).toBe(true);
+    expect(ownerStartBody.lobby.phase).toBe('active');
+
+    const reconnected = await app.request(
+      'http://localhost/rooms/reconnect',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: createdBody.roomId,
+          playerId: createdBody.playerId,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(reconnected.status).toBe(200);
+
+    const diagnostics = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/diagnostics`,
+      {},
+      lobbyEnv,
+    );
+    expect(diagnostics.status).toBe(200);
+    expect(await diagnostics.json()).toMatchObject({
+      diagnostics: { ownerPlayerId: createdBody.playerId, issues: [] },
+    });
+
+    const metrics = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/metrics`,
+      {},
+      lobbyEnv,
+    );
+    expect(metrics.status).toBe(200);
+    expect(await metrics.json()).toMatchObject({
+      roomId: createdBody.roomId,
+      metrics: { lifecyclePhase: 'active' },
+    });
+
+    const stopped = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/stop`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          playerId: createdBody.playerId,
+          reconnectToken: createdBody.reconnectToken,
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(stopped.status).toBe(200);
+    expect(await stopped.json()).toMatchObject({
+      roomId: createdBody.roomId,
+      stopped: true,
+      results: { reason: 'owner stopped room' },
+    });
+
+    const results = await app.request(
+      `http://localhost/rooms/${createdBody.roomId}/results`,
+      {},
+      lobbyEnv,
+    );
+    expect(results.status).toBe(200);
+    expect(await results.json()).toMatchObject({
+      roomId: createdBody.roomId,
+      results: { reason: 'owner stopped room' },
+    });
+    expect(createBodies).toHaveLength(1);
+    expect(createBodies[0]).toMatchObject({
+      mapId: 'map:arena-fixture',
+      mapPackage: arenaMapPackage,
+    });
   });
 
   it('POST /rooms/reconnect validates a reconnect token and returns a fresh handoff', async () => {

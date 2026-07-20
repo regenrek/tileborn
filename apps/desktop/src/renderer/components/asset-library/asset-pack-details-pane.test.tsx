@@ -12,6 +12,22 @@ const useRemoveAssetPackMock = vi.hoisted(() => vi.fn());
 const setMapTilesetPackMutateMock = vi.hoisted(() => vi.fn());
 const notifySuccessMock = vi.hoisted(() => vi.fn());
 const setActivePalettePackIdMock = vi.hoisted(() => vi.fn());
+const assetPackBrowserDialogMock = vi.hoisted(() =>
+  vi.fn(
+    (props: {
+      readonly open: boolean;
+      readonly packId: string;
+      readonly initialSearch?: string | undefined;
+    }) => (
+      <div
+        data-testid="asset-pack-browser-dialog-stub"
+        data-open={props.open ? 'true' : 'false'}
+        data-pack-id={props.packId}
+        data-initial-search={props.initialSearch}
+      />
+    ),
+  ),
+);
 const editorUiState = vi.hoisted(() => ({
   activePalettePackId: null as string | null,
   setActivePalettePackId: setActivePalettePackIdMock,
@@ -56,6 +72,10 @@ vi.mock('@/stores/editor-ui-store', () => ({
   useEditorUiStore: (selector: (state: typeof editorUiState) => unknown) => selector(editorUiState),
 }));
 
+vi.mock('@/components/asset-library/asset-pack-browser-dialog', () => ({
+  AssetPackBrowserDialog: assetPackBrowserDialogMock,
+}));
+
 vi.mock('./use-pack-tile-stats', () => ({
   usePackTileStats: () => ({ tileCount: 12, tileSize: '16x16', loading: false }),
 }));
@@ -98,6 +118,7 @@ describe('AssetPackDetailsPane remove action', () => {
     editorUiState.selectTool.mockReset();
     editorUiState.setCatalogTargetObjectTypeId.mockReset();
     editorUiState.activePalettePackId = null;
+    assetPackBrowserDialogMock.mockClear();
   });
 
   afterEach(() => {
@@ -126,6 +147,34 @@ describe('AssetPackDetailsPane remove action', () => {
     render(<AssetPackDetailsPane packId={pack.id} />);
 
     expect(screen.getByTestId('asset-pack-remove')).toHaveProperty('disabled', true);
+  });
+
+  it('marks the license row as focused for asset-library license diagnostics', () => {
+    render(<AssetPackDetailsPane packId={pack.id} focusPath={`assetPacks.${pack.id}.license`} />);
+
+    expect(screen.getByTestId('asset-pack-license-row').getAttribute('data-focused')).toBe('true');
+  });
+
+  it('opens and filters the browser for per-asset license diagnostics', async () => {
+    const assetId = 'asset:550e8400-e29b-41d4-a716-446655440002';
+    render(
+      <AssetPackDetailsPane
+        packId={pack.id}
+        focusPath={`assetPacks.${pack.id}.assets.${assetId}.license`}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('asset-pack-browser-dialog-stub').getAttribute('data-open')).toBe(
+        'true',
+      );
+    });
+    expect(
+      screen.getByTestId('asset-pack-focused-asset-license').getAttribute('data-asset-id'),
+    ).toBe(assetId);
+    expect(
+      screen.getByTestId('asset-pack-browser-dialog-stub').getAttribute('data-initial-search'),
+    ).toBe(assetId);
   });
 
   it('shows exact canonical consumers and navigates to the owning entity', () => {

@@ -18,12 +18,29 @@ const optionProperty = <K extends string, A>(
     onSome: (inner) => ({ [key]: inner }) as Record<K, A>,
   });
 
+const optionalProperty = <K extends string, A>(
+  key: K,
+  value: A | undefined,
+): Partial<Record<K, A>> => (value === undefined ? {} : { [key]: value }) as Record<K, A>;
+
 const licenseToJson = (license: TilesetPack['license']) => ({
   spdxId: license.spdxId,
   ...optionProperty('attribution', license.attribution),
   ...optionProperty('sourceUrl', license.sourceUrl),
+  ...optionalProperty('sourcePath', license.sourcePath),
+  ...optionalProperty('modifications', license.modifications),
   ...optionProperty('notes', license.notes),
   redistributable: license.redistributable,
+});
+
+const assetLicenseToJson = (license: NonNullable<TilesetPack['assets'][number]['license']>) => ({
+  spdxId: license.spdxId,
+  ...optionalProperty('attribution', license.attribution),
+  ...optionalProperty('sourceUrl', license.sourceUrl),
+  ...optionalProperty('sourcePath', license.sourcePath),
+  ...optionalProperty('modifications', license.modifications),
+  ...optionalProperty('notes', license.notes),
+  ...optionalProperty('redistributable', license.redistributable),
 });
 
 const encodeCollisionMask = (mask: typeof CollisionMask.Type): unknown =>
@@ -250,6 +267,7 @@ export const writeTilesetManifest = (
       id: asset.id,
       path: asset.path,
       mime: asset.mime,
+      ...(asset.license === undefined ? {} : { license: assetLicenseToJson(asset.license) }),
     })),
     ...(options?.provenance === undefined ? {} : { provenance: options.provenance }),
     terrainClasses: collectTerrainClasses(pack),

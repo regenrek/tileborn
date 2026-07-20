@@ -154,6 +154,18 @@ export const generateBundledMapPackages = async () => {
       provenance: {},
     },
     behaviors: Schema.encodeSync(core.RuntimeBehaviorPackage)(core.EMPTY_RUNTIME_BEHAVIOR_PACKAGE),
+    audio: {
+      schemaVersion: 1,
+      buses: [],
+      cues: [],
+      diagnostics: [],
+      settings: {
+        masterVolume: 1,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: {},
+      },
+    },
     visuals: Schema.encodeSync(core.RuntimeMapPackageVisuals)(visuals),
     assets: [],
     modeData,

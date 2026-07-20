@@ -36,6 +36,8 @@ export const isMp3 = (bytes: Uint8Array): boolean => {
   return bytes.length >= 2 && bytes[0] === 0xff && (bytes[1]! & 0xe0) === 0xe0;
 };
 
+export const isWoff2 = (bytes: Uint8Array): boolean => asciiAt(bytes, 0, 'wOF2');
+
 export const hasExpectedMagicBytes = (mime: AllowedMimeType, bytes: Uint8Array): boolean => {
   switch (mime) {
     case 'image/png':
@@ -52,6 +54,8 @@ export const hasExpectedMagicBytes = (mime: AllowedMimeType, bytes: Uint8Array):
       return isWav(bytes);
     case 'audio/mpeg':
       return isMp3(bytes);
+    case 'font/woff2':
+      return isWoff2(bytes);
     default:
       return true;
   }

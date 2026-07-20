@@ -1,15 +1,30 @@
 import { PERSISTED_SCHEMA_VERSIONS, type ContentHash, type JsonObject } from '@tileborne/core';
+import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 import type { RuntimeBehaviorArtifactIdentity } from '@tileborne/runtime/behavior';
-
-import type { RoomPresenceProjection } from './rooms/room-lifecycle.js';
 import type {
-  RoomJoinCode,
-  RoomLifecyclePhase,
-  RoomLobbyState,
-  RoomLobbyVisibility,
-  RoomPlayerModelSelection,
-  RoomResultsSummary,
-} from './rooms/storage-schema.js';
+  MultiplayerLobbyCreateRequest,
+  MultiplayerLobbyCreateResponse,
+  MultiplayerLobbyJoinRequest,
+  MultiplayerLobbyJoinResponse,
+  MultiplayerLobbyStartRequest,
+  MultiplayerLobbyStartResponse,
+  MultiplayerLobbyReadyRequest,
+  MultiplayerLobbyReadyResponse,
+  MultiplayerRoomDiagnosticsResponse,
+  MultiplayerRoomCreateRequest,
+  MultiplayerRoomCreateResponse,
+  MultiplayerRoomLobbySummary,
+  MultiplayerRoomMetricsResponse,
+  MultiplayerRoomReconnectRequest,
+  MultiplayerRoomReconnectResponse,
+  MultiplayerRoomResultsResponse,
+  MultiplayerRoomStopRequest,
+  MultiplayerRoomStopResponse,
+  MultiplayerSessionMetrics,
+  MultiplayerTransportMetrics,
+} from '@tileborne/ipc-contracts/contracts/multiplayer';
+
+import type { RoomPlayerModelSelection } from './rooms/storage-schema.js';
 
 export type {
   RoomJoinCode,
@@ -116,6 +131,7 @@ export interface PlaytestStartRequest {
   readonly options?: Record<string, string | number | boolean | null>;
   /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
   readonly mapPackage?: JsonObject;
+  readonly shellProjection?: RuntimeGameShellProjection;
   readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly playerId?: string;
 }
@@ -132,95 +148,24 @@ export interface RoomPlayerReservationResponse {
   readonly playerId: string;
 }
 
-export interface RoomCreateRequest {
-  readonly mapId: string;
-  readonly seed?: string | number;
-  readonly options?: Record<string, string | number | boolean | null>;
-  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
-  readonly mapPackage?: JsonObject;
-  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
-}
-
-export interface RoomCreateResponse {
-  readonly roomId: string;
-  readonly wsUrl: string;
-}
-
-export interface RoomLobbySummary {
-  readonly roomId: string;
-  readonly mapId: string;
-  readonly phase: RoomLifecyclePhase;
-  readonly lobby: RoomLobbyState;
-  readonly playerCount: number;
-  readonly maxPlayers: number;
-  readonly minReadyPlayers: number;
-  readonly canStart: boolean;
-  readonly players: readonly RoomPresenceProjection[];
-}
-
-export interface LobbyCreateRequest extends RoomCreateRequest {
-  readonly displayName?: string;
-  readonly visibility?: RoomLobbyVisibility;
-  readonly reserveCreator?: boolean;
-  readonly playerId?: string;
-  readonly playerDisplayName?: string;
-}
-
-export interface LobbyCreateResponse extends RoomCreateResponse {
-  readonly joinCode: RoomJoinCode;
-  readonly joinUrl: string;
-  readonly playerId?: string;
-  readonly handoffToken?: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
-
-export interface LobbyJoinRequest {
-  readonly joinCode: string;
-  readonly displayName?: string;
-  readonly playerId?: string;
-}
-
-export interface LobbyJoinResponse {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly wsUrl: string;
-  readonly handoffToken: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
-
-export interface LobbyReadyRequest {
-  readonly playerId: string;
-  readonly ready: boolean;
-  readonly reconnectToken?: string;
-}
-
-export interface LobbyReadyResponse {
-  readonly lobby: RoomLobbySummary;
-  readonly canStart: boolean;
-  readonly reason?: string;
-}
-
-export interface RoomReconnectRequest {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly reconnectToken: string;
-}
-
-export interface RoomReconnectResponse {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly wsUrl: string;
-  readonly handoffToken: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
-
-export interface RoomResultsResponse {
-  readonly roomId: string;
-  readonly results: RoomResultsSummary | null;
-}
+export type RoomCreateRequest = MultiplayerRoomCreateRequest;
+export type RoomCreateResponse = MultiplayerRoomCreateResponse;
+export type RoomLobbySummary = MultiplayerRoomLobbySummary;
+export type LobbyCreateRequest = MultiplayerLobbyCreateRequest;
+export type LobbyCreateResponse = MultiplayerLobbyCreateResponse;
+export type LobbyJoinRequest = MultiplayerLobbyJoinRequest;
+export type LobbyJoinResponse = MultiplayerLobbyJoinResponse;
+export type LobbyReadyRequest = MultiplayerLobbyReadyRequest;
+export type LobbyReadyResponse = MultiplayerLobbyReadyResponse;
+export type LobbyStartRequest = MultiplayerLobbyStartRequest;
+export type LobbyStartResponse = MultiplayerLobbyStartResponse;
+export type RoomReconnectRequest = MultiplayerRoomReconnectRequest;
+export type RoomReconnectResponse = MultiplayerRoomReconnectResponse;
+export type RoomResultsResponse = MultiplayerRoomResultsResponse;
+export type RoomStopRequest = MultiplayerRoomStopRequest;
+export type RoomStopResponse = MultiplayerRoomStopResponse;
+export type RoomDiagnosticsResponse = MultiplayerRoomDiagnosticsResponse;
+export type RoomMetricsResponse = MultiplayerRoomMetricsResponse;
 
 export interface PlaytestSummary {
   readonly playtestId: string;
@@ -231,28 +176,8 @@ export interface PlaytestSummary {
   readonly metrics: PlaytestSessionMetrics;
 }
 
-export interface PlaytestTransportMetrics {
-  readonly trackedClients: number;
-  readonly maxPendingSnapshotLagTicks: number;
-  readonly totalDroppedOutboundFrames: number;
-  readonly totalResyncs: number;
-  readonly totalStaleSnapshotAcks: number;
-}
-
-export interface PlaytestSessionMetrics {
-  readonly lifecyclePhase: RoomLifecyclePhase;
-  readonly tick: number;
-  readonly baseTick: number;
-  readonly lastPersistedTick: number;
-  readonly playerCount: number;
-  readonly connectedClients: number;
-  readonly queuedInputPlayers: number;
-  readonly queuedInputs: number;
-  readonly pendingPluginFrames: number;
-  readonly replayFrames: number;
-  readonly generatedAt: string;
-  readonly transport: PlaytestTransportMetrics;
-}
+export type PlaytestTransportMetrics = MultiplayerTransportMetrics;
+export type PlaytestSessionMetrics = MultiplayerSessionMetrics;
 
 export interface PlaytestRoomMeta {
   readonly mapId: string;

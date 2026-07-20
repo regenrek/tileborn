@@ -42,6 +42,34 @@ export {
   type RuntimeAudioEngineSnapshot,
   type RuntimeAudioPlaybackEngine,
 } from './audio/browser-audio-engine.js';
+export {
+  decodeShippedAudioConfig,
+  loadShippedAudioConfig,
+  type ShippedAudioBootstrap,
+} from './audio/shipped-audio.js';
+export {
+  AUDIO_USER_SETTINGS_STORAGE_KEY,
+  createAudioUserSettingsStore,
+  type AudioUserSettingsStore,
+  type AudioUserSettingsValue,
+} from './audio/user-audio-settings.js';
+export {
+  dispatchGameplayLifecycleAudioEvents,
+  runtimeAudioEventsForGameplayEvent,
+} from './audio/gameplay-lifecycle-audio.js';
+export {
+  menuEventForShellNavigationRequest,
+  shellActionEventForMenuEvent,
+  shellEnteredEventForScreen,
+  shellScreenIdForMenuState,
+  type RuntimeShellBehaviorBridge,
+  type SequencedRuntimeShellNavigationRequest,
+} from './shell-behavior-bridge.js';
+export {
+  defaultShippedShellProjection,
+  loadShippedShellProjection,
+  type ShippedShellBootstrap,
+} from './shell/shipped-shell.js';
 
 // Components
 export { RuntimeRoot, type RuntimeRootProps } from './components/runtime-root.js';
@@ -78,17 +106,25 @@ export {
   type LobbyFetch,
   type LobbyJoinRequest,
   type LobbyJoinResponse,
+  type LobbyStartRequest,
+  type LobbyStartResponse,
   type LobbyReadyRequest,
   type LobbyReadyResponse,
+  type RoomDiagnosticsResponse,
   type RoomLifecyclePhase,
   type RoomLobbyState,
   type RoomLobbySummary,
   type RoomLobbyVisibility,
+  type RoomMetricsResponse,
+  type RoomPlayerRole,
   type RoomPlayerModelSelection,
   type RoomPlayerPresenceStatus,
   type RoomPresenceProjection,
   type RoomReconnectRequest,
   type RoomReconnectResponse,
+  type RoomResultsResponse,
+  type RoomStopRequest,
+  type RoomStopResponse,
 } from './lobby-client.js';
 
 // Input remap (Controls tab) model + persistence (ADR-0024)

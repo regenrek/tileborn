@@ -83,6 +83,31 @@ describe('editor tileset index golden parity', () => {
     expect(roundTripped).toEqual(index);
   });
 
+  it('round-trips license provenance and redistribution fields', () => {
+    const licensedPack = parsePack({
+      ...meadowPack,
+      license: {
+        ...meadowPack.license,
+        attribution: 'Tileborne Fixture Artist',
+        sourcePath: 'fixtures/meadow/source.png',
+        modifications: 'Packed into editor-index fixture atlas',
+        redistributable: true,
+      },
+    });
+    const licensedIndex = buildEditorTilesetIndex(licensedPack, 'sha256:license');
+    const licensedDecoded = decodeEditorTilesetIndex(
+      JSON.parse(JSON.stringify(licensedIndex)) as typeof licensedIndex,
+    );
+
+    expect(licensedDecoded.packMeta.license).toMatchObject({
+      spdxId: meadowPack.license.spdxId,
+      attribution: 'Tileborne Fixture Artist',
+      sourcePath: 'fixtures/meadow/source.png',
+      modifications: 'Packed into editor-index fixture atlas',
+      redistributable: true,
+    });
+  });
+
   it('matches the manifest-derived global tile-index ordering', () => {
     const expected = tileIndexByTileIdFromPack(pack);
     expect(decoded.tileIndexByTileId).toEqual(expected);

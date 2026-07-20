@@ -2,6 +2,10 @@ import { Option, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  AssetLicense,
+  ASSET_LICENSE_FIELD_KEYS,
+  assetLicenseOptionalJsonFields,
+  assetLicenseUndefinedOptionRequiredRedistributableFields,
   makeAssetId,
   makePackId,
   makePlaceableId,
@@ -37,6 +41,7 @@ import {
   VariantFilterId,
   Wang2CornerAutotileRule,
 } from '../schemas/index.js';
+import { parseTilesetManifest, writeTilesetManifest } from '../manifest/index.js';
 
 const uuid = (suffix: string): Uuid =>
   `62656465-0000-4000-8000-${suffix.padStart(12, '0')}` as Uuid;
@@ -158,6 +163,11 @@ const samplePack = new TilesetPack({
       id: assetId('7'),
       path: 'atlases/meadow.png',
       mime: 'image/png',
+      license: new AssetLicense({
+        spdxId: 'CC-BY-4.0',
+        attribution: 'Meadow Artist',
+        redistributable: false,
+      }),
     }),
   ],
 });
@@ -208,6 +218,85 @@ const roundtripCases = [
 ] as const;
 
 describe('sdk-tileset schema roundtrip', () => {
+  it('keeps sdk license schemas on the canonical core field contract', () => {
+    expect(Object.keys(assetLicenseOptionalJsonFields)).toEqual([...ASSET_LICENSE_FIELD_KEYS]);
+    expect(Object.keys(assetLicenseUndefinedOptionRequiredRedistributableFields)).toEqual([
+      ...ASSET_LICENSE_FIELD_KEYS,
+    ]);
+  });
+
+  it('preserves canonical license semantics across core and sdk codecs', () => {
+    const coreLicense = decode(AssetLicense, {
+      spdxId: 'CC-BY-4.0',
+      attribution: 'Core Artist',
+      sourceUrl: 'https://example.invalid/core-license',
+      sourcePath: 'licenses/core.txt',
+      modifications: 'Trimmed transparent border',
+      notes: 'Per-asset override',
+      redistributable: false,
+    });
+
+    expect(encode(AssetLicense, coreLicense)).toEqual({
+      spdxId: 'CC-BY-4.0',
+      attribution: 'Core Artist',
+      sourceUrl: 'https://example.invalid/core-license',
+      sourcePath: 'licenses/core.txt',
+      modifications: 'Trimmed transparent border',
+      notes: 'Per-asset override',
+      redistributable: false,
+    });
+    expect(() => decode(AssetLicense, { spdxId: 'not a valid spdx id' })).toThrow();
+    expect(() => decode(AssetLicense, { spdxId: 'MIT', redistributable: 'yes' })).toThrow();
+
+    expect(() => decode(TilesetPackLicense, { spdxId: 'MIT' })).toThrow();
+    const sdkLicense = decode(TilesetPackLicense, {
+      spdxId: 'MIT',
+      attribution: 'SDK Artist',
+      sourceUrl: 'https://example.invalid/sdk-license',
+      notes: undefined,
+      redistributable: true,
+    });
+    expect(Option.getOrUndefined(sdkLicense.attribution)).toBe('SDK Artist');
+    expect(Option.getOrUndefined(sdkLicense.sourceUrl)).toBe('https://example.invalid/sdk-license');
+    expect(sdkLicense.redistributable).toBe(true);
+  });
+
+  it('round-trips per-asset license metadata through manifest parse and write', () => {
+    const licensedAssetPack = new TilesetPack({
+      ...samplePack,
+      placeables: [],
+      assets: [
+        new TilesetPackAsset({
+          id: assetId('7'),
+          path: 'atlases/meadow.png',
+          mime: 'image/png',
+          license: new AssetLicense({
+            spdxId: 'CC-BY-4.0',
+            attribution: 'Meadow Artist',
+            redistributable: false,
+          }),
+        }),
+      ],
+    });
+    const manifest = writeTilesetManifest(licensedAssetPack);
+    const manifestAsset = manifest.assets[0];
+    expect(manifestAsset?.license).toEqual({
+      spdxId: 'CC-BY-4.0',
+      attribution: 'Meadow Artist',
+      redistributable: false,
+    });
+
+    const parsed = parseTilesetManifest(manifest);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.value?.assets[0]?.license).toEqual(
+      new AssetLicense({
+        spdxId: 'CC-BY-4.0',
+        attribution: 'Meadow Artist',
+        redistributable: false,
+      }),
+    );
+  });
+
   for (const [name, schema, value] of roundtripCases) {
     it(`round-trips ${name}`, () => {
       const encoded = encode(schema, value);

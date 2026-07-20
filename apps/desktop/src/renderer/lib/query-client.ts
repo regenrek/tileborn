@@ -15,6 +15,14 @@ export const queryKeys = {
     list: () => [...queryKeys.projects.all, 'list'] as const,
     detail: (projectId: string) => [...queryKeys.projects.all, projectId] as const,
   },
+  audio: {
+    all: ['audio'] as const,
+    document: (projectId: string) => [...queryKeys.audio.all, projectId, 'document'] as const,
+  },
+  gameShell: {
+    all: ['gameShell'] as const,
+    document: (projectId: string) => [...queryKeys.gameShell.all, projectId, 'document'] as const,
+  },
   behaviors: {
     all: ['behaviors'] as const,
     project: (projectId: string) => [...queryKeys.behaviors.all, projectId] as const,

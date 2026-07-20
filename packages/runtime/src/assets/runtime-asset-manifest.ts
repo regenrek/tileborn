@@ -9,7 +9,10 @@ export interface RuntimeAssetLicenseInput {
   readonly spdxId: string;
   readonly attribution?: Option.Option<string>;
   readonly sourceUrl?: Option.Option<string>;
+  readonly sourcePath?: string;
+  readonly modifications?: string;
   readonly notes?: Option.Option<string>;
+  readonly redistributable?: boolean;
 }
 
 export interface RuntimeAssetEntryInput {
@@ -34,7 +37,10 @@ export const createRuntimeAssetPackLicense = (input: RuntimeAssetLicenseInput): 
     spdxId: input.spdxId,
     attribution: input.attribution ?? Option.none(),
     sourceUrl: input.sourceUrl ?? Option.none(),
+    sourcePath: input.sourcePath,
+    modifications: input.modifications,
     notes: input.notes ?? Option.none(),
+    redistributable: input.redistributable,
   });
 
 export const createRuntimeAssetEntry = (input: RuntimeAssetEntryInput): AssetPackManifestAsset =>

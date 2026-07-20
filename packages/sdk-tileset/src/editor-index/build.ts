@@ -25,7 +25,10 @@ const encodeLicense = (license: TilesetPack['license']): EditorIndexLicense => (
   spdxId: license.spdxId,
   ...(Option.isSome(license.attribution) ? { attribution: license.attribution.value } : {}),
   ...(Option.isSome(license.sourceUrl) ? { sourceUrl: license.sourceUrl.value } : {}),
+  ...(license.sourcePath === undefined ? {} : { sourcePath: license.sourcePath }),
+  ...(license.modifications === undefined ? {} : { modifications: license.modifications }),
   ...(Option.isSome(license.notes) ? { notes: license.notes.value } : {}),
+  redistributable: license.redistributable,
 });
 
 const tileIdsForRule = (rule: AutotileRule): readonly TileId[] => [

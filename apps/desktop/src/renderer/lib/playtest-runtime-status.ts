@@ -7,7 +7,7 @@ export const PLAYTEST_STARTUP_FAILED_PREFIX = 'startup-failed:';
 export interface PlaytestRuntimeStatusMetrics {
   readonly tickCount: number;
   readonly playerCount: number;
-  readonly lastPluginEvent: string;
+  readonly lastPluginEvent?: string | undefined;
   readonly lastTickAtMs?: number | undefined;
   readonly hud?: PlaytestHudState | undefined;
 }
@@ -19,8 +19,8 @@ export interface PlaytestSessionConnectionInput {
   readonly runtimeMetrics?: PlaytestRuntimeStatusMetrics | undefined;
 }
 
-export function isPlaytestStartupFailed(lastPluginEvent: string): boolean {
-  return lastPluginEvent.startsWith(PLAYTEST_STARTUP_FAILED_PREFIX);
+export function isPlaytestStartupFailed(lastPluginEvent: string | undefined): boolean {
+  return lastPluginEvent?.startsWith(PLAYTEST_STARTUP_FAILED_PREFIX) === true;
 }
 
 export function parseStartupFailedReason(lastPluginEvent: string): string {
@@ -53,10 +53,10 @@ export function formatPlaytestRuntimeStatus(
   metrics: PlaytestRuntimeStatusMetrics,
 ): string {
   if (isPlaytestStartupFailed(metrics.lastPluginEvent)) {
-    const reason = parseStartupFailedReason(metrics.lastPluginEvent);
+    const reason = parseStartupFailedReason(metrics.lastPluginEvent ?? '');
     return `Plugin ${pluginName} · startup failed · ${reason}`;
   }
-  return `Plugin ${pluginName} · ${metrics.lastPluginEvent} · Tick ${metrics.tickCount} · Players: ${metrics.playerCount}`;
+  return `Plugin ${pluginName} · ${metrics.lastPluginEvent ?? 'runtime metrics'} · Tick ${metrics.tickCount} · Players: ${metrics.playerCount}`;
 }
 
 export function resolvePlaytestPluginName(activePlugins: readonly string[]): string {

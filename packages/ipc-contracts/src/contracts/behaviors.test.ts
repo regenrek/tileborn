@@ -46,7 +46,16 @@ describe('behavior authoring IPC contracts', () => {
       entryOwners: Object.fromEntries(CORE_BEHAVIOR_REGISTRY.entries.map(({ id }) => [id, 'core'])),
       templateOwners: Object.fromEntries(CORE_BEHAVIOR_TEMPLATES.map(({ id }) => [id, 'core'])),
     });
-    expect(response.templates).toHaveLength(2);
+    expect(response.templates.map(({ id }) => id)).toEqual([
+      'core.on-start',
+      'core.repeating-timer',
+      'shell.on-shell-event',
+    ]);
+    expect(response.templates.find(({ id }) => id === 'shell.on-shell-event')).toMatchObject({
+      category: 'Game Shell',
+      requiredCapabilities: ['shell.navigation'],
+      when: { entryId: 'shell.event', arguments: {} },
+    });
     expect('references' in response).toBe(false);
     const references = Schema.decodeUnknownSync(BehaviorsReferencesResponse)({
       kind: 'asset',

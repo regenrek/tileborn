@@ -290,10 +290,11 @@ export const usePlaytestMultiplayerStore = create<
       set({ roomReady: room, flowPhase: 'host-ready' });
       notifySuccess(`Room ${room.roomId} ready`);
     } catch (error) {
-      set({ flowPhase: 'error', roomReady: null });
+      const message = error instanceof Error ? error.message : 'Failed to host local match';
+      set({ flowPhase: 'error', roomReady: null, lobbyError: message });
       await window.tileborne.runtime.stopLocalHost({}).catch(() => undefined);
       useEditorUiStore.getState().resetMultiplayerPlaytest();
-      notifyError(error instanceof Error ? error.message : 'Failed to host local match');
+      notifyError(message);
       throw error;
     }
   },
@@ -445,5 +446,13 @@ if (typeof window !== 'undefined') {
   window.__tileborne_e2e = {
     ...window.__tileborne_e2e,
     getMultiplayerSessionState: () => usePlaytestMultiplayerStore.getState().sessionState,
+    getMultiplayerStoreState: () => {
+      const state = usePlaytestMultiplayerStore.getState();
+      return {
+        flowPhase: state.flowPhase,
+        hasRoomReady: state.roomReady !== null,
+        lobbyError: state.lobbyError,
+      };
+    },
   };
 }

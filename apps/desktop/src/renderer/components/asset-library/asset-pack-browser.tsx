@@ -39,6 +39,7 @@ import {
   SearchIcon,
   ShapesIcon,
   SproutIcon,
+  FileImageIcon,
 } from 'lucide-react';
 import {
   useCallback,
@@ -86,6 +87,7 @@ interface AssetPackBrowserProps {
   readonly packId: string;
   readonly packName: string;
   readonly projectId: string | null | undefined;
+  readonly initialSearch?: string | undefined;
   readonly variant?: 'embedded' | 'page';
 }
 
@@ -98,7 +100,7 @@ const GROUP_GRID_ROW_PX = GROUP_GRID_CELL_PX + GROUP_GRID_GAP_PX;
 const VIRTUAL_ROW_HEIGHT_PX = 306;
 const VIRTUAL_OVERSCAN_ROWS = 4;
 
-type TabKind = 'tileset' | 'terrain' | 'autotile' | 'placeable';
+type TabKind = 'asset' | 'tileset' | 'terrain' | 'autotile' | 'placeable';
 
 const TAB_DEFINITIONS: ReadonlyArray<{
   readonly id: TabKind;
@@ -109,6 +111,7 @@ const TAB_DEFINITIONS: ReadonlyArray<{
   { id: 'terrain', label: 'Terrain', icon: SproutIcon },
   { id: 'autotile', label: 'Autotiles', icon: ShapesIcon },
   { id: 'placeable', label: 'Objects', icon: PuzzleIcon },
+  { id: 'asset', label: 'Assets', icon: FileImageIcon },
 ];
 
 const tabCountsForPack = (
@@ -116,6 +119,7 @@ const tabCountsForPack = (
 ): Record<TabKind, number> => {
   const tilesets = pack?.tilesets ?? [];
   return {
+    asset: pack?.assets.length ?? 0,
     tileset: tilesets.filter((tileset) => tileset.tiles.length > 0).length,
     terrain: new Set(
       tilesets.flatMap((tileset) =>
@@ -140,6 +144,7 @@ export function AssetPackBrowser({
   packId,
   packName,
   projectId,
+  initialSearch,
   variant = 'embedded',
 }: AssetPackBrowserProps) {
   const packQuery = useAssetPack(packId);
@@ -148,9 +153,10 @@ export function AssetPackBrowser({
   const cacheStatusQuery = useAssetLibraryCacheStatus(integrityKeyedPackId, integrityHash);
   const cacheVersion = cacheStatusQuery.data?.cacheVersion;
   const tilesetPackQuery = useTilesetPack(integrityKeyedPackId, { integrityHash });
-  const [query, setQuery] = useState('');
+  const hasDiagnosticSearch = initialSearch !== undefined && initialSearch.trim().length > 0;
+  const [query, setQuery] = useState(initialSearch ?? '');
   const deferredQuery = useDeferredValue(query);
-  const [activeTab, setActiveTab] = useState<TabKind>('tileset');
+  const [activeTab, setActiveTab] = useState<TabKind>(hasDiagnosticSearch ? 'asset' : 'tileset');
   const [manualTabSelection, setManualTabSelection] = useState(false);
   const [groupPageCount, setGroupPageCount] = useState(1);
   const normalizedQuery = deferredQuery.trim().toLowerCase();
@@ -177,14 +183,22 @@ export function AssetPackBrowser({
   }, [activeTab, cacheVersion, integrityHash, normalizedQuery, packId]);
 
   useEffect(() => {
+    setQuery(initialSearch ?? '');
+    if (hasDiagnosticSearch) {
+      setActiveTab('asset');
+      setManualTabSelection(true);
+    }
+  }, [hasDiagnosticSearch, initialSearch]);
+
+  useEffect(() => {
     setManualTabSelection(false);
   }, [integrityHash, packId]);
 
   useEffect(() => {
-    if (!manualTabSelection && activeTab !== recommendedTab) {
+    if (!hasDiagnosticSearch && !manualTabSelection && activeTab !== recommendedTab) {
       setActiveTab(recommendedTab);
     }
-  }, [activeTab, manualTabSelection, recommendedTab]);
+  }, [activeTab, hasDiagnosticSearch, manualTabSelection, recommendedTab]);
 
   const activePalette = useActiveWorkingPalette(projectId);
   const paletteActions = useWorkingPaletteActions();
@@ -703,6 +717,12 @@ const buildGroupPreviewEntries = (
     };
   });
 
+const humanizeMetadataKey = (key: string): string =>
+  key
+    .replace(/^license/, 'license ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 function BrowserGroup({
   packId,
   group,
@@ -734,10 +754,20 @@ function BrowserGroup({
   );
   const groupDrafts = useMemo(
     () =>
-      group.primaryRef === undefined && entries.length > 0
-        ? entries.map((entry) => ({ ref: entry.previewRef, label: group.label }))
-        : libraryGroupToPaletteDrafts(group),
+      group.kind === 'asset'
+        ? []
+        : group.primaryRef === undefined && entries.length > 0
+          ? entries.map((entry) => ({ ref: entry.previewRef, label: group.label }))
+          : libraryGroupToPaletteDrafts(group),
     [entries, group],
+  );
+  const metadataEntries = useMemo(
+    () =>
+      Object.entries(group.metadata).filter(
+        ([key]) =>
+          key === 'assetId' || key === 'path' || key === 'mime' || key.startsWith('license'),
+      ),
+    [group.metadata],
   );
   const added =
     groupDrafts.length > 0 &&
@@ -789,7 +819,13 @@ function BrowserGroup({
             <CardDescription className="flex flex-wrap items-center gap-1">
               <Badge variant="secondary">
                 {group.count}{' '}
-                {group.kind === 'source' ? 'objects' : group.count === 1 ? 'item' : 'items'}
+                {group.kind === 'source'
+                  ? 'objects'
+                  : group.kind === 'asset'
+                    ? 'asset'
+                    : group.count === 1
+                      ? 'item'
+                      : 'items'}
               </Badge>
               {added ? <Badge variant="success">Added</Badge> : null}
             </CardDescription>
@@ -822,6 +858,23 @@ function BrowserGroup({
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-0">
+        {metadataEntries.length > 0 ? (
+          <dl
+            className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1"
+            data-testid={`asset-pack-browser-metadata-${group.id}`}
+          >
+            {metadataEntries.map(([key, value]) => (
+              <div key={key} className="contents">
+                <dt className={cn(typography.sectionLabelMicro, 'normal-case tracking-normal')}>
+                  {humanizeMetadataKey(key)}
+                </dt>
+                <dd className={cn(typography.bodyMicro, 'min-w-0 truncate text-foreground')}>
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
         {entries.length === 0 ? (
           <BrowserPreviewPlaceholder
             testId={`asset-pack-browser-item-${group.id}`}
@@ -843,8 +896,11 @@ function BrowserGroup({
           <DialogHeader>
             <DialogTitle>{group.label}</DialogTitle>
             <DialogDescription>
-              {group.count} {group.kind === 'source' ? 'objects' : 'items'} · click a texture to add
-              or remove it from the working palette
+              {group.kind === 'asset'
+                ? 'Manifest asset metadata'
+                : `${group.count} ${
+                    group.kind === 'source' ? 'objects' : 'items'
+                  } · click a texture to add or remove it from the working palette`}
             </DialogDescription>
           </DialogHeader>
           {entries.length === 0 ? (

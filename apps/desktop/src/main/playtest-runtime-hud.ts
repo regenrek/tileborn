@@ -1,8 +1,10 @@
 import {
   BattleRoyaleProtocol,
+  GameplayDamageApplied,
   GameplayEntityDefeated,
   GameplayItemGranted,
   GameplayMatchPhaseChanged,
+  GameplayZonePhaseChanged,
   makeGameplayEntityId,
   makeGameplayItemId,
   type GameplayEvent,
@@ -159,7 +161,9 @@ export const createPlaytestRuntimeHudTracker = (
   deriveWorldState?: PlaytestHudWorldStateDeriver,
 ): PlaytestRuntimeHudTracker => {
   const gameplayEvents: GameplayEvent[] = [];
+  const seenDamageIndicatorKeys = new Set<string>();
   const seenPickupToastKeys = new Set<string>();
+  let previousZonePhase: string | undefined;
   let gameOver: PlaytestRuntimeHudState['gameOver'];
 
   const pushEvent = (event: GameplayEvent): void => {
@@ -208,6 +212,24 @@ export const createPlaytestRuntimeHudTracker = (
       const worldState = deriveWorldState?.(world, tickCount) ?? EMPTY_WORLD_STATE;
       const localPlayer = worldState.localPlayer;
 
+      const damageIndicator = localPlayer?.damageIndicator;
+      if (localPlayer !== undefined && damageIndicator !== undefined) {
+        const key = `${localPlayer.playerId}:${damageIndicator.sourceId}:${damageIndicator.amount}:${damageIndicator.tick}`;
+        if (!seenDamageIndicatorKeys.has(key)) {
+          seenDamageIndicatorKeys.add(key);
+          pushEvent(
+            new GameplayDamageApplied({
+              targetId: makeGameplayEntityId(localPlayer.playerId),
+              sourceId: makeGameplayEntityId(damageIndicator.sourceId),
+              amount: damageIndicator.amount,
+              healthBefore: localPlayer.health + damageIndicator.amount,
+              healthAfter: localPlayer.health,
+              tick: damageIndicator.tick,
+            }),
+          );
+        }
+      }
+
       const pickupToast = localPlayer?.pickupToast;
       if (localPlayer !== undefined && pickupToast !== undefined) {
         const key = `${localPlayer.playerId}:${pickupToast.itemKind}:${pickupToast.tier}:${pickupToast.quantity}:${pickupToast.tick}`;
@@ -222,6 +244,26 @@ export const createPlaytestRuntimeHudTracker = (
             }),
           );
         }
+      }
+
+      const zoneStatus = worldState.zoneStatus;
+      if (zoneStatus !== undefined) {
+        const previousPhase = previousZonePhase;
+        if (zoneStatus.phase !== 'stable' && previousPhase !== zoneStatus.phase) {
+          pushEvent(
+            new GameplayZonePhaseChanged({
+              tick: tickCount,
+              phase: zoneStatus.phase,
+              ...(previousPhase === undefined ? {} : { previousPhase }),
+              ...(zoneStatus.secondsRemaining === undefined
+                ? {}
+                : { secondsRemaining: zoneStatus.secondsRemaining }),
+            }),
+          );
+        }
+        previousZonePhase = zoneStatus.phase;
+      } else {
+        previousZonePhase = undefined;
       }
 
       if (gameOver) {

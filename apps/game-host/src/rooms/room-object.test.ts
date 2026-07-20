@@ -1,15 +1,43 @@
 import { Effect, Option } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { hashBytes, type BehaviorId } from '@tileborne/core';
-import { decodeMessage, makePluginHost, ServerNotice } from '@tileborne/runtime';
+import {
+  buildRuntimeGameShellProjection,
+  decodeMessage,
+  defaultProjectGameShellState,
+  makePluginHost,
+  ServerNotice,
+  type RuntimeBehaviorContext,
+} from '@tileborne/runtime';
 import type { PluginHostApi, RuntimeMessage, RuntimePlugin } from '@tileborne/runtime';
 import { AuthoritativeBehaviorRuntimeHost } from '@tileborne/runtime/behavior';
 
+import { ARENA_PLUGIN_ID } from '../../../../packages/plugin-example-arena/src/constants.js';
+import {
+  decodeHostClientFrame as decodeArenaHostClientFrame,
+  encodeHostTransportErrorFrame as encodeArenaTransportErrorFrame,
+  encodeInvalidClientFrame as encodeInvalidArenaClientFrame,
+  snapshotTickFromHostServerFrame as snapshotTickFromArenaServerFrame,
+} from '../../../../packages/plugin-example-arena/src/host-protocol-bridge.js';
+import { createRuntimeAdapter as createArenaRuntimeAdapter } from '../../../../packages/plugin-example-arena/src/runtime-adapter.js';
+import type { ArenaRuntimeInput } from '../../../../packages/plugin-example-arena/src/types/runtime-plugin.js';
+import {
+  ArenaPlayerInput,
+  ArenaSnapshotAck,
+  decodeArenaServerMessage,
+  encodeArenaClientMessage,
+} from '../../../../packages/plugin-example-arena/src/wire-codec.js';
 import { bundledMapPackages } from '../.generated/bundled-map-packages.js';
+import {
+  initialMenuState,
+  menuReducer,
+} from '../../../../packages/game-client/src/state/menu-machine.js';
+import { menuEventForShellNavigationRequest } from '../../../../packages/game-client/src/shell-behavior-bridge.js';
 import { mintHandoffToken } from './handoff-token.js';
 import { MAX_QUEUED_INPUTS_PER_PLAYER, PlaytestRoom } from './room-object.js';
+import type { BundledPluginRuntimeRegistration } from '../bundled-plugin-loader.js';
 import { STORAGE_KEY, type RoomStorage } from './storage-schema.js';
 import {
   PERSIST_EVERY_N_TICKS,
@@ -22,6 +50,8 @@ import {
   MAX_OUTBOUND_BUFFERED_BYTES,
   MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP,
   MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_RESYNC,
+  decodeRoomShellServerFrame,
+  encodeRoomShellEventClientFrame,
 } from './room-transport.js';
 import {
   createFakeDurableObjectState,
@@ -132,6 +162,12 @@ const decodeLegacyMessages = (server: MemoryWebSocket): RuntimeMessage[] =>
     }
   });
 
+const decodeRoomShellNavigationMessages = (server: MemoryWebSocket) =>
+  server.sent.flatMap((frame) => {
+    const decoded = decodeRoomShellServerFrame(new TextDecoder().decode(frame));
+    return decoded === undefined ? [] : [decoded];
+  });
+
 const encodeBrInputFrame = (input: {
   readonly tick: number;
   readonly seq: number;
@@ -181,6 +217,34 @@ const encodeBrSnapshotAckFrame = (tick: number, receivedAtMs = 1_000): ArrayBuff
   return frame.buffer;
 };
 
+const encodeArenaInputFrame = (input: {
+  readonly tick: number;
+  readonly seq: number;
+  readonly dir?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly shoot?: boolean;
+  readonly aimDeg?: number;
+}): ArrayBuffer => {
+  const bytes = encodeArenaClientMessage(
+    new ArenaPlayerInput({
+      tick: input.tick,
+      seq: input.seq,
+      dir: input.dir === undefined ? Option.none() : Option.some(input.dir),
+      shoot: input.shoot ?? false,
+      aimDeg: input.aimDeg === undefined ? Option.none() : Option.some(input.aimDeg),
+    }),
+  );
+  const frame = new Uint8Array(bytes.byteLength);
+  frame.set(bytes);
+  return frame.buffer;
+};
+
+const encodeArenaSnapshotAckFrame = (tick: number, receivedAtMs = 0): ArrayBuffer => {
+  const bytes = encodeArenaClientMessage(new ArenaSnapshotAck({ tick, receivedAtMs }));
+  const frame = new Uint8Array(bytes.byteLength);
+  frame.set(bytes);
+  return frame.buffer;
+};
+
 const queuedInputCount = (room: PlaytestRoom): number =>
   (room as unknown as { readonly inputQueueByPlayerId: { readonly size: number } })
     .inputQueueByPlayerId.size;
@@ -192,6 +256,62 @@ const emitPluginFrameForTest = (room: PlaytestRoom, frame: Uint8Array): void => 
     }
   ).emitPluginFrame(frame);
 };
+
+const arenaRuntimeRegistration = (): BundledPluginRuntimeRegistration => ({
+  id: ARENA_PLUGIN_ID,
+  protocolBridge: {
+    decodeClientFrame: decodeArenaHostClientFrame,
+    decodeSnapshotAckFrame: (bytes) => {
+      const decoded = decodeArenaHostClientFrame(bytes);
+      return decoded.kind === 'accepted' && decoded.frame.kind === 'ack'
+        ? { tick: decoded.frame.tick, receivedAtMs: decoded.frame.receivedAtMs }
+        : undefined;
+    },
+    decodeServerLifecycleFrame: () => undefined,
+    snapshotTickFromServerFrame: snapshotTickFromArenaServerFrame,
+    encodeTransportErrorFrame: encodeArenaTransportErrorFrame,
+    encodeInvalidClientFrame: encodeInvalidArenaClientFrame,
+  },
+  createRuntimeAdapter: (host) =>
+    createArenaRuntimeAdapter({
+      getMapPackage: host.getMapPackage,
+      getPlayerInput: (playerId) => {
+        const input = host.getPlayerInput?.(playerId);
+        return input === undefined || !isArenaRuntimeInput(input) ? undefined : input;
+      },
+      msgOut: host.msgOut,
+      setReplayFrames: host.setReplayFrames,
+      seed: host.seed,
+    }),
+});
+
+const isArenaRuntimeInput = (value: object): value is ArenaRuntimeInput => {
+  const input = value as Partial<ArenaRuntimeInput>;
+  return (
+    Number.isSafeInteger(input.tick) &&
+    Number.isSafeInteger(input.seq) &&
+    (input.dir === undefined ||
+      input.dir === 0 ||
+      input.dir === 1 ||
+      input.dir === 2 ||
+      input.dir === 3 ||
+      input.dir === 4 ||
+      input.dir === 5 ||
+      input.dir === 6 ||
+      input.dir === 7) &&
+    typeof input.shoot === 'boolean' &&
+    (input.aimDeg === undefined || typeof input.aimDeg === 'number')
+  );
+};
+
+const arenaMapPackage = (): Record<string, unknown> => ({
+  manifest: {
+    schemaVersion: 1,
+    packageId: 'mappkg:arena-room-fixture',
+    pluginId: ARENA_PLUGIN_ID,
+    playerCapacity: 2,
+  },
+});
 
 describe('PlaytestRoom lifecycle', () => {
   let state: FakeDurableObjectState;
@@ -339,6 +459,196 @@ describe('PlaytestRoom lifecycle', () => {
       behaviorId,
       state: { ticks: 1 },
     });
+  });
+
+  it('routes browser shell events through room and Workerd behavior runtime back into the client reducer', async () => {
+    const behaviorId = 'behavior:11111111-1111-4111-8111-111111111111' as BehaviorId;
+    const packageId = 'mappkg:550e8400-e29b-41d4-a716-446655440999';
+    const code = `export default {id:'test.shell-e2e',sourceKind:'typescript'};`;
+    const artifact = {
+      behaviorId,
+      sourceKind: 'typescript' as const,
+      modulePath: 'behaviors/modules/shell-e2e.mjs',
+      hash: hashBytes(new TextEncoder().encode(code)),
+    };
+    const mapPackage = cloneDefaultMapPackage();
+    (mapPackage.manifest as Record<string, unknown>).packageId = packageId;
+    mapPackage.behaviors = {
+      schemaVersion: 1,
+      manifests: [],
+      visualDefinitions: [],
+      modules: [artifact],
+    };
+    const shellProjection = buildRuntimeGameShellProjection(
+      defaultProjectGameShellState('tileborne.battle-royale'),
+    );
+    const binding = {
+      fetch: async (request: Request): Promise<Response> => {
+        const input = (await request.json()) as {
+          readonly packageId: string;
+          readonly snapshot?: Parameters<AuthoritativeBehaviorRuntimeHost['restore']>[0];
+          readonly shell?: {
+            readonly projection?: typeof shellProjection;
+            readonly events?: readonly Parameters<
+              AuthoritativeBehaviorRuntimeHost['dispatch']
+            >[1][];
+          };
+          readonly operation: {
+            readonly tick: number;
+            readonly targetBehaviorId: BehaviorId;
+          };
+        };
+        expect(input.packageId).toBe(packageId);
+        const host = new AuthoritativeBehaviorRuntimeHost({
+          shell: { projection: input.shell!.projection! },
+          capabilities: ['shell.navigation'],
+        });
+        expect(
+          host.load({
+            artifact,
+            code,
+            namespace: {
+              default: {
+                id: 'test.shell-e2e',
+                sourceKind: 'typescript',
+                state: { last: '' },
+                requiredCapabilities: ['shell.navigation'],
+                on: {
+                  'shell.event': ({ event, state }: RuntimeBehaviorContext) =>
+                    state.set('last', String(event.event)),
+                  'runtime.tick': ({ state, actions }: RuntimeBehaviorContext) => {
+                    if (state.get('last') === 'shell.menu.entered') {
+                      return actions['shell.invoke-action']({ actionId: 'menu.settings' });
+                    }
+                    return undefined;
+                  },
+                },
+              },
+            },
+          }),
+        ).toBe(true);
+        if (input.snapshot !== undefined) {
+          expect(host.restore(input.snapshot)).toBe(true);
+        }
+        const shellTraces = [];
+        for (const event of input.shell?.events ?? []) {
+          shellTraces.push(
+            ...(await host.dispatch('shell.event', event, input.operation.targetBehaviorId)),
+          );
+        }
+        const timerTraces = await host.advanceTo(input.operation.tick);
+        const tickTraces = await host.dispatch(
+          'runtime.tick',
+          { tick: input.operation.tick },
+          input.operation.targetBehaviorId,
+        );
+        return Response.json({
+          ok: true,
+          snapshot: host.snapshot,
+          traces: [...shellTraces, ...timerTraces, ...tickTraces],
+          diagnostics: host.diagnostics,
+          shellNavigationRequests: host.shellNavigationRequests,
+        });
+      },
+    };
+    const shellState = createFakeDurableObjectState();
+    installWorkerGlobals();
+    const shellRoom = new PlaytestRoom(
+      asDurableObjectState(shellState),
+      makeEnv({ BEHAVIOR_RUNTIME: binding }),
+      { createPluginHost: () => makePluginHost() },
+    );
+    registerAlarmHandler(shellState, () => shellRoom.alarm());
+    await shellRoom.create({
+      mapId: 'map:fixture',
+      seed: 42,
+      options: { countdownSeconds: 0, minReadyPlayers: 1 },
+      mapPackage,
+      shellProjection,
+    });
+    const token = await mintHandoffToken(
+      { HANDOFF_SIGNING_KEY: TEST_KEY },
+      { playtestId: 'room-1', playerId: 'player-1', ttlSeconds: 120 },
+    );
+    await shellRoom.addPlayer('player-1', token, 'room-1', { broadcast: false });
+    const server = new MemoryWebSocket();
+    (
+      shellRoom as unknown as {
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+      }
+    ).acceptPlayerSocket('player-1', server as unknown as WebSocket);
+    expect((await readyPlayer(shellRoom, 'player-1')).status).toBe(200);
+    await shellRoom.alarm();
+
+    await shellRoom.webSocketMessage(
+      server as unknown as WebSocket,
+      encodeRoomShellEventClientFrame({ event: 'shell.menu.entered', screenId: 'main-menu' }),
+    );
+    await shellRoom.alarm();
+
+    const [navigation] = decodeRoomShellNavigationMessages(server);
+    expect(navigation?.request).toEqual({ type: 'navigate', targetScreenId: 'settings' });
+    const menuState = { ...initialMenuState, phase: 'menu' as const, screen: 'main' as const };
+    const menuEvent =
+      navigation === undefined
+        ? undefined
+        : menuEventForShellNavigationRequest(menuState, navigation.request);
+    expect(menuEvent).toEqual({ type: 'OPEN_SETTINGS' });
+    expect(menuEvent === undefined ? menuState : menuReducer(menuState, menuEvent)).toMatchObject({
+      phase: 'menu',
+      screen: 'settings',
+    });
+  });
+
+  it('persists shell navigation sequence across Durable Object recreation', async () => {
+    const shellState = createFakeDurableObjectState();
+    installWorkerGlobals();
+    const behaviorRuntime = {
+      snapshot: undefined,
+      diagnostics: [],
+      shellNavigationRequests: [{ type: 'navigate' as const, targetScreenId: 'settings' }],
+      emitShellEvent: vi.fn(),
+      step: vi.fn(async () => ({ status: 'advanced' })),
+    };
+    const createRoom = () =>
+      new PlaytestRoom(asDurableObjectState(shellState), makeEnv(), {
+        createPluginHost: () => makePluginHost(),
+        createBehaviorRuntime: () => behaviorRuntime,
+      });
+    const room = createRoom();
+    await room.create({
+      mapId: 'map:fixture',
+      seed: 42,
+      options: { countdownSeconds: 0, minReadyPlayers: 1 },
+    });
+    const token = await mintHandoffToken(
+      { HANDOFF_SIGNING_KEY: TEST_KEY },
+      { playtestId: 'room-1', playerId: 'player-a', ttlSeconds: 120 },
+    );
+    await room.addPlayer('player-a', token, 'room-1', { broadcast: false });
+    const firstServer = new MemoryWebSocket();
+    (
+      room as unknown as {
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+      }
+    ).acceptPlayerSocket('player-a', firstServer as unknown as WebSocket);
+    expect((await readyPlayer(room, 'player-a')).status).toBe(200);
+    await room.alarm();
+    const [firstNavigation] = decodeRoomShellNavigationMessages(firstServer);
+    expect(firstNavigation).toMatchObject({ sequence: 0 });
+
+    const recreated = createRoom();
+    const secondServer = new MemoryWebSocket();
+    (
+      recreated as unknown as {
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+      }
+    ).acceptPlayerSocket('player-a', secondServer as unknown as WebSocket);
+    await recreated.alarm();
+    const [secondNavigation] = decodeRoomShellNavigationMessages(secondServer);
+
+    expect(secondNavigation?.epoch).toBe(firstNavigation?.epoch);
+    expect(secondNavigation).toMatchObject({ sequence: 1 });
   });
 
   it('keeps countdown pending until configured countdownSeconds elapses', async () => {
@@ -495,6 +805,202 @@ describe('PlaytestRoom lifecycle', () => {
       status: 'connected',
       ready: false,
       reconnectEligible: true,
+    });
+  });
+
+  it('runs an Arena package through the real room owner lifecycle, reconnect, diagnostics, metrics, and results path', async () => {
+    installWorkerGlobals();
+    const arenaState = createFakeDurableObjectState();
+    const arenaRoom = new PlaytestRoom(asDurableObjectState(arenaState), makeEnv(), {
+      pluginRegistrations: [arenaRuntimeRegistration()],
+    });
+    registerAlarmHandler(arenaState, () => arenaRoom.alarm());
+    await arenaRoom.create({
+      mapId: 'map:arena-room-fixture',
+      seed: 7,
+      options: { minReadyPlayers: 2 },
+      mapPackage: arenaMapPackage(),
+    });
+
+    const ownerReservation = await arenaRoom.fetch(
+      new Request('https://do/players/reserve', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: 'Owner' }),
+      }),
+    );
+    expect(ownerReservation.status).toBe(200);
+    const owner = (await ownerReservation.json()) as { readonly playerId: string };
+    const configured = await arenaRoom.fetch(
+      new Request('https://do/lobby/configure?roomId=arena-room', {
+        method: 'POST',
+        body: JSON.stringify({ joinCode: 'ABC2D3', createdByPlayerId: owner.playerId }),
+      }),
+    );
+    expect(configured.status).toBe(200);
+    const participantReservation = await arenaRoom.fetch(
+      new Request('https://do/players/reserve', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: 'Participant' }),
+      }),
+    );
+    expect(participantReservation.status).toBe(200);
+    const participant = (await participantReservation.json()) as { readonly playerId: string };
+
+    const ownerSocket = await connectPlayer(arenaRoom, arenaState, 'arena-room', owner.playerId);
+    const participantSocket = await connectPlayer(
+      arenaRoom,
+      arenaState,
+      'arena-room',
+      participant.playerId,
+    );
+    expect((await readyPlayer(arenaRoom, owner.playerId)).status).toBe(200);
+    expect((await readyPlayer(arenaRoom, participant.playerId)).status).toBe(200);
+
+    const participantStart = await arenaRoom.fetch(
+      new Request('https://do/lobby/start?roomId=arena-room', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: participant.playerId }),
+      }),
+    );
+    expect(participantStart.status).toBe(403);
+
+    const ownerStart = await arenaRoom.fetch(
+      new Request('https://do/lobby/start?roomId=arena-room', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: owner.playerId }),
+      }),
+    );
+    expect(ownerStart.status).toBe(200);
+    const startBody = (await ownerStart.json()) as { readonly lobby: RoomLobbySummary };
+    expect(startBody.lobby.phase).toBe('active');
+    expect(startBody.lobby.players.map((player) => [player.playerId, player.role])).toEqual([
+      [owner.playerId, 'owner'],
+      [participant.playerId, 'participant'],
+    ]);
+
+    await arenaRoom.alarm();
+    await arenaRoom.webSocketMessage(
+      ownerSocket as unknown as WebSocket,
+      encodeArenaInputFrame({ tick: 1, seq: 1, shoot: true, aimDeg: 0 }),
+    );
+    expect(queuedInputCount(arenaRoom)).toBe(1);
+    await arenaRoom.alarm();
+    const arenaSnapshot = ownerSocket.sent
+      .map((frame) => {
+        try {
+          return decodeArenaServerMessage(new Uint8Array(frame));
+        } catch {
+          return undefined;
+        }
+      })
+      .find((message) => message?._tag === 'ArenaSnapshot');
+    expect(arenaSnapshot?._tag).toBe('ArenaSnapshot');
+    const arenaInputSnapshot = ownerSocket.sent
+      .map((frame) => {
+        try {
+          return decodeArenaServerMessage(new Uint8Array(frame));
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((message) => message?._tag === 'ArenaSnapshot')
+      .at(-1);
+    expect(
+      arenaInputSnapshot?._tag === 'ArenaSnapshot'
+        ? arenaInputSnapshot.entities.find((entity) => entity.id === 'player-1')?.attacking
+        : undefined,
+    ).toBe(true);
+    const arenaInputTick =
+      arenaInputSnapshot?._tag === 'ArenaSnapshot' ? arenaInputSnapshot.tick : -1;
+    expect(arenaRoom.getClientTransportStats(owner.playerId)).toMatchObject({
+      lastSentSnapshotTick: arenaInputTick,
+      lastAckedSnapshotTick: -1,
+      pendingSnapshotLagTicks: arenaInputTick + 1,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+
+    await arenaRoom.webSocketMessage(
+      ownerSocket as unknown as WebSocket,
+      encodeArenaSnapshotAckFrame(arenaInputTick, 5678),
+    );
+    expect(arenaRoom.getClientTransportStats(owner.playerId)).toMatchObject({
+      lastSentSnapshotTick: arenaInputTick,
+      lastAckedSnapshotTick: arenaInputTick,
+      pendingSnapshotLagTicks: 0,
+      lastClientAckReceivedAtMs: 5678,
+      staleAckCount: 0,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+
+    await arenaRoom.webSocketMessage(
+      participantSocket as unknown as WebSocket,
+      new Uint8Array([0xc1]).buffer,
+    );
+    const arenaError = participantSocket.sent
+      .map((frame) => {
+        try {
+          return decodeArenaServerMessage(new Uint8Array(frame));
+        } catch {
+          return undefined;
+        }
+      })
+      .find((message) => message?._tag === 'Error');
+    expect(arenaError?._tag).toBe('Error');
+    expect(participantSocket.closeCode).toBe(1003);
+    expect(participantSocket.closeReason).toBe('invalid frame');
+
+    await arenaRoom.webSocketClose(ownerSocket as unknown as WebSocket);
+    const reconnect = await arenaRoom.fetch(
+      new Request('https://do/players/reconnect?roomId=arena-room', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: owner.playerId }),
+      }),
+    );
+    expect(reconnect.status).toBe(200);
+
+    const metrics = await arenaRoom.fetch(new Request('https://do/metrics?roomId=arena-room'));
+    expect(metrics.status).toBe(200);
+    const metricsBody = (await metrics.json()) as {
+      readonly roomId: string;
+      readonly metrics: PlaytestSummary['metrics'];
+    };
+    expect(metricsBody.roomId).toBe('arena-room');
+    expect(metricsBody.metrics.lifecyclePhase).toBe('active');
+
+    const diagnostics = await arenaRoom.fetch(
+      new Request('https://do/diagnostics?roomId=arena-room'),
+    );
+    expect(diagnostics.status).toBe(200);
+    expect(await diagnostics.json()).toMatchObject({
+      diagnostics: {
+        roomId: 'arena-room',
+        ownerPlayerId: owner.playerId,
+        playerCount: 2,
+        issues: [],
+      },
+    });
+
+    const stopped = await arenaRoom.fetch(
+      new Request('https://do/room/stop?roomId=arena-room', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: owner.playerId }),
+      }),
+    );
+    expect(stopped.status).toBe(200);
+    const stoppedBody = (await stopped.json()) as {
+      readonly stopped: boolean;
+      readonly results: NonNullable<RoomStorage['results']>;
+    };
+    expect(stoppedBody.stopped).toBe(true);
+    expect(stoppedBody.results.reason).toBe('owner stopped room');
+
+    const results = await arenaRoom.fetch(new Request('https://do/results?roomId=arena-room'));
+    expect(results.status).toBe(200);
+    expect(await results.json()).toMatchObject({
+      roomId: 'arena-room',
+      results: { reason: 'owner stopped room' },
     });
   });
 

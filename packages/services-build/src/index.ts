@@ -16,7 +16,10 @@ import {
 } from './build/index.js';
 import { ExportServiceLive } from './export/index.js';
 import { PlaytestServiceLive } from './playtest/index.js';
-import { RuntimeDeployServiceLive } from './runtime-deploy/index.js';
+import {
+  makeRuntimeDeployServiceLive,
+  type RuntimeDeployServiceRuntimeOptions,
+} from './runtime-deploy/index.js';
 import { SupportServiceLive } from './support/index.js';
 
 export * from './model.js';
@@ -27,7 +30,9 @@ export * from './behavior/project-package.js';
 export * from './map-package/index.js';
 export * from './export/index.js';
 export * from './playtest/index.js';
+export * from './reference-game/battle-royale.js';
 export * from './runtime-deploy/index.js';
+export * from './runtime-deploy/adapters.js';
 export * from './support/index.js';
 
 const PersistentJobLayer = JobServicePersistentLive.pipe(Layer.provideMerge(HomeServiceLive));
@@ -47,6 +52,7 @@ const PlaytestLayer = PlaytestServiceLive.pipe(
 export const makeServicesBuildLayer = (
   promotionOperations: BuildPromotionOperations = nodeBuildPromotionOperations,
   runtimeOptions: BuildServiceRuntimeOptions = {},
+  deployRuntimeOptions: RuntimeDeployServiceRuntimeOptions = {},
 ) => {
   const BuildLayer = makeBuildServiceLive(promotionOperations, runtimeOptions).pipe(
     Layer.provideMerge(AppLayer),
@@ -56,7 +62,9 @@ export const makeServicesBuildLayer = (
     Layer.provideMerge(BuildLayer),
     Layer.provideMerge(PluginLayer),
   );
-  const RuntimeDeployLayer = RuntimeDeployServiceLive.pipe(Layer.provideMerge(BuildLayer));
+  const RuntimeDeployLayer = makeRuntimeDeployServiceLive(deployRuntimeOptions).pipe(
+    Layer.provideMerge(BuildLayer),
+  );
   return Layer.mergeAll(
     BuildLayer,
     ExportLayer,

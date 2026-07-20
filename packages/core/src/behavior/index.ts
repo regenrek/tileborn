@@ -479,6 +479,50 @@ export const CORE_BEHAVIOR_REGISTRY = new BehaviorRegistryManifest({
       inputs: [parameter('timerId', 'Timer', 'string', true, 'timer')],
       outputs: [],
     }),
+    new BehaviorRegistryEntry({
+      id: registryEntryId('shell.event'),
+      kind: 'event',
+      label: 'Game shell event',
+      category: 'Game Shell',
+      description: 'Runs when the neutral game shell enters a screen or invokes a shell action.',
+      capability: capabilityId('shell.navigation'),
+      icon: 'panel-top',
+      inputs: [],
+      outputs: [
+        parameter('event', 'Event', 'string', true),
+        parameter('screenId', 'Screen', 'string', true),
+        parameter('actionId', 'Action', 'string', false),
+        parameter('targetScreenId', 'Target screen', 'string', false),
+      ],
+    }),
+    new BehaviorRegistryEntry({
+      id: registryEntryId('shell.invoke-action'),
+      kind: 'action',
+      label: 'Invoke shell action',
+      category: 'Game Shell',
+      description:
+        'Invokes a typed game-shell action and lets the shell own any navigation request.',
+      capability: capabilityId('shell.navigation'),
+      icon: 'mouse-pointer-click',
+      inputs: [parameter('actionId', 'Action', 'string', true, 'title.start')],
+      outputs: [],
+    }),
+    new BehaviorRegistryEntry({
+      id: registryEntryId('shell.emit-event'),
+      kind: 'action',
+      label: 'Emit shell event',
+      category: 'Game Shell',
+      description: 'Emits a registered game-shell event into the runtime behavior scheduler.',
+      capability: capabilityId('shell.navigation'),
+      icon: 'send',
+      inputs: [
+        parameter('event', 'Event', 'string', true, 'shell.action.invoked'),
+        parameter('screenId', 'Screen', 'string', true, 'title'),
+        parameter('actionId', 'Action', 'string', false),
+        parameter('targetScreenId', 'Target screen', 'string', false),
+      ],
+      outputs: [],
+    }),
   ],
 });
 
@@ -513,6 +557,19 @@ export const CORE_BEHAVIOR_TEMPLATES: readonly BehaviorTemplate[] = [
         arguments: { ticks: 60, timerId: 'pulse' },
       }),
     ],
+  }),
+  new BehaviorTemplate({
+    id: templateId('shell.on-shell-event'),
+    label: 'On shell event',
+    description: 'Start from a game-shell event emitted by menus, navigation, or screen lifecycle.',
+    category: 'Game Shell',
+    icon: 'panel-top',
+    requiredCapabilities: [capabilityId('shell.navigation')],
+    when: new BehaviorTemplateInvocation({
+      entryId: registryEntryId('shell.event'),
+      arguments: {},
+    }),
+    do: [],
   }),
 ];
 

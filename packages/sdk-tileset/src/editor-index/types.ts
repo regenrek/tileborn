@@ -52,7 +52,10 @@ export interface EditorIndexLicense {
   readonly spdxId: string;
   readonly attribution?: string;
   readonly sourceUrl?: string;
+  readonly sourcePath?: string;
+  readonly modifications?: string;
   readonly notes?: string;
+  readonly redistributable: boolean;
 }
 
 export interface EditorIndexPackMeta {

@@ -18,6 +18,23 @@ import type {
   StartupTaskStatus,
 } from '../../../shared/startup-status';
 
+type StartupBoundaryDebugEvent = {
+  readonly type: 'render' | 'mount' | 'unmount' | 'show-app';
+  readonly at: number;
+  readonly snapshotState?: StartupStatusSnapshot['state'];
+  readonly appShown: boolean;
+  readonly locationHash: string;
+};
+
+const appendStartupBoundaryDebugEvent = (event: StartupBoundaryDebugEvent) => {
+  const debugWindow = window as unknown as {
+    __tileborneStartupBoundaryDebug?: { events?: StartupBoundaryDebugEvent[] };
+  };
+  const debug = debugWindow.__tileborneStartupBoundaryDebug ?? { events: [] };
+  debug.events = [...(debug.events ?? []), event].slice(-200);
+  debugWindow.__tileborneStartupBoundaryDebug = debug;
+};
+
 const statusLabel: Record<StartupTaskStatus, string> = {
   pending: 'Pending',
   running: 'Running',
@@ -199,14 +216,64 @@ function StartupWarning({ snapshot }: { readonly snapshot: StartupStatusSnapshot
 
 export function StartupBoundary({ children }: { readonly children: ReactNode }) {
   const snapshot = useStartupStatus();
+  const [appShown, setAppShown] = useState(false);
+  const appReady = snapshot?.state === 'ready' || snapshot?.state === 'degraded';
 
-  if (snapshot === undefined || snapshot.state === 'starting' || snapshot.state === 'failed') {
+  useEffect(() => {
+    appendStartupBoundaryDebugEvent({
+      type: 'mount',
+      at: performance.now(),
+      ...(snapshot === undefined ? {} : { snapshotState: snapshot.state }),
+      appShown,
+      locationHash: window.location.hash,
+    });
+    return () => {
+      appendStartupBoundaryDebugEvent({
+        type: 'unmount',
+        at: performance.now(),
+        ...(snapshot === undefined ? {} : { snapshotState: snapshot.state }),
+        appShown,
+        locationHash: window.location.hash,
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    appendStartupBoundaryDebugEvent({
+      type: 'render',
+      at: performance.now(),
+      ...(snapshot === undefined ? {} : { snapshotState: snapshot.state }),
+      appShown,
+      locationHash: window.location.hash,
+    });
+  });
+
+  useEffect(() => {
+    if (!appReady || appShown) {
+      return;
+    }
+    appendStartupBoundaryDebugEvent({
+      type: 'show-app',
+      at: performance.now(),
+      snapshotState: snapshot.state,
+      appShown: true,
+      locationHash: window.location.hash,
+    });
+    setAppShown(true);
+  }, [appReady, appShown, snapshot]);
+
+  if (
+    !appShown &&
+    (snapshot === undefined || snapshot.state === 'starting' || snapshot.state === 'failed')
+  ) {
     return <StartupScreen snapshot={snapshot} />;
   }
 
   return (
     <>
-      {snapshot.state === 'degraded' ? <StartupWarning snapshot={snapshot} /> : null}
+      {snapshot !== undefined && snapshot.state === 'degraded' ? (
+        <StartupWarning snapshot={snapshot} />
+      ) : null}
       {children}
     </>
   );

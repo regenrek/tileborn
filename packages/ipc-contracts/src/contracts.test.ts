@@ -7,6 +7,9 @@ import {
   MainIpcContracts,
   MainIpcRegistry,
   AssetLibraryGetPackUseSitesContract,
+  AudioDocument,
+  GameShellDocument,
+  GameShellOpenContract,
   MapsSetMapTilesetPackContract,
   PluginsListContributionsContract,
   ProjectsCreateContract,
@@ -29,7 +32,7 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('main IPC contracts', () => {
   it('exports the main IPC registry', () => {
-    expect(MainIpcContracts).toHaveLength(116);
+    expect(MainIpcContracts).toHaveLength(130);
     expect(MainIpcRegistry.byChannel['tileborne:asset-library:getPackUseSites']).toBe(
       AssetLibraryGetPackUseSitesContract,
     );
@@ -43,6 +46,67 @@ describe('main IPC contracts', () => {
     );
     expect(MainIpcRegistry.byChannel['tileborne:readiness:check']).toBe(ReadinessCheckContract);
     expect(MainIpcRegistry.byChannel['tileborne:ship:start']).toBe(ShipStartContract);
+    expect(MainIpcRegistry.byChannel['tileborne:game-shell:open']).toBe(GameShellOpenContract);
+  });
+
+  it('round-trips the declarative game shell document and rejects broken routes', () => {
+    const validDocument = {
+      schemaVersion: 1,
+      pluginId: 'tileborne.battle-royale',
+      screens: [
+        {
+          id: 'title',
+          stableId: 'title',
+          version: 1,
+          kind: 'title',
+          title: 'Title',
+          subtitle: 'Start',
+          enabled: true,
+          layout: 'center',
+          actions: [
+            { id: 'title.start', label: 'Start', type: 'navigate', targetScreenId: 'main-menu' },
+          ],
+        },
+        {
+          id: 'main-menu',
+          stableId: 'main-menu',
+          version: 1,
+          kind: 'main-menu',
+          title: 'Menu',
+          subtitle: '',
+          enabled: true,
+          layout: 'stack',
+          actions: [],
+        },
+      ],
+      screenOrder: ['title', 'main-menu'],
+      assets: [],
+      tokens: {
+        fontFamily: 'Inter',
+        textColor: '#fff',
+        accentColor: '#38bdf8',
+        panelColor: '#111827',
+        focusColor: '#facc15',
+        spacing: 'comfortable',
+        motion: 'standard',
+      },
+      entryScreenId: 'title',
+    };
+
+    roundTrip(GameShellOpenContract.request, { projectId });
+    roundTrip(GameShellDocument, validDocument);
+    expect(() =>
+      Schema.decodeUnknownSync(GameShellDocument)({
+        ...validDocument,
+        entryScreenId: 'missing',
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(GameShellDocument)({
+        ...validDocument,
+        screens: [{ ...validDocument.screens[0], backgroundAssetId: 'asset:missing' }],
+      }),
+    ).toThrow();
   });
 
   it('round-trips the guided ship request and canonical artifact', () => {
@@ -86,6 +150,68 @@ describe('main IPC contracts', () => {
   it('round-trips projects.create request without optional engineVersion', () => {
     roundTrip(ProjectsCreateContract.request, { name: 'Example' });
     roundTrip(ProjectsCreateContract.request, { name: 'Example', engineVersion: '0.1.0' });
+  });
+
+  it('rejects invalid durable audio source and settings shapes at the IPC boundary', () => {
+    const validDocument = {
+      schemaVersion: 1,
+      assets: [
+        {
+          label: 'Menu Loop',
+          classification: 'music',
+          source: {
+            assetId: 'asset:menu-loop',
+            path: 'assets/audio/menu-loop.ogg',
+            mime: 'audio/ogg',
+          },
+        },
+      ],
+      bindings: { 'shell.menuMusic': 'Menu Loop' },
+      settings: {
+        masterVolume: 0.8,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: { 'project.music': 0.4 },
+      },
+    };
+
+    roundTrip(AudioDocument, validDocument);
+    expect(() =>
+      Schema.decodeUnknownSync(AudioDocument)({
+        ...validDocument,
+        bindings: { 'unknown.binding': 'Menu Loop' },
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(AudioDocument)({
+        ...validDocument,
+        settings: { ...validDocument.settings, masterVolume: 2 },
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(AudioDocument)({
+        ...validDocument,
+        assets: [
+          {
+            label: 'Bad Source',
+            classification: 'music',
+            source: { url: 'data:audio/ogg;base64,T2dnUw==', path: 'assets/audio/menu-loop.ogg' },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(AudioDocument)({
+        ...validDocument,
+        assets: [
+          {
+            label: 'Bad Mime',
+            classification: 'sfx',
+            source: { path: 'assets/audio/not-audio.png', mime: 'image/png' },
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it('round-trips idempotent Battle Royale game creation', () => {

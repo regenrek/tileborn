@@ -31,9 +31,19 @@ describe('playtest runtime status', () => {
     ).toBe(`Plugin ${PLUGIN_ID} · startup failed · module not found`);
   });
 
+  it('formats live runtime metrics when the plugin event is absent', () => {
+    expect(
+      formatPlaytestRuntimeStatus(PLUGIN_ID, {
+        tickCount: 42,
+        playerCount: 1,
+      }),
+    ).toBe(`Plugin ${PLUGIN_ID} · runtime metrics · Tick 42 · Players: 1`);
+  });
+
   it('detects and parses startup failure events', () => {
     expect(isPlaytestStartupFailed('startup-failed: timeout')).toBe(true);
     expect(isPlaytestStartupFailed('onTick:1')).toBe(false);
+    expect(isPlaytestStartupFailed(undefined)).toBe(false);
     expect(parseStartupFailedReason('startup-failed: timeout')).toBe('timeout');
   });
 
@@ -47,6 +57,15 @@ describe('playtest runtime status', () => {
         status: 'Running',
         runtimeMetrics: {
           lastPluginEvent: 'onTick:1',
+          tickCount: 1,
+          playerCount: 0,
+        },
+      }),
+    ).toBe('live');
+    expect(
+      resolvePlaytestConnectionStatus({
+        status: 'Running',
+        runtimeMetrics: {
           tickCount: 1,
           playerCount: 0,
         },

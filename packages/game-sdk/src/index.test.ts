@@ -62,7 +62,34 @@ describe('game SDK', () => {
     expect(events.lifecycle.started).toBe('lifecycle.started');
     expect(events.runtime.tick).toBe('runtime.tick');
     expect(events.timer.fired).toBe('timer.fired');
+    expect(events.shell.event).toBe('shell.event');
     expect(eventId('world.player-entered-zone')).toBe('world.player-entered-zone');
+  });
+
+  it('types built-in shell events and actions through the SDK registry', () => {
+    const shellBehavior = defineBehavior({
+      id: 'example.shell-listener',
+      state: { last: '' },
+      requiredCapabilities: ['shell.navigation'],
+      on: {
+        'shell.event': ({ event, state, actions, capabilities }) => {
+          expectTypeOf(event.screenId).toEqualTypeOf<string>();
+          expectTypeOf(event.actionId).toEqualTypeOf<string | undefined>();
+          capabilities.require('shell.navigation');
+          return [
+            state.set('last', event.event),
+            actions['shell.emit-event']({
+              event: 'shell.action.invoked',
+              screenId: event.screenId,
+              actionId: event.actionId,
+            }),
+            actions['shell.invoke-action']({ actionId: 'title.start' }),
+          ];
+        },
+      },
+    });
+
+    expect(shellBehavior.requiredCapabilities).toEqual(['shell.navigation']);
   });
 
   it('executes handlers through the deterministic test harness and records commands', async () => {

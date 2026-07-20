@@ -155,16 +155,29 @@ export class RuntimeDeployCredentials extends Schema.Class<RuntimeDeployCredenti
 )({
   accountId: Schema.String,
   apiToken: Schema.String,
+  profile: Schema.optional(Schema.String),
 }) {}
+
+export const RuntimeDeployAdapterId = Schema.Literals(['local', 'alchemy-cloudflare']);
+export type RuntimeDeployAdapterId = Schema.Schema.Type<typeof RuntimeDeployAdapterId>;
 
 export class RuntimeDeployTarget extends Schema.TaggedClass<RuntimeDeployTarget>()(
   'RuntimeDeployTarget',
   {
+    adapterId: Schema.OptionFromOptional(RuntimeDeployAdapterId),
     stage: Schema.Literals(['local', 'dev', 'staging', 'production']),
     workerName: Schema.String,
     credentials: Schema.OptionFromOptional(RuntimeDeployCredentials),
   },
 ) {}
+
+export class RuntimeDeploymentTargetSummary extends Schema.Class<RuntimeDeploymentTargetSummary>(
+  'RuntimeDeploymentTargetSummary',
+)({
+  adapterId: RuntimeDeployAdapterId,
+  stage: Schema.Literals(['local', 'dev', 'staging', 'production']),
+  workerName: Schema.String,
+}) {}
 
 export class RuntimeDeployOptions extends Schema.Class<RuntimeDeployOptions>(
   'RuntimeDeployOptions',
@@ -175,7 +188,7 @@ export class RuntimeDeployOptions extends Schema.Class<RuntimeDeployOptions>(
 export class RuntimeDeployment extends Schema.Class<RuntimeDeployment>('RuntimeDeployment')({
   id: DeploymentId,
   buildId: BuildId,
-  target: RuntimeDeployTarget,
+  target: RuntimeDeploymentTargetSummary,
   createdAt: Schema.String,
   endpoint: Schema.String,
   manifestPath: Schema.String,
@@ -261,6 +274,26 @@ export class RuntimeDeployAuthError extends Schema.TaggedErrorClass<RuntimeDeplo
   'RuntimeDeployAuthError',
   {
     buildId: BuildId,
+    message: Schema.String,
+  },
+) {}
+
+export const RuntimeDeployOperation = Schema.Literals([
+  'plan',
+  'preview',
+  'deploy',
+  'status',
+  'logs',
+  'destroy',
+] as const);
+export type RuntimeDeployOperation = Schema.Schema.Type<typeof RuntimeDeployOperation>;
+
+export class RuntimeDeployOperationError extends Schema.TaggedErrorClass<RuntimeDeployOperationError>()(
+  'RuntimeDeployOperationError',
+  {
+    operation: RuntimeDeployOperation,
+    adapterId: RuntimeDeployAdapterId,
+    code: Schema.String,
     message: Schema.String,
   },
 ) {}

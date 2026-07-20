@@ -7,6 +7,8 @@ import {
 import { bundledBehaviorModules } from '../../.generated/bundled-behaviors.js';
 import {
   WORKERD_BEHAVIOR_PROTOCOL_VERSION,
+  isRuntimeGameShellProjection,
+  isRuntimeShellBehaviorEventPayload,
   type WorkerdBehaviorResponse,
   type WorkerdBehaviorStepRequest,
 } from './protocol.js';
@@ -39,6 +41,22 @@ const parseRequest = (value: unknown): WorkerdBehaviorStepRequest => {
   if (value.seed !== undefined && typeof value.seed !== 'string') {
     throw new TypeError('invalid behavior seed');
   }
+  if (value.shell !== undefined) {
+    if (!isRecord(value.shell)) throw new TypeError('invalid behavior shell bridge');
+    if (
+      value.shell.projection !== undefined &&
+      !isRuntimeGameShellProjection(value.shell.projection)
+    ) {
+      throw new TypeError('invalid behavior shell projection');
+    }
+    if (
+      value.shell.events !== undefined &&
+      (!Array.isArray(value.shell.events) ||
+        !value.shell.events.every(isRuntimeShellBehaviorEventPayload))
+    ) {
+      throw new TypeError('invalid behavior shell event queue');
+    }
+  }
   return value as unknown as WorkerdBehaviorStepRequest;
 };
 
@@ -57,6 +75,9 @@ const execute = async (input: WorkerdBehaviorStepRequest): Promise<WorkerdBehavi
   }
   const host = new AuthoritativeBehaviorRuntimeHost({
     ...(input.seed === undefined ? {} : { seed: input.seed }),
+    ...(input.shell?.projection === undefined
+      ? {}
+      : { capabilities: ['shell.navigation'], shell: { projection: input.shell.projection } }),
   });
   if (
     !host.load({
@@ -65,10 +86,11 @@ const execute = async (input: WorkerdBehaviorStepRequest): Promise<WorkerdBehavi
       namespace: packaged.createNamespace(),
     })
   ) {
+    const diagnostic = host.diagnostics.at(-1);
     return {
       ok: false,
       code: 'TBRUNTIME3202',
-      message: `failed to load behavior ${input.operation.targetBehaviorId}`,
+      message: diagnostic?.message ?? `failed to load behavior ${input.operation.targetBehaviorId}`,
     };
   }
   if (input.snapshot !== undefined && !host.restore(input.snapshot as BehaviorSchedulerSnapshot)) {
@@ -77,6 +99,16 @@ const execute = async (input: WorkerdBehaviorStepRequest): Promise<WorkerdBehavi
       code: 'TBRUNTIME3203',
       message: 'failed to restore the last-known-good behavior snapshot',
     };
+  }
+  const shellTraces = [];
+  for (const event of input.shell?.events ?? []) {
+    shellTraces.push(
+      ...(await host.dispatch(
+        'shell.event',
+        { ...event },
+        input.operation.targetBehaviorId as BehaviorId,
+      )),
+    );
   }
   const timerTraces = await host.advanceTo(input.operation.tick);
   const eventTraces = await host.dispatch(
@@ -87,8 +119,9 @@ const execute = async (input: WorkerdBehaviorStepRequest): Promise<WorkerdBehavi
   return {
     ok: true,
     snapshot: host.snapshot,
-    traces: [...timerTraces, ...eventTraces],
+    traces: [...shellTraces, ...timerTraces, ...eventTraces],
     diagnostics: host.diagnostics,
+    shellNavigationRequests: host.shellNavigationRequests,
   };
 };
 

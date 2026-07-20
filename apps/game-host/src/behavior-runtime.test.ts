@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { type BehaviorId, type JsonObject } from '@tileborne/core';
+import {
+  buildRuntimeGameShellProjection,
+  defaultProjectGameShellState,
+  type RuntimeShellBehaviorEventPayload,
+} from '@tileborne/runtime';
 
 import { WorkerdBehaviorRuntimeClient } from './behavior-runtime.js';
 
@@ -113,5 +118,50 @@ describe('WorkerdBehaviorRuntimeClient response boundary', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(client.snapshot).toBeUndefined();
     expect(client.quarantinedBehaviorIds).toEqual(new Set([BEHAVIOR_ID]));
+  });
+
+  it('transports packaged shell projection, queued shell events, and navigation requests', async () => {
+    const shellProjection = buildRuntimeGameShellProjection(defaultProjectGameShellState());
+    const shellEvent: RuntimeShellBehaviorEventPayload = {
+      event: 'shell.menu.entered',
+      screenId: 'main-menu',
+    };
+    const fetch = vi.fn<(request: Request) => Promise<Response>>(async (request) => {
+      const body = (await request.json()) as {
+        readonly shell?: {
+          readonly projection?: unknown;
+          readonly events?: readonly RuntimeShellBehaviorEventPayload[];
+        };
+      };
+      expect(body.shell?.projection).toMatchObject({
+        pluginId: shellProjection.pluginId,
+        entryScreenId: 'title',
+      });
+      expect(body.shell?.events).toEqual([shellEvent]);
+      return jsonResponse({
+        ok: true,
+        snapshot: { tick: 1, states: [{ behaviorId: BEHAVIOR_ID, state: { shell: 'ok' } }] },
+        traces: [],
+        diagnostics: [],
+        shellNavigationRequests: [{ type: 'navigate', targetScreenId: 'settings' }],
+      });
+    });
+    const client = new WorkerdBehaviorRuntimeClient({
+      binding: { fetch },
+      mapPackage: MAP_PACKAGE,
+      shellProjection,
+    });
+    client.emitShellEvent(shellEvent);
+
+    const result = await client.step(1);
+
+    expect(result).toMatchObject({
+      status: 'advanced',
+      shellNavigationRequests: [{ type: 'navigate', targetScreenId: 'settings' }],
+    });
+    expect(client.shellNavigationRequests).toEqual([
+      { type: 'navigate', targetScreenId: 'settings' },
+    ]);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

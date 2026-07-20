@@ -1,4 +1,10 @@
 import type { BehaviorId, JsonValue } from '@tileborne/core';
+import {
+  SHELL_BEHAVIOR_EVENT_ENTRY_ID,
+  SHELL_BEHAVIOR_EMIT_EVENT_ENTRY_ID,
+  type RuntimeShellEmitEventPayload,
+} from '../shell/events.js';
+import { GAME_SHELL_REGISTERED_EVENTS } from '../shell/authoring.js';
 
 import type {
   BehaviorExecutionTrace,
@@ -142,6 +148,34 @@ const isCommand = (value: unknown): value is RuntimeBehaviorCommand =>
   typeof value.payload === 'object' &&
   value.payload !== null &&
   !Array.isArray(value.payload);
+
+const firstArgument = (command: RuntimeBehaviorCommand): unknown => {
+  const args = command.payload.arguments;
+  return Array.isArray(args) ? args[0] : undefined;
+};
+
+const shellEmitEventPayload = (
+  command: RuntimeBehaviorCommand,
+): RuntimeShellEmitEventPayload | undefined => {
+  const candidate = firstArgument(command) ?? command.payload;
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate))
+    return undefined;
+  const record = candidate as Record<string, unknown>;
+  if (typeof record.event !== 'string' || typeof record.screenId !== 'string') return undefined;
+  if (
+    !GAME_SHELL_REGISTERED_EVENTS.includes(record.event as RuntimeShellEmitEventPayload['event'])
+  ) {
+    throw new TypeError(
+      `shell.emit-event references unknown registered shell event ${JSON.stringify(record.event)}`,
+    );
+  }
+  return {
+    event: record.event as RuntimeShellEmitEventPayload['event'],
+    screenId: record.screenId,
+    ...(typeof record.actionId === 'string' ? { actionId: record.actionId } : {}),
+    ...(typeof record.targetScreenId === 'string' ? { targetScreenId: record.targetScreenId } : {}),
+  };
+};
 
 const DEBUG_COMMAND_PREFIX = '__tileborne.debug.';
 
@@ -657,6 +691,21 @@ export class DeterministicBehaviorScheduler {
         });
         if (!admitted) {
           throw new RangeError(`event ${JSON.stringify(eventId)} failed deterministic admission`);
+        }
+      } else if (command.kind === SHELL_BEHAVIOR_EMIT_EVENT_ENTRY_ID) {
+        const payload = shellEmitEventPayload(command);
+        if (payload === undefined) {
+          throw new TypeError('shell.emit-event requires event and screenId');
+        }
+        const admitted = this.enqueue(
+          SHELL_BEHAVIOR_EVENT_ENTRY_ID,
+          { ...payload },
+          {
+            depth: queued.depth + 1,
+          },
+        );
+        if (!admitted) {
+          throw new RangeError('shell.event failed deterministic admission');
         }
       }
     }

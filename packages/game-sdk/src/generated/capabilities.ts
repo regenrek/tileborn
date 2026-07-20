@@ -22,6 +22,13 @@ export const capabilityInventory = {
       events: ['runtime.tick', 'timer.fired'],
       actions: ['timer.after', 'timer.every', 'timer.cancel'],
     },
+    {
+      id: 'shell.navigation',
+      label: 'Game shell navigation',
+      description: 'Typed game-shell events and shell-owned navigation actions.',
+      events: ['shell.event'],
+      actions: ['shell.invoke-action', 'shell.emit-event'],
+    },
   ],
 } as const;
 

@@ -4,6 +4,8 @@ import { Result, Schema } from 'effect';
 import type { PlaytestRoomMeta, PlaytestSummary } from './types.js';
 import type { RoomPlayerModelSelection, RoomStorage } from './rooms/storage-schema.js';
 import type { ClientTransportStats } from './rooms/room-transport.js';
+import { isRuntimeGameShellProjection } from './behavior/workerd/protocol.js';
+import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,6 +27,7 @@ export const parsePlaytestInitBody = (
   options?: Record<string, string | number | boolean | null>;
   mapPackage?: JsonObject;
   playerModelSelections?: readonly RoomPlayerModelSelection[];
+  shellProjection?: RuntimeGameShellProjection;
 } => {
   const parsed = JSON.parse(body) as {
     readonly mapId?: string;
@@ -32,6 +35,7 @@ export const parsePlaytestInitBody = (
     readonly options?: Record<string, string | number | boolean | null>;
     readonly mapPackage?: unknown;
     readonly playerModelSelections?: unknown;
+    readonly shellProjection?: unknown;
   };
   if (typeof parsed.mapId !== 'string' || parsed.mapId.length === 0) {
     throw new Error('mapId is required');
@@ -57,6 +61,12 @@ export const parsePlaytestInitBody = (
   ) {
     throw new Error('playerModelSelections must be an array of { playerId, modelId }');
   }
+  if (
+    parsed.shellProjection !== undefined &&
+    !isRuntimeGameShellProjection(parsed.shellProjection)
+  ) {
+    throw new Error('shellProjection must be a valid RuntimeGameShellProjection');
+  }
   return {
     mapId: parsed.mapId,
     ...(parsed.seed === undefined ? {} : { seed: parsed.seed }),
@@ -68,6 +78,7 @@ export const parsePlaytestInitBody = (
           playerModelSelections:
             parsed.playerModelSelections as readonly RoomPlayerModelSelection[],
         }),
+    ...(parsed.shellProjection === undefined ? {} : { shellProjection: parsed.shellProjection }),
   };
 };
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { PluginManifest } from '@tileborne/plugin-api';
 import { materializePluginManifestInput } from '../../services-plugin/src/filesystem.js';
+import { decodeGameShellDefaultsDefinition } from '@tileborne/runtime';
 import { Option, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -50,6 +51,13 @@ describe('tileborne-plugin.json', () => {
     expect(runtime).toBeDefined();
     if (runtime) {
       expect(Option.getOrElse(runtime.systems, () => [])).toHaveLength(1);
+      const shellDefaults = Option.getOrElse(runtime.shellDefaults, () => []);
+      expect(shellDefaults).toHaveLength(1);
+      expect(decodeGameShellDefaultsDefinition(manifest.id, shellDefaults[0]?.data)).toMatchObject({
+        pluginId: PLUGIN_ID,
+        entryScreenId: 'title',
+        screenOrder: ['title', 'main-menu', 'loading', 'pause', 'settings', 'results'],
+      });
     }
   });
 });

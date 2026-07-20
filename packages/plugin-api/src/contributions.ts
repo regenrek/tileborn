@@ -401,6 +401,11 @@ export type RuntimeInputMapContribution = typeof RuntimeInputMapContribution.Typ
 export const RuntimeAudioBusContribution = defineDeclarativeContributionSlot('RuntimeAudioBus');
 export type RuntimeAudioBusContribution = typeof RuntimeAudioBusContribution.Type;
 
+export const RuntimeGameShellDefaultsContribution = defineDeclarativeContributionSlot(
+  'RuntimeGameShellDefaults',
+);
+export type RuntimeGameShellDefaultsContribution = typeof RuntimeGameShellDefaultsContribution.Type;
+
 export const RuntimeCameraContribution = defineExecutableContributionSlot('RuntimeCamera');
 export type RuntimeCameraContribution = typeof RuntimeCameraContribution.Type;
 
@@ -453,6 +458,7 @@ export class RuntimeContributions extends Schema.Class<RuntimeContributions>(
   menuSections: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeMenuSectionContribution)),
   inputMaps: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInputMapContribution)),
   audioBuses: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeAudioBusContribution)),
+  shellDefaults: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeGameShellDefaultsContribution)),
   cameras: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeCameraContribution)),
   interpolators: Schema.OptionFromUndefinedOr(Schema.Array(RuntimeInterpolatorContribution)),
   assetPacks: Schema.OptionFromUndefinedOr(Schema.Array(AssetPackContribution)),
@@ -610,6 +616,14 @@ export const validatePluginContributions = (
     'tiled import profile',
     optionalArray(contributions.tiledImportProfiles),
   );
+  const runtimeContributions = contributions.runtime;
+  if (runtimeContributions !== undefined && Option.isSome(runtimeContributions)) {
+    assertUniqueContributionIds(
+      pluginId,
+      'runtime game shell defaults',
+      optionalArray(runtimeContributions.value.shellDefaults),
+    );
+  }
   const behaviorEntryIds = new Set<string>();
   for (const entry of optionalArray(contributions.behaviorEntries)) {
     if (behaviorEntryIds.has(entry.id)) {

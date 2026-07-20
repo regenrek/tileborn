@@ -12,6 +12,7 @@ import {
   hashFileSha256,
   type BuildManifestInput,
 } from "./manifest.js";
+import { buildDeploymentManifest } from "./deployment-manifest.js";
 import type {
   BundledAssetPackSummary,
   BundledManifest,
@@ -459,6 +460,11 @@ const buildCloudflareGameHostInto = async (
     "utf8",
   );
   await writeFile(
+    path.join(outDir, "deployment.json"),
+    `${JSON.stringify(buildDeploymentManifest({ runtimeBuildId: manifest.buildId }), null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
     path.join(outDir, "wrangler.toml"),
     await renderWranglerToml(input.siteName, buildAssets.wranglerTemplatePath),
     "utf8",
@@ -481,6 +487,7 @@ const buildCloudflareGameHostInto = async (
     "behavior-worker.js",
     "behavior-worker.js.map",
     "manifest.json",
+    "deployment.json",
     "wrangler.toml",
     "wrangler.behavior.toml",
     ...pluginEntries.map((entry) => entry.path),

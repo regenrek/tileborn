@@ -6,6 +6,14 @@ import {
   AssetLibraryGetPackUseSitesResponse,
   AssetLibraryReloadPackCacheResponse,
   AssetLibraryResolvePreviewsResponse,
+  AudioApplyResponse,
+  AudioOpenResponse,
+  AudioPreviewResponse,
+  AudioSaveResponse,
+  GameShellApplyResponse,
+  GameShellOpenResponse,
+  GameShellPreviewResponse,
+  GameShellSaveResponse,
   BehaviorsOpenResponse,
   BehaviorsReferencesResponse,
   BehaviorsResolveReferencesResponse,
@@ -13,6 +21,7 @@ import {
   AssetsDetectImportSourceResponse,
   AssetsGetAssetDataUrlResponse,
   AssetsGetPackResponse,
+  AssetsListPackAssetsResponse,
   AssetsListPacksResponse,
   AssetsRemovePackResponse,
   CatalogExportResponse,
@@ -81,6 +90,7 @@ export type TiledImportApplyResponse = Schema.Schema.Type<typeof TiledImportAppl
 
 export type AssetPacksListResponse = Schema.Schema.Type<typeof AssetsListPacksResponse>;
 export type AssetPackGetResponse = Schema.Schema.Type<typeof AssetsGetPackResponse>;
+export type AssetPackAssetsResponse = Schema.Schema.Type<typeof AssetsListPackAssetsResponse>;
 export type AssetPackRemoveResponse = Schema.Schema.Type<typeof AssetsRemovePackResponse>;
 export type AssetImportDetectSourceResponse = Schema.Schema.Type<
   typeof AssetsDetectImportSourceResponse
@@ -101,6 +111,14 @@ export type AssetLibraryReloadPackCacheResponse = Schema.Schema.Type<
 export type AssetLibraryResolvePreviewsResponse = Schema.Schema.Type<
   typeof AssetLibraryResolvePreviewsResponse
 >;
+export type AudioOpenResponse = Schema.Schema.Type<typeof AudioOpenResponse>;
+export type AudioSaveResponse = Schema.Schema.Type<typeof AudioSaveResponse>;
+export type AudioApplyResponse = Schema.Schema.Type<typeof AudioApplyResponse>;
+export type AudioPreviewResponse = Schema.Schema.Type<typeof AudioPreviewResponse>;
+export type GameShellOpenResponse = Schema.Schema.Type<typeof GameShellOpenResponse>;
+export type GameShellSaveResponse = Schema.Schema.Type<typeof GameShellSaveResponse>;
+export type GameShellApplyResponse = Schema.Schema.Type<typeof GameShellApplyResponse>;
+export type GameShellPreviewResponse = Schema.Schema.Type<typeof GameShellPreviewResponse>;
 export type WorkingPalettesListResponse = Schema.Schema.Type<typeof WorkingPalettesListResponse>;
 export type WorkingPalettesGetActiveResponse = Schema.Schema.Type<
   typeof WorkingPalettesGetActiveResponse

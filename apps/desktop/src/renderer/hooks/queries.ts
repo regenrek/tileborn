@@ -26,6 +26,9 @@ import { assetLibraryReferenceKey } from '@/lib/working-palettes-bridge';
 
 import type {
   AssetDataUrlResponse,
+  AssetPackAssetsResponse,
+  AudioOpenResponse,
+  GameShellOpenResponse,
   AssetLibraryGetPackCacheStatusResponse,
   AssetLibraryGetPackLibraryResponse,
   AssetLibraryGetPackUseSitesResponse,
@@ -62,6 +65,22 @@ const ASSET_LIBRARY_METADATA_GC_MS = 2 * 60 * 60 * 1_000;
 const ASSET_LIBRARY_THUMBNAIL_STALE_MS = 60 * 60 * 1_000;
 const ASSET_LIBRARY_THUMBNAIL_GC_MS = 4 * 60 * 60 * 1_000;
 const WORKING_PALETTE_PREVIEW_BATCH_SIZE = 64;
+const READINESS_QUERY_TIMEOUT_MS = 12_000;
+let readinessRequestSequence = 0;
+
+type ReadinessDebugEvent = {
+  id: number;
+  stage: string;
+  event: 'start' | 'success' | 'error';
+  at: number;
+  message?: string | undefined;
+};
+
+type ReadinessDebugWindow = Window & {
+  __tileborneReadinessDebug?: {
+    requests: ReadinessDebugEvent[];
+  };
+};
 
 export const ASSET_LIBRARY_PAGE_SIZE = 64;
 
@@ -87,6 +106,41 @@ export interface AssetLibraryCacheStatus {
   readonly previewRefCount?: number | undefined;
   readonly updatedAt?: string | undefined;
 }
+
+const readinessStageLabel = (
+  projectId: string,
+  mapId: string | undefined,
+  purpose: 'authoring' | 'playtest' | 'build',
+): string => `readiness:${purpose}:project=${projectId}:map=${mapId ?? 'none'}`;
+
+const withReadinessTimeout = async <T>(
+  promise: Promise<T>,
+  stage: string,
+  timeoutMs = READINESS_QUERY_TIMEOUT_MS,
+): Promise<T> => {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`${stage} did not resolve within ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+};
+
+const appendReadinessDebugEvent = (event: ReadinessDebugEvent): void => {
+  const debugWindow = window as ReadinessDebugWindow;
+  if (debugWindow.__tileborneReadinessDebug === undefined) return;
+  debugWindow.__tileborneReadinessDebug.requests = [
+    ...debugWindow.__tileborneReadinessDebug.requests,
+    event,
+  ].slice(-30);
+};
 
 type AssetLibraryPerformanceBridge = {
   readonly getPackCacheStatus?: typeof window.tileborne.assetLibrary.getPackCacheStatus | undefined;
@@ -277,6 +331,17 @@ export function useAssetPack(packId: string | undefined) {
   return useQuery<AssetPackGetResponse>({
     queryKey: queryKeys.assets.detail(packId ?? ''),
     queryFn: () => invokeIpc(() => window.tileborne.assets.getPack({ packId: packId! as PackId })),
+    enabled: packId !== undefined && packId.length > 0,
+    staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
+    gcTime: ASSET_LIBRARY_METADATA_GC_MS,
+  });
+}
+
+export function useAssetPackAssets(packId: string | undefined) {
+  return useQuery<AssetPackAssetsResponse>({
+    queryKey: queryKeys.assets.packAssets(packId ?? ''),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.assets.listPackAssets({ packId: packId! as PackId })),
     enabled: packId !== undefined && packId.length > 0,
     staleTime: ASSET_LIBRARY_METADATA_STALE_MS,
     gcTime: ASSET_LIBRARY_METADATA_GC_MS,
@@ -797,14 +862,60 @@ export function useReadiness(
 ): UseQueryResult<ReadinessCheckResponse> {
   return useQuery<ReadinessCheckResponse>({
     queryKey: queryKeys.readiness.check(projectId ?? '', mapId ?? '', purpose),
+    queryFn: async () => {
+      const stage = readinessStageLabel(projectId!, mapId, purpose);
+      const requestId = ++readinessRequestSequence;
+      appendReadinessDebugEvent({ id: requestId, stage, event: 'start', at: Date.now() });
+      try {
+        const response = await withReadinessTimeout(
+          invokeIpc(() =>
+            window.tileborne.readiness.check({
+              projectId: projectId! as ProjectId,
+              ...(mapId === undefined ? {} : { mapId: mapId as MapId }),
+              purpose,
+            }),
+          ),
+          stage,
+        );
+        appendReadinessDebugEvent({ id: requestId, stage, event: 'success', at: Date.now() });
+        return response;
+      } catch (error) {
+        appendReadinessDebugEvent({
+          id: requestId,
+          stage,
+          event: 'error',
+          at: Date.now(),
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    },
+    enabled: projectId !== undefined && projectId.length > 0,
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useProjectAudio(projectId: string | undefined): UseQueryResult<AudioOpenResponse> {
+  return useQuery<AudioOpenResponse>({
+    queryKey: queryKeys.audio.document(projectId ?? ''),
     queryFn: () =>
-      invokeIpc(() =>
-        window.tileborne.readiness.check({
-          projectId: projectId! as ProjectId,
-          ...(mapId === undefined ? {} : { mapId: mapId as MapId }),
-          purpose,
-        }),
-      ),
+      invokeIpc(() => window.tileborne.audio.open({ projectId: projectId! as ProjectId })),
+    enabled: projectId !== undefined && projectId.length > 0,
+    staleTime: 0,
+  });
+}
+
+export function useProjectGameShell(
+  projectId: string | undefined,
+): UseQueryResult<GameShellOpenResponse> {
+  return useQuery<GameShellOpenResponse>({
+    queryKey: queryKeys.gameShell.document(projectId ?? ''),
+    queryFn: () =>
+      invokeIpc(() => window.tileborne.gameShell.open({ projectId: projectId! as ProjectId })),
     enabled: projectId !== undefined && projectId.length > 0,
     staleTime: 0,
   });

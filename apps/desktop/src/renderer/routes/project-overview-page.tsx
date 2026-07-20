@@ -6,7 +6,9 @@ import {
   CheckCircle2Icon,
   CircleXIcon,
   Gamepad2Icon,
+  LayoutTemplateIcon,
   MapIcon,
+  Music2Icon,
   PackageIcon,
   PuzzleIcon,
 } from 'lucide-react';
@@ -62,7 +64,7 @@ export function ProjectOverviewPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             to="/projects/$projectId/game-content"
             params={{ projectId }}
@@ -81,6 +83,26 @@ export function ProjectOverviewPage() {
             <PackageIcon className="mb-2 size-5" />
             <p className="text-sm font-medium">Asset library</p>
             <p className="text-xs text-muted-foreground">Browse and import packs</p>
+          </Link>
+          <Link
+            to="/projects/$projectId/audio"
+            params={{ projectId }}
+            className="rounded-lg border border-border bg-card p-4 hover:bg-muted/40"
+            data-testid="open-audio"
+          >
+            <Music2Icon className="mb-2 size-5" />
+            <p className="text-sm font-medium">Audio</p>
+            <p className="text-xs text-muted-foreground">Music, SFX and event bindings</p>
+          </Link>
+          <Link
+            to="/projects/$projectId/game-shell"
+            params={{ projectId }}
+            className="rounded-lg border border-border bg-card p-4 hover:bg-muted/40"
+            data-testid="open-game-shell"
+          >
+            <LayoutTemplateIcon className="mb-2 size-5" />
+            <p className="text-sm font-medium">Game Shell</p>
+            <p className="text-xs text-muted-foreground">Menus, screens and actions</p>
           </Link>
           <Link
             to="/projects/$projectId/plugins"

@@ -1,5 +1,6 @@
 import { ROOM_SCHEMA_VERSION } from './room-config.js';
 import type { JsonObject } from '@tileborne/core';
+import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 
 export const ROOM_LIFECYCLE_PHASES = [
   'lobby',
@@ -12,6 +13,7 @@ export const ROOM_LIFECYCLE_PHASES = [
 export type RoomLifecyclePhase = (typeof ROOM_LIFECYCLE_PHASES)[number];
 export type RoomJoinCode = string;
 export type RoomLobbyVisibility = 'private' | 'public';
+export type RoomPlayerRole = 'owner' | 'participant';
 export type RoomPlayerPresenceStatus = 'connected' | 'disconnected';
 export type RoomResultOutcome = 'completed' | 'abandoned' | 'cancelled';
 
@@ -114,6 +116,9 @@ export interface RoomStorageV2 {
   readonly createdAt: string;
   /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
   readonly mapPackage?: JsonObject;
+  readonly shellProjection?: RuntimeGameShellProjection;
+  readonly shellNavigationEpoch?: string;
+  readonly nextShellNavigationSequence?: number;
   readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly lifecycle: RoomLifecycleState;
   readonly options: Record<string, string | number | boolean | null>;
@@ -165,12 +170,17 @@ export const emptyRoomStorage = (
   createdAt = new Date().toISOString(),
   mapPackage?: JsonObject,
   playerModelSelections?: readonly RoomPlayerModelSelection[],
+  shellProjection?: RuntimeGameShellProjection,
+  shellNavigationEpoch = crypto.randomUUID(),
 ): RoomStorageV3 => ({
   schemaVersion: ROOM_SCHEMA_VERSION,
   mapId,
   seed,
   createdAt,
   ...(mapPackage === undefined ? {} : { mapPackage }),
+  ...(shellProjection === undefined ? {} : { shellProjection }),
+  shellNavigationEpoch,
+  nextShellNavigationSequence: 0,
   ...(playerModelSelections === undefined || playerModelSelections.length === 0
     ? {}
     : { playerModelSelections }),
@@ -245,6 +255,8 @@ const migrateLegacyV1 = (value: RoomStorageLegacyV1): RoomStorageV2 => ({
 const addM4RoomStateDefaults = (value: RoomStorageV2): RoomStorageV3 => ({
   ...value,
   schemaVersion: ROOM_SCHEMA_VERSION,
+  shellNavigationEpoch: value.shellNavigationEpoch ?? value.createdAt,
+  nextShellNavigationSequence: value.nextShellNavigationSequence ?? 0,
   lobby: emptyRoomLobbyState(),
   ready: emptyRoomReadyState(),
   presence: emptyRoomPresenceState(),
@@ -263,5 +275,9 @@ export const migrateRoomStorage = (value: PersistedRoomStorage): RoomStorage => 
   if (schemaVersion !== ROOM_SCHEMA_VERSION) {
     throw new Error(`unsupported room storage schema version ${String(schemaVersion)}`);
   }
-  return value;
+  return {
+    ...value,
+    shellNavigationEpoch: value.shellNavigationEpoch ?? value.createdAt,
+    nextShellNavigationSequence: value.nextShellNavigationSequence ?? 0,
+  };
 };

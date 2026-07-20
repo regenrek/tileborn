@@ -102,6 +102,7 @@ const minimalContributions = {
     menuSections: undefined,
     inputMaps: undefined,
     audioBuses: undefined,
+    shellDefaults: undefined,
     cameras: undefined,
     interpolators: undefined,
     assetPacks: undefined,

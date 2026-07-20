@@ -40,6 +40,11 @@ const NODE_NATIVE_MARKERS = [
   '__require("fs")',
   '__require("child_process")',
 ] as const;
+const EXCLUDED_ANCIENT_FIXTURE_MARKERS = [
+  'pack:a6ffcd59-011f-4f05-a4e2-832b87155ade',
+  'ERW Ancient Ruins',
+  'Tileset-Terrain.png',
+] as const;
 
 const expectNoNodeNativeMarkers = (source: string): void => {
   for (const marker of NODE_NATIVE_MARKERS) {
@@ -56,6 +61,19 @@ describe('bundled worker boundary', () => {
     const payload = JSON.stringify(bundledAssetPackBlobs);
     const gzippedBytes = gzipSync(payload).byteLength;
     expect(gzippedBytes).toBeLessThan(200 * 1024);
+  });
+
+  it('excludes non-redistributable ancient fixture assets from bundled artifacts', async () => {
+    const payload = JSON.stringify(bundledAssetPackBlobs);
+    const generatedAssets = await readFile(
+      path.join(gameHostRoot, 'src/.generated/bundled-assets.ts'),
+      'utf8',
+    );
+
+    for (const marker of EXCLUDED_ANCIENT_FIXTURE_MARKERS) {
+      expect(payload).not.toContain(marker);
+      expect(generatedAssets).not.toContain(marker);
+    }
   });
 
   it('loads the bundled battle-royale plugin through the configured loader', async () => {

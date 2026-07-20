@@ -165,6 +165,7 @@ const optionalContributionKeys = {
     'menuSections',
     'inputMaps',
     'audioBuses',
+    'shellDefaults',
     'cameras',
     'interpolators',
     'assetPacks',

@@ -1,8 +1,8 @@
 {
   "scriptPath": "scripts/clean-checkout-smoke.sh",
   "mode": "time",
-  "totalMs": 301000,
-  "totalLimitMs": 300000,
+  "totalMs": 661000,
+  "totalLimitMs": 660000,
   "passed": false,
   "steps": [
     {
@@ -16,21 +16,21 @@
       "name": "bootstrap package builds (composite references)",
       "exitCode": 0,
       "durationMs": 85000,
-      "limitMs": 90000,
+      "limitMs": 300000,
       "passed": true
     },
     {
       "name": "pnpm turbo run typecheck --filter=!@tileborne/desktop",
       "exitCode": 0,
       "durationMs": 28000,
-      "limitMs": 90000,
+      "limitMs": 210000,
       "passed": true
     },
     {
       "name": "pnpm -w build",
       "exitCode": 0,
       "durationMs": 88000,
-      "limitMs": 90000,
+      "limitMs": 150000,
       "passed": true
     },
     {

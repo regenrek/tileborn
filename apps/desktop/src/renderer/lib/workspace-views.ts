@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   FolderOpenIcon,
   Gamepad2Icon,
+  LayoutTemplateIcon,
   MapIcon,
   PackageIcon,
   PuzzleIcon,
@@ -25,6 +26,7 @@ export type WorkspaceViewRoute =
   | '/projects/$projectId/player-models'
   | '/projects/$projectId/entities'
   | '/projects/$projectId/game-content'
+  | '/projects/$projectId/game-shell'
   | '/projects/$projectId/behaviors';
 
 /**
@@ -105,6 +107,16 @@ export const WORKSPACE_VIEWS: readonly WorkspaceViewDef[] = [
     route: '/projects/$projectId/game-content',
     pathPattern: /^\/projects\/([^/]+)\/game-content$/,
     keywords: ['gameplay', 'content', 'weapons', 'items', 'loot'],
+    tool: true,
+  },
+  {
+    kind: 'game-shell',
+    label: 'Game Shell',
+    icon: LayoutTemplateIcon,
+    route: '/projects/$projectId/game-shell',
+    pathPattern: /^\/projects\/([^/]+)\/game-shell$/,
+    commandId: 'view.game-shell',
+    keywords: ['shell', 'menu', 'pause', 'settings', 'results', 'loading'],
     tool: true,
   },
   {

@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import { loadBehaviorModuleNamespace } from './loader.js';
 import { DeterministicBehaviorScheduler } from './scheduler.js';
+import { AuthoritativeBehaviorRuntimeHost } from './authoritative-host.js';
 import type {
   LoadedBehaviorModule,
+  RuntimeBehaviorContext,
   RuntimeBehaviorArtifactIdentity,
   RuntimeBehaviorModule,
 } from './types.js';
 import { BehaviorWorkerSupervisor, type BehaviorWorkerLike } from './worker-supervisor.js';
+import {
+  buildRuntimeGameShellProjection,
+  defaultProjectGameShellState,
+} from '../shell/authoring.js';
 
 const A = 'behavior:11111111-1111-4111-8111-111111111111' as BehaviorId;
 const B = 'behavior:22222222-2222-4222-8222-222222222222' as BehaviorId;
@@ -314,6 +320,209 @@ describe('deterministic behavior scheduler', () => {
       expect.arrayContaining(['TBRUNTIME3005', 'TBRUNTIME3012']),
     );
     expect(await scheduler.advanceTo(1)).toEqual([]);
+  });
+
+  it('enqueues shell.event from TypeScript shell.emit-event commands and drains shell consumers', async () => {
+    const scheduler = new DeterministicBehaviorScheduler({
+      capabilities: ['shell.navigation'],
+      budgets: { maxHandlerMs: 1_000 },
+    });
+    scheduler.register(
+      loaded(A, {
+        id: 'example.shell-emitter',
+        sourceKind: 'typescript',
+        state: {},
+        requiredCapabilities: ['shell.navigation'],
+        on: {
+          start: ({ actions }) =>
+            actions['shell.emit-event']({
+              event: 'shell.action.invoked',
+              screenId: 'title',
+              actionId: 'title.start',
+            }),
+        },
+      }),
+    );
+    scheduler.register(
+      loaded(B, {
+        id: 'example.shell-listener',
+        sourceKind: 'typescript',
+        state: { seen: '' },
+        requiredCapabilities: ['shell.navigation'],
+        on: {
+          'shell.event': ({ event, state }) => state.set('seen', String(event.event)),
+        },
+      }),
+    );
+
+    const traces = await scheduler.dispatch('start', {});
+
+    expect(traces.map((trace) => trace.eventId)).toEqual(['start', 'shell.event']);
+    expect(scheduler.stateOf(B)).toEqual({ seen: 'shell.action.invoked' });
+  });
+
+  it('rejects shell.emit-event commands with events outside the canonical registry', async () => {
+    const scheduler = new DeterministicBehaviorScheduler({
+      capabilities: ['shell.navigation'],
+      budgets: { maxHandlerMs: 1_000 },
+    });
+    scheduler.register(
+      loaded(A, {
+        id: 'example.shell-bad-event',
+        sourceKind: 'typescript',
+        state: { handled: false },
+        requiredCapabilities: ['shell.navigation'],
+        on: {
+          start: () => ({
+            kind: 'shell.emit-event',
+            payload: {
+              event: 'shell.not-registered',
+              screenId: 'title',
+            },
+          }),
+        },
+      }),
+    );
+
+    expect(await scheduler.dispatch('start', {})).toEqual([]);
+    expect(scheduler.diagnostics.at(-1)).toMatchObject({
+      code: 'TBRUNTIME3012',
+      eventId: 'start',
+      message: expect.stringContaining('unknown registered shell event'),
+    });
+  });
+
+  it('lets visual behaviors consume shell.event emitted by shell action metadata', async () => {
+    const scheduler = new DeterministicBehaviorScheduler({
+      capabilities: ['shell.navigation'],
+      budgets: { maxHandlerMs: 1_000 },
+    });
+    scheduler.register(
+      loaded(
+        A,
+        {
+          id: 'example.visual-shell',
+          sourceKind: 'visual',
+          state: { route: '' },
+          requiredCapabilities: ['shell.navigation'],
+          on: {
+            'shell.event': ({ event, state }) => [
+              {
+                kind: '__tileborne.debug.action',
+                payload: { nodeId: 'node:shell-event', actionId: 'state.set' },
+              },
+              state.set('route', String(event.targetScreenId ?? event.screenId)),
+            ],
+          },
+        },
+        'visual',
+      ),
+    );
+
+    const traces = await scheduler.dispatch('shell.event', {
+      event: 'shell.navigation.requested',
+      screenId: 'title',
+      actionId: 'title.start',
+      targetScreenId: 'main-menu',
+    });
+
+    expect(traces[0]?.steps).toEqual([
+      { kind: 'action', nodeId: 'node:shell-event', actionId: 'state.set' },
+    ]);
+    expect(scheduler.stateOf(A)).toEqual({ route: 'main-menu' });
+  });
+
+  it('bridges host shell.invoke-action commands into shell events while navigation stays shell-owned', async () => {
+    const navigation: unknown[] = [];
+    const projection = buildRuntimeGameShellProjection(defaultProjectGameShellState());
+    const host = new AuthoritativeBehaviorRuntimeHost({
+      capabilities: ['shell.navigation'],
+      budgets: { maxHandlerMs: 1_000 },
+      shell: {
+        projection,
+        onNavigation: (request) => navigation.push(request),
+      },
+    });
+    const code = 'export default {}';
+    expect(
+      host.load({
+        artifact: {
+          behaviorId: A,
+          sourceKind: 'typescript',
+          modulePath: 'behaviors/modules/shell-host.mjs',
+          hash: hashBytes(encoder.encode(code)),
+        },
+        code,
+        namespace: {
+          default: {
+            id: 'example.shell-host',
+            sourceKind: 'typescript',
+            state: { navigated: false },
+            requiredCapabilities: ['shell.navigation'],
+            on: {
+              start: ({ actions }: RuntimeBehaviorContext) =>
+                actions['shell.invoke-action']({ actionId: 'title.start' }),
+              'shell.event': ({ state }: RuntimeBehaviorContext) => state.set('navigated', true),
+            },
+          },
+        },
+      }),
+    ).toBe(true);
+
+    const traces = await host.dispatch('start', {});
+
+    expect(navigation).toEqual([{ type: 'navigate', targetScreenId: 'main-menu' }]);
+    expect(traces.map((trace) => trace.eventId)).toEqual(['start', 'shell.event', 'shell.event']);
+    expect(traces.slice(1).map((trace) => trace.event.event)).toEqual([
+      'shell.action.invoked',
+      'shell.navigation.requested',
+    ]);
+    expect(host.snapshot.states[0]?.state).toEqual({ navigated: true });
+  });
+
+  it('diagnoses malformed and unknown shell.invoke-action commands without navigating', async () => {
+    const projection = buildRuntimeGameShellProjection(defaultProjectGameShellState());
+    const host = new AuthoritativeBehaviorRuntimeHost({
+      capabilities: ['shell.navigation'],
+      budgets: { maxHandlerMs: 1_000 },
+      shell: { projection },
+    });
+    const code = 'export default {}';
+    expect(
+      host.load({
+        artifact: {
+          behaviorId: A,
+          sourceKind: 'typescript',
+          modulePath: 'behaviors/modules/shell-host-invalid.mjs',
+          hash: hashBytes(encoder.encode(code)),
+        },
+        code,
+        namespace: {
+          default: {
+            id: 'example.shell-host-invalid',
+            sourceKind: 'typescript',
+            state: {},
+            requiredCapabilities: ['shell.navigation'],
+            on: {
+              start: () => [
+                { kind: 'shell.invoke-action', payload: {} },
+                { kind: 'shell.invoke-action', payload: { actionId: 'missing.action' } },
+              ],
+            },
+          },
+        },
+      }),
+    ).toBe(true);
+
+    await host.dispatch('start', {});
+
+    expect(host.shellNavigationRequests).toEqual([]);
+    expect(host.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'TBRUNTIME3020', eventId: 'start' }),
+        expect.objectContaining({ code: 'TBRUNTIME3021', eventId: 'start' }),
+      ]),
+    );
   });
 });
 

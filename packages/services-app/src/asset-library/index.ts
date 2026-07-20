@@ -346,6 +346,35 @@ const metadataRecord = (
     entries.flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),
   );
 
+const optionalStringValue = (value: unknown): string | undefined => {
+  if (Option.isOption(value)) {
+    const unwrapped = Option.getOrUndefined(value as Option.Option<unknown>);
+    return typeof unwrapped === 'string' ? unwrapped : undefined;
+  }
+  return typeof value === 'string' ? value : undefined;
+};
+
+const optionalBooleanValue = (value: unknown): boolean | undefined =>
+  typeof value === 'boolean' ? value : undefined;
+
+const effectiveAssetLicenseMetadata = (
+  asset: TilesetPack['assets'][number],
+  pack: TilesetPack,
+): ReadonlyArray<readonly [string, string | number | boolean | undefined]> => {
+  const license = asset.license ?? pack.license;
+  const scope = asset.license === undefined ? 'inherited from pack' : 'asset override';
+  return [
+    ['licenseScope', scope],
+    ['licenseSpdxId', license.spdxId],
+    ['licenseAttribution', optionalStringValue(license.attribution)],
+    ['licenseSourceUrl', optionalStringValue(license.sourceUrl)],
+    ['licenseSourcePath', optionalStringValue(license.sourcePath)],
+    ['licenseModifications', optionalStringValue(license.modifications)],
+    ['licenseNotes', optionalStringValue(license.notes)],
+    ['licenseRedistributable', optionalBooleanValue(license.redistributable)],
+  ];
+};
+
 const searchText = (
   label: string,
   kind: AssetLibraryGroupKind,
@@ -451,6 +480,26 @@ const buildLibraryGroups = (
   const packId = pack.id;
   const terrainTiles = new Map<string, TileId[]>();
   const tilesById = new Map<string, TileId>();
+
+  for (const asset of pack.assets) {
+    const metadata = metadataRecord([
+      ['assetId', asset.id],
+      ['path', asset.path],
+      ['mime', asset.mime],
+      ...effectiveAssetLicenseMetadata(asset, pack),
+    ]);
+    groups.push(
+      makeGroup({
+        id: `asset:${asset.id}`,
+        packId,
+        kind: 'asset',
+        label: path.basename(asset.path),
+        count: 1,
+        metadata,
+        previewRefs: [],
+      }),
+    );
+  }
 
   for (const tileset of pack.tilesets) {
     for (const tile of tileset.tiles) {

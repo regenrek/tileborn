@@ -1,11 +1,13 @@
 import { createRegistry, type IpcRegistry } from '../registry.js';
 import { AssetLibraryContracts } from './asset-library.js';
 import { AssetsContracts } from './assets.js';
+import { AudioContracts } from './audio.js';
 import { BuildsContracts } from './builds.js';
 import { BehaviorsContracts } from './behaviors.js';
 import { CatalogContracts } from './catalog.js';
 import { TiledSourceRulesContracts } from './tiled-source-rules.js';
 import { ExportsContracts } from './exports.js';
+import { GameShellContracts } from './game-shell.js';
 import { JobsContracts } from './jobs.js';
 import { LogsContracts } from './logs.js';
 import { MapsContracts } from './maps.js';
@@ -26,6 +28,8 @@ export const MainIpcContracts = [
   ...BehaviorsContracts,
   ...MapsContracts,
   ...AssetsContracts,
+  ...AudioContracts,
+  ...GameShellContracts,
   ...AssetLibraryContracts,
   ...WorkingPalettesContracts,
   ...CatalogContracts,

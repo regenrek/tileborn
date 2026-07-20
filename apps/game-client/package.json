@@ -16,6 +16,7 @@
     "@tileborne/game-client": "workspace:*",
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/plugin-battle-royale": "workspace:*",
+    "@tileborne/runtime": "workspace:*",
     "@tileborne/ui": "workspace:*",
     "react": "19.2.6",
     "react-dom": "19.2.6",

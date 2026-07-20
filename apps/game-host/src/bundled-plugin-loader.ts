@@ -7,9 +7,9 @@ import {
   createRuntimeAdapter,
   decodeClientFrame,
   decodeServerLifecycleFrame,
+  encodeTransportErrorFrame,
   encodeInvalidClientFrame,
-  type RuntimeClientFrameDecodeResult,
-  type RuntimeClientFrameView,
+  snapshotTickFromServerFrame,
   type RuntimeClientInputFrame,
 } from './.generated/plugin-runtime.js';
 import { bundledMapPackages } from './.generated/bundled-map-packages.js';
@@ -29,17 +29,39 @@ interface BundledPluginWorld {
   readonly getComponent: <T extends object>(name: string) => BundledComponentStore<T>;
 }
 
-export type BundledRuntimeInput = RuntimeClientInputFrame;
+export type BundledRuntimeInput = object;
 
-export type BundledClientFrameView = RuntimeClientFrameView;
+export type BundledClientFrameView =
+  | { readonly kind: 'heartbeat'; readonly tick: number }
+  | { readonly kind: 'ack'; readonly tick: number; readonly receivedAtMs: number }
+  | {
+      readonly kind: 'input';
+      readonly input: BundledRuntimeInput;
+      readonly sortKey: {
+        readonly tick: number;
+        readonly seq: number;
+      };
+    };
 
-export type BundledClientFrameDecodeResult = RuntimeClientFrameDecodeResult;
+export type BundledClientFrameDecodeResult =
+  | { readonly kind: 'accepted'; readonly frame: BundledClientFrameView }
+  | {
+      readonly kind: 'rejected';
+      readonly frame: Uint8Array;
+      readonly closeCode: number;
+      readonly closeReason: string;
+    };
 
 export interface BundledPluginProtocolBridge {
   readonly decodeClientFrame: (bytes: Uint8Array) => BundledClientFrameDecodeResult;
+  readonly decodeSnapshotAckFrame: (
+    bytes: Uint8Array,
+  ) => { readonly tick: number; readonly receivedAtMs: number } | undefined;
   readonly decodeServerLifecycleFrame: (
     bytes: Uint8Array,
   ) => { readonly kind: 'game-over'; readonly winnerPlayerId: string } | undefined;
+  readonly snapshotTickFromServerFrame: (bytes: Uint8Array) => number | undefined;
+  readonly encodeTransportErrorFrame: (code: string, message: string) => Uint8Array;
   readonly encodeInvalidClientFrame: () => Uint8Array;
 }
 
@@ -48,6 +70,20 @@ interface BundledRuntimeAdapter {
   readonly onInit?: (ctx: { readonly pluginId: string }, world: BundledPluginWorld) => void;
   readonly onTick?: (world: BundledPluginWorld, dt: number, tick: number) => void;
   readonly onShutdown?: () => void;
+}
+
+export interface BundledPluginRuntimeRegistration {
+  readonly id: string;
+  readonly protocolBridge: BundledPluginProtocolBridge;
+  readonly createRuntimeAdapter: (host: {
+    readonly getMapPackage: () => unknown;
+    readonly getPlayerModelSelections?: () => readonly BundledPlayerModelSelection[];
+    readonly getPlayerIds?: () => readonly string[];
+    readonly getPlayerInput?: (playerId: string) => BundledRuntimeInput | undefined;
+    readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
+    readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+    readonly seed?: string | number;
+  }) => BundledRuntimeAdapter;
 }
 
 export interface BundledPlayerModelSelection {
@@ -65,6 +101,7 @@ interface BundledPluginLoaderOptions {
   readonly mapPackage?: unknown;
   /** Per-session player→model selections (never part of the package). */
   readonly getPlayerModelSelections?: () => readonly BundledPlayerModelSelection[];
+  readonly pluginRegistrations?: readonly BundledPluginRuntimeRegistration[];
 }
 
 class InMemoryBundledPluginWorld implements BundledPluginWorld {
@@ -143,38 +180,124 @@ const toRuntimePlugin = (adapter: BundledRuntimeAdapter): RuntimePlugin => {
   };
 };
 
-export const createBundledPluginLoader = (
-  options: BundledPluginLoaderOptions = {},
-): RuntimePluginLoader => ({
-  loadExecutable: (pluginId) =>
-    Effect.sync(() => {
-      if (pluginId !== bundledPlugin.id) {
-        throw new Error(`no bundled runtime plugin for ${pluginId}`);
-      }
-      // Worker-created rooms always carry a resolved package (M5 S1); the
-      // first bundled package only covers DO-direct dev/test rooms.
-      const mapPackage = options.mapPackage ?? bundledMapPackages[0]?.mapPackage;
-      const adapter = createRuntimeAdapter({
-        getMapPackage: () => mapPackage,
-        ...(options.getPlayerModelSelections === undefined
-          ? {}
-          : { getPlayerModelSelections: options.getPlayerModelSelections }),
-        ...(options.getPlayerIds === undefined ? {} : { getPlayerIds: options.getPlayerIds }),
-        ...(options.getInput === undefined ? {} : { getPlayerInput: options.getInput }),
-        ...(options.emitFrame === undefined ? {} : { msgOut: { push: options.emitFrame } }),
-        ...(options.setReplayFrames === undefined
-          ? {}
-          : { setReplayFrames: options.setReplayFrames }),
-        ...(options.seed === undefined ? {} : { seed: options.seed }),
-      }) as BundledRuntimeAdapter;
-      return { default: toRuntimePlugin(adapter) };
-    }),
-});
+const isDirection8 = (value: unknown): value is 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 =>
+  value === 0 ||
+  value === 1 ||
+  value === 2 ||
+  value === 3 ||
+  value === 4 ||
+  value === 5 ||
+  value === 6 ||
+  value === 7;
 
-export const createBundledPluginProtocolBridge = (): BundledPluginProtocolBridge => ({
-  decodeClientFrame,
+const isDefaultRuntimeInput = (value: BundledRuntimeInput): value is RuntimeClientInputFrame => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const input = value as Partial<RuntimeClientInputFrame>;
+  return (
+    Number.isSafeInteger(input.tick) &&
+    Number.isSafeInteger(input.seq) &&
+    (input.dir === undefined || isDirection8(input.dir)) &&
+    typeof input.shoot === 'boolean' &&
+    typeof input.reload === 'boolean' &&
+    typeof input.interact === 'boolean' &&
+    typeof input.drop === 'boolean' &&
+    Array.isArray(input.abilities) &&
+    input.abilities.every((ability) => typeof ability === 'string') &&
+    (input.aimDeg === undefined || typeof input.aimDeg === 'number') &&
+    (input.swapSlot === undefined || typeof input.swapSlot === 'number')
+  );
+};
+
+export const createDefaultBundledPluginProtocolBridge = (): BundledPluginProtocolBridge => ({
+  decodeClientFrame: (bytes) => {
+    const decoded = decodeClientFrame(bytes);
+    if (decoded.kind === 'rejected') {
+      return decoded;
+    }
+    if (decoded.frame.kind === 'input') {
+      return {
+        kind: 'accepted',
+        frame: {
+          kind: 'input',
+          input: decoded.frame.input,
+          sortKey: decoded.frame.sortKey,
+        },
+      };
+    }
+    return decoded;
+  },
+  decodeSnapshotAckFrame: (bytes) => {
+    const decoded = decodeClientFrame(bytes);
+    return decoded.kind === 'accepted' && decoded.frame.kind === 'ack'
+      ? { tick: decoded.frame.tick, receivedAtMs: decoded.frame.receivedAtMs }
+      : undefined;
+  },
   decodeServerLifecycleFrame,
+  snapshotTickFromServerFrame,
+  encodeTransportErrorFrame,
   encodeInvalidClientFrame,
 });
+
+export const defaultBundledPluginRuntimeRegistration: BundledPluginRuntimeRegistration = {
+  id: bundledPlugin.id,
+  protocolBridge: createDefaultBundledPluginProtocolBridge(),
+  createRuntimeAdapter: (host) =>
+    createRuntimeAdapter({
+      ...host,
+      getPlayerInput: (playerId) => {
+        const input = host.getPlayerInput?.(playerId);
+        return input === undefined || !isDefaultRuntimeInput(input) ? undefined : input;
+      },
+    }) as BundledRuntimeAdapter,
+};
+
+const runtimePluginIdFromPackage = (mapPackage: unknown): string | undefined => {
+  if (typeof mapPackage !== 'object' || mapPackage === null || Array.isArray(mapPackage)) {
+    return undefined;
+  }
+  const manifest = (mapPackage as { readonly manifest?: unknown }).manifest;
+  if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) {
+    return undefined;
+  }
+  const pluginId = (manifest as { readonly pluginId?: unknown }).pluginId;
+  return typeof pluginId === 'string' && pluginId.length > 0 ? pluginId : undefined;
+};
+
+export const createBundledPluginLoader = (
+  options: BundledPluginLoaderOptions = {},
+): RuntimePluginLoader => {
+  const registrations = options.pluginRegistrations ?? [defaultBundledPluginRuntimeRegistration];
+  return {
+    loadExecutable: (pluginId) =>
+      Effect.sync(() => {
+        const registration = registrations.find((candidate) => candidate.id === pluginId);
+        if (registration === undefined) {
+          throw new Error(`no bundled runtime plugin for ${pluginId}`);
+        }
+        // Worker-created rooms always carry a resolved package (M5 S1); the
+        // first bundled package only covers DO-direct dev/test rooms.
+        const mapPackage = options.mapPackage ?? bundledMapPackages[0]?.mapPackage;
+        const adapter = registration.createRuntimeAdapter({
+          getMapPackage: () => mapPackage,
+          ...(options.getPlayerModelSelections === undefined
+            ? {}
+            : { getPlayerModelSelections: options.getPlayerModelSelections }),
+          ...(options.getPlayerIds === undefined ? {} : { getPlayerIds: options.getPlayerIds }),
+          ...(options.getInput === undefined ? {} : { getPlayerInput: options.getInput }),
+          ...(options.emitFrame === undefined ? {} : { msgOut: { push: options.emitFrame } }),
+          ...(options.setReplayFrames === undefined
+            ? {}
+            : { setReplayFrames: options.setReplayFrames }),
+          ...(options.seed === undefined ? {} : { seed: options.seed }),
+        });
+        return { default: toRuntimePlugin(adapter) };
+      }),
+  };
+};
+
+export const resolveBundledRuntimePluginId = (mapPackage: unknown): string =>
+  runtimePluginIdFromPackage(mapPackage) ?? bundledPlugin.id;
 
 export { bundledPlugin };

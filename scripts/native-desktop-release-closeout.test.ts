@@ -71,6 +71,7 @@ describe('native desktop closeout preflight', () => {
     ) as { globalEnv?: unknown };
 
     expect(cleanCheckoutScript).toContain('export TILEBORNE_SOURCE_COMMIT');
+    expect(cleanCheckoutScript).toContain('launch_cmd+=(-- --no-sandbox)');
     expect(turboConfig.globalEnv).toContain('TILEBORNE_SOURCE_COMMIT');
   });
 });

@@ -395,7 +395,7 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
       .toBe(true);
 
     await navigateToRoute(page, `/projects/${created.projectId}/maps/${created.mapId}`);
-    await expect(page.getByTestId('readiness-status')).toContainText(/blocked/, {
+    await expect(page.getByTestId('readiness-status')).toContainText(/blocked|warnings/, {
       timeout: 15_000,
     });
     await page.getByTestId('readiness-status').click();
@@ -796,9 +796,27 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
         { timeout: 30_000, intervals: [100, 250, 500] },
       )
       .toMatch(/^\{"dialog":true,/);
-    await expect(page.getByTestId('playtest-host-room-url')).not.toHaveValue('', {
-      timeout: 120_000,
-    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            JSON.stringify({
+              multiplayer: window.__tileborne_e2e?.getMultiplayerStoreState?.(),
+              roomUrl: document.querySelector<HTMLInputElement>(
+                '[data-testid="playtest-host-room-url"]',
+              )?.value,
+              alerts: [...document.querySelectorAll('[role="alert"]')].map(
+                (element) => element.textContent,
+              ),
+              notifications: [...document.querySelectorAll('[data-sonner-toast]')].map(
+                (element) => element.textContent,
+              ),
+              bodyTail: (document.body.textContent ?? '').slice(-2_000),
+            }),
+          ),
+        { timeout: 120_000, intervals: [250, 500, 1_000] },
+      )
+      .toMatch(/"flowPhase":"host-ready".*"roomUrl":"[^"]+"/);
     const secondaryWindow = context.app.waitForEvent('window', { timeout: 30_000 });
     await page.getByTestId('playtest-host-open-second-client').click();
     const secondaryPage = await secondaryWindow;

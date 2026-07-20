@@ -27,7 +27,10 @@ const mit = new License({
   spdxId: 'MIT',
   attribution: Option.some('Example Artist'),
   sourceUrl: Option.some('https://example.invalid/mit'),
+  sourcePath: 'fixtures/mit/source.png',
+  modifications: 'Trimmed transparent border',
   notes: Option.none(),
+  redistributable: true,
 });
 
 const asset = (id: AssetId, path: string, n: number, license = Option.none<License>()) =>
@@ -77,6 +80,38 @@ describe('pack delta', () => {
     const delta = diffPacks(before, after);
 
     expect(delta.licenseChanged.map((entry) => entry.id)).toEqual([assetId(1)]);
+    expect(delta.modified).toEqual([]);
+  });
+
+  it('detects provenance and redistribution metadata license changes', () => {
+    const beforeLicense = new License({
+      spdxId: 'CC0-1.0',
+      attribution: Option.none(),
+      sourceUrl: Option.none(),
+      sourcePath: 'fixtures/source-a.png',
+      modifications: 'Original fixture',
+      notes: Option.none(),
+      redistributable: true,
+    });
+    const afterLicense = new License({
+      spdxId: 'CC0-1.0',
+      attribution: Option.none(),
+      sourceUrl: Option.none(),
+      sourcePath: 'fixtures/source-b.png',
+      modifications: 'Cropped for runtime atlas',
+      notes: Option.none(),
+      redistributable: false,
+    });
+    const before = manifest([asset(assetId(1), 'a.png', 1, Option.some(beforeLicense))]);
+    const after = manifest([asset(assetId(1), 'a.png', 1, Option.some(afterLicense))]);
+    const delta = diffPacks(before, after);
+
+    expect(delta.licenseChanged.map((entry) => entry.id)).toEqual([assetId(1)]);
+    expect(delta.licenseChanged[0]?.after).toMatchObject({
+      sourcePath: 'fixtures/source-b.png',
+      modifications: 'Cropped for runtime atlas',
+      redistributable: false,
+    });
     expect(delta.modified).toEqual([]);
   });
 

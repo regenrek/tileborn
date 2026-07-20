@@ -3,6 +3,11 @@ import type {
   BehaviorRuntimeDiagnostic,
   BehaviorSchedulerSnapshot,
 } from '@tileborne/runtime/behavior';
+import type {
+  RuntimeGameShellProjection,
+  RuntimeShellBehaviorEventPayload,
+  RuntimeShellNavigationRequest,
+} from '@tileborne/runtime';
 
 import {
   decodeWorkerdBehaviorResponse,
@@ -45,13 +50,16 @@ export type BehaviorRuntimeStepResult =
       readonly snapshot: BehaviorSchedulerSnapshot;
       readonly advancedBehaviorIds: ReadonlyArray<BehaviorId>;
       readonly failures: ReadonlyArray<BehaviorRuntimeStepFailure>;
+      readonly shellNavigationRequests: ReadonlyArray<RuntimeShellNavigationRequest>;
     }
   | { readonly status: 'failed'; readonly failures: ReadonlyArray<BehaviorRuntimeStepFailure> };
 
 export interface AuthoritativeBehaviorRuntimeClient {
   readonly snapshot: BehaviorSchedulerSnapshot | undefined;
   readonly diagnostics: ReadonlyArray<BehaviorRuntimeDiagnostic>;
+  readonly shellNavigationRequests: ReadonlyArray<RuntimeShellNavigationRequest>;
   readonly quarantinedBehaviorIds?: ReadonlySet<BehaviorId>;
+  emitShellEvent(event: RuntimeShellBehaviorEventPayload): void;
   step(tick: number): Promise<unknown>;
 }
 
@@ -60,7 +68,10 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
   readonly #packageId: string | undefined;
   readonly #seed: string | undefined;
   readonly #behaviorIds: ReadonlyArray<BehaviorId>;
+  readonly #shellProjection: RuntimeGameShellProjection | undefined;
   readonly #quarantined = new Set<BehaviorId>();
+  readonly #queuedShellEvents: RuntimeShellBehaviorEventPayload[] = [];
+  #shellNavigationRequests: ReadonlyArray<RuntimeShellNavigationRequest> = [];
   #snapshot: BehaviorSchedulerSnapshot | undefined;
   #diagnostics: ReadonlyArray<BehaviorRuntimeDiagnostic> = [];
 
@@ -68,11 +79,13 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
     readonly binding?: BehaviorRuntimeFetcher;
     readonly mapPackage?: JsonObject;
     readonly seed?: string | number;
+    readonly shellProjection?: RuntimeGameShellProjection | undefined;
   }) {
     this.#binding = input.binding;
     this.#packageId = packageIdOf(input.mapPackage);
     this.#seed = input.seed === undefined ? undefined : String(input.seed);
     this.#behaviorIds = behaviorIdsOf(input.mapPackage);
+    this.#shellProjection = input.shellProjection;
     if (
       this.#behaviorIds.length > 0 &&
       (this.#binding === undefined || this.#packageId === undefined)
@@ -89,8 +102,16 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
     return [...this.#diagnostics];
   }
 
+  get shellNavigationRequests(): ReadonlyArray<RuntimeShellNavigationRequest> {
+    return [...this.#shellNavigationRequests];
+  }
+
   get quarantinedBehaviorIds(): ReadonlySet<BehaviorId> {
     return new Set(this.#quarantined);
+  }
+
+  emitShellEvent(event: RuntimeShellBehaviorEventPayload): void {
+    this.#queuedShellEvents.push({ ...event });
   }
 
   async step(tick: number): Promise<BehaviorRuntimeStepResult> {
@@ -104,7 +125,9 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
     const failures: BehaviorRuntimeStepFailure[] = [];
     const advancedBehaviorIds: BehaviorId[] = [];
     const diagnostics: BehaviorRuntimeDiagnostic[] = [];
+    const shellNavigationRequests: RuntimeShellNavigationRequest[] = [];
     const binding = this.#binding;
+    const shellEvents = [...this.#queuedShellEvents];
     for (const behaviorId of this.#behaviorIds) {
       if (this.#quarantined.has(behaviorId)) continue;
       const body: WorkerdBehaviorStepRequest = {
@@ -112,6 +135,16 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
         packageId: this.#packageId,
         ...(this.#seed === undefined ? {} : { seed: this.#seed }),
         ...this.#snapshotFor(behaviorId),
+        ...(this.#shellProjection === undefined && shellEvents.length === 0
+          ? {}
+          : {
+              shell: {
+                ...(this.#shellProjection === undefined
+                  ? {}
+                  : { projection: this.#shellProjection }),
+                ...(shellEvents.length === 0 ? {} : { events: shellEvents }),
+              },
+            }),
         operation: { kind: 'step', tick, targetBehaviorId: behaviorId },
       };
       const result = await this.#executeTarget(binding, body, behaviorId, tick);
@@ -137,14 +170,18 @@ export class WorkerdBehaviorRuntimeClient implements AuthoritativeBehaviorRuntim
       this.#mergeSnapshot(result.snapshot);
       advancedBehaviorIds.push(behaviorId);
       diagnostics.push(...result.diagnostics);
+      shellNavigationRequests.push(...(result.shellNavigationRequests ?? []));
     }
     this.#diagnostics = diagnostics;
+    this.#shellNavigationRequests = shellNavigationRequests;
+    if (advancedBehaviorIds.length > 0) this.#queuedShellEvents.splice(0);
     if (advancedBehaviorIds.length > 0 && this.#snapshot !== undefined) {
       return {
         status: 'advanced',
         snapshot: structuredClone(this.#snapshot),
         advancedBehaviorIds,
         failures,
+        shellNavigationRequests,
       };
     }
     return { status: 'failed', failures };
@@ -253,4 +290,5 @@ export const createWorkerdBehaviorRuntimeClient = (input: {
   readonly binding?: BehaviorRuntimeFetcher;
   readonly mapPackage?: JsonObject;
   readonly seed?: string | number;
+  readonly shellProjection?: RuntimeGameShellProjection | undefined;
 }): AuthoritativeBehaviorRuntimeClient => new WorkerdBehaviorRuntimeClient(input);

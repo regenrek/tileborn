@@ -2,7 +2,10 @@ import { cp, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { AssetPackManifest } from "@tileborne/asset-pipeline";
+import {
+  AssetPackManifest,
+  validateLicenseRedistribution,
+} from "@tileborne/asset-pipeline";
 import {
   BuildId,
   type ContentHash,
@@ -39,7 +42,9 @@ import { PluginLoaderService, PluginRegistryService } from "@tileborne/services-
 import {
   AssetService,
   MapService,
+  ProjectAudioService,
   ProjectBehaviorService,
+  ProjectGameShellService,
   ProjectService,
 } from "@tileborne/services-app";
 import { HomeService, JobId, JobService } from "@tileborne/services-foundation";
@@ -83,6 +88,37 @@ import { readProjectActiveGameModeId } from "../playtest/active-game-mode-select
 import { compileProjectBehaviorPackage } from "../behavior/project-package.js";
 
 const gameBuildMetadataFileName = "build-artifact.json";
+
+const validateRedistributableAssetPack = (
+  manifest: AssetPackManifest,
+): Result.Result<AssetPackManifest, ServicesBuildError> => {
+  const packLicenseResult = validateLicenseRedistribution(manifest.license);
+  if (Result.isFailure(packLicenseResult)) {
+    return Result.fail(
+      new ServicesBuildError({
+        path: Option.some(`assetPacks.${manifest.id}.license`),
+        message: `${packLicenseResult.failure.message}. Open Asset library > ${manifest.name} to update license metadata or remove the pack from this build.`,
+      }),
+    );
+  }
+
+  for (const asset of manifest.assets) {
+    if (Option.isNone(asset.license)) {
+      continue;
+    }
+    const assetLicenseResult = validateLicenseRedistribution(asset.license.value);
+    if (Result.isFailure(assetLicenseResult)) {
+      return Result.fail(
+        new ServicesBuildError({
+          path: Option.some(`assetPacks.${manifest.id}.assets.${asset.id}.license`),
+          message: `${assetLicenseResult.failure.message} for ${asset.path}. Open Asset library > ${manifest.name} > ${asset.path} to update license metadata or remove the pack from this build.`,
+        }),
+      );
+    }
+  }
+
+  return Result.succeed(manifest);
+};
 
 export interface BuildPromotionOperations {
   readonly rename: (from: string, to: string) => Promise<void>;
@@ -276,11 +312,9 @@ The command prints a base URL once the host is ready. Create a joinable room:
       -d '{"mapId":"<mapId>"}'
 
 Bundled maps (and their ids) are listed in manifest.json under "maps".
-To deploy the same artifact to Cloudflare, publish the isolated behavior worker
-first, then the room worker:
-
-    wrangler deploy --config wrangler.behavior.toml
-    wrangler deploy --config wrangler.toml
+Deployment adapters are described in deployment.json. Local is the default
+adapter. Cloudflare deployment is owned by the Alchemy Cloudflare adapter, which
+uses provider-native credentials and owns any Wrangler-compatible config files.
 `;
 
 export class BuildService extends Context.Service<BuildService, {
@@ -323,6 +357,8 @@ export const makeBuildServiceLive = (
     const loader = yield* PluginLoaderService;
     const assets = yield* AssetService;
     const projects = yield* ProjectService;
+    const projectAudio = yield* ProjectAudioService;
+    const projectGameShell = yield* ProjectGameShellService;
     const projectBehaviors = yield* ProjectBehaviorService;
     const maps = yield* MapService;
     const events = yield* PubSub.unbounded<void>();
@@ -538,12 +574,64 @@ export const makeBuildServiceLive = (
         const manifest = yield* assets.getPack(packId).pipe(
           Effect.mapError((error) => buildError(error.message)),
         );
+        const licenseResult = validateRedistributableAssetPack(manifest);
+        if (Result.isFailure(licenseResult)) {
+          return yield* Effect.fail(licenseResult.failure);
+        }
         packSources.push({
           manifest,
           root: path.join(input.assetsRoot, "packs", `${manifest.id}-${manifest.version}`),
         });
       }
       const packageAssets = yield* collectRuntimeMapPackageAssets(packSources);
+      const audioProjection = yield* projectAudio.project(input.projectId, (source) => {
+        if (source.url !== undefined) return source;
+        if (source.packId !== undefined) {
+          const pack = packSources.find(
+            (candidate) =>
+              String(candidate.manifest.id) === source.packId &&
+              String(candidate.manifest.version) === source.packVersion,
+          );
+          if (pack === undefined) return undefined;
+          const packAsset = pack.manifest.assets.find((asset) =>
+            source.assetId !== undefined
+              ? String(asset.id) === source.assetId
+              : asset.path === source.path,
+          );
+          if (packAsset === undefined) return undefined;
+          const packagedPath = `assets/packs/${pack.manifest.id}-${pack.manifest.version}/${packAsset.path}`;
+          const packaged = packageAssets.find((asset) => asset.path === packagedPath);
+          return packaged === undefined ? undefined : { ...source, url: packaged.path };
+        }
+        if (source.assetId !== undefined) {
+          const packaged = packageAssets.find((asset) => asset.assetId === source.assetId);
+          if (packaged !== undefined) return { ...source, url: packaged.path };
+        }
+        if (source.path !== undefined) {
+          const normalized = source.path.startsWith("assets/")
+            ? source.path
+            : `assets/${source.path}`;
+          const packaged = packageAssets.find((asset) => asset.path === normalized);
+          return packaged === undefined ? undefined : { ...source, url: packaged.path };
+        }
+        return undefined;
+      }).pipe(
+        Effect.mapError((error) => serviceError(error.message, "audio")),
+      );
+      const blockingAudioDiagnostics = audioProjection.diagnostics.filter(
+        (issue) =>
+          issue.code === "missing-label" ||
+          issue.code === "missing-source" ||
+          issue.code === "unresolved-packaged-source",
+      );
+      if (blockingAudioDiagnostics.length > 0) {
+        return yield* serviceError(
+          `audio packaging failed: ${blockingAudioDiagnostics
+            .map((issue) => `${issue.code}: ${issue.message}`)
+            .join("; ")}`,
+          blockingAudioDiagnostics[0]?.path ?? "audio",
+        );
+      }
 
       const behaviorSnapshot = yield* projectBehaviors.open(input.projectId).pipe(
         Effect.mapError((error) => serviceError(
@@ -581,6 +669,9 @@ export const makeBuildServiceLive = (
       if (selectedIds.length === 0) {
         return yield* serviceError(`project ${input.projectId} has no maps to ship`);
       }
+      const shellProjection = yield* projectGameShell.project(input.projectId).pipe(
+        Effect.mapError((error) => serviceError(error.message, "shell")),
+      );
       const mapPackages: CloudflareGameHostMapPackageInput[] = [];
       for (const rawMapId of selectedIds) {
         if (!projectMapIds.includes(rawMapId)) {
@@ -607,6 +698,15 @@ export const makeBuildServiceLive = (
           playerCapacity: resolvePackagePlayerCapacity(map, active.pluginId),
           assets: packageAssets,
           behaviors: compiledBehaviors.behaviorPackage,
+          audio: JSON.parse(
+            JSON.stringify({
+              schemaVersion: 1,
+              buses: audioProjection.buses,
+              cues: audioProjection.cues,
+              diagnostics: audioProjection.diagnostics,
+              settings: audioProjection.settings,
+            }),
+          ) as JsonObject,
           behaviorModules: compiledBehaviors.modules ?? [],
           modeDataExporter,
           mergeDeps: { resolveWeapon: (id) => effective.success.weaponIds.has(id) },
@@ -614,6 +714,8 @@ export const makeBuildServiceLive = (
           outputDirectory: sourceDir,
           signal: input.signal,
         });
+        const shellJsonPath = yield* verifiedChildPath(sourceDir, "shell.json");
+        yield* writeTextFile(shellJsonPath, `${JSON.stringify(shellProjection, null, 2)}\n`);
         // The worker bakes the WIRE package (the encoded JSON every runtime
         // host hands the plugin, ADR-0030), never decoded class instances.
         const wire = JSON.parse(
@@ -719,6 +821,10 @@ export const makeBuildServiceLive = (
               }),
           ),
         );
+        const licenseResult = validateRedistributableAssetPack(manifest);
+        if (Result.isFailure(licenseResult)) {
+          return yield* Effect.fail(licenseResult.failure);
+        }
         const packRoot = path.join(paths.assets, "packs", `${manifest.id}-${manifest.version}`);
         resolvedPacks.push({
           id: manifest.id,

@@ -36,25 +36,27 @@ The CLI resolves the plugin and asset packs from `~/.tileborne`, bundles executa
 
 **Build** = deterministic artifact on disk. **Deploy** = Alchemy/Wrangler applying Cloudflare bindings.
 
-## Reference Alchemy template
+## Production Alchemy stack
 
-Copy [`apps/game-host/alchemy.example.run.ts`](https://github.com/tileborne/tileborne/blob/main/apps/game-host/alchemy.example.run.ts) into your consumer repo and customize resource names:
+Tileborne's committed production graph lives in
+`packages/services-build/src/runtime-deploy/alchemy-cloudflare-stack.ts`. The
+runtime deploy runner calls the official `node_modules/alchemy/bin/alchemy.js`
+CLI with the compiled stack entrypoint and the generated `worker.js` and
+`behavior-worker.js` artifacts:
 
 ```ts
-const gameHostWorkerScript =
-  process.env.TILEBORNE_GAME_HOST_SCRIPT ?? 'dist/game-host-cloudflare/worker.js';
-
 export const gameHostWorker = await Worker('game-host', {
-  script: gameHostWorkerScript,
+  main: input.workerPath,
   bindings: {
     PLAYTEST_ROOM: playtestRoom,
+    BEHAVIOR_RUNTIME: behaviorWorker,
     HANDOFF_SIGNING_KEY: handoffSigningKey,
-    ROOM_IDLE_TIMEOUT_SECONDS: process.env.ROOM_IDLE_TIMEOUT_SECONDS ?? '60',
   },
 });
 ```
 
-Do not execute the example file from CI — it documents composition only.
+Compose product-specific D1, KV, R2, queues, rate limits, and custom domains
+around that graph in your product repo.
 
 ## Product-specific deployment
 

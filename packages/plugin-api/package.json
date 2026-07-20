@@ -29,7 +29,7 @@
     "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
     "@tileborne/simulation": "workspace:*",
-    "effect": "4.0.0-beta.70"
+    "effect": "4.0.0-beta.78"
   },
   "devDependencies": {
     "typescript": "6.0.3",

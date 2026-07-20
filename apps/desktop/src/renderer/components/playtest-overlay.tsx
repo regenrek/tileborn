@@ -56,6 +56,11 @@ const connectionStatusConfig: Record<
   },
 };
 
+const runtimeShellOwnsEscape = (): boolean =>
+  document.querySelector(
+    '[data-testid="playtest-runtime-shell"] .tb-root[data-phase="in-match"]',
+  ) !== null;
+
 interface PlaytestOverlayProps {
   readonly sessionId: string;
   readonly activePlugins: readonly string[];
@@ -92,6 +97,9 @@ export function PlaytestOverlay({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || isEditableTarget(event.target)) {
+        return;
+      }
+      if (!confirmOpen && runtimeShellOwnsEscape()) {
         return;
       }
       event.preventDefault();

@@ -1,4 +1,27 @@
-import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import {
+  GAME_SHELL_REGISTERED_EVENTS,
+  type RuntimeShellBehaviorEventPayload,
+  type RuntimeShellNavigationRequest,
+} from '@tileborne/runtime';
+
+export const ROOM_SHELL_FRAME_VERSION = 1 as const;
+
+export interface RoomShellEventClientFrame {
+  readonly _tag: 'TileborneShellEvent';
+  readonly version: typeof ROOM_SHELL_FRAME_VERSION;
+  readonly payload: RuntimeShellBehaviorEventPayload;
+}
+
+export interface RoomShellNavigationServerFrame {
+  readonly _tag: 'TileborneShellNavigation';
+  readonly version: typeof ROOM_SHELL_FRAME_VERSION;
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly request: RuntimeShellNavigationRequest;
+}
+
+export type RoomShellClientFrame = RoomShellEventClientFrame;
+export type RoomShellServerFrame = RoomShellNavigationServerFrame;
 
 export interface QueuedInput<Input> {
   readonly playerId: string;
@@ -9,6 +32,97 @@ export interface QueuedInput<Input> {
   };
   readonly order: number;
 }
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isRegisteredShellEvent = (
+  value: unknown,
+): value is RuntimeShellBehaviorEventPayload['event'] =>
+  typeof value === 'string' &&
+  GAME_SHELL_REGISTERED_EVENTS.includes(value as RuntimeShellBehaviorEventPayload['event']);
+
+export const decodeRoomShellClientFrame = (message: string): RoomShellClientFrame | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message) as unknown;
+  } catch {
+    return undefined;
+  }
+  if (
+    !isRecord(parsed) ||
+    parsed._tag !== 'TileborneShellEvent' ||
+    parsed.version !== ROOM_SHELL_FRAME_VERSION ||
+    !isRecord(parsed.payload) ||
+    !isRegisteredShellEvent(parsed.payload.event) ||
+    typeof parsed.payload.screenId !== 'string' ||
+    (parsed.payload.actionId !== undefined && typeof parsed.payload.actionId !== 'string') ||
+    (parsed.payload.targetScreenId !== undefined &&
+      typeof parsed.payload.targetScreenId !== 'string')
+  ) {
+    return undefined;
+  }
+  return {
+    _tag: 'TileborneShellEvent',
+    version: ROOM_SHELL_FRAME_VERSION,
+    payload: {
+      event: parsed.payload.event,
+      screenId: parsed.payload.screenId,
+      ...(parsed.payload.actionId === undefined ? {} : { actionId: parsed.payload.actionId }),
+      ...(parsed.payload.targetScreenId === undefined
+        ? {}
+        : { targetScreenId: parsed.payload.targetScreenId }),
+    },
+  };
+};
+
+export const encodeRoomShellEventClientFrame = (
+  payload: RuntimeShellBehaviorEventPayload,
+): string =>
+  JSON.stringify({ _tag: 'TileborneShellEvent', version: ROOM_SHELL_FRAME_VERSION, payload });
+
+export const encodeRoomShellNavigationServerFrame = (
+  epoch: string,
+  sequence: number,
+  request: RuntimeShellNavigationRequest,
+): string =>
+  JSON.stringify({
+    _tag: 'TileborneShellNavigation',
+    version: ROOM_SHELL_FRAME_VERSION,
+    epoch,
+    sequence,
+    request,
+  });
+
+export const decodeRoomShellServerFrame = (message: string): RoomShellServerFrame | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message) as unknown;
+  } catch {
+    return undefined;
+  }
+  if (
+    !isRecord(parsed) ||
+    parsed._tag !== 'TileborneShellNavigation' ||
+    parsed.version !== ROOM_SHELL_FRAME_VERSION ||
+    typeof parsed.epoch !== 'string' ||
+    parsed.epoch.length === 0 ||
+    !Number.isSafeInteger(parsed.sequence) ||
+    !isRecord(parsed.request) ||
+    parsed.request.type !== 'navigate' ||
+    typeof parsed.request.targetScreenId !== 'string'
+  ) {
+    return undefined;
+  }
+  const sequence = parsed.sequence as number;
+  return {
+    _tag: 'TileborneShellNavigation',
+    version: ROOM_SHELL_FRAME_VERSION,
+    epoch: parsed.epoch,
+    sequence,
+    request: { type: 'navigate', targetScreenId: parsed.request.targetScreenId },
+  };
+};
 
 export interface SnapshotAckFrame {
   readonly tick: number;
@@ -86,36 +200,6 @@ export const createRoomSocketRecord = (
   resyncCount: 0,
   resyncSnapshotTick: null,
 });
-
-export const decodeSnapshotAckFrame = (bytes: Uint8Array): SnapshotAckFrame | undefined => {
-  try {
-    const frame = BattleRoyaleProtocol.decodeClientMessage(bytes);
-    return frame._tag === 'SnapshotAck'
-      ? { tick: frame.tick, receivedAtMs: frame.receivedAtMs }
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-export const snapshotTickFromServerFrame = (bytes: Uint8Array): number | undefined => {
-  try {
-    const frame = BattleRoyaleProtocol.decodeServerMessage(bytes);
-    return frame._tag === 'WelcomeSnapshot' || frame._tag === 'DeltaSnapshot'
-      ? frame.tick
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-export const encodeTransportErrorFrame = (code: string, message: string): Uint8Array =>
-  BattleRoyaleProtocol.encodeServerMessage(
-    new BattleRoyaleProtocol.WireError({
-      code,
-      message,
-    }),
-  );
 
 export const pendingSnapshotLagTicks = (record: RoomSocketRecord): number =>
   record.lastProducedSnapshotTick < 0

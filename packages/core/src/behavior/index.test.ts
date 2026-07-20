@@ -7,6 +7,8 @@ import {
   BehaviorDefinition,
   BehaviorManifest,
   BehaviorRegistryManifest,
+  CORE_BEHAVIOR_REGISTRY,
+  CORE_BEHAVIOR_TEMPLATES,
   RuntimeBehaviorPackage,
   UnsupportedBehaviorSchemaVersionError,
   decodePersistedBehaviorDefinitionJson,
@@ -179,5 +181,14 @@ describe('behavior contracts', () => {
         Schema.encodeSync(RuntimeBehaviorPackage)(payload),
       ),
     ).toEqual(payload);
+  });
+
+  it('exposes game-shell events and actions through the core behavior registry', () => {
+    expect(CORE_BEHAVIOR_REGISTRY.entries.map((entry) => String(entry.id))).toEqual(
+      expect.arrayContaining(['shell.event', 'shell.invoke-action', 'shell.emit-event']),
+    );
+    expect(
+      CORE_BEHAVIOR_TEMPLATES.some((template) => String(template.id) === 'shell.on-shell-event'),
+    ).toBe(true);
   });
 });

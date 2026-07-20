@@ -22,6 +22,10 @@ import type {
   BehaviorWorkerResponse,
   RuntimeBehaviorArtifactIdentity,
 } from '@tileborne/runtime/behavior';
+import type {
+  RuntimeShellBehaviorEventPayload,
+  RuntimeShellNavigationRequest,
+} from '@tileborne/runtime';
 import { Effect, Result, Schema } from 'effect';
 
 import {
@@ -119,6 +123,11 @@ interface ActivePlaytestRuntime {
   readonly projectId?: ProjectId;
   readonly getMetrics: () => PlaytestRuntimeMetrics;
   readonly behaviorDebug?: PlaytestBehaviorDebugState;
+  shellNavigationSequence: number;
+  shellNavigationRequests: {
+    readonly sequence: number;
+    readonly request: RuntimeShellNavigationRequest;
+  }[];
   readonly interval?: ReturnType<typeof setInterval>;
   readonly stop: () => Promise<void>;
 }
@@ -328,9 +337,11 @@ const startPlaytestBehaviorRuntime = async (
     throw new Error(`cannot start behavior runtime: ${loaded.failure.message}`);
   }
   if (loaded.success.behaviors.modules.length === 0) return undefined;
+  const smokeWallTimeMs =
+    process.env.TILEBORNE_E2E === '1' || process.env.TILEBORNE_SMOKE === 'true' ? 500 : TICK_MS;
   const host = new NodeIsolatedBehaviorRuntimeHost({
     ticksPerSecond: TICK_RATE,
-    maxWallTimeMs: Math.max(25, TICK_MS),
+    maxWallTimeMs: Math.max(25, smokeWallTimeMs),
   });
   try {
     for (const artifact of loaded.success.behaviors.modules) {
@@ -864,6 +875,8 @@ export const startPlaytestRuntimeHost = async (input: {
       ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
       getMetrics: metricsState.getMetrics,
       ...(behaviorRuntime === undefined ? {} : { behaviorDebug: behaviorRuntime }),
+      shellNavigationSequence: 0,
+      shellNavigationRequests: [],
       interval,
       stop,
     });
@@ -941,6 +954,54 @@ export const controlPlaytestBehaviorDebug = async (
     await stepPlaytestBehaviorRuntime(debug);
   }
   return getPlaytestBehaviorDebugSnapshot(sessionId)!;
+};
+
+export const emitPlaytestShellBehaviorEvent = async (
+  sessionId: string,
+  event: RuntimeShellBehaviorEventPayload,
+): Promise<
+  readonly { readonly sequence: number; readonly request: RuntimeShellNavigationRequest }[]
+> => {
+  const active = activeRuntimes.get(sessionId);
+  const debug = active?.behaviorDebug;
+  if (active === undefined || debug === undefined) {
+    return [];
+  }
+  const execute = async (): Promise<void> => {
+    const response = await debug.host.dispatch({
+      eventId: 'shell.event',
+      event: {
+        event: event.event,
+        screenId: event.screenId,
+        ...(event.actionId === undefined ? {} : { actionId: event.actionId }),
+        ...(event.targetScreenId === undefined ? {} : { targetScreenId: event.targetScreenId }),
+      },
+    });
+    if (!response.ok) throw new Error(response.diagnostic.message);
+    captureBehaviorDebugResponse(debug, response);
+    const value = response.value;
+    if (!isRecord(value) || !Array.isArray(value.shellNavigationRequests)) return;
+    for (const request of value.shellNavigationRequests) {
+      if (
+        !isRecord(request) ||
+        request.type !== 'navigate' ||
+        typeof request.targetScreenId !== 'string'
+      ) {
+        continue;
+      }
+      active.shellNavigationRequests.push({
+        sequence: active.shellNavigationSequence,
+        request: { type: 'navigate', targetScreenId: request.targetScreenId },
+      });
+      active.shellNavigationSequence += 1;
+    }
+  };
+  const result = debug.tail.then(execute, execute);
+  debug.tail = result.catch(() => undefined);
+  await result;
+  const queued = [...active.shellNavigationRequests];
+  active.shellNavigationRequests = [];
+  return queued;
 };
 
 export type PlaytestHotReloadArtifact = RuntimeBehaviorArtifactIdentity & {

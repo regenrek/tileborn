@@ -44,6 +44,7 @@ describe('workspace-views registry', () => {
     expect(WORKSPACE_TOOL_VIEWS.map((view) => view.kind)).toEqual([
       'entity-editor',
       'game-content',
+      'game-shell',
       'behaviors',
       'player-model-editor',
     ]);

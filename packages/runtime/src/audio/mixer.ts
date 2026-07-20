@@ -1,3 +1,9 @@
+import type {
+  RuntimeAudioBindingKey,
+  RuntimeAudioClassification,
+  RuntimeAudioSourceDefinition,
+} from './authoring.js';
+
 export type RuntimeAudioBusKind = 'music' | 'sfx' | 'ui';
 
 export interface RuntimeAudioBusDefinition {
@@ -13,6 +19,11 @@ export interface RuntimeAudioCueDefinition {
   readonly busId: string;
   readonly defaultVolume: number;
   readonly assetId?: string | undefined;
+  readonly binding?: RuntimeAudioBindingKey | undefined;
+  readonly classification?: RuntimeAudioClassification | undefined;
+  readonly source?: RuntimeAudioSourceDefinition | undefined;
+  readonly loop?: boolean | undefined;
+  readonly maxOverlap?: number | undefined;
 }
 
 export interface RuntimeAudioSettings {
@@ -31,6 +42,9 @@ export interface ResolvedAudioPlayback {
   readonly busId: string;
   readonly gain: number;
   readonly audible: boolean;
+  readonly loop: boolean;
+  readonly maxOverlap: number;
+  readonly source?: RuntimeAudioSourceDefinition | undefined;
   readonly mutedReason?: RuntimeAudioMuteReason | undefined;
 }
 
@@ -89,6 +103,9 @@ export const resolveAudioCuePlayback = (
     busId: bus.id,
     gain,
     audible: gain > 0,
+    loop: cue.loop ?? false,
+    maxOverlap: Math.max(1, Math.floor(cue.maxOverlap ?? 8)),
+    ...(cue.source === undefined ? {} : { source: cue.source }),
     ...(mutedReason === undefined ? {} : { mutedReason }),
   };
 };

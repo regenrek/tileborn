@@ -15,6 +15,11 @@ declare global {
     readonly tileborneAppLifecycle: TileborneAppLifecycleBridge;
     __tileborne_e2e?: {
       readonly getMultiplayerSessionState?: () => MultiplayerSessionState | null;
+      readonly getMultiplayerStoreState?: () => {
+        readonly flowPhase: string;
+        readonly hasRoomReady: boolean;
+        readonly lobbyError: string | null;
+      };
     };
   }
 

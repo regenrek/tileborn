@@ -27,12 +27,76 @@ export class AssetPackProvenance extends Schema.Class<AssetPackProvenance>('Asse
   importedAt: Schema.String,
 }) {}
 
+export const AssetLicenseSpdxId = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9-.+]+(?:\s+(?:AND|OR)\s+[A-Za-z0-9-.+]+)*$/),
+);
+export type AssetLicenseSpdxId = typeof AssetLicenseSpdxId.Type;
+
+const assetLicenseFieldDescriptors = {
+  spdxId: {
+    optionalJson: AssetLicenseSpdxId,
+    option: AssetLicenseSpdxId,
+    requiredRedistributable: AssetLicenseSpdxId,
+  },
+  attribution: {
+    optionalJson: Schema.optional(Schema.String),
+    option: Schema.OptionFromOptional(Schema.String),
+    requiredRedistributable: Schema.OptionFromUndefinedOr(Schema.String),
+  },
+  sourceUrl: {
+    optionalJson: Schema.optional(Schema.String),
+    option: Schema.OptionFromOptional(Schema.String),
+    requiredRedistributable: Schema.OptionFromUndefinedOr(Schema.String),
+  },
+  sourcePath: {
+    optionalJson: Schema.optional(Schema.String),
+    option: Schema.optional(Schema.String),
+    requiredRedistributable: Schema.optional(Schema.String),
+  },
+  modifications: {
+    optionalJson: Schema.optional(Schema.String),
+    option: Schema.optional(Schema.String),
+    requiredRedistributable: Schema.optional(Schema.String),
+  },
+  notes: {
+    optionalJson: Schema.optional(Schema.String),
+    option: Schema.OptionFromOptional(Schema.String),
+    requiredRedistributable: Schema.OptionFromUndefinedOr(Schema.String),
+  },
+  redistributable: {
+    optionalJson: Schema.optional(Schema.Boolean),
+    option: Schema.optional(Schema.Boolean),
+    requiredRedistributable: Schema.Boolean,
+  },
+} as const;
+
+type AssetLicenseFieldDescriptors = typeof assetLicenseFieldDescriptors;
+type AssetLicenseFieldKey = keyof AssetLicenseFieldDescriptors;
+
+export const ASSET_LICENSE_FIELD_KEYS = Object.keys(
+  assetLicenseFieldDescriptors,
+) as readonly AssetLicenseFieldKey[];
+
+const deriveAssetLicenseFields = <Variant extends keyof AssetLicenseFieldDescriptors['spdxId']>(
+  variant: Variant,
+): { readonly [Key in AssetLicenseFieldKey]: AssetLicenseFieldDescriptors[Key][Variant] } =>
+  Object.fromEntries(
+    ASSET_LICENSE_FIELD_KEYS.map((key) => [key, assetLicenseFieldDescriptors[key][variant]]),
+  ) as { readonly [Key in AssetLicenseFieldKey]: AssetLicenseFieldDescriptors[Key][Variant] };
+
+export const assetLicenseOptionalJsonFields = deriveAssetLicenseFields('optionalJson');
+
+export const assetLicenseOptionFields = deriveAssetLicenseFields('option');
+
+export const assetLicenseUndefinedOptionRequiredRedistributableFields =
+  deriveAssetLicenseFields('requiredRedistributable');
+
+export class AssetLicense extends Schema.Class<AssetLicense>('AssetLicense')(
+  assetLicenseOptionalJsonFields,
+) {}
+
 export class AssetPackLicense extends Schema.Class<AssetPackLicense>('AssetPackLicense')({
-  id: Schema.optional(Schema.String),
-  name: Schema.optional(Schema.String),
-  url: Schema.optional(Schema.String),
-  attribution: Schema.optional(Schema.String),
-  redistributable: Schema.Boolean,
+  ...assetLicenseOptionalJsonFields,
 }) {}
 
 export class AssetLibraryReference extends Schema.Class<AssetLibraryReference>(
@@ -265,6 +329,7 @@ export const isValidPlayerModelRef = (model: PlayerModelRef): boolean =>
   validatePlayerModelRef(model).length === 0;
 
 export const AssetLibraryGroupKind = Schema.Literals([
+  'asset',
   'tileset',
   'terrain',
   'autotile',

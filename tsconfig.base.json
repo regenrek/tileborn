@@ -22,6 +22,9 @@
       "@tileborne/plugin-api/project-content": ["./packages/plugin-api/src/project-content.ts"],
       "@tileborne/plugin-api/preload": ["./packages/plugin-api/src/preload.ts"],
       "@tileborne/ipc-contracts": ["./packages/ipc-contracts/src/index.ts"],
+      "@tileborne/ipc-contracts/contracts/multiplayer": [
+        "./packages/ipc-contracts/src/contracts/multiplayer.ts"
+      ],
       "@tileborne/ipc-contracts/preload": ["./packages/ipc-contracts/src/preload.ts"],
       "@tileborne/sdk-tileset": ["./packages/sdk-tileset/src/index.ts"],
       "@tileborne/cli": ["./packages/cli/src/main.ts"],

@@ -9,11 +9,13 @@ export const AUDIO_MIME_TYPES = [
   'audio/mpeg',
 ] as const;
 export const DATA_MIME_TYPES = ['application/json', 'text/plain'] as const;
+export const FONT_MIME_TYPES = ['font/woff2'] as const;
 
 export const ALLOWED_MIME_TYPES = [
   ...IMAGE_MIME_TYPES,
   ...AUDIO_MIME_TYPES,
   ...DATA_MIME_TYPES,
+  ...FONT_MIME_TYPES,
 ] as const;
 
 export const AllowedMimeType = Schema.Literals(ALLOWED_MIME_TYPES);
@@ -28,5 +30,8 @@ export const isImageMimeType = (mime: string): boolean =>
 export const isAudioMimeType = (mime: string): boolean =>
   (AUDIO_MIME_TYPES as readonly string[]).includes(mime);
 
+export const isFontMimeType = (mime: string): boolean =>
+  (FONT_MIME_TYPES as readonly string[]).includes(mime);
+
 export const requiresMagicByteCheck = (mime: string): boolean =>
-  isImageMimeType(mime) || isAudioMimeType(mime);
+  isImageMimeType(mime) || isAudioMimeType(mime) || isFontMimeType(mime);

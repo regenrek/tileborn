@@ -89,9 +89,15 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     const userDataDirectory = path.join(isolatedRoot, 'electron-user-data');
     const env = {
       ...process.env,
+      ALCHEMY_PROFILE: 'tbprofile',
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       TILEBORNE_DISABLE_DEVTOOLS: 'true',
       TILEBORNE_E2E: '1',
+      TILEBORNE_ALCHEMY_STACK_ENTRYPOINT: path.join(
+        packagedAppRoot,
+        'runtime-deploy',
+        'alchemy-bootstrap-probe.js',
+      ),
       TILEBORNE_HOME: tileborneHome,
     };
     delete env.TILEBORNE_REMOTE_DEBUGGING_PORT;
@@ -122,11 +128,29 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     // scaffolder's generated source template, so it is intentionally not
     // treated as a live bundle edge here.
     expect(bundleSource).not.toMatch(/require\(["']@tileborne\//);
+    expect(bundleSource).not.toContain('fileURLToPath({}.resolve');
     expect(bundleSource).toMatch(/(?:require|import)\(["']esbuild["']\)/);
     expect(bundleSource).toMatch(/(?:require|import)\(["']miniflare["']\)/);
 
     const nodeModules = path.join(packagedAppRoot, 'node_modules');
     expect(await findEscapingSymlinks(nodeModules)).toEqual([]);
+
+    const alchemyStackSource = await readFile(
+      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js'),
+      'utf8',
+    );
+    const alchemyBootstrapProbeSource = await readFile(
+      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-bootstrap-probe.js'),
+      'utf8',
+    );
+    expect(alchemyStackSource).toContain("Cloudflare.Worker('game-host'");
+    expect(alchemyStackSource).toContain("Cloudflare.Worker('behavior-runtime'");
+    expect(alchemyStackSource).toContain('Output.map(gameHostWorker.url');
+    expect(alchemyStackSource).toContain('TILEBORNE_ALCHEMY_RESULT_JSON=');
+    expect(alchemyStackSource).not.toContain('fileURLToPath({}.resolve');
+    expect(alchemyStackSource).not.toContain('data:text/javascript');
+    expect(alchemyBootstrapProbeSource).toContain('Alchemy.localState()');
+    expect(alchemyBootstrapProbeSource).toContain('TILEBORNE_ALCHEMY_RESULT_JSON=');
 
     const buildAssetsRoot = path.join(copiedApp, 'Contents', 'Resources', 'game-host-build-assets');
     await expect(
@@ -165,9 +189,14 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
         const appRequire = moduleApi.createRequire(
           pathApi.join(electronApp.getAppPath(), '.vite', 'build', 'main.cjs'),
         );
-        return ['esbuild', 'miniflare'].map((packageName) => ({
+        const resolveTargets = {
+          alchemy: 'alchemy/bin/alchemy.js',
+          esbuild: 'esbuild',
+          miniflare: 'miniflare',
+        };
+        return Object.entries(resolveTargets).map(([packageName, resolveTarget]) => ({
           packageName,
-          resolved: appRequire.resolve(packageName),
+          resolved: appRequire.resolve(resolveTarget),
         }));
       }),
     );
@@ -177,9 +206,46 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
         `${resolution.packageName} escaped the copied app: ${resolution.resolved}`,
       ).toBe(true);
     }
+
+    const alchemyEntrypoints = await evaluateStableMainContext(() =>
+      app!.evaluate(({ app: electronApp }) => {
+        const moduleApi = process.getBuiltinModule('node:module');
+        const pathApi = process.getBuiltinModule('node:path');
+        const fsApi = process.getBuiltinModule('node:fs');
+        const appRequire = moduleApi.createRequire(
+          pathApi.join(electronApp.getAppPath(), '.vite', 'build', 'main.cjs'),
+        );
+        const stackEntrypoint = pathApi.join(
+          electronApp.getAppPath(),
+          'runtime-deploy',
+          'alchemy-cloudflare-stack.js',
+        );
+        const bootstrapProbeEntrypoint = pathApi.join(
+          electronApp.getAppPath(),
+          'runtime-deploy',
+          'alchemy-bootstrap-probe.js',
+        );
+        return {
+          cliEntrypoint: appRequire.resolve('alchemy/bin/alchemy.js'),
+          bootstrapProbeEntrypoint,
+          bootstrapProbeExists: fsApi.existsSync(bootstrapProbeEntrypoint),
+          stackEntrypoint,
+          stackExists: fsApi.existsSync(stackEntrypoint),
+        };
+      }),
+    );
+    expect(isContainedPath(packagedAppRoot, alchemyEntrypoints.cliEntrypoint)).toBe(true);
+    expect(alchemyEntrypoints.stackEntrypoint).toBe(
+      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js'),
+    );
+    expect(alchemyEntrypoints.stackExists).toBe(true);
+    expect(alchemyEntrypoints.bootstrapProbeEntrypoint).toBe(
+      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-bootstrap-probe.js'),
+    );
+    expect(alchemyEntrypoints.bootstrapProbeExists).toBe(true);
   });
 
-  it('ships from the packaged app with an external cwd and boots a copied artifact', async () => {
+  it('ships from the packaged app, dry-runs Alchemy through IPC, and boots a copied artifact', async () => {
     const page = await waitForAppPage(app!, 60_000);
     await expect
       .poll(
@@ -245,13 +311,85 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
       if (typeof result !== 'object' || result === null || !('directory' in result)) {
         throw new Error('Packaged Ship Game artifact missing');
       }
-      return result as { readonly directory: string };
+      return result as { readonly buildId: string; readonly directory: string };
     }, created.mapId);
     const copiedArtifact = path.join(isolatedRoot, 'copied-ship-artifact');
     await cp(artifact.directory, copiedArtifact, { recursive: true });
     const workerPath = path.join(copiedArtifact, 'worker.js');
     const behaviorWorkerPath = path.join(copiedArtifact, 'behavior-worker.js');
     expect(await readFile(workerPath, 'utf8')).not.toContain(path.resolve(desktopRoot, '../..'));
+
+    const buildJob = await page.evaluate(
+      async (projectId) =>
+        window.tileborne.builds.build({
+          projectId,
+          target: 'cloudflare',
+        }),
+      created.projectId,
+    );
+    const built = await waitForJob(page, buildJob.jobId, 120_000);
+    expect(built.status, built.errorMessage).toBe('Completed');
+    const runtimeDeployBuild = await page.evaluate(async (jobId) => {
+      const { job } = await window.tileborne.jobs.get({ jobId });
+      if (job.status !== 'Completed') throw new Error('Packaged runtime-deploy build incomplete');
+      const result = job.result;
+      if (typeof result !== 'object' || result === null || !('id' in result)) {
+        throw new Error('Packaged runtime-deploy build result missing id');
+      }
+      return result as { readonly id: string };
+    }, buildJob.jobId);
+
+    const runtimeDeployTarget = {
+      adapterId: 'alchemy-cloudflare' as const,
+      stage: 'dev' as const,
+      workerName: 'runtime-deploy-smoke',
+    };
+    const planResult = await page.evaluate(
+      async ({ buildId, target }) =>
+        window.tileborne.runtimeDeploy.plan({
+          buildId,
+          target,
+        }),
+      { buildId: runtimeDeployBuild.id, target: runtimeDeployTarget },
+    );
+    const previewResult = await page.evaluate(
+      async ({ buildId, target }) =>
+        window.tileborne.runtimeDeploy.preview({
+          buildId,
+          target,
+        }),
+      { buildId: runtimeDeployBuild.id, target: runtimeDeployTarget },
+    );
+    const deployResults = [
+      { operation: 'plan', result: planResult },
+      { operation: 'preview', result: previewResult },
+    ] as const;
+    expect(planResult).toMatchObject({
+      endpoint: '',
+      status: 'planned',
+    });
+    expect(previewResult).toMatchObject({
+      endpoint: '',
+      status: 'previewed',
+    });
+    for (const { operation, result } of deployResults) {
+      const joinedLogs = result.logs.join('\n');
+      expect(joinedLogs).toContain(`alchemy-cloudflare ${operation} runtime-deploy-smoke`);
+      expect(joinedLogs).toContain(path.join(packagedAppRoot, 'node_modules', 'alchemy'));
+      expect(joinedLogs).toContain(
+        path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-bootstrap-probe.js'),
+      );
+      for (const log of result.logs) {
+        if (!log.includes(copiedApp) && !log.includes(isolatedRoot)) continue;
+        const pathMarker = log.slice(log.indexOf('/'));
+        const contained =
+          isContainedPath(path.join(copiedApp, 'Contents', 'Resources'), pathMarker) ||
+          isContainedPath(isolatedRoot, pathMarker);
+        expect(contained, `${operation} log path escaped copied app/external cwd: ${log}`).toBe(
+          true,
+        );
+      }
+    }
 
     const host = await createLocalGameHost({
       port: 19_874,

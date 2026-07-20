@@ -46,6 +46,7 @@ export const events = Object.freeze({
     reloaded: eventId('lifecycle.reloaded'),
   }),
   timer: Object.freeze({ fired: eventId('timer.fired') }),
+  shell: Object.freeze({ event: eventId('shell.event') }),
 });
 
 export const refs = Object.freeze({

@@ -9,6 +9,7 @@ import type {
   RoomJoinCode,
   RoomLifecyclePhase,
   RoomLifecycleState,
+  RoomPlayerRole,
   RoomPlayerPresenceStatus,
   RoomPlayerRecord,
   RoomResultsSummary,
@@ -43,6 +44,7 @@ export interface RoomReconnectEligibility {
 
 export interface RoomPresenceProjection {
   readonly playerId: string;
+  readonly role: RoomPlayerRole;
   readonly status: RoomPlayerPresenceStatus;
   readonly ready: boolean;
   readonly reconnectEligible: boolean;
@@ -98,6 +100,11 @@ export interface RoomPlayerAdmissionOptions {
 }
 
 export interface RoomReadyUpdateResult {
+  readonly storage: RoomStorage;
+  readonly readyGate: RoomReadyGateState;
+}
+
+export interface RoomOwnerActionResult {
   readonly storage: RoomStorage;
   readonly readyGate: RoomReadyGateState;
 }
@@ -290,6 +297,15 @@ export const resolveRoomAdmission = (
 const sortedPlayerIds = (players: Record<string, unknown>): readonly string[] =>
   Object.keys(players).sort((left, right) => left.localeCompare(right));
 
+export const resolveRoomPlayerRole = (storage: RoomStorage, playerId: string): RoomPlayerRole =>
+  storage.lobby.createdByPlayerId === playerId ? 'owner' : 'participant';
+
+export const assertRoomOwner = (storage: RoomStorage, playerId: string): void => {
+  if (resolveRoomPlayerRole(storage, playerId) !== 'owner') {
+    throw new RoomLifecycleRejectedError('only the room owner can perform this action', 403);
+  }
+};
+
 export const resolveRoomReadyGate = (
   storage: RoomStorage,
   options: RoomReadyGateOptions = {},
@@ -417,6 +433,7 @@ export const projectRoomPresence = (
       );
       return {
         playerId,
+        role: resolveRoomPlayerRole(storage, playerId),
         status,
         ready: storage.ready.players[playerId]?.isReady === true,
         reconnectEligible: reconnectEligibility.eligible,
@@ -428,6 +445,57 @@ export const projectRoomPresence = (
           : { disconnectedAt: presence.disconnectedAt }),
       };
     });
+};
+
+export const startRoomFromOwner = (
+  storage: RoomStorage,
+  playerId: string,
+  now: string,
+): RoomOwnerActionResult => {
+  assertRoomOwner(storage, playerId);
+  const readyGate = resolveRoomReadyGate(storage);
+  if (!readyGate.canStart) {
+    throw new RoomLifecycleRejectedError(readyGate.reason ?? 'room is not ready to start');
+  }
+  if (storage.lifecycle.phase === 'active') {
+    return { storage, readyGate };
+  }
+  if (storage.lifecycle.phase !== 'lobby' && storage.lifecycle.phase !== 'countdown') {
+    throw new RoomLifecycleRejectedError('room is not waiting for match start');
+  }
+  return {
+    readyGate,
+    storage: {
+      ...storage,
+      lifecycle: {
+        phase: 'active',
+        enteredAt: now,
+        activeStartedAt: now,
+      },
+    },
+  };
+};
+
+export const stopRoomFromOwner = (
+  storage: RoomStorage,
+  playerId: string,
+  now: string,
+  reason = 'owner stopped room',
+): RoomStorage => {
+  assertRoomOwner(storage, playerId);
+  if (storage.lifecycle.phase === 'finished' || storage.lifecycle.phase === 'archived') {
+    return storage;
+  }
+  return {
+    ...storage,
+    results: storage.results ?? createRoomResultsSummary(storage, now, reason),
+    lifecycle: {
+      phase: 'finished',
+      enteredAt: now,
+      finishedAt: now,
+      reason,
+    },
+  };
 };
 
 export const assertRoomAdmission = (storage: RoomStorage, playerId: string): void => {

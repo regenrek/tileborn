@@ -5,6 +5,58 @@ All notable changes to the Tileborne monorepo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- License-aware asset readiness, scalable asset-library browsing, real asset
+  previews, provenance diagnostics, and production workloads covering large
+  working palettes.
+- First-class audio authoring and runtime support for music, SFX, persisted
+  user settings, declarative cue bindings, and authoritative gameplay events.
+- Declarative, accessible game-shell authoring for title, menu, loading,
+  lobby, pause, settings, HUD, and results flows, shared by editor playtest and
+  shipped games.
+- Provider-neutral multiplayer contracts and authoritative room lifecycle
+  support for lobby readiness, reconnects, two-client play, terminal results,
+  diagnostics, and metrics.
+- Portable Ship output and an Alchemy v2 Cloudflare deployment path with
+  separate game-host and behavior Workers, Durable Objects, OAuth profiles,
+  packaged Electron runtime closure, and self-hosting documentation.
+- A complete Battle Royale reference project with license-safe assets,
+  authored behavior, audio, shell defaults, deterministic terminal gameplay,
+  and local/copied/cloud verification oracles.
+
+### Changed
+
+- Battle Royale playtest and shipped-client flows now consume the same neutral
+  shell, audio, capability, and authoritative gameplay contracts.
+- The desktop package now carries and verifies the complete Alchemy runtime,
+  production stack, and non-mutating packaged `plan`/`preview` subprocess path.
+- Asset, tileset, map-package, behavior, and persisted-schema boundaries now
+  fail closed with canonical validation and clearer creator-facing readiness
+  diagnostics.
+
+### Security
+
+- Updated Hono, Astro, Undici, and the pinned pnpm toolchain to patched,
+  supply-chain-mature versions; the production dependency audit reports no
+  known vulnerabilities.
+- Cloudflare lifecycle proof is restricted to generated disposable Worker
+  names, strips token environment variables, redacts signed WebSocket URLs,
+  validates receipt integrity, and confirms both Workers are absent after
+  cleanup.
+- Packaged runtime closure checks reject escaping paths and symlinks while
+  keeping deployment credentials external to artifacts and repository state.
+
+### Verification
+
+- Planr production-MVP audit holds with all 504 items settled and all reviews,
+  approvals, and verification clauses complete.
+- Disposable Cloudflare proof completed a real two-player match with the
+  behavior Worker, terminal placements, diagnostics, metrics, and verified
+  cleanup of both Workers.
+
 ## [0.0.1] - 2026-07-16
 
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.

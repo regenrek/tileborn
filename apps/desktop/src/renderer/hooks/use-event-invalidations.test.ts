@@ -54,6 +54,7 @@ describe('isMapsListQuery', () => {
     ]) {
       handlers.get(event)?.();
     }
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.gameShell.all });
     expect(
       invalidateQueries.mock.calls.filter(
         ([input]) =>

@@ -5,8 +5,10 @@ export {
   decodeHostClientFrame as decodeClientFrame,
   decodeHostClientFrameView as decodeClientFrameView,
   decodeHostServerLifecycleFrame as decodeServerLifecycleFrame,
+  encodeHostTransportErrorFrame as encodeTransportErrorFrame,
   encodeInvalidClientFrame,
   isHostWelcomeFrame as isWelcomeFrame,
+  snapshotTickFromHostServerFrame as snapshotTickFromServerFrame,
 } from './host-protocol-bridge.js';
 export type {
   RuntimeClientFrameDecodeResult,

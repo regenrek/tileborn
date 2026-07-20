@@ -282,7 +282,10 @@ const licenseToInput = (license: EditorIndexLicense) => ({
   spdxId: license.spdxId,
   attribution: license.attribution === undefined ? Option.none() : Option.some(license.attribution),
   sourceUrl: license.sourceUrl === undefined ? Option.none() : Option.some(license.sourceUrl),
+  ...(license.sourcePath === undefined ? {} : { sourcePath: license.sourcePath }),
+  ...(license.modifications === undefined ? {} : { modifications: license.modifications }),
   notes: license.notes === undefined ? Option.none() : Option.some(license.notes),
+  redistributable: license.redistributable,
 });
 
 const hashForUrl = (url: string): ContentHash => hashBytes(new TextEncoder().encode(url));

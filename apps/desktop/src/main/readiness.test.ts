@@ -7,13 +7,16 @@ import {
   gameObjectTypeIdForKey,
   hashJsonStable,
   makeLayerId,
+  makeAssetId,
   makeBehaviorId,
   makeBehaviorNodeId,
   makeMapId,
   makeObjectId,
+  makePackId,
   makeProjectId,
   makeTileborneMap,
 } from '@tileborne/core';
+import { License } from '@tileborne/asset-pipeline';
 import { ReadinessNavigationTarget, type ReadinessDiagnostic } from '@tileborne/ipc-contracts';
 import type { BehaviorCompileDiagnostic } from '@tileborne/services-build';
 import { PluginManifest } from '@tileborne/plugin-api';
@@ -24,6 +27,8 @@ import { Option, Schema } from 'effect';
 
 import {
   assertReadiness,
+  assetPackLicenseReadinessDiagnostics,
+  assetPackLicenseReadinessDiagnosticsForPurpose,
   assertExecutionReadiness,
   behaviorReadinessDiagnostics,
   mainExecutionPurpose,
@@ -32,6 +37,7 @@ import {
   loadPluginMapValidator,
   makeReadinessReport,
   readinessDiagnostic,
+  shouldGateAssetLicenseRedistribution,
 } from './readiness.js';
 
 const projectId = makeProjectId('00000000-0000-4000-8000-000000000101');
@@ -49,6 +55,79 @@ const diagnostic = (severity: ReadinessDiagnostic['severity'], id: string): Read
   });
 
 describe('canonical readiness report', () => {
+  it('reports non-redistributable pack and asset licenses with asset-library navigation', () => {
+    const packId = makePackId('00000000-0000-4000-8000-000000000301');
+    const assetId = makeAssetId('00000000-0000-4000-8000-000000000302');
+    const unsafePackLicense = new License({
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Unknown upstream pack'),
+      sourceUrl: Option.none(),
+      notes: Option.none(),
+      redistributable: false,
+    });
+    const unsafeAssetLicense = new License({
+      spdxId: 'MIT',
+      attribution: Option.some('Example Artist'),
+      sourceUrl: Option.none(),
+      notes: Option.none(),
+      redistributable: false,
+    });
+
+    const diagnostics = assetPackLicenseReadinessDiagnostics(projectId, {
+      id: packId,
+      name: 'Unsafe Pack',
+      license: unsafePackLicense,
+      assets: [
+        { id: assetId, path: 'tiles/terrain.png', license: Option.some(unsafeAssetLicense) },
+      ],
+    });
+
+    expect(diagnostics.map((entry) => entry.path)).toEqual([
+      `assetPacks.${packId}.license`,
+      `assetPacks.${packId}.assets.${assetId}.license`,
+    ]);
+    expect(diagnostics.every((entry) => entry.code === 'asset.license-not-redistributable')).toBe(
+      true,
+    );
+    expect(diagnostics[0]?.navigation).toMatchObject({
+      kind: 'asset-library',
+      path: `assetPacks.${packId}.license`,
+    });
+  });
+
+  it.each([
+    ['authoring', false],
+    ['playtest', false],
+    ['build', true],
+  ] as const)('scopes asset license redistribution gate to %s readiness', (purpose, expected) => {
+    expect(shouldGateAssetLicenseRedistribution(purpose)).toBe(expected);
+  });
+
+  it('keeps unsafe redistributability local-authoring safe but build-blocking', () => {
+    const packId = makePackId('00000000-0000-4000-8000-000000000303');
+    const unsafePackLicense = new License({
+      spdxId: 'UNKNOWN',
+      attribution: Option.some('Unknown upstream pack'),
+      sourceUrl: Option.none(),
+      notes: Option.none(),
+      redistributable: false,
+    });
+    const pack = {
+      id: packId,
+      name: 'Unsafe Pack',
+      license: unsafePackLicense,
+      assets: [],
+    };
+
+    expect(assetPackLicenseReadinessDiagnosticsForPurpose('authoring', projectId, pack)).toEqual(
+      [],
+    );
+    expect(assetPackLicenseReadinessDiagnosticsForPurpose('playtest', projectId, pack)).toEqual([]);
+    expect(assetPackLicenseReadinessDiagnosticsForPurpose('build', projectId, pack)).toHaveLength(
+      1,
+    );
+  });
+
   it('preserves visual block and TypeScript source deep links for behavior failures', () => {
     const behaviorId = makeBehaviorId('00000000-0000-4000-8000-000000000201');
     const nodeId = makeBehaviorNodeId('00000000-0000-4000-8000-000000000202');

@@ -11,6 +11,19 @@ import { useJobs, useReadiness } from '@/hooks/queries';
 import { requestBehaviorSourceNavigation } from '@/lib/behavior-source-navigation';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
+const assetLibrarySearchForPath = (
+  path: string | undefined,
+): { readonly packId?: string; readonly focus?: string } => {
+  if (path === undefined) {
+    return {};
+  }
+  const match = /^assetPacks\.([^.]+)(?:\.(?:assets\.[^.]+\.license|license))?$/.exec(path);
+  if (match?.[1] === undefined) {
+    return { focus: path };
+  }
+  return { packId: match[1], focus: path };
+};
+
 const diagnosticSurface: Record<ReadinessDiagnostic['severity'], string> = {
   error: 'border-destructive/30 bg-destructive/5',
   warning: 'border-warning/40 bg-warning/5',
@@ -84,6 +97,7 @@ export function ProblemsTab() {
         void navigate({
           to: '/projects/$projectId/assets',
           params: { projectId: target.projectId },
+          search: assetLibrarySearchForPath(target.path),
         });
         return;
       case 'player-model':
@@ -105,6 +119,13 @@ export function ProblemsTab() {
         void navigate({
           to: '/projects/$projectId/behaviors',
           params: { projectId: target.projectId },
+        });
+        return;
+      case 'game-shell':
+        void navigate({
+          to: '/projects/$projectId/game-shell',
+          params: { projectId: target.projectId },
+          search: target.path === undefined ? {} : { path: target.path },
         });
         return;
     }

@@ -12,7 +12,7 @@ import {
   usePanelRef,
 } from '@tileborne/ui';
 import { PanelBottomOpenIcon } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AppNotifications } from '@/components/app-notifications';
 import { AssetImportDialog } from '@/components/asset-import-dialog';
@@ -35,10 +35,33 @@ import { useReadinessProblemsOwner } from '@/hooks/use-readiness-problems-owner'
 const SIDEBAR_COLLAPSED_SIZE = '48px';
 const INSPECTOR_COLLAPSED_SIZE = '48px';
 
+type AppShellDebugEvent = {
+  readonly type: 'render' | 'mount' | 'unmount';
+  readonly at: number;
+  readonly projectId?: string;
+  readonly mapId?: string;
+  readonly locationHash: string;
+};
+
+let appShellInstanceSequence = 0;
+
+const appendAppShellDebugEvent = (event: AppShellDebugEvent) => {
+  const debugWindow = window as unknown as {
+    __tileborneAppShellDebug?: { events?: AppShellDebugEvent[] };
+  };
+  const debug = debugWindow.__tileborneAppShellDebug ?? { events: [] };
+  debug.events = [...(debug.events ?? []), event].slice(-200);
+  debugWindow.__tileborneAppShellDebug = debug;
+};
+
 export function AppShell() {
   useWorkspaceTabSync();
   useReadinessProblemsOwner();
   const { projectId, mapId } = useParams({ strict: false });
+  const [appShellInstanceId] = useState(() => {
+    appShellInstanceSequence += 1;
+    return appShellInstanceSequence;
+  });
   const bottomDrawerOpen = useEditorUiStore((s) => s.bottomDrawerOpen);
   const setBottomDrawerOpen = useEditorUiStore((s) => s.setBottomDrawerOpen);
   const sidebarCollapsed = useEditorUiStore((s) => s.sidebarCollapsed);
@@ -60,6 +83,35 @@ export function AppShell() {
 
   const sidebarPanelRef = usePanelRef();
   const inspectorPanelRef = usePanelRef();
+
+  useEffect(() => {
+    appendAppShellDebugEvent({
+      type: 'mount',
+      at: performance.now(),
+      ...(projectId === undefined ? {} : { projectId }),
+      ...(mapId === undefined ? {} : { mapId }),
+      locationHash: window.location.hash,
+    });
+    return () => {
+      appendAppShellDebugEvent({
+        type: 'unmount',
+        at: performance.now(),
+        ...(projectId === undefined ? {} : { projectId }),
+        ...(mapId === undefined ? {} : { mapId }),
+        locationHash: window.location.hash,
+      });
+    };
+  }, [appShellInstanceId]);
+
+  useEffect(() => {
+    appendAppShellDebugEvent({
+      type: 'render',
+      at: performance.now(),
+      ...(projectId === undefined ? {} : { projectId }),
+      ...(mapId === undefined ? {} : { mapId }),
+      locationHash: window.location.hash,
+    });
+  });
 
   useEffect(() => {
     const panel = sidebarPanelRef.current;

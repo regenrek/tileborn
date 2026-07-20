@@ -11,7 +11,7 @@ export class AssetPackManifestAsset extends Schema.Class<AssetPackManifestAsset>
   mime: Schema.String,
   size: Schema.Number,
   hash: ContentHash,
-  license: Schema.OptionFromUndefinedOr(License),
+  license: Schema.OptionFromOptional(License),
 }) {}
 
 export type Asset = AssetPackManifestAsset;
@@ -32,6 +32,8 @@ export interface AssetPackManifestJson {
     readonly spdxId: string;
     readonly attribution?: string;
     readonly sourceUrl?: string;
+    readonly sourcePath?: string;
+    readonly modifications?: string;
     readonly notes?: string;
     readonly redistributable: boolean;
   };
@@ -54,10 +56,17 @@ const optionProperty = <K extends string>(
     onSome: (inner) => ({ [key]: inner }) as Record<K, string>,
   });
 
+const optionalStringProperty = <K extends string>(
+  key: K,
+  value: string | undefined,
+): Partial<Record<K, string>> => (value === undefined ? {} : { [key]: value }) as Record<K, string>;
+
 const licenseToJson = (license: License): AssetPackManifestJson['license'] => ({
   spdxId: license.spdxId,
   ...optionProperty('attribution', license.attribution),
   ...optionProperty('sourceUrl', license.sourceUrl),
+  ...optionalStringProperty('sourcePath', license.sourcePath),
+  ...optionalStringProperty('modifications', license.modifications),
   ...optionProperty('notes', license.notes),
   redistributable: license.redistributable ?? false,
 });

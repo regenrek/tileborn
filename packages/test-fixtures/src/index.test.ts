@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -15,6 +17,60 @@ import {
   loadCreatorPerformanceContract,
   SAMPLE_ASSET_PACK_DIR,
 } from './index.js';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+
+const binaryExtensions = new Set([
+  '.flac',
+  '.icns',
+  '.ico',
+  '.jpg',
+  '.jpeg',
+  '.mp3',
+  '.ogg',
+  '.otf',
+  '.png',
+  '.svg',
+  '.ttf',
+  '.wav',
+  '.webp',
+  '.woff',
+  '.woff2',
+]);
+
+const SHIPPED_SAMPLE_BINARY_ROOTS = [
+  'apps/desktop/assets',
+  'apps/desktop/public/tileborn-app-icon.png',
+  'apps/desktop/src/smoke/fixtures/asset-pack',
+  'packages/plugin-battle-royale/assets/core',
+  'packages/test-fixtures/fixtures/asset-packs',
+  'packages/test-fixtures/fixtures/maps/tiled-image-collection',
+  'packages/test-fixtures/fixtures/tiled-sources/compat-hardening',
+] as const;
+
+const collectBinaryFiles = (root: string): readonly string[] => {
+  const absolute = path.join(repoRoot, root);
+  if (statSync(absolute).isFile()) {
+    return binaryExtensions.has(path.extname(root).toLowerCase()) ? [root] : [];
+  }
+  return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    const relative = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      return collectBinaryFiles(relative);
+    }
+    return binaryExtensions.has(path.extname(entry.name).toLowerCase()) ? [relative] : [];
+  });
+};
+
+const inventoryCoversPath = (inventory: string, relativePath: string): boolean => {
+  const normalized = relativePath.split(path.sep).join('/');
+  const segments = normalized.split('/');
+  const prefixes = segments.map((_segment, index) => `${segments.slice(0, index + 1).join('/')}/`);
+  return (
+    inventory.includes(`\`${normalized}\``) ||
+    prefixes.some((prefix) => inventory.includes(`\`${prefix}\``))
+  );
+};
 
 const mutableRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -53,6 +109,15 @@ describe('@tileborne/test-fixtures', () => {
     expect(getFixturePath('asset-packs', 'smoke-pack', 'tileborne-asset-pack.json')).toContain(
       'tileborne-asset-pack.json',
     );
+  });
+
+  it('inventories every shipped/sample binary asset root', () => {
+    const inventory = readFileSync(getFixturePath('ASSET_INVENTORY.md'), 'utf8');
+    const missing = SHIPPED_SAMPLE_BINARY_ROOTS.flatMap((root) => collectBinaryFiles(root)).filter(
+      (relativePath) => !inventoryCoversPath(inventory, relativePath),
+    );
+
+    expect(missing).toEqual([]);
   });
 
   it('lists and resolves the sample asset pack fixture', () => {

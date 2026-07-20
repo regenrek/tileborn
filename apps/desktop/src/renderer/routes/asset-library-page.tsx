@@ -1,5 +1,5 @@
-import { useParams } from '@tanstack/react-router';
-import { useMemo, useRef, useState } from 'react';
+import { useParams, useSearch } from '@tanstack/react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Kbd, cn, typography } from '@tileborne/ui';
 import { FilmIcon, ImportIcon, SearchIcon } from 'lucide-react';
 
@@ -16,6 +16,10 @@ import { useEditorUiStore } from '@/stores/editor-ui-store';
 
 export function AssetLibraryPage() {
   useParams({ from: '/editor/projects/$projectId/assets' });
+  const search = useSearch({ from: '/editor/projects/$projectId/assets' }) as {
+    readonly packId?: string;
+    readonly focus?: string;
+  };
   const assetPacksQuery = useAssetPacks();
   const activePalettePackId = useEditorUiStore((state) => state.activePalettePackId);
   const setAssetImportDialogOpen = useEditorUiStore((state) => state.setAssetImportDialogOpen);
@@ -29,6 +33,12 @@ export function AssetLibraryPage() {
 
   const packs = assetPacksQuery.data?.packs ?? [];
   const importPending = false;
+
+  useEffect(() => {
+    if (search.packId !== undefined && search.packId.length > 0) {
+      setSelectedPackId(search.packId);
+    }
+  }, [search.packId]);
 
   const filteredPacks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -164,14 +174,20 @@ export function AssetLibraryPage() {
 
         {selectedId && packs.length > 0 ? (
           <aside className="hidden w-72 shrink-0 lg:block">
-            <AssetPackDetailsPane packId={selectedId} />
+            <AssetPackDetailsPane
+              packId={selectedId}
+              focusPath={selectedId === search.packId ? search.focus : undefined}
+            />
           </aside>
         ) : null}
       </div>
 
       {selectedId && packs.length > 0 ? (
         <div className="lg:hidden">
-          <AssetPackDetailsPane packId={selectedId} />
+          <AssetPackDetailsPane
+            packId={selectedId}
+            focusPath={selectedId === search.packId ? search.focus : undefined}
+          />
         </div>
       ) : null}
     </CloseableWorkspacePage>

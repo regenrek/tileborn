@@ -13,12 +13,14 @@ import {
   type PluginHostApi,
   type RuntimeMessage,
 } from '@tileborne/runtime/worker';
+import { buildRuntimeGameShellProjection, defaultProjectGameShellState } from '@tileborne/runtime';
 
 import {
-  bundledPlugin,
   createBundledPluginLoader,
-  createBundledPluginProtocolBridge,
+  defaultBundledPluginRuntimeRegistration,
+  resolveBundledRuntimePluginId,
   type BundledPluginProtocolBridge,
+  type BundledPluginRuntimeRegistration,
   type BundledRuntimeInput,
 } from '../bundled-plugin-loader.js';
 import {
@@ -63,6 +65,8 @@ import {
   resolveRoomReadyGate,
   resolveRoomReconnectEligibility,
   setRoomPlayerReady,
+  startRoomFromOwner,
+  stopRoomFromOwner,
   shouldHydrateRuntime,
   validateRoomOptions,
 } from './room-lifecycle.js';
@@ -83,21 +87,21 @@ import {
   applySnapshotAck,
   compareQueuedInputs,
   createRoomSocketRecord,
-  decodeSnapshotAckFrame,
   decideSnapshotOutbound,
-  encodeTransportErrorFrame,
   recordOutboundDropped,
   recordSnapshotProduced,
   recordSnapshotResyncSent,
   recordSnapshotSent,
-  snapshotTickFromServerFrame,
   socketBufferedAmount,
   toClientTransportStats,
   type ClientTransportStats,
   type QueuedInput,
   type RoomSocketRecord,
+  decodeRoomShellClientFrame,
+  encodeRoomShellNavigationServerFrame,
 } from './room-transport.js';
 import type { JsonObject } from '@tileborne/core';
+import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 
 export interface RoomCreateOptions {
   readonly mapId: string;
@@ -105,6 +109,7 @@ export interface RoomCreateOptions {
   readonly options?: Record<string, string | number | boolean | null>;
   /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
   readonly mapPackage?: JsonObject;
+  readonly shellProjection?: RuntimeGameShellProjection;
   readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly idempotencyKey?: string;
 }
@@ -116,7 +121,9 @@ export interface PlaytestRoomDeps {
   readonly createBehaviorRuntime?: (input: {
     readonly mapPackage?: JsonObject;
     readonly seed?: string | number;
+    readonly shellProjection?: RuntimeGameShellProjection | undefined;
   }) => AuthoritativeBehaviorRuntimeClient;
+  readonly pluginRegistrations?: readonly BundledPluginRuntimeRegistration[];
 }
 
 interface RoomSocketAttachment {
@@ -158,6 +165,14 @@ interface RoomReadyPayload {
   readonly ready: boolean;
 }
 
+interface RoomOwnerActionRequest {
+  readonly playerId?: unknown;
+}
+
+interface RoomOwnerActionPayload {
+  readonly playerId: string;
+}
+
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -165,6 +180,8 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 };
 
 const defaultSeed = (): string | number => crypto.randomUUID();
+const defaultShellProjection = (): RuntimeGameShellProjection =>
+  buildRuntimeGameShellProjection(defaultProjectGameShellState('tileborne.battle-royale'));
 
 export { MAX_QUEUED_INPUTS_PER_PLAYER } from './room-transport.js';
 
@@ -259,6 +276,19 @@ const parseRoomReadyBody = async (request: Request): Promise<RoomReadyPayload> =
   };
 };
 
+const parseRoomOwnerActionBody = async (request: Request): Promise<RoomOwnerActionPayload> => {
+  let body: RoomOwnerActionRequest;
+  try {
+    body = (await request.json()) as RoomOwnerActionRequest;
+  } catch {
+    throw new Error('owner action body must be valid JSON');
+  }
+  if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+    throw new Error('playerId is required');
+  }
+  return { playerId: body.playerId };
+};
+
 const websocketUpgradeResponse = (client: WebSocket): Response => {
   try {
     return new Response(null, { status: 101, webSocket: client });
@@ -277,7 +307,7 @@ export class PlaytestRoom implements DurableObject {
   private readonly inputByPlayerId = new Map<string, BundledRuntimeInput>();
   private readonly pluginMessages: RuntimeMessage[] = [];
   private readonly pluginBinaryFrames: Uint8Array[] = [];
-  private readonly protocolBridge: BundledPluginProtocolBridge;
+  private protocolBridge: BundledPluginProtocolBridge | null = null;
   private pendingMatchEnd: { readonly winnerPlayerId: string } | null = null;
   private latestReplayFrames: readonly Uint8Array[] = [];
   private nextInputOrder = 0;
@@ -291,7 +321,6 @@ export class PlaytestRoom implements DurableObject {
     deps: PlaytestRoomDeps = {},
   ) {
     this.deps = deps;
-    this.protocolBridge = createBundledPluginProtocolBridge();
     void this.hydrateFromStorage();
   }
 
@@ -312,6 +341,7 @@ export class PlaytestRoom implements DurableObject {
     if (stored.schemaVersion !== this.storageData.schemaVersion) {
       await this.state.storage.put(STORAGE_KEY, this.storageData);
     }
+    this.protocolBridge = this.runtimeRegistrationForStorage(this.storageData).protocolBridge;
     if (shouldHydrateRuntime(this.storageData)) {
       await this.ensureRuntime();
       await this.scheduleNextAlarm();
@@ -350,11 +380,33 @@ export class PlaytestRoom implements DurableObject {
     copy.set(frame);
     this.pluginBinaryFrames.push(copy);
     if (this.pendingMatchEnd === null && this.storageData?.lifecycle.phase === 'active') {
-      const lifecycleFrame = this.protocolBridge.decodeServerLifecycleFrame(copy);
+      const lifecycleFrame = this.protocolBridge?.decodeServerLifecycleFrame(copy);
       if (lifecycleFrame?.kind === 'game-over') {
         this.pendingMatchEnd = { winnerPlayerId: lifecycleFrame.winnerPlayerId };
       }
     }
+  }
+
+  private runtimeRegistrations(): readonly BundledPluginRuntimeRegistration[] {
+    const registrations = [
+      defaultBundledPluginRuntimeRegistration,
+      ...(this.deps.pluginRegistrations ?? []),
+    ];
+    return registrations.filter(
+      (registration, index) =>
+        registrations.findIndex((candidate) => candidate.id === registration.id) === index,
+    );
+  }
+
+  private runtimeRegistrationForStorage(
+    storage: RoomStorage | null,
+  ): BundledPluginRuntimeRegistration {
+    const pluginId = resolveBundledRuntimePluginId(storage?.mapPackage);
+    const registration = this.runtimeRegistrations().find((candidate) => candidate.id === pluginId);
+    if (registration === undefined) {
+      throw new RoomLifecycleRejectedError(`no bundled runtime plugin for ${pluginId}`, 400);
+    }
+    return registration;
   }
 
   private setReplayFrames(frames: readonly Uint8Array[]): void {
@@ -458,6 +510,33 @@ export class PlaytestRoom implements DurableObject {
     return result;
   }
 
+  private async startFromOwner(input: RoomOwnerActionPayload): Promise<{
+    readonly storage: RoomStorage;
+    readonly readyGate: ReturnType<typeof resolveRoomReadyGate>;
+  }> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    const result = startRoomFromOwner(storage, input.playerId, this.nowIso());
+    await this.writeStorage(result.storage);
+    await this.ensureRuntime();
+    await this.scheduleNextAlarm();
+    return result;
+  }
+
+  private async stopFromOwner(input: RoomOwnerActionPayload): Promise<RoomStorage> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    const next = stopRoomFromOwner(storage, input.playerId, this.nowIso());
+    await this.writeStorage(next);
+    await this.stopRuntimeOnly();
+    await this.state.storage.deleteAlarm();
+    return next;
+  }
+
   private async validateReconnect(playerId: string): Promise<RoomStorage> {
     const storage = await this.readStorage();
     if (!storage) {
@@ -479,6 +558,9 @@ export class PlaytestRoom implements DurableObject {
     }
     const usingCustomPluginHost = this.deps.createPluginHost !== undefined;
     const storage = await this.readStorage();
+    const pluginId = resolveBundledRuntimePluginId(storage?.mapPackage);
+    const registration = this.runtimeRegistrationForStorage(storage);
+    this.protocolBridge = registration.protocolBridge;
     const pluginHost =
       this.deps.createPluginHost?.((message) => this.emitPluginMessage(message)) ??
       makePluginHost({
@@ -494,6 +576,7 @@ export class PlaytestRoom implements DurableObject {
             : {
                 getPlayerModelSelections: () => storage.playerModelSelections ?? [],
               }),
+          pluginRegistrations: this.runtimeRegistrations(),
         }),
       });
     const runtime = this.deps.createRuntime?.() ?? makeGameRuntime();
@@ -504,7 +587,7 @@ export class PlaytestRoom implements DurableObject {
       }),
     );
     if (!usingCustomPluginHost) {
-      await Effect.runPromise(pluginHost.loadAndRegister(bundledPlugin.id));
+      await Effect.runPromise(pluginHost.loadAndRegister(pluginId));
       await Effect.runPromise(pluginHost.dispatchInit());
     }
     this.legacyEnvelopeEnabled = usingCustomPluginHost;
@@ -513,11 +596,13 @@ export class PlaytestRoom implements DurableObject {
       this.deps.createBehaviorRuntime?.({
         ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
         ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+        shellProjection: storage?.shellProjection ?? defaultShellProjection(),
       }) ??
       createWorkerdBehaviorRuntimeClient({
         ...(this.env.BEHAVIOR_RUNTIME === undefined ? {} : { binding: this.env.BEHAVIOR_RUNTIME }),
         ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
         ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+        shellProjection: storage?.shellProjection ?? defaultShellProjection(),
       });
     this.runtime = runtime;
     this.pluginHost = pluginHost;
@@ -584,7 +669,9 @@ export class PlaytestRoom implements DurableObject {
       this.nowIso(),
       opts.mapPackage,
       opts.playerModelSelections,
+      opts.shellProjection,
     );
+    this.protocolBridge = this.runtimeRegistrationForStorage(created).protocolBridge;
     await this.writeStorage(created);
     return created;
   }
@@ -732,7 +819,7 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private sendSnapshotFrameToRecord(record: RoomSocketRecord, frame: Uint8Array): void {
-    const tick = snapshotTickFromServerFrame(frame);
+    const tick = this.protocolBridge?.snapshotTickFromServerFrame(frame);
     if (tick === undefined) {
       this.sendBinaryFrameToSocket(record.socket, frame);
       return;
@@ -763,7 +850,7 @@ export class PlaytestRoom implements DurableObject {
 
   private sendReplayFramesToSocket(record: RoomSocketRecord, markAsResync = false): void {
     for (const frame of this.latestReplayFrames) {
-      const tick = snapshotTickFromServerFrame(frame);
+      const tick = this.protocolBridge?.snapshotTickFromServerFrame(frame);
       if (tick !== undefined) {
         if (markAsResync) {
           recordSnapshotResyncSent(record, tick);
@@ -942,6 +1029,27 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
+  private broadcastShellNavigationRequests(
+    epoch: string,
+    startSequence: number,
+    requests: readonly { readonly type: 'navigate'; readonly targetScreenId: string }[],
+  ): void {
+    if (requests.length === 0) {
+      return;
+    }
+    const records = [...this.socketByPlayerId.values()].filter(
+      (record) => record.socket.readyState === WebSocket.OPEN,
+    );
+    let sequence = startSequence;
+    for (const request of requests) {
+      const frame = encodeRoomShellNavigationServerFrame(epoch, sequence, request);
+      sequence += 1;
+      for (const record of records) {
+        record.socket.send(frame);
+      }
+    }
+  }
+
   private async runSimulationTick(): Promise<boolean> {
     const storage = await this.readStorage();
     if (!storage || !this.runtime || storage.lifecycle.phase !== 'active') {
@@ -954,6 +1062,9 @@ export class PlaytestRoom implements DurableObject {
     } finally {
       this.inputByPlayerId.clear();
     }
+    const shellNavigationRequests = this.behaviorRuntime?.shellNavigationRequests ?? [];
+    const shellNavigationEpoch = storage.shellNavigationEpoch ?? storage.createdAt;
+    const shellNavigationStartSequence = storage.nextShellNavigationSequence ?? 0;
     const tick = storage.tick + 1;
     const baseTick = tick % PERSIST_EVERY_N_TICKS === 0 ? tick : storage.baseTick;
     const diff = this.buildSnapshotDiff(tick, Object.keys(storage.players).length);
@@ -963,6 +1074,8 @@ export class PlaytestRoom implements DurableObject {
       tick,
       baseTick,
       lastTickAt: this.nowIso(),
+      shellNavigationEpoch,
+      nextShellNavigationSequence: shellNavigationStartSequence + shellNavigationRequests.length,
       simState: {
         ...storage.simState,
         lastTick: tick,
@@ -1007,6 +1120,11 @@ export class PlaytestRoom implements DurableObject {
       }
     }
     this.broadcastPluginFrames();
+    this.broadcastShellNavigationRequests(
+      shellNavigationEpoch,
+      shellNavigationStartSequence,
+      shellNavigationRequests,
+    );
     if (this.pluginHost && this.legacyEnvelopeEnabled) {
       for (const message of this.pluginMessages.splice(0)) {
         this.broadcast(message);
@@ -1098,6 +1216,7 @@ export class PlaytestRoom implements DurableObject {
         ...(init.seed === undefined ? {} : { seed: init.seed }),
         ...(init.options === undefined ? {} : { options: init.options }),
         ...(init.mapPackage === undefined ? {} : { mapPackage: init.mapPackage }),
+        ...(init.shellProjection === undefined ? {} : { shellProjection: init.shellProjection }),
         ...(init.playerModelSelections === undefined
           ? {}
           : { playerModelSelections: init.playerModelSelections }),
@@ -1164,6 +1283,65 @@ export class PlaytestRoom implements DurableObject {
           return Response.json({ error: error.message }, { status: error.httpStatus });
         }
         return Response.json({ error: 'failed to update ready state' }, { status: 500 });
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/lobby/start') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let input: RoomOwnerActionPayload;
+      try {
+        input = await parseRoomOwnerActionBody(request);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid start request' },
+          { status: 400 },
+        );
+      }
+      try {
+        const result = await this.startFromOwner(input);
+        const roomId = url.searchParams.get('roomId') ?? 'local';
+        return Response.json({
+          lobby: this.buildLobbySummary(roomId, result.storage),
+          started: result.storage.lifecycle.phase === 'active',
+          ...(result.readyGate.reason === undefined ? {} : { reason: result.readyGate.reason }),
+        });
+      } catch (error) {
+        if (error instanceof RoomLifecycleRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to start room' }, { status: 500 });
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/room/stop') {
+      if (!isHandoffSigningKeyValid(this.env)) {
+        return Response.json({ error: 'room unavailable' }, { status: 503 });
+      }
+      let input: RoomOwnerActionPayload;
+      try {
+        input = await parseRoomOwnerActionBody(request);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'invalid stop request' },
+          { status: 400 },
+        );
+      }
+      try {
+        const storage = await this.stopFromOwner(input);
+        const roomId = url.searchParams.get('roomId') ?? 'local';
+        return Response.json({
+          roomId,
+          stopped: storage.lifecycle.phase === 'finished',
+          lobby: this.buildLobbySummary(roomId, storage),
+          results: storage.results,
+        });
+      } catch (error) {
+        if (error instanceof RoomLifecycleRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to stop room' }, { status: 500 });
       }
     }
 
@@ -1258,6 +1436,41 @@ export class PlaytestRoom implements DurableObject {
       return Response.json({ roomId, results: storage.results });
     }
 
+    if (request.method === 'GET' && url.pathname === '/diagnostics') {
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const roomId = url.searchParams.get('roomId') ?? 'unknown';
+      const lobby = this.buildLobbySummary(roomId, storage);
+      return Response.json({
+        diagnostics: {
+          roomId,
+          phase: storage.lifecycle.phase,
+          ...(storage.lobby.createdByPlayerId === undefined
+            ? {}
+            : { ownerPlayerId: storage.lobby.createdByPlayerId }),
+          playerCount: lobby.playerCount,
+          readyPlayerCount: lobby.players.filter((player) => player.ready).length,
+          connectedPlayerCount: lobby.players.filter((player) => player.status === 'connected')
+            .length,
+          reconnectEligiblePlayerCount: lobby.players.filter((player) => player.reconnectEligible)
+            .length,
+          generatedAt: this.nowIso(),
+          issues: lobby.lobby.createdByPlayerId === undefined ? ['missing owner'] : [],
+        },
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/metrics') {
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      const roomId = url.searchParams.get('roomId') ?? 'unknown';
+      return Response.json({ roomId, metrics: this.buildSessionMetrics(storage) });
+    }
+
     if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       if (!isHandoffSigningKeyValid(this.env)) {
         return new Response('room unavailable', { status: 503 });
@@ -1332,10 +1545,19 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     if (typeof message === 'string') {
+      const frame = decodeRoomShellClientFrame(message);
+      if (frame !== undefined) {
+        await this.touchHeartbeat(playerId);
+        this.behaviorRuntime?.emitShellEvent(frame.payload);
+      }
       return;
     }
     const bytes = new Uint8Array(message);
-    const ack = decodeSnapshotAckFrame(bytes);
+    const storage = await this.readStorage();
+    const protocolBridge =
+      this.protocolBridge ?? this.runtimeRegistrationForStorage(storage).protocolBridge;
+    this.protocolBridge = protocolBridge;
+    const ack = protocolBridge.decodeSnapshotAckFrame(bytes);
     if (ack !== undefined) {
       await this.touchHeartbeat(playerId);
       const result = applySnapshotAck(current, ack, this.nowMs());
@@ -1344,7 +1566,7 @@ export class PlaytestRoom implements DurableObject {
       }
       this.sendBinaryFrameToSocket(
         ws,
-        encodeTransportErrorFrame(
+        protocolBridge.encodeTransportErrorFrame(
           'stale_snapshot_ack',
           result.kind === 'future'
             ? 'snapshot ack is ahead of sent state'
@@ -1356,7 +1578,7 @@ export class PlaytestRoom implements DurableObject {
       }
       return;
     }
-    const decoded = this.protocolBridge.decodeClientFrame(bytes);
+    const decoded = protocolBridge.decodeClientFrame(bytes);
     if (decoded.kind === 'rejected') {
       this.sendBinaryFrameToSocket(ws, decoded.frame);
       ws.close(decoded.closeCode, decoded.closeReason);
@@ -1367,7 +1589,6 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     if (decoded.frame.kind === 'input') {
-      const storage = await this.readStorage();
       if (
         storage === null ||
         storage.lifecycle.phase === 'finished' ||

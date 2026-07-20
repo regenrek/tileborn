@@ -1,109 +1,56 @@
-import type { JsonObject } from '@tileborne/core';
+import type {
+  MultiplayerGameShellProjection as GameShellProjection,
+  MultiplayerLobbyCreateRequest as LobbyCreateRequest,
+  MultiplayerLobbyCreateResponse as LobbyCreateResponse,
+  MultiplayerLobbyJoinRequest as LobbyJoinRequest,
+  MultiplayerLobbyJoinResponse as LobbyJoinResponse,
+  MultiplayerLobbyStartRequest as LobbyStartRequest,
+  MultiplayerLobbyStartResponse as LobbyStartResponse,
+  MultiplayerLobbyReadyRequest as LobbyReadyRequest,
+  MultiplayerLobbyReadyResponse as LobbyReadyResponse,
+  MultiplayerRoomDiagnosticsResponse as RoomDiagnosticsResponse,
+  MultiplayerRoomLifecyclePhase as RoomLifecyclePhase,
+  MultiplayerRoomLobbyState as RoomLobbyState,
+  MultiplayerRoomLobbySummary as RoomLobbySummary,
+  MultiplayerRoomLobbyVisibility as RoomLobbyVisibility,
+  MultiplayerRoomMetricsResponse as RoomMetricsResponse,
+  MultiplayerRoomPlayerRole as RoomPlayerRole,
+  MultiplayerRoomPlayerModelSelection as RoomPlayerModelSelection,
+  MultiplayerRoomPlayerPresenceStatus as RoomPlayerPresenceStatus,
+  MultiplayerRoomPresenceProjection as RoomPresenceProjection,
+  MultiplayerRoomReconnectRequest as RoomReconnectRequest,
+  MultiplayerRoomReconnectResponse as RoomReconnectResponse,
+  MultiplayerRoomResultsResponse as RoomResultsResponse,
+  MultiplayerRoomStopRequest as RoomStopRequest,
+  MultiplayerRoomStopResponse as RoomStopResponse,
+} from '@tileborne/ipc-contracts/contracts/multiplayer';
 
-export type RoomLifecyclePhase = 'lobby' | 'countdown' | 'active' | 'finished' | 'archived';
-export type RoomLobbyVisibility = 'private' | 'public';
-export type RoomPlayerPresenceStatus = 'connected' | 'disconnected';
-
-export interface RoomPlayerModelSelection {
-  readonly playerId: string;
-  readonly modelId: string;
-}
-
-export interface RoomLobbyState {
-  readonly visibility: RoomLobbyVisibility;
-  readonly joinCode?: string;
-  readonly title?: string;
-  readonly createdByPlayerId?: string;
-}
-
-export interface RoomPresenceProjection {
-  readonly playerId: string;
-  readonly status: RoomPlayerPresenceStatus;
-  readonly ready: boolean;
-  readonly reconnectEligible: boolean;
-  readonly lastSeenAt: string | null;
-  readonly displayName?: string;
-  readonly connectedAt?: string;
-  readonly disconnectedAt?: string;
-}
-
-export interface RoomLobbySummary {
-  readonly roomId: string;
-  readonly mapId: string;
-  readonly phase: RoomLifecyclePhase;
-  readonly lobby: RoomLobbyState;
-  readonly playerCount: number;
-  readonly maxPlayers: number;
-  readonly minReadyPlayers: number;
-  readonly canStart: boolean;
-  readonly players: readonly RoomPresenceProjection[];
-}
-
-export interface LobbyCreateRequest {
-  readonly mapId: string;
-  readonly seed?: string | number;
-  readonly options?: Record<string, string | number | boolean | null>;
-  readonly mapPackage?: JsonObject;
-  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
-  readonly displayName?: string;
-  readonly visibility?: RoomLobbyVisibility;
-  readonly reserveCreator?: boolean;
-  readonly playerId?: string;
-  readonly playerDisplayName?: string;
-}
-
-export interface LobbyCreateResponse {
-  readonly roomId: string;
-  readonly wsUrl: string;
-  readonly joinCode: string;
-  readonly joinUrl: string;
-  readonly playerId?: string;
-  readonly handoffToken?: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
-
-export interface LobbyJoinRequest {
-  readonly joinCode: string;
-  readonly displayName?: string;
-  readonly playerId?: string;
-}
-
-export interface LobbyJoinResponse {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly wsUrl: string;
-  readonly handoffToken: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
-
-export interface LobbyReadyRequest {
-  readonly playerId: string;
-  readonly ready: boolean;
-  readonly reconnectToken?: string;
-}
-
-export interface LobbyReadyResponse {
-  readonly lobby: RoomLobbySummary;
-  readonly canStart: boolean;
-  readonly reason?: string;
-}
-
-export interface RoomReconnectRequest {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly reconnectToken: string;
-}
-
-export interface RoomReconnectResponse {
-  readonly roomId: string;
-  readonly playerId: string;
-  readonly wsUrl: string;
-  readonly handoffToken: string;
-  readonly reconnectToken?: string;
-  readonly lobby: RoomLobbySummary;
-}
+export type {
+  GameShellProjection,
+  LobbyCreateRequest,
+  LobbyCreateResponse,
+  LobbyJoinRequest,
+  LobbyJoinResponse,
+  LobbyStartRequest,
+  LobbyStartResponse,
+  LobbyReadyRequest,
+  LobbyReadyResponse,
+  RoomDiagnosticsResponse,
+  RoomLifecyclePhase,
+  RoomLobbyState,
+  RoomLobbySummary,
+  RoomLobbyVisibility,
+  RoomMetricsResponse,
+  RoomPlayerRole,
+  RoomPlayerModelSelection,
+  RoomPlayerPresenceStatus,
+  RoomPresenceProjection,
+  RoomReconnectRequest,
+  RoomReconnectResponse,
+  RoomResultsResponse,
+  RoomStopRequest,
+  RoomStopResponse,
+};
 
 export type LobbyFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -118,7 +65,12 @@ export interface GameHostLobbyClient {
   readonly getLobbyByCode: (joinCode: string) => Promise<RoomLobbySummary>;
   readonly getLobby: (roomId: string) => Promise<RoomLobbySummary>;
   readonly setReady: (roomId: string, request: LobbyReadyRequest) => Promise<LobbyReadyResponse>;
+  readonly start: (roomId: string, request: LobbyStartRequest) => Promise<LobbyStartResponse>;
+  readonly stop: (roomId: string, request: RoomStopRequest) => Promise<RoomStopResponse>;
   readonly reconnect: (request: RoomReconnectRequest) => Promise<RoomReconnectResponse>;
+  readonly getResults: (roomId: string) => Promise<RoomResultsResponse>;
+  readonly getDiagnostics: (roomId: string) => Promise<RoomDiagnosticsResponse>;
+  readonly getMetrics: (roomId: string) => Promise<RoomMetricsResponse>;
 }
 
 export class LobbyClientError extends Error {
@@ -222,6 +174,20 @@ export const createGameHostLobbyClient = (
         `/lobbies/${encodeURIComponent(roomId)}/ready`,
         jsonPost(request),
       ),
+    start: (roomId, request) =>
+      requestJson<LobbyStartResponse>(
+        fetchImpl,
+        baseUrl,
+        `/lobbies/${encodeURIComponent(roomId)}/start`,
+        jsonPost(request),
+      ),
+    stop: (roomId, request) =>
+      requestJson<RoomStopResponse>(
+        fetchImpl,
+        baseUrl,
+        `/rooms/${encodeURIComponent(roomId)}/stop`,
+        jsonPost(request),
+      ),
     reconnect: async (request) =>
       normalizeReconnectResponse(
         await requestJson<RoomReconnectResponse>(
@@ -230,6 +196,24 @@ export const createGameHostLobbyClient = (
           '/rooms/reconnect',
           jsonPost(request),
         ),
+      ),
+    getResults: (roomId) =>
+      requestJson<RoomResultsResponse>(
+        fetchImpl,
+        baseUrl,
+        `/rooms/${encodeURIComponent(roomId)}/results`,
+      ),
+    getDiagnostics: (roomId) =>
+      requestJson<RoomDiagnosticsResponse>(
+        fetchImpl,
+        baseUrl,
+        `/rooms/${encodeURIComponent(roomId)}/diagnostics`,
+      ),
+    getMetrics: (roomId) =>
+      requestJson<RoomMetricsResponse>(
+        fetchImpl,
+        baseUrl,
+        `/rooms/${encodeURIComponent(roomId)}/metrics`,
       ),
   };
 };

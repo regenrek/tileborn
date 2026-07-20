@@ -9,7 +9,15 @@ import {
 } from '../errors.js';
 import { extensionOf, isAllowedExtensionForMime } from './extension-allowlist.js';
 import { isAllowedMimeType } from './mime-allowlist.js';
-import { hasExpectedMagicBytes, isJpeg, isOgg, isPng, isWav, isWebp } from './magic-bytes.js';
+import {
+  hasExpectedMagicBytes,
+  isJpeg,
+  isOgg,
+  isPng,
+  isWav,
+  isWebp,
+  isWoff2,
+} from './magic-bytes.js';
 import { MAX_ASSET_BYTES } from './size-limits.js';
 import {
   AssetPathSecurityError,
@@ -28,12 +36,15 @@ const ogg = new Uint8Array([0x4f, 0x67, 0x67, 0x53]);
 const wav = new Uint8Array([
   0x52, 0x49, 0x46, 0x46, 0x01, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
 ]);
+const woff2 = new Uint8Array([0x77, 0x4f, 0x46, 0x32, 0, 1, 2, 3]);
 
 describe('asset security allowlists', () => {
   it('accepts known MIME types and matching extensions', () => {
     expect(isAllowedMimeType('image/png')).toBe(true);
     expect(isAllowedMimeType('audio/ogg')).toBe(true);
+    expect(isAllowedMimeType('font/woff2')).toBe(true);
     expect(isAllowedExtensionForMime('tiles/terrain.png', 'image/png')).toBe(true);
+    expect(isAllowedExtensionForMime('fonts/menu.woff2', 'font/woff2')).toBe(true);
     expect(extensionOf('terrain.PNG')).toBe('.png');
   });
 
@@ -81,13 +92,16 @@ describe('magic byte checks', () => {
     expect(isJpeg(jpeg)).toBe(true);
     expect(isOgg(ogg)).toBe(true);
     expect(isWav(wav)).toBe(true);
+    expect(isWoff2(woff2)).toBe(true);
   });
 
   it('rejects truncated or wrong signatures', () => {
     expect(isPng(png.slice(0, 4))).toBe(false);
     expect(isWebp(new Uint8Array([0x52, 0x49, 0x46, 0x46]))).toBe(false);
     expect(isJpeg(new Uint8Array([0xff, 0x00, 0xff]))).toBe(false);
+    expect(isWoff2(new Uint8Array([0x00, 0x4f, 0x46, 0x32]))).toBe(false);
     expect(hasExpectedMagicBytes('audio/ogg', wav)).toBe(false);
+    expect(hasExpectedMagicBytes('font/woff2', new Uint8Array([1, 2, 3, 4]))).toBe(false);
   });
 
   it('combines MIME, extension, size, and magic checks', () => {
@@ -106,6 +120,29 @@ describe('magic byte checks', () => {
     expect(Result.isFailure(bad)).toBe(true);
     if (Result.isFailure(bad)) {
       expect(bad.failure).toBeInstanceOf(AssetMagicByteMismatchError);
+    }
+  });
+
+  it('allows woff2 fonts with the fixed signature', () => {
+    const result = validateAssetCandidate({
+      mime: 'font/woff2',
+      filename: 'fonts/menu.woff2',
+      bytes: woff2,
+    });
+
+    expect(Result.isSuccess(result)).toBe(true);
+  });
+
+  it('rejects arbitrary bytes with a woff2 extension', () => {
+    const result = validateAssetCandidate({
+      mime: 'font/woff2',
+      filename: 'fonts/menu.woff2',
+      bytes: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
+    });
+
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) {
+      expect(result.failure).toBeInstanceOf(AssetMagicByteMismatchError);
     }
   });
 });

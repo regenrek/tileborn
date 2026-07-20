@@ -40,6 +40,7 @@ export type WorkspaceTabKind =
   | 'player-model-editor'
   | 'entity-editor'
   | 'game-content'
+  | 'game-shell'
   | 'behaviors';
 
 export interface WorkspaceTab {
@@ -58,6 +59,7 @@ const CURRENT_WORKSPACE_TAB_KINDS = new Set<WorkspaceTabKind>([
   'player-model-editor',
   'entity-editor',
   'game-content',
+  'game-shell',
   'behaviors',
 ]);
 
@@ -99,6 +101,8 @@ export function workspaceTabId(tab: {
       return `entity-editor:${tab.projectId ?? ''}`;
     case 'game-content':
       return `game-content:${tab.projectId ?? ''}`;
+    case 'game-shell':
+      return `game-shell:${tab.projectId ?? ''}`;
     case 'behaviors':
       return `behaviors:${tab.projectId ?? ''}`;
   }
@@ -129,6 +133,7 @@ export function normalizeWorkspaceTabs(tabs: readonly unknown[]): WorkspaceTab[]
         kind === 'player-model-editor' ||
         kind === 'entity-editor' ||
         kind === 'game-content' ||
+        kind === 'game-shell' ||
         kind === 'behaviors') &&
       !projectId
     ) {

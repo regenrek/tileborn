@@ -59,8 +59,16 @@
           "description": "Playable arena with spawn points, zone anchors, and loot."
         },
         "checklistFacts": [
-          { "id": "playable-map", "label": "Playable map", "sources": ["map", "game-mode"] },
-          { "id": "gameplay-catalog", "label": "Gameplay catalog", "sources": ["catalog"] },
+          {
+            "id": "playable-map",
+            "label": "Playable map",
+            "sources": ["map", "game-mode"]
+          },
+          {
+            "id": "gameplay-catalog",
+            "label": "Gameplay catalog",
+            "sources": ["catalog"]
+          },
           {
             "id": "player-visuals",
             "label": "Player visuals",
@@ -85,7 +93,12 @@
         "capability": "battle-royale.match",
         "icon": "skull",
         "inputs": [
-          { "key": "player", "label": "Player", "valueKind": "entity-reference", "required": false }
+          {
+            "key": "player",
+            "label": "Player",
+            "valueKind": "entity-reference",
+            "required": false
+          }
         ],
         "outputs": []
       },
@@ -135,9 +148,24 @@
         "category": "Battle Royale",
         "icon": "trophy",
         "requiredCapabilities": ["battle-royale.match", "battle-royale.loot"],
-        "when": { "entryId": "battle-royale.player-eliminated", "arguments": {} },
-        "if": [{ "entryId": "battle-royale.alive-count-at-most", "arguments": { "count": 1 } }],
-        "do": [{ "entryId": "battle-royale.spawn-loot", "arguments": {} }]
+        "when": {
+          "entryId": "battle-royale.player-eliminated",
+          "arguments": {}
+        },
+        "if": [
+          {
+            "entryId": "battle-royale.alive-count-at-most",
+            "arguments": {
+              "count": 1
+            }
+          }
+        ],
+        "do": [
+          {
+            "entryId": "battle-royale.spawn-loot",
+            "arguments": {}
+          }
+        ]
       }
     ],
     "panels": [
@@ -202,11 +230,41 @@
             "scope": "map",
             "invalidMessage": "Battle Royale settings must be positive numbers.",
             "fields": [
-              { "key": "maxPlayers", "label": "Max players", "min": 1, "step": 1, "default": 32 },
-              { "key": "waitSec", "label": "Zone wait", "min": 1, "step": 1, "default": 60 },
-              { "key": "shrinkSec", "label": "Shrink time", "min": 1, "step": 1, "default": 30 },
-              { "key": "holdSec", "label": "Hold time", "min": 1, "step": 1, "default": 30 },
-              { "key": "shrinkPhases", "label": "Phases", "min": 1, "step": 1, "default": 3 },
+              {
+                "key": "maxPlayers",
+                "label": "Max players",
+                "min": 1,
+                "step": 1,
+                "default": 32
+              },
+              {
+                "key": "waitSec",
+                "label": "Zone wait",
+                "min": 1,
+                "step": 1,
+                "default": 60
+              },
+              {
+                "key": "shrinkSec",
+                "label": "Shrink time",
+                "min": 1,
+                "step": 1,
+                "default": 30
+              },
+              {
+                "key": "holdSec",
+                "label": "Hold time",
+                "min": 1,
+                "step": 1,
+                "default": 30
+              },
+              {
+                "key": "shrinkPhases",
+                "label": "Phases",
+                "min": 1,
+                "step": 1,
+                "default": 3
+              },
               {
                 "key": "damagePerSecOutside",
                 "label": "Zone DPS",
@@ -364,12 +422,176 @@
                   "speed": 20,
                   "ttlTicks": 40,
                   "radius": 16,
-                  "falloff": { "_tag": "NoFalloff" },
+                  "falloff": {
+                    "_tag": "NoFalloff"
+                  },
                   "knockback": 0
                 },
                 "appliesStatus": []
               }
             ]
+          }
+        }
+      ],
+      "shellDefaults": [
+        {
+          "_tag": "DeclarativeRuntimeGameShellDefaultsContribution",
+          "id": "br-game-shell-defaults",
+          "kind": "declarative",
+          "display": {
+            "label": "Battle Royale Game Shell",
+            "description": "Default neutral title, menu, loading, pause, settings, and results screens for Battle Royale projects.",
+            "icon": "lucide:panel-top",
+            "order": 10
+          },
+          "data": {
+            "entryScreenId": "title",
+            "screenOrder": ["title", "main-menu", "loading", "pause", "settings", "results"],
+            "screens": [
+              {
+                "id": "title",
+                "stableId": "title",
+                "version": 1,
+                "kind": "title",
+                "title": "Battle Royale",
+                "subtitle": "Drop in and outlast every squad",
+                "enabled": true,
+                "layout": "center",
+                "actions": [
+                  {
+                    "id": "title.start",
+                    "label": "Deploy",
+                    "type": "navigate",
+                    "targetScreenId": "main-menu"
+                  },
+                  {
+                    "id": "title.settings",
+                    "label": "Settings",
+                    "type": "navigate",
+                    "targetScreenId": "settings"
+                  }
+                ]
+              },
+              {
+                "id": "main-menu",
+                "stableId": "main-menu",
+                "version": 1,
+                "kind": "main-menu",
+                "title": "Squad Lobby",
+                "subtitle": "Choose solo, squad, or training deployment",
+                "enabled": true,
+                "layout": "stack",
+                "actions": [
+                  {
+                    "id": "menu.single",
+                    "label": "Solo Match",
+                    "type": "start-single-player"
+                  },
+                  {
+                    "id": "menu.multiplayer",
+                    "label": "Squad Match",
+                    "type": "start-multiplayer"
+                  },
+                  {
+                    "id": "menu.settings",
+                    "label": "Settings",
+                    "type": "navigate",
+                    "targetScreenId": "settings"
+                  }
+                ]
+              },
+              {
+                "id": "loading",
+                "stableId": "loading",
+                "version": 1,
+                "kind": "loading",
+                "title": "Boarding Dropship",
+                "subtitle": "Syncing arena, squads, and storm phases",
+                "enabled": true,
+                "layout": "center",
+                "actions": []
+              },
+              {
+                "id": "pause",
+                "stableId": "pause",
+                "version": 1,
+                "kind": "pause",
+                "title": "Tactical Pause",
+                "subtitle": "Review your loadout before rejoining",
+                "enabled": true,
+                "layout": "stack",
+                "actions": [
+                  {
+                    "id": "pause.resume",
+                    "label": "Resume",
+                    "type": "resume"
+                  },
+                  {
+                    "id": "pause.settings",
+                    "label": "Settings",
+                    "type": "navigate",
+                    "targetScreenId": "settings"
+                  },
+                  {
+                    "id": "pause.exit",
+                    "label": "Exit to Lobby",
+                    "type": "navigate",
+                    "targetScreenId": "main-menu"
+                  }
+                ]
+              },
+              {
+                "id": "settings",
+                "stableId": "settings",
+                "version": 1,
+                "kind": "settings",
+                "title": "Battle Settings",
+                "subtitle": "Tune audio, display, input, and squad preferences",
+                "enabled": true,
+                "layout": "split",
+                "actions": [
+                  {
+                    "id": "settings.back",
+                    "label": "Back to Lobby",
+                    "type": "navigate",
+                    "targetScreenId": "main-menu"
+                  }
+                ]
+              },
+              {
+                "id": "results",
+                "stableId": "results",
+                "version": 1,
+                "kind": "results",
+                "title": "Match Results",
+                "subtitle": "Placement, eliminations, and squad survival",
+                "enabled": true,
+                "layout": "stack",
+                "actions": [
+                  {
+                    "id": "results.retry",
+                    "label": "Redeploy",
+                    "type": "retry"
+                  },
+                  {
+                    "id": "results.menu",
+                    "label": "Lobby",
+                    "type": "navigate",
+                    "targetScreenId": "main-menu"
+                  }
+                ]
+              }
+            ],
+            "assets": [],
+            "tokens": {
+              "fontFamily": "Inter",
+              "textColor": "#f8fafc",
+              "accentColor": "#22c55e",
+              "panelColor": "#111827",
+              "focusColor": "#facc15",
+              "spacing": "comfortable",
+              "motion": "standard"
+            }
           }
         }
       ],
@@ -385,178 +607,319 @@
           "data": {
             "id": "br-default-bindings",
             "actions": [
-              { "action": "core.Move", "valueKind": "analog2d" },
-              { "action": "core.Aim", "valueKind": "pointer" },
-              { "action": "core.PrimaryAction", "valueKind": "digital" },
-              { "action": "core.SecondaryAction", "valueKind": "digital" },
-              { "action": "core.Dash", "valueKind": "digital" },
-              { "action": "core.Reload", "valueKind": "digital" },
-              { "action": "core.Interact", "valueKind": "digital" },
-              { "action": "battle-royale.ScanPulse", "valueKind": "digital" },
-              { "action": "battle-royale.PlaceTrap", "valueKind": "digital" },
-              { "action": "battle-royale.DeployDecoy", "valueKind": "digital" },
-              { "action": "battle-royale.DropItem", "valueKind": "digital" },
-              { "action": "core.Slot1", "valueKind": "digital" },
-              { "action": "core.Slot2", "valueKind": "digital" },
-              { "action": "core.Slot3", "valueKind": "digital" },
-              { "action": "core.Slot4", "valueKind": "digital" },
-              { "action": "core.Slot5", "valueKind": "digital" }
+              {
+                "action": "core.Move",
+                "valueKind": "analog2d"
+              },
+              {
+                "action": "core.Aim",
+                "valueKind": "pointer"
+              },
+              {
+                "action": "core.PrimaryAction",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.SecondaryAction",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Dash",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Reload",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Interact",
+                "valueKind": "digital"
+              },
+              {
+                "action": "battle-royale.ScanPulse",
+                "valueKind": "digital"
+              },
+              {
+                "action": "battle-royale.PlaceTrap",
+                "valueKind": "digital"
+              },
+              {
+                "action": "battle-royale.DeployDecoy",
+                "valueKind": "digital"
+              },
+              {
+                "action": "battle-royale.DropItem",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Slot1",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Slot2",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Slot3",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Slot4",
+                "valueKind": "digital"
+              },
+              {
+                "action": "core.Slot5",
+                "valueKind": "digital"
+              }
             ],
             "schemeDefaults": {
               "keyboard-mouse": [
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "KeyW" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyW"
+                  },
                   "axisRole": "y-"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "ArrowUp" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ArrowUp"
+                  },
                   "axisRole": "y-"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "KeyS" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyS"
+                  },
                   "axisRole": "y+"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "ArrowDown" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ArrowDown"
+                  },
                   "axisRole": "y+"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "KeyA" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyA"
+                  },
                   "axisRole": "x-"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "ArrowLeft" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ArrowLeft"
+                  },
                   "axisRole": "x-"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "KeyD" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyD"
+                  },
                   "axisRole": "x+"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Move",
-                  "trigger": { "_tag": "key", "code": "ArrowRight" },
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ArrowRight"
+                  },
                   "axisRole": "x+"
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.PrimaryAction",
-                  "trigger": { "_tag": "key", "code": "Space" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Space"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.PrimaryAction",
-                  "trigger": { "_tag": "mouseButton", "button": 0 }
+                  "trigger": {
+                    "_tag": "mouseButton",
+                    "button": 0
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.SecondaryAction",
-                  "trigger": { "_tag": "key", "code": "ShiftLeft" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ShiftLeft"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.SecondaryAction",
-                  "trigger": { "_tag": "key", "code": "ShiftRight" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "ShiftRight"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Dash",
-                  "trigger": { "_tag": "key", "code": "KeyF" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyF"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "battle-royale.ScanPulse",
-                  "trigger": { "_tag": "key", "code": "KeyQ" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyQ"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "battle-royale.PlaceTrap",
-                  "trigger": { "_tag": "key", "code": "KeyT" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyT"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "battle-royale.DeployDecoy",
-                  "trigger": { "_tag": "key", "code": "KeyC" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyC"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "battle-royale.DropItem",
-                  "trigger": { "_tag": "key", "code": "KeyG" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyG"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Reload",
-                  "trigger": { "_tag": "key", "code": "KeyR" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyR"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Interact",
-                  "trigger": { "_tag": "key", "code": "KeyE" }
-                },
-                { "_tag": "InputBinding", "action": "core.Aim", "trigger": { "_tag": "pointer" } },
-                {
-                  "_tag": "InputBinding",
-                  "action": "core.Slot1",
-                  "trigger": { "_tag": "key", "code": "Digit1" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "KeyE"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
+                  "action": "core.Aim",
+                  "trigger": {
+                    "_tag": "pointer"
+                  }
+                },
+                {
+                  "_tag": "InputBinding",
                   "action": "core.Slot1",
-                  "trigger": { "_tag": "key", "code": "Numpad1" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Digit1"
+                  }
+                },
+                {
+                  "_tag": "InputBinding",
+                  "action": "core.Slot1",
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Numpad1"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot2",
-                  "trigger": { "_tag": "key", "code": "Digit2" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Digit2"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot2",
-                  "trigger": { "_tag": "key", "code": "Numpad2" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Numpad2"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot3",
-                  "trigger": { "_tag": "key", "code": "Digit3" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Digit3"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot3",
-                  "trigger": { "_tag": "key", "code": "Numpad3" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Numpad3"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot4",
-                  "trigger": { "_tag": "key", "code": "Digit4" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Digit4"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot4",
-                  "trigger": { "_tag": "key", "code": "Numpad4" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Numpad4"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot5",
-                  "trigger": { "_tag": "key", "code": "Digit5" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Digit5"
+                  }
                 },
                 {
                   "_tag": "InputBinding",
                   "action": "core.Slot5",
-                  "trigger": { "_tag": "key", "code": "Numpad5" }
+                  "trigger": {
+                    "_tag": "key",
+                    "code": "Numpad5"
+                  }
                 }
               ]
             }
@@ -570,11 +933,17 @@
           "kind": "declarative",
           "display": {
             "label": "Battle Royale SFX",
-            "description": "Battle Royale runtime SFX bus and cue vocabulary for weapon, pickup, player, and zone events."
+            "description": "Battle Royale runtime SFX bus and cue vocabulary for weapon, item, player, environment, and match events."
           },
           "data": {
             "schemaVersion": 1,
             "buses": [
+              {
+                "id": "battle-royale.music",
+                "label": "Battle Royale Music",
+                "kind": "music",
+                "defaultVolume": 0.65
+              },
               {
                 "id": "battle-royale.sfx",
                 "label": "Battle Royale SFX",
@@ -584,40 +953,105 @@
             ],
             "cues": [
               {
+                "id": "battle-royale.shell.menu-music",
+                "label": "Menu music",
+                "busId": "battle-royale.music",
+                "defaultVolume": 0.55,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "loop": true,
+                "maxOverlap": 1,
+                "binding": "shell.menuMusic"
+              },
+              {
                 "id": "battle-royale.weapon.fire",
                 "label": "Weapon fire",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.72
+                "defaultVolume": 0.72,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "weapon.fire"
               },
               {
                 "id": "battle-royale.weapon.reload",
                 "label": "Weapon reload",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.62
+                "defaultVolume": 0.62,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "weapon.reload"
               },
               {
                 "id": "battle-royale.player.hit",
                 "label": "Player hit",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.8
+                "defaultVolume": 0.8,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "player.hit"
               },
               {
                 "id": "battle-royale.player.eliminated",
                 "label": "Player eliminated",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.88
+                "defaultVolume": 0.88,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "player.eliminated"
               },
               {
-                "id": "battle-royale.pickup.collect",
-                "label": "Pickup collect",
+                "id": "battle-royale.item.collect",
+                "label": "Item collect",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.58
+                "defaultVolume": 0.58,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "item.collect"
               },
               {
                 "id": "battle-royale.zone.warning",
                 "label": "Zone warning",
                 "busId": "battle-royale.sfx",
-                "defaultVolume": 0.76
+                "defaultVolume": 0.76,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "environment.zoneWarning"
+              },
+              {
+                "id": "battle-royale.match.start",
+                "label": "Match start",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.65,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "match.start"
+              },
+              {
+                "id": "battle-royale.match.end",
+                "label": "Match end",
+                "busId": "battle-royale.sfx",
+                "defaultVolume": 0.78,
+                "source": {
+                  "url": "data:audio/wav;base64,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",
+                  "mime": "audio/wav"
+                },
+                "binding": "match.end"
               }
             ]
           }
@@ -722,7 +1156,9 @@
           "id": "br-lobby",
           "kind": "executable",
           "slot": "main.primaryActions",
-          "display": { "label": "Battle Royale Quick Play" },
+          "display": {
+            "label": "Battle Royale Quick Play"
+          },
           "entry": "./dist/menu.js",
           "order": 10
         },
@@ -731,7 +1167,9 @@
           "id": "br-loadout",
           "kind": "executable",
           "slot": "main.tabs",
-          "display": { "label": "Loadout" },
+          "display": {
+            "label": "Loadout"
+          },
           "entry": "./dist/menu.js",
           "order": 20
         },
@@ -740,7 +1178,9 @@
           "id": "br-private-room",
           "kind": "executable",
           "slot": "main.secondaryActions",
-          "display": { "label": "Private Room" },
+          "display": {
+            "label": "Private Room"
+          },
           "entry": "./dist/menu.js",
           "order": 30
         },
@@ -749,7 +1189,9 @@
           "id": "br-match-rules",
           "kind": "executable",
           "slot": "settings.tabs",
-          "display": { "label": "Match Rules" },
+          "display": {
+            "label": "Match Rules"
+          },
           "entry": "./dist/menu.js",
           "order": 40
         }

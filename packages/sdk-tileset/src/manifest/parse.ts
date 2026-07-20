@@ -1,4 +1,5 @@
 import { Option, Result, Schema, SchemaIssue } from 'effect';
+import { AssetLicense } from '@tileborne/core';
 
 import type { ParseDiagnostic, ParseResult } from '../diagnostics.js';
 import type { AutotileRule } from '../schemas/autotile-rule.js';
@@ -46,6 +47,8 @@ const toPackLicense = (license: TilesetManifestLicense): TilesetPackLicense =>
     spdxId: license.spdxId,
     attribution: optionalToOption(license.attribution),
     sourceUrl: optionalToOption(license.sourceUrl),
+    sourcePath: license.sourcePath,
+    modifications: license.modifications,
     notes: optionalToOption(license.notes),
     redistributable: license.redistributable ?? false,
   });
@@ -153,8 +156,8 @@ const flattenSchemaIssues = (
   }
 };
 
-const schemaFailureDiagnostics = (issue: SchemaIssue.Issue): readonly ParseDiagnostic[] =>
-  flattenSchemaIssues(issue).map(({ path, message }) => ({
+const schemaFailureDiagnostics = (error: Schema.SchemaError): readonly ParseDiagnostic[] =>
+  flattenSchemaIssues(error.issue).map(({ path, message }) => ({
     _tag: 'InvalidManifestField' as const,
     path,
     message,
@@ -737,6 +740,9 @@ const assembleTilesetPack = (manifest: TilesetManifest): TilesetPack => {
           id: asset.id,
           path: asset.path,
           mime: asset.mime,
+          ...(asset.license === undefined
+            ? {}
+            : { license: new AssetLicense({ ...asset.license }) }),
         }),
     ),
     placeables: manifest.placeables?.map(toPlaceable),

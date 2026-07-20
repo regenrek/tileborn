@@ -14,12 +14,18 @@ trustPolicyIgnoreAfter: 43200
 # trustPolicyExclude justification: Effect v4 beta changed from v3 trusted-publisher
 # provenance to provenance-only publishing (see c-u9lk); remove when stable for >7 days.
 trustPolicyExclude:
-  - effect@4.0.0-beta.70
-  - '@effect/vitest@4.0.0-beta.70'
+  - effect@4.0.0-beta.78
+  - '@effect/platform-node@4.0.0-beta.78'
+  - '@effect/platform-node-shared@4.0.0-beta.78'
+  - '@effect/vitest@4.0.0-beta.78'
 dangerouslyAllowAllBuilds: false
 savePrefix: ''
 
 overrides:
+  '@effect/platform-node': 4.0.0-beta.78
+  '@effect/platform-node-shared': 4.0.0-beta.78
+  '@effect/vitest': 4.0.0-beta.78
+  effect: 4.0.0-beta.78
   msgpackr-extract: 3.0.3
   # @electron/rebuild pulls node-gyp from git; pin to registry for blockExoticSubdeps.
   '@electron/node-gyp': 10.2.0-electron.2
@@ -34,6 +40,7 @@ overrides:
   esbuild: 0.28.1
   'vite@7.3.3': 7.3.5
   'vite@8.0.12': 8.0.16
+  'undici@7': 7.28.0
   ws: 8.21.0
 
 allowBuilds:

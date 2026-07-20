@@ -149,6 +149,46 @@ describe('ProblemsTab readiness surface', () => {
     expect(useEditorUiStore.getState().activeTool).toBe('select');
   });
 
+  it('deep-links asset diagnostics to the targeted per-asset license focus', () => {
+    useReadinessMock.mockReturnValue({
+      data: {
+        report: {
+          ok: false,
+          purpose: 'authoring',
+          diagnostics: [
+            {
+              id: 'asset-license',
+              code: 'asset.license-not-redistributable',
+              severity: 'error',
+              source: 'asset',
+              title: 'Asset pack license blocks shipping',
+              message: 'Fix the license metadata.',
+              projectId: 'project:one',
+              navigation: {
+                kind: 'asset-library',
+                projectId: 'project:one',
+                path: 'assetPacks.pack:unsafe.assets.asset:bad.license',
+              },
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    });
+
+    render(<ProblemsTab />);
+    fireEvent.click(screen.getByTestId('readiness-problem'));
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/projects/$projectId/assets',
+      params: { projectId: 'project:one' },
+      search: {
+        packId: 'pack:unsafe',
+        focus: 'assetPacks.pack:unsafe.assets.asset:bad.license',
+      },
+    });
+  });
+
   it('deep-links behavior diagnostics to the exact visual block or TypeScript source position', () => {
     useReadinessMock.mockReturnValue({
       data: {
@@ -200,6 +240,47 @@ describe('ProblemsTab readiness surface', () => {
       sourcePath: 'behaviors/proof.behavior.json',
       line: 4,
       column: 7,
+    });
+  });
+
+  it.each([
+    ['shell-font', 'shell.screens.main-menu.fontAssetId'],
+    ['shell-entry', 'shell.entryScreenId'],
+    ['shell-results', 'shell.screens.results'],
+  ])('deep-links game shell diagnostic %s to the exact shell control path', (id, path) => {
+    useReadinessMock.mockReturnValue({
+      data: {
+        report: {
+          ok: false,
+          purpose: 'authoring',
+          diagnostics: [
+            {
+              id,
+              code: 'game-shell.missing-font',
+              severity: 'error',
+              source: 'game-shell',
+              title: 'Game shell is not ready',
+              message: 'Fix the font.',
+              projectId: 'project:one',
+              navigation: {
+                kind: 'game-shell',
+                projectId: 'project:one',
+                path,
+              },
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    });
+
+    render(<ProblemsTab />);
+    fireEvent.click(screen.getByTestId('readiness-problem'));
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/projects/$projectId/game-shell',
+      params: { projectId: 'project:one' },
+      search: { path },
     });
   });
 });

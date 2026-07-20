@@ -5,6 +5,7 @@
   "description": "Production-only binary runtime closure deployed into the packaged Tileborne desktop app.",
   "license": "MIT",
   "dependencies": {
+    "alchemy": "2.0.0-beta.55",
     "esbuild": "0.28.1",
     "miniflare": "4.20260603.0"
   }

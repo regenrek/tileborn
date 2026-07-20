@@ -1,3 +1,4 @@
+import { assetLicenseOptionFields, AssetLicenseSpdxId } from '@tileborne/core';
 import { Result, Schema } from 'effect';
 
 import { LicenseNotAllowlistedError } from '../errors.js';
@@ -13,18 +14,10 @@ export const SPDX_ALLOWLIST = [
   'Unlicense',
 ] as const;
 
-export const SpdxId = Schema.String.check(
-  Schema.isPattern(/^[A-Za-z0-9-.+]+(?:\s+(?:AND|OR)\s+[A-Za-z0-9-.+]+)*$/),
-);
+export const SpdxId = AssetLicenseSpdxId;
 export type SpdxId = typeof SpdxId.Type;
 
-export class License extends Schema.Class<License>('License')({
-  spdxId: SpdxId,
-  attribution: Schema.OptionFromOptional(Schema.String),
-  sourceUrl: Schema.OptionFromOptional(Schema.String),
-  notes: Schema.OptionFromOptional(Schema.String),
-  redistributable: Schema.optional(Schema.Boolean),
-}) {}
+export class License extends Schema.Class<License>('License')(assetLicenseOptionFields) {}
 
 export const isSpdxAllowlisted = (spdxId: string): boolean =>
   (SPDX_ALLOWLIST as readonly string[]).includes(spdxId);
@@ -39,6 +32,24 @@ export const validateLicenseAllowlist = (
     new LicenseNotAllowlistedError({
       spdxId: license.spdxId,
       message: `License ${license.spdxId} requires explicit user approval`,
+    }),
+  );
+};
+
+export const validateLicenseRedistribution = (
+  license: License,
+): Result.Result<License, LicenseNotAllowlistedError> => {
+  const allowlistResult = validateLicenseAllowlist(license);
+  if (Result.isFailure(allowlistResult)) {
+    return allowlistResult;
+  }
+  if (license.redistributable === true) {
+    return Result.succeed(license);
+  }
+  return Result.fail(
+    new LicenseNotAllowlistedError({
+      spdxId: license.spdxId,
+      message: `License ${license.spdxId} is not marked redistributable`,
     }),
   );
 };

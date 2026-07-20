@@ -14,6 +14,17 @@
   overflow: hidden;
 }
 
+.tb-root :focus {
+  outline: none;
+}
+
+.tb-root :focus-visible {
+  outline: 3px solid var(--tb-menu-focus, var(--tb-menu-accent, #6ee7a8));
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px
+    color-mix(in srgb, var(--tb-menu-focus, var(--tb-menu-accent, #6ee7a8)) 24%, transparent);
+}
+
 .tb-canvas-layer {
   position: absolute;
   inset: 0;
@@ -301,6 +312,18 @@
   transition:
     filter 120ms ease,
     background 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-root,
+  .tb-root *,
+  .tb-root *::before,
+  .tb-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 .tb-root [data-slot='button']:hover {

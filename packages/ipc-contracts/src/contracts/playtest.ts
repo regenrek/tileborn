@@ -6,6 +6,7 @@ import { defineContract } from '../contract.js';
 import { createRegistry } from '../registry.js';
 import { IpcContractErrors } from './common.js';
 import { GameplayEvent } from './gameplay-event.js';
+import { GameShellRegisteredEvent } from './game-shell.js';
 
 export const PlaytestSessionId = Schema.String.check(
   Schema.isPattern(/^playtest:[0-9a-f-]{36}$/),
@@ -352,6 +353,27 @@ export const PlaytestBehaviorDebugControlRequest = Schema.Struct({
 });
 export const PlaytestBehaviorDebugControlResponse = PlaytestBehaviorDebugInspectResponse;
 
+export const PlaytestShellEventRequest = Schema.Struct({
+  sessionId: PlaytestSessionId,
+  event: Schema.Struct({
+    event: GameShellRegisteredEvent,
+    screenId: Schema.String,
+    actionId: Schema.optional(Schema.String),
+    targetScreenId: Schema.optional(Schema.String),
+  }),
+});
+export const PlaytestShellEventResponse = Schema.Struct({
+  requests: Schema.Array(
+    Schema.Struct({
+      sequence: Schema.Int,
+      request: Schema.Struct({
+        type: Schema.Literal('navigate'),
+        targetScreenId: Schema.String,
+      }),
+    }),
+  ),
+});
+
 export const PlaytestStartContract = defineContract({
   channel: 'tileborne:playtest:start',
   request: PlaytestStartRequest,
@@ -387,12 +409,20 @@ export const PlaytestBehaviorDebugControlContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const PlaytestShellEventContract = defineContract({
+  channel: 'tileborne:playtest:shellEvent',
+  request: PlaytestShellEventRequest,
+  response: PlaytestShellEventResponse,
+  errors: IpcContractErrors,
+});
+
 export const PlaytestContracts = [
   PlaytestStartContract,
   PlaytestStopContract,
   PlaytestListContract,
   PlaytestBehaviorDebugInspectContract,
   PlaytestBehaviorDebugControlContract,
+  PlaytestShellEventContract,
 ] as const;
 
 export const PlaytestIpcRegistry = createRegistry(PlaytestContracts);

@@ -54,6 +54,29 @@ export interface BehaviorCommand<
   readonly payload: Payload;
 }
 
+export type ShellRegisteredEvent =
+  | 'shell.title.entered'
+  | 'shell.menu.entered'
+  | 'shell.loading.entered'
+  | 'shell.pause.entered'
+  | 'shell.settings.entered'
+  | 'shell.results.entered'
+  | 'shell.action.invoked'
+  | 'shell.navigation.requested';
+
+export interface ShellEventPayload {
+  readonly event: ShellRegisteredEvent;
+  readonly screenId: string;
+  readonly actionId?: string | undefined;
+  readonly targetScreenId?: string | undefined;
+}
+
+export interface ShellInvokeActionPayload {
+  readonly actionId: string;
+}
+
+export type ShellEmitEventPayload = ShellEventPayload;
+
 export type BehaviorResult =
   | void
   | BehaviorCommand
@@ -66,11 +89,14 @@ export interface GameEventRegistry {
   'lifecycle.stopped': { readonly reason: 'project-stop' | 'replacement' | 'error' };
   'lifecycle.reloaded': { readonly previousSourceHash: string };
   'timer.fired': { readonly timerId: string; readonly scheduledTick: number };
+  'shell.event': ShellEventPayload;
 }
 
 /** Extend through declaration merging. Every entry is a normal callable TypeScript function. */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- intentionally open registry
-export interface GameActionRegistry {}
+export interface GameActionRegistry {
+  'shell.invoke-action': (payload: ShellInvokeActionPayload) => void;
+  'shell.emit-event': (payload: ShellEmitEventPayload) => void;
+}
 
 /** Extend through declaration merging. Queries must be deterministic and side-effect free. */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- intentionally open registry
@@ -81,6 +107,7 @@ export interface GameCapabilityRegistry {
   'lifecycle.core': true;
   'state.core': true;
   'time.deterministic': true;
+  'shell.navigation': true;
 }
 
 export type ActionApi = Readonly<{

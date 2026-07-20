@@ -97,6 +97,7 @@ export interface AssembleRuntimeMapPackageInput {
   readonly playerModels: readonly PlayerModelRef[];
   readonly assets?: readonly RuntimeMapPackageAssetInput[];
   readonly behaviors?: RuntimeBehaviorPackage;
+  readonly audio?: JsonObject;
   readonly behaviorModules?: readonly RuntimeMapPackageBehaviorModuleInput[];
   /** The active mode's narrowed exporter; omitted = empty `modeData`. */
   readonly modeDataExporter?: RuntimeModeDataExporter;
@@ -322,6 +323,18 @@ export const assembleRuntimeMapPackage = (
           ? { schemaVersion: 1, items: [], lootTables: [], weapons: [], provenance: {} }
           : Schema.encodeSync(RuntimeProjectContent)(input.projectContent),
       behaviors: Schema.encodeSync(RuntimeBehaviorPackage)(behaviorPackage),
+      audio: input.audio ?? {
+        schemaVersion: 1,
+        buses: [],
+        cues: [],
+        diagnostics: [],
+        settings: {
+          masterVolume: 1,
+          muted: false,
+          muteOnFocusLoss: true,
+          busVolumes: {},
+        },
+      },
       visuals: Schema.encodeSync(RuntimeMapPackageVisuals)(visuals),
       assets: assetEntriesJson,
       modeData,
@@ -381,6 +394,7 @@ export const assembleRuntimeMapPackage = (
           settings: sectionJson.settings,
           content: sectionJson.content,
           behaviors: sectionJson.behaviors,
+          audio: sectionJson.audio,
           visuals: sectionJson.visuals,
           assets: sectionJson.assets,
           modeData: sectionJson.modeData,

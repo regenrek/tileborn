@@ -1,9 +1,14 @@
-import { makeAssetId } from '@tileborne/core';
+import { ASSET_LICENSE_FIELD_KEYS, assetLicenseOptionFields, makeAssetId } from '@tileborne/core';
 import { Option, Result, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { LicenseNotAllowlistedError } from '../errors.js';
-import { License, SPDX_ALLOWLIST, validateLicenseAllowlist } from './license.js';
+import {
+  License,
+  SPDX_ALLOWLIST,
+  validateLicenseAllowlist,
+  validateLicenseRedistribution,
+} from './license.js';
 import { LicenseManifest, LicenseManifestEntry } from './license-manifest.js';
 
 const license = (spdxId: string): License =>
@@ -15,6 +20,17 @@ const license = (spdxId: string): License =>
   });
 
 describe('License schema', () => {
+  it('uses the canonical core asset license field contract', () => {
+    expect(Object.keys(assetLicenseOptionFields)).toEqual([...ASSET_LICENSE_FIELD_KEYS]);
+  });
+
+  it('enforces canonical SPDX and value-type semantics', () => {
+    expect(() => Schema.decodeUnknownSync(License)({ spdxId: 'not a valid spdx id' })).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(License)({ spdxId: 'MIT', redistributable: 'yes' }),
+    ).toThrow();
+  });
+
   it('decodes omitted optional keys as none', () => {
     const decoded = Schema.decodeUnknownSync(License)({ spdxId: 'MIT' });
 
@@ -63,6 +79,8 @@ describe('License schema', () => {
         spdxId: 'MIT',
         attribution: Option.some('Author'),
         sourceUrl: Option.some('https://example.invalid/license'),
+        sourcePath: 'assets/source',
+        modifications: 'Cropped to tile grid',
         notes: Option.none(),
       }),
     );
@@ -71,6 +89,8 @@ describe('License schema', () => {
       spdxId: 'MIT',
       attribution: 'Author',
       sourceUrl: 'https://example.invalid/license',
+      sourcePath: 'assets/source',
+      modifications: 'Cropped to tile grid',
     });
   });
 });
@@ -88,6 +108,20 @@ describe('license allowlist', () => {
     expect(Result.isFailure(result)).toBe(true);
     if (Result.isFailure(result)) {
       expect(result.failure).toBeInstanceOf(LicenseNotAllowlistedError);
+    }
+  });
+
+  it('requires redistribution to be explicitly allowed for ship policy', () => {
+    expect(
+      Result.isSuccess(
+        validateLicenseRedistribution(new License({ ...license('MIT'), redistributable: true })),
+      ),
+    ).toBe(true);
+
+    const result = validateLicenseRedistribution(license('MIT'));
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) {
+      expect(result.failure.message).toContain('not marked redistributable');
     }
   });
 

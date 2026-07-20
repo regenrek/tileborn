@@ -12,6 +12,7 @@ export const DeploymentId = Schema.String.check(
 ).pipe(Schema.brand('DeploymentId'));
 
 export const RuntimeDeployTargetView = Schema.Struct({
+  adapterId: Schema.optional(Schema.Literals(['local', 'alchemy-cloudflare'] as const)),
   stage: Schema.Literals(['local', 'dev', 'staging', 'production']),
   workerName: Schema.String,
 });
@@ -32,6 +33,16 @@ export const RuntimeDeployDeployResponse = Schema.Struct({
   jobId: JobId,
 });
 
+export const RuntimeDeployOperationResult = Schema.Struct({
+  endpoint: Schema.String,
+  status: Schema.Literals(['planned', 'previewed', 'deployed', 'running', 'destroyed'] as const),
+  logs: Schema.Array(Schema.String),
+});
+
+export const RuntimeDeployPlanRequest = RuntimeDeployDeployRequest;
+export const RuntimeDeployPreviewRequest = RuntimeDeployDeployRequest;
+export const RuntimeDeployOperationResponse = RuntimeDeployOperationResult;
+
 export const RuntimeDeployGetDeploymentRequest = Schema.Struct({
   deploymentId: DeploymentId,
 });
@@ -49,11 +60,30 @@ export const RuntimeDeployListDeploymentsResponse = Schema.Struct({
 export const RuntimeDeployDeleteDeploymentRequest = Schema.Struct({
   deploymentId: DeploymentId,
 });
+export const RuntimeDeployStatusRequest = RuntimeDeployDeleteDeploymentRequest;
+export const RuntimeDeployLogsRequest = RuntimeDeployDeleteDeploymentRequest;
+export const RuntimeDeployDestroyRequest = RuntimeDeployDeleteDeploymentRequest;
 
 export const RuntimeDeployDeployContract = defineContract({
   channel: 'tileborne:runtime-deploy:deploy',
   request: RuntimeDeployDeployRequest,
   response: RuntimeDeployDeployResponse,
+  errors: IpcContractErrors,
+  meta: { timeoutMs: 120_000 },
+});
+
+export const RuntimeDeployPlanContract = defineContract({
+  channel: 'tileborne:runtime-deploy:plan',
+  request: RuntimeDeployPlanRequest,
+  response: RuntimeDeployOperationResponse,
+  errors: IpcContractErrors,
+  meta: { timeoutMs: 120_000 },
+});
+
+export const RuntimeDeployPreviewContract = defineContract({
+  channel: 'tileborne:runtime-deploy:preview',
+  request: RuntimeDeployPreviewRequest,
+  response: RuntimeDeployOperationResponse,
   errors: IpcContractErrors,
   meta: { timeoutMs: 120_000 },
 });
@@ -79,8 +109,35 @@ export const RuntimeDeployDeleteDeploymentContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const RuntimeDeployStatusContract = defineContract({
+  channel: 'tileborne:runtime-deploy:status',
+  request: RuntimeDeployStatusRequest,
+  response: RuntimeDeployOperationResponse,
+  errors: IpcContractErrors,
+});
+
+export const RuntimeDeployLogsContract = defineContract({
+  channel: 'tileborne:runtime-deploy:logs',
+  request: RuntimeDeployLogsRequest,
+  response: RuntimeDeployOperationResponse,
+  errors: IpcContractErrors,
+});
+
+export const RuntimeDeployDestroyContract = defineContract({
+  channel: 'tileborne:runtime-deploy:destroy',
+  request: RuntimeDeployDestroyRequest,
+  response: EmptyResponse,
+  errors: IpcContractErrors,
+  meta: { timeoutMs: 120_000 },
+});
+
 export const RuntimeDeployContracts = [
+  RuntimeDeployPlanContract,
+  RuntimeDeployPreviewContract,
   RuntimeDeployDeployContract,
+  RuntimeDeployStatusContract,
+  RuntimeDeployLogsContract,
+  RuntimeDeployDestroyContract,
   RuntimeDeployGetDeploymentContract,
   RuntimeDeployListDeploymentsContract,
   RuntimeDeployDeleteDeploymentContract,

@@ -37,6 +37,7 @@ export const RUNTIME_MAP_PACKAGE_ENTRY_FILES = {
   settings: 'settings.json',
   content: 'content.json',
   behaviors: 'behaviors.json',
+  audio: 'audio.json',
   visuals: 'visuals.json',
   assets: 'assets.json',
   modeData: 'mode-data.json',
@@ -173,6 +174,7 @@ export const loadRuntimeMapPackage = async (
           RuntimeBehaviorPackage,
           await readVerified('behaviors'),
         ),
+        audio: decodeEntry('audio.json', JsonObject, await readVerified('audio')),
         visuals: decodeEntry(
           'visuals.json',
           RuntimeMapPackageVisuals,

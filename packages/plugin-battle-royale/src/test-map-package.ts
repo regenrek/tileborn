@@ -151,6 +151,7 @@ export const buildTestMapPackage = (input: TestMapPackageInput): unknown => {
         provenance: {},
       } satisfies JsonObject),
     behaviors: EMPTY_RUNTIME_BEHAVIOR_PACKAGE,
+    audio: { schemaVersion: 1, buses: [], cues: [], diagnostics: [] } satisfies JsonObject,
     visuals: Schema.encodeSync(RuntimeMapPackageVisuals)(visuals),
     assets: [] as unknown[],
     modeData,

@@ -10,11 +10,12 @@ const nodeBuiltins = [
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
 ];
 
-// Only binary-backed runtimes stay external. Pure workspace/JavaScript
-// packages are bundled so a packaged app never resolves them by walking out of
+// Runtime/provider packages that must stay real files for subprocesses,
+// package resolution, or native binary closure. Pure workspace packages are
+// bundled so a packaged app never resolves them by walking out of
 // Contents/Resources and into a checkout. electron-forge.config.cjs deploys
 // this exact external runtime closure after Packager pruning.
-const externalPackages = ['esbuild', 'miniflare'];
+const externalPackages = ['alchemy', 'esbuild', 'miniflare'];
 
 export default defineConfig({
   plugins: [cjsImportMetaUrl()],

@@ -2,11 +2,14 @@ import { pathToFileURL } from 'node:url';
 
 import type {
   BehaviorDiagnostic,
+  AssetId,
   MapId,
+  PackId,
   PlayerModelRef,
   ProjectId,
   TileborneMap,
 } from '@tileborne/core';
+import { validateLicenseRedistribution, type License } from '@tileborne/asset-pipeline';
 import {
   ReadinessDiagnostic,
   ReadinessNavigationTarget,
@@ -17,9 +20,20 @@ import {
 } from '@tileborne/ipc-contracts';
 import { resolvePluginManifestPath, type InstalledPlugin } from '@tileborne/services-plugin';
 import type { BehaviorCompileDiagnostic } from '@tileborne/services-build';
-import { Option } from 'effect';
+import { Option, Result } from 'effect';
 
 import type { VisualModelDiagnostic } from '../shared/visual-model-diagnostics.js';
+
+export interface AssetPackLicenseDiagnosticInput {
+  readonly id: PackId | string;
+  readonly name: string;
+  readonly license: License;
+  readonly assets: readonly {
+    readonly id: AssetId | string;
+    readonly path: string;
+    readonly license: Option.Option<License>;
+  }[];
+}
 
 export interface PluginMapValidationIssue {
   readonly severity: 'error' | 'warning' | 'info';
@@ -101,6 +115,74 @@ export const readinessDiagnostic = (input: ReadinessDiagnosticInput): ReadinessD
 export const readinessNavigation = (
   input: ConstructorParameters<typeof ReadinessNavigationTarget>[0],
 ): ReadinessNavigationTarget => new ReadinessNavigationTarget(input);
+
+export const shouldGateAssetLicenseRedistribution = (purpose: ReadinessPurpose): boolean =>
+  purpose === 'build';
+
+export const assetPackLicenseReadinessDiagnostics = (
+  projectId: ProjectId,
+  pack: AssetPackLicenseDiagnosticInput,
+): readonly ReadinessDiagnostic[] => {
+  const diagnostics: ReadinessDiagnostic[] = [];
+  const packId = String(pack.id);
+  const packLicenseResult = validateLicenseRedistribution(pack.license);
+  if (Result.isFailure(packLicenseResult)) {
+    diagnostics.push(
+      readinessDiagnostic({
+        id: `project:${projectId}:asset:${packId}:license`,
+        code: 'asset.license-not-redistributable',
+        severity: 'error',
+        source: 'asset',
+        title: 'Asset pack license blocks shipping',
+        message: `${packLicenseResult.failure.message}. Update license metadata or remove ${pack.name} before building or shipping.`,
+        projectId,
+        path: `assetPacks.${packId}.license`,
+        navigation: readinessNavigation({
+          kind: 'asset-library',
+          projectId,
+          path: `assetPacks.${packId}.license`,
+        }),
+      }),
+    );
+  }
+
+  for (const asset of pack.assets) {
+    if (Option.isNone(asset.license)) {
+      continue;
+    }
+    const assetLicenseResult = validateLicenseRedistribution(asset.license.value);
+    if (Result.isFailure(assetLicenseResult)) {
+      diagnostics.push(
+        readinessDiagnostic({
+          id: `project:${projectId}:asset:${packId}:${asset.id}:license`,
+          code: 'asset.license-not-redistributable',
+          severity: 'error',
+          source: 'asset',
+          title: 'Asset license blocks shipping',
+          message: `${assetLicenseResult.failure.message} for ${asset.path}. Update license metadata or remove ${pack.name} before building or shipping.`,
+          projectId,
+          path: `assetPacks.${packId}.assets.${asset.id}.license`,
+          navigation: readinessNavigation({
+            kind: 'asset-library',
+            projectId,
+            path: `assetPacks.${packId}.assets.${asset.id}.license`,
+          }),
+        }),
+      );
+    }
+  }
+
+  return diagnostics;
+};
+
+export const assetPackLicenseReadinessDiagnosticsForPurpose = (
+  purpose: ReadinessPurpose,
+  projectId: ProjectId,
+  pack: AssetPackLicenseDiagnosticInput,
+): readonly ReadinessDiagnostic[] =>
+  shouldGateAssetLicenseRedistribution(purpose)
+    ? assetPackLicenseReadinessDiagnostics(projectId, pack)
+    : [];
 
 /** One metadata-preserving adapter from behavior diagnostics into Problems deep links. */
 export const behaviorReadinessDiagnostics = (

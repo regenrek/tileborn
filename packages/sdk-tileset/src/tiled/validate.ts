@@ -282,7 +282,7 @@ const decodeSchema = <A, I>(
   | { readonly ok: false; readonly diagnostic: ParseDiagnostic } => {
   const decoded = Schema.decodeUnknownResult(schema)(value);
   if (Result.isFailure(decoded)) {
-    return schemaError(format, decoded.failure, pathPrefix);
+    return schemaError(format, decoded.failure.issue, pathPrefix);
   }
   return { ok: true, value: decoded.success };
 };

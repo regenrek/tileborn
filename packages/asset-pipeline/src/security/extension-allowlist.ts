@@ -11,6 +11,7 @@ export const ALLOWED_EXTENSIONS_BY_MIME = {
   'audio/mpeg': ['.mp3'],
   'application/json': ['.json'],
   'text/plain': ['.txt'],
+  'font/woff2': ['.woff2'],
 } as const satisfies Record<AllowedMimeType, readonly string[]>;
 
 export const ALLOWED_EXTENSIONS = Array.from(

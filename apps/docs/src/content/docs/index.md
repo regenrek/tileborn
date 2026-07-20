@@ -32,6 +32,7 @@ Plugins extend the editor and runtime through declarative manifests and build-ti
 | [Getting Started](/getting-started/)     | Install the CLI, init a project, open the editor, build a Cloudflare target |
 | [Architecture](/architecture/)           | Monorepo package map and process boundaries                                 |
 | [Plugins](/plugins/)                     | Manifest schema, contribution points, battle-royale reference               |
+| [Self-Hosting](/deploy/self-hosting/)    | Local artifact proof, credentials, Cloudflare deploy, operations, caveats   |
 | [CLI Reference](/cli/)                   | Generated `tileborne --help` command tree                                   |
 | [API Reference](/reference/)             | TypeDoc output for public packages                                          |
 | [Release Readiness](/release-readiness/) | Release-candidate gates, Cloudflare proof, secrets, rollback, caveats       |

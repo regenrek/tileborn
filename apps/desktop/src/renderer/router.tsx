@@ -15,9 +15,11 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { useEventInvalidations } from '@/hooks/use-event-invalidations';
 import { normalizeRouteParam } from '@/lib/route-params';
 import { AssetLibraryPage } from '@/routes/asset-library-page';
+import { AudioPage } from '@/routes/audio-page';
 import { EntityEditorPage } from '@/routes/entity-editor-page';
 import { HomePage } from '@/routes/home-page';
 import { GameContentPage } from '@/routes/game-content-page';
+import { GameShellPage } from '@/routes/game-shell-page';
 import { BehaviorEditorPage } from '@/routes/behavior-editor-page';
 import { MapEditorPage } from '@/routes/map-editor-page';
 import { PlayerModelEditorPage } from '@/routes/player-model-editor-page';
@@ -124,7 +126,20 @@ const assetLibraryRoute = createRoute({
   getParentRoute: () => editorRoute,
   path: '/projects/$projectId/assets',
   params: projectParams,
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.packId === 'string' && search.packId.length > 0
+      ? { packId: search.packId }
+      : {}),
+    ...(typeof search.focus === 'string' && search.focus.length > 0 ? { focus: search.focus } : {}),
+  }),
   component: AssetLibraryPage,
+});
+
+const audioRoute = createRoute({
+  getParentRoute: () => editorRoute,
+  path: '/projects/$projectId/audio',
+  params: projectParams,
+  component: AudioPage,
 });
 
 const pluginManagerRoute = createRoute({
@@ -161,6 +176,16 @@ const gameContentRoute = createRoute({
   component: GameContentPage,
 });
 
+const gameShellRoute = createRoute({
+  getParentRoute: () => editorRoute,
+  path: '/projects/$projectId/game-shell',
+  params: projectParams,
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.path === 'string' && search.path.length > 0 ? { path: search.path } : {}),
+  }),
+  component: GameShellPage,
+});
+
 const behaviorEditorRoute = createRoute({
   getParentRoute: () => editorRoute,
   path: '/projects/$projectId/behaviors',
@@ -195,10 +220,12 @@ const routeTree = rootRoute.addChildren([
     projectOverviewRoute,
     mapEditorRoute,
     assetLibraryRoute,
+    audioRoute,
     pluginManagerRoute,
     playerModelEditorRoute,
     entityEditorRoute,
     gameContentRoute,
+    gameShellRoute,
     behaviorEditorRoute,
     projectSettingsRoute,
     mapsIndexRoute,

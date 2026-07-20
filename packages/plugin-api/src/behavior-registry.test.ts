@@ -53,6 +53,7 @@ describe('resolveBehaviorAuthoringRegistry', () => {
     expect(effective.templates.map(({ id }) => String(id))).toEqual([
       'core.on-start',
       'core.repeating-timer',
+      'shell.on-shell-event',
       'battle-royale.final-player-reward',
       'example-arena.next-wave',
     ]);

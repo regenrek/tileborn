@@ -31,7 +31,7 @@ describe('Ship Game entry-point parity', () => {
     expect(handlers).not.toContain('tileborne game build --target');
   });
 
-  it('ships binary-backed build dependencies with the production desktop app', async () => {
+  it('ships external runtime dependencies with the production desktop app', async () => {
     const packageJson = JSON.parse(
       await readFile(path.join(desktopRoot, '..', 'package.json'), 'utf8'),
     ) as { readonly dependencies?: Readonly<Record<string, string>> };
@@ -49,22 +49,26 @@ describe('Ship Game entry-point parity', () => {
 
     expect(packageJson.dependencies).toMatchObject({
       '@tileborne/game-host': 'workspace:*',
+      alchemy: '2.0.0-beta.55',
       esbuild: '0.28.1',
       miniflare: '4.20260603.0',
     });
     expect(runtimeClosurePackageJson.dependencies).toEqual({
+      alchemy: '2.0.0-beta.55',
       esbuild: '0.28.1',
       miniflare: '4.20260603.0',
     });
     expect(viteMain).not.toContain("'@tileborne/services-build'");
     expect(viteMain).not.toContain("'@tileborne/services-build/local-game-host'");
     expect(viteMain).not.toContain("'@tileborne/game-host/build'");
+    expect(viteMain).toContain("'alchemy'");
     expect(viteMain).toContain("'esbuild'");
     expect(viteMain).toContain("'miniflare'");
     expect(forgeConfig).toContain(
       "const runtimeClosurePackage = '@tileborne/desktop-runtime-closure'",
     );
     expect(forgeConfig).toContain('packageAfterPrune');
+    expect(forgeConfig).toContain('copyAlchemyRuntimeDeployStack(buildPath)');
     expect(forgeConfig).toContain('deployPackagedRuntimeClosure(buildPath)');
     expect(forgeConfig).toContain('assertPackagedRuntimeClosure(buildPath)');
   });

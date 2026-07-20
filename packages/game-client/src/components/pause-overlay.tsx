@@ -8,6 +8,11 @@ import { SlotHost } from './slot-host.js';
 export interface PauseOverlayProps {
   readonly brand: BrandConfig;
   readonly sections: readonly MenuSectionRegistration[];
+  readonly title?: string | undefined;
+  readonly subtitle?: string | undefined;
+  readonly resumeLabel?: string | undefined;
+  readonly settingsLabel?: string | undefined;
+  readonly quitLabel?: string | undefined;
   readonly onResume: () => void;
   readonly onOpenSettings: () => void;
   readonly onQuitToMenu: () => void;
@@ -17,6 +22,11 @@ export interface PauseOverlayProps {
 export function PauseOverlay({
   brand,
   sections,
+  title,
+  subtitle,
+  resumeLabel,
+  settingsLabel,
+  quitLabel,
   onResume,
   onOpenSettings,
   onQuitToMenu,
@@ -24,13 +34,14 @@ export function PauseOverlay({
   return (
     <div className="tb-scrim">
       <div className="tb-panel" role="dialog" aria-label="Paused" data-testid="pause-overlay">
-        <h2 className="tb-title">Paused</h2>
+        <h2 className="tb-title">{title ?? 'Paused'}</h2>
+        {subtitle ? <p className="tb-tagline">{subtitle}</p> : null}
         <div className="tb-actions">
           <Button onClick={onResume} data-testid="resume-button">
-            Resume
+            {resumeLabel ?? 'Resume'}
           </Button>
           <Button variant="outline" onClick={onOpenSettings}>
-            Settings
+            {settingsLabel ?? 'Settings'}
           </Button>
           <SlotHost
             slot="pause.actions"
@@ -40,7 +51,7 @@ export function PauseOverlay({
             title={brand.title}
           />
           <Button variant="ghost" onClick={onQuitToMenu} data-testid="pause-quit">
-            Quit to menu
+            {quitLabel ?? 'Quit to menu'}
           </Button>
         </div>
       </div>

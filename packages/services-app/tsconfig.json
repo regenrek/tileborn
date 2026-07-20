@@ -12,6 +12,7 @@
     { "path": "../core" },
     { "path": "../asset-pipeline" },
     { "path": "../sdk-tileset" },
+    { "path": "../runtime" },
     { "path": "../runtime-wasm" },
     { "path": "../services-foundation" }
   ]

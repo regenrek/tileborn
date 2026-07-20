@@ -100,6 +100,8 @@ const fakeTilesetPack = new TilesetPack({
     spdxId: 'CC0-1.0',
     attribution: Option.none(),
     sourceUrl: Option.some('https://example.invalid/tileborne-sample-fixture'),
+    sourcePath: 'apps/desktop/src/smoke/fixtures/asset-pack',
+    modifications: 'Synthetic fixture packed for viewport tests',
     notes: Option.none(),
     redistributable: true,
   }),
@@ -205,6 +207,26 @@ describe('viewport asset manifest', () => {
     // The renderer no longer parses the full manifest: it fetches the compact
     // editor index exactly once per pack.
     expect(getEditorIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves license provenance and redistribution fields in the runtime manifest', async () => {
+    stubWindow({
+      packsById: new Map([[fakeTilesetPack.id, fakeTilesetPack]]),
+      listPacks: vi.fn().mockResolvedValue({
+        packs: [
+          { id: fakeTilesetPack.id, name: fakeTilesetPack.name, version: fakeTilesetPack.version },
+        ],
+      }),
+    });
+
+    const bundle = await Effect.runPromise(loadViewportAssetBundle());
+
+    expect(bundle.manifest.license).toMatchObject({
+      spdxId: 'CC0-1.0',
+      sourcePath: 'apps/desktop/src/smoke/fixtures/asset-pack',
+      modifications: 'Synthetic fixture packed for viewport tests',
+      redistributable: true,
+    });
   });
 
   it('only renders atlas images (not decoy sprite/sample assets) from the bundle', async () => {

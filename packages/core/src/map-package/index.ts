@@ -168,6 +168,8 @@ export class RuntimeMapPackage extends Schema.Class<RuntimeMapPackage>('RuntimeM
   content: JsonObject,
   /** Canonical gameplay behavior payload shared by every runtime host. */
   behaviors: RuntimeBehaviorPackage,
+  /** Canonical projected audio buses/cues shared by preview, playtest, and shipped hosts. */
+  audio: JsonObject,
   visuals: RuntimeMapPackageVisuals,
   assets: Schema.Array(RuntimeMapPackageAssetEntry),
   modeData: Schema.Record(Schema.String, JsonObject),

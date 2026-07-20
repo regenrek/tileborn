@@ -49,7 +49,10 @@ const optionOrNull = <A>(value: Option.Option<A>): A | null =>
 const licenseKey = (license: License): string =>
   canonicalJson({
     attribution: optionOrNull(license.attribution),
+    modifications: license.modifications ?? null,
     notes: optionOrNull(license.notes),
+    redistributable: license.redistributable ?? null,
+    sourcePath: license.sourcePath ?? null,
     sourceUrl: optionOrNull(license.sourceUrl),
     spdxId: license.spdxId,
   });

@@ -160,6 +160,11 @@ wait_for_cdp_ready() {
 
 launch_dev_cdp() {
   local launch_cmd=(env TILEBORNE_SKIP_PREDEV_CDP_BUILD=1 pnpm --filter @tileborne/desktop dev:cdp)
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    # GitHub-hosted runners do not install Electron's SUID helper as root/4755.
+    # This flag is scoped to the isolated CDP smoke; packaged and normal starts keep sandboxing.
+    launch_cmd+=(-- --no-sandbox)
+  fi
   if [[ "$(uname -s)" == "Linux" ]] && [[ -z "${DISPLAY:-}" ]]; then
     launch_cmd=(xvfb-run -a "${launch_cmd[@]}")
   fi

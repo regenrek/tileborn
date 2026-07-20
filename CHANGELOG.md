@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Updated Hono, Astro, Undici, and the pinned pnpm toolchain to patched,
+  supply-chain-mature versions; the production dependency audit reports no
+  known vulnerabilities.
 - Cloudflare lifecycle proof is restricted to generated disposable Worker
   names, strips token environment variables, redacts signed WebSocket URLs,
   validates receipt integrity, and confirms both Workers are absent after

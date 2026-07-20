@@ -205,10 +205,7 @@ const copyGameHostBuildAssets = (buildPath) => {
 };
 
 const copyAlchemyRuntimeDeployStack = (buildPath) => {
-  const runtimeDeployFiles = [
-    'alchemy-cloudflare-stack.js',
-    'alchemy-bootstrap-probe.js',
-  ];
+  const runtimeDeployFiles = ['alchemy-cloudflare-stack.js', 'alchemy-bootstrap-probe.js'];
   const sourceRoot = path.resolve(__dirname, '../../packages/services-build/dist/runtime-deploy');
   for (const fileName of runtimeDeployFiles) {
     const sourcePath = path.join(sourceRoot, fileName);

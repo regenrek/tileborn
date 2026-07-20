@@ -514,7 +514,7 @@ describe('PlaytestViewport overlay wiring', () => {
       data: { projection: buildRuntimeGameShellProjection(authoredState) },
     };
 
-    const { rerender } = renderViewport();
+    renderViewport();
 
     expect(await screen.findByTestId('playtest-runtime-shell')).not.toBeNull();
     await waitFor(() => {
@@ -1000,7 +1000,7 @@ describe('PlaytestViewport overlay wiring', () => {
       }
     }
     class FailingFontFace {
-      constructor(_family: string, _source: string) {}
+      constructor() {}
       load = vi.fn(async () => {
         throw new Error('font missing');
       });

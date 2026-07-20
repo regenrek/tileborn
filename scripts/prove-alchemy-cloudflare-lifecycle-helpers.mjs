@@ -68,13 +68,7 @@ export const jsonFetch = async (baseUrl, route, init, fetchImpl = fetch) => {
   }
 };
 
-export const waitFor = async (
-  operation,
-  predicate,
-  label,
-  timeoutMs = 90_000,
-  options = {},
-) => {
+export const waitFor = async (operation, predicate, label, timeoutMs = 90_000, options = {}) => {
   const deadline = Date.now() + timeoutMs;
   const sleep = options.sleep ?? defaultSleep;
   const intervalMs = options.intervalMs ?? 500;
@@ -198,11 +192,7 @@ export const connectWebSocketWithRetry = (rawUrl, options = {}) =>
     },
   );
 
-export const createRoomWithRetry = async (
-  endpoint,
-  input,
-  options = {},
-) =>
+export const createRoomWithRetry = async (endpoint, input, options = {}) =>
   waitFor(
     async () => {
       const response = await jsonFetch(

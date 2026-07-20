@@ -112,14 +112,12 @@ export const menuEventForShellNavigationRequest = (
   switch (request.targetScreenId) {
     case 'title':
     case 'main-menu':
-      return state.phase === 'menu'
-        ? {
-            type: 'NAVIGATE_SHELL_SCREEN',
-            screenId: request.targetScreenId,
-            menuScreen: 'main',
-            replaceHistory: true,
-          }
-        : { type: 'TO_MENU' };
+      return {
+        type: 'NAVIGATE_SHELL_SCREEN',
+        screenId: request.targetScreenId,
+        menuScreen: 'main',
+        replaceHistory: true,
+      };
     case 'settings':
       return {
         type: 'NAVIGATE_SHELL_SCREEN',

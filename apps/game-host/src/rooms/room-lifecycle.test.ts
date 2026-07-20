@@ -256,6 +256,7 @@ describe('room presence and reconnect policy', () => {
     expect(projectRoomPresence(storage, { connectedPlayerIds: ['player-1'], now: LATER })).toEqual([
       {
         playerId: 'player-1',
+        role: 'participant',
         status: 'connected',
         ready: true,
         reconnectEligible: true,
@@ -264,6 +265,7 @@ describe('room presence and reconnect policy', () => {
       },
       {
         playerId: 'player-2',
+        role: 'participant',
         status: 'disconnected',
         ready: false,
         reconnectEligible: true,
@@ -332,6 +334,7 @@ describe('room presence and reconnect policy', () => {
     expect(projectRoomPresence(disconnected, { now: LATER })).toEqual([
       {
         playerId: 'player-1',
+        role: 'participant',
         status: 'disconnected',
         ready: false,
         reconnectEligible: true,

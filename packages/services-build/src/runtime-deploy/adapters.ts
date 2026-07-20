@@ -262,7 +262,8 @@ export const createLocalRuntimeDeploymentAdapter = (
 
 const packagedElectronAppRoot = (): string | undefined => {
   const resourcesPath =
-    typeof (process as NodeJS.Process & { readonly resourcesPath?: unknown }).resourcesPath === 'string'
+    typeof (process as NodeJS.Process & { readonly resourcesPath?: unknown }).resourcesPath ===
+    'string'
       ? (process as NodeJS.Process & { readonly resourcesPath: string }).resourcesPath
       : undefined;
   if (process.versions.electron === undefined || resourcesPath === undefined) {
@@ -284,7 +285,9 @@ export const defaultAlchemyCloudflareStackEntrypoint = (): string => {
 
   const appRoot = packagedElectronAppRoot();
   const packagedStack =
-    appRoot === undefined ? undefined : path.join(appRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js');
+    appRoot === undefined
+      ? undefined
+      : path.join(appRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js');
   if (packagedStack !== undefined && existsSync(packagedStack)) {
     return packagedStack;
   }
@@ -298,7 +301,11 @@ export const defaultAlchemyCloudflareStackEntrypoint = (): string => {
   }
 
   const resolvedServicesBuild = packageRequire().resolve('@tileborne/services-build');
-  return path.join(path.dirname(resolvedServicesBuild), 'runtime-deploy', 'alchemy-cloudflare-stack.js');
+  return path.join(
+    path.dirname(resolvedServicesBuild),
+    'runtime-deploy',
+    'alchemy-cloudflare-stack.js',
+  );
 };
 
 export const defaultAlchemyExecEntrypoint = (): string =>
@@ -322,21 +329,26 @@ export const createNodeAlchemyCloudflareRunner =
       workerPath: path.join(input.artifactDirectory, 'worker.js'),
       behaviorWorkerPath: path.join(input.artifactDirectory, 'behavior-worker.js'),
     };
-    const executed = await execute(process.execPath, [
-      alchemyExecEntrypoint,
-      ...alchemyCliArgs(input, stackEntrypoint),
-    ], {
-      cwd: input.stateDirectory,
-      env: buildNodeAlchemyRunnerEnv(input, payload, process.env, undefined, stackEntrypoint),
-      maxBuffer: 1024 * 1024,
-    });
+    const executed = await execute(
+      process.execPath,
+      [alchemyExecEntrypoint, ...alchemyCliArgs(input, stackEntrypoint)],
+      {
+        cwd: input.stateDirectory,
+        env: buildNodeAlchemyRunnerEnv(input, payload),
+        maxBuffer: 1024 * 1024,
+      },
+    );
     const output = parseAlchemyExecOutput(String(executed.stdout ?? ''));
-    return runtimeDeploymentOperationResult(output.endpoint ?? '', output.status ?? operationStatus(input.operation), [
-      `alchemy-cloudflare ${input.operation} ${input.workerName}`,
-      `alchemy cli ${alchemyExecEntrypoint}`,
-      `alchemy stack ${stackEntrypoint}`,
-      ...(output.logs ?? []),
-    ]);
+    return runtimeDeploymentOperationResult(
+      output.endpoint ?? '',
+      output.status ?? operationStatus(input.operation),
+      [
+        `alchemy-cloudflare ${input.operation} ${input.workerName}`,
+        `alchemy cli ${alchemyExecEntrypoint}`,
+        `alchemy stack ${stackEntrypoint}`,
+        ...(output.logs ?? []),
+      ],
+    );
   };
 
 const alchemyCliArgs = (
@@ -356,8 +368,13 @@ const alchemyCliArgs = (
   ];
 };
 
-const runtimeDeploymentStatuses: ReadonlySet<RuntimeDeploymentOperationResult['status']> =
-  new Set(['planned', 'previewed', 'deployed', 'running', 'destroyed']);
+const runtimeDeploymentStatuses: ReadonlySet<RuntimeDeploymentOperationResult['status']> = new Set([
+  'planned',
+  'previewed',
+  'deployed',
+  'running',
+  'destroyed',
+]);
 
 const parseAlchemyExecOutput = (
   stdout: string,
@@ -399,14 +416,13 @@ export const buildNodeAlchemyRunnerEnv = (
   payload: Record<string, unknown>,
   baseEnv: NodeJS.ProcessEnv = process.env,
   isElectronProcess = process.versions.electron !== undefined,
-  stackEntrypoint: string = defaultAlchemyCloudflareStackEntrypoint(),
 ): NodeJS.ProcessEnv => {
   const profile = input.credentials.profile;
-  const {
-    CLOUDFLARE_ACCOUNT_ID: _cloudflareAccountId,
-    CLOUDFLARE_API_TOKEN: _cloudflareApiToken,
-    ...profileBaseEnv
-  } = baseEnv;
+  const profileBaseEnv = Object.fromEntries(
+    Object.entries(baseEnv).filter(
+      ([name]) => name !== 'CLOUDFLARE_ACCOUNT_ID' && name !== 'CLOUDFLARE_API_TOKEN',
+    ),
+  );
   const inheritedEnv = profile === undefined ? baseEnv : profileBaseEnv;
   return {
     ...inheritedEnv,

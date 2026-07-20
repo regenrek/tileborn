@@ -1,11 +1,29 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
-import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGameHostLobbyClient, LobbyClientError } from './lobby-client.js';
+import type {
+  LobbyCreateRequest as HostLobbyCreateRequest,
+  LobbyCreateResponse as HostLobbyCreateResponse,
+  LobbyJoinRequest as HostLobbyJoinRequest,
+  LobbyJoinResponse as HostLobbyJoinResponse,
+  LobbyReadyRequest as HostLobbyReadyRequest,
+  LobbyReadyResponse as HostLobbyReadyResponse,
+  RoomLobbySummary as HostRoomLobbySummary,
+  RoomReconnectRequest as HostRoomReconnectRequest,
+  RoomReconnectResponse as HostRoomReconnectResponse,
+} from '../../../apps/game-host/src/types.js';
+import {
+  createGameHostLobbyClient,
+  LobbyClientError,
+  type LobbyCreateRequest as ClientLobbyCreateRequest,
+  type LobbyCreateResponse as ClientLobbyCreateResponse,
+  type LobbyJoinRequest as ClientLobbyJoinRequest,
+  type LobbyJoinResponse as ClientLobbyJoinResponse,
+  type LobbyReadyRequest as ClientLobbyReadyRequest,
+  type LobbyReadyResponse as ClientLobbyReadyResponse,
+  type RoomLobbySummary as ClientRoomLobbySummary,
+  type RoomReconnectRequest as ClientRoomReconnectRequest,
+  type RoomReconnectResponse as ClientRoomReconnectResponse,
+} from './lobby-client.js';
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -33,46 +51,9 @@ const lobby = {
   ],
 };
 
-const repoRoot = path.resolve(process.cwd(), '../..');
+type AssertAssignable<Actual, Expected> = Actual extends Expected ? true : never;
 
-const relativeImport = (fromDir: string, toFile: string): string => {
-  const relative = path.relative(fromDir, toFile).split(path.sep).join('/');
-  return relative.startsWith('.') ? relative : `./${relative}`;
-};
-
-const compileLobbyDtoContract = (): readonly string[] => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tileborne-lobby-contract-'));
-  try {
-    const contractFile = path.join(tempDir, 'lobby-contract.ts');
-    fs.writeFileSync(
-      contractFile,
-      `
-import type {
-  LobbyCreateRequest as HostLobbyCreateRequest,
-  LobbyCreateResponse as HostLobbyCreateResponse,
-  LobbyJoinRequest as HostLobbyJoinRequest,
-  LobbyJoinResponse as HostLobbyJoinResponse,
-  LobbyReadyRequest as HostLobbyReadyRequest,
-  LobbyReadyResponse as HostLobbyReadyResponse,
-  RoomLobbySummary as HostRoomLobbySummary,
-  RoomReconnectRequest as HostRoomReconnectRequest,
-  RoomReconnectResponse as HostRoomReconnectResponse,
-} from "${relativeImport(tempDir, path.join(repoRoot, 'apps/game-host/src/types.ts'))}";
-import type {
-  LobbyCreateRequest as ClientLobbyCreateRequest,
-  LobbyCreateResponse as ClientLobbyCreateResponse,
-  LobbyJoinRequest as ClientLobbyJoinRequest,
-  LobbyJoinResponse as ClientLobbyJoinResponse,
-  LobbyReadyRequest as ClientLobbyReadyRequest,
-  LobbyReadyResponse as ClientLobbyReadyResponse,
-  RoomLobbySummary as ClientRoomLobbySummary,
-  RoomReconnectRequest as ClientRoomReconnectRequest,
-  RoomReconnectResponse as ClientRoomReconnectResponse,
-} from "${relativeImport(tempDir, path.join(repoRoot, 'packages/game-client/src/lobby-client.ts'))}";
-
-type AssertAssignable<Actual extends Expected, Expected> = true;
-
-type LobbyContract = [
+type LobbyContract = readonly [
   AssertAssignable<ClientRoomLobbySummary, HostRoomLobbySummary>,
   AssertAssignable<HostRoomLobbySummary, ClientRoomLobbySummary>,
   AssertAssignable<ClientLobbyCreateRequest, HostLobbyCreateRequest>,
@@ -93,50 +74,31 @@ type LobbyContract = [
   AssertAssignable<HostRoomReconnectResponse, ClientRoomReconnectResponse>,
 ];
 
-const contract: LobbyContract = [
-  true, true, true, true, true, true, true, true, true,
-  true, true, true, true, true, true, true, true, true,
+const lobbyContract: LobbyContract = [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
 ];
-void contract;
-`,
-    );
-    const program = ts.createProgram({
-      rootNames: [contractFile],
-      options: {
-        strict: true,
-        noUncheckedIndexedAccess: true,
-        exactOptionalPropertyTypes: true,
-        noEmit: true,
-        skipLibCheck: true,
-        allowImportingTsExtensions: true,
-        ignoreDeprecations: '6.0',
-        module: ts.ModuleKind.NodeNext,
-        moduleResolution: ts.ModuleResolutionKind.NodeNext,
-        target: ts.ScriptTarget.ES2022,
-        lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
-        types: ['@cloudflare/workers-types'],
-        baseUrl: repoRoot,
-        paths: {
-          '@tileborne/core': ['./packages/core/src/index.ts'],
-          '@tileborne/ipc-contracts': ['./packages/ipc-contracts/src/index.ts'],
-          '@tileborne/ipc-contracts/contracts/multiplayer': [
-            './packages/ipc-contracts/src/contracts/multiplayer.ts',
-          ],
-        },
-      },
-    });
-    return ts
-      .getPreEmitDiagnostics(program)
-      .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-};
 
 describe('createGameHostLobbyClient', () => {
   it('keeps lobby DTOs assignable to the host-owned contract', () => {
-    expect(compileLobbyDtoContract()).toEqual([]);
-  }, 20_000);
+    expect(lobbyContract).toHaveLength(18);
+  });
 
   it('wraps lobby create, join, ready, lookup, and reconnect endpoints', async () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {

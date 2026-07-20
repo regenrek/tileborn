@@ -8,18 +8,18 @@ SCRIPT_PATH="scripts/clean-checkout-smoke.sh"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tileborne-clean-checkout.XXXXXX")"
 MODE="smoke"
 CDP_PORT=9323
-# Cold-start profiling (2026-05-23): dev:cdp CDP /json/version ready ~20.2s on fresh rsync tree;
-# pnpm -w typecheck after bootstrap ~79s on fresh rsync tree (Mac dev).
+# Production-MVP profiling (GitHub hosted runner, 2026-07-20): bootstrap ~253s,
+# typecheck ~168s, and the remaining build ~116s. CDP reuses that verified build.
 CDP_READY_LIMIT_MS=30000
 DEV_CDP_PID=""
 PORT_WAS_BUSY=0
 TOTAL_START_MS=0
 
 LIMIT_INSTALL_MS=90000
-LIMIT_BOOTSTRAP_MS=90000
-LIMIT_TYPECHECK_MS=90000
-LIMIT_BUILD_MS=90000
-LIMIT_TOTAL_MS=300000
+LIMIT_BOOTSTRAP_MS=300000
+LIMIT_TYPECHECK_MS=210000
+LIMIT_BUILD_MS=150000
+LIMIT_TOTAL_MS=660000
 
 declare -a STEP_NAMES=()
 declare -a STEP_EXIT_CODES=()
@@ -159,7 +159,7 @@ wait_for_cdp_ready() {
 }
 
 launch_dev_cdp() {
-  local launch_cmd=(pnpm --filter @tileborne/desktop dev:cdp)
+  local launch_cmd=(env TILEBORNE_SKIP_PREDEV_CDP_BUILD=1 pnpm --filter @tileborne/desktop dev:cdp)
   if [[ "$(uname -s)" == "Linux" ]] && [[ -z "${DISPLAY:-}" ]]; then
     launch_cmd=(xvfb-run -a "${launch_cmd[@]}")
   fi

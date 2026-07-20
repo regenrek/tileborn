@@ -9,7 +9,7 @@ const stack = Alchemy.Stack(
     providers: Layer.empty,
     state: Alchemy.localState(),
   },
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const endpoint = Output.asOutput('https://bootstrap.invalid');
     return Output.map(
       endpoint,

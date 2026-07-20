@@ -887,7 +887,8 @@ export function PlaytestViewport({
     playtestHudMetrics?.hud === undefined
       ? playtestHudMetrics
       : (() => {
-          const { gameOver: _gameOver, ...hudWithoutGameOver } = playtestHudMetrics.hud;
+          const { gameOver, ...hudWithoutGameOver } = playtestHudMetrics.hud;
+          void gameOver;
           return {
             ...playtestHudMetrics,
             hud: hudWithoutGameOver,

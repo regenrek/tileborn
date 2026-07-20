@@ -21,7 +21,9 @@ import {
   AssetLibraryService,
   AssetService,
   MapService,
+  ProjectAudioServiceLive,
   ProjectBehaviorService,
+  ProjectGameShellServiceLive,
   ProjectService,
   makeAssetLibraryServiceLive,
   makeProjectBehaviorServiceLive,
@@ -195,7 +197,16 @@ describe('creator-v1 canonical owner execution', () => {
       onPageCompleted: (event) => assetPageEvents.push(event),
       onPreviewResolutionCompleted: (event) => previewEvents.push(event),
     }).pipe(Layer.provideMerge(HomeServiceLive), Layer.provideMerge(assetLayer));
-    const appLayer = Layer.mergeAll(projectLayer, behaviorLayer, assetLibraryLayer, assetLayer);
+    const audioLayer = ProjectAudioServiceLive.pipe(Layer.provideMerge(projectLayer));
+    const shellLayer = ProjectGameShellServiceLive.pipe(Layer.provideMerge(projectLayer));
+    const appLayer = Layer.mergeAll(
+      projectLayer,
+      audioLayer,
+      shellLayer,
+      behaviorLayer,
+      assetLibraryLayer,
+      assetLayer,
+    );
 
     const projectId = await Effect.runPromise(
       Effect.gen(function* () {
@@ -610,6 +621,8 @@ describe('creator-v1 canonical owner execution', () => {
           loaderLayer,
           assetLayer,
           projectLayer,
+          audioLayer,
+          shellLayer,
           behaviorLayer,
           mapLayer,
         ),

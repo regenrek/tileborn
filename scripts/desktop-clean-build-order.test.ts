@@ -13,11 +13,12 @@ describe('desktop clean-checkout dependency build order', () => {
     const command = desktopPackage.scripts?.['predev:cdp'];
 
     expect(command).toBeDefined();
+    expect(command).toContain('TILEBORNE_SKIP_PREDEV_CDP_BUILD');
     expect(command).toContain(
       "pnpm -w -r --workspace-concurrency=1 --filter '@tileborne/desktop^...' --filter '!tileborne' build",
     );
     expect(command).toMatch(
-      /--workspace-concurrency=1[\s\S]+@tileborne\/desktop\^\.\.\.[\s\S]+build[\s\S]+&& pnpm --filter @tileborne\/game-host build$/,
+      /--workspace-concurrency=1[\s\S]+@tileborne\/desktop\^\.\.\.[\s\S]+build[\s\S]+&& pnpm --filter @tileborne\/game-host build/,
     );
   });
 });

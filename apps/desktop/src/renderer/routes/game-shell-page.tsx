@@ -1,5 +1,5 @@
 import { useParams, useSearch } from '@tanstack/react-router';
-import type { PackId, ProjectId } from '@tileborne/core';
+import type { ProjectId } from '@tileborne/core';
 import {
   GAME_SHELL_ACTION_TYPES,
   GAME_SHELL_REGISTERED_EVENTS,

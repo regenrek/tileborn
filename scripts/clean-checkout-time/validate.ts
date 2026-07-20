@@ -2,11 +2,11 @@ export const CLEAN_CHECKOUT_SCRIPT_PATH = 'scripts/clean-checkout-smoke.sh';
 
 export const CLEAN_CHECKOUT_TIME_LIMITS = {
   installMs: 90_000,
-  bootstrapMs: 90_000,
-  typecheckMs: 90_000,
-  buildMs: 90_000,
+  bootstrapMs: 300_000,
+  typecheckMs: 210_000,
+  buildMs: 150_000,
   devCdpReadyMs: 30_000,
-  totalMs: 300_000,
+  totalMs: 660_000,
 } as const;
 
 export type CleanCheckoutTimeStepName =

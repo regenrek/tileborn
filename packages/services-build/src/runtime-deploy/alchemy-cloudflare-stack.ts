@@ -16,9 +16,7 @@ interface AlchemyCloudflareStackInput {
 
 const ALCHEMY_RESULT_PREFIX = 'TILEBORNE_ALCHEMY_RESULT_JSON=';
 
-const input = JSON.parse(
-  requireEnv('TILEBORNE_ALCHEMY_INPUT'),
-) as AlchemyCloudflareStackInput;
+const input = JSON.parse(requireEnv('TILEBORNE_ALCHEMY_INPUT')) as AlchemyCloudflareStackInput;
 const handoffSigningKey = requireEnv('TILEBORNE_HANDOFF_SIGNING_KEY');
 
 const stack = Alchemy.Stack(
@@ -52,14 +50,16 @@ const stack = Alchemy.Stack(
       },
     });
 
-    return Output.map(gameHostWorker.url, (endpoint) =>
-      `${ALCHEMY_RESULT_PREFIX}${JSON.stringify({
-        endpoint: endpoint ?? '',
-        status: operationStatus(input.operation),
-        logs: [`alchemy-cloudflare ${input.operation} ${input.workerName}`],
-        workerName: input.workerName,
-        behaviorWorkerName: `${input.workerName}-behaviors`,
-      })}`,
+    return Output.map(
+      gameHostWorker.url,
+      (endpoint) =>
+        `${ALCHEMY_RESULT_PREFIX}${JSON.stringify({
+          endpoint: endpoint ?? '',
+          status: operationStatus(input.operation),
+          logs: [`alchemy-cloudflare ${input.operation} ${input.workerName}`],
+          workerName: input.workerName,
+          behaviorWorkerName: `${input.workerName}-behaviors`,
+        })}`,
     );
   }),
 );
@@ -72,7 +72,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function operationStatus(operation: RuntimeDeployOperation): 'planned' | 'previewed' | 'deployed' | 'running' | 'destroyed' {
+function operationStatus(
+  operation: RuntimeDeployOperation,
+): 'planned' | 'previewed' | 'deployed' | 'running' | 'destroyed' {
   if (operation === 'plan') return 'planned';
   if (operation === 'preview') return 'previewed';
   if (operation === 'destroy') return 'destroyed';

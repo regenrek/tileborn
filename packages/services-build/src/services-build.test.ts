@@ -15,11 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import {
-  ProjectAssetPackRef,
-  ProjectManifest,
-  hashBytes,
-} from '@tileborne/core';
+import { ProjectAssetPackRef, ProjectManifest, hashBytes } from '@tileborne/core';
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { PluginManifest } from '@tileborne/plugin-api';
 import { AuthoritativeBehaviorRuntimeHost } from '@tileborne/runtime/behavior';
@@ -3035,7 +3031,7 @@ emitResult({
 
   it('node Alchemy runner falls back to the requested operation status without machine output', async () => {
     const runner = createNodeAlchemyCloudflareRunner(
-      async (_file, _args, _options) => ({ stdout: 'Alchemy planned human output\n', stderr: '' }),
+      async () => ({ stdout: 'Alchemy planned human output\n', stderr: '' }),
       '/tmp/tileborne-services-build/alchemy-cloudflare-stack.js',
       '/tmp/tileborne-services-build/alchemy-exec.js',
     );

@@ -154,6 +154,7 @@ class MockWebSocket {
   readonly close = vi.fn();
   readonly url: string;
   readonly listeners = new Map<string, ((event: MessageEvent) => void)[]>();
+  private readonly pendingSends = new Set<Promise<void>>();
 
   constructor(url: string) {
     this.url = url;
@@ -170,7 +171,9 @@ class MockWebSocket {
         const message = ArrayBuffer.isView(data)
           ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
           : data;
-        void connection.room.webSocketMessage(server as unknown as WebSocket, message);
+        const pending = connection.room.webSocketMessage(server as unknown as WebSocket, message);
+        this.pendingSends.add(pending);
+        void pending.finally(() => this.pendingSends.delete(pending));
       });
     }
   }
@@ -183,6 +186,10 @@ class MockWebSocket {
     for (const listener of this.listeners.get('message') ?? []) {
       listener(new MessageEvent('message', { data }));
     }
+  }
+
+  async flushSends(): Promise<void> {
+    await Promise.all([...this.pendingSends]);
   }
 }
 
@@ -817,6 +824,7 @@ describe('game-client template App', () => {
       expect(socket.send).toHaveBeenCalledWith(expect.stringContaining('shell.pause.entered')),
     );
 
+    await socket.flushSends();
     await room.alarm();
 
     await waitFor(() => expect(screen.getByTestId('shell-screen-main-menu')).not.toBeNull());

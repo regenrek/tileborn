@@ -62,7 +62,6 @@ import {
   decodeProjectGameShellDocument,
   gameShellStateFromDocument,
   resolveRuntimeAudioSource,
-  type GameShellAssetKind,
   type GameShellAssetRefDefinition,
 } from '@tileborne/runtime';
 import {
@@ -244,8 +243,7 @@ const resolveProjectGameMode = (
   );
 
 const shellAssetResolverFromPacks =
-  (installedPacks: readonly AssetPackWithCapability[]) =>
-  (asset: GameShellAssetRefDefinition, _kind: GameShellAssetKind) => {
+  (installedPacks: readonly AssetPackWithCapability[]) => (asset: GameShellAssetRefDefinition) => {
     const pack = installedPacks.find(
       (entry) => String(entry.id) === asset.packId && entry.version === asset.packVersion,
     );

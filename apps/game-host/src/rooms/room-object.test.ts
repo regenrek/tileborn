@@ -593,7 +593,11 @@ describe('PlaytestRoom lifecycle', () => {
       navigation === undefined
         ? undefined
         : menuEventForShellNavigationRequest(menuState, navigation.request);
-    expect(menuEvent).toEqual({ type: 'OPEN_SETTINGS' });
+    expect(menuEvent).toEqual({
+      type: 'NAVIGATE_SHELL_SCREEN',
+      screenId: 'settings',
+      menuScreen: 'settings',
+    });
     expect(menuEvent === undefined ? menuState : menuReducer(menuState, menuEvent)).toMatchObject({
       phase: 'menu',
       screen: 'settings',

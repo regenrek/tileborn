@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js start",
     "clean:vite-deps": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('node_modules/.vite/deps', { recursive: true, force: true }); console.log('Removed desktop Vite optimized deps cache. Restart the dev server to rebuild stale pre-bundled deps.');\"",
-    "predev:cdp": "echo \"[t-fix-r-f3-predev-build][ADR-0015] Building desktop workspace dist dependencies before CDP dev, then rebundling game-host worker.\" && pnpm -w -r --workspace-concurrency=1 --filter '@tileborne/desktop^...' --filter '!tileborne' build && pnpm --filter @tileborne/game-host build",
+    "predev:cdp": "if [ \"${TILEBORNE_SKIP_PREDEV_CDP_BUILD:-0}\" = \"1\" ]; then echo \"[ADR-0015] Reusing the verified workspace build for CDP dev.\"; else echo \"[t-fix-r-f3-predev-build][ADR-0015] Building desktop workspace dist dependencies before CDP dev, then rebundling game-host worker.\" && pnpm -w -r --workspace-concurrency=1 --filter '@tileborne/desktop^...' --filter '!tileborne' build && pnpm --filter @tileborne/game-host build; fi",
     "dev:cdp": "TILEBORNE_REMOTE_DEBUGGING_PORT=9323 node ../../node_modules/@electron-forge/cli/dist/electron-forge.js start",
     "prebuild": "node --input-type=module -e \"import { rmSync } from 'node:fs'; for (const path of ['out', '.vite/build']) rmSync(path, { recursive: true, force: true });\"",
     "build": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js package",
@@ -76,6 +76,7 @@
     "@tanstack/react-router-devtools": "1.167.0",
     "@tanstack/router-plugin": "1.168.7",
     "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.1",

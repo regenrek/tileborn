@@ -60,7 +60,9 @@ const assertDisposableWorkerNames = () => {
     throw new Error(`refusing Cloudflare lifecycle for non-disposable worker name: ${workerName}`);
   }
   if (behaviorWorkerName !== `${workerName}-behaviors`) {
-    throw new Error(`refusing Cloudflare lifecycle for unexpected behavior worker name: ${behaviorWorkerName}`);
+    throw new Error(
+      `refusing Cloudflare lifecycle for unexpected behavior worker name: ${behaviorWorkerName}`,
+    );
   }
 };
 
@@ -167,24 +169,19 @@ const runAlchemyBootstrapProbe = async () => {
   const execEntrypoint = path.join(repoRoot, 'node_modules/alchemy/bin/alchemy.js');
   const executed = await execFileAsync(
     process.execPath,
-    [
-      execEntrypoint,
-      'deploy',
-      '--stage',
-      'bootstrap',
-      '--yes',
-      stackEntrypoint,
-    ],
+    [execEntrypoint, 'deploy', '--stage', 'bootstrap', '--yes', stackEntrypoint],
     {
-    cwd: evidenceRoot,
-    env: {
-      ...process.env,
-      ALCHEMY_NO_TUI: '1',
-    },
-    maxBuffer: 1024 * 1024,
+      cwd: evidenceRoot,
+      env: {
+        ...process.env,
+        ALCHEMY_NO_TUI: '1',
+      },
+      maxBuffer: 1024 * 1024,
     },
   );
-  const stdoutLines = String(executed.stdout ?? '').split('\n').filter(Boolean);
+  const stdoutLines = String(executed.stdout ?? '')
+    .split('\n')
+    .filter(Boolean);
   const marker = 'TILEBORNE_ALCHEMY_RESULT_JSON=';
   const resultLine = stdoutLines.findLast((line) => line.trim().startsWith(marker));
   if (resultLine === undefined) {
@@ -257,9 +254,13 @@ if (localBuildOnly) {
   } finally {
     receipt.completedAt = new Date().toISOString();
     receipt.receiptSha256 = sha256(JSON.stringify({ ...receipt, receiptSha256: undefined }));
-    await writeFile(path.join(evidenceRoot, 'receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`, {
-      mode: 0o600,
-    });
+    await writeFile(
+      path.join(evidenceRoot, 'receipt.json'),
+      `${JSON.stringify(receipt, null, 2)}\n`,
+      {
+        mode: 0o600,
+      },
+    );
     await rm(homeRoot, { recursive: true, force: true });
   }
   console.log(
@@ -405,8 +406,9 @@ try {
       progressStatus: progress.status,
       tickCount: progress.body?.metrics?.tickCount,
       lastTickAt: progress.body?.lastTickAt,
-      behaviorWorkerPresent: afterDeployPresence.find((entry) => entry.workerName === behaviorWorkerName)
-        ?.exists,
+      behaviorWorkerPresent: afterDeployPresence.find(
+        (entry) => entry.workerName === behaviorWorkerName,
+      )?.exists,
       behaviorId: String(services.reference.behaviorId),
     },
     results: {
@@ -457,9 +459,13 @@ try {
   ]);
   receipt.completedAt = new Date().toISOString();
   receipt.receiptSha256 = sha256(JSON.stringify({ ...receipt, receiptSha256: undefined }));
-  await writeFile(path.join(evidenceRoot, 'receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`, {
-    mode: 0o600,
-  });
+  await writeFile(
+    path.join(evidenceRoot, 'receipt.json'),
+    `${JSON.stringify(receipt, null, 2)}\n`,
+    {
+      mode: 0o600,
+    },
+  );
   await rm(homeRoot, { recursive: true, force: true });
 }
 

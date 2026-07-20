@@ -88,6 +88,7 @@ const step = async <T>(label: string, action: () => Promise<T>, timeoutMs = 12_0
   } catch (cause) {
     throw new Error(
       `Step failed: ${label}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
     );
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
@@ -429,6 +430,7 @@ const waitForRuntimeRootMounted = async (page: SmokeContext['page']): Promise<vo
             .catch(() => null),
         })}\n` +
         `rendererDebug=${JSON.stringify(rendererDebug)}`,
+      { cause },
     );
   }
 };
@@ -537,6 +539,7 @@ const clickShellActionByPointer = async (
           shellScreenId: await runtimeRoot.getAttribute('data-shell-screen-id'),
         })}\n` +
         `rendererDebug=${JSON.stringify(rendererDebug)}`,
+      { cause },
     );
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
@@ -610,6 +613,7 @@ const pressShellActionByKeyboard = async (
         })}\n` +
         `shellState=${JSON.stringify(await shellStateSnapshot(page))}\n` +
         `rendererDebug=${JSON.stringify(await rendererPlaytestDebug(page))}`,
+      { cause },
     );
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
@@ -913,6 +917,7 @@ describe('acceptance: playtest', () => {
           `readinessNodes=${JSON.stringify(await readinessStatusSnapshots(page))}\n` +
           `rendererPageEvents=${JSON.stringify(rendererPageEvents.slice(-80))}\n` +
           `rendererDebug=${JSON.stringify(await rendererPlaytestDebug(page))}`,
+        { cause },
       );
     }
 
@@ -1009,6 +1014,7 @@ describe('acceptance: playtest', () => {
           throw new Error(
             `${cause instanceof Error ? cause.message : String(cause)}\n` +
               `afterNavigation=${JSON.stringify(await shellHitTestDiagnostics(page))}`,
+            { cause },
           );
         }
       },
@@ -1251,7 +1257,8 @@ describe('acceptance: playtest', () => {
                   };
                 }
                 if (session.runtimeMetrics?.hud === undefined) return session;
-                const { gameOver: _gameOver, ...hud } = session.runtimeMetrics.hud;
+                const { gameOver, ...hud } = session.runtimeMetrics.hud;
+                void gameOver;
                 return {
                   ...session,
                   runtimeMetrics: {
@@ -1309,6 +1316,7 @@ describe('acceptance: playtest', () => {
         `${cause instanceof Error ? cause.message : String(cause)}\n` +
           `rendererPageEvents=${JSON.stringify(rendererPageEvents.slice(-80))}\n` +
           `rendererDebug=${JSON.stringify(await rendererPlaytestDebug(page))}`,
+        { cause },
       );
     }
     await expect(page.getByTestId('shell-screen-results')).toBeVisible();
@@ -1371,6 +1379,7 @@ describe('acceptance: playtest', () => {
         `${cause instanceof Error ? cause.message : String(cause)}\n` +
           `rendererPageEvents=${JSON.stringify(rendererPageEvents.slice(-80))}\n` +
           `rendererDebug=${JSON.stringify(await rendererPlaytestDebug(page))}`,
+        { cause },
       );
     }
     await step(

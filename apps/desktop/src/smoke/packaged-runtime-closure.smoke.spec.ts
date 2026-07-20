@@ -319,12 +319,14 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     const behaviorWorkerPath = path.join(copiedArtifact, 'behavior-worker.js');
     expect(await readFile(workerPath, 'utf8')).not.toContain(path.resolve(desktopRoot, '../..'));
 
-    const buildJob = await page.evaluate(async (projectId) =>
-      window.tileborne.builds.build({
-        projectId,
-        target: 'cloudflare',
-      }),
-    created.projectId);
+    const buildJob = await page.evaluate(
+      async (projectId) =>
+        window.tileborne.builds.build({
+          projectId,
+          target: 'cloudflare',
+        }),
+      created.projectId,
+    );
     const built = await waitForJob(page, buildJob.jobId, 120_000);
     expect(built.status, built.errorMessage).toBe('Completed');
     const runtimeDeployBuild = await page.evaluate(async (jobId) => {

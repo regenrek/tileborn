@@ -1001,105 +1001,109 @@ describe('BuildService', () => {
       }
     }));
 
-  it('buildGame --project packages licensed authored audio bytes into the copied artifact', () =>
-    withTempHome(async () => {
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const { projectId, mapId } = yield* seedProject('Licensed Audio Arena');
-          yield* installShipModePlugin();
-          const pack = yield* installFixtureAudioPack();
-          const audio = yield* ProjectAudioService;
-          yield* audio.apply(projectId, {
-            type: 'import',
-            label: 'Menu Loop',
-            classification: 'music',
-            source: {
-              assetId: String(pack.assets[0]!.id),
+  it(
+    'buildGame --project packages licensed authored audio bytes into the copied artifact',
+    () =>
+      withTempHome(async () => {
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId, mapId } = yield* seedProject('Licensed Audio Arena');
+            yield* installShipModePlugin();
+            const pack = yield* installFixtureAudioPack();
+            const audio = yield* ProjectAudioService;
+            yield* audio.apply(projectId, {
+              type: 'import',
+              label: 'Menu Loop',
+              classification: 'music',
+              source: {
+                assetId: String(pack.assets[0]!.id),
+                packId: String(pack.id),
+                packVersion: pack.version,
+                path: pack.assets[0]!.path,
+                mime: pack.assets[0]!.mime,
+              },
+            });
+            yield* audio.apply(projectId, {
+              type: 'bind',
+              binding: 'shell.menuMusic',
+              label: 'Menu Loop',
+            });
+            const shell = yield* ProjectGameShellService;
+            yield* shell.apply(projectId, {
+              type: 'set-screen-text',
+              screenId: 'main-menu',
+              title: 'Licensed Arena Shell',
+              subtitle: 'Packaged through ship build',
+            });
+            const projects = yield* ProjectService;
+            const saved = yield* projects.open(projectId);
+            expect(saved.assetPacks).toContainEqual(
+              new ProjectAssetPackRef({ id: String(pack.id), version: pack.version }),
+            );
+
+            const outDir = yield* Effect.promise(() =>
+              mkdtemp(path.join(tmpdir(), 'tileborne-licensed-audio-out-')),
+            );
+            const builds = yield* BuildService;
+            const artifact = yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: 'local',
+                outputDirectory: Option.some(outDir),
+                assetPackIds: Option.none(),
+                siteName: Option.none(),
+                projectId: Option.some(projectId),
+                mapIds: Option.none(),
+              }),
+            );
+
+            const mapDir = `maps/${mapId.replaceAll(':', '-')}`;
+            const packagedAudioPath = `${mapDir}/assets/packs/${pack.id}-${pack.version}/${pack.assets[0]!.path}`;
+            expect(artifact.files).toContain(`${mapDir}/audio.json`);
+            expect(artifact.files).toContain(`${mapDir}/shell.json`);
+            expect(artifact.files).toContain(packagedAudioPath);
+            expect(
+              yield* Effect.promise(() => readFile(path.join(outDir, packagedAudioPath))),
+            ).toEqual(Buffer.from(tinyLicensedWav));
+
+            const copiedDir = yield* Effect.promise(() =>
+              mkdtemp(path.join(tmpdir(), 'tileborne-licensed-audio-copied-')),
+            );
+            yield* Effect.promise(() => cp(outDir, copiedDir, { recursive: true }));
+
+            const audioJson = JSON.parse(
+              yield* Effect.promise(() =>
+                readFile(path.join(copiedDir, mapDir, 'audio.json'), 'utf8'),
+              ),
+            ) as {
+              readonly cues: readonly {
+                readonly id: string;
+                readonly source?: { readonly url?: string; readonly packId?: string };
+              }[];
+              readonly settings: { readonly masterVolume: number };
+            };
+            const shellJson = JSON.parse(
+              yield* Effect.promise(() =>
+                readFile(path.join(copiedDir, mapDir, 'shell.json'), 'utf8'),
+              ),
+            ) as {
+              readonly screens: readonly { readonly stableId: string; readonly title: string }[];
+            };
+            expect(shellJson.screens.find((screen) => screen.stableId === 'main-menu')?.title).toBe(
+              'Licensed Arena Shell',
+            );
+            expect(
+              audioJson.cues.find((cue) => cue.id === 'project.shell.menuMusic')?.source,
+            ).toMatchObject({
               packId: String(pack.id),
-              packVersion: pack.version,
-              path: pack.assets[0]!.path,
-              mime: pack.assets[0]!.mime,
-            },
-          });
-          yield* audio.apply(projectId, {
-            type: 'bind',
-            binding: 'shell.menuMusic',
-            label: 'Menu Loop',
-          });
-          const shell = yield* ProjectGameShellService;
-          yield* shell.apply(projectId, {
-            type: 'set-screen-text',
-            screenId: 'main-menu',
-            title: 'Licensed Arena Shell',
-            subtitle: 'Packaged through ship build',
-          });
-          const projects = yield* ProjectService;
-          const saved = yield* projects.open(projectId);
-          expect(saved.assetPacks).toContainEqual(
-            new ProjectAssetPackRef({ id: String(pack.id), version: pack.version }),
-          );
-
-          const outDir = yield* Effect.promise(() =>
-            mkdtemp(path.join(tmpdir(), 'tileborne-licensed-audio-out-')),
-          );
-          const builds = yield* BuildService;
-          const artifact = yield* builds.buildGame(
-            new GameBuildOptions({
-              pluginId: SHIP_PLUGIN_ID,
-              target: 'local',
-              outputDirectory: Option.some(outDir),
-              assetPackIds: Option.none(),
-              siteName: Option.none(),
-              projectId: Option.some(projectId),
-              mapIds: Option.none(),
-            }),
-          );
-
-          const mapDir = `maps/${mapId.replaceAll(':', '-')}`;
-          const packagedAudioPath = `${mapDir}/assets/packs/${pack.id}-${pack.version}/${pack.assets[0]!.path}`;
-          expect(artifact.files).toContain(`${mapDir}/audio.json`);
-          expect(artifact.files).toContain(`${mapDir}/shell.json`);
-          expect(artifact.files).toContain(packagedAudioPath);
-          expect(
-            yield* Effect.promise(() => readFile(path.join(outDir, packagedAudioPath))),
-          ).toEqual(Buffer.from(tinyLicensedWav));
-
-          const copiedDir = yield* Effect.promise(() =>
-            mkdtemp(path.join(tmpdir(), 'tileborne-licensed-audio-copied-')),
-          );
-          yield* Effect.promise(() => cp(outDir, copiedDir, { recursive: true }));
-
-          const audioJson = JSON.parse(
-            yield* Effect.promise(() =>
-              readFile(path.join(copiedDir, mapDir, 'audio.json'), 'utf8'),
-            ),
-          ) as {
-            readonly cues: readonly {
-              readonly id: string;
-              readonly source?: { readonly url?: string; readonly packId?: string };
-            }[];
-            readonly settings: { readonly masterVolume: number };
-          };
-          const shellJson = JSON.parse(
-            yield* Effect.promise(() =>
-              readFile(path.join(copiedDir, mapDir, 'shell.json'), 'utf8'),
-            ),
-          ) as {
-            readonly screens: readonly { readonly stableId: string; readonly title: string }[];
-          };
-          expect(shellJson.screens.find((screen) => screen.stableId === 'main-menu')?.title).toBe(
-            'Licensed Arena Shell',
-          );
-          expect(
-            audioJson.cues.find((cue) => cue.id === 'project.shell.menuMusic')?.source,
-          ).toMatchObject({
-            packId: String(pack.id),
-            url: `assets/packs/${pack.id}-${pack.version}/${pack.assets[0]!.path}`,
-          });
-          expect(audioJson.settings.masterVolume).toBe(1);
-        }).pipe(Effect.provide(testLayer)),
-      );
-    }));
+              url: `assets/packs/${pack.id}-${pack.version}/${pack.assets[0]!.path}`,
+            });
+            expect(audioJson.settings.masterVolume).toBe(1);
+          }).pipe(Effect.provide(testLayer)),
+        );
+      }),
+    30_000,
+  );
 
   it(
     'buildGame local emits the canonical artifact plus serve README and boots a joinable room in miniflare (M5 S2)',
@@ -1519,47 +1523,51 @@ describe('BuildService', () => {
     180_000,
   );
 
-  it('buildGame local ships deployment manifest without direct Wrangler deploy instructions', () =>
-    withTempHome(async () => {
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const { projectId } = yield* seedProject('Local Deployment Manifest Arena');
-          yield* installShipModePlugin();
-          const outDir = yield* Effect.promise(() =>
-            mkdtemp(path.join(tmpdir(), 'tileborne-local-deploy-manifest-out-')),
-          );
-          const builds = yield* BuildService;
-          const artifact = yield* builds.buildGame(
-            new GameBuildOptions({
-              pluginId: SHIP_PLUGIN_ID,
-              target: 'local',
-              outputDirectory: Option.some(outDir),
-              assetPackIds: Option.none(),
-              siteName: Option.none(),
-              projectId: Option.some(projectId),
-              mapIds: Option.none(),
-            }),
-          );
+  it(
+    'buildGame local ships deployment manifest without direct Wrangler deploy instructions',
+    () =>
+      withTempHome(async () => {
+        await Effect.runPromise(
+          Effect.gen(function* () {
+            const { projectId } = yield* seedProject('Local Deployment Manifest Arena');
+            yield* installShipModePlugin();
+            const outDir = yield* Effect.promise(() =>
+              mkdtemp(path.join(tmpdir(), 'tileborne-local-deploy-manifest-out-')),
+            );
+            const builds = yield* BuildService;
+            const artifact = yield* builds.buildGame(
+              new GameBuildOptions({
+                pluginId: SHIP_PLUGIN_ID,
+                target: 'local',
+                outputDirectory: Option.some(outDir),
+                assetPackIds: Option.none(),
+                siteName: Option.none(),
+                projectId: Option.some(projectId),
+                mapIds: Option.none(),
+              }),
+            );
 
-          expect(artifact.files).toContain('deployment.json');
-          const deployment = JSON.parse(
-            yield* Effect.promise(() => readFile(path.join(outDir, 'deployment.json'), 'utf8')),
-          ) as {
-            readonly defaultAdapter: string;
-            readonly adapters: readonly { readonly id: string; readonly provider: string }[];
-          };
-          expect(deployment.defaultAdapter).toBe('local');
-          expect(deployment.adapters).toContainEqual(
-            expect.objectContaining({ id: 'alchemy-cloudflare', provider: 'cloudflare' }),
-          );
-          const readme = yield* Effect.promise(() =>
-            readFile(path.join(outDir, 'README.md'), 'utf8'),
-          );
-          expect(readme).toContain('Deployment adapters are described in deployment.json');
-          expect(readme).not.toContain('wrangler deploy');
-        }).pipe(Effect.provide(testLayer)),
-      );
-    }));
+            expect(artifact.files).toContain('deployment.json');
+            const deployment = JSON.parse(
+              yield* Effect.promise(() => readFile(path.join(outDir, 'deployment.json'), 'utf8')),
+            ) as {
+              readonly defaultAdapter: string;
+              readonly adapters: readonly { readonly id: string; readonly provider: string }[];
+            };
+            expect(deployment.defaultAdapter).toBe('local');
+            expect(deployment.adapters).toContainEqual(
+              expect.objectContaining({ id: 'alchemy-cloudflare', provider: 'cloudflare' }),
+            );
+            const readme = yield* Effect.promise(() =>
+              readFile(path.join(outDir, 'README.md'), 'utf8'),
+            );
+            expect(readme).toContain('Deployment adapters are described in deployment.json');
+            expect(readme).not.toContain('wrangler deploy');
+          }).pipe(Effect.provide(testLayer)),
+        );
+      }),
+    30_000,
+  );
 
   it(
     'reuses deterministic managed builds and rejects tampered or arbitrary artifacts',

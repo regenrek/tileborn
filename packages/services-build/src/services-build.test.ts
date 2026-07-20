@@ -3155,7 +3155,7 @@ emitResult({
     expect(stackSource).toContain('PLAYTEST_ROOM: playtestRoom');
     expect(stackSource).toContain('BEHAVIOR_RUNTIME: behaviorWorker');
     expect(stackSource).toContain('HANDOFF_SIGNING_KEY: Redacted.make(handoffSigningKey)');
-    expect(stackSource).toContain('Output.map(gameHostWorker.url');
+    expect(stackSource).toMatch(/Output\.map\(\s*gameHostWorker\.url/);
     expect(stackSource).toContain('TILEBORNE_ALCHEMY_RESULT_JSON=');
     expect(stackSource).not.toContain('const endpoint = yield* gameHostWorker.url');
     expect(stackSource).not.toContain('writeFile(input.resultPath!');

@@ -433,5 +433,5 @@ export default {
       );
     }
     await rm(tempRoot, { recursive: true, force: true });
-  }, 120_000);
+  }, 300_000);
 });

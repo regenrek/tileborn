@@ -90,33 +90,36 @@ const createDesktopReleaseForgeSettings = ({
     throw new Error('desktop-release.entitlements-missing: assets/entitlements.mac.plist');
   }
 
-  const notarizeCredentials = Object.freeze({
+  // Electron Forge renders string templates by mutating every config object it
+  // receives. Keep the Forge-owned settings mutable; freezing these objects
+  // makes configuration loading fail before packaging starts.
+  const notarizeCredentials = {
     appleApiKey: apiKeyPath,
     appleApiKeyId: apiKeyId,
     appleApiIssuer: apiIssuer,
-  });
+  };
   return Object.freeze({
     enabled: true,
     teamIdentifier,
-    packagerConfig: Object.freeze({
-      osxSign: Object.freeze({
+    packagerConfig: {
+      osxSign: {
         identity,
         entitlements: RELEASE_ENTITLEMENTS_PATH,
         entitlementsInherit: RELEASE_ENTITLEMENTS_PATH,
         hardenedRuntime: true,
         strictVerify: true,
         continueOnError: false,
-      }),
+      },
       osxNotarize: notarizeCredentials,
-    }),
-    dmgConfig: Object.freeze({
-      additionalDMGOptions: Object.freeze({
-        'code-sign': Object.freeze({
+    },
+    dmgConfig: {
+      additionalDMGOptions: {
+        'code-sign': {
           'signing-identity': identity,
           identifier: 'dev.tileborne.app.installer',
-        }),
-      }),
-    }),
+        },
+      },
+    },
     notarizeCredentials,
     entitlementsPath: RELEASE_ENTITLEMENTS_PATH,
   });

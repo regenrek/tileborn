@@ -868,6 +868,10 @@ describe('desktop 1.0 release contract', () => {
       appleApiKeyId: 'KLMNOPQRST',
       appleApiIssuer: '12345678-1234-1234-1234-123456789abc',
     });
+    expect(Object.isFrozen(settings.packagerConfig)).toBe(false);
+    expect(Object.isFrozen(settings.packagerConfig?.osxSign)).toBe(false);
+    expect(Object.isFrozen(settings.packagerConfig?.osxNotarize)).toBe(false);
+    expect(Object.isFrozen(settings.dmgConfig)).toBe(false);
     expect(() =>
       createDesktopReleaseForgeSettings({
         env: {

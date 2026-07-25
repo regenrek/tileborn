@@ -48,15 +48,19 @@ cell with the validated policy.
 
 <!-- desktop-release-support:start -->
 
-| Policy id                           | Surface                | Status             | Reason                                                                                                    |
-| ----------------------------------- | ---------------------- | ------------------ | --------------------------------------------------------------------------------------------------------- |
-| `platform.macos-arm64`              | macOS arm64            | `candidate`        | The only desktop 1.0 candidate; distribution remains fail-closed until every required receipt verifies.   |
-| `platform.macos-x64`                | macOS x64              | `unsupported`      | No native x64 signed installer or install/launch evidence exists.                                         |
-| `platform.windows`                  | Windows                | `unsupported`      | Forge maker configuration is not Windows build, signing, install, launch, upgrade, or uninstall evidence. |
-| `platform.linux`                    | Linux                  | `unsupported`      | Forge maker configuration is not native deb/rpm install, launch, or uninstall evidence.                   |
-| `capability.auto-update`            | automatic updates      | `unsupported`      | Desktop 1.0 uses manual signed-installer replacement and has no update feed or updater lifecycle.         |
-| `capability.remote-crash-reporting` | remote crash reporting | `unsupported`      | Desktop 1.0 supports local fail-fast logs, recovery, and opt-in manual support bundles only.              |
-| `capability.publish`                | desktop publication    | `operator-blocked` | Publication requires an explicit release approval and a scoped credential supplied out of band.           |
+| Policy id                           | Surface                  | Status             | Reason                                                                                                                                |
+| ----------------------------------- | ------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform.macos-arm64`              | macOS arm64              | `candidate`        | The only desktop 1.0 candidate; distribution remains fail-closed until every required receipt verifies.                               |
+| `platform.macos-x64`                | macOS x64                | `unsupported`      | No native x64 signed installer or install/launch evidence exists.                                                                     |
+| `platform.windows`                  | Windows                  | `unsupported`      | Forge maker configuration is not Windows build, signing, install, launch, upgrade, or uninstall evidence.                             |
+| `platform.linux`                    | Linux                    | `unsupported`      | Forge maker configuration is not native deb/rpm install, launch, or uninstall evidence.                                               |
+| `capability.auto-update`            | automatic updates        | `unsupported`      | Desktop 1.0 uses manual signed-installer replacement and has no update feed or updater lifecycle.                                     |
+| `capability.remote-crash-reporting` | remote crash reporting   | `unsupported`      | Desktop 1.0 supports local fail-fast logs, recovery, and opt-in manual support bundles only.                                          |
+| `capability.publish`                | desktop publication      | `operator-blocked` | Publication requires an explicit release approval and a scoped credential supplied out of band.                                       |
+| `channel.mac-app-store`             | Mac App Store            | `unsupported`      | Desktop 1.0 is a direct GitHub download candidate and has no App Store packaging, entitlement review, upload, or receipt evidence.    |
+| `channel.npm`                       | npm desktop distribution | `unsupported`      | The desktop application is not distributed as an npm package and no npm publish mutation is part of this release contract.            |
+| `channel.homebrew`                  | Homebrew distribution    | `unsupported`      | No Homebrew cask, tap, checksum update, or installation evidence is part of the desktop 1.0 contract.                                 |
+| `channel.cloudflare-deploy`         | Cloudflare deployment    | `unsupported`      | Desktop candidate verification may package local runtime assets but must not create or mutate persistent Cloudflare deployment state. |
 
 <!-- desktop-release-support:end -->
 
@@ -64,6 +68,19 @@ The DMG, Squirrel, deb, and rpm entries in `apps/desktop/electron-forge.config.c
 possibilities. They are not platform support, signing, installation, upgrade, uninstall, or
 runtime evidence. Ubuntu CI and a successful unpacked Forge `.app` smoke do not broaden this
 matrix.
+
+## Ownership Boundary
+
+The policy names exactly one owner for each release boundary:
+
+| Boundary                          | Owner                                            | Scope                                                                                                                                                             |
+| --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release.packaging-provenance`    | `apps/desktop/scripts/desktop-release-forge.cjs` | Desktop release Forge helper owns release-mode signing and notarization settings, build provenance helpers, and make-result validation.                           |
+| `electron.metadata-entitlements`  | `apps/desktop/electron-forge.config.cjs`         | Electron Forge configuration owns app metadata, bundle id, icon/resource wiring, maker inventory, lifecycle hook wiring, and entitlements if they are introduced. |
+| `project.backup-reopen-semantics` | `packages/services-app/src/project`              | Existing project persistence owners supply backup, recovery, migration, save, reopen, and compatibility semantics; release scripts only verify them.              |
+
+Do not duplicate these decisions in workflow YAML, app code, or maintainer prose. Change
+`scripts/desktop-release-policy.json`, its contract tests, and this runbook together.
 
 ## Build boundary and secrets
 
@@ -83,6 +100,18 @@ support bundles, project backups, generated receipts, or release artifacts. Do n
 values. Use a protected CI secret store or a temporary operator environment; remove temporary key
 material after the run according to the owner policy.
 
+The policy documents credential names and presence checks only:
+
+| Name                                 | Owner                                            | Presence check                                                   |
+| ------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------- |
+| `TILEBORNE_APPLE_SIGNING_IDENTITY`   | `apps/desktop/scripts/desktop-release-forge.cjs` | present; starts with Developer ID Application:                   |
+| `TILEBORNE_APPLE_TEAM_ID`            | `scripts/desktop-release-contract.mjs`           | present; ten uppercase letters or digits                         |
+| `TILEBORNE_APPLE_API_KEY_PATH`       | `apps/desktop/scripts/desktop-release-forge.cjs` | present; external file path exists                               |
+| `TILEBORNE_APPLE_API_KEY_ID`         | `apps/desktop/scripts/desktop-release-forge.cjs` | present; ten uppercase letters or digits                         |
+| `TILEBORNE_APPLE_API_ISSUER`         | `apps/desktop/scripts/desktop-release-forge.cjs` | present; UUID                                                    |
+| `TILEBORNE_DESKTOP_PUBLISH_APPROVED` | `scripts/desktop-release-contract.mjs`           | present only at publication boundary; exact value 1              |
+| `GH_TOKEN`                           | `scripts/desktop-release-contract.mjs`           | present only at publication boundary; verified by gh auth status |
+
 After the normal clean-checkout gates, build the sole approved release artifact:
 
 ```sh
@@ -98,37 +127,26 @@ A successful Forge invocation is still not the release decision.
 ## Generate the candidate manifest
 
 Set `CANDIDATE` to the freshly produced DMG and generate the manifest from the artifact and current
-checkout. This step records claims; it does not verify them.
+checkout. The command is deterministic for identical inputs and writes the closed-schema manifest
+with private file permissions. This step records claims; it does not verify them.
 
 ```sh
 export CANDIDATE="apps/desktop/out/make/Tileborne.dmg"
 export MANIFEST="/tmp/tileborne-desktop-release-manifest.json"
-node --input-type=module -e '
-  import { createHash } from "node:crypto";
-  import { execFileSync } from "node:child_process";
-  import { basename } from "node:path";
-  import { readFileSync, statSync, writeFileSync } from "node:fs";
-  const file = process.env.CANDIDATE;
-  const output = process.env.MANIFEST;
-  if (!file || !output) throw new Error("CANDIDATE and MANIFEST are required");
-  const bytes = readFileSync(file);
-  const version = JSON.parse(readFileSync("apps/desktop/package.json", "utf8")).version;
-  const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  const manifest = {
-    schemaVersion: 1,
-    policyId: "tileborne-desktop-1.0",
-    artifact: {
-      fileName: basename(file), kind: "dmg", platform: "darwin", architecture: "arm64",
-      version, sizeBytes: statSync(file).size,
-      sha256: createHash("sha256").update(bytes).digest("hex")
-    },
-    provenance: {
-      sourceCommit, buildCommand: "pnpm --filter @tileborne/desktop package",
-      builderOs: "darwin", builderArchitecture: "arm64", builtAt: new Date().toISOString()
-    }
-  };
-  writeFileSync(output, JSON.stringify(manifest, null, 2) + "\n", { mode: 0o600 });
-'
+export SOURCE_COMMIT="$(git rev-parse HEAD)"
+export VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("apps/desktop/package.json", "utf8")).version')"
+export BUILT_AT="2026-07-16T09:00:00.000Z"
+export RUNNER_ID="github-actions:${GITHUB_RUN_ID:-local-retained-candidate}"
+export SIGNING_AUTHORITY="Developer ID Application: Tileborne (${TILEBORNE_APPLE_TEAM_ID})"
+pnpm release:desktop:manifest \
+  --artifact "$CANDIDATE" \
+  --output "$MANIFEST" \
+  --version "$VERSION" \
+  --source-commit "$SOURCE_COMMIT" \
+  --built-at "$BUILT_AT" \
+  --runner-id "$RUNNER_ID" \
+  --signing-authority "$SIGNING_AUTHORITY" \
+  --team-id "$TILEBORNE_APPLE_TEAM_ID"
 ```
 
 Do not hand-edit a manifest to match a failed check. Rebuild from the intended clean commit and
@@ -204,9 +222,18 @@ node scripts/desktop-release-contract.mjs verify \
 
 `decision: "go"`, `artifactDecision: "ready"`, `publicationDecision: "approved"`, zero blockers,
 and the native evidence summary are authorization inputs. They do not publish anything themselves.
-Recheck the candidate and manifest digests, then execute the separately approved `gh release create`
-command. Do not tag, push, publish, deploy, or overwrite a release without explicit maintainer
+Recheck the candidate and manifest digests, then execute only the separately approved mutating
+operation. Do not tag, push, publish, deploy, or overwrite a release without explicit maintainer
 approval.
+
+The operator-only mutations are closed-schema policy entries:
+
+| Operation                         | Status             | Reason                                                                                                               |
+| --------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `operation.git-tag-create`        | `operator-blocked` | Creating a release tag is a mutating operator action and must not occur during autonomous candidate construction.    |
+| `operation.git-tag-push`          | `operator-blocked` | Pushing a release tag is a remote mutation that requires explicit maintainer approval.                               |
+| `operation.github-release-create` | `operator-blocked` | Creating the GitHub Release is separate from local candidate verification and requires explicit maintainer approval. |
+| `operation.github-release-upload` | `operator-blocked` | Uploading the DMG, manifest, or checksum mutates GitHub release state and requires explicit maintainer approval.     |
 
 ## Project-content recovery versus release rollback
 

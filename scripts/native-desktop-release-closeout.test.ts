@@ -4,7 +4,15 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { deriveBinaryDecision, outputDirectories } from './native-desktop-release-closeout.mjs';
+import {
+  RELEASE_SUBPROCESS_ENVIRONMENT,
+  createNotaryHistoryInvocation,
+  createReleaseSubprocessEnvironment,
+  deriveBinaryDecision,
+  deriveCloseoutBlockerCodes,
+  deriveCloseoutExternalOwners,
+  outputDirectories,
+} from './native-desktop-release-closeout.mjs';
 
 const temporaryRoots: string[] = [];
 
@@ -46,6 +54,76 @@ describe('native desktop binary closeout decision', () => {
 });
 
 describe('native desktop closeout preflight', () => {
+  const releaseEnvironment = {
+    TILEBORNE_DESKTOP_RELEASE: '1',
+    TILEBORNE_APPLE_SIGNING_IDENTITY: 'Developer ID Application: Tileborne Release (ABCDEFGHIJ)',
+    TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
+    TILEBORNE_APPLE_API_KEY_PATH: '/external/AuthKey_ABC1234567.p8',
+    TILEBORNE_APPLE_API_KEY_ID: 'KLMNOPQRST',
+    TILEBORNE_APPLE_API_ISSUER: '12345678-1234-1234-1234-123456789abc',
+    TILEBORNE_DESKTOP_PUBLISH_APPROVED: '1',
+    GH_TOKEN: 'must-not-propagate',
+    NODE_OPTIONS: '--require secret-hook',
+  } as const;
+
+  it('passes only release credential references to Forge and notary subprocesses', () => {
+    const env = createReleaseSubprocessEnvironment(releaseEnvironment);
+    expect(Object.keys(env).sort()).toEqual([...RELEASE_SUBPROCESS_ENVIRONMENT].sort());
+    expect(env).toEqual({
+      TILEBORNE_DESKTOP_RELEASE: '1',
+      TILEBORNE_APPLE_SIGNING_IDENTITY: 'Developer ID Application: Tileborne Release (ABCDEFGHIJ)',
+      TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
+      TILEBORNE_APPLE_API_KEY_PATH: '/external/AuthKey_ABC1234567.p8',
+      TILEBORNE_APPLE_API_KEY_ID: 'KLMNOPQRST',
+      TILEBORNE_APPLE_API_ISSUER: '12345678-1234-1234-1234-123456789abc',
+    });
+    expect(JSON.stringify(env)).not.toContain('must-not-propagate');
+    expect(JSON.stringify(env)).not.toContain('secret-hook');
+
+    const notary = createNotaryHistoryInvocation(env);
+    expect(notary.args).toEqual([
+      'notarytool',
+      'history',
+      '--key',
+      '/external/AuthKey_ABC1234567.p8',
+      '--key-id',
+      'KLMNOPQRST',
+      '--issuer',
+      '12345678-1234-1234-1234-123456789abc',
+    ]);
+    expect(notary.receiptCommand).toEqual([
+      '/usr/bin/xcrun',
+      'notarytool',
+      'history',
+      '--key',
+      '$TILEBORNE_APPLE_API_KEY_PATH',
+      '--key-id',
+      '$TILEBORNE_APPLE_API_KEY_ID',
+      '--issuer',
+      '$TILEBORNE_APPLE_API_ISSUER',
+    ]);
+    expect(JSON.stringify(notary.receiptCommand)).not.toContain('/external/AuthKey');
+    expect(JSON.stringify(notary.receiptCommand)).not.toContain('KLMNOPQRST');
+    expect(JSON.stringify(notary.receiptCommand)).not.toContain('12345678-1234');
+  });
+
+  it.each([
+    ['TILEBORNE_DESKTOP_RELEASE', '0', /release\.flag-invalid/],
+    [
+      'TILEBORNE_APPLE_SIGNING_IDENTITY',
+      'Apple Development: Tileborne',
+      /release\.identity-invalid/,
+    ],
+    ['TILEBORNE_APPLE_TEAM_ID', 'bad-team', /release\.team-id-invalid/],
+    ['TILEBORNE_APPLE_API_KEY_PATH', '', /release\.credentials-missing/],
+    ['TILEBORNE_APPLE_API_KEY_ID', 'bad-key', /release\.api-key-id-invalid/],
+    ['TILEBORNE_APPLE_API_ISSUER', 'not-a-uuid', /release\.api-issuer-invalid/],
+  ] as const)('fails closed when %s is invalid', (name, value, message) => {
+    expect(() =>
+      createReleaseSubprocessEnvironment({ ...releaseEnvironment, [name]: value }),
+    ).toThrow(message);
+  });
+
   it('permits only the tracked fixture dist input and rejects real build outputs', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'tileborne-closeout-preflight-'));
     temporaryRoots.push(root);
@@ -73,5 +151,39 @@ describe('native desktop closeout preflight', () => {
     expect(cleanCheckoutScript).toContain('export TILEBORNE_SOURCE_COMMIT');
     expect(cleanCheckoutScript).toContain('launch_cmd+=(-- --no-sandbox)');
     expect(turboConfig.globalEnv).toContain('TILEBORNE_SOURCE_COMMIT');
+  });
+});
+
+describe('native desktop closeout receipt evidence', () => {
+  it('does not emit credential-missing blockers or owners when notary credentials verify', () => {
+    const blockerCodes = deriveCloseoutBlockerCodes({
+      binaryBlockers: ['contract.not-go'],
+      canonicalBlockers: ['rollback.retained-artifact-missing', 'publish.approval-missing'],
+      notaryCredentials: 'available',
+    });
+
+    expect(blockerCodes).toEqual([
+      'publish.approval-missing',
+      'rollback.retained-artifact-missing',
+    ]);
+    expect(blockerCodes).not.toContain('notarization.credentials-missing');
+    expect(blockerCodes).not.toContain('signing.approved-team-missing');
+    expect(deriveCloseoutExternalOwners(blockerCodes).map(({ blocker }) => blocker)).toEqual([
+      'rollback.retained-artifact-missing',
+      'publish.approval-missing',
+    ]);
+  });
+
+  it('keeps the notary owner only when credential evidence is missing', () => {
+    const blockerCodes = deriveCloseoutBlockerCodes({
+      binaryBlockers: [],
+      canonicalBlockers: [],
+      notaryCredentials: 'missing',
+    });
+
+    expect(blockerCodes).toEqual(['notarization.credentials-missing']);
+    expect(deriveCloseoutExternalOwners(blockerCodes).map(({ blocker }) => blocker)).toEqual([
+      'notarization.credentials-missing',
+    ]);
   });
 });

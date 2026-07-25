@@ -1,0 +1,27 @@
+# QA Acceptance Tests
+
+## Acceptance
+
+- Build from a clean macOS arm64 checkout with frozen dependencies.
+- Verify Developer ID signature, hardened runtime, notarization ticket, stapling,
+  Gatekeeper acceptance, DMG integrity, manifest schema, and SHA-256.
+- Install, launch, close, and relaunch the app from the DMG.
+- Back up, open, save, close, and reopen a representative Tileborne project.
+- Install the digest-pinned last-known-good candidate and reopen the backup.
+- Confirm Planr evidence and candidate receipts are redacted and unpublished.
+
+## Regression
+
+- Existing source release gates, desktop smoke, clean-checkout gates, project
+  persistence/recovery tests, security scans, and package boundaries remain green.
+- Unsupported makers and publication commands remain fail-closed.
+- Tampered artifact, manifest, checksum, source revision, version, architecture,
+  signing identity, and notarization evidence are rejected.
+
+## Manual Scenarios
+
+- Fresh macOS user profile with Gatekeeper enabled.
+- Missing signing identity or notarization profile.
+- Project backup interruption and safe retry.
+- Candidate launch followed by manual rollback to last-known-good.
+- Maintainer inspects the candidate locally but withholds publication approval.

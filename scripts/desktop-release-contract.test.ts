@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DesktopReleaseContractError,
   evaluateDesktopRelease,
+  generateDesktopReleaseManifest,
   hasUdifTrailer,
   loadDesktopReleasePolicy,
   sha256File,
@@ -39,6 +40,7 @@ const {
       readonly osxNotarize: Readonly<Record<string, unknown>>;
     };
     readonly dmgConfig?: Readonly<Record<string, unknown>>;
+    readonly entitlementsPath?: string;
   };
   readonly createDesktopBuildProvenance: (input: {
     readonly sourceCommit: string;
@@ -105,26 +107,22 @@ const createEvidence = () => {
   writeUdifFixture(retainedArtifactPath, 'B');
   const candidateSha256 = sha256File(artifactPath);
   const retainedSha256 = sha256File(retainedArtifactPath);
-  const manifest = {
-    schemaVersion: 1,
-    policyId: 'tileborne-desktop-1.0',
-    artifact: {
-      fileName: path.basename(artifactPath),
-      kind: 'dmg',
-      platform: 'darwin',
-      architecture: 'arm64',
-      version: '1.0.0',
-      sizeBytes: 1024,
-      sha256: candidateSha256,
+  const manifest = generateDesktopReleaseManifest({
+    artifactPath,
+    version: '1.0.0',
+    sourceCommit: 'a'.repeat(40),
+    builtAt: '2026-07-16T09:00:00.000Z',
+    runnerId: 'github-actions:run-123',
+    signingAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+    teamIdentifier: 'ABCDEFGHIJ',
+    verification: {
+      checksum: { algorithm: 'sha256', value: candidateSha256 },
+      codesign: { commandId: '11-codesign-strict', status: 'valid' },
+      notarization: { commandId: '13-notary-credential-boundary', status: 'available' },
+      stapler: { commandId: '12-stapler-validate', status: 'valid' },
+      gatekeeper: { commandId: '14-gatekeeper-assess', status: 'accepted' },
     },
-    provenance: {
-      sourceCommit: 'a'.repeat(40),
-      buildCommand: 'pnpm --filter @tileborne/desktop package',
-      builderOs: 'darwin',
-      builderArchitecture: 'arm64',
-      builtAt: '2026-07-16T09:00:00.000Z',
-    },
-  };
+  });
   return {
     directory,
     artifactPath,
@@ -267,6 +265,13 @@ describe('desktop 1.0 release contract', () => {
       channel: 'github-release',
     });
     expect(
+      policy.owners.map(({ id, owner }: { id: string; owner: string }) => [id, owner]),
+    ).toEqual([
+      ['release.packaging-provenance', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+      ['electron.metadata-entitlements', 'apps/desktop/electron-forge.config.cjs'],
+      ['project.backup-reopen-semantics', 'packages/services-app/src/project'],
+    ]);
+    expect(
       policy.support.map(({ id, status }: { id: string; status: string }) => [id, status]),
     ).toEqual([
       ['platform.macos-arm64', 'candidate'],
@@ -276,6 +281,35 @@ describe('desktop 1.0 release contract', () => {
       ['capability.auto-update', 'unsupported'],
       ['capability.remote-crash-reporting', 'unsupported'],
       ['capability.publish', 'operator-blocked'],
+      ['channel.mac-app-store', 'unsupported'],
+      ['channel.npm', 'unsupported'],
+      ['channel.homebrew', 'unsupported'],
+      ['channel.cloudflare-deploy', 'unsupported'],
+    ]);
+    expect(
+      policy.operatorOnlyMutations.map(({ id, status }: { id: string; status: string }) => [
+        id,
+        status,
+      ]),
+    ).toEqual([
+      ['operation.git-tag-create', 'operator-blocked'],
+      ['operation.git-tag-push', 'operator-blocked'],
+      ['operation.github-release-create', 'operator-blocked'],
+      ['operation.github-release-upload', 'operator-blocked'],
+    ]);
+    expect(
+      policy.credentialPresenceChecks.map(({ name, owner }: { name: string; owner: string }) => [
+        name,
+        owner,
+      ]),
+    ).toEqual([
+      ['TILEBORNE_APPLE_SIGNING_IDENTITY', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+      ['TILEBORNE_APPLE_TEAM_ID', 'scripts/desktop-release-contract.mjs'],
+      ['TILEBORNE_APPLE_API_KEY_PATH', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+      ['TILEBORNE_APPLE_API_KEY_ID', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+      ['TILEBORNE_APPLE_API_ISSUER', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+      ['TILEBORNE_DESKTOP_PUBLISH_APPROVED', 'scripts/desktop-release-contract.mjs'],
+      ['GH_TOKEN', 'scripts/desktop-release-contract.mjs'],
     ]);
     expect(policy.rollback).toMatchObject({
       mode: 'manual-retained-installer',
@@ -291,14 +325,71 @@ describe('desktop 1.0 release contract', () => {
     expect(() => validateDesktopReleasePolicy({ ...policy, inferredMakerSupport: true })).toThrow(
       DesktopReleaseContractError,
     );
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        owners: policy.owners.map((owner: { id: string }) =>
+          owner.id === 'electron.metadata-entitlements'
+            ? { ...owner, owner: 'scripts/desktop-release-contract.mjs' }
+            : owner,
+        ),
+      }),
+    ).toThrow(/policy\.owner-drift/);
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        support: policy.support.filter(
+          (support: { id: string }) => support.id !== 'channel.mac-app-store',
+        ),
+      }),
+    ).toThrow(/policy\.support-drift/);
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        operatorOnlyMutations: policy.operatorOnlyMutations.filter(
+          (operation: { id: string }) => operation.id !== 'operation.git-tag-push',
+        ),
+      }),
+    ).toThrow(/policy\.operator-mutation-drift/);
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        operatorOnlyMutations: policy.operatorOnlyMutations.map((operation: { id: string }) =>
+          operation.id === 'operation.github-release-upload'
+            ? { ...operation, status: 'candidate' }
+            : operation,
+        ),
+      }),
+    ).toThrow(/contract\.invalid-enum/);
+    expect(() =>
+      validateDesktopReleasePolicy({
+        ...policy,
+        credentialPresenceChecks: policy.credentialPresenceChecks.map((check: { name: string }) =>
+          check.name === 'GH_TOKEN'
+            ? { ...check, owner: 'apps/desktop/scripts/desktop-release-forge.cjs' }
+            : check,
+        ),
+      }),
+    ).toThrow(/policy\.credential-check-drift/);
     const { manifest } = createEvidence();
     expect(() =>
       validateDesktopReleaseManifest({
         ...manifest,
-        signing: { verified: true, hardenedRuntime: true },
-        notarization: { verified: true, stapled: true },
+        callerProvidedReceipts: { signing: true, notarization: true },
       }),
     ).toThrow(/contract\.unknown-field/);
+    expect(() =>
+      validateDesktopReleaseManifest({
+        ...manifest,
+        signing: { ...manifest.signing, verified: true },
+      }),
+    ).toThrow(/contract\.unknown-field/);
+    expect(() =>
+      validateDesktopReleaseManifest({
+        ...manifest,
+        artifact: { ...manifest.artifact, platform: 'win32' },
+      }),
+    ).toThrow(/contract\.invalid-literal/);
     expect(() =>
       validateDesktopReleasePolicy({
         ...policy,
@@ -313,6 +404,179 @@ describe('desktop 1.0 release contract', () => {
       }),
     ).toThrow(/contract\.invalid-semver/);
   });
+
+  it('generates a deterministic closed desktop candidate manifest', () => {
+    const evidence = createEvidence();
+    const input = {
+      artifactPath: evidence.artifactPath,
+      version: '1.0.0',
+      sourceCommit: 'a'.repeat(40),
+      builtAt: '2026-07-16T09:00:00.000Z',
+      runnerId: 'github-actions:run-123',
+      signingAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+      teamIdentifier: 'ABCDEFGHIJ',
+    };
+    const first = generateDesktopReleaseManifest(input);
+    const second = generateDesktopReleaseManifest(input);
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({
+      artifact: {
+        bundleId: 'dev.tileborne.app',
+        fileName: path.basename(evidence.artifactPath),
+        sha256: evidence.candidateSha256,
+      },
+      provenance: {
+        sourceCommit: 'a'.repeat(40),
+        builtAt: '2026-07-16T09:00:00.000Z',
+      },
+      runner: {
+        id: 'github-actions:run-123',
+        os: 'darwin',
+        architecture: 'arm64',
+      },
+      signing: {
+        authority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+        teamIdentifier: 'ABCDEFGHIJ',
+        hardenedRuntime: 'runtime',
+      },
+      notarization: {
+        method: 'app-store-connect-api-key',
+        credentialReference: 'TILEBORNE_APPLE_API_KEY_PATH',
+        staple: 'validated',
+      },
+      verification: {
+        checksum: { algorithm: 'sha256', value: evidence.candidateSha256 },
+        codesign: { commandId: 'manifest-generation', status: 'pending' },
+        notarization: { commandId: 'manifest-generation', status: 'pending' },
+        stapler: { commandId: 'manifest-generation', status: 'pending' },
+        gatekeeper: { commandId: 'manifest-generation', status: 'pending' },
+      },
+    });
+  });
+
+  it('requires completed redacted verification evidence before artifact GO', () => {
+    const evidence = createEvidence();
+    const pendingManifest = generateDesktopReleaseManifest({
+      artifactPath: evidence.artifactPath,
+      version: '1.0.0',
+      sourceCommit: 'a'.repeat(40),
+      builtAt: '2026-07-16T09:00:00.000Z',
+      runnerId: 'github-actions:run-123',
+      signingAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+      teamIdentifier: 'ABCDEFGHIJ',
+    });
+    const status = evaluateReady(
+      { ...evidence, manifest: pendingManifest },
+      { nativeRunner: nativeRunnerFor(evidence) },
+    );
+    expect(status.decision).toBe('no-go');
+    expect(status.blockers.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        'manifest.codesign-evidence-missing',
+        'manifest.notarization-evidence-missing',
+        'manifest.stapler-evidence-missing',
+        'manifest.gatekeeper-evidence-missing',
+      ]),
+    );
+  });
+
+  it('rejects manifest tampering and mismatched source/version during verification', () => {
+    const evidence = createEvidence();
+    const tamperedArtifact = evaluateDesktopRelease({
+      artifactPath: evidence.artifactPath,
+      retainedArtifactPath: evidence.retainedArtifactPath,
+      backupArtifactPath: evidence.backupArtifactPath,
+      manifest: {
+        ...evidence.manifest,
+        artifact: { ...evidence.manifest.artifact, sha256: 'f'.repeat(64) },
+        verification: {
+          ...evidence.manifest.verification,
+          checksum: { algorithm: 'sha256', value: 'f'.repeat(64) },
+        },
+      },
+      environment: { TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ' },
+      expectedSourceCommit: 'a'.repeat(40),
+    });
+    expect(tamperedArtifact.blockers.map(({ code }) => code)).toContain('artifact.sha256-mismatch');
+
+    const wrongSource = evaluateDesktopRelease({
+      artifactPath: evidence.artifactPath,
+      retainedArtifactPath: evidence.retainedArtifactPath,
+      backupArtifactPath: evidence.backupArtifactPath,
+      manifest: {
+        ...evidence.manifest,
+        provenance: { ...evidence.manifest.provenance, sourceCommit: 'b'.repeat(40) },
+      },
+      environment: { TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ' },
+      expectedSourceCommit: 'a'.repeat(40),
+    });
+    expect(wrongSource.blockers.map(({ code }) => code)).toContain(
+      'provenance.source-commit-mismatch',
+    );
+
+    const manifestVersionMismatch = evaluateReady(
+      {
+        ...evidence,
+        manifest: {
+          ...evidence.manifest,
+          artifact: { ...evidence.manifest.artifact, version: '1.0.1' },
+        },
+      },
+      { nativeRunner: nativeRunnerFor(evidence) },
+    );
+    expect(manifestVersionMismatch.blockers.map(({ code }) => code)).toContain(
+      'contract.invalid-literal',
+    );
+  });
+
+  it.each([
+    {
+      label: 'signing authority',
+      code: 'manifest.signing-authority-mismatch',
+      mutate: (manifest: ReturnType<typeof createEvidence>['manifest']) => ({
+        ...manifest,
+        signing: {
+          ...manifest.signing,
+          authority: 'Developer ID Application: Other Publisher (ABCDEFGHIJ)',
+        },
+      }),
+    },
+    {
+      label: 'signing team',
+      code: 'manifest.signing-team-mismatch',
+      mutate: (manifest: ReturnType<typeof createEvidence>['manifest']) => ({
+        ...manifest,
+        signing: { ...manifest.signing, teamIdentifier: 'ZZZZZZZZZZ' },
+      }),
+    },
+    {
+      label: 'hardened runtime',
+      code: 'manifest.hardened-runtime-mismatch',
+      mutate: (manifest: ReturnType<typeof createEvidence>['manifest']) => ({
+        ...manifest,
+        signing: { ...manifest.signing, hardenedRuntime: 'disabled' },
+      }),
+    },
+    {
+      label: 'notarization staple',
+      code: 'manifest.notarization-staple-mismatch',
+      mutate: (manifest: ReturnType<typeof createEvidence>['manifest']) => ({
+        ...manifest,
+        notarization: { ...manifest.notarization, staple: 'missing' },
+      }),
+    },
+  ])(
+    'rejects manifest $label when it disagrees with verified native evidence',
+    ({ code, mutate }) => {
+      const evidence = createEvidence();
+      const status = evaluateReady(
+        { ...evidence, manifest: mutate(evidence.manifest) },
+        { nativeRunner: nativeRunnerFor(evidence) },
+      );
+      expect(status.decision).toBe('no-go');
+      expect(status.blockers.map(({ code: blockerCode }) => blockerCode)).toContain(code);
+    },
+  );
 
   it('reports the evidence-free checkout truthfully as NO-GO', () => {
     const status = evaluateDesktopRelease();
@@ -361,6 +625,10 @@ describe('desktop 1.0 release contract', () => {
         ...evidence.manifest.artifact,
         sizeBytes: statSize(evidence.artifactPath),
         sha256: sha256File(evidence.artifactPath),
+      },
+      verification: {
+        ...evidence.manifest.verification,
+        checksum: { algorithm: 'sha256', value: sha256File(evidence.artifactPath) },
       },
     };
     const nativeRunner = nativeRunnerFor(evidence);
@@ -583,19 +851,39 @@ describe('desktop 1.0 release contract', () => {
       },
       platform: 'darwin',
       architecture: 'arm64',
-      existsSync: (candidate) => candidate === '/external/AuthKey.p8',
+      existsSync: (candidate) =>
+        candidate === '/external/AuthKey.p8' || candidate.endsWith('assets/entitlements.mac.plist'),
     });
     expect(settings.packagerConfig?.osxSign).toMatchObject({
+      entitlements: settings.entitlementsPath,
+      entitlementsInherit: settings.entitlementsPath,
       hardenedRuntime: true,
       strictVerify: true,
       continueOnError: false,
     });
+    expect(settings.entitlementsPath).toMatch(/apps\/desktop\/assets\/entitlements\.mac\.plist$/);
     expect(settings.teamIdentifier).toBe('ABCDEFGHIJ');
     expect(settings.packagerConfig?.osxNotarize).toEqual({
       appleApiKey: '/external/AuthKey.p8',
       appleApiKeyId: 'KLMNOPQRST',
       appleApiIssuer: '12345678-1234-1234-1234-123456789abc',
     });
+    expect(() =>
+      createDesktopReleaseForgeSettings({
+        env: {
+          TILEBORNE_DESKTOP_RELEASE: '1',
+          TILEBORNE_APPLE_SIGNING_IDENTITY:
+            'Developer ID Application: Tileborne Release (ABCDEFGHIJ)',
+          TILEBORNE_APPLE_TEAM_ID: 'ABCDEFGHIJ',
+          TILEBORNE_APPLE_API_KEY_PATH: '/external/AuthKey.p8',
+          TILEBORNE_APPLE_API_KEY_ID: 'KLMNOPQRST',
+          TILEBORNE_APPLE_API_ISSUER: '12345678-1234-1234-1234-123456789abc',
+        },
+        platform: 'darwin',
+        architecture: 'arm64',
+        existsSync: (candidate) => candidate === '/external/AuthKey.p8',
+      }),
+    ).toThrow(/desktop-release\.entitlements-missing/);
     expect(
       createDesktopBuildProvenance({
         sourceCommit: 'a'.repeat(40),
@@ -707,6 +995,44 @@ describe('desktop 1.0 release contract', () => {
     );
     expect(legacy.status).toBe(1);
     expect(legacy.stderr).toContain('cli.invalid-argument');
+  });
+
+  it('exposes a deterministic manifest CLI', () => {
+    const evidence = createEvidence();
+    const args = [
+      path.join(repoRoot, 'scripts/desktop-release-contract.mjs'),
+      'manifest',
+      '--artifact',
+      evidence.artifactPath,
+      '--version',
+      '1.0.0',
+      '--source-commit',
+      'a'.repeat(40),
+      '--built-at',
+      '2026-07-16T09:00:00.000Z',
+      '--runner-id',
+      'github-actions:run-123',
+      '--signing-authority',
+      'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+      '--team-id',
+      'ABCDEFGHIJ',
+    ];
+    const first = spawnSync(process.execPath, args, { encoding: 'utf8' });
+    const second = spawnSync(process.execPath, args, { encoding: 'utf8' });
+    expect(first.status, first.stderr).toBe(0);
+    expect(second.status, second.stderr).toBe(0);
+    expect(second.stdout).toBe(first.stdout);
+    expect(JSON.parse(first.stdout)).toEqual(
+      generateDesktopReleaseManifest({
+        artifactPath: evidence.artifactPath,
+        version: '1.0.0',
+        sourceCommit: 'a'.repeat(40),
+        builtAt: '2026-07-16T09:00:00.000Z',
+        runnerId: 'github-actions:run-123',
+        signingAuthority: 'Developer ID Application: Tileborne (ABCDEFGHIJ)',
+        teamIdentifier: 'ABCDEFGHIJ',
+      }),
+    );
   });
 
   it('recognizes only a UDIF trailer, not a DMG extension or arbitrary prefix', () => {

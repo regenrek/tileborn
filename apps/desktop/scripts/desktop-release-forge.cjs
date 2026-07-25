@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- consumed by the CommonJS Forge config */
 const fs = require('node:fs');
+const path = require('node:path');
 
 const RELEASE_FLAG = 'TILEBORNE_DESKTOP_RELEASE';
+const RELEASE_ENTITLEMENTS_PATH = path.resolve(__dirname, '../assets/entitlements.mac.plist');
 const REQUIRED_ENVIRONMENT = Object.freeze([
   'TILEBORNE_APPLE_SIGNING_IDENTITY',
   'TILEBORNE_APPLE_TEAM_ID',
@@ -84,6 +86,9 @@ const createDesktopReleaseForgeSettings = ({
   if (!existsSync(apiKeyPath)) {
     throw new Error('desktop-release.api-key-file-missing: configured path does not exist');
   }
+  if (!existsSync(RELEASE_ENTITLEMENTS_PATH)) {
+    throw new Error('desktop-release.entitlements-missing: assets/entitlements.mac.plist');
+  }
 
   const notarizeCredentials = Object.freeze({
     appleApiKey: apiKeyPath,
@@ -96,6 +101,8 @@ const createDesktopReleaseForgeSettings = ({
     packagerConfig: Object.freeze({
       osxSign: Object.freeze({
         identity,
+        entitlements: RELEASE_ENTITLEMENTS_PATH,
+        entitlementsInherit: RELEASE_ENTITLEMENTS_PATH,
         hardenedRuntime: true,
         strictVerify: true,
         continueOnError: false,
@@ -111,6 +118,7 @@ const createDesktopReleaseForgeSettings = ({
       }),
     }),
     notarizeCredentials,
+    entitlementsPath: RELEASE_ENTITLEMENTS_PATH,
   });
 };
 
@@ -151,6 +159,7 @@ const validateDesktopReleaseMakeResults = ({
 
 module.exports = {
   RELEASE_FLAG,
+  RELEASE_ENTITLEMENTS_PATH,
   REQUIRED_ENVIRONMENT,
   createDesktopBuildProvenance,
   createDesktopReleaseProvenance,

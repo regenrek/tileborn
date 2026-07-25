@@ -7,6 +7,23 @@
     "artifactKind": "dmg",
     "channel": "github-release"
   },
+  "owners": [
+    {
+      "id": "release.packaging-provenance",
+      "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
+      "scope": "Desktop release Forge helper owns release-mode signing and notarization settings, build provenance helpers, and make-result validation."
+    },
+    {
+      "id": "electron.metadata-entitlements",
+      "owner": "apps/desktop/electron-forge.config.cjs",
+      "scope": "Electron Forge configuration owns app metadata, bundle id, icon/resource wiring, maker inventory, lifecycle hook wiring, and entitlements if they are introduced."
+    },
+    {
+      "id": "project.backup-reopen-semantics",
+      "owner": "packages/services-app/src/project",
+      "scope": "Existing project persistence owners supply backup, recovery, migration, save, reopen, and compatibility semantics; release scripts only verify them."
+    }
+  ],
   "requiredEvidence": [
     "artifact-sha256",
     "source-provenance",
@@ -59,6 +76,30 @@
       "status": "operator-blocked",
       "documentationLabel": "desktop publication",
       "reason": "Publication requires an explicit release approval and a scoped credential supplied out of band."
+    },
+    {
+      "id": "channel.mac-app-store",
+      "status": "unsupported",
+      "documentationLabel": "Mac App Store",
+      "reason": "Desktop 1.0 is a direct GitHub download candidate and has no App Store packaging, entitlement review, upload, or receipt evidence."
+    },
+    {
+      "id": "channel.npm",
+      "status": "unsupported",
+      "documentationLabel": "npm desktop distribution",
+      "reason": "The desktop application is not distributed as an npm package and no npm publish mutation is part of this release contract."
+    },
+    {
+      "id": "channel.homebrew",
+      "status": "unsupported",
+      "documentationLabel": "Homebrew distribution",
+      "reason": "No Homebrew cask, tap, checksum update, or installation evidence is part of the desktop 1.0 contract."
+    },
+    {
+      "id": "channel.cloudflare-deploy",
+      "status": "unsupported",
+      "documentationLabel": "Cloudflare deployment",
+      "reason": "Desktop candidate verification may package local runtime assets but must not create or mutate persistent Cloudflare deployment state."
     }
   ],
   "publication": {
@@ -66,9 +107,72 @@
     "credentialEnvironment": "GH_TOKEN",
     "approvedValue": "1"
   },
+  "operatorOnlyMutations": [
+    {
+      "id": "operation.git-tag-create",
+      "status": "operator-blocked",
+      "documentationLabel": "git tag creation",
+      "reason": "Creating a release tag is a mutating operator action and must not occur during autonomous candidate construction."
+    },
+    {
+      "id": "operation.git-tag-push",
+      "status": "operator-blocked",
+      "documentationLabel": "git tag push",
+      "reason": "Pushing a release tag is a remote mutation that requires explicit maintainer approval."
+    },
+    {
+      "id": "operation.github-release-create",
+      "status": "operator-blocked",
+      "documentationLabel": "GitHub Release creation",
+      "reason": "Creating the GitHub Release is separate from local candidate verification and requires explicit maintainer approval."
+    },
+    {
+      "id": "operation.github-release-upload",
+      "status": "operator-blocked",
+      "documentationLabel": "GitHub Release artifact upload",
+      "reason": "Uploading the DMG, manifest, or checksum mutates GitHub release state and requires explicit maintainer approval."
+    }
+  ],
   "signing": {
     "approvedTeamIdentifierEnvironment": "TILEBORNE_APPLE_TEAM_ID"
   },
+  "credentialPresenceChecks": [
+    {
+      "name": "TILEBORNE_APPLE_SIGNING_IDENTITY",
+      "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
+      "check": "present; starts with Developer ID Application:"
+    },
+    {
+      "name": "TILEBORNE_APPLE_TEAM_ID",
+      "owner": "scripts/desktop-release-contract.mjs",
+      "check": "present; ten uppercase letters or digits"
+    },
+    {
+      "name": "TILEBORNE_APPLE_API_KEY_PATH",
+      "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
+      "check": "present; external file path exists"
+    },
+    {
+      "name": "TILEBORNE_APPLE_API_KEY_ID",
+      "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
+      "check": "present; ten uppercase letters or digits"
+    },
+    {
+      "name": "TILEBORNE_APPLE_API_ISSUER",
+      "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
+      "check": "present; UUID"
+    },
+    {
+      "name": "TILEBORNE_DESKTOP_PUBLISH_APPROVED",
+      "owner": "scripts/desktop-release-contract.mjs",
+      "check": "present only at publication boundary; exact value 1"
+    },
+    {
+      "name": "GH_TOKEN",
+      "owner": "scripts/desktop-release-contract.mjs",
+      "check": "present only at publication boundary; verified by gh auth status"
+    }
+  ],
   "lastKnownGoodReleases": [],
   "rollback": {
     "mode": "manual-retained-installer",

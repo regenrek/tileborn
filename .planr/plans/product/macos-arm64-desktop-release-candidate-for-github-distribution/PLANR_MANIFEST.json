@@ -1,0 +1,27 @@
+{
+  "ai": false,
+  "assumptions": [],
+  "backend": false,
+  "generated_at": "2026-07-25T18:09:04.072214Z",
+  "included_documents": [
+    "README.md",
+    "PRODUCT_SPEC.md",
+    "UX_FLOWS.md",
+    "DESIGN_SYSTEM_SPEC.md",
+    "TECH_ARCHITECTURE.md",
+    "ADRS.md",
+    "AI_SPEC.md",
+    "SAFETY_PRIVACY_SECURITY.md",
+    "API_AND_DATA_MODEL.md",
+    "CLIENT_IMPLEMENTATION_SPEC.md",
+    "BACKEND_IMPLEMENTATION_SPEC.md",
+    "ANALYTICS_OBSERVABILITY_SPEC.md",
+    "QA_ACCEPTANCE_TESTS.md",
+    "RELEASE_READINESS.md",
+    "TASKS.md",
+    "REFERENCES.md"
+  ],
+  "platform": "desktop",
+  "source_prompt": "macOS arm64 desktop release candidate for GitHub distribution",
+  "title": "macOS arm64 desktop release candidate for GitHub distribution"
+}

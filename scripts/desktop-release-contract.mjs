@@ -125,10 +125,13 @@ export function validateDesktopReleasePolicy(value) {
       'schemaVersion',
       'policyId',
       'candidate',
+      'owners',
       'requiredEvidence',
       'support',
       'publication',
+      'operatorOnlyMutations',
       'signing',
+      'credentialPresenceChecks',
       'lastKnownGoodReleases',
       'rollback',
     ],
@@ -146,6 +149,32 @@ export function validateDesktopReleasePolicy(value) {
   literal(candidate.architecture, 'arm64', 'policy.candidate.architecture');
   literal(candidate.artifactKind, 'dmg', 'policy.candidate.artifactKind');
   literal(candidate.channel, 'github-release', 'policy.candidate.channel');
+
+  if (!Array.isArray(policy.owners)) fail('contract.invalid-array', 'policy.owners');
+  const owners = policy.owners.map((entry, index) => {
+    const record = exactKeys(entry, ['id', 'owner', 'scope'], `policy.owners[${index}]`);
+    return {
+      id: string(record.id, `policy.owners[${index}].id`),
+      owner: string(record.owner, `policy.owners[${index}].owner`),
+      scope: string(record.scope, `policy.owners[${index}].scope`),
+    };
+  });
+  if (new Set(owners.map(({ id }) => id)).size !== owners.length) {
+    fail('contract.duplicate-value', 'policy.owners ids');
+  }
+  const expectedOwners = new Map([
+    ['release.packaging-provenance', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+    ['electron.metadata-entitlements', 'apps/desktop/electron-forge.config.cjs'],
+    ['project.backup-reopen-semantics', 'packages/services-app/src/project'],
+  ]);
+  for (const [id, owner] of expectedOwners) {
+    if (owners.find((entry) => entry.id === id)?.owner !== owner) {
+      fail('policy.owner-drift', `${id} must be owned by ${owner}`);
+    }
+  }
+  if (owners.length !== expectedOwners.size) {
+    fail('policy.owner-drift', 'owners must exactly match the approved 1.0 boundaries');
+  }
 
   const evidence = uniqueStrings(policy.requiredEvidence, 'policy.requiredEvidence');
   const expectedEvidence = [
@@ -199,6 +228,10 @@ export function validateDesktopReleasePolicy(value) {
     ['capability.auto-update', 'unsupported'],
     ['capability.remote-crash-reporting', 'unsupported'],
     ['capability.publish', 'operator-blocked'],
+    ['channel.mac-app-store', 'unsupported'],
+    ['channel.npm', 'unsupported'],
+    ['channel.homebrew', 'unsupported'],
+    ['channel.cloudflare-deploy', 'unsupported'],
   ]);
   for (const [id, status] of expectedSupport) {
     if (support.find((entry) => entry.id === id)?.status !== status) {
@@ -226,6 +259,50 @@ export function validateDesktopReleasePolicy(value) {
   );
   literal(publication.approvedValue, '1', 'policy.publication.approvedValue');
 
+  if (!Array.isArray(policy.operatorOnlyMutations)) {
+    fail('contract.invalid-array', 'policy.operatorOnlyMutations');
+  }
+  const operatorOnlyMutations = policy.operatorOnlyMutations.map((entry, index) => {
+    const record = exactKeys(
+      entry,
+      ['id', 'status', 'documentationLabel', 'reason'],
+      `policy.operatorOnlyMutations[${index}]`,
+    );
+    return {
+      id: string(record.id, `policy.operatorOnlyMutations[${index}].id`),
+      status: oneOf(
+        record.status,
+        ['operator-blocked'],
+        `policy.operatorOnlyMutations[${index}].status`,
+      ),
+      documentationLabel: string(
+        record.documentationLabel,
+        `policy.operatorOnlyMutations[${index}].documentationLabel`,
+      ),
+      reason: string(record.reason, `policy.operatorOnlyMutations[${index}].reason`),
+    };
+  });
+  if (new Set(operatorOnlyMutations.map(({ id }) => id)).size !== operatorOnlyMutations.length) {
+    fail('contract.duplicate-value', 'policy.operatorOnlyMutations ids');
+  }
+  const expectedOperatorOnlyMutations = new Set([
+    'operation.git-tag-create',
+    'operation.git-tag-push',
+    'operation.github-release-create',
+    'operation.github-release-upload',
+  ]);
+  for (const id of expectedOperatorOnlyMutations) {
+    if (operatorOnlyMutations.find((entry) => entry.id === id)?.status !== 'operator-blocked') {
+      fail('policy.operator-mutation-drift', `${id} must be explicitly operator-blocked`);
+    }
+  }
+  if (operatorOnlyMutations.length !== expectedOperatorOnlyMutations.size) {
+    fail(
+      'policy.operator-mutation-drift',
+      'operator-only mutations must exactly match the approved 1.0 boundary',
+    );
+  }
+
   const signing = exactKeys(
     policy.signing,
     ['approvedTeamIdentifierEnvironment'],
@@ -236,6 +313,48 @@ export function validateDesktopReleasePolicy(value) {
     'TILEBORNE_APPLE_TEAM_ID',
     'policy.signing.approvedTeamIdentifierEnvironment',
   );
+
+  if (!Array.isArray(policy.credentialPresenceChecks)) {
+    fail('contract.invalid-array', 'policy.credentialPresenceChecks');
+  }
+  const credentialPresenceChecks = policy.credentialPresenceChecks.map((entry, index) => {
+    const record = exactKeys(
+      entry,
+      ['name', 'owner', 'check'],
+      `policy.credentialPresenceChecks[${index}]`,
+    );
+    return {
+      name: string(record.name, `policy.credentialPresenceChecks[${index}].name`),
+      owner: string(record.owner, `policy.credentialPresenceChecks[${index}].owner`),
+      check: string(record.check, `policy.credentialPresenceChecks[${index}].check`),
+    };
+  });
+  if (
+    new Set(credentialPresenceChecks.map(({ name }) => name)).size !==
+    credentialPresenceChecks.length
+  ) {
+    fail('contract.duplicate-value', 'policy.credentialPresenceChecks names');
+  }
+  const expectedCredentialPresenceChecks = new Map([
+    ['TILEBORNE_APPLE_SIGNING_IDENTITY', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+    ['TILEBORNE_APPLE_TEAM_ID', 'scripts/desktop-release-contract.mjs'],
+    ['TILEBORNE_APPLE_API_KEY_PATH', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+    ['TILEBORNE_APPLE_API_KEY_ID', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+    ['TILEBORNE_APPLE_API_ISSUER', 'apps/desktop/scripts/desktop-release-forge.cjs'],
+    ['TILEBORNE_DESKTOP_PUBLISH_APPROVED', 'scripts/desktop-release-contract.mjs'],
+    ['GH_TOKEN', 'scripts/desktop-release-contract.mjs'],
+  ]);
+  for (const [name, owner] of expectedCredentialPresenceChecks) {
+    if (credentialPresenceChecks.find((entry) => entry.name === name)?.owner !== owner) {
+      fail('policy.credential-check-drift', `${name} must be checked by ${owner}`);
+    }
+  }
+  if (credentialPresenceChecks.length !== expectedCredentialPresenceChecks.size) {
+    fail(
+      'policy.credential-check-drift',
+      'credential presence checks must exactly match the approved 1.0 boundary',
+    );
+  }
 
   if (!Array.isArray(policy.lastKnownGoodReleases)) {
     fail('contract.invalid-array', 'policy.lastKnownGoodReleases');
@@ -297,13 +416,22 @@ export function validateDesktopReleasePolicy(value) {
 export function validateDesktopReleaseManifest(value, policy = loadDesktopReleasePolicy()) {
   const manifest = exactKeys(
     value,
-    ['schemaVersion', 'policyId', 'artifact', 'provenance'],
+    [
+      'schemaVersion',
+      'policyId',
+      'artifact',
+      'provenance',
+      'runner',
+      'signing',
+      'notarization',
+      'verification',
+    ],
     'manifest',
   );
   validateReceiptHeader(manifest, policy, 'manifest');
   const artifact = exactKeys(
     manifest.artifact,
-    ['fileName', 'kind', 'platform', 'architecture', 'version', 'sizeBytes', 'sha256'],
+    ['fileName', 'kind', 'platform', 'architecture', 'bundleId', 'version', 'sizeBytes', 'sha256'],
     'manifest.artifact',
   );
   const fileName = string(artifact.fileName, 'manifest.artifact.fileName');
@@ -311,6 +439,7 @@ export function validateDesktopReleaseManifest(value, policy = loadDesktopReleas
   literal(artifact.kind, policy.candidate.artifactKind, 'manifest.artifact.kind');
   literal(artifact.platform, policy.candidate.platform, 'manifest.artifact.platform');
   literal(artifact.architecture, policy.candidate.architecture, 'manifest.artifact.architecture');
+  literal(artifact.bundleId, 'dev.tileborne.app', 'manifest.artifact.bundleId');
   string(artifact.version, 'manifest.artifact.version');
   positiveInteger(artifact.sizeBytes, 'manifest.artifact.sizeBytes');
   string(artifact.sha256, 'manifest.artifact.sha256', SHA256);
@@ -330,7 +459,155 @@ export function validateDesktopReleaseManifest(value, policy = loadDesktopReleas
   literal(provenance.builderArchitecture, 'arm64', 'manifest.provenance.builderArchitecture');
   string(provenance.builtAt, 'manifest.provenance.builtAt', ISO_TIMESTAMP);
 
+  const runner = exactKeys(manifest.runner, ['id', 'os', 'architecture'], 'manifest.runner');
+  string(runner.id, 'manifest.runner.id');
+  literal(runner.os, 'darwin', 'manifest.runner.os');
+  literal(runner.architecture, 'arm64', 'manifest.runner.architecture');
+
+  const signing = exactKeys(
+    manifest.signing,
+    ['authority', 'teamIdentifier', 'hardenedRuntime'],
+    'manifest.signing',
+  );
+  const authority = string(signing.authority, 'manifest.signing.authority');
+  if (!authority.startsWith('Developer ID Application:')) {
+    fail('manifest.invalid-signing-authority', 'Developer ID Application authority required');
+  }
+  string(signing.teamIdentifier, 'manifest.signing.teamIdentifier', /^[A-Z0-9]{10}$/);
+  oneOf(signing.hardenedRuntime, ['runtime', 'disabled'], 'manifest.signing.hardenedRuntime');
+
+  const notarization = exactKeys(
+    manifest.notarization,
+    ['method', 'credentialReference', 'staple'],
+    'manifest.notarization',
+  );
+  literal(notarization.method, 'app-store-connect-api-key', 'manifest.notarization.method');
+  literal(
+    notarization.credentialReference,
+    'TILEBORNE_APPLE_API_KEY_PATH',
+    'manifest.notarization.credentialReference',
+  );
+  oneOf(notarization.staple, ['validated', 'missing'], 'manifest.notarization.staple');
+
+  const verification = exactKeys(
+    manifest.verification,
+    ['checksum', 'codesign', 'notarization', 'stapler', 'gatekeeper'],
+    'manifest.verification',
+  );
+  const checksum = exactKeys(
+    verification.checksum,
+    ['algorithm', 'value'],
+    'manifest.verification.checksum',
+  );
+  literal(checksum.algorithm, 'sha256', 'manifest.verification.checksum.algorithm');
+  const checksumValue = string(checksum.value, 'manifest.verification.checksum.value', SHA256);
+  if (checksumValue !== artifact.sha256) {
+    fail('manifest.verification-checksum-mismatch', 'checksum evidence must match artifact sha256');
+  }
+  const codesign = exactKeys(
+    verification.codesign,
+    ['commandId', 'status'],
+    'manifest.verification.codesign',
+  );
+  string(codesign.commandId, 'manifest.verification.codesign.commandId');
+  oneOf(codesign.status, ['pending', 'valid', 'invalid'], 'manifest.verification.codesign.status');
+  const notaryEvidence = exactKeys(
+    verification.notarization,
+    ['commandId', 'status'],
+    'manifest.verification.notarization',
+  );
+  string(notaryEvidence.commandId, 'manifest.verification.notarization.commandId');
+  oneOf(
+    notaryEvidence.status,
+    ['pending', 'available', 'missing'],
+    'manifest.verification.notarization.status',
+  );
+  const stapler = exactKeys(
+    verification.stapler,
+    ['commandId', 'status'],
+    'manifest.verification.stapler',
+  );
+  string(stapler.commandId, 'manifest.verification.stapler.commandId');
+  oneOf(stapler.status, ['pending', 'valid', 'invalid'], 'manifest.verification.stapler.status');
+  const gatekeeper = exactKeys(
+    verification.gatekeeper,
+    ['commandId', 'status'],
+    'manifest.verification.gatekeeper',
+  );
+  string(gatekeeper.commandId, 'manifest.verification.gatekeeper.commandId');
+  oneOf(
+    gatekeeper.status,
+    ['pending', 'accepted', 'rejected'],
+    'manifest.verification.gatekeeper.status',
+  );
+
   return manifest;
+}
+
+const pendingVerification = (artifactSha256) => ({
+  checksum: { algorithm: 'sha256', value: artifactSha256 },
+  codesign: { commandId: 'manifest-generation', status: 'pending' },
+  notarization: { commandId: 'manifest-generation', status: 'pending' },
+  stapler: { commandId: 'manifest-generation', status: 'pending' },
+  gatekeeper: { commandId: 'manifest-generation', status: 'pending' },
+});
+
+export function generateDesktopReleaseManifest({
+  artifactPath,
+  version,
+  sourceCommit,
+  builtAt,
+  runnerId,
+  signingAuthority,
+  teamIdentifier,
+  verification,
+  policy = loadDesktopReleasePolicy(),
+}) {
+  if (typeof artifactPath !== 'string' || artifactPath.length === 0) {
+    fail('manifest.artifact-missing', 'artifact path is required');
+  }
+  if (!existsSync(artifactPath)) {
+    fail('manifest.artifact-missing', 'artifact path does not exist');
+  }
+  const artifactSha256 = sha256File(artifactPath);
+  const manifest = {
+    schemaVersion: 1,
+    policyId: policy.policyId,
+    artifact: {
+      fileName: path.basename(artifactPath),
+      kind: policy.candidate.artifactKind,
+      platform: policy.candidate.platform,
+      architecture: policy.candidate.architecture,
+      bundleId: 'dev.tileborne.app',
+      version: string(version, 'manifest.input.version'),
+      sizeBytes: statSync(artifactPath).size,
+      sha256: artifactSha256,
+    },
+    provenance: {
+      sourceCommit: string(sourceCommit, 'manifest.input.sourceCommit', SOURCE_COMMIT),
+      buildCommand: 'pnpm --filter @tileborne/desktop package',
+      builderOs: 'darwin',
+      builderArchitecture: 'arm64',
+      builtAt: string(builtAt, 'manifest.input.builtAt', ISO_TIMESTAMP),
+    },
+    runner: {
+      id: string(runnerId, 'manifest.input.runnerId'),
+      os: 'darwin',
+      architecture: 'arm64',
+    },
+    signing: {
+      authority: string(signingAuthority, 'manifest.input.signingAuthority'),
+      teamIdentifier: string(teamIdentifier, 'manifest.input.teamIdentifier', /^[A-Z0-9]{10}$/),
+      hardenedRuntime: 'runtime',
+    },
+    notarization: {
+      method: 'app-store-connect-api-key',
+      credentialReference: 'TILEBORNE_APPLE_API_KEY_PATH',
+      staple: 'validated',
+    },
+    verification: verification ?? pendingVerification(artifactSha256),
+  };
+  return validateDesktopReleaseManifest(manifest, policy);
 }
 
 function validateReceiptHeader(receipt, policy, at) {
@@ -713,6 +990,67 @@ export function evaluateDesktopRelease({
         hostPlatform,
         hostArchitecture,
       });
+      if (validManifest.signing.authority !== nativeEvidence.candidate.candidateAuthority) {
+        addBlocker(
+          blockers,
+          'manifest.signing-authority-mismatch',
+          'Manifest signing authority does not match verified native evidence.',
+        );
+      }
+      if (
+        validManifest.signing.teamIdentifier !== approvedTeamIdentifier ||
+        validManifest.signing.teamIdentifier !== nativeEvidence.candidate.candidateTeamIdentifier
+      ) {
+        addBlocker(
+          blockers,
+          'manifest.signing-team-mismatch',
+          'Manifest signing TeamIdentifier does not match the approved team and verified native evidence.',
+        );
+      }
+      if (
+        validManifest.signing.hardenedRuntime !== nativeEvidence.candidate.candidateHardenedRuntime
+      ) {
+        addBlocker(
+          blockers,
+          'manifest.hardened-runtime-mismatch',
+          'Manifest hardened-runtime value does not match verified native evidence.',
+        );
+      }
+      if (validManifest.notarization.staple !== nativeEvidence.candidate.candidateStaple) {
+        addBlocker(
+          blockers,
+          'manifest.notarization-staple-mismatch',
+          'Manifest notarization staple value does not match verified native evidence.',
+        );
+      }
+      if (validManifest.verification.codesign.status !== 'valid') {
+        addBlocker(
+          blockers,
+          'manifest.codesign-evidence-missing',
+          'Manifest must attach redacted successful codesign evidence.',
+        );
+      }
+      if (validManifest.verification.notarization.status !== 'available') {
+        addBlocker(
+          blockers,
+          'manifest.notarization-evidence-missing',
+          'Manifest must attach redacted notarization credential-boundary evidence.',
+        );
+      }
+      if (validManifest.verification.stapler.status !== 'valid') {
+        addBlocker(
+          blockers,
+          'manifest.stapler-evidence-missing',
+          'Manifest must attach redacted successful stapler validation evidence.',
+        );
+      }
+      if (validManifest.verification.gatekeeper.status !== 'accepted') {
+        addBlocker(
+          blockers,
+          'manifest.gatekeeper-evidence-missing',
+          'Manifest must attach redacted successful Gatekeeper assessment evidence.',
+        );
+      }
       if (!existsSync(backupArtifactPath) || !hasZipHeader(backupArtifactPath)) {
         addBlocker(
           blockers,
@@ -852,6 +1190,12 @@ function parseArgs(args) {
     'output',
     'expect',
     'skip-publication',
+    'version',
+    'source-commit',
+    'built-at',
+    'runner-id',
+    'signing-authority',
+    'team-id',
   ]);
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
@@ -867,7 +1211,7 @@ function parseArgs(args) {
 
 function usage() {
   console.error(
-    'Usage: node scripts/desktop-release-contract.mjs <policy|status|verify> [--artifact path --retained-artifact path --backup-output path --manifest path --output path --expect go|no-go --skip-publication 1]',
+    'Usage: node scripts/desktop-release-contract.mjs <policy|manifest|status|verify> [--artifact path --retained-artifact path --backup-output path --manifest path --output path --expect go|no-go --skip-publication 1 --version 1.0.0 --source-commit <sha> --built-at <iso> --runner-id <id> --signing-authority <authority> --team-id <team>]',
   );
 }
 
@@ -876,6 +1220,22 @@ function main(argv) {
   if (command === 'policy') {
     const policy = loadDesktopReleasePolicy();
     console.log(JSON.stringify({ policyId: policy.policyId, status: 'valid' }));
+    return;
+  }
+  if (command === 'manifest') {
+    const args = parseArgs(rawArgs);
+    const manifest = generateDesktopReleaseManifest({
+      artifactPath: args.artifact,
+      version: args.version,
+      sourceCommit: args['source-commit'],
+      builtAt: args['built-at'],
+      runnerId: args['runner-id'],
+      signingAuthority: args['signing-authority'],
+      teamIdentifier: args['team-id'],
+    });
+    const serialized = `${JSON.stringify(manifest, null, 2)}\n`;
+    if (args.output) writeFileSync(args.output, serialized, { encoding: 'utf8', mode: 0o600 });
+    process.stdout.write(serialized);
     return;
   }
   if (command !== 'status' && command !== 'verify') {

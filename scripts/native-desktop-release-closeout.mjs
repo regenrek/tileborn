@@ -22,6 +22,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { generateDesktopReleaseManifest } from './desktop-release-contract.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), '..');
@@ -34,6 +35,14 @@ const SENSITIVE_RELEASE_ENVIRONMENT = Object.freeze([
   'TILEBORNE_APPLE_API_ISSUER',
   'TILEBORNE_DESKTOP_PUBLISH_APPROVED',
   'GH_TOKEN',
+]);
+export const RELEASE_SUBPROCESS_ENVIRONMENT = Object.freeze([
+  'TILEBORNE_DESKTOP_RELEASE',
+  'TILEBORNE_APPLE_SIGNING_IDENTITY',
+  'TILEBORNE_APPLE_TEAM_ID',
+  'TILEBORNE_APPLE_API_KEY_PATH',
+  'TILEBORNE_APPLE_API_KEY_ID',
+  'TILEBORNE_APPLE_API_ISSUER',
 ]);
 const SHA256 = /^[a-f0-9]{64}$/;
 const TRACKED_DISTRIBUTION_INPUTS = new Set([
@@ -57,6 +66,73 @@ const git = (root, args, allowFailure = false) => {
 const assert = (condition, code, message) => {
   if (!condition) throw new Error(`${code}: ${message}`);
 };
+
+const releaseValue = (source, name) => {
+  const value = source[name];
+  assert(
+    typeof value === 'string' && value.length > 0,
+    'release.credentials-missing',
+    `${name} is required for native release closeout`,
+  );
+  return value;
+};
+
+export const createReleaseSubprocessEnvironment = (source = process.env) => {
+  const releaseEnv = Object.fromEntries(
+    RELEASE_SUBPROCESS_ENVIRONMENT.map((name) => [name, releaseValue(source, name)]),
+  );
+  assert(
+    releaseEnv.TILEBORNE_DESKTOP_RELEASE === '1',
+    'release.flag-invalid',
+    'TILEBORNE_DESKTOP_RELEASE must be 1',
+  );
+  assert(
+    releaseEnv.TILEBORNE_APPLE_SIGNING_IDENTITY.startsWith('Developer ID Application:'),
+    'release.identity-invalid',
+    'Developer ID Application identity is required',
+  );
+  assert(
+    /^[A-Z0-9]{10}$/.test(releaseEnv.TILEBORNE_APPLE_TEAM_ID),
+    'release.team-id-invalid',
+    'TILEBORNE_APPLE_TEAM_ID must be ten uppercase letters/digits',
+  );
+  assert(
+    /^[A-Z0-9]{10}$/.test(releaseEnv.TILEBORNE_APPLE_API_KEY_ID),
+    'release.api-key-id-invalid',
+    'TILEBORNE_APPLE_API_KEY_ID must be ten uppercase letters/digits',
+  );
+  assert(
+    /^[a-f0-9-]{36}$/i.test(releaseEnv.TILEBORNE_APPLE_API_ISSUER),
+    'release.api-issuer-invalid',
+    'TILEBORNE_APPLE_API_ISSUER must be a UUID',
+  );
+  return Object.freeze(releaseEnv);
+};
+
+export const createNotaryHistoryInvocation = (releaseEnv) =>
+  Object.freeze({
+    args: Object.freeze([
+      'notarytool',
+      'history',
+      '--key',
+      releaseEnv.TILEBORNE_APPLE_API_KEY_PATH,
+      '--key-id',
+      releaseEnv.TILEBORNE_APPLE_API_KEY_ID,
+      '--issuer',
+      releaseEnv.TILEBORNE_APPLE_API_ISSUER,
+    ]),
+    receiptCommand: Object.freeze([
+      '/usr/bin/xcrun',
+      'notarytool',
+      'history',
+      '--key',
+      '$TILEBORNE_APPLE_API_KEY_PATH',
+      '--key-id',
+      '$TILEBORNE_APPLE_API_KEY_ID',
+      '--issuer',
+      '$TILEBORNE_APPLE_API_ISSUER',
+    ]),
+  });
 
 export const outputDirectories = (root) => {
   const found = [];
@@ -90,7 +166,16 @@ const writePrivate = (file, bytes) => {
   chmodSync(file, 0o600);
 };
 
-const run = ({ root, evidenceRoot, id, command, args, expect = 'success', env = {} }) => {
+const run = ({
+  root,
+  evidenceRoot,
+  id,
+  command,
+  args,
+  expect = 'success',
+  env = {},
+  receiptCommand,
+}) => {
   const result = spawnSync(command, args, {
     cwd: root,
     env: { ...sanitizeEnvironment(), ...env },
@@ -104,7 +189,7 @@ const run = ({ root, evidenceRoot, id, command, args, expect = 'success', env = 
   writePrivate(path.join(evidenceRoot, stdoutFile), stdout);
   writePrivate(path.join(evidenceRoot, stderrFile), stderr);
   const receipt = {
-    command: [command, ...args],
+    command: receiptCommand ?? [command, ...args],
     exitCode: result.status,
     signal: result.signal,
     stdout: { file: stdoutFile, bytes: Buffer.byteLength(stdout), sha256: sha256(stdout) },
@@ -204,6 +289,55 @@ export const deriveBinaryDecision = ({
   });
 };
 
+export const deriveCloseoutBlockerCodes = ({
+  binaryBlockers,
+  canonicalBlockers,
+  notaryCredentials,
+}) =>
+  [
+    ...new Set([
+      ...binaryBlockers.filter((code) => code !== 'contract.not-go'),
+      ...(notaryCredentials === 'missing' ? ['notarization.credentials-missing'] : []),
+      ...canonicalBlockers,
+    ]),
+  ].sort();
+
+export const deriveCloseoutExternalOwners = (blockerCodes) => {
+  const blockers = new Set(blockerCodes);
+  return [
+    {
+      blocker: 'signing.approved-team-missing',
+      owner: 'Apple Developer release owner',
+      remediation:
+        'Provide the approved TeamIdentifier and Developer ID Application identity through protected CI/operator secrets.',
+    },
+    {
+      blocker: 'notarization.credentials-missing',
+      owner: 'Apple notarization credential owner',
+      remediation:
+        'Provide the approved App Store Connect API key path, key id, and issuer through protected CI/operator secrets.',
+    },
+    {
+      blocker: 'rollback.retained-artifact-missing',
+      owner: 'Tileborne release owner',
+      remediation:
+        'Approve a strictly earlier signed/notarized LKG in scripts/desktop-release-policy.json and supply its exact retained DMG.',
+    },
+    {
+      blocker: 'publish.approval-missing',
+      owner: 'Tileborne release approver',
+      remediation:
+        'After artifact-only verification is ready, set TILEBORNE_DESKTOP_PUBLISH_APPROVED=1 for the approved final verification only.',
+    },
+    {
+      blocker: 'publish.credential-missing',
+      owner: 'GitHub release credential owner',
+      remediation:
+        'Provide a scoped GH_TOKEN through the protected release environment only after approval.',
+    },
+  ].filter(({ blocker }) => blockers.has(blocker));
+};
+
 const atomicReceipt = (evidenceRoot, receipt) => {
   const pending = path.join(evidenceRoot, 'native-desktop-closeout-receipt.pending.json');
   const closed = path.join(evidenceRoot, 'native-desktop-closeout-receipt.json');
@@ -265,6 +399,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     'closeout.evidence-inside-checkout',
     resolvedEvidenceRoot,
   );
+  const releaseEnv = createReleaseSubprocessEnvironment();
 
   const commands = {};
   commands.frozenInstall = run({
@@ -287,6 +422,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     id: '03-forge-make',
     command: 'pnpm',
     args: ['--filter', '@tileborne/desktop', 'package'],
+    env: releaseEnv,
   }).receipt;
 
   const outRoot = path.join(checkoutRoot, 'apps', 'desktop', 'out');
@@ -416,13 +552,16 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     expect: 'any',
   });
   commands.staplerValidate = stapler.receipt;
+  const notaryInvocation = createNotaryHistoryInvocation(releaseEnv);
   const notary = run({
     root: checkoutRoot,
     evidenceRoot: resolvedEvidenceRoot,
     id: '13-notary-credential-boundary',
     command: '/usr/bin/xcrun',
-    args: ['notarytool', 'history'],
+    args: notaryInvocation.args,
     expect: 'any',
+    env: releaseEnv,
+    receiptCommand: notaryInvocation.receiptCommand,
   });
   commands.notaryCredentialBoundary = notary.receipt;
   const gatekeeper = run({
@@ -474,18 +613,54 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       : embeddedProvenanceValue !== null
         ? 'invalid'
         : 'missing';
-  const manifest = {
-    schemaVersion: 1,
-    policyId: 'tileborne-desktop-1.0',
-    artifact: { ...dmg, kind: 'dmg', platform: 'darwin', architecture: 'arm64', version },
-    provenance: {
-      sourceCommit: head,
-      buildCommand: 'pnpm --filter @tileborne/desktop package',
-      builderOs: 'darwin',
-      builderArchitecture: 'arm64',
-      builtAt: new Date().toISOString(),
+
+  const display = `${codesignDisplay.stdout}\n${codesignDisplay.stderr}`;
+  const developerIdSignature =
+    codesignStrict.succeeded && /Developer ID Application:/.test(display) ? 'valid' : 'invalid';
+  const hardenedRuntime = /flags=.*runtime/.test(display) ? 'enabled' : 'missing';
+  const notarizationStaple = stapler.succeeded ? 'valid' : 'invalid';
+  const gatekeeperAssessment = gatekeeper.succeeded ? 'accepted' : 'rejected';
+  const signingAuthority = /Authority=(Developer ID Application:[^\n]+)/.exec(display)?.[1];
+  const teamIdentifier =
+    /TeamIdentifier=([A-Z0-9]{10})/.exec(display)?.[1] ?? releaseEnv.TILEBORNE_APPLE_TEAM_ID;
+  assert(
+    typeof signingAuthority === 'string' && signingAuthority.length > 0,
+    'signing.authority-missing',
+    'codesign display did not include a Developer ID Application authority',
+  );
+  assert(
+    typeof teamIdentifier === 'string' && /^[A-Z0-9]{10}$/.test(teamIdentifier),
+    'signing.team-id-missing',
+    'codesign display or protected environment must provide the approved TeamIdentifier',
+  );
+  const manifest = generateDesktopReleaseManifest({
+    artifactPath: externalDmg,
+    version,
+    sourceCommit: head,
+    builtAt: new Date().toISOString(),
+    runnerId: `native-closeout:${os.hostname()}`,
+    signingAuthority,
+    teamIdentifier,
+    verification: {
+      checksum: { algorithm: 'sha256', value: dmg.sha256 },
+      codesign: {
+        commandId: '11-codesign-strict',
+        status: developerIdSignature,
+      },
+      notarization: {
+        commandId: '13-notary-credential-boundary',
+        status: notary.succeeded ? 'available' : 'missing',
+      },
+      stapler: {
+        commandId: '12-stapler-validate',
+        status: notarizationStaple,
+      },
+      gatekeeper: {
+        commandId: '14-gatekeeper-assess',
+        status: gatekeeperAssessment,
+      },
     },
-  };
+  });
   const manifestFile = path.join(resolvedEvidenceRoot, 'candidate-manifest.json');
   writePrivate(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   const canonicalStatus = run({
@@ -507,16 +682,10 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       '--expect',
       'no-go',
     ],
+    env: { TILEBORNE_APPLE_TEAM_ID: releaseEnv.TILEBORNE_APPLE_TEAM_ID },
   });
   commands.canonicalStatus = canonicalStatus.receipt;
   const status = JSON.parse(canonicalStatus.stdout);
-
-  const display = `${codesignDisplay.stdout}\n${codesignDisplay.stderr}`;
-  const developerIdSignature =
-    codesignStrict.succeeded && /Developer ID Application:/.test(display) ? 'valid' : 'invalid';
-  const hardenedRuntime = /flags=.*runtime/.test(display) ? 'enabled' : 'missing';
-  const notarizationStaple = stapler.succeeded ? 'valid' : 'invalid';
-  const gatekeeperAssessment = gatekeeper.succeeded ? 'accepted' : 'rejected';
   const binary = deriveBinaryDecision({
     canonicalDecision: status.decision,
     developerIdSignature,
@@ -528,15 +697,34 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     embeddedProvenance,
   });
   const canonicalBlockers = status.blockers.map(({ code }) => code);
-  const blockerCodes = [
-    ...new Set([
-      ...binary.blockers.filter((code) => code !== 'contract.not-go'),
-      'notarization.credentials-missing',
-      ...canonicalBlockers,
-    ]),
-  ].sort();
+  const notaryCredentials = notary.succeeded ? 'available' : 'missing';
+  const blockerCodes = deriveCloseoutBlockerCodes({
+    binaryBlockers: binary.blockers,
+    canonicalBlockers,
+    notaryCredentials,
+  });
   const postStatus = git(checkoutRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
   assert(postStatus === '', 'closeout.post-run-dirty', postStatus);
+  assert(
+    developerIdSignature === 'valid',
+    'signing.developer-id-invalid',
+    'codesign strict verification and Developer ID Application authority are required',
+  );
+  assert(
+    hardenedRuntime === 'enabled',
+    'signing.hardened-runtime-missing',
+    'hardened runtime must be present in codesign flags',
+  );
+  assert(
+    notarizationStaple === 'valid',
+    'notarization.staple-invalid',
+    'stapler validation must succeed for the retained candidate DMG',
+  );
+  assert(
+    gatekeeperAssessment === 'accepted',
+    'gatekeeper.assessment-rejected',
+    'Gatekeeper assessment must accept the installed app',
+  );
   assert(
     lipoProbe.stdout.trim().split(/\s+/).includes('arm64'),
     'native.architecture-mismatch',
@@ -579,7 +767,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       developerIdSignature,
       hardenedRuntime,
       notarizationStaple,
-      notaryCredentials: notary.succeeded ? 'available' : 'missing',
+      notaryCredentials,
       gatekeeper: gatekeeperAssessment,
       creatorOpenPlaytestShipSmoke: 'passed',
       embeddedProvenance,
@@ -593,38 +781,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       knownLimitations: status.knownLimitations,
     },
     unsupported: status.knownLimitations,
-    externalOwners: [
-      {
-        blocker: 'signing.approved-team-missing',
-        owner: 'Apple Developer release owner',
-        remediation:
-          'Provide the approved TeamIdentifier and Developer ID Application identity through protected CI/operator secrets.',
-      },
-      {
-        blocker: 'notarization.credentials-missing',
-        owner: 'Apple notarization credential owner',
-        remediation:
-          'Provide the approved App Store Connect API key path, key id, and issuer through protected CI/operator secrets.',
-      },
-      {
-        blocker: 'rollback.retained-artifact-missing',
-        owner: 'Tileborne release owner',
-        remediation:
-          'Approve a strictly earlier signed/notarized LKG in scripts/desktop-release-policy.json and supply its exact retained DMG.',
-      },
-      {
-        blocker: 'publish.approval-missing',
-        owner: 'Tileborne release approver',
-        remediation:
-          'After artifact-only verification is ready, set TILEBORNE_DESKTOP_PUBLISH_APPROVED=1 for the approved final verification only.',
-      },
-      {
-        blocker: 'publish.credential-missing',
-        owner: 'GitHub release credential owner',
-        remediation:
-          'Provide a scoped GH_TOKEN through the protected release environment only after approval.',
-      },
-    ],
+    externalOwners: deriveCloseoutExternalOwners(blockerCodes),
     remediationCommands: [
       'TILEBORNE_DESKTOP_RELEASE=1 pnpm --filter @tileborne/desktop package',
       'node scripts/desktop-release-contract.mjs status --artifact "$CANDIDATE" --retained-artifact "$RETAINED_DMG" --backup-output "$BACKUP_OUTPUT" --manifest "$MANIFEST" --output "$STATUS_OUTPUT" --skip-publication 1 --expect no-go',
@@ -632,11 +789,6 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     ],
     commands,
   };
-  assert(
-    receipt.decision === 'no-go',
-    'closeout.unexpected-go',
-    'unsigned local development candidate must remain no-go',
-  );
   return atomicReceipt(resolvedEvidenceRoot, receipt);
 };
 

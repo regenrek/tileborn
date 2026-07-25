@@ -113,7 +113,7 @@ const assertPackagedRuntimeClosure = (buildPath) => {
   if (!fs.existsSync(alchemyStackEntrypoint)) {
     throw new Error(
       'Packaged runtime is missing runtime-deploy/alchemy-cloudflare-stack.js. Run ' +
-        '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+        '`pnpm turbo run build --filter=@tileborne/services-build` before desktop packaging.',
     );
   }
 };
@@ -215,7 +215,7 @@ const copyAlchemyRuntimeDeployStack = (buildPath) => {
     if (!fs.existsSync(sourcePath)) {
       throw new Error(
         `Alchemy runtime deploy ${fileName} is missing. Run ` +
-          '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+          '`pnpm turbo run build --filter=@tileborne/services-build` before desktop packaging.',
       );
     }
   }

@@ -64,7 +64,7 @@ const CURRENT_PLAYTEST_START_JOIN_MARKER = 'room idempotency key is required';
 const STALE_PLAYTEST_START_MAP_MARKER = 'mapId is required';
 const SMOKE_DROP_PARTICIPANT_SOCKET_ROUTE = '/__smoke/rooms/:id/drop-participant-socket';
 const SMOKE_TRANSPORT_LOSS_CLOSE_CODE = 4000;
-const COMPILED_DEPENDENCY_BUILD_COMMAND = 'pnpm --filter @tileborne/services-build build';
+const COMPILED_DEPENDENCY_BUILD_COMMAND = 'pnpm turbo run build --filter=@tileborne/services-build';
 
 let BATTLE_ROYALE_REFERENCE_PLUGIN_ID;
 let BuildService;

@@ -20,9 +20,6 @@
     }
   },
   "scripts": {
-    "prepare:game-host-worker": "pnpm --filter @tileborne/game-host build",
-    "prebuild": "pnpm run prepare:game-host-worker",
-    "pretest": "pnpm run prepare:game-host-worker && tsc -b tsconfig.json --force",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",

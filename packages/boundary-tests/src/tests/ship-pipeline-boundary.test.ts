@@ -114,15 +114,13 @@ describe('game-host bundled worker build ownership', () => {
     expect(references.map((reference) => reference.path)).not.toContain('../../apps/game-host');
   });
 
-  it('prepares the canonical bundled worker before services-build build and test', () => {
+  it('leaves dependency build ordering to the workspace graph owner', () => {
     const servicesBuildPackage = readJson('packages/services-build/package.json');
     const scripts = servicesBuildPackage.scripts as Record<string, string>;
 
-    expect(scripts['prepare:game-host-worker']).toBe('pnpm --filter @tileborne/game-host build');
-    expect(scripts.prebuild).toBe('pnpm run prepare:game-host-worker');
-    expect(scripts.pretest).toBe(
-      'pnpm run prepare:game-host-worker && tsc -b tsconfig.json --force',
-    );
+    expect(scripts['prepare:game-host-worker']).toBeUndefined();
+    expect(scripts.prebuild).toBeUndefined();
+    expect(scripts.pretest).toBeUndefined();
   });
 
   it('declares the workspace typecheck-to-services-build regression sequence', () => {
@@ -130,7 +128,7 @@ describe('game-host bundled worker build ownership', () => {
     const scripts = rootPackage.scripts as Record<string, string>;
 
     expect(scripts['test:services-build-hermetic']).toBe(
-      'pnpm typecheck && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test',
+      'pnpm typecheck && pnpm turbo run build --filter=@tileborne/services-build && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test',
     );
   });
 

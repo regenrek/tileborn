@@ -21,7 +21,7 @@
       "dependsOn": ["^build", "build"]
     },
     "@tileborne/services-build#test": {
-      "dependsOn": ["^build", "build"]
+      "dependsOn": ["@tileborne/cli#build", "^build", "build"]
     },
     "test:cli-e2e": {
       "dependsOn": ["^build", "build"]

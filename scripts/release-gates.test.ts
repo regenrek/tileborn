@@ -71,6 +71,9 @@ describe('canonical release gates', () => {
     const rootPackage = JSON.parse(read('package.json')) as {
       readonly scripts: Record<string, string>;
     };
+    const turbo = JSON.parse(read('turbo.json')) as {
+      readonly tasks: Record<string, { readonly dependsOn?: readonly string[] }>;
+    };
 
     expect(rootPackage.scripts.ci).toBe('pnpm release:gates');
     expect(rootPackage.scripts['release:gates']).toBe('node scripts/release-gates.mjs run-all');
@@ -79,6 +82,9 @@ describe('canonical release gates', () => {
       'node scripts/release-gates.mjs matrix',
     );
     expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=1');
+    expect(turbo.tasks['@tileborne/services-build#test']?.dependsOn).toContain(
+      '@tileborne/cli#build',
+    );
   });
 
   it('makes GitHub Actions derive scheduling and execution from the same runner', () => {

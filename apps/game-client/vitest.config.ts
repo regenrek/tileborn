@@ -7,6 +7,9 @@ const resolveSrc = (relative: string): string => fileURLToPath(new URL(relative,
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __SMOKE_CONTROL_ENABLED__: JSON.stringify(false),
+  },
   resolve: {
     alias: {
       '@tileborne/game-client/styles/menu.css': resolveSrc(
@@ -25,6 +28,7 @@ export default defineConfig({
         '../../packages/plugin-api/src/project-content.ts',
       ),
       '@tileborne/plugin-api': resolveSrc('../../packages/plugin-api/src/index.ts'),
+      '@tileborne/runtime/net': resolveSrc('../../packages/runtime/src/net/index.ts'),
       '@tileborne/ui': resolveSrc('../../packages/ui/src/index.ts'),
     },
     dedupe: ['react', 'react-dom'],

@@ -1,5 +1,4 @@
 import { PERSISTED_SCHEMA_VERSIONS, type ContentHash, type JsonObject } from '@tileborne/core';
-import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 import type { RuntimeBehaviorArtifactIdentity } from '@tileborne/runtime/behavior';
 import type {
   MultiplayerLobbyCreateRequest,
@@ -23,8 +22,6 @@ import type {
   MultiplayerSessionMetrics,
   MultiplayerTransportMetrics,
 } from '@tileborne/ipc-contracts/contracts/multiplayer';
-
-import type { RoomPlayerModelSelection } from './rooms/storage-schema.js';
 
 export type {
   RoomJoinCode,
@@ -126,13 +123,7 @@ export interface BundledManifestDiscoverSummary {
 }
 
 export interface PlaytestStartRequest {
-  readonly mapId: string;
-  readonly seed?: string | number;
   readonly options?: Record<string, string | number | boolean | null>;
-  /** Encoded `RuntimeMapPackage` wire JSON the room runtime boots from (ADR-0030). */
-  readonly mapPackage?: JsonObject;
-  readonly shellProjection?: RuntimeGameShellProjection;
-  readonly playerModelSelections?: readonly RoomPlayerModelSelection[];
   readonly playerId?: string;
 }
 
@@ -223,9 +214,11 @@ export interface Env {
 
 declare const __WORKER_VERSION__: string;
 declare const __BUILD_ID__: string;
+declare const __SMOKE_CONTROL_ENABLED__: boolean;
 
 export const workerVersion = (): string => __WORKER_VERSION__;
 export const workerBuildId = (): ContentHash => __BUILD_ID__ as ContentHash;
+export const smokeControlEnabled = (): boolean => __SMOKE_CONTROL_ENABLED__;
 
 export const toDiscoverSummary = (manifest: BundledManifest): BundledManifestDiscoverSummary => ({
   plugin: { id: manifest.plugin.id, version: manifest.plugin.version },

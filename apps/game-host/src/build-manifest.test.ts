@@ -118,15 +118,96 @@ describe('buildCloudflareGameHost fixture bundle', () => {
   it('resolves build assets from an Electron Vite working directory without import.meta ownership', async () => {
     const { resolveGameHostBuildAssets } = await import('./build/cloudflare.js');
     const assets = resolveGameHostBuildAssets(path.join(process.cwd(), 'apps/desktop/.vite/build'));
-    expect(assets.workerEntry).toMatch(
-      /apps\/game-host\/(?:dist\/build-assets\/worker-entry\.js|dist\/worker-entry\.js|src\/worker\.ts)$/,
-    );
+    expect(assets.workerEntry).toMatch(/apps\/game-host\/src\/worker\.ts$/);
     expect(assets.behaviorWorkerEntry).toMatch(
-      /apps\/game-host\/(?:dist\/build-assets\/behavior\/workerd\/service-worker\.js|dist\/behavior\/workerd\/service-worker\.js|src\/behavior\/workerd\/service-worker\.ts)$/,
+      /apps\/game-host\/src\/behavior\/workerd\/service-worker\.ts$/,
     );
-    expect(assets.wranglerTemplatePath).toMatch(
-      /apps\/game-host\/(?:dist\/build-assets\/)?wrangler\.template\.toml$/,
+    expect(assets.wranglerTemplatePath).toMatch(/apps\/game-host\/wrangler\.template\.toml$/);
+  });
+
+  it('builds artifacts from current game-host source when stale portable dist assets exist', async () => {
+    const { buildCloudflareGameHost, resolveGameHostBuildAssets } =
+      await import('./build/cloudflare.js');
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'tileborne-stale-gh-assets-'));
+    const gameHostRoot = path.join(tempRoot, 'apps', 'game-host');
+    const pluginRoot = path.join(tempRoot, 'plugin-src');
+    await mkdir(path.join(gameHostRoot, 'src', 'behavior', 'workerd'), { recursive: true });
+    await mkdir(path.join(gameHostRoot, 'dist', 'build-assets', 'behavior', 'workerd'), {
+      recursive: true,
+    });
+    await mkdir(path.join(pluginRoot, 'dist'), { recursive: true });
+    await writeFile(path.join(pluginRoot, 'dist/runtime.js'), 'export default {};\n', 'utf8');
+    await writeFile(
+      path.join(gameHostRoot, 'wrangler.template.toml'),
+      'name = "{{SITE_NAME}}"\nmain = "worker.js"\n',
+      'utf8',
     );
+    await writeFile(
+      path.join(gameHostRoot, 'dist', 'build-assets', 'wrangler.template.toml'),
+      'name = "{{SITE_NAME}}"\nmain = "worker.js"\n',
+      'utf8',
+    );
+    await writeFile(
+      path.join(gameHostRoot, 'dist', 'build-assets', 'worker-entry.js'),
+      `export default { async fetch(request) {
+  if (new URL(request.url).pathname === '/playtest/start') {
+    return Response.json({ error: 'mapId is required' }, { status: 400 });
+  }
+  return new Response('ok');
+} };\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(gameHostRoot, 'dist', 'build-assets', 'behavior', 'workerd', 'service-worker.js'),
+      `export default { fetch() { return new Response('stale behavior'); } };\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(gameHostRoot, 'src', 'worker.ts'),
+      `import { runtimeManifest } from './.generated/runtime-manifest.js';
+import { bundledMapPackages } from './.generated/bundled-map-packages.js';
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    void runtimeManifest;
+    void bundledMapPackages;
+    if (new URL(request.url).pathname === '/playtest/start') {
+      return Response.json({ error: 'room idempotency key is required' }, { status: 400 });
+    }
+    return new Response('ok');
+  },
+};
+`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(gameHostRoot, 'src', 'behavior', 'workerd', 'service-worker.ts'),
+      `export default { fetch(): Response { return new Response('current behavior'); } };\n`,
+      'utf8',
+    );
+
+    const resolved = resolveGameHostBuildAssets(tempRoot);
+    expect(resolved.workerEntry).toBe(path.join(gameHostRoot, 'src', 'worker.ts'));
+
+    const outDir = path.join(tempRoot, 'artifact');
+    await buildCloudflareGameHost({
+      outDir,
+      buildAssetsRoot: tempRoot,
+      pluginId: '@tileborne-plugins/fixture',
+      pluginVersion: '0.1.0',
+      pluginRoot,
+      assetPacks: [],
+      mapPackages: [],
+      runtimeVersion: '0.0.0',
+      siteName: 'fixture-host',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    const workerSource = await readFile(path.join(outDir, 'worker.js'), 'utf8');
+    const playtestStartRoute = /["']\/playtest\/start["'][\s\S]{0,1000}/.exec(workerSource)?.[0];
+    expect(playtestStartRoute).toContain('room idempotency key is required');
+    expect(playtestStartRoute).not.toContain('mapId is required');
+    await rm(tempRoot, { recursive: true, force: true });
   });
 
   it('canonicalizes display names into injection-safe Cloudflare slugs', async () => {
@@ -291,6 +372,7 @@ describe('buildCloudflareGameHost fixture bundle', () => {
     const behaviorWorkerSource = await readFile(path.join(outDir, 'behavior-worker.js'), 'utf8');
     expect(workerSource).toContain('export');
     expect(workerSource).toContain(packageId);
+    expect(workerSource).not.toContain('__SMOKE_CONTROL_ENABLED__');
     expect(workerSource).not.toContain('test.ship-runtime');
     expect(workerSource).not.toContain('AuthoritativeBehaviorRuntimeHost');
     expect(behaviorWorkerSource).toContain('test.ship-runtime');
@@ -313,6 +395,23 @@ describe('buildCloudflareGameHost fixture bundle', () => {
     expect(behaviorWranglerToml).toContain('cpu_ms = 50');
     // Build-time staging never ships inside the artifact.
     await expect(stat(path.join(outDir, '.staging'))).rejects.toThrow();
+
+    const smokeOut = path.join(tempRoot, 'smoke-out');
+    const smokeResult = await buildCloudflareGameHost({
+      outDir: smokeOut,
+      smokeControlsEnabled: true,
+      pluginId: '@tileborne-plugins/fixture',
+      pluginVersion: '0.1.0',
+      pluginRoot,
+      assetPacks: [],
+      mapPackages: [{ mapId, packageId, sourceDir: mapPackageDir, mapPackage: mapPackageWire }],
+      runtimeVersion: '0.0.0',
+      siteName: 'fixture-host',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    const smokeWorkerSource = await readFile(smokeResult.bundlePath, 'utf8');
+    expect(smokeWorkerSource).toContain('/__smoke/rooms/:id/drop-participant-socket');
+    expect(smokeWorkerSource).toContain('/__smoke/drop-participant-socket');
 
     const repeatOut = path.join(tempRoot, 'repeat-out');
     const repeat = await buildCloudflareGameHost({

@@ -2779,7 +2779,13 @@ emitResult({
 `,
       );
 
-      const runner = createNodeAlchemyCloudflareRunner(undefined, stackEntrypoint, execEntrypoint);
+      const baseRunner = createNodeAlchemyCloudflareRunner(
+        undefined,
+        stackEntrypoint,
+        execEntrypoint,
+      );
+      const runner = (input: Parameters<typeof baseRunner>[0]) =>
+        baseRunner({ ...input, allowAdopt: true });
       const executor = createProductionAlchemyCloudflareExecutor(runner);
       const adapter = createAlchemyCloudflareDeploymentAdapter(executor);
       const context = {
@@ -3028,7 +3034,6 @@ emitResult({
       '--stage',
       'dev',
       '--yes',
-      '--adopt',
       '/tmp/tileborne-services-build/alchemy-cloudflare-stack.js',
     ]);
     expect(calls[0]?.env?.TILEBORNE_ALCHEMY_INPUT).not.toContain('token-secret');
@@ -3101,9 +3106,10 @@ emitResult({
     expect(inputPayload).not.toContain('handoff-signing-key-secret');
     expect(calls[0]?.args).toContain('--profile');
     expect(calls[0]?.args).toContain('office-profile');
+    expect(calls[0]?.args).not.toContain('--adopt');
   });
 
-  it('node Alchemy sidecar disables adoption for destroy operations', async () => {
+  it('node Alchemy sidecar only enables adoption through an explicit runner opt-in', async () => {
     const calls: Array<{ args: readonly string[]; env?: NodeJS.ProcessEnv }> = [];
     const runner = createNodeAlchemyCloudflareRunner(
       async (_file, args, options) => {
@@ -3135,6 +3141,22 @@ emitResult({
       '--yes',
       '/tmp/tileborne-services-build/alchemy-cloudflare-stack.js',
     ]);
+
+    await runner({
+      operation: 'deploy',
+      artifactDirectory: '/tmp/tileborne-artifact',
+      workerName: 'entrypoint-worker',
+      stage: 'dev',
+      stateDirectory: '/tmp/tileborne-state',
+      handoffSigningKey: 'handoff-signing-key-secret-32chars-min',
+      allowAdopt: true,
+      credentials: new RuntimeDeployCredentials({
+        accountId: 'acct-secret',
+        apiToken: 'token-secret',
+      }),
+    });
+
+    expect(calls[1]?.args).toContain('--adopt');
   });
 
   it('committed Alchemy stack models remote state, both Workers, and game-host bindings', async () => {

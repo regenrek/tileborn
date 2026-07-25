@@ -145,11 +145,18 @@ class RoomBackedWebSocket {
 }
 
 class MockWebSocket {
+  static readonly CONNECTING = 0;
   static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
   static readonly instances: MockWebSocket[] = [];
 
   binaryType: BinaryType = 'blob';
   readyState = WebSocket.OPEN;
+  onclose: ((this: WebSocket, ev: CloseEvent) => unknown) | null = null;
+  onerror: ((this: WebSocket, ev: Event) => unknown) | null = null;
+  onmessage: ((this: WebSocket, ev: MessageEvent) => unknown) | null = null;
+  onopen: ((this: WebSocket, ev: Event) => unknown) | null = null;
   readonly send = vi.fn();
   readonly close = vi.fn();
   readonly url: string;
@@ -176,6 +183,9 @@ class MockWebSocket {
         void pending.finally(() => this.pendingSends.delete(pending));
       });
     }
+    queueMicrotask(() => {
+      this.onopen?.call(this as unknown as WebSocket, {} as Event);
+    });
   }
 
   addEventListener(type: string, listener: (event: MessageEvent) => void): void {
@@ -183,9 +193,22 @@ class MockWebSocket {
   }
 
   emitMessage(data: ArrayBuffer | Uint8Array | string): void {
+    this.onmessage?.call(this as unknown as WebSocket, new MessageEvent('message', { data }));
     for (const listener of this.listeners.get('message') ?? []) {
       listener(new MessageEvent('message', { data }));
     }
+  }
+
+  emitClose(code = 1006, reason = 'abnormal close'): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.call(
+      this as unknown as WebSocket,
+      {
+        code,
+        reason,
+        wasClean: code === 1000,
+      } as CloseEvent,
+    );
   }
 
   async flushSends(): Promise<void> {
@@ -723,6 +746,140 @@ describe('game-client template App', () => {
     expect(screen.getByText('Victory')).not.toBeNull();
   });
 
+  it('reconnects the shipped runtime socket through the canonical room endpoint', async () => {
+    const user = userEvent.setup();
+    let reconnectResponseCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/lobbies/create')) {
+        return jsonResponse(
+          {
+            roomId: 'room-1',
+            wsUrl: 'http://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-1',
+            joinCode: 'ABC234',
+            joinUrl: 'http://localhost/lobbies/join?code=ABC234',
+            playerId: 'player-1',
+            handoffToken: 'handoff-1',
+            reconnectToken: 'reconnect-1',
+            lobby: lobbySummary(),
+          },
+          201,
+        );
+      }
+      if (url.endsWith('/lobbies/room-1/ready')) {
+        return jsonResponse({
+          lobby: lobbySummary({ ready: true, canStart: true }),
+          canStart: true,
+        });
+      }
+      if (url.endsWith('/rooms/reconnect')) {
+        reconnectResponseCount += 1;
+        if (reconnectResponseCount === 1) {
+          return jsonResponse({
+            wsUrl: 'http://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-2',
+            reconnectToken: 'reconnect-2',
+          });
+        }
+        if (reconnectResponseCount === 2) {
+          return jsonResponse({
+            wsUrl: 'http://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-3',
+            reconnectToken: 'reconnect-3',
+          });
+        }
+        return jsonResponse({
+          wsUrl: 'http://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-extra',
+          reconnectToken: 'reconnect-extra',
+        });
+      }
+      throw new Error(`unexpected fetch ${url} ${String(init?.method)}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('shell-screen-main-menu')).not.toBeNull());
+    await user.click(screen.getByTestId('br-quick-play'));
+    await user.click(screen.getByTestId('create-lobby'));
+    await waitFor(() => expect(screen.getByTestId('lobby-code').textContent).toBe('ABC234'));
+    await user.click(screen.getByTestId('ready-toggle'));
+    await waitFor(() =>
+      expect(screen.getByTestId('lobby-player-player-1').textContent).toContain('Ready'),
+    );
+    await user.click(screen.getByTestId('start-match'));
+    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+
+    MockWebSocket.instances[0]!.emitClose(1006, 'runtime drop');
+    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+
+    const reconnectCalls = () =>
+      fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/rooms/reconnect'));
+    expect(reconnectCalls()).toHaveLength(1);
+    expect(String(reconnectCalls()[0]?.[0])).toBe('/rooms/reconnect');
+    expect(JSON.parse(String(reconnectCalls()[0]?.[1]?.body))).toEqual({
+      roomId: 'room-1',
+      playerId: 'player-1',
+      reconnectToken: 'reconnect-1',
+    });
+
+    const replacement = MockWebSocket.instances[1]!;
+    expect(replacement.url).toBe(
+      'ws://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-2',
+    );
+    emitServerFrame(
+      replacement,
+      createInitialFrame({
+        tick: 1,
+        zone: { cx: 0, cy: 0, radius: 100 },
+        players: [
+          {
+            playerId: 'player-1',
+            x: 0,
+            y: 0,
+            health: 100,
+            inventory: { itemIds: [], capacity: 4 },
+            stats: { kills: 0, deaths: 0 },
+          },
+        ],
+      }),
+    );
+
+    await waitFor(() => expect(replacement.send).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('in-match')).not.toBeNull();
+
+    replacement.emitClose(1006, 'runtime drop again');
+    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(3));
+    await waitFor(() => expect(reconnectCalls()).toHaveLength(2));
+    expect(JSON.parse(String(reconnectCalls()[1]?.[1]?.body))).toEqual({
+      roomId: 'room-1',
+      playerId: 'player-1',
+      reconnectToken: 'reconnect-2',
+    });
+
+    const secondReplacement = MockWebSocket.instances[2]!;
+    expect(secondReplacement.url).toBe(
+      'ws://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-3',
+    );
+    emitServerFrame(
+      secondReplacement,
+      createInitialFrame({
+        tick: 2,
+        zone: { cx: 0, cy: 0, radius: 95 },
+        players: [
+          {
+            playerId: 'player-1',
+            x: 2,
+            y: 0,
+            health: 100,
+            inventory: { itemIds: [], capacity: 4 },
+            stats: { kills: 0, deaths: 0 },
+          },
+        ],
+      }),
+    );
+
+    await waitFor(() => expect(secondReplacement.send).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('in-match')).not.toBeNull();
+  });
+
   it('routes shipped shell WebSocket events through the room and Workerd service back into RuntimeRoot', async () => {
     installWorkerGlobals();
     const worker = (await import('../../game-host/src/behavior/workerd/service-worker.js')).default;
@@ -820,9 +977,7 @@ describe('game-client template App', () => {
     await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
     const socket = MockWebSocket.instances[0]!;
     fireEvent.keyDown(window, { key: 'Escape' });
-    await waitFor(() =>
-      expect(socket.send).toHaveBeenCalledWith(expect.stringContaining('shell.pause.entered')),
-    );
+    await waitFor(() => expect(screen.getByTestId('shell-screen-pause')).not.toBeNull());
 
     await socket.flushSends();
     await room.alarm();

@@ -24,6 +24,7 @@ import type {
   MultiplayerRoomStopRequest as RoomStopRequest,
   MultiplayerRoomStopResponse as RoomStopResponse,
 } from '@tileborne/ipc-contracts/contracts/multiplayer';
+import { DEFAULT_ROOM_RECONNECT_PATH } from '@tileborne/runtime/net';
 
 export type {
   GameShellProjection,
@@ -193,7 +194,7 @@ export const createGameHostLobbyClient = (
         await requestJson<RoomReconnectResponse>(
           fetchImpl,
           baseUrl,
-          '/rooms/reconnect',
+          DEFAULT_ROOM_RECONNECT_PATH,
           jsonPost(request),
         ),
       ),

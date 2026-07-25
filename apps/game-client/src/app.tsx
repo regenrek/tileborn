@@ -24,6 +24,11 @@ import {
   type SequencedRuntimeShellNavigationRequest,
 } from '@tileborne/game-client';
 import {
+  DEFAULT_ROOM_RECONNECT_PATH,
+  makeBrowserWebSocketTransport,
+  makeNetFrameClient,
+} from '@tileborne/runtime/net';
+import {
   battleRoyaleAudioCues,
   battleRoyaleDefaultInputMap,
   battleRoyaleSfxBus,
@@ -123,6 +128,16 @@ const toJoinSession = (response: LobbyJoinResponse | RoomReconnectResponse): Lob
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : 'Lobby request failed';
 
+const textDecoder = new TextDecoder();
+const textEncoder = new TextEncoder();
+
+const decodeShellNavigationFrameBytes = (data: Uint8Array) =>
+  decodeShippedShellNavigationFrame(textDecoder.decode(data));
+
+const encodeShellEventFrameBytes = (
+  event: Parameters<RuntimeShellBehaviorBridge['emitShellEvent']>[0],
+): Uint8Array => textEncoder.encode(encodeShippedShellEventFrame(event));
+
 const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValue => ({
   ...settings,
   busVolumes: settings.busVolumes ?? {},
@@ -138,7 +153,7 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
 export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
   const lobbyClient = useMemo(() => createGameHostLobbyClient(), []);
   const audioSettingsStore = useMemo(() => createAudioUserSettingsStore(), []);
-  const runtimeSocketRef = useRef<WebSocket | null>(null);
+  const runtimeClientRef = useRef<ReturnType<typeof makeNetFrameClient> | null>(null);
   const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>('idle');
   const [lobbyMessage, setLobbyMessage] = useState<string | undefined>(undefined);
   const [lobbyError, setLobbyError] = useState<string | undefined>(undefined);
@@ -375,13 +390,28 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
     if (!lobbySession?.wsUrl) {
       return;
     }
-    runtimeSocketRef.current?.close();
-    const socket = new WebSocket(lobbySession.wsUrl);
-    runtimeSocketRef.current = socket;
-    socket.binaryType = 'arraybuffer';
-    socket.addEventListener('message', (event: MessageEvent) => {
-      const handleData = (data: unknown): void => {
-        const shellFrame = decodeShippedShellNavigationFrame(data);
+    const previousClient = runtimeClientRef.current;
+    if (previousClient !== null) {
+      void previousClient.closePromise().catch(() => undefined);
+    }
+    const transport = makeBrowserWebSocketTransport({
+      reconnectEndpoint: DEFAULT_ROOM_RECONNECT_PATH,
+      ...(lobbySession.reconnectToken === undefined
+        ? {}
+        : { reconnectToken: lobbySession.reconnectToken }),
+      ...(lobbySession.playerId === undefined ? {} : { reconnectPlayerId: lobbySession.playerId }),
+    });
+    const client = makeNetFrameClient(transport, { roomId: lobbySession.roomId });
+    runtimeClientRef.current = client;
+
+    void client.connectPromise(lobbySession.wsUrl).catch(() => {
+      if (runtimeClientRef.current === client) {
+        runtimeClientRef.current = null;
+      }
+    });
+    void client
+      .runFrames((data) => {
+        const shellFrame = decodeShellNavigationFrameBytes(data);
         if (shellFrame !== undefined) {
           setShellNavigationRequests((requests) => [...requests, shellFrame]);
           return;
@@ -389,35 +419,26 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
         const frame = decodeShippedRuntimeServerFrame(data);
         if (frame === undefined) return;
         if (frame.kind === 'initial' || frame.kind === 'delta') {
-          const ackFrame = buildSnapshotAckFrame(frame.tick);
-          const ackBuffer = new ArrayBuffer(ackFrame.byteLength);
-          new Uint8Array(ackBuffer).set(ackFrame);
-          socket.send(ackBuffer);
+          void client.sendFramePromise(buildSnapshotAckFrame(frame.tick)).catch(() => undefined);
         }
         setRuntime((state) => applyShippedRuntimeServerFrame(state, frame));
-      };
-      if (event.data instanceof Blob) {
-        void event.data.arrayBuffer().then(handleData);
-        return;
-      }
-      handleData(event.data);
-    });
-    socket.addEventListener('close', () => {
-      if (runtimeSocketRef.current === socket) {
-        runtimeSocketRef.current = null;
-      }
-    });
+      })
+      .finally(() => {
+        if (runtimeClientRef.current === client) {
+          runtimeClientRef.current = null;
+        }
+      });
   }, [lobbySession]);
 
   const shellBridge = useMemo<RuntimeShellBehaviorBridge>(
     () => ({
       shellNavigationRequests,
       emitShellEvent: (event) => {
-        const socket = runtimeSocketRef.current;
-        if (socket === null || socket.readyState !== WebSocket.OPEN) {
+        const client = runtimeClientRef.current;
+        if (client === null) {
           return;
         }
-        socket.send(encodeShippedShellEventFrame(event));
+        void client.sendFramePromise(encodeShellEventFrameBytes(event)).catch(() => undefined);
       },
     }),
     [shellNavigationRequests],

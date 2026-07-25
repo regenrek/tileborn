@@ -235,7 +235,8 @@ const connectToRoom = async (
 ): Promise<void> => {
   stopLobbyPolling();
   set({ flowPhase: 'joining' });
-  const joinSession = await startPlaytestJoinSession(baseUrl, mapId, roomId);
+  void mapId;
+  const joinSession = await startPlaytestJoinSession(baseUrl, roomId);
   const participantSession: LocalMultiplayerParticipantSession = {
     ...joinSession,
     baseUrl: baseUrl.replace(/\/$/, ''),
@@ -250,7 +251,36 @@ const connectToRoom = async (
   useEditorUiStore.getState().setPlaytestMode('multiplayer');
   useEditorUiStore.getState().setPlaytestActive(true);
   const client = ensureClient(rendererCapabilityId, mapWidth, mapHeight, set, get);
-  client.connect(joinSession.wsUrl, joinSession.playerId);
+  client.connect(participantSession);
+  startLobbyPolling(participantSession, set, get);
+};
+
+const connectWithParticipantSession = async (
+  session: LocalMultiplayerParticipantSession,
+  rendererCapabilityId: string,
+  mapId: string,
+  mapWidth: number,
+  mapHeight: number,
+  set: StoreSet,
+  get: () => PlaytestMultiplayerStoreState,
+): Promise<void> => {
+  stopLobbyPolling();
+  set({ flowPhase: 'joining' });
+  void mapId;
+  const participantSession: LocalMultiplayerParticipantSession = {
+    ...session,
+    baseUrl: session.baseUrl.replace(/\/$/, ''),
+  };
+  set({
+    participantSession,
+    lobbyState: null,
+    roomResults: null,
+    lobbyError: null,
+  });
+  useEditorUiStore.getState().setPlaytestMode('multiplayer');
+  useEditorUiStore.getState().setPlaytestActive(true);
+  const client = ensureClient(rendererCapabilityId, mapWidth, mapHeight, set, get);
+  client.connect(participantSession);
   startLobbyPolling(participantSession, set, get);
 };
 
@@ -451,8 +481,22 @@ if (typeof window !== 'undefined') {
       return {
         flowPhase: state.flowPhase,
         hasRoomReady: state.roomReady !== null,
+        isReadyPending: state.isReadyPending,
         lobbyError: state.lobbyError,
+        lobbyState: state.lobbyState,
+        participantSession: state.participantSession,
+        roomResults: state.roomResults,
       };
     },
+    joinMultiplayerSession: (session, options) =>
+      connectWithParticipantSession(
+        session,
+        options.rendererCapabilityId,
+        options.mapId,
+        options.mapWidth,
+        options.mapHeight,
+        usePlaytestMultiplayerStore.setState,
+        usePlaytestMultiplayerStore.getState,
+      ),
   };
 }

@@ -75,7 +75,7 @@ export class MemoryWebSocket implements FakeWebSocketLike {
 }
 
 export const asDurableObjectState = (state: FakeDurableObjectState): DurableObjectState =>
-  state as DurableObjectState;
+  state as unknown as DurableObjectState;
 
 export const createFakeDurableObjectState = (): FakeDurableObjectState => {
   const storageMap = new Map<string, unknown>();
@@ -108,11 +108,11 @@ export const createFakeDurableObjectState = (): FakeDurableObjectState => {
       deleteAlarm: async () => {
         alarmAt = null;
       },
-    },
+    } as unknown as DurableObjectStorage,
     acceptWebSocket: (ws: WebSocket) => {
-      sockets.push(ws as MemoryWebSocket);
+      sockets.push(ws as unknown as MemoryWebSocket);
     },
-    getWebSockets: () => sockets as MemoryWebSocket[] as WebSocket[],
+    getWebSockets: () => sockets as unknown as WebSocket[],
     waitUntil: (promise: Promise<unknown>) => {
       void promise;
     },
@@ -162,8 +162,8 @@ export const installWorkerGlobals = (): void => {
 
     constructor() {
       const pair = createWebSocketPair();
-      this[0] = pair.client;
-      this[1] = pair.server;
+      this[0] = pair.client as unknown as WebSocket;
+      this[1] = pair.server as unknown as WebSocket;
     }
   }
   globalScope.WebSocketPair = PolyfillWebSocketPair as typeof WebSocketPair;

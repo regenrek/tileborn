@@ -78,6 +78,7 @@ const bundleWorker = async (manifest, runtimeVersion, pass) => {
     define: {
       __WORKER_VERSION__: JSON.stringify(runtimeVersion),
       __BUILD_ID__: JSON.stringify(manifest.buildId),
+      __SMOKE_CONTROL_ENABLED__: JSON.stringify(false),
     },
     plugins: [
       {

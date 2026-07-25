@@ -32,6 +32,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:smoke:cloudflare": "vitest run --config vitest.cloudflare-smoke.config.ts",
     "verify:bundled-worker": "node scripts/verify-bundled-worker.mjs",
     "build": "tsc -b tsconfig.json --force && node scripts/bundle-worker.mjs"
   },
@@ -46,6 +47,7 @@
     "msgpackr": "2.0.1"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.4",
     "@cloudflare/workers-types": "4.20250508.0",
     "@tileborne/plugin-battle-royale": "workspace:*",
     "@tileborne/test-fixtures": "workspace:*",

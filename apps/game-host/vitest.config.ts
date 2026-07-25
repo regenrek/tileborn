@@ -6,6 +6,7 @@ export default defineConfig({
     __BUILD_ID__: JSON.stringify(
       'sha256:0000000000000000000000000000000000000000000000000000000000000000',
     ),
+    __SMOKE_CONTROL_ENABLED__: JSON.stringify(false),
   },
   test: {
     include: ['src/**/*.test.ts'],

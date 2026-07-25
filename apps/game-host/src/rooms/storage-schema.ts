@@ -73,6 +73,16 @@ export interface RoomReconnectState {
   readonly seats: Record<string, RoomReconnectSeatRecord>;
 }
 
+export interface RoomCurrentSocketRecord {
+  readonly playerId: string;
+  readonly socketId: string;
+  readonly connectedAt: string;
+}
+
+export interface RoomCurrentSocketState {
+  readonly players: Record<string, RoomCurrentSocketRecord>;
+}
+
 export interface RoomPlayerResultSummary {
   readonly playerId: string;
   readonly outcome?: RoomResultOutcome;
@@ -138,6 +148,7 @@ export interface RoomStorageV3 extends Omit<RoomStorageV2, 'schemaVersion'> {
   readonly ready: RoomReadyState;
   readonly presence: RoomPresenceState;
   readonly reconnect: RoomReconnectState;
+  readonly currentSockets?: RoomCurrentSocketState;
   readonly results: RoomResultsSummary | null;
 }
 
@@ -160,6 +171,10 @@ export const emptyRoomPresenceState = (): RoomPresenceState => ({
 
 export const emptyRoomReconnectState = (): RoomReconnectState => ({
   seats: {},
+});
+
+export const emptyRoomCurrentSocketState = (): RoomCurrentSocketState => ({
+  players: {},
 });
 
 export const emptyRoomStorage = (
@@ -201,6 +216,7 @@ export const emptyRoomStorage = (
   ready: emptyRoomReadyState(),
   presence: emptyRoomPresenceState(),
   reconnect: emptyRoomReconnectState(),
+  currentSockets: emptyRoomCurrentSocketState(),
   results: null,
 });
 

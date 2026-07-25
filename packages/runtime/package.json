@@ -18,6 +18,10 @@
       "types": "./dist/map-package/index.d.ts",
       "default": "./dist/map-package/index.js"
     },
+    "./net": {
+      "types": "./dist/net/index.d.ts",
+      "default": "./dist/net/index.js"
+    },
     "./behavior": {
       "types": "./dist/behavior/index.d.ts",
       "default": "./dist/behavior/index.js"

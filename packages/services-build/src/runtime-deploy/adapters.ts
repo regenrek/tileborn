@@ -100,6 +100,7 @@ export interface NodeAlchemyCloudflareRunnerInput extends AlchemyCloudflareExecu
   readonly stateDirectory: string;
   readonly handoffSigningKey: string;
   readonly alchemyPassword?: string | undefined;
+  readonly allowAdopt?: boolean | undefined;
 }
 
 export type NodeAlchemyCloudflareRunner = (
@@ -363,7 +364,7 @@ const alchemyCliArgs = (
     input.stage,
     '--yes',
     ...(input.credentials.profile === undefined ? [] : ['--profile', input.credentials.profile]),
-    ...(input.operation === 'destroy' ? [] : ['--adopt']),
+    ...(input.operation !== 'destroy' && input.allowAdopt === true ? ['--adopt'] : []),
     stackEntrypoint,
   ];
 };

@@ -1,10 +1,3 @@
-import {
-  encodeMessage as encodeRuntimeMessage,
-  Events,
-  PlayerJoined,
-  SnapshotDelta,
-} from '@tileborne/runtime';
-import { Option } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
@@ -27,11 +20,22 @@ class MockWebSocket {
       }) => void
     >
   >();
+  onclose:
+    | ((event: {
+        readonly code?: number;
+        readonly reason?: string;
+        readonly wasClean?: boolean;
+      }) => void)
+    | null = null;
+  onerror: (() => void) | null = null;
+  onmessage: ((event: { readonly data?: ArrayBuffer }) => void) | null = null;
+  onopen: (() => void) | null = null;
   readyState = MockWebSocket.OPEN;
   binaryType: BinaryType = 'blob';
 
   constructor(readonly url: string) {
     MockWebSocket.instances.push(this);
+    queueMicrotask(() => this.onopen?.());
   }
 
   send(data: ArrayBuffer): void {
@@ -40,6 +44,7 @@ class MockWebSocket {
 
   close(code = 1000, reason = ''): void {
     this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.({ code, reason, wasClean: code === 1000 });
     for (const listener of this.listeners.get('close') ?? []) {
       listener({ code, reason });
     }
@@ -63,6 +68,7 @@ class MockWebSocket {
   }
 
   receive(data: ArrayBuffer): void {
+    this.onmessage?.({ data });
     for (const listener of this.listeners.get('message') ?? []) {
       listener({ data });
     }
@@ -120,12 +126,26 @@ describe('PlaytestMultiplayerClient', () => {
     MockWebSocket.instances = [];
   });
 
+  const connectTestClient = (
+    client: PlaytestMultiplayerClient,
+    wsUrl = 'ws://localhost/rooms/test/connect',
+    options: { readonly reconnectToken: string | undefined } = { reconnectToken: 'reconnect-1' },
+  ): void => {
+    client.connect({
+      baseUrl: 'http://localhost',
+      roomId: 'test',
+      wsUrl,
+      playerId: 'player-1',
+      ...(options.reconnectToken === undefined ? {} : { reconnectToken: options.reconnectToken }),
+    });
+  };
+
   it('sends one BR protocol frame per input', () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const plugin = makePlugin();
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     client.sendInput(0, true);
 
     const socket = MockWebSocket.instances[0];
@@ -147,7 +167,7 @@ describe('PlaytestMultiplayerClient', () => {
     const plugin = makePlugin();
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     client.sendInput(0, true, {
       reload: true,
       interact: true,
@@ -176,7 +196,7 @@ describe('PlaytestMultiplayerClient', () => {
     const plugin = makePlugin();
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     client.sendInput(undefined, true);
 
     expect(plugin.encodeClientInputFrame).toHaveBeenCalledWith({
@@ -195,7 +215,7 @@ describe('PlaytestMultiplayerClient', () => {
     const plugin = makePlugin();
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     client.sendInput(0, false);
 
     const call = (plugin.encodeClientInputFrame as ReturnType<typeof vi.fn>).mock.lastCall;
@@ -214,41 +234,23 @@ describe('PlaytestMultiplayerClient', () => {
     expect(frame).not.toHaveProperty('swapSlot');
   });
 
-  it('accepts canonical runtime frames emitted by the game host', () => {
+  it('rejects non-plugin frames without falling back to runtime protocol decoding', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const onStateChange = vi.fn();
     const client = new PlaytestMultiplayerClient(64, 64, onStateChange, vi.fn(), makePlugin());
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     const socket = MockWebSocket.instances[0];
-    socket?.receive(
-      toArrayBuffer(
-        encodeRuntimeMessage(
-          new SnapshotDelta({
-            tick: 5,
-            baseTick: 0,
-            diff: Option.some([{ tick: 5, players: 2 }]),
-          }),
-        ),
-      ),
-    );
-    socket?.receive(
-      toArrayBuffer(
-        encodeRuntimeMessage(
-          new Events({
-            events: Option.some([{ type: 'tick', tick: 5 }]),
-          }),
-        ),
-      ),
-    );
+    socket?.receive(toArrayBuffer(new Uint8Array([99])));
 
-    expect(onStateChange).toHaveBeenCalledWith(
-      expect.objectContaining({ tick: 5, errorMessage: null }),
+    await vi.waitFor(() =>
+      expect(onStateChange).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'error', errorMessage: 'Invalid protocol frame' }),
+      ),
     );
-    expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ phase: 'error' }));
   });
 
-  it('stays connecting for admission frames and becomes live only on a runtime snapshot', () => {
+  it('stays connecting until a plugin snapshot arrives', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const onStateChange = vi.fn();
     const onInitialFrame = vi.fn();
@@ -260,35 +262,19 @@ describe('PlaytestMultiplayerClient', () => {
       makePlugin(),
     );
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     const socket = MockWebSocket.instances[0];
-    socket?.receive(
-      toArrayBuffer(
-        encodeRuntimeMessage(
-          new PlayerJoined({ playerId: 'player-1', displayName: Option.none() }),
-        ),
-      ),
-    );
+    socket?.receive(toArrayBuffer(new Uint8Array([99])));
 
-    expect(client.getState()).toMatchObject({ phase: 'connecting', tick: 0 });
+    await vi.waitFor(() => expect(client.getState()).toMatchObject({ phase: 'error', tick: 0 }));
     expect(onInitialFrame).not.toHaveBeenCalled();
 
-    socket?.receive(
-      toArrayBuffer(
-        encodeRuntimeMessage(
-          new SnapshotDelta({
-            tick: 1,
-            baseTick: 0,
-            diff: Option.some([{ tick: 1, players: 1 }]),
-          }),
-        ),
-      ),
-    );
+    socket?.receive(toArrayBuffer(new Uint8Array([1])));
 
-    expect(client.getState()).toMatchObject({ phase: 'live', tick: 1 });
+    expect(client.getState()).toMatchObject({ phase: 'error', tick: 0 });
   });
 
-  it('projects BR snapshots and match events into HUD state', () => {
+  it('projects BR snapshots and match events into HUD state', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const onStateChange = vi.fn();
     const plugin = makePlugin({
@@ -349,14 +335,15 @@ describe('PlaytestMultiplayerClient', () => {
     });
     const client = new PlaytestMultiplayerClient(64, 64, onStateChange, vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     const socket = MockWebSocket.instances[0];
     socket?.receive(toArrayBuffer(new Uint8Array([1])));
     socket?.receive(toArrayBuffer(new Uint8Array([2])));
     socket?.receive(toArrayBuffer(new Uint8Array([3])));
     socket?.receive(toArrayBuffer(new Uint8Array([4])));
 
-    const latestState = onStateChange.mock.lastCall?.[0];
+    await vi.waitFor(() => expect(client.getState()).toMatchObject({ tick: 10 }));
+    const latestState = client.getState();
     expect(latestState).toMatchObject({
       tick: 10,
       players: [{ playerId: 'player-1' }],
@@ -417,7 +404,7 @@ describe('PlaytestMultiplayerClient', () => {
     ).toBe(true);
   });
 
-  it('acks each decoded snapshot tick once', () => {
+  it('acks each decoded snapshot tick once', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const plugin = makePlugin({
       1: {
@@ -443,18 +430,20 @@ describe('PlaytestMultiplayerClient', () => {
     });
     const client = new PlaytestMultiplayerClient(64, 64, vi.fn(), vi.fn(), plugin);
 
-    client.connect('ws://localhost/rooms/test/connect', 'player-1');
+    connectTestClient(client);
     const socket = MockWebSocket.instances[0];
     socket?.receive(toArrayBuffer(new Uint8Array([1])));
     socket?.receive(toArrayBuffer(new Uint8Array([2])));
     socket?.receive(toArrayBuffer(new Uint8Array([3])));
 
-    expect(plugin.encodeSnapshotAckFrame).toHaveBeenNthCalledWith(1, 6, expect.any(Number));
-    expect(plugin.encodeSnapshotAckFrame).toHaveBeenNthCalledWith(2, 7, expect.any(Number));
-    expect(socket?.sent).toHaveLength(2);
+    await vi.waitFor(() => {
+      expect(plugin.encodeSnapshotAckFrame).toHaveBeenNthCalledWith(1, 6, expect.any(Number));
+      expect(plugin.encodeSnapshotAckFrame).toHaveBeenNthCalledWith(2, 7, expect.any(Number));
+      expect(socket?.sent).toHaveLength(2);
+    });
   });
 
-  it('replaces the socket and accepts the reconnect welcome as authoritative state', () => {
+  it('replaces the socket and accepts the reconnect welcome as authoritative state', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const onStateChange = vi.fn();
     const onInitialFrame = vi.fn();
@@ -474,23 +463,55 @@ describe('PlaytestMultiplayerClient', () => {
     });
     const client = new PlaytestMultiplayerClient(64, 64, onStateChange, onInitialFrame, plugin);
 
-    client.connect('ws://localhost/rooms/test/connect?playerId=player-1', 'player-1');
+    connectTestClient(client, 'ws://localhost/rooms/test/connect?playerId=player-1');
     const firstSocket = MockWebSocket.instances[0];
     firstSocket?.receive(toArrayBuffer(new Uint8Array([1])));
 
-    client.connect('ws://localhost/rooms/test/connect?playerId=player-1&reconnect=1', 'player-1');
+    connectTestClient(client, 'ws://localhost/rooms/test/connect?playerId=player-1&reconnect=1');
     const replacementSocket = MockWebSocket.instances[1];
     replacementSocket?.receive(toArrayBuffer(new Uint8Array([2])));
 
     expect(firstSocket?.readyState).toBe(MockWebSocket.CLOSED);
     expect(replacementSocket?.url).toContain('reconnect=1');
-    expect(onInitialFrame).toHaveBeenLastCalledWith({ key: 2 });
-    expect(onStateChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        phase: 'live',
-        tick: 12,
-        players: [{ playerId: 'player-1', x: 36, y: 10, health: 90 }],
-      }),
-    );
+    await vi.waitFor(() => {
+      expect(onInitialFrame).toHaveBeenLastCalledWith({ key: 2 });
+      expect(onStateChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          phase: 'live',
+          tick: 12,
+          players: [{ playerId: 'player-1', x: 36, y: 10, health: 90 }],
+        }),
+      );
+    });
+  });
+
+  it('projects reconnect attempts from canonical runtime observations before fetch', async () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const onStateChange = vi.fn();
+    const plugin = makePlugin();
+    const client = new PlaytestMultiplayerClient(64, 64, onStateChange, vi.fn(), plugin);
+
+    connectTestClient(client, 'ws://localhost/rooms/test/connect?playerId=player-1', {
+      reconnectToken: undefined,
+    });
+    const socket = MockWebSocket.instances[0];
+    socket?.close(1006, 'abnormal close');
+
+    await vi.waitFor(() => {
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(client.getState()).toMatchObject({
+        phase: 'error',
+        reconnectAttempts: 1,
+        transportObservations: expect.arrayContaining([
+          expect.objectContaining({
+            _tag: 'reconnectAttempt',
+            roomId: 'test',
+            attempt: 1,
+          }),
+        ]),
+      });
+    });
   });
 });

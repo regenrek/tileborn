@@ -34,15 +34,15 @@ export const resolveGameHostBuildAssets = (runtimeRoot = process.cwd()): GameHos
   for (;;) {
     for (const root of [
       directory,
-      path.join(directory, "apps/game-host/dist/build-assets"),
       path.join(directory, "apps/game-host"),
       path.join(directory, "game-host"),
+      path.join(directory, "apps/game-host/dist/build-assets"),
     ]) {
       for (const entries of [
         ["worker-entry.js", "behavior/workerd/service-worker.js", "wrangler.template.toml"],
+        ["src/worker.ts", "src/behavior/workerd/service-worker.ts", "wrangler.template.toml"],
         ["dist/build-assets/worker-entry.js", "dist/build-assets/behavior/workerd/service-worker.js", "dist/build-assets/wrangler.template.toml"],
         ["dist/worker-entry.js", "dist/behavior/workerd/service-worker.js", "wrangler.template.toml"],
-        ["src/worker.ts", "src/behavior/workerd/service-worker.ts", "wrangler.template.toml"],
       ] as const) {
         const workerEntry = path.join(root, entries[0]);
         const behaviorWorkerEntry = path.join(root, entries[1]);
@@ -63,6 +63,24 @@ export const resolveGameHostBuildAssets = (runtimeRoot = process.cwd()): GameHos
   throw new Error(`Could not locate Tileborne game-host build assets from ${runtimeRoot}`);
 };
 
+const assertCurrentPlaytestStartContract = async (workerPath: string): Promise<void> => {
+  const source = await readFile(workerPath, "utf8");
+  const playtestStartRoute = /["']\/playtest\/start["'][\s\S]{0,5000}/.exec(source)?.[0];
+  if (playtestStartRoute === undefined) {
+    throw new Error(`${workerPath} is missing the /playtest/start route`);
+  }
+  if (!playtestStartRoute.includes("room idempotency key is required")) {
+    throw new Error(
+      `${workerPath} was not built from the current /playtest/start join contract`,
+    );
+  }
+  if (playtestStartRoute.includes("mapId is required")) {
+    throw new Error(
+      `${workerPath} carries stale /playtest/start mapId-required semantics`,
+    );
+  }
+};
+
 /**
  * One assembled `RuntimeMapPackage` to bake into the artifact (ADR-0030 / M5
  * S1): `sourceDir` holds the canonical on-disk package layout written by
@@ -80,6 +98,8 @@ export interface CloudflareGameHostBuildInput {
   readonly outDir: string;
   /** Explicit portable assembly-asset root supplied by packaged desktop hosts. */
   readonly buildAssetsRoot?: string;
+  /** Test-only control routes for disposable lifecycle proofs. Defaults to disabled. */
+  readonly smokeControlsEnabled?: boolean;
   readonly pluginId: string;
   readonly pluginVersion: string;
   readonly pluginRoot: string;
@@ -190,6 +210,7 @@ const bundleWorker = async (
   mapPackages: readonly BundledMapPackage[],
   runtimeVersion: string,
   workerEntry: string,
+  smokeControlsEnabled = false,
 ): Promise<void> => {
   const runtimeManifestSource = `export const runtimeManifest = ${JSON.stringify(manifest)};\n`;
   const mapPackagesSource = `export const bundledMapPackages = ${JSON.stringify(mapPackages)};\n`;
@@ -215,6 +236,7 @@ const bundleWorker = async (
     define: {
       __WORKER_VERSION__: JSON.stringify(runtimeVersion),
       __BUILD_ID__: JSON.stringify(manifest.buildId),
+      __SMOKE_CONTROL_ENABLED__: JSON.stringify(smokeControlsEnabled),
     },
     plugins: [
       {
@@ -440,7 +462,14 @@ const buildCloudflareGameHostInto = async (
   // manifest. The shipped worker.js intentionally does not hash to the
   // recorded entries; `buildId` covers the pre-embed worker.
   let manifest = buildBundledManifest(manifestBase);
-  await bundleWorker(outDir, manifest, bundledMapPackages, input.runtimeVersion, buildAssets.workerEntry);
+  await bundleWorker(
+    outDir,
+    manifest,
+    bundledMapPackages,
+    input.runtimeVersion,
+    buildAssets.workerEntry,
+    input.smokeControlsEnabled === true,
+  );
   checkpoint();
 
   const workerFiles: BundledManifestFileEntry[] = [
@@ -451,7 +480,15 @@ const buildCloudflareGameHostInto = async (
   ];
 
   manifest = buildBundledManifest({ ...manifestBase, workerFiles });
-  await bundleWorker(outDir, manifest, bundledMapPackages, input.runtimeVersion, buildAssets.workerEntry);
+  await bundleWorker(
+    outDir,
+    manifest,
+    bundledMapPackages,
+    input.runtimeVersion,
+    buildAssets.workerEntry,
+    input.smokeControlsEnabled === true,
+  );
+  await assertCurrentPlaytestStartContract(path.join(outDir, "worker.js"));
   checkpoint();
 
   await writeFile(

@@ -33,7 +33,7 @@ import type {
   RoomStopRequest,
   RoomStopResponse,
 } from './types.js';
-import { toDiscoverSummary, workerBuildId, workerVersion } from './types.js';
+import { smokeControlEnabled, toDiscoverSummary, workerBuildId, workerVersion } from './types.js';
 import { runtimeManifest } from './.generated/runtime-manifest.js';
 import { bundledMapPackages } from './.generated/bundled-map-packages.js';
 import { PlaytestRoom } from './room.js';
@@ -474,6 +474,62 @@ const fetchRoomMetrics = async (env: Env, roomId: string): Promise<Response> => 
   );
 };
 
+const fetchSmokeRoomReconstruction = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(
+      `https://playtest-room/__smoke/reconstruction?roomId=${encodeURIComponent(roomId)}`,
+    ),
+  );
+};
+
+const fetchSmokeRoomHibernationState = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(
+      `https://playtest-room/__smoke/hibernation-state?roomId=${encodeURIComponent(roomId)}`,
+    ),
+  );
+};
+
+const allowSmokeRoomHibernation = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(
+      `https://playtest-room/__smoke/allow-hibernation?roomId=${encodeURIComponent(roomId)}`,
+      { method: 'POST' },
+    ),
+  );
+};
+
+const failNextSmokeRoomInitialization = async (env: Env, roomId: string): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(
+      `https://playtest-room/__smoke/fail-next-initialization?roomId=${encodeURIComponent(roomId)}`,
+      { method: 'POST' },
+    ),
+  );
+};
+
+const dropSmokeParticipantSocket = async (
+  env: Env,
+  roomId: string,
+  playerId: string,
+): Promise<Response> => {
+  const stub = env.PLAYTEST_ROOM.get(env.PLAYTEST_ROOM.idFromName(roomId));
+  return stub.fetch(
+    new Request(
+      `https://playtest-room/__smoke/drop-participant-socket?roomId=${encodeURIComponent(roomId)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId }),
+      },
+    ),
+  );
+};
+
 /**
  * Resolve the `RuntimeMapPackage` a packageless `/rooms/create` boots from
  * (M5 S1): an exact bundled `mapId` match wins; a single-map build is the
@@ -533,6 +589,69 @@ export const createWorkerApp = (
   });
 
   app.get('/discover', (context) => context.json(toDiscoverSummary(manifest)));
+
+  app.get('/__smoke/rooms/:id/reconstruction', async (context) => {
+    if (!smokeControlEnabled()) {
+      return new Response('not found', { status: 404 });
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    return fetchSmokeRoomReconstruction(context.env, roomId);
+  });
+
+  app.get('/__smoke/rooms/:id/hibernation-state', async (context) => {
+    if (!smokeControlEnabled()) {
+      return new Response('not found', { status: 404 });
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    return fetchSmokeRoomHibernationState(context.env, roomId);
+  });
+
+  app.post('/__smoke/rooms/:id/allow-hibernation', async (context) => {
+    if (!smokeControlEnabled()) {
+      return new Response('not found', { status: 404 });
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    return allowSmokeRoomHibernation(context.env, roomId);
+  });
+
+  app.post('/__smoke/rooms/:id/fail-next-initialization', async (context) => {
+    if (!smokeControlEnabled()) {
+      return new Response('not found', { status: 404 });
+    }
+    const roomId = context.req.param('id');
+    if (roomId.length === 0) {
+      return context.json({ error: 'roomId is required' }, 400);
+    }
+    return failNextSmokeRoomInitialization(context.env, roomId);
+  });
+
+  if (smokeControlEnabled()) {
+    app.post('/__smoke/rooms/:id/drop-participant-socket', async (context) => {
+      const roomId = context.req.param('id');
+      if (roomId.length === 0) {
+        return context.json({ error: 'roomId is required' }, 400);
+      }
+      let body: { readonly playerId?: unknown };
+      try {
+        body = (await context.req.json()) as { readonly playerId?: unknown };
+      } catch {
+        return context.json({ error: 'drop participant socket body must be valid JSON' }, 400);
+      }
+      if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+        return context.json({ error: 'playerId is required' }, 400);
+      }
+      return dropSmokeParticipantSocket(context.env, roomId, body.playerId);
+    });
+  }
 
   app.post('/rooms/create', async (context) => {
     if (!isHandoffSigningKeyValid(context.env)) {
@@ -1088,14 +1207,14 @@ export const createWorkerApp = (
       return context.json({ error: 'room service unavailable' }, 503);
     }
     const body = (await context.req.json()) as PlaytestStartRequest;
-    if (typeof body.mapId !== 'string' || body.mapId.length === 0) {
-      return context.json({ error: 'mapId is required' }, 400);
-    }
     const idempotencyKey =
       body.options?.idempotencyKey !== undefined && typeof body.options.idempotencyKey === 'string'
         ? body.options.idempotencyKey
         : undefined;
-    const playtestId = idempotencyKey ?? crypto.randomUUID();
+    if (idempotencyKey === undefined || idempotencyKey.length === 0) {
+      return context.json({ error: 'room idempotency key is required' }, 400);
+    }
+    const playtestId = idempotencyKey;
     const requestedPlayerId = body.playerId === undefined ? undefined : body.playerId;
     if (
       requestedPlayerId !== undefined &&

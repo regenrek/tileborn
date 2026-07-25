@@ -32,12 +32,18 @@ describe('canonical release gates', () => {
     expect(deterministic).toMatchObject({
       required: true,
       xvfb: false,
-      commands: [['pnpm', 'test:creator-performance']],
+      commands: [
+        ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
+        ['pnpm', 'test:creator-performance'],
+      ],
     });
     expect(native).toMatchObject({
       required: false,
       xvfb: true,
-      commands: [['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native']],
+      commands: [
+        ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
+        ['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native'],
+      ],
     });
   });
 
@@ -72,6 +78,7 @@ describe('canonical release gates', () => {
     expect(rootPackage.scripts['release:gates:matrix']).toBe(
       'node scripts/release-gates.mjs matrix',
     );
+    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=4');
   });
 
   it('makes GitHub Actions derive scheduling and execution from the same runner', () => {
@@ -79,7 +86,8 @@ describe('canonical release gates', () => {
 
     expect(workflow).toContain('run: pnpm release:gates:matrix');
     expect(workflow).toContain('matrix: ${{ fromJSON(needs.release-gate-plan.outputs.matrix) }}');
-    expect(workflow).toContain('pnpm release:gate -- "${{ matrix.id }}"');
+    expect(workflow).toContain('RELEASE_GATE_ID: ${{ matrix.id }}');
+    expect(workflow).toContain('pnpm release:gate -- "$RELEASE_GATE_ID"');
 
     for (const command of [
       'pnpm format:check',

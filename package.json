@@ -16,7 +16,7 @@
   "scripts": {
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=4",
     "test:boundaries": "pnpm --filter @tileborne/boundary-tests test -- --run",
     "test:clean-checkout": "bash scripts/clean-checkout-smoke.sh",
     "test:clean-checkout-time": "bash scripts/clean-checkout-smoke.sh --time",

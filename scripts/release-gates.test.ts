@@ -32,12 +32,18 @@ describe('canonical release gates', () => {
     expect(deterministic).toMatchObject({
       required: true,
       xvfb: false,
-      commands: [['pnpm', 'test:creator-performance']],
+      commands: [
+        ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
+        ['pnpm', 'test:creator-performance'],
+      ],
     });
     expect(native).toMatchObject({
       required: false,
       xvfb: true,
-      commands: [['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native']],
+      commands: [
+        ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...'],
+        ['pnpm', '--filter', '@tileborne/desktop', 'test:creator-performance-native'],
+      ],
     });
   });
 
@@ -65,12 +71,19 @@ describe('canonical release gates', () => {
     const rootPackage = JSON.parse(read('package.json')) as {
       readonly scripts: Record<string, string>;
     };
+    const turbo = JSON.parse(read('turbo.json')) as {
+      readonly tasks: Record<string, { readonly dependsOn?: readonly string[] }>;
+    };
 
     expect(rootPackage.scripts.ci).toBe('pnpm release:gates');
     expect(rootPackage.scripts['release:gates']).toBe('node scripts/release-gates.mjs run-all');
     expect(rootPackage.scripts['release:gate']).toBe('node scripts/release-gates.mjs run');
     expect(rootPackage.scripts['release:gates:matrix']).toBe(
       'node scripts/release-gates.mjs matrix',
+    );
+    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=1');
+    expect(turbo.tasks['@tileborne/services-build#test']?.dependsOn).toContain(
+      '@tileborne/cli#build',
     );
   });
 
@@ -79,7 +92,10 @@ describe('canonical release gates', () => {
 
     expect(workflow).toContain('run: pnpm release:gates:matrix');
     expect(workflow).toContain('matrix: ${{ fromJSON(needs.release-gate-plan.outputs.matrix) }}');
-    expect(workflow).toContain('pnpm release:gate -- "${{ matrix.id }}"');
+    expect(workflow).toContain('RELEASE_GATE_ID: ${{ matrix.id }}');
+    expect(workflow).toContain('pnpm release:gate -- "$RELEASE_GATE_ID"');
+    expect(workflow).toContain('run: corepack enable');
+    expect(workflow).not.toContain('pnpm/action-setup');
 
     for (const command of [
       'pnpm format:check',

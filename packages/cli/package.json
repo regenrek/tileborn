@@ -20,7 +20,7 @@
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts",
     "test:cli-e2e": "vitest run --config vitest.e2e.config.ts",
-    "build": "tsc -b tsconfig.json --force"
+    "build": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "@tileborne/asset-pipeline": "workspace:*",

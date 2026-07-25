@@ -31,6 +31,7 @@ export default defineConfig({
         '../../packages/plugin-api/src/project-content.ts',
       ),
       '@tileborne/plugin-api': resolveSrc('../../packages/plugin-api/src/index.ts'),
+      '@tileborne/runtime/net': resolveSrc('../../packages/runtime/src/net/index.ts'),
       '@tileborne/ui': resolveSrc('../../packages/ui/src/index.ts'),
     },
     dedupe: ['react', 'react-dom'],

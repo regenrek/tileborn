@@ -1,4 +1,3 @@
-/* eslint-disable import/no-extraneous-dependencies -- vitest config entrypoint */
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
@@ -19,6 +18,7 @@ export default defineConfig({
       'src/smoke/ship-game.electron.test.ts',
       'src/smoke/behavior-goal-oracle.electron.test.ts',
       'src/smoke/creator-performance-native.electron.test.ts',
+      'src/smoke/cloudflare-multiplayer-lifecycle.electron.test.ts',
     ],
     testTimeout: 120_000,
     hookTimeout: 120_000,

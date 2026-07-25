@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --config eslint.config.js",
     "test": "vitest run",
-    "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc -b tsconfig.json --force"
+    "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; for (const path of ['dist', 'tsconfig.tsbuildinfo']) rmSync(path, { recursive: true, force: true });\" && tsc -b tsconfig.json"
   },
   "peerDependencies": {
     "react": "19.2.6",

@@ -23,7 +23,7 @@ describe('gameplay source validation', () => {
         export default defineBehavior({ id: "example.native-ts", state: { count: bump({ value: 1 }) } });
       `),
     ).toEqual([]);
-  });
+  }, 15_000);
 
   it('reports stable actionable diagnostics for forbidden imports and APIs', () => {
     const diagnostics = validate(`

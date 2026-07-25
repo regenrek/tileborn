@@ -1,5 +1,6 @@
 import { _electron as electron, type ElectronApplication } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { cp, lstat, mkdtemp, readFile, readdir, readlink, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,7 +33,7 @@ const evaluateStableMainContext = async <T>(operation: () => Promise<T>): Promis
   }
 };
 const isContainedPath = (root: string, candidate: string): boolean => {
-  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  const relative = path.relative(realpathSync(root), realpathSync(candidate));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 };
 
@@ -180,7 +181,9 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
     expect(isContainedPath(path.join(copiedApp, 'Contents', 'Resources'), mainState.appPath)).toBe(
       true,
     );
-    expect(mainState.resourcesPath).toBe(path.join(copiedApp, 'Contents', 'Resources'));
+    expect(realpathSync(mainState.resourcesPath)).toBe(
+      realpathSync(path.join(copiedApp, 'Contents', 'Resources')),
+    );
 
     const resolutions = await evaluateStableMainContext(() =>
       app!.evaluate(({ app: electronApp }) => {
@@ -235,12 +238,12 @@ describe.skipIf(process.platform !== 'darwin')('packaged desktop runtime closure
       }),
     );
     expect(isContainedPath(packagedAppRoot, alchemyEntrypoints.cliEntrypoint)).toBe(true);
-    expect(alchemyEntrypoints.stackEntrypoint).toBe(
-      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js'),
+    expect(realpathSync(alchemyEntrypoints.stackEntrypoint)).toBe(
+      realpathSync(path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-cloudflare-stack.js')),
     );
     expect(alchemyEntrypoints.stackExists).toBe(true);
-    expect(alchemyEntrypoints.bootstrapProbeEntrypoint).toBe(
-      path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-bootstrap-probe.js'),
+    expect(realpathSync(alchemyEntrypoints.bootstrapProbeEntrypoint)).toBe(
+      realpathSync(path.join(packagedAppRoot, 'runtime-deploy', 'alchemy-bootstrap-probe.js')),
     );
     expect(alchemyEntrypoints.bootstrapProbeExists).toBe(true);
   });

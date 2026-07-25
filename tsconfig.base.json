@@ -30,6 +30,7 @@
       "@tileborne/cli": ["./packages/cli/src/main.ts"],
       "@tileborne/asset-pipeline": ["./packages/asset-pipeline/src/index.ts"],
       "@tileborne/runtime": ["./packages/runtime/src/index.ts"],
+      "@tileborne/runtime/net": ["./packages/runtime/src/net/index.ts"],
       "@tileborne/runtime/behavior": ["./packages/runtime/src/behavior/index.ts"],
       "@tileborne/game-host/behavior-node": ["./apps/game-host/src/behavior/node/index.ts"],
       "@tileborne/runtime/worker": ["./packages/runtime/src/worker.ts"],

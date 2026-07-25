@@ -645,7 +645,7 @@ const resolveTiledImportSource = (
             ? await inferDirectTilesetImportRoot(sourcePath)
             : inputWasAbsolute
               ? path.dirname(path.dirname(sourcePath))
-              : projectDir,
+              : await realpath(projectDir),
         };
       },
       catch: (cause) =>

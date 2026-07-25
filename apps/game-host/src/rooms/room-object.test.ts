@@ -7,12 +7,14 @@ import {
   buildRuntimeGameShellProjection,
   decodeMessage,
   defaultProjectGameShellState,
+  makeGameRuntime,
   makePluginHost,
   ServerNotice,
   type RuntimeBehaviorContext,
 } from '@tileborne/runtime';
 import type { PluginHostApi, RuntimeMessage, RuntimePlugin } from '@tileborne/runtime';
 import { AuthoritativeBehaviorRuntimeHost } from '@tileborne/runtime/behavior';
+import { MATCH_ENDED_CLOSE_CODE, isReconnectableCloseCode } from '@tileborne/runtime/net';
 
 import { ARENA_PLUGIN_ID } from '../../../../packages/plugin-example-arena/src/constants.js';
 import {
@@ -40,6 +42,7 @@ import { MAX_QUEUED_INPUTS_PER_PLAYER, PlaytestRoom } from './room-object.js';
 import type { BundledPluginRuntimeRegistration } from '../bundled-plugin-loader.js';
 import { STORAGE_KEY, type RoomStorage } from './storage-schema.js';
 import {
+  INVALID_HANDOFF_CLOSE_CODE,
   PERSIST_EVERY_N_TICKS,
   ROOM_BACKPRESSURE_CLOSE_CODE,
   ROOM_INVALID_ACK_CLOSE_CODE,
@@ -146,6 +149,17 @@ const decodeBattleRoyaleMessages = (
   server: MemoryWebSocket,
 ): BattleRoyaleProtocol.ServerToClientMessage[] =>
   server.sent.flatMap((frame) => {
+    try {
+      return [BattleRoyaleProtocol.decodeServerMessage(new Uint8Array(frame))];
+    } catch {
+      return [];
+    }
+  });
+
+const decodeBattleRoyaleFrames = (
+  frames: readonly ArrayBuffer[],
+): BattleRoyaleProtocol.ServerToClientMessage[] =>
+  frames.flatMap((frame) => {
     try {
       return [BattleRoyaleProtocol.decodeServerMessage(new Uint8Array(frame))];
     } catch {
@@ -572,9 +586,9 @@ describe('PlaytestRoom lifecycle', () => {
     );
     await shellRoom.addPlayer('player-1', token, 'room-1', { broadcast: false });
     const server = new MemoryWebSocket();
-    (
+    await (
       shellRoom as unknown as {
-        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => Promise<void>;
       }
     ).acceptPlayerSocket('player-1', server as unknown as WebSocket);
     expect((await readyPlayer(shellRoom, 'player-1')).status).toBe(200);
@@ -631,9 +645,9 @@ describe('PlaytestRoom lifecycle', () => {
     );
     await room.addPlayer('player-a', token, 'room-1', { broadcast: false });
     const firstServer = new MemoryWebSocket();
-    (
+    await (
       room as unknown as {
-        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => Promise<void>;
       }
     ).acceptPlayerSocket('player-a', firstServer as unknown as WebSocket);
     expect((await readyPlayer(room, 'player-a')).status).toBe(200);
@@ -643,9 +657,9 @@ describe('PlaytestRoom lifecycle', () => {
 
     const recreated = createRoom();
     const secondServer = new MemoryWebSocket();
-    (
+    await (
       recreated as unknown as {
-        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => void;
+        readonly acceptPlayerSocket: (playerId: string, server: WebSocket) => Promise<void>;
       }
     ).acceptPlayerSocket('player-a', secondServer as unknown as WebSocket);
     await recreated.alarm();
@@ -1167,12 +1181,475 @@ describe('PlaytestRoom heartbeat and idle destroy', () => {
 });
 
 describe('PlaytestRoom persistence and recovery', () => {
+  it('runs a deterministic two-client cold-wake oracle through production room paths', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    let nowMs = Date.parse('2026-01-01T00:00:00.000Z');
+    const original = await initRoom(state, makeEnv(), { now: () => nowMs }, { minReadyPlayers: 2 });
+    const playerOne = await connectPlayer(original, state, 'room-1', 'player-1');
+    const playerTwo = await connectPlayer(original, state, 'room-1', 'player-2');
+    const playerOneAttachment = playerOne.deserializeAttachment();
+    const playerTwoAttachment = playerTwo.deserializeAttachment();
+    expect(playerOneAttachment).toMatchObject({
+      playerId: 'player-1',
+      socketId: expect.any(String),
+    });
+    expect(playerTwoAttachment).toMatchObject({
+      playerId: 'player-2',
+      socketId: expect.any(String),
+    });
+    expect((await readyPlayer(original, 'player-1')).status).toBe(200);
+    expect((await readyPlayer(original, 'player-2')).status).toBe(200);
+    await original.alarm();
+    const active = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(active?.lifecycle.phase).toBe('active');
+    expect(active?.currentSockets?.players['player-1']?.socketId).toBe(
+      (playerOneAttachment as { readonly socketId: string }).socketId,
+    );
+    expect(active?.currentSockets?.players['player-2']?.socketId).toBe(
+      (playerTwoAttachment as { readonly socketId: string }).socketId,
+    );
+
+    const playerOneSentBeforeWakeInput = playerOne.sent.length;
+    const playerTwoSentBeforeWakeInput = playerTwo.sent.length;
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv(), { now: () => nowMs });
+    registerAlarmHandler(state, () => reloaded.alarm());
+    nowMs += 25;
+    await reloaded.webSocketMessage(playerOne as WebSocket, encodeBrHeartbeatFrame(2));
+    await reloaded.webSocketMessage(
+      playerTwo as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 1, dir: 4 }),
+    );
+    expect(queuedInputCount(reloaded)).toBe(MAX_QUEUED_INPUTS_PER_PLAYER);
+    nowMs += 50;
+    await reloaded.alarm();
+
+    const afterWakeInput = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(afterWakeInput?.players['player-1']?.lastHeartbeatAt).toBe(
+      new Date(Date.parse('2026-01-01T00:00:00.025Z')).toISOString(),
+    );
+    const playerOneWakeMessages = decodeBattleRoyaleFrames(
+      playerOne.sent.slice(playerOneSentBeforeWakeInput),
+    );
+    const playerTwoWakeMessages = decodeBattleRoyaleFrames(
+      playerTwo.sent.slice(playerTwoSentBeforeWakeInput),
+    );
+    expect(playerOneWakeMessages.some((message) => message._tag === 'DeltaSnapshot')).toBe(true);
+    expect(playerTwoWakeMessages.some((message) => message._tag === 'DeltaSnapshot')).toBe(true);
+    expect(reloaded.getClientTransportStats('player-1')).toMatchObject({
+      playerId: 'player-1',
+      socketId: (playerOneAttachment as { readonly socketId: string }).socketId,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+    expect(reloaded.getClientTransportStats('player-2')).toMatchObject({
+      playerId: 'player-2',
+      socketId: (playerTwoAttachment as { readonly socketId: string }).socketId,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+
+    const replacement = await connectPlayer(reloaded, state, 'room-1', 'player-2');
+    const replacementAttachment = replacement.deserializeAttachment() as {
+      readonly socketId: string;
+    };
+    expect(playerTwo.closeCode).toBe(ROOM_REPLACED_CLOSE_CODE);
+    expect(playerTwo.closeReason).toBe('player reconnected');
+    await reloaded.webSocketClose(playerTwo as WebSocket, 1000, 'late predecessor close');
+    expect(
+      (await state.storage.get<RoomStorage>(STORAGE_KEY))?.currentSockets?.players['player-2'],
+    ).toMatchObject({
+      playerId: 'player-2',
+      socketId: replacementAttachment.socketId,
+    });
+
+    await reloaded.webSocketClose(playerOne as WebSocket, 1000, 'client closed');
+    expect(playerOne.closeCode).toBe(1000);
+    expect(playerOne.closeReason).toBe('client closed');
+    expect(playerOne.closeCode).not.toBe(1006);
+
+    for (let index = 0; index <= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP + 1; index += 1) {
+      await reloaded.alarm();
+    }
+    const replacementStats = reloaded.getClientTransportStats('player-2');
+    expect(replacementStats?.pendingSnapshotLagTicks).toBeGreaterThanOrEqual(
+      MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP,
+    );
+    expect(replacementStats?.resyncCount).toBeGreaterThan(0);
+    expect(replacementStats?.droppedOutboundFrames).toBeGreaterThan(0);
+    expect(replacement.closeCode).toBe(ROOM_BACKPRESSURE_CLOSE_CODE);
+    expect(replacement.closeReason).toBe('snapshot backpressure');
+    expect(replacement.closeCode).not.toBe(1006);
+  });
+
+  it('rebuilds accepted socket records before dispatching cold-wake messages', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const original = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const server = await connectPlayer(original, state, 'room-1', 'player-1');
+    expect((await readyPlayer(original, 'player-1')).status).toBe(200);
+    await original.alarm();
+
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    registerAlarmHandler(state, () => reloaded.alarm());
+    await reloaded.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 4 }),
+    );
+
+    expect(server.closeCode).toBeNull();
+    expect(queuedInputCount(reloaded)).toBe(MAX_QUEUED_INPUTS_PER_PLAYER);
+  });
+
+  it('handles invalid, stale, and duplicate cold-wake socket attachments deterministically', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const original = await initRoom(state, makeEnv());
+    await connectPlayer(original, state, 'room-1', 'player-1');
+    const stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    if (stored === undefined) {
+      throw new Error('expected room storage');
+    }
+    state.storageMap.set(STORAGE_KEY, {
+      ...stored,
+      currentSockets: {
+        players: {
+          'player-1': {
+            playerId: 'player-1',
+            socketId: 'z',
+            connectedAt: stored.createdAt,
+          },
+        },
+      },
+    });
+
+    state.sockets.length = 0;
+    const missing = new MemoryWebSocket();
+    const malformed = new MemoryWebSocket();
+    malformed.serializeAttachment({ playerId: 'player-1', socketId: 1 });
+    const stale = new MemoryWebSocket();
+    stale.serializeAttachment({ playerId: 'missing-player', socketId: 'stale' });
+    const duplicateLow = new MemoryWebSocket();
+    duplicateLow.serializeAttachment({ playerId: 'player-1', socketId: 'a' });
+    const duplicateHigh = new MemoryWebSocket();
+    duplicateHigh.serializeAttachment({ playerId: 'player-1', socketId: 'z' });
+    for (const socket of [duplicateHigh, stale, duplicateLow, malformed, missing]) {
+      state.acceptWebSocket(socket as unknown as WebSocket);
+    }
+
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    await reloaded.fetch(new Request('https://do/metrics?roomId=room-1'));
+
+    expect(missing.closeCode).toBe(INVALID_HANDOFF_CLOSE_CODE);
+    expect(missing.closeReason).toBe('invalid socket attachment');
+    expect(malformed.closeCode).toBe(INVALID_HANDOFF_CLOSE_CODE);
+    expect(malformed.closeReason).toBe('invalid socket attachment');
+    expect(stale.closeCode).toBe(INVALID_HANDOFF_CLOSE_CODE);
+    expect(stale.closeReason).toBe('stale socket attachment');
+    expect(duplicateLow.closeCode).toBe(ROOM_REPLACED_CLOSE_CODE);
+    expect(duplicateLow.closeReason).toBe('player reconnected');
+    expect(duplicateHigh.closeCode).toBeNull();
+    expect(reloaded.getClientTransportStats('player-1')).toMatchObject({
+      playerId: 'player-1',
+      socketId: 'z',
+      staleAckCount: 0,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+  });
+
+  it('closes accepted sockets when a cold wake has no room storage', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const accepted = new MemoryWebSocket();
+    accepted.serializeAttachment({ playerId: 'player-1', socketId: 'socket-1' });
+    state.acceptWebSocket(accepted as unknown as WebSocket);
+
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    const response = await room.fetch(new Request('https://do/metrics?roomId=room-1'));
+
+    expect(response.status).toBe(404);
+    expect(accepted.closeCode).toBe(INVALID_HANDOFF_CLOSE_CODE);
+    expect(accepted.closeReason).toBe('stale socket attachment');
+  });
+
+  it('retries initialization after a transient storage read failure', async () => {
+    installWorkerGlobals();
+    const sourceState = createFakeDurableObjectState();
+    await initRoom(sourceState, makeEnv());
+    const snapshot = await sourceState.storage.get<RoomStorage>(STORAGE_KEY);
+
+    const state = createFakeDurableObjectState();
+    state.storageMap.set(STORAGE_KEY, snapshot);
+    const originalGet = state.storage.get.bind(state.storage);
+    let failNextRead = true;
+    (
+      state.storage as DurableObjectStorage & {
+        get: DurableObjectStorage['get'];
+      }
+    ).get = async <T>(key: string): Promise<T | undefined> => {
+      if (failNextRead) {
+        failNextRead = false;
+        throw new Error('transient storage failure');
+      }
+      return originalGet<T>(key);
+    };
+
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    await expect(room.fetch(new Request('https://do/metrics?roomId=room-1'))).rejects.toThrow(
+      'transient storage failure',
+    );
+
+    const retry = await room.fetch(new Request('https://do/metrics?roomId=room-1'));
+    expect(retry.status).toBe(200);
+  });
+
+  it('retries post-hydration alarm scheduling after setAlarm fails during cold wake', async () => {
+    installWorkerGlobals();
+    const sourceState = createFakeDurableObjectState();
+    const source = await initRoom(sourceState, makeEnv(), undefined, { minReadyPlayers: 1 });
+    await connectPlayer(source, sourceState, 'room-1', 'player-1');
+    expect((await readyPlayer(source, 'player-1')).status).toBe(200);
+    await source.alarm();
+    const snapshot = await sourceState.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(snapshot?.lifecycle.phase).toBe('active');
+
+    const state = createFakeDurableObjectState();
+    state.storageMap.set(STORAGE_KEY, snapshot);
+    const originalSetAlarm = state.storage.setAlarm.bind(state.storage);
+    let failNextAlarm = true;
+    (
+      state.storage as DurableObjectStorage & {
+        setAlarm: DurableObjectStorage['setAlarm'];
+      }
+    ).setAlarm = async (scheduledTime: number | Date): Promise<void> => {
+      if (failNextAlarm) {
+        failNextAlarm = false;
+        throw new Error('transient alarm failure');
+      }
+      await originalSetAlarm(scheduledTime);
+    };
+
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    await expect(room.fetch(new Request('https://do/metrics?roomId=room-1'))).rejects.toThrow(
+      'transient alarm failure',
+    );
+
+    const retry = await room.fetch(new Request('https://do/metrics?roomId=room-1'));
+    expect(retry.status).toBe(200);
+    expect(await state.storage.getAlarm()).toEqual(expect.any(Number));
+  });
+
+  it('stops a partially started runtime before retrying initialization', async () => {
+    installWorkerGlobals();
+    const sourceState = createFakeDurableObjectState();
+    const source = await initRoom(sourceState, makeEnv(), undefined, { minReadyPlayers: 1 });
+    await connectPlayer(source, sourceState, 'room-1', 'player-1');
+    expect((await readyPlayer(source, 'player-1')).status).toBe(200);
+    await source.alarm();
+    const snapshot = await sourceState.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(snapshot?.lifecycle.phase).toBe('active');
+
+    const state = createFakeDurableObjectState();
+    state.storageMap.set(STORAGE_KEY, snapshot);
+    let starts = 0;
+    let stops = 0;
+    let failNextBehaviorRuntime = true;
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv(), {
+      createPluginHost: () => makePluginHost(),
+      createRuntime: () => {
+        const runtime = makeGameRuntime();
+        return {
+          ...runtime,
+          start: () =>
+            Effect.gen(function* () {
+              starts += 1;
+              yield* runtime.start();
+            }),
+          stop: () =>
+            Effect.gen(function* () {
+              stops += 1;
+              yield* runtime.stop();
+            }),
+        };
+      },
+      createBehaviorRuntime: () => {
+        if (failNextBehaviorRuntime) {
+          failNextBehaviorRuntime = false;
+          throw new Error('behavior runtime boot failed');
+        }
+        return new AuthoritativeBehaviorRuntimeHost();
+      },
+    });
+
+    await expect(room.fetch(new Request('https://do/metrics?roomId=room-1'))).rejects.toThrow(
+      'behavior runtime boot failed',
+    );
+    expect(starts).toBe(1);
+    expect(stops).toBe(1);
+
+    const retry = await room.fetch(new Request('https://do/metrics?roomId=room-1'));
+    expect(retry.status).toBe(200);
+    expect(starts).toBe(2);
+    expect(stops).toBe(1);
+  });
+
+  it('keeps a cold-wake successor authoritative when the stale predecessor close arrives later', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const original = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const predecessor = await connectPlayer(original, state, 'room-1', 'player-1');
+    const successor = await connectPlayer(original, state, 'room-1', 'player-1');
+    const successorAttachment = successor.deserializeAttachment() as {
+      readonly socketId?: string;
+    } | null;
+    expect(successorAttachment?.socketId).toEqual(expect.any(String));
+
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    const response = await reloaded.fetch(new Request('https://do/lobby/summary?roomId=room-1'));
+    expect(response.status).toBe(200);
+
+    await reloaded.webSocketClose(predecessor as WebSocket);
+
+    const stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.currentSockets?.players['player-1']).toMatchObject({
+      playerId: 'player-1',
+      socketId: successorAttachment?.socketId,
+    });
+    expect(stored?.presence.players['player-1']).toMatchObject({
+      status: 'connected',
+    });
+    expect(reloaded.getClientTransportStats('player-1')).toMatchObject({
+      playerId: 'player-1',
+      socketId: successorAttachment?.socketId,
+    });
+  });
+
+  it('disconnects the persisted current socket when a client close wakes a hibernated room', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const original = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const server = await connectPlayer(original, state, 'room-1', 'player-1');
+    const attachment = server.deserializeAttachment() as { readonly socketId?: string } | null;
+    expect(attachment?.socketId).toEqual(expect.any(String));
+
+    server.readyState = WebSocket.CLOSING;
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+
+    await reloaded.webSocketClose(server as WebSocket, 1000, 'client closed');
+
+    const stored = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(stored?.currentSockets?.players['player-1']).toBeUndefined();
+    expect(stored?.presence.players['player-1']).toMatchObject({
+      status: 'disconnected',
+    });
+    expect(stored?.reconnect.seats['player-1']?.expiresAt).toBeDefined();
+    expect(await state.storage.getAlarm()).toEqual(expect.any(Number));
+    expect(server.closeCode).toBe(1000);
+    expect(server.closeReason).toBe('client closed');
+    expect(server.closeCode).not.toBe(ROOM_REPLACED_CLOSE_CODE);
+  });
+
+  it('keeps cold-wake snapshot ack and backpressure decisions bounded after rehydration', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const original = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const server = await connectPlayer(original, state, 'room-1', 'player-1');
+    expect((await readyPlayer(original, 'player-1')).status).toBe(200);
+    await original.alarm();
+
+    const reloaded = new PlaytestRoom(asDurableObjectState(state), makeEnv());
+    registerAlarmHandler(state, () => reloaded.alarm());
+    await reloaded.webSocketMessage(server as WebSocket, encodeBrSnapshotAckFrame(0));
+
+    expect(reloaded.getClientTransportStats('player-1')).toMatchObject({
+      staleAckCount: 1,
+      droppedOutboundFrames: 0,
+      resyncCount: 0,
+    });
+    expect(server.closeCode).toBe(ROOM_INVALID_ACK_CLOSE_CODE);
+    expect(server.closeReason).toBe('invalid snapshot ack');
+    expect(server.closeCode).not.toBe(1006);
+
+    const lagging = await connectPlayer(reloaded, state, 'room-1', 'player-1');
+    for (let index = 0; index <= MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP + 1; index += 1) {
+      await reloaded.alarm();
+    }
+
+    const stats = reloaded.getClientTransportStats('player-1');
+    expect(stats?.pendingSnapshotLagTicks).toBeGreaterThanOrEqual(
+      MAX_UNACKED_SNAPSHOT_TICKS_BEFORE_DROP,
+    );
+    expect(stats?.resyncCount).toBeGreaterThan(0);
+    expect(stats?.droppedOutboundFrames).toBeGreaterThan(0);
+    expect(lagging.closeCode).toBe(ROOM_BACKPRESSURE_CLOSE_CODE);
+    expect(lagging.closeReason).toBe('snapshot backpressure');
+    expect(lagging.closeCode).not.toBe(1006);
+  });
+
+  it('shares one cold-wake initialization gate across concurrent fetch, alarm, and message events', async () => {
+    installWorkerGlobals();
+    const sourceState = createFakeDurableObjectState();
+    const source = await initRoom(sourceState, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const server = await connectPlayer(source, sourceState, 'room-1', 'player-1');
+    expect((await readyPlayer(source, 'player-1')).status).toBe(200);
+    await source.alarm();
+    const snapshot = await sourceState.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(snapshot?.lifecycle.phase).toBe('active');
+
+    const state = createFakeDurableObjectState();
+    state.storageMap.set(STORAGE_KEY, snapshot);
+    state.acceptWebSocket(server as unknown as WebSocket);
+    let runtimeBoots = 0;
+    let storageReads = 0;
+    const originalGet = state.storage.get.bind(state.storage);
+    (
+      state.storage as DurableObjectStorage & {
+        get: DurableObjectStorage['get'];
+      }
+    ).get = async <T>(key: string): Promise<T | undefined> => {
+      storageReads += 1;
+      await Promise.resolve();
+      return originalGet<T>(key);
+    };
+    const room = new PlaytestRoom(asDurableObjectState(state), makeEnv(), {
+      createPluginHost: () => makePluginHost(),
+      createRuntime: () => {
+        runtimeBoots += 1;
+        return makeGameRuntime();
+      },
+    });
+    registerAlarmHandler(state, () => room.alarm());
+
+    await Promise.all([
+      room.fetch(new Request('https://do/metrics?roomId=room-1')),
+      room.alarm(),
+      room.webSocketMessage(server as WebSocket, encodeBrHeartbeatFrame(1)),
+    ]);
+
+    expect(runtimeBoots).toBe(1);
+    expect(storageReads).toBe(1);
+    expect(server.closeCode).toBeNull();
+  });
+
   it('freezes the first plugin GameOver into durable results and stops ticks and inputs', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
     const room = await initRoom(state, makeEnv());
     const playerOne = await connectPlayer(room, state, 'room-1', 'player-1');
     const playerTwo = await connectPlayer(room, state, 'room-1', 'player-2');
+    const terminalCloses: Array<{
+      readonly socket: MemoryWebSocket;
+      readonly code: number;
+      readonly reason: string;
+    }> = [];
+    for (const socket of [playerOne, playerTwo]) {
+      const close = socket.close.bind(socket);
+      vi.spyOn(socket, 'close').mockImplementation((code = 1000, reason = '') => {
+        terminalCloses.push({ socket, code, reason });
+        close(code, reason);
+      });
+    }
     expect((await readyPlayer(room, 'player-1')).status).toBe(200);
     expect((await readyPlayer(room, 'player-2')).status).toBe(200);
 
@@ -1208,7 +1685,13 @@ describe('PlaytestRoom persistence and recovery', () => {
       expect(
         decodeBattleRoyaleMessages(socket).some((message) => message._tag === 'GameOver'),
       ).toBe(true);
+      expect(socket.closeCode).toBe(MATCH_ENDED_CLOSE_CODE);
+      expect(socket.closeReason).toBe('match ended');
     }
+    expect(terminalCloses).toHaveLength(2);
+    expect(new Set(terminalCloses.map((close) => close.socket))).toEqual(
+      new Set([playerOne, playerTwo]),
+    );
 
     const resultsResponse = await room.fetch(new Request('https://do/results?roomId=room-1'));
     expect(resultsResponse.status).toBe(200);
@@ -1222,8 +1705,22 @@ describe('PlaytestRoom persistence and recovery', () => {
       encodeBrInputFrame({ tick: finished?.tick ?? 0, seq: 99, dir: 4 }),
     );
     expect(queuedInputCount(room)).toBe(0);
+    await room.webSocketClose(playerOne as WebSocket, MATCH_ENDED_CLOSE_CODE, 'match ended');
+    expect(await state.storage.get<RoomStorage>(STORAGE_KEY)).toEqual(finished);
+    const reconnect = await room.fetch(
+      new Request('https://do/players/reconnect?roomId=room-1', {
+        method: 'POST',
+        body: JSON.stringify({ playerId: 'player-1' }),
+      }),
+    );
+    expect(reconnect.status).toBe(409);
+    await expect(reconnect.json()).resolves.toMatchObject({ error: 'room is closed' });
     await room.alarm();
     expect((await state.storage.get<RoomStorage>(STORAGE_KEY))?.tick).toBe(finished?.tick);
+  });
+
+  it('treats match-ended close code as non-reconnectable room transport policy', () => {
+    expect(isReconnectableCloseCode(MATCH_ENDED_CLOSE_CODE)).toBe(false);
   });
 
   it('persists state every N ticks', async () => {
@@ -1342,6 +1839,58 @@ describe('PlaytestRoom wire protocol and plugins', () => {
         expect(movedPlayer.x.value).toBeGreaterThan(initialPlayer?.x ?? 0);
       }
     }
+  });
+
+  it('fans out the active-transition replay snapshot to every accepted current socket', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 2 });
+    const playerOne = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    const playerTwo = await connectPlayerViaFetch(room, state, 'room-1', 'player-2');
+    const playerOneWelcomeCount = decodeBattleRoyaleMessages(playerOne).filter(
+      (message) => message._tag === 'WelcomeSnapshot',
+    ).length;
+    const playerTwoWelcomeCount = decodeBattleRoyaleMessages(playerTwo).filter(
+      (message) => message._tag === 'WelcomeSnapshot',
+    ).length;
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-2')).status).toBe(200);
+    await room.alarm();
+
+    const playerOneWelcomes = decodeBattleRoyaleMessages(playerOne).filter(
+      (message) => message._tag === 'WelcomeSnapshot',
+    );
+    const playerTwoWelcomes = decodeBattleRoyaleMessages(playerTwo).filter(
+      (message) => message._tag === 'WelcomeSnapshot',
+    );
+    const playerOneActiveWelcome = playerOneWelcomes.at(-1);
+    const playerTwoActiveWelcome = playerTwoWelcomes.at(-1);
+    if (
+      playerOneActiveWelcome?._tag !== 'WelcomeSnapshot' ||
+      playerTwoActiveWelcome?._tag !== 'WelcomeSnapshot'
+    ) {
+      throw new Error('expected active replay welcome snapshots for both players');
+    }
+
+    expect(playerOneWelcomes).toHaveLength(playerOneWelcomeCount + 1);
+    expect(playerTwoWelcomes).toHaveLength(playerTwoWelcomeCount + 1);
+    expect(playerOneActiveWelcome.tick).toBeGreaterThan(0);
+    expect(playerTwoActiveWelcome.tick).toBe(playerOneActiveWelcome.tick);
+    expect(playerOneActiveWelcome.players.map((player) => player.id).sort()).toEqual([
+      'player-1',
+      'player-2',
+    ]);
+    expect(playerTwoActiveWelcome.players.map((player) => player.id).sort()).toEqual([
+      'player-1',
+      'player-2',
+    ]);
+    expect(room.getClientTransportStats('player-1')?.lastSentSnapshotTick).toBe(
+      playerOneActiveWelcome.tick,
+    );
+    expect(room.getClientTransportStats('player-2')?.lastSentSnapshotTick).toBe(
+      playerTwoActiveWelcome.tick,
+    );
   });
 
   it('flows stored playerModelSelections through the bundled loader into the adapter (welcome reflects the selection)', async () => {
@@ -1574,6 +2123,35 @@ describe('PlaytestRoom wire protocol and plugins', () => {
       status: 'disconnected',
     });
     expect(afterReplacementClose?.reconnect.seats['player-1']?.expiresAt).toBeDefined();
+  });
+
+  it('mirrors normal and application close codes for reciprocal close handshakes', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = await initRoom(state, makeEnv());
+    const normal = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    await room.webSocketClose(normal as WebSocket, 1000, 'done');
+
+    expect(normal.closeCode).toBe(1000);
+    expect(normal.closeReason).toBe('done');
+    expect(normal.closeCode).not.toBe(1006);
+    expect(
+      (await state.storage.get<RoomStorage>(STORAGE_KEY))?.presence.players['player-1'],
+    ).toMatchObject({
+      status: 'disconnected',
+    });
+
+    const application = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    await room.webSocketClose(
+      application as WebSocket,
+      ROOM_BACKPRESSURE_CLOSE_CODE,
+      'snapshot backpressure',
+    );
+
+    expect(application.closeCode).toBe(ROOM_BACKPRESSURE_CLOSE_CODE);
+    expect(application.closeReason).toBe('snapshot backpressure');
+    expect(application.closeCode).not.toBe(1006);
   });
 
   it('accepts snapshot acks and clears per-client lag counters', async () => {

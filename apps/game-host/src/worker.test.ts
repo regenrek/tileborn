@@ -263,6 +263,17 @@ const makeLobbyNamespace = (
         },
       });
     }
+    if (request.method === 'GET' && url.pathname === '/') {
+      if (room === undefined) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      return Response.json({
+        playtestId: url.searchParams.get('playtestId') ?? roomId,
+        mapId: room.mapId,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        connectedClients: Object.keys(room.players).length,
+      });
+    }
     return new Response('missing', { status: 404 });
   });
 };
@@ -381,6 +392,28 @@ describe('game-host worker routes', () => {
     expect(response.status).toBe(404);
   });
 
+  it('keeps smoke-control socket-drop route production-disabled', async () => {
+    let roomInvoked = false;
+    const app = createWorkerApp(runtimeManifest);
+    const response = await app.request(
+      'http://localhost/__smoke/rooms/room-1/drop-participant-socket',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId: 'player-2' }),
+      },
+      {
+        ...env,
+        PLAYTEST_ROOM: makePlaytestNamespace(async () => {
+          roomInvoked = true;
+          return Response.json({ ok: true });
+        }),
+      },
+    );
+    expect(response.status).toBe(404);
+    expect(roomInvoked).toBe(false);
+  });
+
   it('GET /health returns 503 when signing key is invalid', async () => {
     const app = createWorkerApp(runtimeManifest);
     const response = await app.request(
@@ -423,16 +456,31 @@ describe('game-host worker routes', () => {
     expect(body.buildId).toMatch(/^sha256:/);
   });
 
-  it('POST /playtest/start returns playtestId, wsUrl, and handoff token', async () => {
+  it('POST /playtest/start joins an existing room and returns playtestId, wsUrl, and handoff token', async () => {
     const app = createWorkerApp(runtimeManifest);
+    const lobbyEnv = { ...env, PLAYTEST_ROOM: makeLobbyNamespace() };
+    const created = await app.request(
+      'http://localhost/rooms/create',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mapId: 'map:fixture',
+          options: { idempotencyKey: 'room-stable' },
+        }),
+      },
+      lobbyEnv,
+    );
+    expect(created.status).toBe(201);
+
     const response = await app.request(
       'http://localhost/playtest/start',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mapId: 'map:fixture' }),
+        body: JSON.stringify({ options: { idempotencyKey: 'room-stable' } }),
       },
-      env,
+      lobbyEnv,
     );
     expect(response.status).toBe(201);
     const body = (await response.json()) as {
@@ -442,7 +490,7 @@ describe('game-host worker routes', () => {
       readonly reconnectToken: string;
       readonly playerId: string;
     };
-    expect(body.playtestId.length).toBeGreaterThan(0);
+    expect(body.playtestId).toBe('room-stable');
     expect(body.wsUrl).toContain('/playtest/');
     expect(body.wsUrl).toContain('token=');
     expect(body.wsUrl).toContain('playerId=player-1');

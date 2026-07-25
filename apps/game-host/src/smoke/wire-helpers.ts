@@ -222,14 +222,14 @@ export const waitForWebSocketClose = (
   socket: MiniflareWebSocket,
   expectedCode: number,
   timeoutMs: number,
-): Promise<{ readonly code: number; readonly reason: string }> =>
+): Promise<{ readonly code: number; readonly reason: string; readonly wasClean: boolean }> =>
   new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`timed out waiting for WebSocket close code ${expectedCode}`));
     }, timeoutMs);
     socket.addEventListener('close', (event) => {
       clearTimeout(timer);
-      resolve({ code: event.code, reason: event.reason });
+      resolve({ code: event.code, reason: event.reason, wasClean: event.wasClean });
     });
     if (socket.readyState === WebSocket.CLOSED) {
       clearTimeout(timer);

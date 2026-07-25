@@ -204,14 +204,12 @@ export const getLocalMultiplayerResults = async (
 
 export const startPlaytestJoinSession = async (
   baseUrl: string,
-  mapId: string,
   roomId: string,
 ): Promise<PlaytestJoinSession> => {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/playtest/start`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      mapId,
       options: { idempotencyKey: roomId },
     }),
   });

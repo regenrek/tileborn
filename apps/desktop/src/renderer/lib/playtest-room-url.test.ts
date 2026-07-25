@@ -44,12 +44,16 @@ describe('playtest room HTTP contracts', () => {
       .mockResolvedValueOnce(jsonResponse({ lobby, canStart: false }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const joined = await startPlaytestJoinSession('http://127.0.0.1:8787', 'map-1', 'room-1');
+    const joined = await startPlaytestJoinSession('http://127.0.0.1:8787', 'room-1');
     expect(joined).toEqual({
       wsUrl: 'ws://127.0.0.1:8787/rooms/room-1/connect',
       playerId: 'player-1',
       handoffToken: 'handoff-1',
       reconnectToken: 'reconnect-1',
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:8787/playtest/start');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      options: { idempotencyKey: 'room-1' },
     });
 
     await setLocalMultiplayerReady(

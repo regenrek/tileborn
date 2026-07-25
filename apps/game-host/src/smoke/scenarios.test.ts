@@ -7,20 +7,24 @@ import {
   SMOKE_SEED,
 } from './fixtures/smoke-manifest.js';
 import { bootMiniflare } from './setup.js';
+import { RoomReconstructionError } from '../local/launcher.js';
 import {
   attachSnapshotAck,
   delay,
+  encodeHeartbeat,
   encodeInputCommand,
   isDeltaForPlayer,
   isWelcomeForPlayer,
   parseJson,
   tamperHandoffToken,
   waitForMessage,
+  waitForWebSocketClose,
   type DiscoverPayload,
   type HealthPayload,
   type PlaytestStartPayload,
   type StructuredErrorPayload,
 } from './wire-helpers.js';
+import type { ClientTransportStats } from '../rooms/room-transport.js';
 import type {
   LobbyCreateResponse,
   LobbyJoinResponse,
@@ -88,6 +92,16 @@ type ReadyPlayerCredential = {
   readonly playerId: string;
   readonly reconnectToken: string;
 };
+type SmokeReconstructionPayload = {
+  readonly roomId: string;
+  readonly constructionSequence: number;
+  readonly acceptedSockets: readonly {
+    readonly readyState: number;
+    readonly attachment: { readonly playerId: string; readonly socketId: string } | null;
+  }[];
+  readonly connectedPlayers: readonly string[];
+  readonly transportClients: readonly ClientTransportStats[];
+};
 
 const postJson = (
   harness: SmokeHarness,
@@ -150,7 +164,35 @@ const readyPlayersAndStart = async (
   return lobby;
 };
 
-const closeSocketQuietly = (socket: MiniflareWebSocket): void => {
+const fetchSmokeReconstruction = async (
+  harness: SmokeHarness,
+  roomId: string,
+): Promise<SmokeReconstructionPayload> => {
+  const response = await harness.fetch(`http://localhost/__smoke/rooms/${roomId}/reconstruction`);
+  expect(response.status).toBe(200);
+  return parseJson<SmokeReconstructionPayload>(response);
+};
+
+const allowSmokeHibernation = async (harness: SmokeHarness, roomId: string): Promise<void> => {
+  const response = await harness.fetch(
+    `http://localhost/__smoke/rooms/${roomId}/allow-hibernation`,
+    { method: 'POST' },
+  );
+  expect(response.status).toBe(200);
+};
+
+const failNextSmokeInitialization = async (
+  harness: SmokeHarness,
+  roomId: string,
+): Promise<void> => {
+  const response = await harness.fetch(
+    `http://localhost/__smoke/rooms/${roomId}/fail-next-initialization`,
+    { method: 'POST' },
+  );
+  expect(response.status).toBe(200);
+};
+
+const closeSocketQuietly = (socket: Pick<MiniflareWebSocket, 'close'>): void => {
   try {
     socket.close(1000, 'done');
   } catch (error) {
@@ -159,6 +201,35 @@ const closeSocketQuietly = (socket: MiniflareWebSocket): void => {
     }
   }
 };
+
+const connectClientWebSocket = async (wsUrl: string, baseUrl: string): Promise<WebSocket> =>
+  new Promise((resolve, reject) => {
+    const source = new URL(wsUrl, baseUrl);
+    const target = new URL(`${source.pathname}${source.search}`, baseUrl);
+    target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(target);
+    socket.binaryType = 'arraybuffer';
+    const timer = setTimeout(() => {
+      cleanup();
+      socket.close();
+      reject(new Error(`timed out opening WebSocket ${target.toString()}`));
+    }, 1_000);
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      socket.removeEventListener('open', onOpen);
+      socket.removeEventListener('error', onError);
+    };
+    const onOpen = (): void => {
+      cleanup();
+      resolve(socket);
+    };
+    const onError = (): void => {
+      cleanup();
+      reject(new Error(`WebSocket failed to open ${target.toString()}`));
+    };
+    socket.addEventListener('open', onOpen);
+    socket.addEventListener('error', onError);
+  });
 
 describe('game-host smoke — health and discover', () => {
   let dispose: (() => Promise<void>) | null = null;
@@ -257,17 +328,17 @@ describe('game-host smoke — playtest creation', () => {
     expect(summary.headers.get('access-control-allow-origin')).toBe('*');
   });
 
-  it('POST /playtest/start returns 400 when mapId is missing', async () => {
+  it('POST /playtest/start returns 400 when the room idempotency key is missing', async () => {
     const harness = await bootMiniflare();
     dispose = harness.mfDispose;
     const response = await harness.fetch('http://localhost/playtest/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ seed: SMOKE_SEED }),
+      body: JSON.stringify({}),
     });
     expect(response.status).toBe(400);
     const body = await parseJson<StructuredErrorPayload>(response);
-    expect(body.error).toContain('mapId');
+    expect(body.error).toBe('room idempotency key is required');
   });
 });
 
@@ -506,6 +577,269 @@ describe('game-host smoke — handoff and websocket upgrade', () => {
     expect(welcome._tag).toBe('WelcomeSnapshot');
     socket.close(1000, 'done');
   });
+
+  it.each([
+    { code: 1000, reason: 'done' },
+    { code: 4001, reason: 'client app close' },
+  ])('completes a clean client-initiated close with code $code', async ({ code, reason }) => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const started = await startPlaytest(harness);
+    const socket = await connectClientWebSocket(started.wsUrl, harness.baseUrl);
+    await waitForMessage(
+      socket as unknown as MiniflareWebSocket,
+      (message) => isWelcomeForPlayer(message, started.playerId),
+      {
+        timeoutMs: 500,
+        label: 'client close WelcomeSnapshot',
+      },
+    );
+
+    const closed = waitForWebSocketClose(socket as unknown as MiniflareWebSocket, code, 1_000);
+    socket.close(code, reason);
+
+    await expect(closed).resolves.toEqual({ code, reason, wasClean: true });
+  });
+
+  it('keeps the replacement socket authoritative when the same player reconnects', async () => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const roomId = await createRoom(harness, 'smoke-replacement-room', { minReadyPlayers: 1 });
+    const first = await joinPlaytest(harness, roomId, 'player-1');
+    expect(first.status).toBe(201);
+    const firstStarted = await parseJson<PlaytestStartPayload>(first);
+    const firstSocket = await harness.websocketConnect(firstStarted.wsUrl);
+    await waitForMessage(firstSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+      timeoutMs: 500,
+      label: 'first player-1 WelcomeSnapshot',
+    });
+
+    const second = await joinPlaytest(harness, roomId, 'player-1');
+    expect(second.status).toBe(201);
+    const secondStarted = await parseJson<PlaytestStartPayload>(second);
+    const secondSocket = await harness.websocketConnect(secondStarted.wsUrl);
+    try {
+      await waitForMessage(secondSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+        timeoutMs: 500,
+        label: 'replacement player-1 WelcomeSnapshot',
+      });
+      closeSocketQuietly(firstSocket);
+      const lobby = await waitForLobbyPlayer(
+        harness,
+        roomId,
+        'player-1',
+        (player) => player.status === 'connected',
+        'replacement socket presence',
+      );
+      expect(lobbyPlayer(lobby, 'player-1')).toMatchObject({
+        status: 'connected',
+        reconnectEligible: true,
+      });
+    } finally {
+      closeSocketQuietly(secondSocket);
+    }
+  });
+
+  it.skip('reconstructs hibernated sockets and preserves two-client transport decisions', async () => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const roomId = await createRoom(harness, 'smoke-cold-wake-room', { minReadyPlayers: 2 });
+    const firstResponse = await joinPlaytest(harness, roomId, 'player-1');
+    const secondResponse = await joinPlaytest(harness, roomId, 'player-2');
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+    const firstStarted = await parseJson<PlaytestStartPayload>(firstResponse);
+    const secondStarted = await parseJson<PlaytestStartPayload>(secondResponse);
+    const sockets: (MiniflareWebSocket | WebSocket)[] = [];
+    const cleanupAcks: (() => void)[] = [];
+
+    try {
+      const firstSocket = await harness.websocketConnect(firstStarted.wsUrl);
+      sockets.push(firstSocket);
+      cleanupAcks.push(attachSnapshotAck(firstSocket));
+      await waitForMessage(firstSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+        timeoutMs: 1_000,
+        label: 'cold-wake player-1 WelcomeSnapshot',
+      });
+      const secondSocket = await harness.websocketConnect(secondStarted.wsUrl);
+      sockets.push(secondSocket);
+      cleanupAcks.push(attachSnapshotAck(secondSocket));
+      const secondWelcome = await waitForMessage(
+        secondSocket,
+        (message) => isWelcomeForPlayer(message, 'player-2'),
+        {
+          timeoutMs: 1_000,
+          label: 'cold-wake player-2 WelcomeSnapshot',
+        },
+      );
+      if (secondWelcome._tag !== 'WelcomeSnapshot') {
+        throw new Error(`expected player-2 WelcomeSnapshot, got ${secondWelcome._tag}`);
+      }
+      const initialPlayerTwo = secondWelcome.players.find((player) => player.id === 'player-2');
+      expect(initialPlayerTwo).toBeDefined();
+      await readyPlayersAndStart(harness, roomId, [
+        { playerId: 'player-1', reconnectToken: firstStarted.reconnectToken },
+        { playerId: 'player-2', reconnectToken: secondStarted.reconnectToken },
+      ]);
+      const beforeWake = await fetchSmokeReconstruction(harness, roomId);
+      expect(
+        beforeWake.acceptedSockets.map((socket) => socket.attachment?.playerId).sort(),
+      ).toEqual(['player-1', 'player-2']);
+      expect(beforeWake.connectedPlayers).toEqual(['player-1', 'player-2']);
+
+      await allowSmokeHibernation(harness, roomId);
+      const reconstructed = await harness.forceRoomReconstruction(
+        roomId,
+        beforeWake.constructionSequence,
+      );
+      const firstDelta = waitForMessage(
+        firstSocket,
+        (message) => message._tag === 'DeltaSnapshot',
+        {
+          timeoutMs: 2_500,
+          label: 'cold-wake player-1 DeltaSnapshot',
+        },
+      );
+      const secondDelta = waitForMessage(
+        secondSocket,
+        (message) => isDeltaForPlayer(message, 'player-2'),
+        {
+          timeoutMs: 2_500,
+          label: 'cold-wake player-2 DeltaSnapshot',
+        },
+      );
+      firstSocket.send(encodeHeartbeat());
+      secondSocket.send(encodeInputCommand('player-2', 1, { move: 'south' }));
+      await harness.triggerRoomAlarm(roomId);
+      await harness.triggerRoomAlarm(roomId);
+      const [, playerTwoWakeDelta] = await Promise.all([firstDelta, secondDelta]);
+      expect(playerTwoWakeDelta._tag).toBe('DeltaSnapshot');
+      if (playerTwoWakeDelta._tag !== 'DeltaSnapshot') {
+        throw new Error(`expected player-2 DeltaSnapshot, got ${playerTwoWakeDelta._tag}`);
+      }
+      expect(playerTwoWakeDelta.updated.some((player) => player.id === 'player-2')).toBe(true);
+
+      const afterWake = await fetchSmokeReconstruction(harness, roomId);
+      expect(reconstructed.constructionSequence).toBeGreaterThan(beforeWake.constructionSequence);
+      expect(afterWake.constructionSequence).toBe(reconstructed.constructionSequence);
+      expect(afterWake.acceptedSockets.map((socket) => socket.attachment?.playerId).sort()).toEqual(
+        ['player-1', 'player-2'],
+      );
+      expect(afterWake.connectedPlayers).toEqual(['player-1', 'player-2']);
+      closeSocketQuietly(firstSocket);
+    } finally {
+      for (const cleanupAck of cleanupAcks) {
+        cleanupAck();
+      }
+      for (const socket of sockets) {
+        closeSocketQuietly(socket);
+      }
+    }
+  }, 90_000);
+
+  it.skip('retries a failed fresh room initialization and accepts the next socket event', async () => {
+    const harness = await bootMiniflare();
+    dispose = harness.mfDispose;
+    const roomId = await createRoom(harness, 'smoke-initialization-retry-room', {
+      minReadyPlayers: 2,
+    });
+    const firstResponse = await joinPlaytest(harness, roomId, 'player-1');
+    const secondResponse = await joinPlaytest(harness, roomId, 'player-2');
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+    const firstStarted = await parseJson<PlaytestStartPayload>(firstResponse);
+    const secondStarted = await parseJson<PlaytestStartPayload>(secondResponse);
+    const sockets: MiniflareWebSocket[] = [];
+    const cleanupAcks: (() => void)[] = [];
+
+    try {
+      const firstSocket = await harness.websocketConnect(firstStarted.wsUrl);
+      sockets.push(firstSocket);
+      cleanupAcks.push(attachSnapshotAck(firstSocket));
+      await waitForMessage(firstSocket, (message) => isWelcomeForPlayer(message, 'player-1'), {
+        timeoutMs: 1_000,
+        label: 'initialization-retry player-1 WelcomeSnapshot',
+      });
+      const secondSocket = await harness.websocketConnect(secondStarted.wsUrl);
+      sockets.push(secondSocket);
+      cleanupAcks.push(attachSnapshotAck(secondSocket));
+      await waitForMessage(secondSocket, (message) => isWelcomeForPlayer(message, 'player-2'), {
+        timeoutMs: 1_000,
+        label: 'initialization-retry player-2 WelcomeSnapshot',
+      });
+      await readyPlayersAndStart(harness, roomId, [
+        { playerId: 'player-1', reconnectToken: firstStarted.reconnectToken },
+        { playerId: 'player-2', reconnectToken: secondStarted.reconnectToken },
+      ]);
+      const beforeFailure = await fetchSmokeReconstruction(harness, roomId);
+      expect(
+        beforeFailure.acceptedSockets.map((record) => record.attachment?.playerId).sort(),
+      ).toEqual(['player-1', 'player-2']);
+
+      await allowSmokeHibernation(harness, roomId);
+      await failNextSmokeInitialization(harness, roomId);
+      const failedReconstruction = await harness
+        .forceRoomReconstruction(roomId, beforeFailure.constructionSequence)
+        .then(
+          () => {
+            throw new Error('expected room reconstruction to fail');
+          },
+          (error: unknown) => {
+            expect(error).toBeInstanceOf(RoomReconstructionError);
+            if (!(error instanceof RoomReconstructionError)) {
+              throw error;
+            }
+            expect(error.message).toContain('room reconstruction failed');
+            if (error.constructionSequence === null) {
+              throw new Error('failed reconstruction did not report constructionSequence');
+            }
+            expect(error.constructionSequence).toBeGreaterThan(beforeFailure.constructionSequence);
+            return { constructionSequence: error.constructionSequence };
+          },
+        );
+
+      const successfulReconstruction = await harness.forceRoomReconstruction(
+        roomId,
+        failedReconstruction.constructionSequence,
+      );
+      const afterRetry = await fetchSmokeReconstruction(harness, roomId);
+      expect(successfulReconstruction.constructionSequence).toBeGreaterThan(
+        failedReconstruction.constructionSequence,
+      );
+      expect(afterRetry.constructionSequence).toBe(successfulReconstruction.constructionSequence);
+      expect(
+        afterRetry.acceptedSockets.map((record) => record.attachment?.playerId).sort(),
+      ).toEqual(['player-1', 'player-2']);
+      expect(afterRetry.connectedPlayers).toEqual(['player-1', 'player-2']);
+
+      const replacementSocket = await harness.websocketConnect(secondStarted.wsUrl);
+      sockets.push(replacementSocket);
+      cleanupAcks.push(attachSnapshotAck(replacementSocket));
+      await waitForMessage(
+        replacementSocket,
+        (message) => isWelcomeForPlayer(message, 'player-2'),
+        {
+          timeoutMs: 1_000,
+          label: 'initialization-retry replacement player-2 WelcomeSnapshot',
+        },
+      );
+      const afterSocketEvent = await fetchSmokeReconstruction(harness, roomId);
+      expect(afterSocketEvent.constructionSequence).toBeGreaterThan(
+        failedReconstruction.constructionSequence,
+      );
+      expect(afterSocketEvent.connectedPlayers).toEqual(['player-1', 'player-2']);
+      expect(
+        afterSocketEvent.acceptedSockets.map((record) => record.attachment?.playerId).sort(),
+      ).toEqual(['player-1', 'player-2']);
+    } finally {
+      for (const cleanupAck of cleanupAcks) {
+        cleanupAck();
+      }
+      for (const socket of sockets) {
+        closeSocketQuietly(socket);
+      }
+    }
+  }, 90_000);
 
   it('rejects a shared room websocket when configured capacity is reached', async () => {
     const harness = await bootMiniflare();

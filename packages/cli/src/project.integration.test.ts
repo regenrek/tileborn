@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -64,7 +64,7 @@ describe('ProjectService integration', () => {
             return yield* projects.init({ slug: 'here-proj', here: true });
           }),
         );
-        expect(result.path).toBe(projectDir);
+        expect(result.path).toBe(await realpath(projectDir));
         await expect(
           readFile(path.join(projectDir, PROJECT_MANIFEST_FILE), 'utf8'),
         ).resolves.toContain('here-proj');

@@ -16,7 +16,7 @@
   "scripts": {
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "test:boundaries": "pnpm --filter @tileborne/boundary-tests test -- --run",
     "test:clean-checkout": "bash scripts/clean-checkout-smoke.sh",
     "test:clean-checkout-time": "bash scripts/clean-checkout-smoke.sh --time",
@@ -24,7 +24,7 @@
     "test:cli-e2e": "pnpm --filter @tileborne/cli test:cli-e2e",
     "test:desktop-smoke": "pnpm --filter @tileborne/desktop test:desktop-smoke",
     "test:game-host": "pnpm --filter @tileborne/game-host test:smoke",
-    "test:services-build-hermetic": "pnpm typecheck && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test",
+    "test:services-build-hermetic": "pnpm typecheck && pnpm turbo run build --filter=@tileborne/services-build && pnpm --filter @tileborne/game-host verify:bundled-worker && pnpm --filter @tileborne/services-build test",
     "test:creator-performance": "vitest run --config vitest.config.ts scripts/creator-performance.test.ts scripts/creator-performance-owners.test.ts",
     "test:creator-oracle:clean-checkout": "node scripts/clean-checkout-creator-oracle.mjs",
     "docs:build": "pnpm --filter @tileborne/docs build",

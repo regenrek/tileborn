@@ -14,6 +14,7 @@ import {
   type RuntimeMessage,
 } from '@tileborne/runtime/worker';
 import { buildRuntimeGameShellProjection, defaultProjectGameShellState } from '@tileborne/runtime';
+import { MATCH_ENDED_CLOSE_CODE } from '@tileborne/runtime/net';
 
 import {
   createBundledPluginLoader,
@@ -35,7 +36,13 @@ import {
   toPlaytestSummary,
   type BinarySocket,
 } from '../room.js';
-import type { Env, PlaytestRoomMeta, PlaytestSummary, RoomLobbySummary } from '../types.js';
+import {
+  smokeControlEnabled,
+  type Env,
+  type PlaytestRoomMeta,
+  type PlaytestSummary,
+  type RoomLobbySummary,
+} from '../types.js';
 import { isHandoffSigningKeyValid, verifyHandoffToken } from './handoff-token.js';
 import {
   INVALID_HANDOFF_CLOSE_CODE,
@@ -72,6 +79,7 @@ import {
 } from './room-lifecycle.js';
 import {
   STORAGE_KEY,
+  emptyRoomCurrentSocketState,
   emptyRoomStorage,
   migrateRoomStorage,
   type PersistedRoomStorage,
@@ -127,8 +135,8 @@ export interface PlaytestRoomDeps {
 }
 
 interface RoomSocketAttachment {
-  readonly playerId?: string;
-  readonly socketId?: string;
+  readonly playerId: string;
+  readonly socketId: string;
 }
 
 interface RoomPlayerReservationRequest {
@@ -173,10 +181,38 @@ interface RoomOwnerActionPayload {
   readonly playerId: string;
 }
 
+interface SmokeDropParticipantSocketRequest {
+  readonly playerId?: unknown;
+}
+
+interface SmokeDropParticipantSocketPayload {
+  readonly playerId: string;
+}
+
+const SMOKE_TRANSPORT_LOSS_CLOSE_CODE = 4000;
+const SMOKE_TRANSPORT_LOSS_CLOSE_REASON = 'smoke transport loss';
+const MATCH_ENDED_CLOSE_REASON = 'match ended';
+
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy.buffer;
+};
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const parseRoomSocketAttachment = (value: unknown): RoomSocketAttachment | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (typeof value.playerId !== 'string' || value.playerId.length === 0) {
+    return null;
+  }
+  if (typeof value.socketId !== 'string' || value.socketId.length === 0) {
+    return null;
+  }
+  return { playerId: value.playerId, socketId: value.socketId };
 };
 
 const defaultSeed = (): string | number => crypto.randomUUID();
@@ -184,6 +220,11 @@ const defaultShellProjection = (): RuntimeGameShellProjection =>
   buildRuntimeGameShellProjection(defaultProjectGameShellState('tileborne.battle-royale'));
 
 export { MAX_QUEUED_INPUTS_PER_PLAYER } from './room-transport.js';
+
+let nextRoomConstructionSequence = 0;
+let smokeFailNextInitialization = false;
+const SMOKE_FAIL_NEXT_INITIALIZATION_KEY = '__smoke_fail_next_initialization';
+const SMOKE_CONSTRUCTION_SEQUENCE_KEY = '__smoke_construction_sequence';
 
 const parseRoomPlayerReservationBody = async (
   request: Request,
@@ -289,6 +330,21 @@ const parseRoomOwnerActionBody = async (request: Request): Promise<RoomOwnerActi
   return { playerId: body.playerId };
 };
 
+const parseSmokeDropParticipantSocketBody = async (
+  request: Request,
+): Promise<SmokeDropParticipantSocketPayload> => {
+  let body: SmokeDropParticipantSocketRequest;
+  try {
+    body = (await request.json()) as SmokeDropParticipantSocketRequest;
+  } catch {
+    throw new Error('drop participant socket body must be valid JSON');
+  }
+  if (typeof body.playerId !== 'string' || body.playerId.length === 0) {
+    throw new Error('playerId is required');
+  }
+  return { playerId: body.playerId };
+};
+
 const websocketUpgradeResponse = (client: WebSocket): Response => {
   try {
     return new Response(null, { status: 101, webSocket: client });
@@ -312,8 +368,12 @@ export class PlaytestRoom implements DurableObject {
   private latestReplayFrames: readonly Uint8Array[] = [];
   private nextInputOrder = 0;
   private tickAlarmScheduled = false;
+  private smokeHibernationQuiescing = false;
   private legacyEnvelopeEnabled = false;
+  private initializationPromise: Promise<void> | null = null;
+  private initialized = false;
   private readonly deps: PlaytestRoomDeps;
+  private constructionSequence: number;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -321,7 +381,9 @@ export class PlaytestRoom implements DurableObject {
     deps: PlaytestRoomDeps = {},
   ) {
     this.deps = deps;
-    void this.hydrateFromStorage();
+    this.constructionSequence = 0;
+    this.initializationPromise = this.initialize();
+    this.initializationPromise.catch(() => undefined);
   }
 
   private nowMs(): number {
@@ -332,9 +394,65 @@ export class PlaytestRoom implements DurableObject {
     return new Date(this.nowMs()).toISOString();
   }
 
+  private isLiveSocket(socket: WebSocket): boolean {
+    return socket.readyState === WebSocket.OPEN;
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      if (this.constructionSequence === 0) {
+        this.constructionSequence = await this.nextConstructionSequence();
+      }
+      if (
+        smokeControlEnabled() &&
+        (smokeFailNextInitialization ||
+          (await this.state.storage.get<boolean>(SMOKE_FAIL_NEXT_INITIALIZATION_KEY)) === true)
+      ) {
+        smokeFailNextInitialization = false;
+        await this.state.storage.delete(SMOKE_FAIL_NEXT_INITIALIZATION_KEY);
+        throw new Error('smoke controlled first room initialization failure');
+      }
+      await this.hydrateFromStorage();
+      this.initialized = true;
+    } catch (error) {
+      this.tickAlarmScheduled = false;
+      await this.stopRuntimeOnly();
+      this.initialized = false;
+      throw error;
+    }
+  }
+
+  private async nextConstructionSequence(): Promise<number> {
+    if (!smokeControlEnabled()) {
+      nextRoomConstructionSequence += 1;
+      return nextRoomConstructionSequence;
+    }
+    const previous = (await this.state.storage.get<number>(SMOKE_CONSTRUCTION_SEQUENCE_KEY)) ?? 0;
+    const next = previous + 1;
+    await this.state.storage.put(SMOKE_CONSTRUCTION_SEQUENCE_KEY, next);
+    return next;
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    if (this.initializationPromise === null) {
+      this.initializationPromise = this.initialize();
+      this.initializationPromise.catch(() => undefined);
+    }
+    try {
+      await this.initializationPromise;
+    } catch (error) {
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
+
   private async hydrateFromStorage(): Promise<void> {
     const stored = await this.state.storage.get<PersistedRoomStorage>(STORAGE_KEY);
     if (!stored) {
+      this.closeAcceptedSocketsWithoutStorage();
       return;
     }
     this.storageData = migrateRoomStorage(stored);
@@ -342,10 +460,102 @@ export class PlaytestRoom implements DurableObject {
       await this.state.storage.put(STORAGE_KEY, this.storageData);
     }
     this.protocolBridge = this.runtimeRegistrationForStorage(this.storageData).protocolBridge;
+    this.rehydrateAcceptedSockets(this.storageData);
     if (shouldHydrateRuntime(this.storageData)) {
       await this.ensureRuntime();
       await this.scheduleNextAlarm();
     }
+  }
+
+  private rehydrateAcceptedSockets(storage: RoomStorage): void {
+    this.socketByPlayerId.clear();
+    const candidates = new Map<string, RoomSocketRecord>();
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = parseRoomSocketAttachment(socket.deserializeAttachment());
+      if (attachment === null) {
+        socket.close(INVALID_HANDOFF_CLOSE_CODE, 'invalid socket attachment');
+        continue;
+      }
+      if (storage.players[attachment.playerId] === undefined) {
+        socket.close(INVALID_HANDOFF_CLOSE_CODE, 'stale socket attachment');
+        continue;
+      }
+      if (socket.readyState === WebSocket.CLOSED) {
+        continue;
+      }
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.accept();
+      }
+      const currentSocket = storage.currentSockets?.players[attachment.playerId];
+      if (currentSocket !== undefined && currentSocket.socketId !== attachment.socketId) {
+        socket.close(ROOM_REPLACED_CLOSE_CODE, 'player reconnected');
+        continue;
+      }
+      const record = createRoomSocketRecord(attachment.playerId, socket, attachment.socketId);
+      const existing = candidates.get(attachment.playerId);
+      if (existing === undefined) {
+        candidates.set(attachment.playerId, record);
+        continue;
+      }
+      const recordOpen = this.isLiveSocket(record.socket);
+      const existingOpen = this.isLiveSocket(existing.socket);
+      const winner =
+        recordOpen !== existingOpen
+          ? recordOpen
+            ? { keep: record, close: existing }
+            : { keep: existing, close: record }
+          : record.socketId.localeCompare(existing.socketId) > 0
+            ? { keep: record, close: existing }
+            : { keep: existing, close: record };
+      winner.close.socket.close(ROOM_REPLACED_CLOSE_CODE, 'player reconnected');
+      candidates.set(attachment.playerId, winner.keep);
+    }
+    for (const [playerId, record] of candidates) {
+      this.socketByPlayerId.set(playerId, record);
+    }
+  }
+
+  private closeAcceptedSocketsWithoutStorage(): void {
+    this.socketByPlayerId.clear();
+    for (const socket of this.state.getWebSockets()) {
+      socket.close(INVALID_HANDOFF_CLOSE_CODE, 'stale socket attachment');
+    }
+  }
+
+  private async writeCurrentSocket(playerId: string, socketId: string): Promise<void> {
+    const storage = await this.readStorage();
+    if (!storage || storage.players[playerId] === undefined) {
+      return;
+    }
+    await this.writeStorage({
+      ...storage,
+      currentSockets: {
+        players: {
+          ...(storage.currentSockets ?? emptyRoomCurrentSocketState()).players,
+          [playerId]: {
+            playerId,
+            socketId,
+            connectedAt: this.nowIso(),
+          },
+        },
+      },
+    });
+  }
+
+  private async clearCurrentSocket(playerId: string, socketId: string): Promise<void> {
+    const storage = await this.readStorage();
+    if (!storage?.currentSockets?.players[playerId]) {
+      return;
+    }
+    if (storage.currentSockets.players[playerId].socketId !== socketId) {
+      return;
+    }
+    const players = { ...storage.currentSockets.players };
+    delete players[playerId];
+    await this.writeStorage({
+      ...storage,
+      currentSockets: { players },
+    });
   }
 
   private async readStorage(): Promise<RoomStorage | null> {
@@ -445,7 +655,7 @@ export class PlaytestRoom implements DurableObject {
 
   private connectedPlayerIds(): readonly string[] {
     return [...this.socketByPlayerId.values()]
-      .filter((record) => record.socket.readyState === WebSocket.OPEN)
+      .filter((record) => this.isLiveSocket(record.socket))
       .map((record) => record.playerId);
   }
 
@@ -580,44 +790,60 @@ export class PlaytestRoom implements DurableObject {
         }),
       });
     const runtime = this.deps.createRuntime?.() ?? makeGameRuntime();
-    await Effect.runPromise(
-      runtime.init({
-        tickRate: TICK_HZ,
-        pluginHost,
-      }),
-    );
-    if (!usingCustomPluginHost) {
-      await Effect.runPromise(pluginHost.loadAndRegister(pluginId));
-      await Effect.runPromise(pluginHost.dispatchInit());
+    let runtimeInitialized = false;
+    try {
+      await Effect.runPromise(
+        runtime.init({
+          tickRate: TICK_HZ,
+          pluginHost,
+        }),
+      );
+      runtimeInitialized = true;
+      if (!usingCustomPluginHost) {
+        await Effect.runPromise(pluginHost.loadAndRegister(pluginId));
+        await Effect.runPromise(pluginHost.dispatchInit());
+      }
+      this.legacyEnvelopeEnabled = usingCustomPluginHost;
+      await Effect.runPromise(runtime.start());
+      this.behaviorRuntime =
+        this.deps.createBehaviorRuntime?.({
+          ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
+          ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+          shellProjection: storage?.shellProjection ?? defaultShellProjection(),
+        }) ??
+        createWorkerdBehaviorRuntimeClient({
+          ...(this.env.BEHAVIOR_RUNTIME === undefined
+            ? {}
+            : { binding: this.env.BEHAVIOR_RUNTIME }),
+          ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
+          ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
+          shellProjection: storage?.shellProjection ?? defaultShellProjection(),
+        });
+      this.runtime = runtime;
+      this.pluginHost = pluginHost;
+    } catch (error) {
+      this.runtime = null;
+      this.behaviorRuntime = null;
+      this.pluginHost = null;
+      this.legacyEnvelopeEnabled = false;
+      if (runtimeInitialized) {
+        await Effect.runPromise(runtime.stop()).catch(() => undefined);
+      }
+      throw error;
     }
-    this.legacyEnvelopeEnabled = usingCustomPluginHost;
-    await Effect.runPromise(runtime.start());
-    this.behaviorRuntime =
-      this.deps.createBehaviorRuntime?.({
-        ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
-        ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
-        shellProjection: storage?.shellProjection ?? defaultShellProjection(),
-      }) ??
-      createWorkerdBehaviorRuntimeClient({
-        ...(this.env.BEHAVIOR_RUNTIME === undefined ? {} : { binding: this.env.BEHAVIOR_RUNTIME }),
-        ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
-        ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
-        shellProjection: storage?.shellProjection ?? defaultShellProjection(),
-      });
-    this.runtime = runtime;
-    this.pluginHost = pluginHost;
   }
 
   private async stopRuntimeOnly(): Promise<void> {
-    if (!this.runtime) {
-      return;
-    }
-    await Effect.runPromise(this.runtime.stop());
+    const runtime = this.runtime;
     this.runtime = null;
     this.behaviorRuntime = null;
     this.pluginHost = null;
+    this.legacyEnvelopeEnabled = false;
     this.pluginBinaryFrames.length = 0;
     this.latestReplayFrames = [];
+    if (runtime) {
+      await Effect.runPromise(runtime.stop());
+    }
   }
 
   private async restartRuntimeForPreActiveRosterChange(storage: RoomStorage): Promise<void> {
@@ -646,6 +872,7 @@ export class PlaytestRoom implements DurableObject {
   }
 
   async create(opts: RoomCreateOptions): Promise<RoomStorage> {
+    await this.ensureInitialized();
     if (!isHandoffSigningKeyValid(this.env)) {
       throw new Error('handoff signing key is not configured');
     }
@@ -677,6 +904,7 @@ export class PlaytestRoom implements DurableObject {
   }
 
   async destroy(): Promise<void> {
+    await this.ensureInitialized();
     const sockets = this.state.getWebSockets();
     for (const socket of sockets) {
       socket.close(1000, 'room destroyed');
@@ -709,6 +937,7 @@ export class PlaytestRoom implements DurableObject {
     playtestId: string,
     options: { readonly broadcast?: boolean } = {},
   ): Promise<void> {
+    await this.ensureInitialized();
     const verified = await verifyHandoffToken(this.env, sessionToken, {
       playtestId,
       purpose: 'handoff',
@@ -733,6 +962,7 @@ export class PlaytestRoom implements DurableObject {
   }
 
   async removePlayer(playerId: string, reason: string): Promise<void> {
+    await this.ensureInitialized();
     const storage = await this.readStorage();
     if (!storage || !storage.players[playerId]) {
       return;
@@ -772,7 +1002,7 @@ export class PlaytestRoom implements DurableObject {
       this.broadcast(new PlayerLeft({ playerId, reason }));
     }
     const socket = this.socketByPlayerId.get(playerId)?.socket;
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (socket && this.isLiveSocket(socket)) {
       socket.close(1000, reason);
     }
     this.socketByPlayerId.delete(playerId);
@@ -781,7 +1011,11 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
-  private async disconnectPlayer(playerId: string, reason: string): Promise<void> {
+  private async disconnectPlayer(
+    playerId: string,
+    reason: string,
+    close: { readonly code?: number; readonly reason?: string } = {},
+  ): Promise<void> {
     const storage = await this.readStorage();
     if (!storage || !storage.players[playerId]) {
       return;
@@ -791,10 +1025,34 @@ export class PlaytestRoom implements DurableObject {
     await this.writeStorage(next);
     await this.scheduleReconnectExpiryCheck(next);
     const socket = this.socketByPlayerId.get(playerId)?.socket;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.close(1000, reason);
-    }
+    socket?.close(close.code ?? 1000, close.reason ?? reason);
     this.socketByPlayerId.delete(playerId);
+  }
+
+  private async smokeDropParticipantSocket(playerId: string): Promise<{
+    readonly socketId: string;
+    readonly storage: RoomStorage;
+  }> {
+    const storage = await this.readStorage();
+    if (!storage) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    if (storage.players[playerId] === undefined) {
+      throw new RoomLifecycleRejectedError('player is not in the room', 404);
+    }
+    const record = this.socketByPlayerId.get(playerId);
+    if (record === undefined || !this.isLiveSocket(record.socket)) {
+      throw new RoomLifecycleRejectedError('player socket is not connected', 409);
+    }
+    await this.disconnectPlayer(playerId, SMOKE_TRANSPORT_LOSS_CLOSE_REASON, {
+      code: SMOKE_TRANSPORT_LOSS_CLOSE_CODE,
+      reason: SMOKE_TRANSPORT_LOSS_CLOSE_REASON,
+    });
+    const next = await this.readStorage();
+    if (!next) {
+      throw new RoomLifecycleRejectedError('room not initialized', 404);
+    }
+    return { socketId: record.socketId, storage: next };
   }
 
   private broadcast(message: RuntimeMessage): void {
@@ -812,7 +1070,7 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private sendBinaryFrameToSocket(ws: WebSocket, frame: Uint8Array): void {
-    if (ws.readyState !== WebSocket.OPEN) {
+    if (!this.isLiveSocket(ws)) {
       return;
     }
     ws.send(toArrayBuffer(frame));
@@ -848,6 +1106,19 @@ export class PlaytestRoom implements DurableObject {
     this.sendBinaryFrameToSocket(record.socket, frame);
   }
 
+  private closeLiveSocketsForTerminalResult(): void {
+    const closedSocketIds = new Set<string>();
+    for (const [playerId, record] of this.socketByPlayerId) {
+      if (!this.isLiveSocket(record.socket) || closedSocketIds.has(record.socketId)) {
+        this.socketByPlayerId.delete(playerId);
+        continue;
+      }
+      closedSocketIds.add(record.socketId);
+      record.socket.close(MATCH_ENDED_CLOSE_CODE, MATCH_ENDED_CLOSE_REASON);
+      this.socketByPlayerId.delete(playerId);
+    }
+  }
+
   private sendReplayFramesToSocket(record: RoomSocketRecord, markAsResync = false): void {
     for (const frame of this.latestReplayFrames) {
       const tick = this.protocolBridge?.snapshotTickFromServerFrame(frame);
@@ -862,35 +1133,51 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
-  private acceptPlayerSocket(playerId: string, server: WebSocket): void {
+  private sendReplayFramesToCurrentSockets(): void {
+    for (const record of this.socketByPlayerId.values()) {
+      if (this.isLiveSocket(record.socket)) {
+        this.sendReplayFramesToSocket(record);
+      }
+    }
+  }
+
+  private async acceptPlayerSocket(playerId: string, server: WebSocket): Promise<void> {
+    await this.ensureInitialized();
     const previous = this.socketByPlayerId.get(playerId);
     const socketId = crypto.randomUUID();
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ playerId, socketId });
+    await this.writeCurrentSocket(playerId, socketId);
     const record = createRoomSocketRecord(playerId, server, socketId);
     this.socketByPlayerId.set(playerId, record);
     this.sendReplayFramesToSocket(record);
-    if (previous?.socket !== undefined && previous.socket.readyState === WebSocket.OPEN) {
+    if (previous?.socket !== undefined && this.isLiveSocket(previous.socket)) {
       previous.socket.close(ROOM_REPLACED_CLOSE_CODE, 'player reconnected');
     }
   }
 
   private async scheduleNextAlarm(): Promise<void> {
-    if (this.tickAlarmScheduled) {
+    if (this.smokeHibernationQuiescing || this.tickAlarmScheduled) {
       return;
     }
-    this.tickAlarmScheduled = true;
     await this.state.storage.setAlarm(this.nowMs() + TICK_INTERVAL_MS);
+    this.tickAlarmScheduled = true;
   }
 
   private async scheduleEmptyRoomCheck(): Promise<void> {
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
     const idleMs = roomIdleTimeoutMs(this.env.ROOM_IDLE_TIMEOUT_SECONDS);
     await this.state.storage.setAlarm(this.nowMs() + idleMs);
   }
 
   private async scheduleAlarmAt(timestampMs: number): Promise<void> {
-    this.tickAlarmScheduled = true;
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
     await this.state.storage.setAlarm(timestampMs);
+    this.tickAlarmScheduled = true;
   }
 
   private nextReconnectExpiryMs(storage: RoomStorage): number | undefined {
@@ -916,6 +1203,13 @@ export class PlaytestRoom implements DurableObject {
   }
 
   async alarm(): Promise<void> {
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
+    await this.ensureInitialized();
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
     this.tickAlarmScheduled = false;
     const storage = await this.readStorage();
     if (!storage) {
@@ -1019,8 +1313,8 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private broadcastPluginFrames(): void {
-    const records = [...this.socketByPlayerId.values()].filter(
-      (record) => record.socket.readyState === WebSocket.OPEN,
+    const records = [...this.socketByPlayerId.values()].filter((record) =>
+      this.isLiveSocket(record.socket),
     );
     for (const frame of this.pluginBinaryFrames.splice(0)) {
       for (const record of records) {
@@ -1037,8 +1331,8 @@ export class PlaytestRoom implements DurableObject {
     if (requests.length === 0) {
       return;
     }
-    const records = [...this.socketByPlayerId.values()].filter(
-      (record) => record.socket.readyState === WebSocket.OPEN,
+    const records = [...this.socketByPlayerId.values()].filter((record) =>
+      this.isLiveSocket(record.socket),
     );
     let sequence = startSequence;
     for (const request of requests) {
@@ -1054,6 +1348,10 @@ export class PlaytestRoom implements DurableObject {
     const storage = await this.readStorage();
     if (!storage || !this.runtime || storage.lifecycle.phase !== 'active') {
       return false;
+    }
+    const isFirstActiveTick = storage.tick === 0;
+    if (!this.legacyEnvelopeEnabled && isFirstActiveTick) {
+      this.pluginBinaryFrames.length = 0;
     }
     this.drainInputQueueForTick();
     try {
@@ -1119,6 +1417,9 @@ export class PlaytestRoom implements DurableObject {
         );
       }
     }
+    if (!this.legacyEnvelopeEnabled && isFirstActiveTick) {
+      this.sendReplayFramesToCurrentSockets();
+    }
     this.broadcastPluginFrames();
     this.broadcastShellNavigationRequests(
       shellNavigationEpoch,
@@ -1136,6 +1437,7 @@ export class PlaytestRoom implements DurableObject {
       this.inputByPlayerId.clear();
       this.tickAlarmScheduled = false;
       await this.state.storage.deleteAlarm();
+      this.closeLiveSocketsForTerminalResult();
     }
     return !terminal;
   }
@@ -1171,6 +1473,74 @@ export class PlaytestRoom implements DurableObject {
     await this.writeStorage(next);
   }
 
+  private smokeRoomState(roomId: string): {
+    readonly roomId: string;
+    readonly constructionSequence: number;
+    readonly tick: number;
+    readonly acceptedSockets: readonly {
+      readonly readyState: number;
+      readonly open: boolean;
+      readonly attachment: RoomSocketAttachment | null;
+    }[];
+    readonly connectedPlayers: readonly string[];
+    readonly transportClients: readonly ClientTransportStats[];
+    readonly playerState: Record<
+      string,
+      {
+        readonly lastHeartbeatAt: string;
+        readonly lastSeenAt: string | null;
+        readonly presenceStatus: string | null;
+      }
+    >;
+  } {
+    const storage = this.storageData;
+    return {
+      roomId,
+      constructionSequence: this.constructionSequence,
+      tick: storage?.tick ?? 0,
+      acceptedSockets: this.state.getWebSockets().map((socket) => ({
+        readyState: socket.readyState,
+        open: this.isLiveSocket(socket),
+        attachment: parseRoomSocketAttachment(socket.deserializeAttachment()),
+      })),
+      connectedPlayers: [...this.connectedPlayerIds()].sort(),
+      transportClients: [...this.socketByPlayerId.values()].map(toClientTransportStats),
+      playerState: Object.fromEntries(
+        Object.entries(storage?.players ?? {}).map(([playerId, player]) => {
+          const presence = storage?.presence.players[playerId];
+          return [
+            playerId,
+            {
+              lastHeartbeatAt: player.lastHeartbeatAt,
+              lastSeenAt: presence?.lastSeenAt ?? null,
+              presenceStatus: presence?.status ?? null,
+            },
+          ];
+        }),
+      ),
+    };
+  }
+
+  private async establishSmokeHibernationQuiescence(): Promise<number> {
+    this.smokeHibernationQuiescing = true;
+    this.tickAlarmScheduled = false;
+    await this.stopRuntimeOnly();
+    await this.state.storage.deleteAlarm();
+    const acceptedSocketCount = this.state.getWebSockets().length;
+    this.storageData = null;
+    this.socketByPlayerId.clear();
+    this.inputQueueByPlayerId.clear();
+    this.inputByPlayerId.clear();
+    this.pluginMessages.length = 0;
+    this.pluginBinaryFrames.length = 0;
+    this.latestReplayFrames = [];
+    this.protocolBridge = null;
+    this.pendingMatchEnd = null;
+    await this.state.storage.deleteAlarm();
+    this.tickAlarmScheduled = false;
+    return acceptedSocketCount;
+  }
+
   private rejectWebSocket(
     server: WebSocket,
     client: WebSocket,
@@ -1191,6 +1561,114 @@ export class PlaytestRoom implements DurableObject {
       await this.alarm();
       return Response.json({ ok: true, triggered: 'alarm' });
     }
+
+    if (
+      smokeControlEnabled() &&
+      request.method === 'GET' &&
+      url.pathname === '/__smoke/reconstruction'
+    ) {
+      const roomId = url.searchParams.get('roomId') ?? 'unknown';
+      try {
+        await this.ensureInitialized();
+      } catch (error) {
+        return Response.json(
+          {
+            roomId,
+            constructionSequence: this.constructionSequence,
+            error:
+              error instanceof Error ? error.message : 'room reconstruction initialization failed',
+          },
+          { status: 500 },
+        );
+      }
+      const storage = await this.readStorage();
+      if (!storage) {
+        return Response.json({ error: 'playtest not initialized' }, { status: 404 });
+      }
+      this.smokeHibernationQuiescing = false;
+      if (shouldHydrateRuntime(storage)) {
+        await this.ensureRuntime();
+        await this.scheduleNextAlarm();
+      }
+      return Response.json({
+        ...this.smokeRoomState(roomId),
+      });
+    }
+
+    if (
+      smokeControlEnabled() &&
+      request.method === 'GET' &&
+      url.pathname === '/__smoke/hibernation-state'
+    ) {
+      return Response.json(this.smokeRoomState(url.searchParams.get('roomId') ?? 'unknown'));
+    }
+
+    if (
+      smokeControlEnabled() &&
+      request.method === 'POST' &&
+      url.pathname === '/__smoke/allow-hibernation'
+    ) {
+      const acceptedSocketCount = await this.establishSmokeHibernationQuiescence();
+      return Response.json({
+        roomId: url.searchParams.get('roomId') ?? 'unknown',
+        constructionSequence: this.constructionSequence,
+        acceptedSocketCount,
+      });
+    }
+
+    if (
+      smokeControlEnabled() &&
+      request.method === 'POST' &&
+      url.pathname === '/__smoke/fail-next-initialization'
+    ) {
+      smokeFailNextInitialization = true;
+      await this.state.storage.put(SMOKE_FAIL_NEXT_INITIALIZATION_KEY, true);
+      return Response.json({
+        roomId: url.searchParams.get('roomId') ?? 'unknown',
+        constructionSequence: this.constructionSequence,
+      });
+    }
+
+    if (
+      smokeControlEnabled() &&
+      request.method === 'POST' &&
+      url.pathname === '/__smoke/drop-participant-socket'
+    ) {
+      let input: SmokeDropParticipantSocketPayload;
+      try {
+        input = await parseSmokeDropParticipantSocketBody(request);
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'invalid drop participant socket request',
+          },
+          { status: 400 },
+        );
+      }
+      try {
+        const dropped = await this.smokeDropParticipantSocket(input.playerId);
+        return Response.json({
+          roomId: url.searchParams.get('roomId') ?? 'unknown',
+          playerId: input.playerId,
+          socketId: dropped.socketId,
+          closeCode: SMOKE_TRANSPORT_LOSS_CLOSE_CODE,
+          reconnectEligible: resolveRoomReconnectEligibility(
+            dropped.storage,
+            input.playerId,
+            this.nowIso(),
+          ).eligible,
+          connectedPlayers: [...this.connectedPlayerIds()].sort(),
+        });
+      } catch (error) {
+        if (error instanceof RoomLifecycleRejectedError) {
+          return Response.json({ error: error.message }, { status: error.httpStatus });
+        }
+        return Response.json({ error: 'failed to drop participant socket' }, { status: 500 });
+      }
+    }
+
+    await this.ensureInitialized();
 
     // Room creation is EXPLICIT (`/rooms/create` → `/create`): joining or
     // starting against an unknown room must never materialize one (hard cut).
@@ -1502,7 +1980,7 @@ export class PlaytestRoom implements DurableObject {
           'invalid handoff token',
         );
       }
-      this.acceptPlayerSocket(playerId, server);
+      await this.acceptPlayerSocket(playerId, server);
       if (this.legacyEnvelopeEnabled) {
         this.broadcast(new PlayerJoined({ playerId, displayName: Option.none() }));
       }
@@ -1534,12 +2012,19 @@ export class PlaytestRoom implements DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const attachment = ws.deserializeAttachment() as RoomSocketAttachment | null;
-    const playerId = attachment?.playerId;
-    if (!playerId) {
+    if (this.smokeHibernationQuiescing) {
+      this.smokeHibernationQuiescing = false;
+    }
+    await this.ensureInitialized();
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
+    const attachment = parseRoomSocketAttachment(ws.deserializeAttachment());
+    if (attachment === null) {
       ws.close(INVALID_HANDOFF_CLOSE_CODE, 'missing player attachment');
       return;
     }
+    const playerId = attachment.playerId;
     const current = this.socketByPlayerId.get(playerId);
     if (!current || current.socket !== ws || current.socketId !== attachment.socketId) {
       return;
@@ -1553,6 +2038,12 @@ export class PlaytestRoom implements DurableObject {
       return;
     }
     const bytes = new Uint8Array(message);
+    const shellFrame = decodeRoomShellClientFrame(new TextDecoder().decode(bytes));
+    if (shellFrame !== undefined) {
+      await this.touchHeartbeat(playerId);
+      this.behaviorRuntime?.emitShellEvent(shellFrame.payload);
+      return;
+    }
     const storage = await this.readStorage();
     const protocolBridge =
       this.protocolBridge ?? this.runtimeRegistrationForStorage(storage).protocolBridge;
@@ -1601,20 +2092,54 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
-    const attachment = ws.deserializeAttachment() as RoomSocketAttachment | null;
-    const playerId = attachment?.playerId;
-    if (!playerId) {
+  async webSocketClose(ws: WebSocket, code = 1000, reason = ''): Promise<void> {
+    const attachment = parseRoomSocketAttachment(ws.deserializeAttachment());
+    if (attachment === null) {
+      return;
+    }
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
+    await this.ensureInitialized();
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
+    const playerId = attachment.playerId;
+    if (code === MATCH_ENDED_CLOSE_CODE) {
+      const current = this.socketByPlayerId.get(playerId);
+      if (current?.socket === ws && current.socketId === attachment.socketId) {
+        this.socketByPlayerId.delete(playerId);
+      }
+      return;
+    }
+    ws.close(code, reason || 'disconnect');
+    const storage = await this.readStorage();
+    if (storage?.lifecycle.phase === 'finished' || storage?.lifecycle.phase === 'archived') {
       return;
     }
     const current = this.socketByPlayerId.get(playerId);
-    if (!current || current.socket !== ws || current.socketId !== attachment.socketId) {
-      return;
+    if (current !== undefined) {
+      if (current.socket !== ws || current.socketId !== attachment.socketId) {
+        return;
+      }
+    } else {
+      const currentSocket = storage?.currentSockets?.players[playerId];
+      if (currentSocket === undefined || currentSocket.socketId !== attachment.socketId) {
+        return;
+      }
     }
-    await this.disconnectPlayer(playerId, 'disconnect');
+    await this.clearCurrentSocket(playerId, attachment.socketId);
+    await this.disconnectPlayer(playerId, reason || 'disconnect', {
+      code,
+      reason: reason || 'disconnect',
+    });
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
+    if (this.smokeHibernationQuiescing) {
+      return;
+    }
+    await this.ensureInitialized();
     await this.webSocketClose(ws);
   }
 }

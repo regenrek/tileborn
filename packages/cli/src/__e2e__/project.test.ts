@@ -1,3 +1,5 @@
+import { realpath } from 'node:fs/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import { expectCliJsonData, runCli } from './helpers/run-cli.js';
@@ -13,7 +15,7 @@ describe.sequential('project e2e', () => {
       readonly manifest: { readonly name: string };
     }>(['project', 'init', 'demo', '--here'], { cwd: projectDir });
     expect(data.manifest.name).toBe('demo');
-    expect(data.path).toBe(projectDir);
+    expect(data.path).toBe(await realpath(projectDir));
   });
 
   it('project info --json returns slug and uuid after init', async () => {

@@ -45,6 +45,12 @@ export const isRetryableProofError = (error) => {
   return true;
 };
 
+const isPendingWorkersDevRoute = (error) =>
+  error instanceof ProofRouteError &&
+  error.status === 404 &&
+  error.contentType.toLowerCase().includes('text/html') &&
+  /workers\.cloudflare\.com|<title>Page not found<\/title>/i.test(error.bodyText);
+
 export const jsonFetch = async (baseUrl, route, init, fetchImpl = fetch) => {
   const response = await fetchImpl(new URL(route, baseUrl), init);
   const text = await response.text();
@@ -222,9 +228,127 @@ export const createRoomWithRetry = async (endpoint, input, options = {}) =>
     {
       sleep: options.sleep,
       intervalMs: options.intervalMs,
-      shouldRetry: isRetryableProofError,
+      shouldRetry: (error) => isPendingWorkersDevRoute(error) || isRetryableProofError(error),
     },
   );
+
+export const assertMatchingReconnectLocalPlayerIds = (reconnect) => {
+  const beforeLocalPlayerId = reconnect?.beforeDisconnect?.localPlayerId;
+  const afterLocalPlayerId = reconnect?.afterReconnect?.localPlayerId;
+  if (
+    typeof beforeLocalPlayerId !== 'string' ||
+    beforeLocalPlayerId.length === 0 ||
+    typeof afterLocalPlayerId !== 'string' ||
+    afterLocalPlayerId.length === 0
+  ) {
+    throw new Error(`electron reconnect identity missing: ${JSON.stringify(reconnect)}`);
+  }
+  if (afterLocalPlayerId !== beforeLocalPlayerId) {
+    throw new Error(`electron reconnect identity changed: ${JSON.stringify(reconnect)}`);
+  }
+  return afterLocalPlayerId;
+};
+
+const observationCode = (observation) =>
+  typeof observation === 'object' && observation !== null && Number.isInteger(observation.code)
+    ? observation.code
+    : undefined;
+
+const observationWasClean = (observation) =>
+  typeof observation === 'object' &&
+  observation !== null &&
+  typeof observation.wasClean === 'boolean'
+    ? observation.wasClean
+    : undefined;
+
+const observationReconnectable = (observation) =>
+  typeof observation === 'object' &&
+  observation !== null &&
+  typeof observation.reconnectable === 'boolean'
+    ? observation.reconnectable
+    : undefined;
+
+const observationTag = (observation) =>
+  typeof observation === 'object' && observation !== null ? observation._tag : undefined;
+
+const isCloseObservation = (observation) => {
+  const tag = observationTag(observation);
+  return tag === 'close' || tag === 'reconnectPredecessorClose';
+};
+
+const classifyLifecycleCloseObservation = (observation, options) => {
+  const tag = observationTag(observation);
+  const code = observationCode(observation);
+  const wasClean = observationWasClean(observation);
+  const reconnectable = observationReconnectable(observation);
+  if (
+    tag === 'reconnectPredecessorClose' &&
+    code === options.cleanReconnectPredecessorCloseCode &&
+    wasClean === true
+  ) {
+    return { kind: 'expected', code, abnormal: false };
+  }
+  if (
+    tag === 'close' &&
+    code === options.matchEndedCloseCode &&
+    wasClean === true &&
+    reconnectable === false
+  ) {
+    return { kind: 'expected', code, abnormal: false };
+  }
+  if (tag === 'close' && code === options.forcedNetworkDropCloseCode && reconnectable === true) {
+    return { kind: 'forced-network-drop', code, abnormal: false };
+  }
+  return { kind: 'unexpected', code, abnormal: true };
+};
+
+export const classifyElectronLifecycleCloseObservations = ({
+  afterReconnect,
+  terminalFirst,
+  terminalSecond,
+  forcedNetworkDropCloseCode = 4000,
+  matchEndedCloseCode = 4006,
+  cleanReconnectPredecessorCloseCode = 1000,
+}) => {
+  const options = {
+    forcedNetworkDropCloseCode,
+    matchEndedCloseCode,
+    cleanReconnectPredecessorCloseCode,
+  };
+  const closeObservations = [
+    ...(Array.isArray(afterReconnect) ? afterReconnect : []),
+    ...(Array.isArray(terminalFirst) ? terminalFirst : []),
+    ...(Array.isArray(terminalSecond) ? terminalSecond : []),
+  ].filter(isCloseObservation);
+  const classifications = closeObservations.map((observation) => ({
+    observation,
+    ...classifyLifecycleCloseObservation(observation, options),
+  }));
+  const unexpected = classifications.filter(
+    (classification) => classification.kind === 'unexpected',
+  );
+  if (unexpected.length > 0) {
+    throw new Error(
+      `electron lifecycle unexpected close observations: ${JSON.stringify(
+        unexpected.map((classification) => classification.observation),
+      )}`,
+    );
+  }
+  const expected = classifications.filter((classification) => classification.kind === 'expected');
+  return {
+    expectedCloseCodes: expected.map((classification) => classification.code),
+    abnormalExpectedCloseCodeObserved: expected.some(
+      (classification) => classification.abnormal === true,
+    ),
+    forcedNetworkDropCloseCodeObserved: classifications.some(
+      (classification) =>
+        classification.kind === 'forced-network-drop' &&
+        classification.code === forcedNetworkDropCloseCode,
+    )
+      ? forcedNetworkDropCloseCode
+      : undefined,
+  };
+};
 
 export const summarizeMatchCompleteResults = (
   payload,

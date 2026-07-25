@@ -119,10 +119,14 @@ describe('playtest multiplayer lobby coordination', () => {
       },
       lobbyState: { phase: 'lobby' },
     });
-    expect(clientMocks.connect).toHaveBeenCalledWith(
-      'ws://127.0.0.1:8787/rooms/room-1/connect',
-      'player-1',
-    );
+    expect(clientMocks.connect).toHaveBeenCalledWith({
+      baseUrl: 'http://127.0.0.1:8787',
+      roomId: 'room-1',
+      wsUrl: 'ws://127.0.0.1:8787/rooms/room-1/connect',
+      playerId: 'player-1',
+      handoffToken: 'handoff-1',
+      reconnectToken: 'reconnect-1',
+    });
     expect(editorUiMocks.setPlaytestActive).toHaveBeenCalledWith(true);
 
     await usePlaytestMultiplayerStore.getState().setLocalReady(true);

@@ -91,7 +91,10 @@ const runPnpm = (args, options = {}) => {
 
 const assertPackagedRuntimeClosure = (buildPath) => {
   const appRequire = moduleApi.createRequire(path.join(buildPath, 'package.json'));
-  const appRoot = path.resolve(buildPath);
+  // macOS exposes the same temporary directory through both /var and
+  // /private/var. Compare canonical paths so that alias does not look like a
+  // runtime dependency escaping Resources/app.
+  const appRoot = fs.realpathSync(buildPath);
   for (const packageName of externalRuntimePackages) {
     const resolved = path.resolve(
       appRequire.resolve(runtimePackageResolveTargets[packageName] ?? packageName),
@@ -110,7 +113,7 @@ const assertPackagedRuntimeClosure = (buildPath) => {
   if (!fs.existsSync(alchemyStackEntrypoint)) {
     throw new Error(
       'Packaged runtime is missing runtime-deploy/alchemy-cloudflare-stack.js. Run ' +
-        '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+        '`pnpm turbo run build --filter=@tileborne/services-build` before desktop packaging.',
     );
   }
 };
@@ -212,7 +215,7 @@ const copyAlchemyRuntimeDeployStack = (buildPath) => {
     if (!fs.existsSync(sourcePath)) {
       throw new Error(
         `Alchemy runtime deploy ${fileName} is missing. Run ` +
-          '`pnpm --filter @tileborne/services-build build` before desktop packaging.',
+          '`pnpm turbo run build --filter=@tileborne/services-build` before desktop packaging.',
       );
     }
   }

@@ -55,6 +55,7 @@ export default tseslint.config(
             '**/*.spec.ts',
             '**/*.smoke.spec.ts',
             '**/vitest.config.ts',
+            '**/vitest.*.config.ts',
             '**/playwright.config.ts',
             '**/vite.*.config.ts',
             '**/src/smoke/**/*.ts',

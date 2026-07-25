@@ -1,4 +1,10 @@
-import { decodeMessage as decodeRuntimeMessage, type RuntimeMessage } from '@tileborne/runtime';
+import { Effect, Stream } from 'effect';
+import {
+  makeBrowserWebSocketTransport,
+  makeNetFrameClient,
+  type NetFrameClient,
+  type TransportObservation,
+} from '@tileborne/runtime/net';
 import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
 import {
   GameplayEntityDefeated,
@@ -26,12 +32,6 @@ type MinimapObject = NonNullable<PlaytestHudState['minimap']>['objects'][number]
 type LocalPlayerState = NonNullable<PlaytestHudState['localPlayer']>;
 
 const MAX_GAMEPLAY_EVENTS = 20;
-
-const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
-};
 
 export type MultiplayerConnectionPhase = 'idle' | 'connecting' | 'live' | 'error' | 'disconnected';
 
@@ -65,6 +65,8 @@ interface MultiplayerObjectState {
 export interface MultiplayerSessionState {
   readonly phase: MultiplayerConnectionPhase;
   readonly localPlayerId: string | null;
+  readonly reconnectAttempts: number;
+  readonly transportObservations: readonly TransportObservation[];
   readonly tick: number;
   readonly players: readonly MultiplayerPlayerState[];
   readonly zone: ZoneView;
@@ -78,36 +80,6 @@ const defaultZone = (mapWidth: number, mapHeight: number): ZoneView => ({
   radius: Math.max(mapWidth, mapHeight),
 });
 
-const toInitialFrame = (
-  plugin: ResolvedPlaytestPlugin,
-  tick: number,
-  players: readonly MultiplayerPlayerState[],
-  zone: ZoneView,
-): unknown =>
-  plugin.createInitialFrame({
-    tick,
-    players: players.map((player) => ({
-      playerId: player.playerId,
-      ...(player.team === undefined ? {} : { team: player.team }),
-      x: player.x,
-      y: player.y,
-      health: player.health,
-      ...(player.shield === undefined ? {} : { shield: player.shield }),
-      ...(player.armor === undefined ? {} : { armor: player.armor }),
-      ...(player.weapon === undefined ? {} : { weapon: player.weapon }),
-      ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
-      ...(player.pickupPrompt === undefined ? {} : { pickupPrompt: player.pickupPrompt }),
-      ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
-      ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
-      ...(player.stats === undefined ? {} : { stats: player.stats }),
-      ...(player.statusEffects === undefined ? {} : { statusEffects: player.statusEffects }),
-      ...(player.abilityCooldowns === undefined
-        ? {}
-        : { abilityCooldowns: player.abilityCooldowns }),
-    })),
-    zone,
-  });
-
 const formatPlayerDisplayName = (playerId: string): string => {
   const match = /^player-(\d+)$/.exec(playerId);
   if (match) {
@@ -117,8 +89,8 @@ const formatPlayerDisplayName = (playerId: string): string => {
 };
 
 export class PlaytestMultiplayerClient {
-  private socket: WebSocket | null = null;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private netClient: NetFrameClient | null = null;
+  private connectionGeneration = 0;
   private seq = 0;
   private tick = 0;
   private players = new Map<string, MultiplayerPlayerState>();
@@ -134,6 +106,8 @@ export class PlaytestMultiplayerClient {
   private errorMessage: string | null = null;
   private onSnapshotFrame: ((frame: unknown) => void) | undefined;
   private lastSnapshotAckTick = -1;
+  private reconnectAttempts = 0;
+  private readonly transportObservations: TransportObservation[] = [];
 
   constructor(
     private readonly mapWidth: number,
@@ -172,6 +146,8 @@ export class PlaytestMultiplayerClient {
     return {
       phase: this.phase,
       localPlayerId: this.localPlayerId,
+      reconnectAttempts: this.reconnectAttempts,
+      transportObservations: [...this.transportObservations],
       tick: this.tick,
       players: [...this.players.values()],
       zone: this.zone,
@@ -332,44 +308,6 @@ export class PlaytestMultiplayerClient {
 
   private emitState(): void {
     this.onStateChange(this.getState());
-  }
-
-  private emitRuntimeSnapshotStarted(): void {
-    this.phase = 'live';
-    const snapshot = toInitialFrame(this.plugin, this.tick, [...this.players.values()], this.zone);
-    this.onInitialFrame(snapshot);
-  }
-
-  private handleRuntimeMessage(message: RuntimeMessage): void {
-    if (message._tag === 'PlayerJoined') {
-      const existing = this.players.get(message.playerId);
-      if (!existing) {
-        this.players.set(message.playerId, {
-          playerId: message.playerId,
-          x: this.mapWidth / 2,
-          y: this.mapHeight / 2,
-          health: 100,
-        });
-      }
-      this.emitState();
-      return;
-    }
-    if (message._tag === 'PlayerLeft') {
-      this.players.delete(message.playerId);
-      this.emitState();
-      return;
-    }
-    if (message._tag === 'SnapshotDelta') {
-      this.tick = message.tick;
-      this.phase = 'live';
-      this.emitState();
-      return;
-    }
-    if (message._tag === 'SnapshotFull') {
-      this.tick += 1;
-      this.emitRuntimeSnapshotStarted();
-      this.emitState();
-    }
   }
 
   private handlePluginFrameView(message: ServerFrameView): void {
@@ -534,86 +472,124 @@ export class PlaytestMultiplayerClient {
     }
   }
 
-  private sendSnapshotAck(socket: WebSocket, tick: number): void {
-    if (socket.readyState !== WebSocket.OPEN || tick <= this.lastSnapshotAckTick) {
+  private sendSnapshotAck(client: NetFrameClient, tick: number): void {
+    if (tick <= this.lastSnapshotAckTick) {
       return;
     }
     const ackBytes = this.plugin.encodeSnapshotAckFrame(tick, Date.now());
-    socket.send(toArrayBuffer(ackBytes));
+    void Effect.runPromise(client.sendFrame(ackBytes)).catch((error: unknown) => {
+      this.phase = 'error';
+      this.errorMessage =
+        error instanceof Error ? error.message : 'Failed to acknowledge snapshot frame';
+      this.emitState();
+    });
     this.lastSnapshotAckTick = tick;
   }
 
-  connect(wsUrl: string, localPlayerId: string): void {
+  connect(session: {
+    readonly baseUrl: string;
+    readonly roomId: string;
+    readonly wsUrl: string;
+    readonly playerId: string;
+    readonly reconnectToken?: string;
+  }): void {
     this.disconnect();
-    this.localPlayerId = localPlayerId;
+    this.localPlayerId = session.playerId;
+    this.reconnectAttempts = 0;
     this.phase = 'connecting';
     this.errorMessage = null;
     this.emitState();
 
-    const socket = new WebSocket(wsUrl);
-    socket.binaryType = 'arraybuffer';
-    this.socket = socket;
+    const generation = this.connectionGeneration;
+    const transport = makeBrowserWebSocketTransport({
+      ...(session.reconnectToken === undefined ? {} : { reconnectToken: session.reconnectToken }),
+      reconnectBaseUrl: session.baseUrl,
+      reconnectPlayerId: session.playerId,
+      observe: (observation) => {
+        if (observation._tag === 'reconnectAttempt') {
+          this.reconnectAttempts = observation.attempt;
+        }
+        this.transportObservations.push(observation);
+        this.emitState();
+      },
+    });
+    const client = makeNetFrameClient(transport, {
+      roomId: session.roomId,
+      heartbeat: {
+        intervalMs: 2_000,
+        makeFrame: () => this.plugin.encodeHeartbeatFrame(this.tick),
+      },
+    });
+    this.netClient = client;
 
-    socket.addEventListener('open', () => {
-      this.heartbeatTimer = setInterval(() => {
-        if (socket.readyState !== WebSocket.OPEN) {
+    void Effect.runPromise(client.connect(session.wsUrl))
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        if (generation !== this.connectionGeneration || this.netClient !== client) {
           return;
         }
-        const heartbeatBytes = this.plugin.encodeHeartbeatFrame(this.tick);
-        socket.send(toArrayBuffer(heartbeatBytes));
-      }, 2_000);
-    });
-
-    socket.addEventListener('message', (event) => {
-      const data = event.data;
-      if (!(data instanceof ArrayBuffer)) {
-        return;
-      }
-      const frame = new Uint8Array(data);
-      try {
-        const pluginFrame = this.plugin.decodeServerFrame(frame);
-        if (pluginFrame === undefined) {
-          throw new Error('Invalid plugin frame');
-        }
-        const frameView = this.plugin.serverFrameToView(pluginFrame);
-        if (frameView === undefined) {
-          throw new Error('Unsupported plugin frame');
-        }
-        if (frameView.kind === 'initial') {
-          this.onInitialFrame(pluginFrame);
-          this.onSnapshotFrame?.(pluginFrame);
-        } else if (frameView.kind === 'delta') {
-          this.onSnapshotFrame?.(pluginFrame);
-        }
-        this.handlePluginFrameView(frameView);
-        if (frameView.kind === 'initial' || frameView.kind === 'delta') {
-          this.sendSnapshotAck(socket, frameView.tick);
-        }
-        return;
-      } catch {
-        // Fall through to runtime wire codec used by game-host.
-      }
-      try {
-        this.handleRuntimeMessage(decodeRuntimeMessage(frame));
-      } catch {
         this.phase = 'error';
-        this.errorMessage = 'Invalid protocol frame';
+        this.errorMessage = error instanceof Error ? error.message : 'WebSocket connection failed';
         this.emitState();
-      }
-    });
+      });
 
-    socket.addEventListener('error', () => {
+    void Effect.runPromise(
+      client.receiveFrames().pipe(
+        Stream.runForEach((frame) =>
+          Effect.sync(() => {
+            if (generation !== this.connectionGeneration || this.netClient !== client) {
+              return;
+            }
+            this.handleTransportFrame(client, frame);
+          }),
+        ),
+      ),
+    )
+      .then(() => {
+        if (generation !== this.connectionGeneration || this.netClient !== client) {
+          return;
+        }
+        if (this.phase !== 'error') {
+          this.phase = 'disconnected';
+        }
+        this.emitState();
+      })
+      .catch((error: unknown) => {
+        if (generation !== this.connectionGeneration || this.netClient !== client) {
+          return;
+        }
+        this.phase = 'error';
+        this.errorMessage = error instanceof Error ? error.message : 'WebSocket connection failed';
+        this.emitState();
+      });
+  }
+
+  private handleTransportFrame(client: NetFrameClient, frame: Uint8Array): void {
+    try {
+      const pluginFrame = this.plugin.decodeServerFrame(frame);
+      if (pluginFrame === undefined) {
+        throw new Error('Invalid plugin frame');
+      }
+      const frameView = this.plugin.serverFrameToView(pluginFrame);
+      if (frameView === undefined) {
+        throw new Error('Unsupported plugin frame');
+      }
+      if (frameView.kind === 'initial') {
+        this.onInitialFrame(pluginFrame);
+        this.onSnapshotFrame?.(pluginFrame);
+      } else if (frameView.kind === 'delta') {
+        this.onSnapshotFrame?.(pluginFrame);
+      }
+      this.handlePluginFrameView(frameView);
+      if (frameView.kind === 'initial' || frameView.kind === 'delta') {
+        this.sendSnapshotAck(client, frameView.tick);
+      }
+      return;
+    } catch {
       this.phase = 'error';
-      this.errorMessage = 'WebSocket connection failed';
+      this.errorMessage = 'Invalid protocol frame';
       this.emitState();
-    });
-
-    socket.addEventListener('close', () => {
-      if (this.phase !== 'error') {
-        this.phase = 'disconnected';
-      }
-      this.emitState();
-    });
+    }
   }
 
   /**
@@ -635,9 +611,9 @@ export class PlaytestMultiplayerClient {
       readonly swapSlot?: number;
     },
   ): void {
-    const socket = this.socket;
+    const client = this.netClient;
     const localPlayerId = this.localPlayerId;
-    if (!socket || socket.readyState !== WebSocket.OPEN || !localPlayerId) {
+    if (!client || !localPlayerId) {
       return;
     }
     this.seq += 1;
@@ -653,17 +629,15 @@ export class PlaytestMultiplayerClient {
       ...(options?.aimDeg !== undefined ? { aimDeg: options.aimDeg } : {}),
       ...(options?.swapSlot !== undefined ? { swapSlot: options.swapSlot } : {}),
     });
-    socket.send(toArrayBuffer(brFrame));
+    void Effect.runPromise(client.sendFrame(brFrame)).catch(() => undefined);
   }
 
   disconnect(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
+    this.connectionGeneration += 1;
+    const client = this.netClient;
+    this.netClient = null;
+    if (client) {
+      void Effect.runPromise(client.close()).catch(() => undefined);
     }
     this.players.clear();
     this.objects.clear();
@@ -671,6 +645,7 @@ export class PlaytestMultiplayerClient {
     this.seq = 0;
     this.tick = 0;
     this.lastSnapshotAckTick = -1;
+    this.transportObservations.length = 0;
     this.phase = 'idle';
     this.errorMessage = null;
     this.zone = defaultZone(this.mapWidth, this.mapHeight);

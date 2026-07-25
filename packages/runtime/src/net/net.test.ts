@@ -2,7 +2,7 @@ import { Effect, Option, Stream } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InputCommand } from '../input/input.js';
-import { makeNetClient } from './client.js';
+import { makeNetClient, makeNetFrameClient } from './client.js';
 import {
   Chat,
   ClientReady,
@@ -23,6 +23,8 @@ import {
 } from './protocol.js';
 import {
   DEFAULT_RECONNECT_ATTEMPT_CAP,
+  MATCH_ENDED_CLOSE_CODE,
+  isReconnectableCloseCode,
   makeBrowserWebSocketTransport,
   type Transport,
   type TransportEvent,
@@ -84,6 +86,7 @@ describe('runtime net protocol', () => {
 
 describe('NetClient', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -274,6 +277,462 @@ describe('NetClient', () => {
     expect(decodeMessage(sent[0]!)).toEqual(sampleMessages[0]);
   });
 
+  it('sends raw plugin frames through the reusable transport policy', async () => {
+    const sent: Uint8Array[] = [];
+    const client = makeNetFrameClient(mockTransport({ sent }));
+    const frame = new Uint8Array([1, 2, 3]);
+
+    await Effect.runPromise(client.sendFrame(frame));
+
+    expect(sent).toEqual([frame]);
+  });
+
+  it('starts frame heartbeats after connect', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    const client = makeNetFrameClient(mockTransport({ sent }), {
+      heartbeat: {
+        intervalMs: 2_000,
+        makeFrame: () => new Uint8Array([1]),
+      },
+    });
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(sent).toEqual([new Uint8Array([1])]);
+  });
+
+  it('stops frame heartbeats after a consumed runtime reconnect stream ends', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    let reconnects = 0;
+    let heartbeatSeq = 0;
+    const client = makeNetFrameClient(
+      mockTransport({
+        sent,
+        events: [
+          { _tag: 'close', code: 1006, reason: 'drop', wasClean: false },
+          { _tag: 'message', data: new Uint8Array([9]) },
+        ],
+        reconnect: () =>
+          Effect.sync(() => {
+            reconnects += 1;
+          }),
+      }),
+      {
+        roomId: 'room-1',
+        heartbeat: {
+          intervalMs: 2_000,
+          makeFrame: () => new Uint8Array([++heartbeatSeq]),
+        },
+      },
+    );
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    const frames = await Effect.runPromise(
+      client.receiveFrames().pipe(Stream.take(1), Stream.runCollect),
+    );
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(Array.from(frames as Iterable<Uint8Array>)).toEqual([new Uint8Array([9])]);
+    expect(reconnects).toBe(1);
+    expect(sent).toEqual([new Uint8Array([1])]);
+  });
+
+  it('cancels frame heartbeats on close', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    const client = makeNetFrameClient(mockTransport({ sent }), {
+      heartbeat: {
+        intervalMs: 2_000,
+        makeFrame: () => new Uint8Array([1]),
+      },
+    });
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    await Effect.runPromise(client.close());
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(sent).toEqual([new Uint8Array([1])]);
+  });
+
+  it('cancels frame heartbeats after non-reconnectable receive close', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    let reconnects = 0;
+    const client = makeNetFrameClient(
+      mockTransport({
+        sent,
+        events: [{ _tag: 'close', code: 1000, wasClean: true }],
+        reconnect: () =>
+          Effect.sync(() => {
+            reconnects += 1;
+          }),
+      }),
+      {
+        roomId: 'room-1',
+        heartbeat: {
+          intervalMs: 2_000,
+          makeFrame: () => new Uint8Array([1]),
+        },
+      },
+    );
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    await Effect.runPromise(client.receiveFrames().pipe(Stream.runCollect));
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(reconnects).toBe(0);
+    expect(sent).toEqual([new Uint8Array([1])]);
+  });
+
+  it('stops frame heartbeats immediately after observed match-ended close', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    let heartbeatSeq = 0;
+    const client = makeNetFrameClient(
+      mockTransport({
+        sent,
+        events: [{ _tag: 'close', code: MATCH_ENDED_CLOSE_CODE, wasClean: true }],
+      }),
+      {
+        roomId: 'room-1',
+        heartbeat: {
+          intervalMs: 2_000,
+          makeFrame: () => new Uint8Array([++heartbeatSeq]),
+        },
+      },
+    );
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    await Effect.runPromise(client.receiveFrames().pipe(Stream.runCollect));
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(sent).toEqual([new Uint8Array([1])]);
+    expect(heartbeatSeq).toBe(1);
+  });
+
+  it('treats sends after observed match-ended close as benign terminal no-ops', async () => {
+    let sends = 0;
+    const sendError = new TransportError({
+      message: 'websocket is not open',
+      code: Option.none(),
+      cause: Option.none(),
+    });
+    const client = makeNetFrameClient(
+      mockTransport({
+        events: [{ _tag: 'close', code: MATCH_ENDED_CLOSE_CODE, wasClean: true }],
+        send: () =>
+          Effect.gen(function* () {
+            sends += 1;
+            yield* sendError;
+          }),
+      }),
+      { roomId: 'room-1' },
+    );
+
+    await Effect.runPromise(client.receiveFrames().pipe(Stream.runCollect));
+    await Effect.runPromise(client.sendFrame(new Uint8Array([1, 2, 3])));
+
+    expect(sends).toBe(0);
+  });
+
+  it('treats in-flight send failures after observed match-ended close as benign terminal no-ops', async () => {
+    const sendStarted = deferred<void>();
+    const releaseSend = deferred<void>();
+    const sendError = new TransportError({
+      message: 'websocket is not open',
+      code: Option.none(),
+      cause: Option.none(),
+    });
+    const client = makeNetFrameClient(
+      mockTransport({
+        events: [{ _tag: 'close', code: MATCH_ENDED_CLOSE_CODE, wasClean: true }],
+        send: () =>
+          Effect.tryPromise({
+            try: async () => {
+              sendStarted.resolve(undefined);
+              await releaseSend.promise;
+              throw new Error('websocket is not open');
+            },
+            catch: () => sendError,
+          }),
+      }),
+      { roomId: 'room-1' },
+    );
+
+    const send = Effect.runPromise(client.sendFrame(new Uint8Array([1, 2, 3])));
+    await sendStarted.promise;
+    await Effect.runPromise(client.receiveFrames().pipe(Stream.runCollect));
+    releaseSend.resolve(undefined);
+
+    await expect(send).resolves.toBeUndefined();
+  });
+
+  it('treats browser sends that fail before match-ended close delivery as terminal no-ops', async () => {
+    const sockets: FakeWebSocket[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, () => undefined),
+    );
+    const client = makeNetFrameClient(makeBrowserWebSocketTransport(), { roomId: 'room-1' });
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    sockets[0]!.readyState = WebSocket.CLOSED;
+    const send = Effect.runPromise(client.sendFrame(new Uint8Array([1, 2, 3])));
+    sockets[0]!.emitClose(MATCH_ENDED_CLOSE_CODE, 'match ended');
+
+    await expect(send).resolves.toBeUndefined();
+  });
+
+  it('preserves browser send failures that occur before nonterminal close delivery', async () => {
+    const sockets: FakeWebSocket[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, () => undefined),
+    );
+    const client = makeNetFrameClient(makeBrowserWebSocketTransport(), { roomId: 'room-1' });
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    sockets[0]!.readyState = WebSocket.CLOSED;
+    const send = Effect.runPromise(Effect.flip(client.sendFrame(new Uint8Array([1, 2, 3]))));
+    sockets[0]!.emitClose(1000, 'normal close');
+
+    await expect(send).resolves.toMatchObject({
+      _tag: 'TransportError',
+      message: 'websocket is not open',
+    });
+  });
+
+  it('preserves in-flight send failures after nonterminal close', async () => {
+    const sendStarted = deferred<void>();
+    const releaseSend = deferred<void>();
+    const sendError = new TransportError({
+      message: 'websocket is not open',
+      code: Option.none(),
+      cause: Option.none(),
+    });
+    const client = makeNetFrameClient(
+      mockTransport({
+        events: [{ _tag: 'close', code: 1000, wasClean: true }],
+        send: () =>
+          Effect.tryPromise({
+            try: async () => {
+              sendStarted.resolve(undefined);
+              await releaseSend.promise;
+              throw new Error('websocket is not open');
+            },
+            catch: () => sendError,
+          }),
+      }),
+      { roomId: 'room-1' },
+    );
+
+    const send = Effect.runPromise(Effect.flip(client.sendFrame(new Uint8Array([1, 2, 3]))));
+    await sendStarted.promise;
+    await Effect.runPromise(client.receiveFrames().pipe(Stream.runCollect));
+    releaseSend.resolve(undefined);
+
+    await expect(send).resolves.toBe(sendError);
+  });
+
+  it('preserves send failures while the frame session is live', async () => {
+    const sendError = new TransportError({
+      message: 'websocket send failed',
+      code: Option.none(),
+      cause: Option.none(),
+    });
+    const client = makeNetFrameClient(
+      mockTransport({
+        send: () => Effect.fail(sendError),
+      }),
+    );
+
+    const error = await Effect.runPromise(Effect.flip(client.sendFrame(new Uint8Array([1]))));
+
+    expect(error).toBe(sendError);
+  });
+
+  it('cancels frame heartbeats after reconnect failure ends receive stream', async () => {
+    vi.useFakeTimers();
+    const sent: Uint8Array[] = [];
+    let reconnects = 0;
+    const reconnectError = new TransportError({
+      message: 'reconnect unavailable',
+      code: Option.none(),
+      cause: Option.none(),
+    });
+    const client = makeNetFrameClient(
+      mockTransport({
+        sent,
+        events: [{ _tag: 'close', code: 1006, wasClean: false }],
+        reconnect: () =>
+          Effect.gen(function* () {
+            reconnects += 1;
+            yield* reconnectError;
+          }),
+      }),
+      {
+        roomId: 'room-1',
+        heartbeat: {
+          intervalMs: 2_000,
+          makeFrame: () => new Uint8Array([1]),
+        },
+      },
+    );
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    const error = await Effect.runPromise(
+      Effect.flip(client.receiveFrames().pipe(Stream.runCollect)),
+    );
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(error).toBe(reconnectError);
+    expect(reconnects).toBe(1);
+    expect(sent).toEqual([new Uint8Array([1])]);
+  });
+
+  it('reconnects raw frame streams with a configured room reconnect request', async () => {
+    const sockets: FakeWebSocket[] = [];
+    const requests: Array<{ readonly input: RequestInfo | URL; readonly init?: RequestInit }> = [];
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, (socket) => {
+        if (socket.url === 'wss://fresh') {
+          socket.emitMessage(new Uint8Array([9]));
+        }
+      }),
+    );
+    const transport = makeBrowserWebSocketTransport({
+      reconnectToken: 'token-1',
+      reconnectBaseUrl: 'https://host',
+      reconnectPlayerId: 'player-1',
+      fetch: async (input, init) => {
+        requests.push({ input, init });
+        return jsonResponse({
+          wsUrl: 'wss://fresh',
+          reconnectToken: 'token-2',
+        });
+      },
+    });
+    const client = makeNetFrameClient(transport, { roomId: 'room-1' });
+
+    await Effect.runPromise(client.connect('wss://initial'));
+    sockets[0]!.close(1006, 'drop');
+    const frames = await Effect.runPromise(
+      client.receiveFrames().pipe(Stream.take(1), Stream.runCollect),
+    );
+
+    expect(Array.from(frames as Iterable<Uint8Array>)).toEqual([new Uint8Array([9])]);
+    expect(sockets[1]?.url).toBe('wss://fresh');
+    expect(requests).toHaveLength(1);
+    expect(String(requests[0]!.input)).toBe('https://host/rooms/reconnect');
+    expect(JSON.parse(String(requests[0]!.init?.body))).toEqual({
+      roomId: 'room-1',
+      playerId: 'player-1',
+      reconnectToken: 'token-1',
+    });
+  });
+
+  it('normalizes reconnect response http URLs to websocket URLs', async () => {
+    const sockets: FakeWebSocket[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, () => undefined),
+    );
+    const transport = makeBrowserWebSocketTransport({
+      reconnectToken: 'token-1',
+      fetch: async () =>
+        jsonResponse({
+          wsUrl: 'https://host/rooms/room-1/connect',
+          reconnectToken: 'token-2',
+        }),
+    });
+    const client = makeNetFrameClient(transport, { roomId: 'room-1' });
+
+    await Effect.runPromise(transport.connect('wss://initial'));
+    sockets[0]!.close(1006, 'drop');
+    const stream = Effect.runPromise(
+      client.receiveFrames().pipe(Stream.take(1), Stream.runCollect),
+    );
+    await vi.waitFor(() => expect(sockets[1]?.url).toBe('wss://host/rooms/room-1/connect'));
+    sockets[1]!.emitMessage(new Uint8Array([7]));
+    await stream;
+  });
+
+  it('normalizes reconnect response http URLs to ws URLs', async () => {
+    const sockets: FakeWebSocket[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, () => undefined),
+    );
+    const transport = makeBrowserWebSocketTransport({
+      reconnectToken: 'token-1',
+      fetch: async () =>
+        jsonResponse({
+          wsUrl: 'http://host/rooms/room-1/connect',
+          reconnectToken: 'token-2',
+        }),
+    });
+    const client = makeNetFrameClient(transport, { roomId: 'room-1' });
+
+    await Effect.runPromise(transport.connect('ws://initial'));
+    sockets[0]!.close(1006, 'drop');
+    const stream = Effect.runPromise(
+      client.receiveFrames().pipe(Stream.take(1), Stream.runCollect),
+    );
+    await vi.waitFor(() => expect(sockets[1]?.url).toBe('ws://host/rooms/room-1/connect'));
+    sockets[1]!.emitMessage(new Uint8Array([7]));
+    await stream;
+  });
+
+  it('keeps close events observable after the message queue is full', async () => {
+    const sockets: FakeWebSocket[] = [];
+    let reconnects = 0;
+    vi.stubGlobal(
+      'WebSocket',
+      makeFakeWebSocket(sockets, (socket) => {
+        if (socket.url === 'wss://reconnect') {
+          socket.emitMessage(new Uint8Array([9]));
+        }
+      }),
+    );
+    const transport = makeBrowserWebSocketTransport({
+      eventQueueCap: 2,
+      reconnectToken: 'token-1',
+      fetch: async () => {
+        reconnects += 1;
+        return jsonResponse({
+          wsUrl: 'wss://reconnect',
+          reconnectToken: 'token-2',
+        });
+      },
+    });
+    const client = makeNetFrameClient(transport, { roomId: 'room-1' });
+
+    await Effect.runPromise(transport.connect('wss://initial'));
+    sockets[0]!.emitMessage(new Uint8Array([1]));
+    sockets[0]!.emitMessage(new Uint8Array([2]));
+    sockets[0]!.emitMessage(new Uint8Array([3]));
+    sockets[0]!.close(1006, 'drop');
+    const frames = await Effect.runPromise(
+      client.receiveFrames().pipe(Stream.take(3), Stream.runCollect),
+    );
+
+    expect(Array.from(frames as Iterable<Uint8Array>)).toEqual([
+      new Uint8Array([1]),
+      new Uint8Array([2]),
+      new Uint8Array([9]),
+    ]);
+    expect(reconnects).toBe(1);
+  });
+
   it('decodes inbound message events', async () => {
     const client = makeNetClient(
       mockTransport({ events: [{ _tag: 'message', data: encodeMessage(sampleMessages[10]!) }] }),
@@ -337,7 +796,7 @@ describe('NetClient', () => {
     let reconnects = 0;
     const client = makeNetClient(
       mockTransport({
-        events: [{ _tag: 'close', code: 4006, wasClean: true }],
+        events: [{ _tag: 'close', code: MATCH_ENDED_CLOSE_CODE, wasClean: true }],
         reconnect: () =>
           Effect.sync(() => {
             reconnects += 1;
@@ -349,20 +808,38 @@ describe('NetClient', () => {
     await Effect.runPromise(client.receive().pipe(Stream.runCollect));
 
     expect(reconnects).toBe(0);
+    expect(isReconnectableCloseCode(MATCH_ENDED_CLOSE_CODE)).toBe(false);
   });
 });
+
+const deferred = <T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T | PromiseLike<T>) => void;
+  readonly reject: (reason?: unknown) => void;
+} => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
 
 const mockTransport = (options: {
   readonly events?: readonly TransportEvent[];
   readonly sent?: Uint8Array[];
   readonly connect?: (url: string) => Effect.Effect<void, TransportError>;
+  readonly send?: (bytes: Uint8Array) => Effect.Effect<void, TransportError>;
   readonly reconnect?: (roomId: string) => Effect.Effect<void, TransportError>;
 }): Transport => ({
   connect: options.connect ?? (() => Effect.succeed(void 0)),
-  send: (bytes) =>
-    Effect.sync(() => {
-      options.sent?.push(bytes);
-    }),
+  send:
+    options.send ??
+    ((bytes) =>
+      Effect.sync(() => {
+        options.sent?.push(bytes);
+      })),
   receive: () => Stream.fromIterable(options.events ?? []),
   close: () => Effect.succeed(void 0),
   markHealthy: () => Effect.succeed(void 0),
@@ -393,6 +870,10 @@ class FakeWebSocket {
       return;
     }
     this.readyState = WebSocket.CLOSED;
+    this.emitClose(code, reason);
+  }
+
+  emitClose(code = 1000, reason = ''): void {
     this.onclose?.call(
       this as unknown as WebSocket,
       {

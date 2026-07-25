@@ -59,6 +59,7 @@ describe('room storage M4 defaults', () => {
     expect(storage.ready).toEqual({ players: {} });
     expect(storage.presence).toEqual({ players: {} });
     expect(storage.reconnect).toEqual({ seats: {} });
+    expect(storage.currentSockets).toEqual({ players: {} });
     expect(storage.results).toBeNull();
   });
 

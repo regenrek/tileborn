@@ -11,6 +11,7 @@ import { PLUGIN_ID } from '@tileborne/plugin-battle-royale';
 
 const smokeDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(smokeDir, '../..');
+const workspaceRoot = path.resolve(desktopRoot, '../..');
 
 export const FIXTURE_PLUGIN_ID = '@tileborne-plugins/smoke-fixture';
 export const FIXTURE_PACK_ID = 'pack:550e8400-e29b-41d4-a716-446655440001';
@@ -90,10 +91,14 @@ function buildSmokeBundles(): void {
     'vite.preload.config.ts',
     'vite.renderer.config.ts',
   ]) {
-    execFileSync('pnpm', ['exec', 'vite', 'build', '--config', config], {
-      cwd: desktopRoot,
-      stdio: 'inherit',
-    });
+    execFileSync(
+      path.join(workspaceRoot, 'node_modules/.bin/vite'),
+      ['build', '--config', config],
+      {
+        cwd: desktopRoot,
+        stdio: 'inherit',
+      },
+    );
   }
   smokeBundlesBuilt = true;
 }

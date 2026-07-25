@@ -31,6 +31,9 @@ const LOCAL_GAME_HOST_SOURCES = [
   'ws://localhost:*',
 ] as const;
 
+/** Remote game-host transport origins supported by the Cloudflare deploy adapter. */
+const CLOUDFLARE_GAME_HOST_SOURCES = ['https://*.workers.dev', 'wss://*.workers.dev'] as const;
+
 export interface SecurityContext {
   /**
    * True only when the renderer is served by the Vite dev server (unpackaged,
@@ -102,7 +105,14 @@ export const buildContentSecurityPolicy = (context: SecurityContext): string => 
   // (e.g. bundled player-model + projectile textures in playtest), and a fetch
   // is governed by connect-src — without these it fails with "Failed to fetch"
   // and entities fall back to missing textures.
-  const connectSrc = ["'self'", 'data:', 'blob:', ASSET_SCHEME_SOURCE, ...LOCAL_GAME_HOST_SOURCES];
+  const connectSrc = [
+    "'self'",
+    'data:',
+    'blob:',
+    ASSET_SCHEME_SOURCE,
+    ...LOCAL_GAME_HOST_SOURCES,
+    ...CLOUDFLARE_GAME_HOST_SOURCES,
+  ];
   if (devOrigin) {
     connectSrc.push(devOrigin);
   }

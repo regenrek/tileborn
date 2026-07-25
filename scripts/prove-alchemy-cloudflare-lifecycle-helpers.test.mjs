@@ -4,6 +4,8 @@ import { inspect } from 'node:util';
 
 import {
   ProofRouteError,
+  assertMatchingReconnectLocalPlayerIds,
+  classifyElectronLifecycleCloseObservations,
   connectWebSocketWithRetry,
   createRoomWithRetry,
   jsonFetch,
@@ -118,6 +120,35 @@ test('createRoomWithRetry retries transient 5xx with the same idempotency key', 
   );
 });
 
+test('createRoomWithRetry retries a pending workers.dev route 404', async () => {
+  let attempts = 0;
+  const room = await createRoomWithRetry(
+    'https://example.invalid',
+    { mapId: 'map:one', seed: 'run-one', idempotencyKey: 'room-run-one' },
+    {
+      timeoutMs: 1_000,
+      intervalMs: 1,
+      sleep: async () => undefined,
+      fetch: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return response(
+            '<title>Page not found</title><a href="https://workers.cloudflare.com">',
+            {
+              status: 404,
+              contentType: 'text/html; charset=UTF-8',
+            },
+          );
+        }
+        return response(JSON.stringify({ roomId: 'room-one' }), { status: 201 });
+      },
+    },
+  );
+
+  assert.equal(room.body.roomId, 'room-one');
+  assert.equal(attempts, 2);
+});
+
 test('createRoomWithRetry does not retry deterministic 4xx failures', async () => {
   let attempts = 0;
   await assert.rejects(
@@ -213,6 +244,147 @@ test('connectWebSocketWithRetry does not retry deterministic auth close codes', 
     },
   );
   assert.equal(urls.length, 1);
+});
+
+test('assertMatchingReconnectLocalPlayerIds returns the preserved reconnect identity', () => {
+  assert.equal(
+    assertMatchingReconnectLocalPlayerIds({
+      beforeDisconnect: { localPlayerId: 'player-2' },
+      afterReconnect: { localPlayerId: 'player-2' },
+    }),
+    'player-2',
+  );
+});
+
+test('assertMatchingReconnectLocalPlayerIds rejects missing and empty identities', () => {
+  const malformedReceipts = [
+    {
+      name: 'both identities missing',
+      reconnect: { beforeDisconnect: {}, afterReconnect: {} },
+    },
+    {
+      name: 'before identity missing',
+      reconnect: { beforeDisconnect: {}, afterReconnect: { localPlayerId: 'player-2' } },
+    },
+    {
+      name: 'after identity missing',
+      reconnect: { beforeDisconnect: { localPlayerId: 'player-2' }, afterReconnect: {} },
+    },
+    {
+      name: 'before identity empty',
+      reconnect: {
+        beforeDisconnect: { localPlayerId: '' },
+        afterReconnect: { localPlayerId: 'player-2' },
+      },
+    },
+    {
+      name: 'after identity empty',
+      reconnect: {
+        beforeDisconnect: { localPlayerId: 'player-2' },
+        afterReconnect: { localPlayerId: '' },
+      },
+    },
+  ];
+
+  for (const { name, reconnect } of malformedReceipts) {
+    assert.throws(
+      () => assertMatchingReconnectLocalPlayerIds(reconnect),
+      /electron reconnect identity missing/,
+      name,
+    );
+  }
+});
+
+test('assertMatchingReconnectLocalPlayerIds rejects changed reconnect identity', () => {
+  assert.throws(
+    () =>
+      assertMatchingReconnectLocalPlayerIds({
+        beforeDisconnect: { localPlayerId: 'player-1' },
+        afterReconnect: { localPlayerId: 'player-2' },
+      }),
+    /electron reconnect identity changed/,
+  );
+});
+
+test('classifyElectronLifecycleCloseObservations returns derived expected close evidence', () => {
+  assert.deepEqual(
+    classifyElectronLifecycleCloseObservations({
+      afterReconnect: [
+        {
+          _tag: 'close',
+          code: 4000,
+          wasClean: false,
+          reconnectable: true,
+        },
+        {
+          _tag: 'reconnectPredecessorClose',
+          code: 1000,
+          wasClean: true,
+          reconnectable: false,
+        },
+      ],
+      terminalFirst: [
+        {
+          _tag: 'close',
+          code: 4006,
+          wasClean: true,
+          reconnectable: false,
+        },
+      ],
+      terminalSecond: [
+        {
+          _tag: 'close',
+          code: 4006,
+          wasClean: true,
+          reconnectable: false,
+        },
+      ],
+    }),
+    {
+      expectedCloseCodes: [1000, 4006, 4006],
+      abnormalExpectedCloseCodeObserved: false,
+      forcedNetworkDropCloseCodeObserved: 4000,
+    },
+  );
+});
+
+test('classifyElectronLifecycleCloseObservations rejects extra abnormal close observations', () => {
+  assert.throws(
+    () =>
+      classifyElectronLifecycleCloseObservations({
+        afterReconnect: [
+          {
+            _tag: 'close',
+            code: 4000,
+            wasClean: false,
+            reconnectable: true,
+          },
+          {
+            _tag: 'close',
+            code: 1006,
+            wasClean: false,
+            reconnectable: true,
+          },
+        ],
+        terminalFirst: [
+          {
+            _tag: 'close',
+            code: 4006,
+            wasClean: true,
+            reconnectable: false,
+          },
+        ],
+        terminalSecond: [
+          {
+            _tag: 'close',
+            code: 4006,
+            wasClean: true,
+            reconnectable: false,
+          },
+        ],
+      }),
+    /unexpected close observations/,
+  );
 });
 
 test('connectWebSocketWithRetry does not retain raw constructor errors with signed URLs', async () => {

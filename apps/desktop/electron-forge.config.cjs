@@ -91,7 +91,10 @@ const runPnpm = (args, options = {}) => {
 
 const assertPackagedRuntimeClosure = (buildPath) => {
   const appRequire = moduleApi.createRequire(path.join(buildPath, 'package.json'));
-  const appRoot = path.resolve(buildPath);
+  // macOS exposes the same temporary directory through both /var and
+  // /private/var. Compare canonical paths so that alias does not look like a
+  // runtime dependency escaping Resources/app.
+  const appRoot = fs.realpathSync(buildPath);
   for (const packageName of externalRuntimePackages) {
     const resolved = path.resolve(
       appRequire.resolve(runtimePackageResolveTargets[packageName] ?? packageName),

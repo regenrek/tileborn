@@ -54,6 +54,13 @@ describe('buildContentSecurityPolicy (prod)', () => {
     expect(dirs.get('connect-src')).toContain('ws://localhost:*');
   });
 
+  it('allows only the scoped Cloudflare Worker game-host transport origins', () => {
+    expect(dirs.get('connect-src')).toContain('https://*.workers.dev');
+    expect(dirs.get('connect-src')).toContain('wss://*.workers.dev');
+    expect(dirs.get('connect-src')).not.toMatch(/(?:^|\s)https:(?:\s|$)/);
+    expect(dirs.get('connect-src')).not.toMatch(/(?:^|\s)wss:(?:\s|$)/);
+  });
+
   it('allows data:/blob: in connect-src so Pixi can fetch bundled textures', () => {
     // Pixi's asset loader fetches bundled data:/blob: texture URLs; connect-src
     // (not img-src) governs fetch, so these must be present or playtest entity

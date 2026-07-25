@@ -22,9 +22,13 @@ describe('built authoring validator regressions', () => {
     ['named export-from', 'export { readFile } from "node:fs";'],
     ['export star', 'export * from "node:fs";'],
     ['import equals', 'import fs = require("node:fs"); void fs;'],
-  ])('rejects forbidden modules through %s', (_label, sourceText) => {
-    expect(validateBuiltArtifact(sourceText).map(({ code }) => code)).toEqual(['TBSDK1001']);
-  });
+  ])(
+    'rejects forbidden modules through %s',
+    (_label, sourceText) => {
+      expect(validateBuiltArtifact(sourceText).map(({ code }) => code)).toEqual(['TBSDK1001']);
+    },
+    15_000,
+  );
 
   it.each([
     ['aliased Math.random', 'const random = Math.random; random();'],

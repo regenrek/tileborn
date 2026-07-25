@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
@@ -272,7 +272,7 @@ describe('MapService export/import path security', () => {
         report: { outputs: { kind: 'map' } },
       });
       expect(store.records[0]?.sourceIdentity.path).toBe(
-        path.join(projectDir(home, result.projectId), 'imports/tiled-ground.tmj'),
+        await realpath(path.join(projectDir(home, result.projectId), 'imports/tiled-ground.tmj')),
       );
 
       const validDocument = JSON.parse(await readFile(recordsPath, 'utf8')) as {

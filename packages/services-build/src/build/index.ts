@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -128,6 +128,8 @@ export interface BuildPromotionOperations {
 export interface BuildServiceRuntimeOptions {
   /** Portable Game Host assembly assets owned by the embedding runtime. */
   readonly gameHostBuildAssetsRoot?: string;
+  /** Enables production-disabled smoke-control routes for disposable proof artifacts only. */
+  readonly gameHostSmokeControlsEnabled?: boolean;
 }
 
 export const nodeBuildPromotionOperations: BuildPromotionOperations = {
@@ -362,8 +364,21 @@ export const makeBuildServiceLive = (
     const projectBehaviors = yield* ProjectBehaviorService;
     const maps = yield* MapService;
     const events = yield* PubSub.unbounded<void>();
-    const root = buildRoot(home.paths.cache);
-    yield* ensureDirectory(root);
+    const configuredRoot = buildRoot(home.paths.cache);
+    yield* ensureDirectory(configuredRoot);
+    const root = yield* Effect.tryPromise({
+      try: () => realpath(configuredRoot),
+      catch: (cause) => serviceError(errorMessage(cause), configuredRoot),
+    });
+
+    const canonicalManagedGamePath = (candidate: string, gamesRoot: string): string => {
+      const resolved = path.resolve(candidate);
+      const configuredGamesRoot = path.join(configuredRoot, "games");
+      const relative = path.relative(configuredGamesRoot, resolved);
+      return relative.length === 0 || (!relative.startsWith("..") && !path.isAbsolute(relative))
+        ? path.join(gamesRoot, relative)
+        : resolved;
+    };
 
     const loadProjectSnapshot = (projectId: ProjectId) =>
       Effect.gen(function* () {
@@ -769,11 +784,11 @@ export const makeBuildServiceLive = (
         );
       }
       const target = options.target;
-      const requestedDirectory = Option.isSome(options.outputDirectory)
-        ? path.resolve(options.outputDirectory.value)
-        : undefined;
       const gamesRoot = yield* verifiedChildPath(root, "games");
       yield* ensureDirectory(gamesRoot);
+      const requestedDirectory = Option.isSome(options.outputDirectory)
+        ? canonicalManagedGamePath(options.outputDirectory.value, gamesRoot)
+        : undefined;
       const workDirectory = requestedDirectory === undefined
         ? yield* verifiedChildPath(gamesRoot, `.building-${randomUUID()}`)
         : `${requestedDirectory}.building-${randomUUID()}`;
@@ -867,6 +882,9 @@ export const makeBuildServiceLive = (
             ...(runtimeOptions.gameHostBuildAssetsRoot === undefined
               ? {}
               : { buildAssetsRoot: runtimeOptions.gameHostBuildAssetsRoot }),
+            ...(runtimeOptions.gameHostSmokeControlsEnabled === undefined
+              ? {}
+              : { smokeControlsEnabled: runtimeOptions.gameHostSmokeControlsEnabled }),
             pluginId,
             pluginVersion: installed!.version,
             pluginRoot: installed!.rootPath,
@@ -956,7 +974,7 @@ export const makeBuildServiceLive = (
     ) {
       const gamesRoot = yield* verifiedChildPath(root, "games");
       const requestedDirectory = typeof candidate === "string" ? candidate : candidate.directory;
-      const resolvedDirectory = path.resolve(requestedDirectory);
+      const resolvedDirectory = canonicalManagedGamePath(requestedDirectory, gamesRoot);
       const relative = path.relative(gamesRoot, resolvedDirectory);
       if (relative.length === 0 || relative.startsWith("..") || path.isAbsolute(relative)) {
         return yield* serviceError(

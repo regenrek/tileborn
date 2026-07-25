@@ -78,7 +78,7 @@ describe('canonical release gates', () => {
     expect(rootPackage.scripts['release:gates:matrix']).toBe(
       'node scripts/release-gates.mjs matrix',
     );
-    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=4');
+    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=1');
   });
 
   it('makes GitHub Actions derive scheduling and execution from the same runner', () => {

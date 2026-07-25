@@ -1145,8 +1145,16 @@ describe('AssetService', () => {
           const assets = yield* AssetService;
           const jobs = yield* JobService;
           const jobId = yield* assets.importPack(new DirectoryAssetPackSource({ path: source }));
-          yield* Effect.sleep('50 millis');
-          const state = (yield* jobs.list()).find((entry) => entry.id === jobId);
+          const terminal = yield* jobs.subscribe(jobId).pipe(
+            Stream.takeUntil(
+              (entry) =>
+                entry.status._tag === 'Completed' ||
+                entry.status._tag === 'Failed' ||
+                entry.status._tag === 'Cancelled',
+            ),
+            Stream.runLast,
+          );
+          const state = Option.getOrThrow(terminal);
           return { jobId, state };
         }),
       );

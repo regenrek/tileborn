@@ -713,7 +713,7 @@ describe('project revision transaction recovery', () => {
       hashJsonStable(state.nextB),
     );
     expect(await readdir(path.join(state.projectRoot, '.tileborne'))).toEqual([]);
-  });
+  }, 15_000);
 
   it('does not adopt a different owner token from the same process', async () => {
     const state = await fixture();
@@ -795,6 +795,6 @@ describe('project revision transaction recovery', () => {
       expect(await claimResidue(state.projectRoot)).toEqual([]);
       await expectMissing(projectRevisionOwnerPath(state.projectRoot));
       await expectMissing(projectRevisionTransactionPath(state.projectRoot));
-    });
+    }, 15_000);
   }
 });

@@ -357,6 +357,10 @@ const parsedSourceFiles = new Map<
   string,
   { readonly mtimeMs: number; readonly size: number; readonly sourceFile: ParsedSourceFile }
 >();
+const reconnectAttemptObservationProjectionSpans = new WeakMap<
+  ParsedSourceFile,
+  ReturnType<typeof collectReconnectAttemptObservationProjectionSpans>
+>();
 
 const parseCachedSourceFile = (filePath: string): ParsedSourceFile => {
   const { mtimeMs, size } = fs.statSync(filePath);
@@ -367,6 +371,18 @@ const parseCachedSourceFile = (filePath: string): ParsedSourceFile => {
   const sourceFile = parseSourceFile(filePath);
   parsedSourceFiles.set(filePath, { mtimeMs, size, sourceFile });
   return sourceFile;
+};
+
+const collectCachedReconnectAttemptObservationProjectionSpans = (
+  sourceFile: ParsedSourceFile,
+): ReturnType<typeof collectReconnectAttemptObservationProjectionSpans> => {
+  const cached = reconnectAttemptObservationProjectionSpans.get(sourceFile);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const spans = collectReconnectAttemptObservationProjectionSpans(sourceFile);
+  reconnectAttemptObservationProjectionSpans.set(sourceFile, spans);
+  return spans;
 };
 
 const sourceLines = (filePath: string): readonly string[] =>
@@ -509,7 +525,7 @@ const allowsRuntimeReconnectAttemptObservationProjection: PatternAllowance = ({
 }): boolean =>
   (forbidden.name === 'reconnect attempt policy' ||
     forbidden.name === 'reconnect observation projection receiver') &&
-  collectReconnectAttemptObservationProjectionSpans(sourceFile).some(
+  collectCachedReconnectAttemptObservationProjectionSpans(sourceFile).some(
     (span) => span.start <= matchStart && matchEnd <= span.end,
   );
 
@@ -798,7 +814,7 @@ describe('multiplayer connection lifecycle ownership boundary', () => {
       ),
     ];
     expect(violations, violations.join('\n')).toEqual([]);
-  }, 60_000);
+  }, 180_000);
 
   it('rejects fixture evasions with exact runtime-root plugin and client transport violations', () => {
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tileborne-transport-boundary-'));

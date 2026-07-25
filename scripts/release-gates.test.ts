@@ -88,6 +88,8 @@ describe('canonical release gates', () => {
     expect(workflow).toContain('matrix: ${{ fromJSON(needs.release-gate-plan.outputs.matrix) }}');
     expect(workflow).toContain('RELEASE_GATE_ID: ${{ matrix.id }}');
     expect(workflow).toContain('pnpm release:gate -- "$RELEASE_GATE_ID"');
+    expect(workflow).toContain('run: corepack enable');
+    expect(workflow).not.toContain('pnpm/action-setup');
 
     for (const command of [
       'pnpm format:check',

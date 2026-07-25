@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "build": "tsc -b tsconfig.json --force"
+    "build": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "@tileborne/asset-pipeline": "workspace:*",

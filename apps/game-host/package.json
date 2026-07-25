@@ -34,7 +34,7 @@
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:smoke:cloudflare": "vitest run --config vitest.cloudflare-smoke.config.ts",
     "verify:bundled-worker": "node scripts/verify-bundled-worker.mjs",
-    "build": "tsc -b tsconfig.json --force && node scripts/bundle-worker.mjs"
+    "build": "tsc -b tsconfig.json && node scripts/bundle-worker.mjs"
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",

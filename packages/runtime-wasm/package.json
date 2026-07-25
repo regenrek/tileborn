@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "build": "tsc -b tsconfig.json --force"
+    "build": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "effect": "4.0.0-beta.78"

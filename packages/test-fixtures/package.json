@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "build": "tsc -b tsconfig.json --force"
+    "build": "tsc -b tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "22.19.19",

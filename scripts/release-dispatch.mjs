@@ -91,10 +91,7 @@ const runList = JSON.parse(
     '10',
   ]),
 );
-const dispatchedRun =
-  channel === 'advisory'
-    ? runList[0]
-    : runList.find((candidate) => candidate.headSha === sourceSha);
+const dispatchedRun = runList.find((candidate) => candidate.headSha === sourceSha);
 if (dispatchedRun === undefined) {
   throw new Error(`release-dispatch.run-not-found: ${workflow} ${sourceSha}`);
 }

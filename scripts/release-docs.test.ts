@@ -124,9 +124,6 @@ describe('desktop release documentation contract', () => {
     expect(runbook).toContain('This is recovery, not a verified desktop rollback guarantee.');
     expect(runbook).not.toContain('--retained-artifact');
     expect(runbook).not.toContain('--backup-output');
-    expect(readFileSync(path.join(repoRoot, 'scripts/release-dispatch.mjs'), 'utf8')).toContain(
-      'runList.find((candidate) => candidate.headSha === sourceSha)',
-    );
   });
 
   it.each([

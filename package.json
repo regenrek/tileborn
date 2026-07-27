@@ -42,7 +42,7 @@
     "release:desktop:verify": "node scripts/desktop-release-contract.mjs verify",
     "release:desktop:closeout": "node scripts/native-desktop-release-closeout.mjs",
     "test:release-gates": "vitest run --config vitest.config.ts scripts/release-gates.test.ts",
-    "test:desktop-release-contract": "vitest run --config vitest.config.ts scripts/desktop-release-contract.test.ts scripts/native-desktop-release-closeout.test.ts scripts/release-docs.test.ts",
+    "test:desktop-release-contract": "vitest run --config vitest.config.ts scripts/desktop-release-contract.test.ts scripts/native-desktop-release-closeout.test.ts scripts/release-dispatch.test.ts scripts/release-docs.test.ts",
     "ci": "pnpm ci:fast",
     "ci:fast": "pnpm release:gates:ci-fast",
     "format": "prettier --write .",

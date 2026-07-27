@@ -5,9 +5,31 @@
     "platform": "darwin",
     "architecture": "arm64",
     "artifactKind": "dmg",
+    "updateArtifactKind": "zip",
+    "updateArtifactNamePattern": "Tileborne-darwin-arm64-${version}.zip",
     "channel": "github-release"
   },
   "owners": [
+    {
+      "id": "updater.runtime-state-machine",
+      "owner": "apps/desktop/src/main/updater.ts",
+      "scope": "Electron main process owns the automatic-update state machine, production feed policy, version/signing continuity checks, and restart coordination."
+    },
+    {
+      "id": "updater.ipc-contract",
+      "owner": "packages/ipc-contracts/src/contracts/desktop-updates.ts",
+      "scope": "Shared IPC contracts own update state, commands, events, receipt schema, and the invariant that renderer requests cannot provide feed URLs or artifact paths."
+    },
+    {
+      "id": "updater.renderer-presentation",
+      "owner": "apps/desktop/src/renderer",
+      "scope": "Renderer code owns presentation-only update surfaces; it can display state and invoke allowlisted actions but cannot supply feeds, versions, signatures, or artifact paths."
+    },
+    {
+      "id": "updater.preload-bridge",
+      "owner": "apps/desktop/src/preload/preload.ts",
+      "scope": "Preload owns the contextBridge IPC transport allowlist and exposes only registered shared-contract channels to the renderer."
+    },
     {
       "id": "release.packaging-provenance",
       "owner": "apps/desktop/scripts/desktop-release-forge.cjs",
@@ -19,9 +41,9 @@
       "scope": "Electron Forge configuration owns app metadata, bundle id, icon/resource wiring, maker inventory, lifecycle hook wiring, and entitlements if they are introduced."
     },
     {
-      "id": "project.backup-reopen-semantics",
+      "id": "project.relaunch-persistence-semantics",
       "owner": "packages/services-app/src/project",
-      "scope": "Existing project persistence owners supply backup, recovery, migration, save, reopen, and compatibility semantics; release scripts only verify them."
+      "scope": "Existing project persistence owners supply recovery, migration, save, reopen, and compatibility semantics; release scripts only verify project identity survives native relaunch."
     }
   ],
   "requiredEvidence": [
@@ -31,8 +53,8 @@
     "apple-notarization",
     "stapled-ticket",
     "gatekeeper-install-first-launch-relaunch",
-    "retained-installer-rollback",
-    "verified-project-backup"
+    "verified-project-relaunch-persistence",
+    "verified-signed-a-to-b-update"
   ],
   "support": [
     {
@@ -61,9 +83,9 @@
     },
     {
       "id": "capability.auto-update",
-      "status": "unsupported",
+      "status": "candidate",
       "documentationLabel": "automatic updates",
-      "reason": "Desktop 1.0 uses manual signed-installer replacement and has no update feed or updater lifecycle."
+      "reason": "Candidate-only for macOS arm64 after the signed A-to-B ZIP, feed, Restart/Later, and relaunch oracle pass; not a publication claim."
     },
     {
       "id": "capability.remote-crash-reporting",
@@ -172,16 +194,5 @@
       "owner": "scripts/desktop-release-contract.mjs",
       "check": "present only at publication boundary; verified by gh auth status"
     }
-  ],
-  "lastKnownGoodReleases": [],
-  "rollback": {
-    "mode": "manual-retained-installer",
-    "retention": "current-and-last-known-good",
-    "requireArtifactDigest": true,
-    "requireProjectBackupBeforeDowngrade": true,
-    "requireBackupVerification": true,
-    "requireReinstallSmoke": true,
-    "requireProjectReopenSmoke": true,
-    "automaticRollback": "unsupported"
-  }
+  ]
 }

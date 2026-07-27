@@ -71,12 +71,12 @@ describe('desktop release documentation contract', () => {
   it('derives the full support and exact evidence-free blocker projections from canonical data', () => {
     expect(assertCanonicalReleaseDocumentation()).toEqual({
       stateSurfaces: 11,
-      auditedSurfaces: 14,
+      auditedSurfaces: 31,
       supportDecisions: policy.support.length,
       baselineBlockers: baselineStatus.blockers.length,
     });
     expect(baselineStatus.decision).toBe('no-go');
-    expect(baselineStatus.blockers).toHaveLength(7);
+    expect(baselineStatus.blockers).toHaveLength(6);
   });
 
   it('keeps the dated source-preview state and all newly introduced local targets resolvable', () => {
@@ -113,15 +113,22 @@ describe('desktop release documentation contract', () => {
       expect(runbook).toContain(command);
     }
     expect(runbook).toContain('no caller-provided native receipt is accepted');
-    expect(runbook).toContain('lastKnownGoodReleases');
     expect(runbook).toContain('TILEBORNE_DESKTOP_PUBLISH_APPROVED=1');
     expect(runbook).toContain('gh auth status --hostname github.com --active');
+    expect(runbook).toContain('This is recovery, not a verified desktop rollback guarantee.');
+    expect(runbook).not.toContain('--retained-artifact');
+    expect(runbook).not.toContain('--backup-output');
   });
 
   it.each([
     ['Windows support', 'Windows is supported.'],
     ['Linux support', 'Linux is supported.'],
     ['automatic update support', 'Automatic updates are supported.'],
+    ['automatic update unsupported', 'Automatic desktop updates are unsupported.'],
+    [
+      'grouped automatic update unsupported',
+      'Windows, Linux, automatic desktop updates, and remote crash reporting are unsupported.',
+    ],
     ['remote crash support', 'Remote crash reporting is supported.'],
     ['desktop GO', 'Desktop release is GO.'],
     ['completed publication', 'Publication is complete.'],
@@ -151,6 +158,27 @@ describe('desktop release documentation contract', () => {
         source.replace('`artifact.file-missing`', '`artifact.candidate-missing`'),
       ),
       'release-docs.canonical-list-drift',
+    );
+  });
+
+  it('rejects source-plan drift back to release-owned project backup evidence', () => {
+    assertMutatedContractFails(
+      mutated(
+        '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/PRODUCT_SPEC.md',
+        (source) => `${source}\n- Open a verified project backup after install.\n`,
+      ),
+      'release-docs.project-recovery-evidence-drift',
+    );
+  });
+
+  it('rejects source-plan drift claiming a signed automatic-update channel is supported', () => {
+    assertMutatedContractFails(
+      mutated(
+        '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/ADRS.md',
+        (source) =>
+          `${source}\nThe first direct-download release supports a signed automatic-update channel.\n`,
+      ),
+      'release-docs.contradictory-claim',
     );
   });
 

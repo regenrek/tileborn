@@ -165,11 +165,12 @@ if (
   typeof window === 'undefined' ||
   !window.tileborneIpc ||
   !window.tileborneStartup ||
-  !window.tileborneAppLifecycle
+  !window.tileborneAppLifecycle ||
+  !window.tileborneDesktopUpdates
 ) {
   document.body.innerHTML =
     '<pre style="font:14px/1.5 monospace;padding:1.5rem;color:#f87171;background:#1e1e1e;">' +
-    'Tileborne preload transport missing (window.tileborneIpc / window.tileborneStartup).\n\n' +
+    'Tileborne preload transport missing (window.tileborneIpc / window.tileborneStartup / window.tileborneDesktopUpdates).\n\n' +
     'The preload script likely failed to load. Open DevTools and check for:\n' +
     '  • "Unable to load preload script"\n' +
     '  • node:crypto / sandbox errors in the main process log\n\n' +

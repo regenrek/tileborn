@@ -7,6 +7,7 @@ export * from './events-core.js';
 export { TriggerEventPayload } from './contracts/trigger.js';
 
 import { AssetsCapabilityRefreshedEventPayload } from './contracts/assets.js';
+import { DesktopUpdateStateChangedEvent } from './contracts/desktop-updates.js';
 import {
   TiledSourceRulesCompileProgressEventPayload,
   TiledSourceRulesDiagnosticsEventPayload,
@@ -124,6 +125,7 @@ export const MainIpcEvents = [
   TiledSourceRulesCompileProgressEvent,
   TiledSourceRulesRuntimeApplyProgressEvent,
   TiledSourceRulesDiagnosticsEvent,
+  DesktopUpdateStateChangedEvent,
 ] as const;
 
 export type MainEventRegistry = IpcEventRegistry<typeof MainIpcEvents>;

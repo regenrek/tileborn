@@ -13,10 +13,10 @@ cleanup.
 The Battle Royale creator/game Ship vertical has committed evidence, but the
 desktop editor distribution is **NO-GO**. macOS arm64 is the only desktop 1.0
 candidate. It is not releasable until the signed/notarized DMG, manifest,
-native install/relaunch, verified project backup, approved last-known-good
-retained-installer rollback, publication approval, and scoped credential all
-pass the canonical contract. macOS x64, Windows, Linux, automatic desktop
-updates/rollback, and remote crash reporting are unsupported in 1.0.
+native install/relaunch, signed A-to-B update evidence, Restart/Later relaunch persistence,
+publication approval, and scoped credential all pass the canonical contract. macOS x64, Windows,
+Linux, and remote crash reporting are unsupported in 1.0; the macOS arm64 automatic-update path is
+candidate-gated, not a publication claim.
 
 Read [`docs/desktop-release-runbook.md`](docs/desktop-release-runbook.md) before
 any desktop release operation. `scripts/desktop-release-policy.json` is the
@@ -139,9 +139,9 @@ Tileborne `0.0.1` publishes the BR vertical as a source-only preview:
 - Cloudflare Worker/Durable Object game host with local Miniflare smoke proof.
 - Battle Royale plugin runtime, lobby flow, HUD, input, and synthesized audio
   proof.
-- Release-readiness docs, security guidance, rollback notes, and known caveats.
+- Release-readiness docs, security guidance, recovery notes, and known caveats.
 - A fail-closed macOS arm64 desktop release contract with immutable artifact,
-  source, Team/LKG, native backup/rollback, and publication boundaries.
+  source, Team, native install/relaunch/recovery, and publication boundaries.
 
 Known caveats:
 
@@ -152,7 +152,7 @@ Known caveats:
 - Physical speaker output is not externally measured by automated gates.
 - The desktop distribution remains NO-GO; an unpacked Forge `.app` smoke is not
   a signed/notarized installer receipt.
-- macOS x64, Windows, Linux, automatic desktop update/rollback, and remote crash
+- macOS x64, Windows, Linux, automatic desktop updates, and remote crash
   reporting are unsupported for desktop 1.0.
 - npm, Homebrew, GitHub release, desktop publication, and production tag steps
   require separate maintainer approval. npm and Homebrew are not desktop 1.0

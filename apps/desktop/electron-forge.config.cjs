@@ -7,12 +7,14 @@ const path = require('node:path');
 
 const {
   createDesktopBuildProvenance,
+  createDesktopUpdateOracleForgeSettings,
   createDesktopReleaseForgeSettings,
   createDesktopReleaseProvenance,
   validateDesktopReleaseMakeResults,
 } = require('./scripts/desktop-release-forge.cjs');
 
 const desktopRelease = createDesktopReleaseForgeSettings();
+const desktopUpdateOracle = createDesktopUpdateOracleForgeSettings();
 let desktopReleaseProvenanceInjected = false;
 
 const packagerTmp = path.join(
@@ -249,7 +251,8 @@ const writeDesktopBuildProvenance = (buildPath) => {
       );
     }
   })();
-  const { version } = require('./package.json');
+  const packageVersion = require('./package.json').version;
+  const version = desktopUpdateOracle.enabled ? desktopUpdateOracle.version : packageVersion;
   const releaseProvenancePath = path.join(
     path.dirname(buildPath),
     'tileborne-desktop-provenance.json',
@@ -257,22 +260,43 @@ const writeDesktopBuildProvenance = (buildPath) => {
   fs.writeFileSync(
     releaseProvenancePath,
     `${JSON.stringify(
-      desktopRelease.enabled
+      desktopRelease.enabled || desktopUpdateOracle.enabled
         ? createDesktopReleaseProvenance({
             sourceCommit,
             version,
-            teamIdentifier: desktopRelease.teamIdentifier,
+            teamIdentifier: desktopRelease.enabled
+              ? desktopRelease.teamIdentifier
+              : desktopUpdateOracle.teamIdentifier,
           })
         : createDesktopBuildProvenance({ sourceCommit, version }),
     )}\n`,
-    { encoding: 'utf8', mode: 0o444 },
+    { encoding: 'utf8', mode: 0o644 },
   );
   desktopReleaseProvenanceInjected = true;
+};
+
+const writeDesktopUpdateOracleCapability = (buildPath) => {
+  if (!desktopUpdateOracle.enabled) {
+    return;
+  }
+  fs.writeFileSync(
+    path.join(path.dirname(buildPath), 'tileborne-desktop-update-oracle-capability.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      nonce: desktopUpdateOracle.capabilityNonce,
+    })}\n`,
+    { encoding: 'utf8', mode: 0o644 },
+  );
 };
 
 const dmgMaker = {
   name: '@electron-forge/maker-dmg',
   config: desktopRelease.enabled ? desktopRelease.dmgConfig : {},
+  platforms: ['darwin'],
+};
+
+const zipMaker = {
+  name: '@electron-forge/maker-zip',
   platforms: ['darwin'],
 };
 
@@ -318,7 +342,11 @@ module.exports = {
     icon: appIconPath,
     extraResource: [runtimeIconPath],
     tmpdir: packagerTmp,
-    ...(desktopRelease.enabled ? desktopRelease.packagerConfig : {}),
+    ...(desktopRelease.enabled
+      ? desktopRelease.packagerConfig
+      : desktopUpdateOracle.enabled
+        ? desktopUpdateOracle.packagerConfig
+        : {}),
   },
   rebuildConfig: {},
   hooks: {
@@ -327,6 +355,7 @@ module.exports = {
       copyGameHostBuildAssets(buildPath);
       copyAlchemyRuntimeDeployStack(buildPath);
       writeDesktopBuildProvenance(buildPath);
+      writeDesktopUpdateOracleCapability(buildPath);
     },
     // Packager pruning has finished here. Install a lockfile-derived, portable
     // production closure for Vite externals that need real package files;
@@ -339,16 +368,17 @@ module.exports = {
       const artifact = validateDesktopReleaseMakeResults({
         makeResults,
         provenanceInjected: desktopReleaseProvenanceInjected,
+        version: require('./package.json').version,
       });
       const { notarize } = require('@electron/notarize');
-      await notarize({ appPath: artifact, ...desktopRelease.notarizeCredentials });
+      await notarize({ appPath: artifact.dmg, ...desktopRelease.notarizeCredentials });
       return makeResults;
     },
   },
-  // Release mode deliberately exposes only the approved macOS-arm64 maker.
+  // Release mode deliberately exposes only the approved macOS-arm64 makers.
   // The development maker inventory is cross-platform build capability, not a
   // support claim; support is owned by scripts/desktop-release-policy.json.
-  makers: desktopRelease.enabled ? [dmgMaker] : developmentMakers,
+  makers: desktopRelease.enabled ? [dmgMaker, zipMaker] : developmentMakers,
   plugins: [
     {
       name: '@electron-forge/plugin-vite',

@@ -1,6 +1,6 @@
 ---
 title: Release Readiness
-description: Production 1.0 release-candidate checklist, deploy proof, secrets setup, rollback, support matrix, and caveats.
+description: Production 1.0 release-candidate checklist, deploy proof, secrets setup, recovery, support matrix, and caveats.
 ---
 
 # Release Readiness
@@ -119,13 +119,13 @@ If credentials or approval are missing, record the exact deploy substep as block
 
 ## Support matrix
 
-| Surface                | Production 1.0 readiness target                                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop editor         | macOS arm64 candidate only; **NO-GO** until signed/notarized DMG, native install/relaunch, backup/rollback, and publication contract pass |
-| CLI                    | Project, asset, map, plugin, game build, game serve, and scaffold workflows                                                               |
-| Game host              | Cloudflare Worker and Durable Object room runtime, with local Miniflare proof and credentialed deploy operator gate                       |
-| Battle Royale vertical | Authored BR maps, lobby/join code flow, runtime combat/zone loop, HUD, input, and audio runtime proof                                     |
-| Docs                   | Maintainer install/build/deploy/security/release handoff docs built from the repo                                                         |
+| Surface                | Production 1.0 readiness target                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop editor         | macOS arm64 candidate only; **NO-GO** until signed/notarized DMG, native install/relaunch/recovery, and publication contract pass |
+| CLI                    | Project, asset, map, plugin, game build, game serve, and scaffold workflows                                                       |
+| Game host              | Cloudflare Worker and Durable Object room runtime, with local Miniflare proof and credentialed deploy operator gate               |
+| Battle Royale vertical | Authored BR maps, lobby/join code flow, runtime combat/zone loop, HUD, input, and audio runtime proof                             |
+| Docs                   | Maintainer install/build/deploy/security/release handoff docs built from the repo                                                 |
 
 ## Known caveats
 
@@ -134,8 +134,8 @@ If credentials or approval are missing, record the exact deploy substep as block
 - The hosted game path has no accounts, matchmaking, friends, leaderboards, or long-lived player identity.
 - Generated GoalBuddy receipts under `docs/goals/` and `.refs/` may be local-only if those paths remain ignored.
 - npm, Homebrew, GitHub release, and production tagging steps require separate maintainer approval.
-- macOS x64, Windows, Linux, automatic desktop update/rollback, and remote crash reporting are unsupported for desktop 1.0; Forge maker configuration is not support evidence.
+- macOS x64, Windows, Linux, and remote crash reporting are unsupported for desktop 1.0. Automatic desktop updates are macOS arm64 candidate-gated by the signed A-to-B release oracle and are not an available release channel yet; Forge maker configuration is not support evidence.
 
 ## Go/no-go
 
-Go only when the final release-candidate audit maps a clean committed tree, passing gates, deploy proof or exact credential blocker, release docs, security hygiene, package/version readiness, rollback guidance, and known caveats to the production 1.0 oracle. Desktop publication additionally requires the independent Desktop Release contract to return GO with no blockers.
+Go only when the final release-candidate audit maps a clean committed tree, passing gates, deploy proof or exact credential blocker, release docs, security hygiene, package/version readiness, recovery guidance, and known caveats to the production 1.0 oracle. Desktop publication additionally requires the independent Desktop Release contract to return GO with no blockers.

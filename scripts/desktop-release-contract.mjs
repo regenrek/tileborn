@@ -1,7 +1,16 @@
 /* global Buffer, console, process */
 import { createHash, randomBytes } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +22,10 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const SOURCE_COMMIT = /^[a-f0-9]{40}$/;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const nativeVerifierPath = path.join(repoRoot, 'scripts/macos-desktop-release-verifier.mjs');
+
+const expectedDarwinArm64ZipName = (version) => `Tileborne-darwin-arm64-${version}.zip`;
+const versionFromDarwinArm64ZipName = (fileName) =>
+  /^Tileborne-darwin-arm64-(.+)\.zip$/.exec(fileName)?.[1];
 
 export class DesktopReleaseContractError extends Error {
   constructor(code, message) {
@@ -29,6 +42,13 @@ const fail = (code, message) => {
 const object = (value, at) => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     fail('contract.invalid-type', `${at} must be an object`);
+  }
+  return value;
+};
+
+const array = (value, at) => {
+  if (!Array.isArray(value)) {
+    fail('contract.invalid-array', `${at} must be an array`);
   }
   return value;
 };
@@ -78,42 +98,6 @@ const uniqueStrings = (value, at) => {
   return result;
 };
 
-const SEMVER =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-
-export function parseSemVer(value) {
-  const match = SEMVER.exec(value);
-  if (!match) fail('contract.invalid-semver', value);
-  return {
-    core: [Number(match[1]), Number(match[2]), Number(match[3])],
-    prerelease: match[4] === undefined ? [] : match[4].split('.'),
-  };
-}
-
-export function compareSemVer(left, right) {
-  const a = parseSemVer(left);
-  const b = parseSemVer(right);
-  for (let index = 0; index < 3; index += 1) {
-    if (a.core[index] !== b.core[index]) return a.core[index] < b.core[index] ? -1 : 1;
-  }
-  if (a.prerelease.length === 0 || b.prerelease.length === 0) {
-    return a.prerelease.length === b.prerelease.length ? 0 : a.prerelease.length === 0 ? 1 : -1;
-  }
-  const length = Math.max(a.prerelease.length, b.prerelease.length);
-  for (let index = 0; index < length; index += 1) {
-    const aPart = a.prerelease[index];
-    const bPart = b.prerelease[index];
-    if (aPart === undefined || bPart === undefined) return aPart === undefined ? -1 : 1;
-    if (aPart === bPart) continue;
-    const aNumeric = /^\d+$/.test(aPart);
-    const bNumeric = /^\d+$/.test(bPart);
-    if (aNumeric && bNumeric) return Number(aPart) < Number(bPart) ? -1 : 1;
-    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
-    return aPart < bPart ? -1 : 1;
-  }
-  return 0;
-}
-
 export function loadDesktopReleasePolicy(policyPath = desktopReleasePolicyPath) {
   return validateDesktopReleasePolicy(JSON.parse(readFileSync(policyPath, 'utf8')));
 }
@@ -132,8 +116,6 @@ export function validateDesktopReleasePolicy(value) {
       'operatorOnlyMutations',
       'signing',
       'credentialPresenceChecks',
-      'lastKnownGoodReleases',
-      'rollback',
     ],
     'policy',
   );
@@ -142,12 +124,25 @@ export function validateDesktopReleasePolicy(value) {
 
   const candidate = exactKeys(
     policy.candidate,
-    ['platform', 'architecture', 'artifactKind', 'channel'],
+    [
+      'platform',
+      'architecture',
+      'artifactKind',
+      'updateArtifactKind',
+      'updateArtifactNamePattern',
+      'channel',
+    ],
     'policy.candidate',
   );
   literal(candidate.platform, 'darwin', 'policy.candidate.platform');
   literal(candidate.architecture, 'arm64', 'policy.candidate.architecture');
   literal(candidate.artifactKind, 'dmg', 'policy.candidate.artifactKind');
+  literal(candidate.updateArtifactKind, 'zip', 'policy.candidate.updateArtifactKind');
+  literal(
+    candidate.updateArtifactNamePattern,
+    'Tileborne-darwin-arm64-${version}.zip',
+    'policy.candidate.updateArtifactNamePattern',
+  );
   literal(candidate.channel, 'github-release', 'policy.candidate.channel');
 
   if (!Array.isArray(policy.owners)) fail('contract.invalid-array', 'policy.owners');
@@ -163,9 +158,13 @@ export function validateDesktopReleasePolicy(value) {
     fail('contract.duplicate-value', 'policy.owners ids');
   }
   const expectedOwners = new Map([
+    ['updater.runtime-state-machine', 'apps/desktop/src/main/updater.ts'],
+    ['updater.ipc-contract', 'packages/ipc-contracts/src/contracts/desktop-updates.ts'],
+    ['updater.renderer-presentation', 'apps/desktop/src/renderer'],
+    ['updater.preload-bridge', 'apps/desktop/src/preload/preload.ts'],
     ['release.packaging-provenance', 'apps/desktop/scripts/desktop-release-forge.cjs'],
     ['electron.metadata-entitlements', 'apps/desktop/electron-forge.config.cjs'],
-    ['project.backup-reopen-semantics', 'packages/services-app/src/project'],
+    ['project.relaunch-persistence-semantics', 'packages/services-app/src/project'],
   ]);
   for (const [id, owner] of expectedOwners) {
     if (owners.find((entry) => entry.id === id)?.owner !== owner) {
@@ -184,8 +183,8 @@ export function validateDesktopReleasePolicy(value) {
     'apple-notarization',
     'stapled-ticket',
     'gatekeeper-install-first-launch-relaunch',
-    'retained-installer-rollback',
-    'verified-project-backup',
+    'verified-project-relaunch-persistence',
+    'verified-signed-a-to-b-update',
   ];
   if (JSON.stringify(evidence) !== JSON.stringify(expectedEvidence)) {
     fail('policy.required-evidence-drift', 'required evidence must match the 1.0 contract');
@@ -225,7 +224,7 @@ export function validateDesktopReleasePolicy(value) {
     ['platform.macos-x64', 'unsupported'],
     ['platform.windows', 'unsupported'],
     ['platform.linux', 'unsupported'],
-    ['capability.auto-update', 'unsupported'],
+    ['capability.auto-update', 'candidate'],
     ['capability.remote-crash-reporting', 'unsupported'],
     ['capability.publish', 'operator-blocked'],
     ['channel.mac-app-store', 'unsupported'],
@@ -356,60 +355,6 @@ export function validateDesktopReleasePolicy(value) {
     );
   }
 
-  if (!Array.isArray(policy.lastKnownGoodReleases)) {
-    fail('contract.invalid-array', 'policy.lastKnownGoodReleases');
-  }
-  const seenLkgDigests = new Set();
-  for (const [index, entry] of policy.lastKnownGoodReleases.entries()) {
-    const record = exactKeys(
-      entry,
-      ['version', 'sourceCommit', 'sha256', 'teamIdentifier'],
-      `policy.lastKnownGoodReleases[${index}]`,
-    );
-    parseSemVer(string(record.version, `policy.lastKnownGoodReleases[${index}].version`));
-    string(
-      record.sourceCommit,
-      `policy.lastKnownGoodReleases[${index}].sourceCommit`,
-      SOURCE_COMMIT,
-    );
-    const digest = string(record.sha256, `policy.lastKnownGoodReleases[${index}].sha256`, SHA256);
-    string(
-      record.teamIdentifier,
-      `policy.lastKnownGoodReleases[${index}].teamIdentifier`,
-      /^[A-Z0-9]{10}$/,
-    );
-    if (seenLkgDigests.has(digest)) {
-      fail('contract.duplicate-value', 'policy.lastKnownGoodReleases sha256');
-    }
-    seenLkgDigests.add(digest);
-  }
-
-  const rollback = exactKeys(
-    policy.rollback,
-    [
-      'mode',
-      'retention',
-      'requireArtifactDigest',
-      'requireProjectBackupBeforeDowngrade',
-      'requireBackupVerification',
-      'requireReinstallSmoke',
-      'requireProjectReopenSmoke',
-      'automaticRollback',
-    ],
-    'policy.rollback',
-  );
-  literal(rollback.mode, 'manual-retained-installer', 'policy.rollback.mode');
-  literal(rollback.retention, 'current-and-last-known-good', 'policy.rollback.retention');
-  for (const key of [
-    'requireArtifactDigest',
-    'requireProjectBackupBeforeDowngrade',
-    'requireBackupVerification',
-    'requireReinstallSmoke',
-    'requireProjectReopenSmoke',
-  ]) {
-    literal(rollback[key], true, `policy.rollback.${key}`);
-  }
-  literal(rollback.automaticRollback, 'unsupported', 'policy.rollback.automaticRollback');
   return policy;
 }
 
@@ -420,6 +365,7 @@ export function validateDesktopReleaseManifest(value, policy = loadDesktopReleas
       'schemaVersion',
       'policyId',
       'artifact',
+      'updateArtifact',
       'provenance',
       'runner',
       'signing',
@@ -443,6 +389,32 @@ export function validateDesktopReleaseManifest(value, policy = loadDesktopReleas
   string(artifact.version, 'manifest.artifact.version');
   positiveInteger(artifact.sizeBytes, 'manifest.artifact.sizeBytes');
   string(artifact.sha256, 'manifest.artifact.sha256', SHA256);
+
+  const updateArtifact = exactKeys(
+    manifest.updateArtifact,
+    ['fileName', 'kind', 'platform', 'architecture', 'bundleId', 'version', 'sizeBytes', 'sha256'],
+    'manifest.updateArtifact',
+  );
+  const updateFileName = string(updateArtifact.fileName, 'manifest.updateArtifact.fileName');
+  if (path.basename(updateFileName) !== updateFileName) {
+    fail('manifest.invalid-update-file-name', updateFileName);
+  }
+  literal(updateArtifact.kind, policy.candidate.updateArtifactKind, 'manifest.updateArtifact.kind');
+  literal(updateArtifact.platform, policy.candidate.platform, 'manifest.updateArtifact.platform');
+  literal(
+    updateArtifact.architecture,
+    policy.candidate.architecture,
+    'manifest.updateArtifact.architecture',
+  );
+  literal(updateArtifact.bundleId, artifact.bundleId, 'manifest.updateArtifact.bundleId');
+  string(updateArtifact.version, 'manifest.updateArtifact.version');
+  positiveInteger(updateArtifact.sizeBytes, 'manifest.updateArtifact.sizeBytes');
+  string(updateArtifact.sha256, 'manifest.updateArtifact.sha256', SHA256);
+  literal(
+    updateFileName,
+    expectedDarwinArm64ZipName(updateArtifact.version),
+    'manifest.updateArtifact.fileName',
+  );
 
   const provenance = exactKeys(
     manifest.provenance,
@@ -554,7 +526,9 @@ const pendingVerification = (artifactSha256) => ({
 
 export function generateDesktopReleaseManifest({
   artifactPath,
+  updateArtifactPath,
   version,
+  updateVersion,
   sourceCommit,
   builtAt,
   runnerId,
@@ -569,7 +543,19 @@ export function generateDesktopReleaseManifest({
   if (!existsSync(artifactPath)) {
     fail('manifest.artifact-missing', 'artifact path does not exist');
   }
+  if (typeof updateArtifactPath !== 'string' || updateArtifactPath.length === 0) {
+    fail('manifest.update-artifact-missing', 'update artifact path is required');
+  }
+  if (!existsSync(updateArtifactPath)) {
+    fail('manifest.update-artifact-missing', 'update artifact path does not exist');
+  }
+  const artifactVersion = string(version, 'manifest.input.version');
+  const updateArtifactVersion = string(
+    updateVersion ?? versionFromDarwinArm64ZipName(path.basename(updateArtifactPath)),
+    'manifest.input.updateVersion',
+  );
   const artifactSha256 = sha256File(artifactPath);
+  const updateArtifactSha256 = sha256File(updateArtifactPath);
   const manifest = {
     schemaVersion: 1,
     policyId: policy.policyId,
@@ -579,9 +565,19 @@ export function generateDesktopReleaseManifest({
       platform: policy.candidate.platform,
       architecture: policy.candidate.architecture,
       bundleId: 'dev.tileborne.app',
-      version: string(version, 'manifest.input.version'),
+      version: artifactVersion,
       sizeBytes: statSync(artifactPath).size,
       sha256: artifactSha256,
+    },
+    updateArtifact: {
+      fileName: path.basename(updateArtifactPath),
+      kind: policy.candidate.updateArtifactKind,
+      platform: policy.candidate.platform,
+      architecture: policy.candidate.architecture,
+      bundleId: 'dev.tileborne.app',
+      version: updateArtifactVersion,
+      sizeBytes: statSync(updateArtifactPath).size,
+      sha256: updateArtifactSha256,
     },
     provenance: {
       sourceCommit: string(sourceCommit, 'manifest.input.sourceCommit', SOURCE_COMMIT),
@@ -629,11 +625,6 @@ export function hasUdifTrailer(filePath) {
   );
 }
 
-export function hasZipHeader(filePath) {
-  const bytes = readFileSync(filePath);
-  return bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
-}
-
 export function currentSourceCommit() {
   return execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: repoRoot,
@@ -654,9 +645,57 @@ const defaultCommandRunner = ({ file, args, env }) =>
   });
 
 function validateNativeEvidence(value, expected) {
+  const validateProjectEvidence = (project, at) => {
+    const entry = exactKeys(
+      project,
+      ['found', 'id', 'name', 'engineVersion', 'plugins', 'assetPacks', 'maps', 'starterMap'],
+      at,
+    );
+    literal(entry.found, true, `${at}.found`);
+    string(entry.id, `${at}.id`);
+    literal(entry.name, 'Desktop Release Oracle Persistence Payload', `${at}.name`);
+    string(entry.engineVersion, `${at}.engineVersion`);
+    const plugins = array(entry.plugins, `${at}.plugins`);
+    if (plugins.length < 1) fail('native.project-plugin-missing', `${at}.plugins`);
+    for (const [index, plugin] of plugins.entries()) {
+      const pluginEntry = exactKeys(plugin, ['id', 'version'], `${at}.plugins[${index}]`);
+      string(pluginEntry.id, `${at}.plugins[${index}].id`);
+      string(pluginEntry.version, `${at}.plugins[${index}].version`);
+    }
+    const assetPacks = array(entry.assetPacks, `${at}.assetPacks`);
+    if (assetPacks.length < 1) fail('native.project-asset-pack-missing', `${at}.assetPacks`);
+    for (const [index, pack] of assetPacks.entries()) {
+      const packEntry = exactKeys(pack, ['id', 'version'], `${at}.assetPacks[${index}]`);
+      string(packEntry.id, `${at}.assetPacks[${index}].id`);
+      string(packEntry.version, `${at}.assetPacks[${index}].version`);
+    }
+    const maps = array(entry.maps, `${at}.maps`);
+    if (maps.length < 1) fail('native.project-map-missing', `${at}.maps`);
+    for (const [index, map] of maps.entries()) {
+      const mapEntry = exactKeys(map, ['id', 'path'], `${at}.maps[${index}]`);
+      string(mapEntry.id, `${at}.maps[${index}].id`);
+      string(mapEntry.path, `${at}.maps[${index}].path`);
+    }
+    const starterMap = exactKeys(
+      entry.starterMap,
+      ['id', 'width', 'height', 'tileWidth', 'tileHeight', 'layers', 'objects', 'properties'],
+      `${at}.starterMap`,
+    );
+    string(starterMap.id, `${at}.starterMap.id`);
+    for (const key of ['width', 'height', 'tileWidth', 'tileHeight']) {
+      positiveInteger(starterMap[key], `${at}.starterMap.${key}`);
+    }
+    const layers = array(starterMap.layers, `${at}.starterMap.layers`);
+    if (layers.length < 1) fail('native.project-layer-missing', `${at}.starterMap.layers`);
+    const objects = array(starterMap.objects, `${at}.starterMap.objects`);
+    if (objects.length < 1) fail('native.project-object-missing', `${at}.starterMap.objects`);
+    object(starterMap.properties, `${at}.starterMap.properties`);
+    return entry;
+  };
+
   const evidence = exactKeys(
     value,
-    ['schemaVersion', 'nonce', 'candidate', 'install', 'rollback'],
+    ['schemaVersion', 'nonce', 'candidate', 'install', 'update'],
     'nativeEvidence',
   );
   literal(evidence.schemaVersion, 1, 'nativeEvidence.schemaVersion');
@@ -665,27 +704,17 @@ function validateNativeEvidence(value, expected) {
     evidence.candidate,
     [
       'candidateArtifactSha256',
-      'retainedArtifactSha256',
       'format',
       'candidateArchitecture',
-      'retainedArchitecture',
       'bundleId',
       'embeddedSourceCommit',
       'embeddedVersion',
       'candidateEmbeddedTeamIdentifier',
-      'retainedEmbeddedSourceCommit',
-      'retainedEmbeddedVersion',
-      'retainedEmbeddedTeamIdentifier',
       'candidateAuthority',
-      'retainedAuthority',
       'candidateTeamIdentifier',
-      'retainedTeamIdentifier',
       'candidateHardenedRuntime',
-      'retainedHardenedRuntime',
       'candidateStaple',
-      'retainedStaple',
       'candidateGatekeeper',
-      'retainedGatekeeper',
     ],
     'nativeEvidence.candidate',
   );
@@ -694,18 +723,12 @@ function validateNativeEvidence(value, expected) {
     expected.candidateSha256,
     'nativeEvidence.candidate.candidateArtifactSha256',
   );
-  literal(
-    candidate.retainedArtifactSha256,
-    expected.retainedSha256,
-    'nativeEvidence.candidate.retainedArtifactSha256',
-  );
-  literal(candidate.format, 'udif', 'nativeEvidence.candidate.format');
+  literal(candidate.format, expected.format, 'nativeEvidence.candidate.format');
   literal(
     candidate.candidateArchitecture,
     'arm64',
     'nativeEvidence.candidate.candidateArchitecture',
   );
-  literal(candidate.retainedArchitecture, 'arm64', 'nativeEvidence.candidate.retainedArchitecture');
   literal(candidate.bundleId, 'dev.tileborne.app', 'nativeEvidence.candidate.bundleId');
   literal(
     candidate.embeddedSourceCommit,
@@ -713,75 +736,317 @@ function validateNativeEvidence(value, expected) {
     'nativeEvidence.candidate.embeddedSourceCommit',
   );
   literal(candidate.embeddedVersion, expected.version, 'nativeEvidence.candidate.embeddedVersion');
-  for (const key of [
-    'candidateEmbeddedTeamIdentifier',
-    'retainedEmbeddedTeamIdentifier',
-    'candidateTeamIdentifier',
-    'retainedTeamIdentifier',
-  ]) {
+  for (const key of ['candidateEmbeddedTeamIdentifier', 'candidateTeamIdentifier']) {
     literal(candidate[key], expected.approvedTeamIdentifier, `nativeEvidence.candidate.${key}`);
   }
-  string(
-    candidate.retainedEmbeddedSourceCommit,
-    'nativeEvidence.candidate.retainedEmbeddedSourceCommit',
-    SOURCE_COMMIT,
+  const authority = string(
+    candidate.candidateAuthority,
+    'nativeEvidence.candidate.candidateAuthority',
   );
-  parseSemVer(
-    string(candidate.retainedEmbeddedVersion, 'nativeEvidence.candidate.retainedEmbeddedVersion'),
+  if (!authority.startsWith('Developer ID Application:')) {
+    fail('native.invalid-signing-authority', 'candidateAuthority is not Developer ID Application');
+  }
+  literal(
+    candidate.candidateHardenedRuntime,
+    'runtime',
+    'nativeEvidence.candidate.candidateHardenedRuntime',
   );
-  for (const key of ['candidateAuthority', 'retainedAuthority']) {
-    const authority = string(candidate[key], `nativeEvidence.candidate.${key}`);
-    if (!authority.startsWith('Developer ID Application:')) {
-      fail('native.invalid-signing-authority', `${key} is not Developer ID Application`);
+  literal(candidate.candidateStaple, 'validated', 'nativeEvidence.candidate.candidateStaple');
+  literal(
+    candidate.candidateGatekeeper,
+    'accepted',
+    'nativeEvidence.candidate.candidateGatekeeper',
+  );
+
+  const installRecord = object(evidence.install, 'nativeEvidence.install');
+  const allowedInstallKeys = new Set([
+    'location',
+    'firstLaunchProject',
+    'sourceVersion',
+    'targetVersion',
+    'loopbackFeedUrl',
+    'feedMetadataRequests',
+    'feedArtifactRequests',
+    'relaunchProject',
+    'failureMatrix',
+  ]);
+  const missingInstallKeys = [
+    'location',
+    'firstLaunchProject',
+    'sourceVersion',
+    'targetVersion',
+    'loopbackFeedUrl',
+    'feedMetadataRequests',
+    'feedArtifactRequests',
+    'relaunchProject',
+  ].filter((key) => !(key in installRecord));
+  const extraInstallKeys = Object.keys(installRecord).filter((key) => !allowedInstallKeys.has(key));
+  if (missingInstallKeys.length > 0) {
+    fail('contract.missing-field', `nativeEvidence.install: ${missingInstallKeys.join(', ')}`);
+  }
+  if (extraInstallKeys.length > 0) {
+    fail('contract.unknown-field', `nativeEvidence.install: ${extraInstallKeys.join(', ')}`);
+  }
+  const install = installRecord;
+  const requiredFailureModes = [
+    'stale-version',
+    'same-version',
+    'wrong-architecture',
+    'wrong-bundle',
+    'wrong-team',
+    'malformed-metadata',
+    'unavailable-feed',
+    'interrupted-download',
+  ];
+  const expectedFailureOutcomes = new Map([
+    ['stale-version', { state: 'error', code: 'non-newer-version', artifactRequests: 1 }],
+    ['same-version', { state: 'error', code: 'non-newer-version', artifactRequests: 1 }],
+    ['wrong-architecture', { state: 'error', code: 'policy-mismatch', artifactRequests: 1 }],
+    ['wrong-bundle', { state: 'error', code: 'updater-error', artifactRequests: 1 }],
+    ['wrong-team', { state: 'error', code: 'signature-failed', artifactRequests: 1 }],
+    ['malformed-metadata', { state: 'error', code: 'updater-error', artifactRequests: 0 }],
+    ['unavailable-feed', { state: 'error', code: 'feed-unavailable', artifactRequests: 0 }],
+    ['interrupted-download', { state: 'error', code: 'feed-unavailable', artifactRequests: 1 }],
+  ]);
+  if (!Array.isArray(install.failureMatrix)) {
+    fail('native.failure-matrix-missing', 'Native verifier must prove rejected update fixtures.');
+  }
+  if (install.failureMatrix.length !== requiredFailureModes.length) {
+    fail('native.failure-matrix-incomplete', 'Native failure matrix must cover every mode once.');
+  }
+  const firstLaunchProject = validateProjectEvidence(
+    install.firstLaunchProject,
+    'nativeEvidence.install.firstLaunchProject',
+  );
+  const observedFailureModes = new Set();
+  for (const [index, result] of install.failureMatrix.entries()) {
+    const entry = exactKeys(
+      result,
+      [
+        'mode',
+        'rejectionState',
+        'diagnosticCode',
+        'fixtureIdentity',
+        'feedMetadataRequests',
+        'feedArtifactRequests',
+        'projectAfterRejection',
+      ],
+      `nativeEvidence.install.failureMatrix[${index}]`,
+    );
+    const mode = string(entry.mode, `nativeEvidence.install.failureMatrix[${index}].mode`);
+    if (!requiredFailureModes.includes(mode)) {
+      fail('native.failure-matrix-unknown-mode', mode);
+    }
+    if (observedFailureModes.has(mode)) {
+      fail('native.failure-matrix-duplicate-mode', mode);
+    }
+    observedFailureModes.add(mode);
+    const expectedOutcome = expectedFailureOutcomes.get(mode);
+    literal(
+      entry.rejectionState,
+      expectedOutcome.state,
+      `nativeEvidence.install.failureMatrix[${index}].rejectionState`,
+    );
+    literal(
+      entry.diagnosticCode,
+      expectedOutcome.code,
+      `nativeEvidence.install.failureMatrix[${index}].diagnosticCode`,
+    );
+    const identity = exactKeys(
+      entry.fixtureIdentity,
+      [
+        'expectedArchitecture',
+        'observedArchitecture',
+        'expectedBundleId',
+        'observedBundleId',
+        'expectedTeamIdentifier',
+        'observedTeamIdentifier',
+      ],
+      `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity`,
+    );
+    literal(
+      identity.expectedArchitecture,
+      'arm64',
+      `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.expectedArchitecture`,
+    );
+    literal(
+      identity.expectedBundleId,
+      'dev.tileborne.app',
+      `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.expectedBundleId`,
+    );
+    string(
+      identity.expectedTeamIdentifier,
+      `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.expectedTeamIdentifier`,
+    );
+    if (mode === 'wrong-architecture') {
+      literal(
+        identity.observedArchitecture,
+        'x86_64',
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedArchitecture`,
+      );
+    } else {
+      literal(
+        identity.observedArchitecture,
+        'arm64',
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedArchitecture`,
+      );
+    }
+    if (mode === 'wrong-bundle') {
+      literal(
+        identity.observedBundleId,
+        'dev.tileborne.other',
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedBundleId`,
+      );
+    } else {
+      literal(
+        identity.observedBundleId,
+        'dev.tileborne.app',
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedBundleId`,
+      );
+    }
+    if (mode === 'wrong-team') {
+      literal(
+        identity.observedTeamIdentifier,
+        'ad-hoc',
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedTeamIdentifier`,
+      );
+    } else if (mode === 'wrong-architecture') {
+      literal(
+        identity.observedTeamIdentifier,
+        expected.approvedTeamIdentifier,
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedTeamIdentifier`,
+      );
+    } else {
+      string(
+        identity.observedTeamIdentifier,
+        `nativeEvidence.install.failureMatrix[${index}].fixtureIdentity.observedTeamIdentifier`,
+      );
+    }
+    if (expectedOutcome.artifactRequests > 0) {
+      positiveInteger(
+        entry.feedArtifactRequests,
+        `nativeEvidence.install.failureMatrix[${index}].feedArtifactRequests`,
+      );
+    } else {
+      literal(
+        entry.feedArtifactRequests,
+        0,
+        `nativeEvidence.install.failureMatrix[${index}].feedArtifactRequests`,
+      );
+    }
+    if (!Number.isSafeInteger(entry.feedMetadataRequests) || entry.feedMetadataRequests < 0) {
+      fail(
+        'contract.invalid-integer',
+        `nativeEvidence.install.failureMatrix[${index}].feedMetadataRequests must be a non-negative safe integer`,
+      );
+    }
+    if (mode !== 'unavailable-feed') {
+      positiveInteger(
+        entry.feedMetadataRequests,
+        `nativeEvidence.install.failureMatrix[${index}].feedMetadataRequests`,
+      );
+    } else {
+      literal(
+        entry.feedMetadataRequests,
+        0,
+        `nativeEvidence.install.failureMatrix[${index}].feedMetadataRequests`,
+      );
+    }
+    literal(
+      validateProjectEvidence(
+        entry.projectAfterRejection,
+        `nativeEvidence.install.failureMatrix[${index}].projectAfterRejection`,
+      ).id,
+      firstLaunchProject.id,
+      `nativeEvidence.install.failureMatrix[${index}].projectAfterRejection.id`,
+    );
+    literal(
+      JSON.stringify(entry.projectAfterRejection),
+      JSON.stringify(firstLaunchProject),
+      `nativeEvidence.install.failureMatrix[${index}].projectAfterRejection`,
+    );
+  }
+  for (const mode of requiredFailureModes) {
+    if (!observedFailureModes.has(mode)) {
+      fail('native.failure-matrix-missing-mode', mode);
     }
   }
-  for (const key of ['candidateHardenedRuntime', 'retainedHardenedRuntime']) {
-    literal(candidate[key], 'runtime', `nativeEvidence.candidate.${key}`);
-  }
-  for (const key of ['candidateStaple', 'retainedStaple']) {
-    literal(candidate[key], 'validated', `nativeEvidence.candidate.${key}`);
-  }
-  for (const key of ['candidateGatekeeper', 'retainedGatekeeper']) {
-    literal(candidate[key], 'accepted', `nativeEvidence.candidate.${key}`);
-  }
-
-  const install = exactKeys(
-    evidence.install,
-    ['location', 'firstLaunchProjectId', 'relaunchProjectId'],
-    'nativeEvidence.install',
-  );
   literal(install.location, 'temporary-applications', 'nativeEvidence.install.location');
-  string(install.firstLaunchProjectId, 'nativeEvidence.install.firstLaunchProjectId');
+  literal(install.sourceVersion, expected.version, 'nativeEvidence.install.sourceVersion');
+  literal(install.targetVersion, expected.updateVersion, 'nativeEvidence.install.targetVersion');
+  const loopbackFeedUrl = string(install.loopbackFeedUrl, 'nativeEvidence.install.loopbackFeedUrl');
+  if (!/^http:\/\/127\.0\.0\.1:\d+\/feed$/.test(loopbackFeedUrl)) {
+    fail('native.invalid-loopback-feed', 'native verifier must use an ephemeral loopback feed');
+  }
+  positiveInteger(install.feedMetadataRequests, 'nativeEvidence.install.feedMetadataRequests');
+  positiveInteger(install.feedArtifactRequests, 'nativeEvidence.install.feedArtifactRequests');
   literal(
-    install.relaunchProjectId,
-    install.firstLaunchProjectId,
-    'nativeEvidence.install.relaunchProjectId',
+    validateProjectEvidence(install.relaunchProject, 'nativeEvidence.install.relaunchProject').id,
+    firstLaunchProject.id,
+    'nativeEvidence.install.relaunchProject.id',
+  );
+  literal(
+    JSON.stringify(install.relaunchProject),
+    JSON.stringify(firstLaunchProject),
+    'nativeEvidence.install.relaunchProject',
   );
 
-  const rollback = exactKeys(
-    evidence.rollback,
-    ['action', 'backupSha256', 'backupSizeBytes', 'reopenedProjectId'],
-    'nativeEvidence.rollback',
+  const update = exactKeys(
+    evidence.update,
+    [
+      'updateArtifactSha256',
+      'format',
+      'updateArchitecture',
+      'bundleId',
+      'embeddedSourceCommit',
+      'embeddedVersion',
+      'updateEmbeddedTeamIdentifier',
+      'updateAuthority',
+      'updateTeamIdentifier',
+      'updateHardenedRuntime',
+      'updateStaple',
+      'updateGatekeeper',
+    ],
+    'nativeEvidence.update',
   );
-  literal(rollback.action, 'retained-installer-reinstalled', 'nativeEvidence.rollback.action');
-  string(rollback.backupSha256, 'nativeEvidence.rollback.backupSha256', SHA256);
-  positiveInteger(rollback.backupSizeBytes, 'nativeEvidence.rollback.backupSizeBytes');
   literal(
-    rollback.reopenedProjectId,
-    install.firstLaunchProjectId,
-    'nativeEvidence.rollback.reopenedProjectId',
+    update.updateArtifactSha256,
+    expected.updateSha256,
+    'nativeEvidence.update.updateArtifactSha256',
   );
+  literal(update.format, 'zip', 'nativeEvidence.update.format');
+  literal(update.updateArchitecture, 'arm64', 'nativeEvidence.update.updateArchitecture');
+  literal(update.bundleId, 'dev.tileborne.app', 'nativeEvidence.update.bundleId');
+  literal(
+    update.embeddedSourceCommit,
+    expected.sourceCommit,
+    'nativeEvidence.update.embeddedSourceCommit',
+  );
+  literal(update.embeddedVersion, expected.updateVersion, 'nativeEvidence.update.embeddedVersion');
+  for (const key of ['updateEmbeddedTeamIdentifier', 'updateTeamIdentifier']) {
+    literal(update[key], expected.approvedTeamIdentifier, `nativeEvidence.update.${key}`);
+  }
+  const updateAuthority = string(update.updateAuthority, 'nativeEvidence.update.updateAuthority');
+  if (!updateAuthority.startsWith('Developer ID Application:')) {
+    fail(
+      'native.invalid-update-signing-authority',
+      'updateAuthority is not Developer ID Application',
+    );
+  }
+  literal(update.updateHardenedRuntime, 'runtime', 'nativeEvidence.update.updateHardenedRuntime');
+  literal(update.updateStaple, 'validated', 'nativeEvidence.update.updateStaple');
+  literal(update.updateGatekeeper, 'accepted', 'nativeEvidence.update.updateGatekeeper');
   return evidence;
 }
 
 export function verifyMacOsReleaseEvidence({
   artifactPath,
-  retainedArtifactPath,
-  backupArtifactPath,
+  updateArtifactPath,
   candidateSha256,
-  retainedSha256,
+  updateCandidateSha256,
   sourceCommit,
   version,
+  updateVersion,
   approvedTeamIdentifier,
   commandRunner = defaultCommandRunner,
   hostPlatform = process.platform,
@@ -800,12 +1065,12 @@ export function verifyMacOsReleaseEvidence({
       nativeVerifierPath,
       '--candidate',
       artifactPath,
-      '--retained',
-      retainedArtifactPath,
-      '--backup-output',
-      backupArtifactPath,
+      '--update-artifact',
+      updateArtifactPath,
       '--nonce',
       nonce,
+      '--failure-matrix',
+      '1',
     ],
     env: process.env,
   });
@@ -825,11 +1090,193 @@ export function verifyMacOsReleaseEvidence({
   return validateNativeEvidence(parsed, {
     nonce,
     candidateSha256,
-    retainedSha256,
+    format: 'udif',
     sourceCommit,
     version,
+    updateVersion,
+    updateSha256: updateCandidateSha256,
     approvedTeamIdentifier,
   });
+}
+
+const commandOutput = ({ file, args, commandRunner, env = process.env, errorCode }) => {
+  const result = commandRunner({ file, args, env });
+  if (result.error !== undefined || result.status !== 0) {
+    const detail = String(result.stderr ?? '').trim();
+    fail(
+      errorCode,
+      detail.length > 0 ? detail : (result.error?.message ?? `exit ${String(result.status)}`),
+    );
+  }
+  const stdout = String(result.stdout ?? '').trim();
+  return stdout.length > 0 ? stdout : String(result.stderr ?? '').trim();
+};
+
+const findAppBundles = (root) => {
+  const apps = [];
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const candidate = path.join(directory, entry.name);
+      if (!entry.isDirectory()) continue;
+      if (entry.name.endsWith('.app')) {
+        apps.push(candidate);
+      } else {
+        visit(candidate);
+      }
+    }
+  };
+  visit(root);
+  return apps;
+};
+
+function verifyMacOsUpdateArtifactEvidence({
+  updateArtifactPath,
+  updateCandidateSha256,
+  sourceCommit,
+  version,
+  approvedTeamIdentifier,
+  commandRunner = defaultCommandRunner,
+  hostPlatform = process.platform,
+  hostArchitecture = process.arch,
+}) {
+  if (hostPlatform !== 'darwin' || hostArchitecture !== 'arm64') {
+    fail(
+      'native.unsupported-host',
+      `native release verification requires darwin/arm64, observed ${hostPlatform}/${hostArchitecture}`,
+    );
+  }
+  const extractionRoot = mkdtempSync(path.join(os.tmpdir(), 'tileborne-update-zip-'));
+  try {
+    commandOutput({
+      file: '/usr/bin/ditto',
+      args: ['-x', '-k', updateArtifactPath, extractionRoot],
+      commandRunner,
+      errorCode: 'artifact.update-format-invalid',
+    });
+    const apps = findAppBundles(extractionRoot);
+    if (apps.length !== 1) {
+      fail(
+        'artifact.update-app-count-invalid',
+        `Candidate update ZIP must contain exactly one app bundle, found ${apps.length}`,
+      );
+    }
+    const appPath = apps[0];
+    const infoPlist = path.join(appPath, 'Contents', 'Info.plist');
+    const bundleId = commandOutput({
+      file: '/usr/bin/plutil',
+      args: ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlist],
+      commandRunner,
+      errorCode: 'artifact.update-metadata-invalid',
+    });
+    const bundleVersion = commandOutput({
+      file: '/usr/bin/plutil',
+      args: ['-extract', 'CFBundleShortVersionString', 'raw', '-o', '-', infoPlist],
+      commandRunner,
+      errorCode: 'artifact.update-metadata-invalid',
+    });
+    const executableName = commandOutput({
+      file: '/usr/bin/plutil',
+      args: ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', infoPlist],
+      commandRunner,
+      errorCode: 'artifact.update-metadata-invalid',
+    });
+    const executablePath = path.join(appPath, 'Contents', 'MacOS', executableName);
+    const architectures = commandOutput({
+      file: '/usr/bin/lipo',
+      args: ['-archs', executablePath],
+      commandRunner,
+      errorCode: 'artifact.update-architecture-invalid',
+    })
+      .split(/\s+/)
+      .filter(Boolean);
+    if (architectures.length !== 1 || architectures[0] !== 'arm64') {
+      fail('artifact.update-architecture-invalid', architectures.join(','));
+    }
+    const provenancePath = path.join(
+      appPath,
+      'Contents',
+      'Resources',
+      'tileborne-desktop-provenance.json',
+    );
+    let releaseProvenance;
+    try {
+      releaseProvenance = JSON.parse(readFileSync(provenancePath, 'utf8'));
+    } catch {
+      fail('artifact.update-provenance-invalid', provenancePath);
+    }
+    const provenance = exactKeys(
+      releaseProvenance,
+      ['schemaVersion', 'policyId', 'sourceCommit', 'version', 'teamIdentifier', 'buildCommand'],
+      'artifact.update.provenance',
+    );
+    literal(provenance.schemaVersion, 1, 'artifact.update.provenance.schemaVersion');
+    literal(provenance.policyId, 'tileborne-desktop-1.0', 'artifact.update.provenance.policyId');
+    literal(provenance.sourceCommit, sourceCommit, 'artifact.update.provenance.sourceCommit');
+    literal(provenance.version, version, 'artifact.update.provenance.version');
+    literal(
+      provenance.teamIdentifier,
+      approvedTeamIdentifier,
+      'artifact.update.provenance.teamIdentifier',
+    );
+    literal(
+      provenance.buildCommand,
+      'pnpm --filter @tileborne/desktop package',
+      'artifact.update.provenance.buildCommand',
+    );
+    literal(bundleId, 'dev.tileborne.app', 'artifact.update.bundleId');
+    literal(bundleVersion, version, 'artifact.update.version');
+
+    const display = commandOutput({
+      file: '/usr/bin/codesign',
+      args: ['-dv', '--verbose=4', appPath],
+      commandRunner,
+      errorCode: 'artifact.update-signature-invalid',
+    });
+    commandOutput({
+      file: '/usr/bin/codesign',
+      args: ['--verify', '--deep', '--strict', '--verbose=4', appPath],
+      commandRunner,
+      errorCode: 'artifact.update-signature-invalid',
+    });
+    commandOutput({
+      file: '/usr/bin/xcrun',
+      args: ['stapler', 'validate', appPath],
+      commandRunner,
+      errorCode: 'artifact.update-notarization-invalid',
+    });
+    commandOutput({
+      file: '/usr/sbin/spctl',
+      args: ['--assess', '--type', 'execute', '--verbose=4', appPath],
+      commandRunner,
+      errorCode: 'artifact.update-gatekeeper-invalid',
+    });
+    const authority = /^Authority=(Developer ID Application:[^\n]+)$/m.exec(display)?.[1];
+    const teamIdentifier = /^TeamIdentifier=([A-Z0-9]{10})$/m.exec(display)?.[1];
+    const flags = /^CodeDirectory .+ flags=.+\(([^)]+)\)/m.exec(display)?.[1] ?? '';
+    if (typeof authority !== 'string' || typeof teamIdentifier !== 'string') {
+      fail('artifact.update-signature-invalid', 'Developer ID Application signature is required');
+    }
+    literal(teamIdentifier, approvedTeamIdentifier, 'artifact.update.teamIdentifier');
+    if (!flags.split(',').includes('runtime')) {
+      fail('artifact.update-hardened-runtime-invalid', 'hardened runtime is required');
+    }
+    return {
+      candidateArtifactSha256: updateCandidateSha256,
+      format: 'zip',
+      candidateArchitecture: 'arm64',
+      bundleId,
+      embeddedSourceCommit: provenance.sourceCommit,
+      embeddedVersion: provenance.version,
+      candidateEmbeddedTeamIdentifier: provenance.teamIdentifier,
+      candidateAuthority: authority,
+      candidateTeamIdentifier: teamIdentifier,
+      candidateHardenedRuntime: 'runtime',
+      candidateStaple: 'validated',
+      candidateGatekeeper: 'accepted',
+    };
+  } finally {
+    rmSync(extractionRoot, { recursive: true, force: true });
+  }
 }
 
 export function verifyPublicationBoundary({ environment, commandRunner = defaultCommandRunner }) {
@@ -850,8 +1297,7 @@ export function verifyPublicationBoundary({ environment, commandRunner = default
  */
 export function evaluateDesktopRelease({
   artifactPath,
-  retainedArtifactPath,
-  backupArtifactPath,
+  updateArtifactPath,
   manifest,
   environment = process.env,
   expectedSourceCommit = currentSourceCommit(),
@@ -866,8 +1312,9 @@ export function evaluateDesktopRelease({
   const blockers = [];
   let validManifest;
   let candidateSha256;
-  let retainedSha256;
+  let updateCandidateSha256;
   let nativeEvidence;
+  let updateEvidence;
   let approvedTeamIdentifier;
 
   if (manifest === undefined) {
@@ -903,6 +1350,41 @@ export function evaluateDesktopRelease({
     }
   }
 
+  if (updateArtifactPath === undefined || !existsSync(updateArtifactPath)) {
+    addBlocker(blockers, 'artifact.update-file-missing', 'Candidate update ZIP is required.');
+  } else if (validManifest !== undefined) {
+    updateCandidateSha256 = sha256File(updateArtifactPath);
+    const size = statSync(updateArtifactPath).size;
+    if (updateCandidateSha256 !== validManifest.updateArtifact.sha256) {
+      addBlocker(
+        blockers,
+        'artifact.update-sha256-mismatch',
+        'Candidate update ZIP digest does not match manifest.',
+      );
+    }
+    if (size !== validManifest.updateArtifact.sizeBytes) {
+      addBlocker(
+        blockers,
+        'artifact.update-size-mismatch',
+        'Candidate update ZIP size does not match manifest.',
+      );
+    }
+    if (path.basename(updateArtifactPath) !== validManifest.updateArtifact.fileName) {
+      addBlocker(
+        blockers,
+        'artifact.update-name-mismatch',
+        'Candidate update ZIP name does not match manifest.',
+      );
+    }
+    if (path.extname(updateArtifactPath).toLowerCase() !== '.zip') {
+      addBlocker(
+        blockers,
+        'artifact.update-format-invalid',
+        'Candidate update artifact must be the Squirrel.Mac ZIP.',
+      );
+    }
+  }
+
   if (
     validManifest !== undefined &&
     validManifest.provenance.sourceCommit !== expectedSourceCommit
@@ -911,40 +1393,6 @@ export function evaluateDesktopRelease({
       blockers,
       'provenance.source-commit-mismatch',
       'Manifest source commit does not match the evaluated checkout.',
-    );
-  }
-
-  if (retainedArtifactPath === undefined || !existsSync(retainedArtifactPath)) {
-    addBlocker(
-      blockers,
-      'rollback.retained-artifact-missing',
-      'A last-known-good retained DMG is required.',
-    );
-  } else {
-    retainedSha256 = sha256File(retainedArtifactPath);
-    if (candidateSha256 !== undefined && retainedSha256 === candidateSha256) {
-      addBlocker(
-        blockers,
-        'rollback.retained-artifact-not-prior',
-        'Rollback requires a distinct last-known-good installer.',
-      );
-    }
-    if (
-      path.extname(retainedArtifactPath).toLowerCase() !== '.dmg' ||
-      !hasUdifTrailer(retainedArtifactPath)
-    ) {
-      addBlocker(
-        blockers,
-        'rollback.retained-format-invalid',
-        'Retained installer must be a real UDIF DMG.',
-      );
-    }
-  }
-  if (backupArtifactPath === undefined) {
-    addBlocker(
-      blockers,
-      'rollback.backup-output-missing',
-      'Native rollback verifier requires a backup archive output path.',
     );
   }
 
@@ -969,27 +1417,54 @@ export function evaluateDesktopRelease({
   if (
     preNativeBlockers === 0 &&
     artifactPath !== undefined &&
-    retainedArtifactPath !== undefined &&
-    backupArtifactPath !== undefined &&
     candidateSha256 !== undefined &&
-    retainedSha256 !== undefined &&
     validManifest !== undefined &&
+    updateCandidateSha256 !== undefined &&
     approvedTeamIdentifier !== undefined
   ) {
     try {
       nativeEvidence = verifyMacOsReleaseEvidence({
         artifactPath,
-        retainedArtifactPath,
-        backupArtifactPath,
+        updateArtifactPath,
         candidateSha256,
-        retainedSha256,
+        updateCandidateSha256,
         sourceCommit: validManifest.provenance.sourceCommit,
         version: validManifest.artifact.version,
+        updateVersion: validManifest.updateArtifact.version,
         approvedTeamIdentifier,
         commandRunner: nativeCommandRunner,
         hostPlatform,
         hostArchitecture,
       });
+      updateEvidence = verifyMacOsUpdateArtifactEvidence({
+        updateArtifactPath,
+        updateCandidateSha256,
+        sourceCommit: validManifest.provenance.sourceCommit,
+        version: validManifest.updateArtifact.version,
+        approvedTeamIdentifier,
+        commandRunner: nativeCommandRunner,
+        hostPlatform,
+        hostArchitecture,
+      });
+      const updateBindings = [
+        ['bundleId', 'artifact.update-bundle-id-mismatch'],
+        ['embeddedSourceCommit', 'artifact.update-source-mismatch'],
+        ['candidateEmbeddedTeamIdentifier', 'artifact.update-embedded-team-mismatch'],
+        ['candidateAuthority', 'artifact.update-authority-mismatch'],
+        ['candidateTeamIdentifier', 'artifact.update-team-mismatch'],
+        ['candidateHardenedRuntime', 'artifact.update-hardened-runtime-mismatch'],
+        ['candidateStaple', 'artifact.update-staple-mismatch'],
+        ['candidateGatekeeper', 'artifact.update-gatekeeper-mismatch'],
+      ];
+      for (const [key, code] of updateBindings) {
+        if (nativeEvidence.candidate[key] !== updateEvidence[key]) {
+          addBlocker(
+            blockers,
+            code,
+            'Candidate update ZIP app does not match verified DMG-installed app evidence.',
+          );
+        }
+      }
       if (validManifest.signing.authority !== nativeEvidence.candidate.candidateAuthority) {
         addBlocker(
           blockers,
@@ -1051,52 +1526,6 @@ export function evaluateDesktopRelease({
           'Manifest must attach redacted successful Gatekeeper assessment evidence.',
         );
       }
-      if (!existsSync(backupArtifactPath) || !hasZipHeader(backupArtifactPath)) {
-        addBlocker(
-          blockers,
-          'rollback.backup-format-invalid',
-          'Native verifier did not produce a ZIP project backup.',
-        );
-      } else {
-        const backupSha256 = sha256File(backupArtifactPath);
-        const backupSizeBytes = statSync(backupArtifactPath).size;
-        if (
-          backupSha256 !== nativeEvidence.rollback.backupSha256 ||
-          backupSizeBytes !== nativeEvidence.rollback.backupSizeBytes
-        ) {
-          addBlocker(
-            blockers,
-            'rollback.backup-provenance-mismatch',
-            'Backup archive does not match native rollback evidence.',
-          );
-        }
-      }
-      if (
-        compareSemVer(
-          nativeEvidence.candidate.retainedEmbeddedVersion,
-          validManifest.artifact.version,
-        ) >= 0
-      ) {
-        addBlocker(
-          blockers,
-          'rollback.lkg-version-not-earlier',
-          'Retained installer must have a strictly earlier SemVer than the candidate.',
-        );
-      }
-      const approvedLkg = policy.lastKnownGoodReleases.some(
-        (entry) =>
-          entry.version === nativeEvidence.candidate.retainedEmbeddedVersion &&
-          entry.sourceCommit === nativeEvidence.candidate.retainedEmbeddedSourceCommit &&
-          entry.sha256 === retainedSha256 &&
-          entry.teamIdentifier === nativeEvidence.candidate.retainedEmbeddedTeamIdentifier,
-      );
-      if (!approvedLkg) {
-        addBlocker(
-          blockers,
-          'rollback.lkg-not-approved',
-          'Retained installer does not match the operator-approved LKG allowlist.',
-        );
-      }
     } catch (error) {
       addBlocker(blockers, error.code ?? 'native.verification-failed', String(error.message));
     }
@@ -1140,6 +1569,12 @@ export function evaluateDesktopRelease({
   const knownLimitations = policy.support
     .filter(({ status }) => status !== 'candidate')
     .map(({ id, status, reason }) => ({ id, status, reason }));
+  const supportStatus = policy.support.map(({ id, documentationLabel, status, reason }) => ({
+    id,
+    documentationLabel,
+    status,
+    reason,
+  }));
   return {
     schemaVersion: 1,
     policyId: policy.policyId,
@@ -1155,14 +1590,15 @@ export function evaluateDesktopRelease({
         ? 'operator-blocked'
         : 'approved',
     blockers,
+    supportStatus,
     knownLimitations,
     ...(nativeEvidence === undefined
       ? {}
       : {
           nativeEvidence: {
             candidateTeamIdentifier: nativeEvidence.candidate.candidateTeamIdentifier,
-            projectId: nativeEvidence.install.firstLaunchProjectId,
-            backupSha256: nativeEvidence.rollback.backupSha256,
+            projectId: nativeEvidence.install.firstLaunchProject.id,
+            updateArtifactSha256: updateEvidence?.candidateArtifactSha256,
           },
         }),
   };
@@ -1184,8 +1620,7 @@ function parseArgs(args) {
   const values = {};
   const allowed = new Set([
     'artifact',
-    'retained-artifact',
-    'backup-output',
+    'update-artifact',
     'manifest',
     'output',
     'expect',
@@ -1211,7 +1646,7 @@ function parseArgs(args) {
 
 function usage() {
   console.error(
-    'Usage: node scripts/desktop-release-contract.mjs <policy|manifest|status|verify> [--artifact path --retained-artifact path --backup-output path --manifest path --output path --expect go|no-go --skip-publication 1 --version 1.0.0 --source-commit <sha> --built-at <iso> --runner-id <id> --signing-authority <authority> --team-id <team>]',
+    'Usage: node scripts/desktop-release-contract.mjs <policy|manifest|status|verify> [--artifact path --update-artifact path --manifest path --output path --expect go|no-go --skip-publication 1 --version 1.0.0 --source-commit <sha> --built-at <iso> --runner-id <id> --signing-authority <authority> --team-id <team>]',
   );
 }
 
@@ -1226,6 +1661,7 @@ function main(argv) {
     const args = parseArgs(rawArgs);
     const manifest = generateDesktopReleaseManifest({
       artifactPath: args.artifact,
+      updateArtifactPath: args['update-artifact'],
       version: args.version,
       sourceCommit: args['source-commit'],
       builtAt: args['built-at'],
@@ -1246,8 +1682,7 @@ function main(argv) {
   const args = parseArgs(rawArgs);
   const status = evaluateDesktopRelease({
     artifactPath: args.artifact,
-    retainedArtifactPath: args['retained-artifact'],
-    backupArtifactPath: args['backup-output'],
+    updateArtifactPath: args['update-artifact'],
     manifest: readJson(args.manifest, 'manifest'),
     requirePublication: args['skip-publication'] !== '1',
   });

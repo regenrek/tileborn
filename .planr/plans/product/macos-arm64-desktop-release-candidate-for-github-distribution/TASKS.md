@@ -52,32 +52,36 @@ Acceptance criteria:
 - Publish remains a separate approval-gated job or command that cannot run in
   this goal.
 
-### TASK-005: Prove Gatekeeper installation relaunch and project-data safety
+### TASK-005: Prove Gatekeeper installation relaunch and project-data persistence
 
 Goal:
-Exercise the DMG as an end user would and prove the candidate can safely open a
-verified backup of an existing Tileborne project.
+Exercise the DMG as an end user would and prove the candidate preserves project
+identity across the first launch and relaunch in isolated user data.
 
 Acceptance criteria:
 - The DMG is mounted, copied into the supported application location, assessed
   by Gatekeeper, launched, closed, and relaunched through the canonical native
   smoke path.
-- The smoke records app identity/version and verifies project backup integrity
-  before and after open/save/reopen without committing project data or receipts.
-- Failure paths leave the original project and backup recoverable.
+- The smoke records app identity/version, creates a representative project, and
+  verifies the same project remains listed after relaunch without committing
+  project data or receipts.
+- Failure paths leave isolated project data recoverable for local inspection.
 
-### TASK-006: Prove retained-installer manual rollback
+### TASK-006: Implement the signed automatic-update path
 
 Goal:
-Define and execute the supported manual rollback using a digest-pinned
-last-known-good signed installer.
+Let the macOS arm64 desktop application discover and safely stage newer signed
+Tileborne releases from the GitHub release channel.
 
 Acceptance criteria:
-- Retention metadata and compatibility policy identify the exact prior artifact
-  without storing it or credentials in Git.
-- The candidate is replaced through the documented non-destructive procedure,
-  and the backed-up project reopens without data loss in the supported prior app.
-- Automatic update/rollback remains explicitly unsupported.
+- Update lifecycle ownership lives in the Electron main process; feed and
+  artifact metadata remain owned by the desktop release pipeline.
+- Only a newer version with the expected channel, bundle identity, architecture,
+  signing continuity, and release metadata can be staged.
+- Missing, invalid, interrupted, or unavailable updates leave the installed app
+  and project data untouched and provide an actionable status to the user.
+- Verification uses a local or non-publishing fixture feed. It creates no tag,
+  GitHub Release, upload, or other remote publication state.
 
 ### TASK-007: Run clean-checkout release gates and finalize maintainer docs
 
@@ -87,15 +91,16 @@ redacted maintainer handoff.
 
 Acceptance criteria:
 - Frozen install, release gates, docs, typecheck, lint, tests, build, audit,
-  diff check, desktop policy, native candidate, install, and rollback gates pass.
+  diff check, desktop policy, native candidate, install, and updater gates pass.
 - Documentation states direct GitHub download, system requirements, checksum
-  verification, installation, backup, rollback, known limitations, and support.
+  verification, installation, automatic updates, recovery, known limitations,
+  and support.
 - The resulting status is release-candidate-ready but unpublished.
 
 ### TASK-008: Independently review the complete desktop candidate
 
 Goal:
-Audit ownership, security, artifact identity, native behavior, rollback, and the
+Audit ownership, security, artifact identity, native behavior, update safety, and the
 absence of unauthorized publication before closing the goal.
 
 Acceptance criteria:

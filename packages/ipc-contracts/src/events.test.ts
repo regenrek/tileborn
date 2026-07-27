@@ -13,7 +13,7 @@ import {
 
 describe('IPC events', () => {
   it('exports the main trigger-only event registry', () => {
-    expect(MainIpcEvents).toHaveLength(16);
+    expect(MainIpcEvents).toHaveLength(17);
     expect(MainEventRegistry.byChannel['tileborne:projects:changed']).toBeDefined();
     expect(MainEventRegistry.byChannel['tileborne:logs:appended']).toBeDefined();
     expect(MainEventRegistry.byChannel['tileborne:assets:capabilityRefreshed']).toBe(
@@ -29,6 +29,7 @@ describe('IPC events', () => {
     expect(MainEventRegistry.byChannel['tileborne:tiled-source-rules:diagnostics']).toBe(
       TiledSourceRulesDiagnosticsEvent,
     );
+    expect(MainEventRegistry.byChannel['tileborne:desktop-updates:stateChanged']).toBeDefined();
     expect(
       Schema.decodeUnknownSync(RuntimeSnapshotEvent.payload)({
         sessionId: 'session-1',

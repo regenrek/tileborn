@@ -36,7 +36,7 @@ Plugins extend the editor and runtime through declarative manifests and build-ti
 | [CLI Reference](/cli/)                   | Generated `tileborne --help` command tree                                   |
 | [API Reference](/reference/)             | TypeDoc output for public packages                                          |
 | [Release Readiness](/release-readiness/) | Release-candidate gates, Cloudflare proof, secrets, rollback, caveats       |
-| [Desktop Release](/desktop-release/)     | macOS arm64 candidate evidence, recovery, rollback, and publication gate    |
+| [Desktop Release](/desktop-release/)     | macOS arm64 candidate evidence, recovery, and publication gate              |
 
 ## Public packages
 

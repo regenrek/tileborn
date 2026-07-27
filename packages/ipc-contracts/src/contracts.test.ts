@@ -32,7 +32,7 @@ const roundTrip = <A, I>(schema: Schema.Top, value: I) => {
 
 describe('main IPC contracts', () => {
   it('exports the main IPC registry', () => {
-    expect(MainIpcContracts).toHaveLength(130);
+    expect(MainIpcContracts).toHaveLength(133);
     expect(MainIpcRegistry.byChannel['tileborne:asset-library:getPackUseSites']).toBe(
       AssetLibraryGetPackUseSitesContract,
     );

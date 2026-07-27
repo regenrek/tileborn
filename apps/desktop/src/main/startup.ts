@@ -13,6 +13,7 @@ import { registerMainIpc, type MainIpcRegistration } from './ipc/handlers.js';
 import { stopDesktopLocalGameHost } from './local-game-host-manager.js';
 import { disposeRuntime, runEffect } from './runtime.js';
 import { seedBundledPluginAssetPacks, seedBundledPlugins } from './seed-plugins.js';
+import type { DesktopUpdaterController } from './updater.js';
 import type { StartupStatusStore, StartupTaskId } from '../shared/startup-status.js';
 
 const OPTIONAL_STARTUP_TASK_TIMEOUT_MS = 15_000;
@@ -32,6 +33,7 @@ export interface DesktopStartupController {
 export interface DesktopStartupControllerOptions {
   readonly status: StartupStatusStore;
   readonly reporter: StartupReporter;
+  readonly desktopUpdater?: DesktopUpdaterController | undefined;
 }
 
 const toError = (cause: unknown): Error =>
@@ -102,6 +104,7 @@ const runOptionalEffect = async <R>(
 export const createDesktopStartupController = ({
   status,
   reporter,
+  desktopUpdater,
 }: DesktopStartupControllerOptions): DesktopStartupController => {
   let ipcRegistration: MainIpcRegistration | undefined;
 
@@ -128,7 +131,12 @@ export const createDesktopStartupController = ({
         homeRoot: home.root,
       });
 
-      ipcRegistration = await runRequiredEffect(reporter, 'ipc-registration', registerMainIpc);
+      ipcRegistration = await runRequiredEffect(
+        reporter,
+        'ipc-registration',
+        registerMainIpc(desktopUpdater),
+      );
+      desktopUpdater?.start();
 
       await runOptionalEffect(reporter, logger, 'plugin-seed', seedBundledPlugins);
       await runOptionalEffect(reporter, logger, 'asset-pack-seed', seedBundledPluginAssetPacks);
@@ -179,6 +187,7 @@ export const createDesktopStartupController = ({
         );
         ipcRegistration?.handlers.unregister();
         ipcRegistration?.events.unregister();
+        desktopUpdater?.dispose();
         yield* Effect.tryPromise({
           try: () => stopDesktopLocalGameHost(),
           catch: () => new Error('stop local host failed'),

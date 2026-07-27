@@ -20,6 +20,7 @@ import { MonitorIcon, MoonIcon, PackageIcon, PuzzleIcon, SunIcon } from 'lucide-
 import { useEffect, useMemo } from 'react';
 
 import { CloseableWorkspacePage } from '@/components/shell/closeable-workspace-page';
+import { DesktopUpdatesPanel } from '@/components/desktop-updates-panel';
 import { useTheme } from '@/components/theme-provider';
 import { useHomePaths, useSystemVersion } from '@/hooks/queries';
 import { appVersion, gitCommit } from '@/lib/build-info';
@@ -196,6 +197,8 @@ export function SettingsPage() {
           <Switch id="telemetry" checked={telemetryEnabled} onCheckedChange={setTelemetryEnabled} />
         </CardContent>
       </Card>
+
+      <DesktopUpdatesPanel />
 
       <Separator />
 

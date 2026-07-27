@@ -17,6 +17,7 @@ import {
   type StartupStatusSnapshot,
   type TileborneStartupBridge,
 } from '../shared/startup-status.js';
+import type { TileborneDesktopUpdatesBridge } from '../shared/desktop-updates-bridge.js';
 
 const INVOKE_CHANNELS = new Set<string>(
   MainIpcRegistry.contracts.map((contract) => contract.channel),
@@ -80,6 +81,29 @@ const tileborneAppLifecycle: TileborneAppLifecycleBridge = {
     ipcRenderer.invoke(APP_RECOVERY_STORAGE_COMMIT_CHANNEL, commit) as Promise<void>,
 };
 
+const tileborneDesktopUpdates: TileborneDesktopUpdatesBridge = {
+  getState: () =>
+    ipcRenderer.invoke('tileborne:desktop-updates:getState', {}) as ReturnType<
+      TileborneDesktopUpdatesBridge['getState']
+    >,
+  check: () =>
+    ipcRenderer.invoke('tileborne:desktop-updates:check', {}) as ReturnType<
+      TileborneDesktopUpdatesBridge['check']
+    >,
+  restart: () =>
+    ipcRenderer.invoke('tileborne:desktop-updates:restart', {}) as ReturnType<
+      TileborneDesktopUpdatesBridge['restart']
+    >,
+  onStateChanged: (handler) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => {
+      handler(state as Parameters<typeof handler>[0]);
+    };
+    ipcRenderer.on('tileborne:desktop-updates:stateChanged', listener);
+    return () => ipcRenderer.removeListener('tileborne:desktop-updates:stateChanged', listener);
+  },
+};
+
 contextBridge.exposeInMainWorld('tileborneIpc', tileborneIpc);
 contextBridge.exposeInMainWorld('tileborneStartup', tileborneStartup);
 contextBridge.exposeInMainWorld('tileborneAppLifecycle', tileborneAppLifecycle);
+contextBridge.exposeInMainWorld('tileborneDesktopUpdates', tileborneDesktopUpdates);

@@ -6,8 +6,12 @@
 - Verify Developer ID signature, hardened runtime, notarization ticket, stapling,
   Gatekeeper acceptance, DMG integrity, manifest schema, and SHA-256.
 - Install, launch, close, and relaunch the app from the DMG.
-- Back up, open, save, close, and reopen a representative Tileborne project.
-- Install the digest-pinned last-known-good candidate and reopen the backup.
+- Create a representative Tileborne project, close the app, relaunch it, and
+  verify the same project remains listed.
+- Discover and safely stage a newer signed release from a non-publishing fixture
+  feed; reject wrong-channel, wrong-architecture, unsigned, and stale metadata.
+- Prove an unavailable or interrupted update leaves the installed app and
+  project data usable.
 - Confirm Planr evidence and candidate receipts are redacted and unpublished.
 
 ## Regression
@@ -22,6 +26,7 @@
 
 - Fresh macOS user profile with Gatekeeper enabled.
 - Missing signing identity or notarization profile.
-- Project backup interruption and safe retry.
-- Candidate launch followed by manual rollback to last-known-good.
+- Project persistence failure and safe retry.
+- Candidate launch followed by no-update, update-available, invalid-update, and
+  interrupted-update states without project-data mutation.
 - Maintainer inspects the candidate locally but withholds publication approval.

@@ -32,9 +32,12 @@ overrides:
   # Production 1.0 audit hygiene: mature patched transitive pins, kept at the
   # narrowest package names that current upstream ranges can tolerate.
   '@babel/core': 7.29.7
-  js-yaml: 4.2.0
+  js-yaml: 4.3.0
   markdown-it: 14.2.0
+  postcss: 8.5.18
   qs: 6.15.2
+  sharp: 0.35.3
+  svgo: 4.0.2
   tar: 7.5.16
   tmp: 0.2.7
   esbuild: 0.28.1

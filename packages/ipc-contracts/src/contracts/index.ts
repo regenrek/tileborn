@@ -5,6 +5,7 @@ export * from './builds.js';
 export * from './behaviors.js';
 export * from './catalog.js';
 export * from './common.js';
+export * from './desktop-updates.js';
 export * from './tiled-source-rules.js';
 export * from './exports.js';
 export * from './gameplay-event.js';

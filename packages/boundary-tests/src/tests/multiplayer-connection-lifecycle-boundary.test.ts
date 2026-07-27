@@ -193,6 +193,7 @@ const PRODUCTION_CLIENT_ALLOWED_PACKAGE_IMPORT_ROOTS: Readonly<Record<string, re
       '@electron-forge/maker-dmg',
       '@electron-forge/maker-rpm',
       '@electron-forge/maker-squirrel',
+      '@electron-forge/maker-zip',
       '@electron-forge/plugin-vite',
       '@fontsource-variable/ibm-plex-sans',
       '@pixi/tilemap',

@@ -1,0 +1,219 @@
+name: release-fast
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact 40-character source commit SHA to package
+        required: true
+        type: string
+      version:
+        description: Desktop package version that must match apps/desktop/package.json
+        required: true
+        type: string
+      publish_prerelease:
+        description: Create a GitHub prerelease from the verified candidate bundle
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-fast-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: release-fast-candidate
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      VERSION: ${{ inputs.version }}
+      BUNDLE_NAME: tileborne-macos-arm64-fast-${{ inputs.source_sha }}
+    steps:
+      - name: Validate dispatch inputs
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "source_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "version must be stable SemVer from apps/desktop/package.json" >&2
+            exit 2
+          fi
+
+      - name: Checkout exact source SHA
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify checked out SHA and package version
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          PACKAGE_VERSION="$(node -p "require('./apps/desktop/package.json').version")"
+          if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
+            echo "version input $VERSION does not match apps/desktop/package.json $PACKAGE_VERSION" >&2
+            exit 2
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare signing credential file
+        env:
+          TILEBORNE_APPLE_API_KEY_P8: ${{ secrets.TILEBORNE_APPLE_API_KEY_P8 }}
+          TILEBORNE_APPLE_API_KEY_ID: ${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${TILEBORNE_APPLE_API_KEY_P8:-}"
+          test -n "${TILEBORNE_APPLE_API_KEY_ID:-}"
+          printf '%s' "$TILEBORNE_APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey_${TILEBORNE_APPLE_API_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey_${TILEBORNE_APPLE_API_KEY_ID}.p8"
+
+      - name: Run fast gate profile
+        env:
+          TURBO_SCM_BASE: ${{ inputs.source_sha }}^
+          TURBO_SCM_HEAD: ${{ inputs.source_sha }}
+          TILEBORNE_CI_FAST_RECEIPT: ${{ runner.temp }}/${{ env.BUNDLE_NAME }}/ci-fast-gate-receipt.json
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/$BUNDLE_NAME"
+          pnpm release:gates:ci-fast -- --changed-path apps/desktop/src/main/main.ts
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; import { validateReleaseGateReceipt } from './scripts/release-gates.mjs'; const receipt = JSON.parse(readFileSync(process.env.TILEBORNE_CI_FAST_RECEIPT, 'utf8')); validateReleaseGateReceipt(receipt, { profile: 'fast', sourceSha: process.env.SOURCE_SHA, lockfileHash: receipt.lockfileHash, gateIds: ['install', 'build', 'lint', 'typecheck', 'test', 'format', 'desktop-release-contract', 'desktop-smoke', 'packaged-runtime'], artifactHashes: receipt.artifactHashes });"
+
+      - name: Build signed notarized macOS arm64 candidate
+        env:
+          TILEBORNE_DESKTOP_RELEASE: '1'
+          TILEBORNE_APPLE_SIGNING_IDENTITY: ${{ secrets.TILEBORNE_APPLE_SIGNING_IDENTITY }}
+          TILEBORNE_APPLE_TEAM_ID: ${{ secrets.TILEBORNE_APPLE_TEAM_ID }}
+          TILEBORNE_APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}.p8
+          TILEBORNE_APPLE_API_KEY_ID: ${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}
+          TILEBORNE_APPLE_API_ISSUER: ${{ secrets.TILEBORNE_APPLE_API_ISSUER }}
+        run: pnpm --filter @tileborne/desktop package
+
+      - name: Assemble immutable candidate bundle
+        env:
+          TILEBORNE_APPLE_SIGNING_IDENTITY: ${{ secrets.TILEBORNE_APPLE_SIGNING_IDENTITY }}
+          TILEBORNE_APPLE_TEAM_ID: ${{ secrets.TILEBORNE_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="$RUNNER_TEMP/$BUNDLE_NAME"
+          DMG_COUNT="$(find apps/desktop/out/make -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          ZIP_COUNT="$(find apps/desktop/out/make -type f -name 'Tileborne-darwin-arm64-*.zip' | wc -l | tr -d ' ')"
+          if [[ "$DMG_COUNT" != "1" || "$ZIP_COUNT" != "1" ]]; then
+            echo "expected one DMG and one darwin arm64 ZIP, observed $DMG_COUNT DMG and $ZIP_COUNT ZIP" >&2
+            exit 1
+          fi
+          DMG="$(find apps/desktop/out/make -type f -name '*.dmg' | sort | head -n 1)"
+          ZIP="$(find apps/desktop/out/make -type f -name 'Tileborne-darwin-arm64-*.zip' | sort | head -n 1)"
+          MANIFEST="$BUNDLE_DIR/tileborne-desktop-release-manifest.json"
+          cp "$DMG" "$BUNDLE_DIR/$(basename "$DMG")"
+          cp "$ZIP" "$BUNDLE_DIR/$(basename "$ZIP")"
+          BUNDLE_DMG="$BUNDLE_DIR/$(basename "$DMG")"
+          BUNDLE_ZIP="$BUNDLE_DIR/$(basename "$ZIP")"
+          pnpm release:desktop:manifest \
+            --artifact "$BUNDLE_DMG" \
+            --update-artifact "$BUNDLE_ZIP" \
+            --version "$VERSION" \
+            --source-commit "$SOURCE_SHA" \
+            --built-at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
+            --runner-id "github-actions:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+            --signing-authority "$TILEBORNE_APPLE_SIGNING_IDENTITY" \
+            --team-id "$TILEBORNE_APPLE_TEAM_ID" \
+            --output "$MANIFEST"
+          NATIVE_RECEIPT="$BUNDLE_DIR/native-candidate-verification-receipt.json"
+          NONCE="$(openssl rand -hex 32)"
+          node scripts/macos-desktop-release-verifier.mjs \
+            --candidate "$BUNDLE_DMG" \
+            --update-artifact "$BUNDLE_ZIP" \
+            --nonce "$NONCE" \
+            --candidate-only 1 > "$NATIVE_RECEIPT"
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; const manifest = JSON.parse(readFileSync(process.argv[1], 'utf8')); const receipt = JSON.parse(readFileSync(process.argv[2], 'utf8')); const team = process.env.TILEBORNE_APPLE_TEAM_ID; const source = process.env.SOURCE_SHA; const failures = []; if (receipt.nonce !== process.argv[3]) failures.push('nonce'); if (receipt.candidate.candidateArtifactSha256 !== manifest.artifact.sha256) failures.push('candidate.sha256'); if (receipt.update.updateArtifactSha256 !== manifest.updateArtifact.sha256) failures.push('update.sha256'); if (receipt.candidate.embeddedSourceCommit !== source || receipt.update.embeddedSourceCommit !== source) failures.push('source'); if (receipt.candidate.candidateTeamIdentifier !== team || receipt.update.updateTeamIdentifier !== team) failures.push('team'); if (receipt.candidate.candidateStaple !== 'validated' || receipt.update.updateStaple !== 'validated') failures.push('staple'); if (receipt.candidate.candidateGatekeeper !== 'accepted' || receipt.update.updateGatekeeper !== 'accepted') failures.push('gatekeeper'); if (receipt.install.firstLaunchProject.id !== receipt.install.relaunchProject.id) failures.push('relaunch'); if (failures.length > 0) throw new Error('native receipt mismatch: ' + failures.join(', '));" "$MANIFEST" "$NATIVE_RECEIPT" "$NONCE"
+          (cd "$BUNDLE_DIR" && shasum -a 256 ./* > checksums.sha256)
+          {
+            echo "## release-fast"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Source SHA | $SOURCE_SHA |"
+            echo "| Version | $VERSION |"
+            echo "| Artifact bundle | $BUNDLE_NAME |"
+            echo "| Runner | macos-15 arm64 |"
+            echo "| Prerelease requested | ${{ inputs.publish_prerelease }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable candidate bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.BUNDLE_NAME }}
+          path: ${{ runner.temp }}/${{ env.BUNDLE_NAME }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-prerelease:
+    name: release-fast-prerelease
+    runs-on: ubuntu-latest
+    needs: candidate
+    if: ${{ inputs.publish_prerelease }}
+    permissions:
+      actions: read
+      contents: write
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      TILEBORNE_DESKTOP_PUBLISH_APPROVED: ${{ secrets.TILEBORNE_DESKTOP_PUBLISH_APPROVED }}
+    steps:
+      - name: Verify prerelease approval boundary
+        run: |
+          set -euo pipefail
+          test "$TILEBORNE_DESKTOP_PUBLISH_APPROVED" = "1"
+
+      - name: Download immutable candidate bundle
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release-bundle"
+          gh run download "$GITHUB_RUN_ID" \
+            --name "tileborne-macos-arm64-fast-$SOURCE_SHA" \
+            --dir "$RUNNER_TEMP/release-bundle"
+
+      - name: Create GitHub prerelease
+        run: |
+          set -euo pipefail
+          TAG="desktop-fast-$SOURCE_SHA"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json targetCommitish,isPrerelease,isDraft,assets > "$RUNNER_TEMP/existing-release.json"
+            node --input-type=module -e "import { readFileSync, readdirSync } from 'node:fs'; import path from 'node:path'; const release = JSON.parse(readFileSync(process.argv[1], 'utf8')); const bundleDir = process.argv[2]; const source = process.env.SOURCE_SHA; const failures = []; if (release.targetCommitish !== source) failures.push('targetCommitish'); if (release.isPrerelease !== true) failures.push('isPrerelease'); if (release.isDraft !== false) failures.push('isDraft'); const expectedAssets = readdirSync(bundleDir).filter((name) => !name.startsWith('.')).sort(); const actualAssets = (release.assets ?? []).map((asset) => asset.name).sort(); if (JSON.stringify(actualAssets) !== JSON.stringify(expectedAssets)) failures.push('assets'); if (failures.length > 0) throw new Error('existing prerelease conflict: ' + failures.join(', '));" "$RUNNER_TEMP/existing-release.json" "$RUNNER_TEMP/release-bundle"
+            mkdir -p "$RUNNER_TEMP/existing-release-assets"
+            gh release download "$TAG" --dir "$RUNNER_TEMP/existing-release-assets" --clobber
+            (cd "$RUNNER_TEMP/existing-release-assets" && shasum -a 256 -c checksums.sha256)
+            LATEST_TAG="$(gh release view --json tagName -q .tagName 2>/dev/null || true)"
+            if [[ "$LATEST_TAG" == "$TAG" ]]; then
+              echo "Existing fast prerelease $TAG is marked latest" >&2
+              exit 1
+            fi
+            echo "Existing prerelease $TAG already matches $SOURCE_SHA and bundle checksums"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            "$RUNNER_TEMP/release-bundle"/* \
+            --target "$SOURCE_SHA" \
+            --title "Tileborne macOS arm64 fast candidate $VERSION ($SOURCE_SHA)" \
+            --notes "Fast prerelease candidate for exact source SHA $SOURCE_SHA. Artifact bundle: tileborne-macos-arm64-fast-$SOURCE_SHA." \
+            --prerelease \
+            --latest=false

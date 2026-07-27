@@ -5,6 +5,7 @@ import { AudioContracts } from './audio.js';
 import { BuildsContracts } from './builds.js';
 import { BehaviorsContracts } from './behaviors.js';
 import { CatalogContracts } from './catalog.js';
+import { DesktopUpdateContracts } from './desktop-updates.js';
 import { TiledSourceRulesContracts } from './tiled-source-rules.js';
 import { ExportsContracts } from './exports.js';
 import { GameShellContracts } from './game-shell.js';
@@ -47,6 +48,7 @@ export const MainIpcContracts = [
   ...ShipContracts,
   ...SupportContracts,
   ...SystemContracts,
+  ...DesktopUpdateContracts,
 ] as const;
 
 export type MainIpcRegistry = IpcRegistry<typeof MainIpcContracts>;

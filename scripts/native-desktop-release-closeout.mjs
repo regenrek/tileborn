@@ -271,6 +271,7 @@ export const deriveBinaryDecision = ({
   gatekeeper,
   creatorSmoke,
   artifactDigest,
+  updateArtifactDigest,
   embeddedProvenance,
 }) => {
   const blockers = [];
@@ -280,6 +281,7 @@ export const deriveBinaryDecision = ({
   if (gatekeeper !== 'accepted') blockers.push('gatekeeper.assessment-rejected');
   if (creatorSmoke !== 'passed') blockers.push('native.creator-smoke-failed');
   if (!SHA256.test(artifactDigest)) blockers.push('artifact.sha256-invalid');
+  if (!SHA256.test(updateArtifactDigest)) blockers.push('artifact.update-sha256-invalid');
   if (embeddedProvenance === 'missing') blockers.push('native.embedded-provenance-missing');
   if (embeddedProvenance === 'invalid') blockers.push('native.embedded-provenance-invalid');
   if (canonicalDecision !== 'go') blockers.push('contract.not-go');
@@ -316,12 +318,6 @@ export const deriveCloseoutExternalOwners = (blockerCodes) => {
       owner: 'Apple notarization credential owner',
       remediation:
         'Provide the approved App Store Connect API key path, key id, and issuer through protected CI/operator secrets.',
-    },
-    {
-      blocker: 'rollback.retained-artifact-missing',
-      owner: 'Tileborne release owner',
-      remediation:
-        'Approve a strictly earlier signed/notarized LKG in scripts/desktop-release-policy.json and supply its exact retained DMG.',
     },
     {
       blocker: 'publish.approval-missing',
@@ -434,18 +430,27 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     outRoot,
     (candidate, entry) => entry.isFile() && candidate.toLowerCase().endsWith('.dmg'),
   );
+  const zips = findFiles(
+    outRoot,
+    (candidate, entry) => entry.isFile() && candidate.toLowerCase().endsWith('.zip'),
+  );
   assert(apps.length >= 1, 'artifact.app-missing', JSON.stringify(apps));
   assert(dmgs.length === 1, 'artifact.dmg-count-invalid', JSON.stringify(dmgs));
+  assert(zips.length === 1, 'artifact.zip-count-invalid', JSON.stringify(zips));
   const sourceApp =
     apps.find((candidate) => candidate.includes('Tileborne-darwin-arm64')) ?? apps[0];
   const sourceDmg = dmgs[0];
+  const sourceZip = zips[0];
   const externalArtifacts = path.join(resolvedEvidenceRoot, 'artifacts');
   mkdirSync(externalArtifacts, { mode: 0o700 });
   const externalApp = path.join(externalArtifacts, 'Tileborne.app');
   const externalDmg = path.join(externalArtifacts, path.basename(sourceDmg));
+  const externalZip = path.join(externalArtifacts, path.basename(sourceZip));
   copyTree(sourceApp, externalApp);
   copyFileSync(sourceDmg, externalDmg);
+  copyFileSync(sourceZip, externalZip);
   chmodSync(externalDmg, 0o600);
+  chmodSync(externalZip, 0o600);
 
   commands.dmgVerify = run({
     root: checkoutRoot,
@@ -576,10 +581,16 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
 
   const appTree = treeManifest(installedApp);
   const dmgBytes = readFileSync(externalDmg);
+  const zipBytes = readFileSync(externalZip);
   const dmg = {
     fileName: path.basename(externalDmg),
     sizeBytes: dmgBytes.byteLength,
     sha256: sha256(dmgBytes),
+  };
+  const zip = {
+    fileName: path.basename(externalZip),
+    sizeBytes: zipBytes.byteLength,
+    sha256: sha256(zipBytes),
   };
   const version = JSON.parse(
     readFileSync(path.join(checkoutRoot, 'apps/desktop/package.json'), 'utf8'),
@@ -635,6 +646,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
   );
   const manifest = generateDesktopReleaseManifest({
     artifactPath: externalDmg,
+    updateArtifactPath: externalZip,
     version,
     sourceCommit: head,
     builtAt: new Date().toISOString(),
@@ -673,10 +685,10 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       'status',
       '--artifact',
       externalDmg,
+      '--update-artifact',
+      externalZip,
       '--manifest',
       manifestFile,
-      '--backup-output',
-      path.join(resolvedEvidenceRoot, 'project-backup.zip'),
       '--output',
       path.join(resolvedEvidenceRoot, 'canonical-status.json'),
       '--expect',
@@ -694,6 +706,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     gatekeeper: gatekeeperAssessment,
     creatorSmoke: 'passed',
     artifactDigest: dmg.sha256,
+    updateArtifactDigest: zip.sha256,
     embeddedProvenance,
   });
   const canonicalBlockers = status.blockers.map(({ code }) => code);
@@ -718,7 +731,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
   assert(
     notarizationStaple === 'valid',
     'notarization.staple-invalid',
-    'stapler validation must succeed for the retained candidate DMG',
+    'stapler validation must succeed for the candidate DMG',
   );
   assert(
     gatekeeperAssessment === 'accepted',
@@ -762,6 +775,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       bundleId: 'dev.tileborne.app',
       app: { path: installedApp, ...appTree },
       dmg: { path: externalDmg, ...dmg },
+      updateZip: { path: externalZip, ...zip },
     },
     nativeEvidence: {
       developerIdSignature,
@@ -778,14 +792,15 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
       artifactDecision: status.artifactDecision,
       publicationDecision: status.publicationDecision,
       blockers: status.blockers,
+      supportStatus: status.supportStatus,
       knownLimitations: status.knownLimitations,
     },
     unsupported: status.knownLimitations,
     externalOwners: deriveCloseoutExternalOwners(blockerCodes),
     remediationCommands: [
       'TILEBORNE_DESKTOP_RELEASE=1 pnpm --filter @tileborne/desktop package',
-      'node scripts/desktop-release-contract.mjs status --artifact "$CANDIDATE" --retained-artifact "$RETAINED_DMG" --backup-output "$BACKUP_OUTPUT" --manifest "$MANIFEST" --output "$STATUS_OUTPUT" --skip-publication 1 --expect no-go',
-      'node scripts/desktop-release-contract.mjs verify --artifact "$CANDIDATE" --retained-artifact "$RETAINED_DMG" --backup-output "$BACKUP_OUTPUT" --manifest "$MANIFEST" --output "$FINAL_STATUS_OUTPUT" --expect go',
+      'node scripts/desktop-release-contract.mjs status --artifact "$CANDIDATE_DMG" --update-artifact "$CANDIDATE_ZIP" --manifest "$MANIFEST" --output "$STATUS_OUTPUT" --skip-publication 1 --expect no-go',
+      'node scripts/desktop-release-contract.mjs verify --artifact "$CANDIDATE_DMG" --update-artifact "$CANDIDATE_ZIP" --manifest "$MANIFEST" --output "$FINAL_STATUS_OUTPUT" --expect go',
     ],
     commands,
   };

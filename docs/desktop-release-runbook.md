@@ -12,7 +12,8 @@ policy.
 
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
-macOS arm64 is the only 1.0 candidate, not a supported release yet. An evidence-free checkout
+macOS arm64 is the only 1.0 candidate, not a supported release yet. Its automatic-update path is
+candidate-gated by the same machine contract and native oracle, not by prose. An evidence-free checkout
 deterministically reports:
 
 ```sh
@@ -25,19 +26,18 @@ The second command must exit successfully with `decision: "no-go"` and these sta
 
 <!-- desktop-release-baseline-blockers:start -->
 
-| Blocker                              | Contract meaning                                                |
-| ------------------------------------ | --------------------------------------------------------------- |
-| `artifact.manifest-missing`          | Desktop release manifest is required.                           |
-| `artifact.file-missing`              | Candidate DMG is required.                                      |
-| `rollback.retained-artifact-missing` | A last-known-good retained DMG is required.                     |
-| `rollback.backup-output-missing`     | Native rollback verifier requires a backup archive output path. |
-| `signing.approved-team-missing`      | Explicit approved Apple TeamIdentifier is required.             |
-| `publish.approval-missing`           | Explicit desktop publication approval is absent.                |
-| `publish.credential-missing`         | Scoped publication credential is absent.                        |
+| Blocker                         | Contract meaning                                    |
+| ------------------------------- | --------------------------------------------------- |
+| `artifact.manifest-missing`     | Desktop release manifest is required.               |
+| `artifact.file-missing`         | Candidate DMG is required.                          |
+| `artifact.update-file-missing`  | Candidate update ZIP is required.                   |
+| `signing.approved-team-missing` | Explicit approved Apple TeamIdentifier is required. |
+| `publish.approval-missing`      | Explicit desktop publication approval is absent.    |
+| `publish.credential-missing`    | Scoped publication credential is absent.            |
 
 <!-- desktop-release-baseline-blockers:end -->
 
-Other `artifact.*`, `provenance.*`, `signing.*`, `native.*`, or `rollback.*` blockers mean the
+Other `artifact.*`, `provenance.*`, `signing.*`, or `native.*` blockers mean the
 local artifact evidence is invalid. `publish.*` blockers mean the artifact may be locally ready,
 but publication is not authorized. Never relabel a blocker as a warning to obtain a GO.
 
@@ -54,7 +54,7 @@ cell with the validated policy.
 | `platform.macos-x64`                | macOS x64                | `unsupported`      | No native x64 signed installer or install/launch evidence exists.                                                                     |
 | `platform.windows`                  | Windows                  | `unsupported`      | Forge maker configuration is not Windows build, signing, install, launch, upgrade, or uninstall evidence.                             |
 | `platform.linux`                    | Linux                    | `unsupported`      | Forge maker configuration is not native deb/rpm install, launch, or uninstall evidence.                                               |
-| `capability.auto-update`            | automatic updates        | `unsupported`      | Desktop 1.0 uses manual signed-installer replacement and has no update feed or updater lifecycle.                                     |
+| `capability.auto-update`            | automatic updates        | `candidate`        | Candidate-only for macOS arm64 after the signed A-to-B ZIP, feed, Restart/Later, and relaunch oracle pass; not a publication claim.   |
 | `capability.remote-crash-reporting` | remote crash reporting   | `unsupported`      | Desktop 1.0 supports local fail-fast logs, recovery, and opt-in manual support bundles only.                                          |
 | `capability.publish`                | desktop publication      | `operator-blocked` | Publication requires an explicit release approval and a scoped credential supplied out of band.                                       |
 | `channel.mac-app-store`             | Mac App Store            | `unsupported`      | Desktop 1.0 is a direct GitHub download candidate and has no App Store packaging, entitlement review, upload, or receipt evidence.    |
@@ -73,11 +73,11 @@ matrix.
 
 The policy names exactly one owner for each release boundary:
 
-| Boundary                          | Owner                                            | Scope                                                                                                                                                             |
-| --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `release.packaging-provenance`    | `apps/desktop/scripts/desktop-release-forge.cjs` | Desktop release Forge helper owns release-mode signing and notarization settings, build provenance helpers, and make-result validation.                           |
-| `electron.metadata-entitlements`  | `apps/desktop/electron-forge.config.cjs`         | Electron Forge configuration owns app metadata, bundle id, icon/resource wiring, maker inventory, lifecycle hook wiring, and entitlements if they are introduced. |
-| `project.backup-reopen-semantics` | `packages/services-app/src/project`              | Existing project persistence owners supply backup, recovery, migration, save, reopen, and compatibility semantics; release scripts only verify them.              |
+| Boundary                                 | Owner                                            | Scope                                                                                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release.packaging-provenance`           | `apps/desktop/scripts/desktop-release-forge.cjs` | Desktop release Forge helper owns release-mode signing and notarization settings, build provenance helpers, and make-result validation.                                           |
+| `electron.metadata-entitlements`         | `apps/desktop/electron-forge.config.cjs`         | Electron Forge configuration owns app metadata, bundle id, icon/resource wiring, maker inventory, lifecycle hook wiring, and entitlements if they are introduced.                 |
+| `project.relaunch-persistence-semantics` | `packages/services-app/src/project`              | Existing project persistence owners supply recovery, migration, save, reopen, and compatibility semantics; release scripts only verify project identity survives native relaunch. |
 
 Do not duplicate these decisions in workflow YAML, app code, or maintainer prose. Change
 `scripts/desktop-release-policy.json`, its contract tests, and this runbook together.
@@ -96,7 +96,7 @@ requires all of the following environment values:
 
 The identity, Team ID, API key, GitHub token, and publication approval are external operator/CI
 inputs. Never commit them, `.env` files, key files, notarization credentials, shell history,
-support bundles, project backups, generated receipts, or release artifacts. Do not print secret
+support bundles, project data, generated receipts, or release artifacts. Do not print secret
 values. Use a protected CI secret store or a temporary operator environment; remove temporary key
 material after the run according to the owner policy.
 
@@ -127,19 +127,22 @@ A successful Forge invocation is still not the release decision.
 ## Generate the candidate manifest
 
 Set `CANDIDATE` to the freshly produced DMG and generate the manifest from the artifact and current
-checkout. The command is deterministic for identical inputs and writes the closed-schema manifest
-with private file permissions. This step records claims; it does not verify them.
+checkout. Set `UPDATE_CANDIDATE` to the matching Squirrel.Mac ZIP from the same signed make output.
+The command is deterministic for identical inputs and writes the closed-schema manifest with
+private file permissions. This step records claims; it does not verify them.
 
 ```sh
 export CANDIDATE="apps/desktop/out/make/Tileborne.dmg"
 export MANIFEST="/tmp/tileborne-desktop-release-manifest.json"
 export SOURCE_COMMIT="$(git rev-parse HEAD)"
 export VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("apps/desktop/package.json", "utf8")).version')"
+export UPDATE_CANDIDATE="apps/desktop/out/make/zip/darwin/arm64/Tileborne-darwin-arm64-${VERSION}.zip"
 export BUILT_AT="2026-07-16T09:00:00.000Z"
-export RUNNER_ID="github-actions:${GITHUB_RUN_ID:-local-retained-candidate}"
+export RUNNER_ID="github-actions:${GITHUB_RUN_ID:-local-candidate}"
 export SIGNING_AUTHORITY="Developer ID Application: Tileborne (${TILEBORNE_APPLE_TEAM_ID})"
 pnpm release:desktop:manifest \
   --artifact "$CANDIDATE" \
+  --update-artifact "$UPDATE_CANDIDATE" \
   --output "$MANIFEST" \
   --version "$VERSION" \
   --source-commit "$SOURCE_COMMIT" \
@@ -152,32 +155,17 @@ pnpm release:desktop:manifest \
 Do not hand-edit a manifest to match a failed check. Rebuild from the intended clean commit and
 regenerate it.
 
-## Approve a last-known-good release
+## Verify artifact, install, update, and recovery
 
-Rollback is unavailable until the release owner adds the retained release to
-`lastKnownGoodReleases` in the policy. The approved entry binds all four values: earlier SemVer,
-40-character source commit, retained-DMG SHA-256, and Apple Team ID. Review that policy change like
-release code, run `pnpm release:desktop:policy`, and retain the exact signed/notarized DMG in the
-protected release channel. A filename, version label, latest tag, or independently supplied JSON
-receipt is not an LKG identity.
-
-The retained DMG must be a strictly earlier version, a distinct digest, signed by the same approved
-team, notarized, stapled, and present for the native verification run.
-
-## Verify artifact, install, recovery, and rollback
-
-Choose an unused backup path and run the status command on a native macOS arm64 host. The contract
-rehashes both DMGs and checks the manifest against the current commit. It invokes the repository's
-native verifier itself with a one-time nonce; no caller-provided native receipt is accepted.
+Run the status command on a native macOS arm64 host. The contract rehashes the candidate DMG and
+update ZIP, checks the manifest against the current commit, and invokes the repository's native
+verifier itself with a one-time nonce; no caller-provided native receipt is accepted.
 
 ```sh
-export RETAINED_DMG="/secure/releases/Tileborne-last-known-good.dmg"
-export BACKUP_OUTPUT="/tmp/tileborne-project-backup.zip"
 export STATUS_OUTPUT="/tmp/tileborne-desktop-artifact-status.json"
 node scripts/desktop-release-contract.mjs status \
   --artifact "$CANDIDATE" \
-  --retained-artifact "$RETAINED_DMG" \
-  --backup-output "$BACKUP_OUTPUT" \
+  --update-artifact "$UPDATE_CANDIDATE" \
   --manifest "$MANIFEST" \
   --output "$STATUS_OUTPUT" \
   --skip-publication 1 \
@@ -188,18 +176,28 @@ This pre-publication run is successful only when `artifactDecision` is `ready`,
 `publicationDecision` is `not-requested`, and the sole blocker is `publish.not-requested`. The
 native verifier independently proves:
 
-1. both DMGs are real UDIF images with valid Developer ID signatures, notarization staples,
+1. the DMG is a real UDIF image with a valid Developer ID signature, notarization staple,
    Gatekeeper assessment, hardened runtime, arm64 executable, expected bundle ID, and embedded
    provenance;
 2. the candidate can be mounted, copied to an isolated Applications directory, launched, used to
    create a Battle Royale project, closed, and relaunched with that project present;
-3. a project backup ZIP is created and restored before downgrade;
-4. the candidate is replaced with the approved retained installer and the restored project is
-   reopened successfully.
+3. a strictly newer signed ZIP is served from an ephemeral loopback feed, downloaded through the
+   main-process updater, offers Restart and Later without renderer-supplied feed or artifact paths,
+   restarts into the newer app, and preserves the same project identity;
+4. stale/same-version, wrong architecture, wrong bundle, wrong team, malformed metadata,
+   unavailable feed, and interrupted download fixtures fail closed while leaving the project usable.
 
-The verifier writes the backup and status receipt with private file modes. They may contain project
-metadata and local paths: store them as restricted release evidence, never commit or attach them to
-a public issue, and delete them per the release retention policy.
+Restart applies the downloaded update on the next app launch. Later keeps the current app running
+and leaves the downloaded update pending until the user restarts. The candidate updater sends only
+release-feed requests and package downloads to the configured GitHub release channel or the local
+oracle feed during verification; it does not upload project content, support bundles, crash dumps,
+or telemetry. Recovery is limited to reopening preserved project data after relaunch or failed
+fixtures. There is no previous-version rollback, downgrade, retained installer, or last-known-good
+claim.
+
+The verifier writes the status receipt with private file modes. It may contain project metadata and
+local paths: store it as restricted release evidence, never commit or attach it to a public issue,
+and delete it per the release retention policy.
 
 ## Publish approval and final GO
 
@@ -213,8 +211,7 @@ export TILEBORNE_DESKTOP_PUBLISH_APPROVED=1
 export FINAL_STATUS_OUTPUT="/tmp/tileborne-desktop-final-status.json"
 node scripts/desktop-release-contract.mjs verify \
   --artifact "$CANDIDATE" \
-  --retained-artifact "$RETAINED_DMG" \
-  --backup-output "$BACKUP_OUTPUT" \
+  --update-artifact "$UPDATE_CANDIDATE" \
   --manifest "$MANIFEST" \
   --output "$FINAL_STATUS_OUTPUT" \
   --expect go
@@ -235,17 +232,17 @@ The operator-only mutations are closed-schema policy entries:
 | `operation.github-release-create` | `operator-blocked` | Creating the GitHub Release is separate from local candidate verification and requires explicit maintainer approval. |
 | `operation.github-release-upload` | `operator-blocked` | Uploading the DMG, manifest, or checksum mutates GitHub release state and requires explicit maintainer approval.     |
 
-## Project-content recovery versus release rollback
+## Project-content recovery versus application replacement
 
-Creator recovery and desktop rollback are different operations:
+Creator recovery and application replacement are different operations:
 
 - A dirty close offers Save, Discard, or Cancel. A failed save remains dirty and blocks close.
 - Map/project/integrity-lock updates publish as one transaction. After interruption, reopen the
   main-process-owned recovery snapshot, inspect it, then save or explicitly discard it.
 - Preserve the affected project directory before manual repair. Never edit the integrity lock to
   silence a mismatch and never delete a recovery snapshot before the user chooses an outcome.
-- A desktop downgrade additionally requires the verified backup and retained-installer flow above.
-  Do not replace the application first and hope schema compatibility holds.
+- If the current application must be removed and installed again, preserve project data first and
+  reopen through the recovery flow. This is recovery, not a verified desktop rollback guarantee.
 
 Remote crash upload is not present. If diagnostics are needed, generate an opt-in redacted support
 bundle, inspect it before sharing, transmit it through the approved private channel, and follow the
@@ -276,8 +273,8 @@ to waive a deterministic budget failure, and do not commit its temporary trace o
 ## Handoff checklist
 
 Before requesting publication approval, record exact source commit, version, artifact name/size/
-digest, approved Team ID, policy revision, LKG identity, native host, commands, exit codes, and the
-paths/digests of restricted evidence. Also run:
+digest, approved Team ID, policy revision, native host, commands, exit codes, and the paths/digests
+of restricted evidence. Also run:
 
 ```sh
 git status --short --branch
@@ -289,5 +286,6 @@ git diff --check
 ```
 
 The handoff must state the current decision and every blocker verbatim. Do not claim Windows,
-Linux, macOS x64, automatic update, remote crash reporting, or completed publication. Do not cite
-Forge configuration as evidence.
+Linux, macOS x64, remote crash reporting, or completed publication. Do not describe the
+candidate automatic-update path as a supported release channel before the final contract and
+operator approval pass. Do not cite Forge configuration as evidence.

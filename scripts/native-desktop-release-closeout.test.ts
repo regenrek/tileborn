@@ -28,6 +28,7 @@ const ready = {
   gatekeeper: 'accepted',
   creatorSmoke: 'passed',
   artifactDigest: 'a'.repeat(64),
+  updateArtifactDigest: 'b'.repeat(64),
   embeddedProvenance: 'valid',
 } as const;
 
@@ -44,6 +45,7 @@ describe('native desktop binary closeout decision', () => {
     ['gatekeeper', 'rejected', 'gatekeeper.assessment-rejected'],
     ['creatorSmoke', 'failed', 'native.creator-smoke-failed'],
     ['artifactDigest', 'not-a-digest', 'artifact.sha256-invalid'],
+    ['updateArtifactDigest', 'not-a-digest', 'artifact.update-sha256-invalid'],
     ['embeddedProvenance', 'missing', 'native.embedded-provenance-missing'],
     ['embeddedProvenance', 'invalid', 'native.embedded-provenance-invalid'],
   ] as const)('fails closed when %s is not ready', (field, value, blocker) => {
@@ -155,22 +157,20 @@ describe('native desktop closeout preflight', () => {
 });
 
 describe('native desktop closeout receipt evidence', () => {
-  it('does not emit credential-missing blockers or owners when notary credentials verify', () => {
+  it('keeps a verified candidate blocked only by publication when notary credentials verify', () => {
     const blockerCodes = deriveCloseoutBlockerCodes({
       binaryBlockers: ['contract.not-go'],
-      canonicalBlockers: ['rollback.retained-artifact-missing', 'publish.approval-missing'],
+      canonicalBlockers: ['publish.approval-missing', 'publish.credential-missing'],
       notaryCredentials: 'available',
     });
 
-    expect(blockerCodes).toEqual([
-      'publish.approval-missing',
-      'rollback.retained-artifact-missing',
-    ]);
+    expect(blockerCodes).toEqual(['publish.approval-missing', 'publish.credential-missing']);
     expect(blockerCodes).not.toContain('notarization.credentials-missing');
     expect(blockerCodes).not.toContain('signing.approved-team-missing');
+    expect(blockerCodes).not.toContain('rollback.retained-artifact-missing');
     expect(deriveCloseoutExternalOwners(blockerCodes).map(({ blocker }) => blocker)).toEqual([
-      'rollback.retained-artifact-missing',
       'publish.approval-missing',
+      'publish.credential-missing',
     ]);
   });
 

@@ -22,8 +22,8 @@ snapshot must be reopened and saved or explicitly discarded.
 `build` creates an unpacked Forge application; `package` invokes Forge make. Development maker
 entries exist for macOS, Windows, and Linux, but they are not a support claim. Desktop 1.0 has one
 candidate only: a signed/notarized macOS arm64 DMG. It remains **NO-GO** until the canonical release
-contract verifies the artifact, provenance, native install/relaunch, project backup, retained-
-installer rollback, explicit publication approval, and active scoped credential.
+contract verifies the artifact, provenance, native install/relaunch, project identity persistence,
+signed A-to-B update evidence, explicit publication approval, and active scoped credential.
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 ```sh
@@ -31,8 +31,9 @@ pnpm release:desktop:policy
 pnpm release:desktop:status
 ```
 
-Windows, Linux, macOS x64, automatic update, automatic rollback, and remote crash reporting are
-unsupported in desktop 1.0. See the
+Windows, Linux, macOS x64, automatic rollback, and remote crash reporting are unsupported in
+desktop 1.0. The macOS arm64 automatic-update path is candidate-gated by the signed ZIP/feed
+oracle and has no previous-version rollback or downgrade guarantee. See the
 [desktop release runbook](../../docs/desktop-release-runbook.md) and
 [capability audit](../../docs/desktop-release-capability-audit.md). Forge configuration or an
 unpacked `.app` smoke must never be cited as distribution evidence.

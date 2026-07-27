@@ -3,6 +3,7 @@ import type { MainTileborneBridge } from '@tileborne/ipc-contracts';
 import type { TileborneIpcTransport } from '../shared/ipc-transport';
 import type { TileborneStartupBridge } from '../shared/startup-status';
 import type { TileborneAppLifecycleBridge } from '../shared/app-lifecycle';
+import type { TileborneDesktopUpdatesBridge } from '../shared/desktop-updates-bridge';
 import type { MultiplayerSessionState } from '@/lib/playtest-multiplayer-client';
 import type { LocalMultiplayerParticipantSession } from '@/lib/playtest-room-url';
 
@@ -14,6 +15,7 @@ declare global {
     readonly tileborneIpc: TileborneIpcTransport;
     readonly tileborneStartup: TileborneStartupBridge;
     readonly tileborneAppLifecycle: TileborneAppLifecycleBridge;
+    readonly tileborneDesktopUpdates: TileborneDesktopUpdatesBridge;
     __tileborne_e2e?: {
       readonly getMultiplayerSessionState?: () => MultiplayerSessionState | null;
       readonly getMultiplayerStoreState?: () => {

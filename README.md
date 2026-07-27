@@ -11,8 +11,10 @@ Build maps in the Electron editor, extend behavior with plugins, and run determi
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
 
 The creator/game Ship vertical has committed evidence, while the desktop editor remains unavailable for distribution.
-macOS arm64 is the sole desktop 1.0 candidate; Windows, Linux, macOS x64, automatic updates, and
-remote crash reporting are unsupported. See the [desktop release runbook](docs/desktop-release-runbook.md).
+macOS arm64 is the sole desktop 1.0 candidate; Windows, Linux, macOS x64, and remote crash
+reporting are unsupported. The macOS arm64 automatic-update path is candidate-gated by the same
+signed A-to-B release oracle and is not an available release channel yet. See the
+[desktop release runbook](docs/desktop-release-runbook.md).
 
 ## Quick start
 
@@ -102,7 +104,7 @@ Run `pnpm --filter @tileborne/desktop dev:cdp` to explore the editor locally.
 - [Security](SECURITY.md)
 - [Docs site](apps/docs/) — build with `pnpm docs:dev`
 - [Release readiness](apps/docs/src/content/docs/release-readiness/index.md)
-- [Desktop release and rollback](docs/desktop-release-runbook.md)
+- [Desktop release and recovery](docs/desktop-release-runbook.md)
 
 ## Contributing
 

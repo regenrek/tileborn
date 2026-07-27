@@ -1,5 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 
 import { app, BrowserWindow, ipcMain, protocol } from 'electron';
 
@@ -14,11 +15,13 @@ import {
   type StartupStatusStore,
 } from '../shared/startup-status.js';
 import type { DesktopStartupController } from './startup.js';
+import { findE2eIsolationConfig } from './e2e-isolation-config.js';
 import {
   APP_RECOVERY_STORAGE_COMMIT_CHANNEL,
   APP_RECOVERY_STORAGE_LOAD_CHANNEL,
   type AppRecoveryStorageCommit,
 } from '../shared/app-lifecycle.js';
+import { createDesktopUpdaterController, resolveConfiguredAppleTeamIdentifier } from './updater.js';
 
 // Dev-only: expose CDP for native-devtools-mcp (and other CDP clients). Never in packaged builds.
 const cdpPort =
@@ -26,6 +29,31 @@ const cdpPort =
 if (!app.isPackaged && cdpPort !== undefined && cdpPort.length > 0) {
   app.commandLine.appendSwitch('remote-debugging-port', cdpPort);
 }
+
+const e2eIsolationConfig = findE2eIsolationConfig({
+  appPath: app.getAppPath(),
+  env: process.env,
+  execPath: process.execPath,
+});
+const e2eUserDataPath = e2eIsolationConfig?.userDataDir;
+if (typeof e2eUserDataPath === 'string' && path.isAbsolute(e2eUserDataPath)) {
+  mkdirSync(e2eUserDataPath, { recursive: true });
+  app.setPath('userData', e2eUserDataPath);
+}
+const e2eAppDataPath = e2eIsolationConfig?.appDataDir;
+if (typeof e2eAppDataPath === 'string' && path.isAbsolute(e2eAppDataPath)) {
+  mkdirSync(e2eAppDataPath, { recursive: true });
+  app.setPath('appData', e2eAppDataPath);
+}
+
+const e2eQuitAfterStartupMarker = e2eIsolationConfig?.quitAfterStartupMarker;
+const shouldQuitAfterStartup =
+  typeof e2eQuitAfterStartupMarker === 'string' &&
+  path.isAbsolute(e2eQuitAfterStartupMarker) &&
+  existsSync(e2eQuitAfterStartupMarker);
+const e2eQuitAfterStartupMarkerPath = shouldQuitAfterStartup
+  ? e2eQuitAfterStartupMarker
+  : undefined;
 
 // Privileged scheme for streaming installed pack assets (atlases, manifests)
 // directly to the renderer. Must run before `app.ready`. The renderer loads
@@ -60,6 +88,23 @@ if (!gotSingleInstanceLock) {
   const recoveryStore = createDocumentRecoveryStore(
     path.join(app.getPath('userData'), 'recovery', 'documents.json'),
   );
+  const desktopUpdater = createDesktopUpdaterController({
+    configuredTeamIdentifier: resolveConfiguredAppleTeamIdentifier(),
+    testLoopbackFeedUrl:
+      process.env.TILEBORNE_E2E === '1'
+        ? process.env.TILEBORNE_DESKTOP_UPDATE_LOOPBACK_FEED_URL
+        : undefined,
+    requestQuit: () => {
+      app.quit();
+    },
+    emitStateChange: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('tileborne:desktop-updates:stateChanged', state);
+        }
+      }
+    },
+  });
   let startupController: DesktopStartupController | undefined;
   let quitting = false;
   let quitRequested = false;
@@ -147,8 +192,15 @@ if (!gotSingleInstanceLock) {
           startupController = createDesktopStartupController({
             status: startupStatus,
             reporter: startupReporter,
+            desktopUpdater,
           });
           return startupController.start();
+        })
+        .then(() => {
+          if (e2eQuitAfterStartupMarkerPath !== undefined) {
+            rmSync(e2eQuitAfterStartupMarkerPath, { force: true });
+            app.quit();
+          }
         })
         .catch((cause) => {
           failStartup('Failed to start Tileborne desktop domain', cause);
@@ -178,6 +230,9 @@ if (!gotSingleInstanceLock) {
     }
     exited = true;
     unregisterStartupIpc();
+    if (desktopUpdater.installAfterLifecycleShutdown()) {
+      return;
+    }
     app.exit(code);
   };
 

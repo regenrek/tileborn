@@ -137,6 +137,7 @@ export const TILEBORNE_IPC_DOMAIN_PREFIXES = {
   ship: 'tileborne:ship',
   support: 'tileborne:support',
   system: 'tileborne:system',
+  desktopUpdates: 'tileborne:desktop-updates',
 } as const;
 
 export type TileborneIpcDomainPrefixes = typeof TILEBORNE_IPC_DOMAIN_PREFIXES;

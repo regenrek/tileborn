@@ -28,6 +28,26 @@ const additionalAuditSurfacePaths = Object.freeze([
   'apps/docs/src/content/docs/security/index.md',
 ]);
 
+const productPlanAuditSurfacePaths = Object.freeze([
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/ADRS.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/AI_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/ANALYTICS_OBSERVABILITY_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/API_AND_DATA_MODEL.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/BACKEND_IMPLEMENTATION_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/CLIENT_IMPLEMENTATION_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/DESIGN_SYSTEM_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/PLANR_MANIFEST.json',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/PRODUCT_SPEC.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/README.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/REFERENCES.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/TASKS.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/RELEASE_READINESS.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/TECH_ARCHITECTURE.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/QA_ACCEPTANCE_TESTS.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/SAFETY_PRIVACY_SECURITY.md',
+  '.planr/plans/product/macos-arm64-desktop-release-candidate-for-github-distribution/UX_FLOWS.md',
+]);
+
 export class ReleaseDocsContractError extends Error {
   constructor(code, message) {
     super(`${code}: ${message}`);
@@ -187,6 +207,30 @@ const rowContainsValue = (row, value) => {
 const rowIdentifiesSupport = (row, support) =>
   rowContainsValue(row, support.id) || rowContainsValue(row, support.documentationLabel);
 
+const unsupportedCapabilityClaimPatterns = (documentationLabel) => {
+  const label = normalizeFactValue(documentationLabel);
+  if (label === 'automatic updates') {
+    return [
+      /\bsupports?\s+(?:a\s+|an\s+|the\s+)?(?:signed\s+)?automatic[-\s]+update(?:s|[-\s]+channel)?\b/i,
+      /\bautomatic[-\s]+update(?:s|[-\s]+channel)?\s+(?:is|are)\s+supported\b/i,
+    ];
+  }
+  return [];
+};
+
+const unsupportedCandidateCapabilityClaimPatterns = (documentationLabel) => {
+  const label = normalizeFactValue(documentationLabel);
+  if (label === 'automatic updates') {
+    return [
+      /\bautomatic(?:\s+desktop)?[-\s]+updates?\s+(?:is|are)\s+unsupported\b/i,
+      /\bautomatic[-\s]+update[-\s]+(?:path|channel|capability)\s+(?:is|are)\s+unsupported\b/i,
+      /\bautomatic(?:\s+desktop)?[-\s]+updates?\b[^.\n;]*\bunsupported\b/i,
+      /\bunsupported\b[^.\n;]*\bautomatic(?:\s+desktop)?[-\s]+updates?\b/i,
+    ];
+  }
+  return [];
+};
+
 const cellStartsWithValue = (cell, value) => {
   const normalized = normalizeFactValue(value);
   return new RegExp(`^${escapeRegExp(normalized)}(?=$|[^a-z0-9-])`, 'i').test(cell);
@@ -259,10 +303,13 @@ const assertNoContradictions = (surfaces, policy) => {
         contradictions.push(
           new RegExp(`${label}\\s+(?:is|are)\\s+supported\\b`, 'i'),
           new RegExp(`\\bsupports?\\s+${label}\\b`, 'i'),
+          ...unsupportedCapabilityClaimPatterns(documentationLabel),
         );
       } else if (status === 'candidate') {
         contradictions.push(
           new RegExp(`${label}\\s+(?:is|are)\\s+(?:supported|released|go)\\b`, 'i'),
+          ...unsupportedCapabilityClaimPatterns(documentationLabel),
+          ...unsupportedCandidateCapabilityClaimPatterns(documentationLabel),
         );
       } else if (status === 'operator-blocked') {
         contradictions.push(
@@ -290,9 +337,32 @@ const assertNoContradictions = (surfaces, policy) => {
   }
 };
 
+const releaseOwnedBackupEvidencePatterns = Object.freeze([
+  /\bverified-project-backup\b/i,
+  /\bverified\s+(?:project\s+)?backup\b/i,
+  /\bproject\s+backup\/reopen\b/i,
+  /\bbackup\s+integrity\b/i,
+  /\bbacked-up\s+Tileborne\s+project\b/i,
+  /\bbackup\s+of\s+an\s+existing\s+Tileborne\s+project\b/i,
+  /\bopen\s+a\s+verified\s+project\s+backup\b/i,
+]);
+
+const assertNoReleaseOwnedBackupEvidence = (surfaces) => {
+  for (const [surface, text] of Object.entries(surfaces)) {
+    const drift = releaseOwnedBackupEvidencePatterns.find((pattern) => pattern.test(text));
+    if (drift) {
+      fail('release-docs.project-recovery-evidence-drift', `${surface}: ${String(drift)}`);
+    }
+  }
+};
+
 export const loadReleaseDocumentationSurfaces = () =>
   Object.fromEntries(
-    [...releaseStateSurfacePaths, ...additionalAuditSurfacePaths].map((relativePath) => [
+    [
+      ...releaseStateSurfacePaths,
+      ...additionalAuditSurfacePaths,
+      ...productPlanAuditSurfacePaths,
+    ].map((relativePath) => [
       relativePath,
       readFileSync(path.join(repoRoot, relativePath), 'utf8'),
     ]),
@@ -343,6 +413,7 @@ export function assertReleaseDocumentation({ surfaces, policy, baselineStatus, r
   }
   assertNoUnboundFactRows(runbook, policy, baselineStatus);
   assertNoContradictions(surfaces, policy);
+  assertNoReleaseOwnedBackupEvidence(surfaces);
   return {
     stateSurfaces: releaseStateSurfacePaths.length,
     auditedSurfaces: Object.keys(surfaces).length,

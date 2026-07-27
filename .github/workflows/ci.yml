@@ -10,43 +10,22 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-fast-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  release-gate-plan:
-    name: release-gate-plan
+  ci-fast:
+    name: ci-fast
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.gates.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Read canonical release gates
-        id: gates
-        run: pnpm release:gates:matrix
-
-  release-gate:
-    name: ${{ matrix.label }}
-    needs: release-gate-plan
-    runs-on: ubuntu-latest
-    continue-on-error: ${{ !matrix.required }}
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.release-gate-plan.outputs.matrix) }}
+    env:
+      TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      TURBO_SCM_HEAD: ${{ github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -55,23 +34,9 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
-
-      - name: Install dependencies
-        if: matrix.id != 'install'
-        run: pnpm install --frozen-lockfile
 
       - name: Install xvfb
-        if: matrix.xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      - name: Run release gate
-        if: ${{ !matrix.xvfb }}
-        env:
-          RELEASE_GATE_ID: ${{ matrix.id }}
-        run: pnpm release:gate -- "$RELEASE_GATE_ID"
-
-      - name: Run release gate with xvfb
-        if: matrix.xvfb
-        env:
-          RELEASE_GATE_ID: ${{ matrix.id }}
-        run: xvfb-run -a pnpm release:gate -- "$RELEASE_GATE_ID"
+      - name: Run ci-fast
+        run: xvfb-run -a pnpm ci:fast

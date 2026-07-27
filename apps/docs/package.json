@@ -13,9 +13,9 @@
     "test": "node scripts/prebuild.mjs && astro build && vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@astrojs/starlight": "0.39.2",
-    "astro": "6.4.6",
-    "sharp": "0.34.5"
+    "@astrojs/starlight": "0.41.2",
+    "astro": "7.1.0",
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@tileborne/cli": "workspace:*",

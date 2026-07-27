@@ -19,6 +19,9 @@ coverage/
 .tmp/
 .cache/
 .cursor/
+.codex/
+.claude/
+.envrc
 
 # Cloudflare, env, and local machine state
 .alchemy/
@@ -64,6 +67,30 @@ test-results/
 .eslintcache
 .stylelintcache
 dist-smoke/
+
+# Credentials, private keys, and infrastructure state
+.aws/credentials
+.netrc
+.git-credentials
+.docker/config.json
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+*.agekey
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+secrets.json
+tokens.json
+credentials.json
+service-account*.json
 
 # Planr durable plans, project contracts, agent profiles, and the archived
 # review baseline are tracked explicitly. The SQLite database and newly emitted

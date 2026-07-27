@@ -364,7 +364,9 @@ describe('canonical release gates', () => {
     );
     expect(workflow).toContain('manifest.version = process.env.PREVIOUS_VERSION');
     expect(workflow).toContain('BUNDLE_PREVIOUS_DMG="$BUNDLE_DIR/retained-previous-');
-    expect(workflow).toContain('TILEBORNE_SOURCE_COMMIT="$SOURCE_SHA" pnpm --filter @tileborne/desktop package');
+    expect(workflow).toContain(
+      'TILEBORNE_SOURCE_COMMIT="$SOURCE_SHA" pnpm --filter @tileborne/desktop package',
+    );
     expect(workflow).toContain('pnpm release:desktop:manifest');
     expect(workflow).toContain('--source-commit "$SOURCE_SHA"');
     expect(workflow).toContain('native-stable-verification-receipt.json');
@@ -374,7 +376,7 @@ describe('canonical release gates', () => {
     expect(workflow).toContain('--candidate "$BUNDLE_PREVIOUS_DMG"');
     expect(workflow).toContain('--candidate-only 1 > "$NATIVE_RECEIPT"');
     expect(workflow).toContain(
-      "updateReceipt.candidate.embeddedVersion !== previousVersion || updateReceipt.install.sourceVersion !== previousVersion || updateReceipt.install.targetVersion !== version",
+      'updateReceipt.candidate.embeddedVersion !== previousVersion || updateReceipt.install.sourceVersion !== previousVersion || updateReceipt.install.targetVersion !== version',
     );
     expect(workflow).toContain('(cd "$BUNDLE_DIR" && shasum -a 256 ./* > checksums.sha256)');
     expect(workflow).toContain(
@@ -529,6 +531,13 @@ describe('canonical release gates', () => {
     ]);
     expect(desktopPlan.escalations.map(({ id }) => id)).toEqual(['desktop']);
     expect(desktopPlan.commands[1]).toContain('@tileborne/desktop...');
+    expect(desktopPlan.commands).toContainEqual([
+      'pnpm',
+      'turbo',
+      'run',
+      'build',
+      '--filter=@tileborne/desktop^...',
+    ]);
     expect(desktopPlan.commands).toContainEqual(['pnpm', 'test:desktop-smoke']);
     expect(desktopPlan.commands).toContainEqual([
       'pnpm',
@@ -540,7 +549,7 @@ describe('canonical release gates', () => {
       desktopPlan.commands.filter(
         (command) => command[0] === 'pnpm' && command[1] === 'turbo' && command.includes('build'),
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['desktop-smoke']);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['packaged-runtime']);
     expect(rootPlan.escalations.map(({ id }) => id)).toEqual([
@@ -665,6 +674,7 @@ describe('canonical release gates', () => {
         'release:desktop:status',
         'release:desktop:docs',
         'test:desktop-release-contract',
+        'turbo run build --filter=@tileborne/desktop^...',
         'test:desktop-smoke',
         '--filter @tileborne/desktop test:packaged-smoke',
       ]);

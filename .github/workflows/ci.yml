@@ -32,6 +32,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Check forbidden tracked paths
+        run: node scripts/security/check-forbidden-paths.mjs --tracked
+
+      - name: Verify JavaScript supply-chain policy
+        run: node scripts/security/check-supply-chain-policy.mjs
+
       - name: Enable Corepack
         run: corepack enable
 

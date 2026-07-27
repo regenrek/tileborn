@@ -40,6 +40,7 @@ const ciFastRootContractCommands = Object.freeze([
 ]);
 
 const ciFastDesktopCandidateCommands = Object.freeze([
+  ciFastStep(['build'], ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...']),
   ciFastStep(['desktop-smoke'], ['pnpm', 'test:desktop-smoke']),
   ciFastStep(
     ['packaged-runtime'],

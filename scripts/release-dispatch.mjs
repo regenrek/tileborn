@@ -74,6 +74,8 @@ if (channel === 'fast') {
   run('gh', ['workflow', 'run', 'release-advisory.yml', '--ref', 'main']);
 }
 
+await new Promise((resolve) => setTimeout(resolve, 5000));
+
 const workflow = `release-${channel}.yml`;
 const runList = JSON.parse(
   run('gh', [

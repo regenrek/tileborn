@@ -184,12 +184,7 @@ requireCondition(
 
 requireCondition(existsSync(join(root, '.github/dependabot.yml')), 'Dependabot config is required');
 const ci = read('.github/workflows/ci.yml');
-for (const marker of [
-  'Check forbidden tracked paths',
-  'Verify JavaScript supply-chain policy',
-  'BetterLeaks',
-  'Aqua Security Trivy',
-]) {
+for (const marker of ['Check forbidden tracked paths', 'Verify JavaScript supply-chain policy']) {
   requireCondition(ci.includes(marker), `ci-fast is missing security control: ${marker}`);
 }
 

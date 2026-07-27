@@ -1,0 +1,113 @@
+name: release-advisory
+
+on:
+  schedule:
+    - cron: '17 3 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-advisory-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  timing-and-native-confidence:
+    name: release-advisory-timing-and-native-confidence
+    runs-on: macos-15
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run advisory gate profile
+        env:
+          TILEBORNE_ADVISORY_RECEIPT: ${{ runner.temp }}/release-advisory-gate-receipt.json
+        run: |
+          set -euo pipefail
+          node scripts/release-gates.mjs run-profile advisory --receipt "$TILEBORNE_ADVISORY_RECEIPT"
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; import { selectReleaseGates, validateReleaseGateReceipt } from './scripts/release-gates.mjs'; const receipt = JSON.parse(readFileSync(process.env.TILEBORNE_ADVISORY_RECEIPT, 'utf8')); validateReleaseGateReceipt(receipt, { profile: 'advisory', sourceSha: process.env.GITHUB_SHA, lockfileHash: receipt.lockfileHash, gateIds: selectReleaseGates('advisory').map(({ id }) => id), artifactHashes: receipt.artifactHashes });"
+
+      - name: Upload advisory timing receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-advisory-timing-${{ github.sha }}
+          path: ${{ runner.temp }}/release-advisory-gate-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  unsupported-platform-probes:
+    name: release-advisory-unsupported-${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-latest
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: macos-x64
+            runner: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable Corepack
+        shell: bash
+        run: corepack enable
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Probe unsupported desktop package
+        shell: bash
+        env:
+          TILEBORNE_ADVISORY_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @tileborne/desktop build
+          pnpm --filter @tileborne/desktop package
+
+      - name: Record unsupported-platform advisory status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## release-advisory unsupported platform probe"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Platform | ${{ matrix.platform }} |"
+            echo "| Support status | unsupported for desktop 1.0 |"
+            echo "| Blocking | false |"
+          } >> "$GITHUB_STEP_SUMMARY"

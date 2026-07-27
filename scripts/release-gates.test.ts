@@ -412,6 +412,53 @@ describe('canonical release gates', () => {
     );
   });
 
+  it('moves unsupported platforms and timing-only coverage into non-blocking advisory workflow', () => {
+    const workflow = read('.github/workflows/release-advisory.yml');
+    const ciWorkflow = read('.github/workflows/ci.yml');
+    const ruleset = JSON.parse(read('.github/rulesets/ci-fast-required-check.json')) as {
+      readonly rules: readonly {
+        readonly parameters: {
+          readonly required_status_checks: readonly { readonly context: string }[];
+        };
+      }[];
+    };
+    const requiredStatusChecks = ruleset.rules.flatMap(
+      (rule) => rule.parameters.required_status_checks ?? [],
+    );
+
+    expect(workflow).toContain('name: release-advisory');
+    expect(workflow).toContain('schedule:');
+    expect(workflow).toContain("cron: '17 3 * * 2'");
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).not.toContain('pull_request:');
+    expect(workflow).not.toContain('push:');
+    expect(workflow).toContain('permissions:\n  contents: read');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('release-advisory-timing-and-native-confidence');
+    expect(workflow).toContain(
+      'node scripts/release-gates.mjs run-profile advisory --receipt "$TILEBORNE_ADVISORY_RECEIPT"',
+    );
+    expect(workflow).toContain("selectReleaseGates('advisory').map(({ id }) => id)");
+    expect(workflow).toContain('release-advisory-unsupported-${{ matrix.platform }}');
+    expect(workflow).toContain('fail-fast: false');
+    expect(workflow).toContain('platform: linux-x64');
+    expect(workflow).toContain('platform: windows-x64');
+    expect(workflow).toContain('platform: macos-x64');
+    expect(workflow).toContain('runner: ubuntu-latest');
+    expect(workflow).toContain('runner: windows-latest');
+    expect(workflow).toContain('runner: macos-13');
+    expect(workflow).toContain('Support status | unsupported for desktop 1.0');
+    expect(workflow).toContain('Blocking | false');
+    expect(workflow).not.toContain('contents: write');
+
+    const continueOnErrorOccurrences = workflow.match(/continue-on-error: true/g) ?? [];
+    expect(continueOnErrorOccurrences).toHaveLength(2);
+    expect(ciWorkflow).not.toContain('release-advisory');
+    expect(ciWorkflow).not.toContain('windows-latest');
+    expect(ciWorkflow).not.toContain('macos-13');
+    expect(requiredStatusChecks.map(({ context }) => context)).toEqual(['ci-fast']);
+  });
+
   it('plans one affected Turbo command plus isolated root contracts for ci-fast', () => {
     const plan = createCiFastPlan({
       base: 'base-sha',

@@ -28,7 +28,10 @@ jobs:
   stable-candidate:
     name: release-stable-candidate
     runs-on: macos-15
+    environment: stable-release
     timeout-minutes: 90
+    permissions:
+      contents: read
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
       VERSION: ${{ inputs.version }}
@@ -94,6 +97,43 @@ jobs:
           node scripts/release-gates.mjs run-profile stable --receipt "$TILEBORNE_STABLE_GATE_RECEIPT"
           node --input-type=module -e "import { readFileSync } from 'node:fs'; import { selectReleaseGates, validateReleaseGateReceipt } from './scripts/release-gates.mjs'; const receipt = JSON.parse(readFileSync(process.env.TILEBORNE_STABLE_GATE_RECEIPT, 'utf8')); validateReleaseGateReceipt(receipt, { profile: 'stable', sourceSha: process.env.SOURCE_SHA, lockfileHash: receipt.lockfileHash, gateIds: selectReleaseGates('stable').map(({ id }) => id), artifactHashes: receipt.artifactHashes });"
 
+      - name: Build retained older signed macOS arm64 candidate
+        env:
+          TILEBORNE_DESKTOP_RELEASE: '1'
+          TILEBORNE_APPLE_SIGNING_IDENTITY: ${{ secrets.TILEBORNE_APPLE_SIGNING_IDENTITY }}
+          TILEBORNE_APPLE_TEAM_ID: ${{ secrets.TILEBORNE_APPLE_TEAM_ID }}
+          TILEBORNE_APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}.p8
+          TILEBORNE_APPLE_API_KEY_ID: ${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}
+          TILEBORNE_APPLE_API_ISSUER: ${{ secrets.TILEBORNE_APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="$RUNNER_TEMP/$BUNDLE_NAME"
+          ORIGINAL_PACKAGE_JSON="$RUNNER_TEMP/desktop-package.original.json"
+          cp apps/desktop/package.json "$ORIGINAL_PACKAGE_JSON"
+          restore_package_json() {
+            cp "$ORIGINAL_PACKAGE_JSON" apps/desktop/package.json
+          }
+          trap restore_package_json EXIT
+          PREVIOUS_VERSION="$(node --input-type=module -e "import { decrementPatchVersion } from './scripts/macos-desktop-release-verifier.mjs'; console.log(decrementPatchVersion(process.env.VERSION));")"
+          PREVIOUS_VERSION="$PREVIOUS_VERSION" node --input-type=module -e "import { readFileSync, writeFileSync } from 'node:fs'; const packagePath = 'apps/desktop/package.json'; const manifest = JSON.parse(readFileSync(packagePath, 'utf8')); manifest.version = process.env.PREVIOUS_VERSION; writeFileSync(packagePath, JSON.stringify(manifest, null, 2) + '\n');"
+          rm -rf apps/desktop/out/make
+          TILEBORNE_SOURCE_COMMIT="$SOURCE_SHA" pnpm --filter @tileborne/desktop package
+          PREVIOUS_DMG_COUNT="$(find apps/desktop/out/make -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          if [[ "$PREVIOUS_DMG_COUNT" != "1" ]]; then
+            echo "expected one retained previous-version DMG, observed $PREVIOUS_DMG_COUNT" >&2
+            exit 1
+          fi
+          PREVIOUS_DMG="$(find apps/desktop/out/make -type f -name '*.dmg' | sort | head -n 1)"
+          BUNDLE_PREVIOUS_DMG="$BUNDLE_DIR/retained-previous-$(basename "$PREVIOUS_DMG")"
+          cp "$PREVIOUS_DMG" "$BUNDLE_PREVIOUS_DMG"
+          restore_package_json
+          trap - EXIT
+          rm -rf apps/desktop/out/make
+          {
+            echo "PREVIOUS_VERSION=$PREVIOUS_VERSION"
+            echo "BUNDLE_PREVIOUS_DMG=$BUNDLE_PREVIOUS_DMG"
+          } >> "$GITHUB_ENV"
+
       - name: Build signed notarized macOS arm64 stable bundle
         env:
           TILEBORNE_DESKTOP_RELEASE: '1'
@@ -102,7 +142,7 @@ jobs:
           TILEBORNE_APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}.p8
           TILEBORNE_APPLE_API_KEY_ID: ${{ secrets.TILEBORNE_APPLE_API_KEY_ID }}
           TILEBORNE_APPLE_API_ISSUER: ${{ secrets.TILEBORNE_APPLE_API_ISSUER }}
-        run: pnpm --filter @tileborne/desktop package
+        run: TILEBORNE_SOURCE_COMMIT="$SOURCE_SHA" pnpm --filter @tileborne/desktop package
 
       - name: Assemble verified stable bundle
         env:
@@ -135,12 +175,19 @@ jobs:
             --team-id "$TILEBORNE_APPLE_TEAM_ID" \
             --output "$MANIFEST"
           NATIVE_RECEIPT="$BUNDLE_DIR/native-stable-verification-receipt.json"
+          UPDATE_RECEIPT="$BUNDLE_DIR/native-stable-update-verification-receipt.json"
           NONCE="$(openssl rand -hex 32)"
           node scripts/macos-desktop-release-verifier.mjs \
             --candidate "$BUNDLE_DMG" \
             --update-artifact "$BUNDLE_ZIP" \
-            --nonce "$NONCE" > "$NATIVE_RECEIPT"
-          node --input-type=module -e "import { readFileSync } from 'node:fs'; const manifest = JSON.parse(readFileSync(process.argv[1], 'utf8')); const receipt = JSON.parse(readFileSync(process.argv[2], 'utf8')); const team = process.env.TILEBORNE_APPLE_TEAM_ID; const source = process.env.SOURCE_SHA; const failures = []; if (receipt.nonce !== process.argv[3]) failures.push('nonce'); if (receipt.candidate.candidateArtifactSha256 !== manifest.artifact.sha256) failures.push('candidate.sha256'); if (receipt.update.updateArtifactSha256 !== manifest.updateArtifact.sha256) failures.push('update.sha256'); if (receipt.candidate.embeddedSourceCommit !== source || receipt.update.embeddedSourceCommit !== source) failures.push('source'); if (receipt.candidate.candidateTeamIdentifier !== team || receipt.update.updateTeamIdentifier !== team) failures.push('team'); if (receipt.candidate.candidateStaple !== 'validated' || receipt.update.updateStaple !== 'validated') failures.push('staple'); if (receipt.candidate.candidateGatekeeper !== 'accepted' || receipt.update.updateGatekeeper !== 'accepted') failures.push('gatekeeper'); if (receipt.install.firstLaunchProject.id !== receipt.install.relaunchProject.id) failures.push('relaunch'); if (failures.length > 0) throw new Error('native receipt mismatch: ' + failures.join(', '));" "$MANIFEST" "$NATIVE_RECEIPT" "$NONCE"
+            --nonce "$NONCE" \
+            --candidate-only 1 > "$NATIVE_RECEIPT"
+          UPDATE_NONCE="$(openssl rand -hex 32)"
+          node scripts/macos-desktop-release-verifier.mjs \
+            --candidate "$BUNDLE_PREVIOUS_DMG" \
+            --update-artifact "$BUNDLE_ZIP" \
+            --nonce "$UPDATE_NONCE" > "$UPDATE_RECEIPT"
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; const manifest = JSON.parse(readFileSync(process.argv[1], 'utf8')); const currentReceipt = JSON.parse(readFileSync(process.argv[2], 'utf8')); const updateReceipt = JSON.parse(readFileSync(process.argv[3], 'utf8')); const team = process.env.TILEBORNE_APPLE_TEAM_ID; const source = process.env.SOURCE_SHA; const version = process.env.VERSION; const previousVersion = process.env.PREVIOUS_VERSION; const failures = []; if (currentReceipt.nonce !== process.argv[4]) failures.push('current.nonce'); if (updateReceipt.nonce !== process.argv[5]) failures.push('update.nonce'); if (currentReceipt.candidate.candidateArtifactSha256 !== manifest.artifact.sha256) failures.push('current.candidate.sha256'); if (currentReceipt.update.updateArtifactSha256 !== manifest.updateArtifact.sha256 || updateReceipt.update.updateArtifactSha256 !== manifest.updateArtifact.sha256) failures.push('update.sha256'); if (currentReceipt.candidate.embeddedSourceCommit !== source || currentReceipt.update.embeddedSourceCommit !== source || updateReceipt.candidate.embeddedSourceCommit !== source || updateReceipt.update.embeddedSourceCommit !== source) failures.push('source'); if (currentReceipt.candidate.embeddedVersion !== version || currentReceipt.update.embeddedVersion !== version || updateReceipt.update.embeddedVersion !== version) failures.push('current.version'); if (updateReceipt.candidate.embeddedVersion !== previousVersion || updateReceipt.install.sourceVersion !== previousVersion || updateReceipt.install.targetVersion !== version) failures.push('update.version-order'); if (currentReceipt.candidate.candidateTeamIdentifier !== team || currentReceipt.update.updateTeamIdentifier !== team || updateReceipt.candidate.candidateTeamIdentifier !== team || updateReceipt.update.updateTeamIdentifier !== team) failures.push('team'); if (currentReceipt.candidate.candidateStaple !== 'validated' || currentReceipt.update.updateStaple !== 'validated' || updateReceipt.candidate.candidateStaple !== 'validated' || updateReceipt.update.updateStaple !== 'validated') failures.push('staple'); if (currentReceipt.candidate.candidateGatekeeper !== 'accepted' || currentReceipt.update.updateGatekeeper !== 'accepted' || updateReceipt.candidate.candidateGatekeeper !== 'accepted' || updateReceipt.update.updateGatekeeper !== 'accepted') failures.push('gatekeeper'); if (currentReceipt.install.firstLaunchProject.id !== currentReceipt.install.relaunchProject.id || updateReceipt.install.firstLaunchProject.id !== updateReceipt.install.relaunchProject.id) failures.push('relaunch'); if (failures.length > 0) throw new Error('native receipt mismatch: ' + failures.join(', '));" "$MANIFEST" "$NATIVE_RECEIPT" "$UPDATE_RECEIPT" "$NONCE" "$UPDATE_NONCE"
           (cd "$BUNDLE_DIR" && shasum -a 256 ./* > checksums.sha256)
           {
             echo "## release-stable"
@@ -152,6 +199,7 @@ jobs:
             echo "| Artifact bundle | $BUNDLE_NAME |"
             echo "| Runner | macos-15 arm64 |"
             echo "| Stable gate receipt | stable-gate-receipt.json |"
+            echo "| Retained candidate version | $PREVIOUS_VERSION |"
             echo "| Publication requested | ${{ inputs.publish_release }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 

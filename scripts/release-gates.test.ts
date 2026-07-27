@@ -338,6 +338,9 @@ describe('canonical release gates', () => {
     expect(workflow).not.toContain('macos-latest');
     expect(workflow).toContain('group: release-stable-${{ inputs.source_sha }}');
     expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('stable-candidate:\n    name: release-stable-candidate');
+    expect(workflow).toContain('environment: stable-release');
+    expect(workflow).toContain('stable-candidate:\n    name: release-stable-candidate\n    runs-on: macos-15\n    environment: stable-release\n    timeout-minutes: 90\n    permissions:\n      contents: read');
     expect(workflow).toContain('[[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]');
     expect(workflow).toContain('ref: ${{ inputs.source_sha }}');
     expect(workflow).toContain('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"');
@@ -350,12 +353,23 @@ describe('canonical release gates', () => {
     );
     expect(workflow).toContain("selectReleaseGates('stable').map(({ id }) => id)");
     expect(workflow).toContain("TILEBORNE_DESKTOP_RELEASE: '1'");
-    expect(workflow).toContain('pnpm --filter @tileborne/desktop package');
+    expect(workflow).toContain(
+      "import { decrementPatchVersion } from './scripts/macos-desktop-release-verifier.mjs'",
+    );
+    expect(workflow).toContain('manifest.version = process.env.PREVIOUS_VERSION');
+    expect(workflow).toContain('BUNDLE_PREVIOUS_DMG="$BUNDLE_DIR/retained-previous-');
+    expect(workflow).toContain('TILEBORNE_SOURCE_COMMIT="$SOURCE_SHA" pnpm --filter @tileborne/desktop package');
     expect(workflow).toContain('pnpm release:desktop:manifest');
     expect(workflow).toContain('--source-commit "$SOURCE_SHA"');
     expect(workflow).toContain('native-stable-verification-receipt.json');
+    expect(workflow).toContain('native-stable-update-verification-receipt.json');
     expect(workflow).toContain('node scripts/macos-desktop-release-verifier.mjs \\');
-    expect(workflow).not.toContain('--candidate-only 1');
+    expect(workflow).toContain('--candidate "$BUNDLE_DMG"');
+    expect(workflow).toContain('--candidate "$BUNDLE_PREVIOUS_DMG"');
+    expect(workflow).toContain('--candidate-only 1 > "$NATIVE_RECEIPT"');
+    expect(workflow).toContain(
+      "updateReceipt.candidate.embeddedVersion !== previousVersion || updateReceipt.install.sourceVersion !== previousVersion || updateReceipt.install.targetVersion !== version",
+    );
     expect(workflow).toContain('(cd "$BUNDLE_DIR" && shasum -a 256 ./* > checksums.sha256)');
     expect(workflow).toContain(
       'uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
@@ -384,6 +398,12 @@ describe('canonical release gates', () => {
 
     const contentsWriteOccurrences = workflow.match(/contents: write/g) ?? [];
     expect(contentsWriteOccurrences).toHaveLength(1);
+    expect(workflow.indexOf('stable-candidate:')).toBeLessThan(
+      workflow.indexOf('stable-publication:'),
+    );
+    expect(workflow.indexOf('--candidate "$BUNDLE_PREVIOUS_DMG"')).toBeGreaterThan(
+      workflow.indexOf('--candidate "$BUNDLE_DMG"'),
+    );
   });
 
   it('plans one affected Turbo command plus isolated root contracts for ci-fast', () => {

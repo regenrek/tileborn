@@ -184,15 +184,14 @@ const createUpdateZipFixture = ({
       buildCommand: 'pnpm --filter @tileborne/desktop package',
     })}\n`,
   );
-  const zip = spawnSync('/usr/bin/ditto', [
-    '-c',
-    '-k',
-    '--keepParent',
-    appPath,
-    updateArtifactPath,
-  ]);
+  const zip = spawnSync('/usr/bin/zip', ['-q', '-r', updateArtifactPath, path.basename(appPath)], {
+    cwd: stagingRoot,
+    encoding: 'utf8',
+  });
   if (zip.status !== 0) {
-    throw new Error(`failed to create ZIP fixture: ${String(zip.stderr)}`);
+    throw new Error(
+      `failed to create ZIP fixture: ${zip.error?.message ?? zip.stderr ?? 'unknown error'}`,
+    );
   }
 };
 
@@ -257,6 +256,16 @@ const createEvidence = (
 const nativeRunnerFor = (evidence: ReturnType<typeof createEvidence>) =>
   vi.fn((input: CommandInput): CommandResult => {
     if (input.file === '/usr/bin/ditto') {
+      if (process.platform !== 'darwin') {
+        const archivePath = input.args.at(-2);
+        const extractionRoot = input.args.at(-1);
+        if (archivePath === undefined || extractionRoot === undefined) {
+          return { status: 1, stderr: 'invalid ditto extraction arguments' };
+        }
+        return spawnSync('/usr/bin/unzip', ['-q', archivePath, '-d', extractionRoot], {
+          encoding: 'utf8',
+        });
+      }
       return spawnSync(input.file, input.args, { encoding: 'utf8' });
     }
     if (input.file === '/usr/bin/plutil') {

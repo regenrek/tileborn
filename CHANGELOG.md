@@ -65,14 +65,14 @@ Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** an
 
 - Closed-schema macOS arm64 desktop release policy and verifier for artifact
   SHA-256/source provenance, Developer ID/notarization/stapling, native
-  install/first-launch/relaunch, verified project backup, approved retained-
-  installer rollback, and explicit GitHub publication authorization.
+  install/first-launch/relaunch, project identity persistence evidence, and explicit
+  GitHub publication authorization.
 - Creator performance release budgets for the canonical 2,048-asset,
   512-behavior, and 8,192-reference workload, with separate advisory native
   timing traces.
 - Maintainer runbooks for desktop support, external secrets, stable blocker
-  meanings, project-content recovery, last-known-good approval, rollback, and
-  release handoff.
+  meanings, project-content recovery, application replacement, and release
+  handoff.
 
 ### Changed
 

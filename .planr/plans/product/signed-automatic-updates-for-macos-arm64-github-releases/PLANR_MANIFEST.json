@@ -1,0 +1,32 @@
+{
+  "ai": false,
+  "assumptions": [
+    "regenrek/tileborn remains public and stable releases use SemVer tags",
+    "production uses update.electronjs.org while verification uses only a local non-publishing feed",
+    "automatic updates are macOS arm64 only in this goal",
+    "rollback, downgrade, LKG, and retained installers remain prohibited"
+  ],
+  "backend": false,
+  "generated_at": "2026-07-26T11:10:17.383387Z",
+  "included_documents": [
+    "README.md",
+    "PRODUCT_SPEC.md",
+    "UX_FLOWS.md",
+    "DESIGN_SYSTEM_SPEC.md",
+    "TECH_ARCHITECTURE.md",
+    "ADRS.md",
+    "AI_SPEC.md",
+    "SAFETY_PRIVACY_SECURITY.md",
+    "API_AND_DATA_MODEL.md",
+    "CLIENT_IMPLEMENTATION_SPEC.md",
+    "BACKEND_IMPLEMENTATION_SPEC.md",
+    "ANALYTICS_OBSERVABILITY_SPEC.md",
+    "QA_ACCEPTANCE_TESTS.md",
+    "RELEASE_READINESS.md",
+    "TASKS.md",
+    "REFERENCES.md"
+  ],
+  "platform": "desktop",
+  "source_prompt": "Signed automatic updates for macOS arm64 GitHub releases",
+  "title": "Signed automatic updates for macOS arm64 GitHub releases"
+}

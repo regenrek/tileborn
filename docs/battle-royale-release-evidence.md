@@ -3,8 +3,8 @@
 Status: **creator/gameplay release oracle and unpacked Forge runtime closure proven**.
 
 This is not desktop distribution evidence. The macOS arm64 desktop candidate remains **NO-GO**
-until the signed/notarized DMG, manifest, native install/relaunch, verified backup, approved
-retained-installer rollback, and publication boundary pass the canonical desktop release contract.
+until the signed/notarized DMG, manifest, native install/relaunch/recovery, and publication
+boundary pass the canonical desktop release contract.
 macOS x64, Windows, and Linux are unsupported for desktop 1.0; Forge maker configuration does not
 change that decision.
 Release `0.0.1` is source-only; desktop binary distribution remains **NO-GO** and no desktop artifact is published.
@@ -52,4 +52,4 @@ Local-listen integration tests require permission to bind Miniflare to `127.0.0.
 
 ## Unpacked application runtime proof
 
-The unpacked Forge application is verified as a self-contained runtime closure. The successful root build completed all 23 tasks, the package hook deployed the 29-package binary-backed runtime closure, and the 2/2 copied-app smoke proved that the fresh `.app` starts independently of the repository and reaches a visible renderer. This copied-app proof remains separate from the fresh two-client gameplay receipt above; neither substitutes for the signed/notarized installer and native rollback evidence required by the [desktop release runbook](desktop-release-runbook.md).
+The unpacked Forge application is verified as a self-contained runtime closure. The successful root build completed all 23 tasks, the package hook deployed the 29-package binary-backed runtime closure, and the 2/2 copied-app smoke proved that the fresh `.app` starts independently of the repository and reaches a visible renderer. This copied-app proof remains separate from the fresh two-client gameplay receipt above; neither substitutes for the signed/notarized installer and native install/relaunch/recovery evidence required by the [desktop release runbook](desktop-release-runbook.md).

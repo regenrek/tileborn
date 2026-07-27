@@ -1,0 +1,45 @@
+# Local runtime and agent state
+(^|/)\.agentrig/
+(^|/)\.codex/
+(^|/)\.claude/
+(^|/)\.cursor/
+
+# Environment files
+(^|/)\.env$
+(^|/)\.env\.
+(^|/)\.envrc$
+(^|/)\.dev\.vars$
+(^|/)\.dev\.vars\.
+
+# Credential files. Repository .npmrc files are inspected for credential
+# directives by the supply-chain policy instead of being path-blocked.
+(^|/)\.aws/credentials$
+(^|/)\.netrc$
+(^|/)\.git-credentials$
+(^|/)\.docker/config\.json$
+
+# Private keys
+\.pem$
+\.key$
+\.p12$
+\.jks$
+\.keystore$
+(^|/)id_rsa$
+(^|/)id_ed25519$
+(^|/)id_ecdsa$
+(^|/)id_dsa$
+\.agekey$
+
+# Infrastructure state and secret payloads
+\.tfstate($|\.|/)
+\.tfplan$
+\.tfvars$
+(^|/)secrets\.json$
+(^|/)tokens\.json$
+(^|/)credentials\.json$
+(^|/)service-account.*\.json$
+
+# Local IDE state
+(^|/)\.idea/
+(^|/)\.vscode/settings\.json$
+(^|/)\.vscode/launch\.json$

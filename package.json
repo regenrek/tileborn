@@ -45,6 +45,9 @@
     "test:desktop-release-contract": "vitest run --config vitest.config.ts scripts/desktop-release-contract.test.ts scripts/native-desktop-release-closeout.test.ts scripts/release-dispatch.test.ts scripts/release-docs.test.ts",
     "ci": "pnpm ci:fast",
     "ci:fast": "pnpm release:gates:ci-fast",
+    "security:forbidden": "node scripts/security/check-forbidden-paths.mjs --tracked",
+    "security:supply-chain": "node scripts/security/check-supply-chain-policy.mjs",
+    "security:check": "bash scripts/secleak-check.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

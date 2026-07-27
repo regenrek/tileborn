@@ -32,6 +32,54 @@ jobs:
         with:
           node-version: 22
 
+      - name: Check forbidden tracked paths
+        run: node scripts/security/check-forbidden-paths.mjs --tracked
+
+      - name: Verify JavaScript supply-chain policy
+        run: node scripts/security/check-supply-chain-policy.mjs
+
+      - name: Install BetterLeaks
+        run: |
+          set -euo pipefail
+          version="1.7.1"
+          archive="betterleaks_${version}_linux_x64.tar.gz"
+          checksum="48d9ae267b46677c9943cf9291bed682ed7b37b5b2c6ffbdea47a155495e5dcc"
+          curl -fsSL \
+            "https://github.com/betterleaks/betterleaks/releases/download/v${version}/${archive}" \
+            -o "$RUNNER_TEMP/$archive"
+          echo "$checksum  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          sudo install -m 0755 "$RUNNER_TEMP/betterleaks" /usr/local/bin/betterleaks
+
+      - name: BetterLeaks
+        run: betterleaks git --no-banner --redact=100 --config .betterleaks.toml .
+
+      - name: Install Aqua Security Trivy
+        run: |
+          set -euo pipefail
+          version="0.72.0"
+          archive="trivy_${version}_Linux-64bit.tar.gz"
+          checksum="bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea"
+          curl -fsSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${version}/${archive}" \
+            -o "$RUNNER_TEMP/$archive"
+          echo "$checksum  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" trivy
+          sudo install -m 0755 "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
+
+      - name: Aqua Security Trivy
+        run: |
+          trivy fs \
+            --scanners vuln,secret,misconfig \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --skip-dirs node_modules \
+            --skip-dirs apps/desktop/out \
+            --skip-dirs apps/game-host/dist \
+            --skip-dirs apps/game-host/dist-smoke \
+            .
+
       - name: Enable Corepack
         run: corepack enable
 

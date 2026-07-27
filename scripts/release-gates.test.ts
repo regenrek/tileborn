@@ -326,6 +326,66 @@ describe('canonical release gates', () => {
     expect(workflow).not.toContain('refs/heads/main');
   });
 
+  it('adds a protected exact-SHA macOS arm64 release-stable workflow', () => {
+    const workflow = read('.github/workflows/release-stable.yml');
+
+    expect(workflow).toContain('name: release-stable');
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).toContain('source_sha:');
+    expect(workflow).toContain('version:');
+    expect(workflow).toContain('publish_release:');
+    expect(workflow).toContain('runs-on: macos-15');
+    expect(workflow).not.toContain('macos-latest');
+    expect(workflow).toContain('group: release-stable-${{ inputs.source_sha }}');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('[[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]');
+    expect(workflow).toContain('ref: ${{ inputs.source_sha }}');
+    expect(workflow).toContain('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"');
+    expect(workflow).toContain(
+      'PACKAGE_VERSION="$(node -p "require(\'./apps/desktop/package.json\').version")"',
+    );
+    expect(workflow).toContain('TILEBORNE_STABLE_GATE_RECEIPT:');
+    expect(workflow).toContain(
+      'node scripts/release-gates.mjs run-profile stable --receipt "$TILEBORNE_STABLE_GATE_RECEIPT"',
+    );
+    expect(workflow).toContain("selectReleaseGates('stable').map(({ id }) => id)");
+    expect(workflow).toContain("TILEBORNE_DESKTOP_RELEASE: '1'");
+    expect(workflow).toContain('pnpm --filter @tileborne/desktop package');
+    expect(workflow).toContain('pnpm release:desktop:manifest');
+    expect(workflow).toContain('--source-commit "$SOURCE_SHA"');
+    expect(workflow).toContain('native-stable-verification-receipt.json');
+    expect(workflow).toContain('node scripts/macos-desktop-release-verifier.mjs \\');
+    expect(workflow).not.toContain('--candidate-only 1');
+    expect(workflow).toContain('(cd "$BUNDLE_DIR" && shasum -a 256 ./* > checksums.sha256)');
+    expect(workflow).toContain(
+      'uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+    );
+    expect(workflow).toContain('name: ${{ env.BUNDLE_NAME }}');
+    expect(workflow).toContain('environment: stable-release');
+    expect(workflow).toContain('name: release-stable-protected-publication');
+    expect(workflow).toContain('contents: write');
+    expect(workflow).toContain('if: ${{ ! inputs.publish_release }}');
+    expect(workflow).toContain('Publication was not requested; no tag or release was created.');
+    expect(workflow).toContain('if: ${{ inputs.publish_release }}');
+    expect(workflow).toContain('test "$TILEBORNE_DESKTOP_PUBLISH_APPROVED" = "1"');
+    expect(workflow).toContain('gh run download "$GITHUB_RUN_ID"');
+    expect(workflow).toContain('--name "tileborne-macos-arm64-stable-$SOURCE_SHA"');
+    expect(workflow).toContain('TAG="desktop-v$VERSION"');
+    expect(workflow).toContain(
+      'gh release view "$TAG" --json targetCommitish,isPrerelease,isDraft,isLatest,assets',
+    );
+    expect(workflow).toContain('release.targetCommitish !== source');
+    expect(workflow).toContain('release.isPrerelease !== false');
+    expect(workflow).toContain('release.isDraft !== false');
+    expect(workflow).toContain('"$RUNNER_TEMP/release-bundle"/*');
+    expect(workflow).toContain('--latest');
+    expect(workflow).not.toContain('--prerelease');
+    expect(workflow).not.toContain('refs/heads/main');
+
+    const contentsWriteOccurrences = workflow.match(/contents: write/g) ?? [];
+    expect(contentsWriteOccurrences).toHaveLength(1);
+  });
+
   it('plans one affected Turbo command plus isolated root contracts for ci-fast', () => {
     const plan = createCiFastPlan({
       base: 'base-sha',

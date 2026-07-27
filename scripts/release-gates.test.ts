@@ -531,6 +531,13 @@ describe('canonical release gates', () => {
     ]);
     expect(desktopPlan.escalations.map(({ id }) => id)).toEqual(['desktop']);
     expect(desktopPlan.commands[1]).toContain('@tileborne/desktop...');
+    expect(desktopPlan.commands).toContainEqual([
+      'pnpm',
+      'turbo',
+      'run',
+      'build',
+      '--filter=@tileborne/desktop^...',
+    ]);
     expect(desktopPlan.commands).toContainEqual(['pnpm', 'test:desktop-smoke']);
     expect(desktopPlan.commands).toContainEqual([
       'pnpm',
@@ -542,7 +549,7 @@ describe('canonical release gates', () => {
       desktopPlan.commands.filter(
         (command) => command[0] === 'pnpm' && command[1] === 'turbo' && command.includes('build'),
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['desktop-smoke']);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['packaged-runtime']);
     expect(rootPlan.escalations.map(({ id }) => id)).toEqual([
@@ -667,6 +674,7 @@ describe('canonical release gates', () => {
         'release:desktop:status',
         'release:desktop:docs',
         'test:desktop-release-contract',
+        'turbo run build --filter=@tileborne/desktop^...',
         'test:desktop-smoke',
         '--filter @tileborne/desktop test:packaged-smoke',
       ]);

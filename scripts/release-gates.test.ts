@@ -338,9 +338,15 @@ describe('canonical release gates', () => {
     expect(workflow).not.toContain('macos-latest');
     expect(workflow).toContain('group: release-stable-${{ inputs.source_sha }}');
     expect(workflow).toContain('cancel-in-progress: false');
-    expect(workflow).toContain('stable-candidate:\n    name: release-stable-candidate');
-    expect(workflow).toContain('environment: stable-release');
-    expect(workflow).toContain('stable-candidate:\n    name: release-stable-candidate\n    runs-on: macos-15\n    environment: stable-release\n    timeout-minutes: 90\n    permissions:\n      contents: read');
+    const stableCandidateBlock = workflow.slice(
+      workflow.indexOf('  stable-candidate:'),
+      workflow.indexOf('  stable-publication:'),
+    );
+    const stablePublicationBlock = workflow.slice(workflow.indexOf('  stable-publication:'));
+    expect(stableCandidateBlock).toContain('name: release-stable-candidate');
+    expect(stableCandidateBlock).toContain('environment: stable-build-secrets');
+    expect(stableCandidateBlock).not.toContain('environment: stable-release');
+    expect(stableCandidateBlock).toContain('permissions:\n      contents: read');
     expect(workflow).toContain('[[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]');
     expect(workflow).toContain('ref: ${{ inputs.source_sha }}');
     expect(workflow).toContain('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"');
@@ -375,9 +381,9 @@ describe('canonical release gates', () => {
       'uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
     );
     expect(workflow).toContain('name: ${{ env.BUNDLE_NAME }}');
-    expect(workflow).toContain('environment: stable-release');
-    expect(workflow).toContain('name: release-stable-protected-publication');
-    expect(workflow).toContain('contents: write');
+    expect(stablePublicationBlock).toContain('environment: stable-release');
+    expect(stablePublicationBlock).toContain('name: release-stable-protected-publication');
+    expect(stablePublicationBlock).toContain('contents: write');
     expect(workflow).toContain('if: ${{ ! inputs.publish_release }}');
     expect(workflow).toContain('Publication was not requested; no tag or release was created.');
     expect(workflow).toContain('if: ${{ inputs.publish_release }}');

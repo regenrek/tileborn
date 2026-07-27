@@ -28,7 +28,7 @@ jobs:
   stable-candidate:
     name: release-stable-candidate
     runs-on: macos-15
-    environment: stable-release
+    environment: stable-build-secrets
     timeout-minutes: 90
     permissions:
       contents: read

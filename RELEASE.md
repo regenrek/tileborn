@@ -61,6 +61,29 @@ An evidence-free checkout must remain NO-GO. Do not suppress dependency audit
 findings or desktop blocker codes. Any accepted advisory exception requires an
 explicit, dated release-owner decision; it is not implied by an older handoff.
 
+## Workflow handoff
+
+GitHub release workflows are dispatch-and-record handoffs. The agent stop
+condition is successful dispatch plus recorded run URL; do not poll CI unless a
+maintainer explicitly asks for monitoring.
+
+```bash
+pnpm release:dispatch -- --channel fast --sha "$SOURCE_COMMIT" --version "$VERSION" --publish 0
+pnpm release:dispatch -- --channel stable --sha "$SOURCE_COMMIT" --version "$VERSION" --publish 0
+pnpm release:dispatch -- --channel advisory
+```
+
+Stable native closeout may reuse a valid stable gate receipt for the same
+source SHA and lockfile instead of rerunning the stable profile:
+
+```bash
+node scripts/native-desktop-release-closeout.mjs "$EVIDENCE_ROOT" \
+  --stable-gate-receipt "$STABLE_GATE_RECEIPT"
+```
+
+Advisory timing and unsupported-platform probes are schedule/manual-only and
+non-blocking. They are not required PR checks and cannot authorize publication.
+
 ## Approval Boundaries
 
 Do not run these without explicit maintainer approval:

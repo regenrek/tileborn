@@ -102,7 +102,11 @@ describe('desktop release documentation contract', () => {
       'pnpm release:desktop:policy',
       'pnpm release:desktop:status',
       'pnpm release:desktop:docs',
+      'pnpm release:dispatch -- --channel fast',
+      'pnpm release:dispatch -- --channel stable',
+      'pnpm release:dispatch -- --channel advisory',
       'pnpm --filter @tileborne/desktop package',
+      'node scripts/release-gates.mjs run-profile stable --receipt "$STABLE_GATE_RECEIPT"',
       'node scripts/desktop-release-contract.mjs status',
       'node scripts/desktop-release-contract.mjs verify',
       'pnpm release:gate -- creator-performance',
@@ -113,6 +117,8 @@ describe('desktop release documentation contract', () => {
       expect(runbook).toContain(command);
     }
     expect(runbook).toContain('no caller-provided native receipt is accepted');
+    expect(runbook).toContain('successful dispatch plus recorded run URL');
+    expect(runbook).toContain('Do not poll the workflow unless a maintainer explicitly asks');
     expect(runbook).toContain('TILEBORNE_DESKTOP_PUBLISH_APPROVED=1');
     expect(runbook).toContain('gh auth status --hostname github.com --active');
     expect(runbook).toContain('This is recovery, not a verified desktop rollback guarantee.');

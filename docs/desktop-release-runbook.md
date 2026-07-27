@@ -69,6 +69,35 @@ possibilities. They are not platform support, signing, installation, upgrade, un
 runtime evidence. Ubuntu CI and a successful unpacked Forge `.app` smoke do not broaden this
 matrix.
 
+## GitHub workflow handoff
+
+Release workflows are asynchronous handoffs. The maintainer or agent dispatches exactly one
+workflow for an exact source SHA, records the GitHub run URL, and stops. The stop condition is
+successful dispatch plus recorded run URL. Do not poll the workflow unless a maintainer explicitly asks for monitoring, retry, approval, or promotion work.
+
+Fast candidate handoff:
+
+```sh
+pnpm release:dispatch -- --channel fast --sha "$SOURCE_COMMIT" --version "$VERSION" --publish 0
+```
+
+Stable candidate handoff:
+
+```sh
+pnpm release:dispatch -- --channel stable --sha "$SOURCE_COMMIT" --version "$VERSION" --publish 0
+```
+
+Advisory confidence handoff:
+
+```sh
+pnpm release:dispatch -- --channel advisory
+```
+
+The dispatch command prints a structured receipt with the channel, workflow file, source SHA,
+version when applicable, publish flag, and run URL. Keep that receipt with the restricted release
+handoff notes. A `--publish 1` dispatch is a mutating publication request and requires the
+separate approval boundary below.
+
 ## Ownership Boundary
 
 The policy names exactly one owner for each release boundary:
@@ -116,13 +145,24 @@ After the normal clean-checkout gates, build the sole approved release artifact:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm release:gates
+node scripts/release-gates.mjs run-profile stable --receipt "$STABLE_GATE_RECEIPT"
 TILEBORNE_DESKTOP_RELEASE=1 pnpm --filter @tileborne/desktop package
 ```
 
 Release mode exposes only the macOS DMG maker, embeds source/version/Team provenance before
 signing, requires hardened-runtime signing, notarizes, and rejects missing or extra make outputs.
 A successful Forge invocation is still not the release decision.
+
+For local native closeout, pass the previously generated stable gate receipt instead of rerunning
+the full stable profile when the receipt is for the same source SHA and current lockfile:
+
+```sh
+node scripts/native-desktop-release-closeout.mjs "$EVIDENCE_ROOT" \
+  --stable-gate-receipt "$STABLE_GATE_RECEIPT"
+```
+
+Receipt reuse is fail-closed. The closeout rejects profile, source SHA, lockfile, schema, missing
+gate, unexpected gate, and failed gate mismatches.
 
 ## Generate the candidate manifest
 
@@ -265,10 +305,14 @@ Native startup/create/reopen timings and Playwright traces are calibration evide
 
 ```sh
 pnpm --filter @tileborne/desktop test:creator-performance-native
+pnpm release:dispatch -- --channel advisory
 ```
 
 The native gate is advisory and has no required millisecond threshold. Do not use a fast local trace
 to waive a deterministic budget failure, and do not commit its temporary trace or receipt output.
+The scheduled advisory workflow also probes non-candidate desktop platforms and records timing
+evidence with non-blocking jobs; its results cannot block PR merge, fast candidate handoff, or
+stable candidate verification.
 
 ## Handoff checklist
 

@@ -34,6 +34,7 @@
     "release:gates": "node scripts/release-gates.mjs run-all",
     "release:gates:ci-fast": "node scripts/release-gates.mjs ci-fast",
     "release:gates:matrix": "node scripts/release-gates.mjs matrix",
+    "release:dispatch": "node scripts/release-dispatch.mjs",
     "release:desktop:policy": "node scripts/desktop-release-contract.mjs policy",
     "release:desktop:manifest": "node scripts/desktop-release-contract.mjs manifest",
     "release:desktop:status": "node scripts/desktop-release-contract.mjs status --expect no-go",

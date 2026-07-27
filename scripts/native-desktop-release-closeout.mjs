@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateDesktopReleaseManifest } from './desktop-release-contract.mjs';
+import { selectReleaseGates, validateReleaseGateReceipt } from './release-gates.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), '..');
@@ -50,6 +51,7 @@ const TRACKED_DISTRIBUTION_INPUTS = new Set([
 ]);
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+const lockfileHash = (root) => `sha256:${sha256(readFileSync(path.join(root, 'pnpm-lock.yaml')))}`;
 const git = (root, args, allowFailure = false) => {
   try {
     return execFileSync('git', args, {
@@ -334,6 +336,42 @@ export const deriveCloseoutExternalOwners = (blockerCodes) => {
   ].filter(({ blocker }) => blockers.has(blocker));
 };
 
+export const validateStableGateReceiptForCloseout = ({ receiptPath, checkoutRoot, sourceSha }) => {
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  validateReleaseGateReceipt(receipt, {
+    profile: 'stable',
+    sourceSha,
+    lockfileHash: lockfileHash(checkoutRoot),
+    gateIds: selectReleaseGates('stable').map(({ id }) => id),
+    artifactHashes: receipt.artifactHashes,
+  });
+  return Object.freeze({
+    command: [
+      'node',
+      'scripts/release-gates.mjs',
+      'run-profile',
+      'stable',
+      '--receipt',
+      receiptPath,
+    ],
+    exitCode: 0,
+    signal: null,
+    stdout: {
+      file: null,
+      bytes: 0,
+      sha256: sha256(JSON.stringify({ receiptPath, sourceSha })),
+    },
+    stderr: { file: null, bytes: 0, sha256: sha256('') },
+    reusedReceipt: {
+      path: receiptPath,
+      profile: receipt.profile,
+      sourceSha: receipt.sourceSha,
+      lockfileHash: receipt.lockfileHash,
+      gateCount: receipt.gates.length,
+    },
+  });
+};
+
 const atomicReceipt = (evidenceRoot, receipt) => {
   const pending = path.join(evidenceRoot, 'native-desktop-closeout-receipt.pending.json');
   const closed = path.join(evidenceRoot, 'native-desktop-closeout-receipt.json');
@@ -355,7 +393,11 @@ const atomicReceipt = (evidenceRoot, receipt) => {
   return { file: closed, bytes: Buffer.byteLength(bytes), sha256: sha256(bytes) };
 };
 
-export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidenceRoot }) => {
+export const runNativeDesktopReleaseCloseout = ({
+  root = process.cwd(),
+  evidenceRoot,
+  stableGateReceiptPath,
+}) => {
   assert(
     process.platform === 'darwin' && process.arch === 'arm64',
     'native.unsupported-host',
@@ -405,13 +447,20 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     command: 'pnpm',
     args: ['install', '--frozen-lockfile'],
   }).receipt;
-  commands.releaseGates = run({
-    root: checkoutRoot,
-    evidenceRoot: resolvedEvidenceRoot,
-    id: '02-release-gates',
-    command: 'pnpm',
-    args: ['release:gates'],
-  }).receipt;
+  commands.releaseGates =
+    stableGateReceiptPath === undefined
+      ? run({
+          root: checkoutRoot,
+          evidenceRoot: resolvedEvidenceRoot,
+          id: '02-release-gates',
+          command: 'pnpm',
+          args: ['release:gates'],
+        }).receipt
+      : validateStableGateReceiptForCloseout({
+          receiptPath: stableGateReceiptPath,
+          checkoutRoot,
+          sourceSha: head,
+        });
   commands.forgeMake = run({
     root: checkoutRoot,
     evidenceRoot: resolvedEvidenceRoot,
@@ -798,6 +847,7 @@ export const runNativeDesktopReleaseCloseout = ({ root = process.cwd(), evidence
     unsupported: status.knownLimitations,
     externalOwners: deriveCloseoutExternalOwners(blockerCodes),
     remediationCommands: [
+      'node scripts/release-gates.mjs run-profile stable --receipt "$STABLE_GATE_RECEIPT"',
       'TILEBORNE_DESKTOP_RELEASE=1 pnpm --filter @tileborne/desktop package',
       'node scripts/desktop-release-contract.mjs status --artifact "$CANDIDATE_DMG" --update-artifact "$CANDIDATE_ZIP" --manifest "$MANIFEST" --output "$STATUS_OUTPUT" --skip-publication 1 --expect no-go',
       'node scripts/desktop-release-contract.mjs verify --artifact "$CANDIDATE_DMG" --update-artifact "$CANDIDATE_ZIP" --manifest "$MANIFEST" --output "$FINAL_STATUS_OUTPUT" --expect go',
@@ -812,9 +862,13 @@ if (
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
 ) {
   try {
+    const stableGateReceiptFlag = process.argv.indexOf('--stable-gate-receipt');
+    const stableGateReceiptPath =
+      stableGateReceiptFlag === -1 ? undefined : process.argv[stableGateReceiptFlag + 1];
     const result = runNativeDesktopReleaseCloseout({
       root: repoRoot,
       evidenceRoot: process.argv[2],
+      stableGateReceiptPath,
     });
     console.log(JSON.stringify(result));
   } catch (error) {

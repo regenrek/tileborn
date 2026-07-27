@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -12,7 +12,9 @@ import {
   deriveCloseoutBlockerCodes,
   deriveCloseoutExternalOwners,
   outputDirectories,
+  validateStableGateReceiptForCloseout,
 } from './native-desktop-release-closeout.mjs';
+import { createReleaseGateReceipt, selectReleaseGates } from './release-gates.mjs';
 
 const temporaryRoots: string[] = [];
 
@@ -184,6 +186,50 @@ describe('native desktop closeout receipt evidence', () => {
     expect(blockerCodes).toEqual(['notarization.credentials-missing']);
     expect(deriveCloseoutExternalOwners(blockerCodes).map(({ blocker }) => blocker)).toEqual([
       'notarization.credentials-missing',
+    ]);
+  });
+
+  it('reuses a SHA- and lockfile-bound stable gate receipt for closeout', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'tileborne-stable-receipt-'));
+    temporaryRoots.push(root);
+    await writeFile(path.join(root, 'pnpm-lock.yaml'), 'lockfile\n');
+    const receiptPath = path.join(root, 'stable-gate-receipt.json');
+    const receipt = createReleaseGateReceipt({
+      profile: 'stable',
+      sourceSha: 'a'.repeat(40),
+      lockfileHash: 'sha256:3d0abe3e8f9631c12a42e96531a6a0727a4752fb15508ebf30dca059607f498d',
+      nodeVersion: 'v22.0.0',
+      packageManagerVersion: '11.8.0',
+      startedAt: '2026-07-27T10:00:00.000Z',
+      finishedAt: '2026-07-27T10:01:00.000Z',
+      gateResults: selectReleaseGates('stable').map(({ id }) => ({
+        id,
+        status: 'passed',
+        startedAt: '2026-07-27T10:00:00.000Z',
+        finishedAt: '2026-07-27T10:00:01.000Z',
+      })),
+    });
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+
+    const commandReceipt = validateStableGateReceiptForCloseout({
+      receiptPath,
+      checkoutRoot: root,
+      sourceSha: 'a'.repeat(40),
+    });
+
+    expect(commandReceipt.reusedReceipt).toMatchObject({
+      path: receiptPath,
+      profile: 'stable',
+      sourceSha: 'a'.repeat(40),
+      gateCount: selectReleaseGates('stable').length,
+    });
+    expect(commandReceipt.command).toEqual([
+      'node',
+      'scripts/release-gates.mjs',
+      'run-profile',
+      'stable',
+      '--receipt',
+      receiptPath,
     ]);
   });
 });

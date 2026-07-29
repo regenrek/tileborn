@@ -15,12 +15,60 @@ Before substantial work:
 - When several already-known tool calls are independent, read-only, and non-conflicting, run them concurrently inside one `functions.exec` call using `Promise.allSettled`. Inspect every result.
 - Keep dependent or adaptive calls, writes, approvals, waits or resumes, and conflicting mutations sequential. Limit fan-out and combined output.
 
+## Verification Policy: Operating Path First
+
+- Prove the real operating path before adding tests, guardrails, fixtures, or
+  verification infrastructure. For user-visible behavior, direct observation
+  in the running product is the primary evidence.
+- For ordinary feature and fix work, use at most one targeted existing
+  automated check plus one live operating-path verification. Do not run broad
+  root test suites, `test:all`, full Electron smoke suites, release gates, or
+  repeated typecheck/lint/test cycles unless the user explicitly asks, the
+  release contract requires them, or no targeted check can cover a genuinely
+  cross-cutting change.
+- Default to zero new test files for Electron, renderer, Pixi/canvas, and
+  gameplay work. Add at most one focused regression test only when it protects
+  a durable non-visual invariant and can demonstrate fail-before/pass-after.
+  Creating or modifying more test files requires explicit maintainer approval.
+- Never add production hooks, metrics, debug exports, event ledgers, hashes,
+  proof artifacts, duplicate fixtures, or compatibility paths solely to make
+  agent verification possible.
+- Verify visual and feel-based behavior such as muzzle flashes, animation
+  timing, spawn layout, textures, HUD state, pointer aim, and input
+  responsiveness live in Electron. DOM counters, event counts, snapshots, and
+  headless surrogates do not substitute for observing the rendered behavior.
+- Rerun a command only after a relevant code change or to confirm a previously
+  failing targeted check. Never rerun a passing command for reassurance. If the
+  same check fails twice without new evidence, stop and report the blocker
+  instead of entering another repair or verification loop.
+- Do not start a verification command expected to take more than five minutes
+  unless the user requested it or the release contract requires it. If an
+  ordinary verification run stalls past that budget, terminate it once and
+  report the partial result; do not keep polling unchanged state.
+- Stop when the requested operating path works live, no new relevant
+  console/runtime error appears, and the closest existing automated check (if
+  one exists) passes. Do not escalate a working change into extra tests,
+  reviews, evidence packages, or proof loops.
+- Do not spawn subagents to create tests, review evidence, or repeat
+  verification unless the user explicitly requests delegation.
+
 ## Live Electron Testing
 
-- When the user asks for live browser testing, live UI verification, Electron app driving, native desktop automation, MCP browser control, screenshots/OCR, or CDP interaction, load the project skill `.cursor/skills/electron-live-test/SKILL.md` and follow it.
-- Prefer Chrome DevTools MCP for Tileborne's Electron renderer and React shell when CDP inspection, console/network debugging, source-mapped renderer stacks, or performance traces are needed. Use Playwright Electron smoke tests for repeatable verification. Keep native-devtools-mcp for native window chrome, OS dialogs, screenshot/OCR, Pixi/canvas visual targeting, or Android/native coverage that Chrome DevTools MCP and Playwright do not cover.
-- On this machine, the Codex MCP server names are `chrome-devtools-tileborn`, `playwright`, and `native-devtools`.
-- The dev server is assumed to be user-managed. Do not start or restart it unless the user explicitly asks; if CDP is needed, ask the user to run `pnpm --filter @tileborne/desktop dev:cdp` or confirm that it is already running.
+- Before writing or modifying tests for user-visible Electron behavior, load
+  and follow `.agents/skills/electron-live-test/SKILL.md`.
+- Prefer Chrome DevTools MCP for Tileborne's Electron renderer and React shell
+  when CDP inspection, console/network debugging, source-mapped renderer
+  stacks, or performance traces are needed. Use Playwright Electron smoke tests
+  only for an existing repeatable verification path. Keep native-devtools-mcp
+  for native window chrome, OS dialogs, screenshot/OCR, Pixi/canvas visual
+  targeting, or Android/native coverage that Chrome DevTools MCP and Playwright
+  do not cover.
+- On this machine, the Codex MCP server names are
+  `chrome-devtools-tileborn`, `playwright`, and `native-devtools`.
+- The dev server is user-managed. Do not start or restart it unless the user
+  explicitly asks; if CDP is needed, ask the user to run
+  `pnpm --filter @tileborne/desktop dev:cdp` or confirm that it is already
+  running.
 
 ## Licensing
 

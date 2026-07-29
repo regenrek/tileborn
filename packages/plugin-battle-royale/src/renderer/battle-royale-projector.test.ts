@@ -268,7 +268,7 @@ describe('BattleRoyaleProjector', () => {
           y: 20,
           health: 100,
           modelId: 'model:hero',
-          animation: playerAnimation('shoot'),
+          animation: { ...playerAnimation('shoot'), acceptedFireTick: 1 },
         },
       ],
       projectiles: [],
@@ -291,6 +291,33 @@ describe('BattleRoyaleProjector', () => {
     expect(entity?.animation?.clipId).toBe('model:hero:shoot');
     expect(entity?.animation?.frames).toHaveLength(2);
     expect(entity?.animation?.loop).toBe(true);
+  });
+
+  it('does not render muzzle flash for raw shoot animation without an accepted fire event', () => {
+    const projector = createBattleRoyaleProjector(projectorConfig());
+    const playerId = BattleRoyaleProtocol.makePlayerId('player-1');
+    const welcome = new BattleRoyaleProtocol.WelcomeSnapshot({
+      tick: 1,
+      serverTimestampMs: 1000,
+      seed: 1,
+      players: [
+        {
+          id: playerId,
+          x: 10,
+          y: 20,
+          health: 100,
+          modelId: 'model:hero',
+          animation: playerAnimation('shoot'),
+        },
+      ],
+      projectiles: [],
+      zone: { cx: 32, cy: 32, radius: 64 },
+    });
+
+    const full = projector.mergeFrame?.(undefined, welcome);
+    const entities = projector.project(full);
+
+    expect(entities.find((entry) => entry.id === 'br:muzzle:player-1')).toBeUndefined();
   });
 
   it('applies authored weapon grip and muzzle transforms from weapon-entity metadata', () => {
@@ -320,6 +347,7 @@ describe('BattleRoyaleProjector', () => {
           animation: {
             ...playerAnimation('shoot'),
             aimDeg: 0,
+            acceptedFireTick: 1,
           },
         },
       ],
@@ -635,6 +663,7 @@ describe('BattleRoyaleProjector', () => {
           animation: {
             ...playerAnimation('shoot'),
             aimDeg: 0,
+            acceptedFireTick: 1,
           },
         },
       ],

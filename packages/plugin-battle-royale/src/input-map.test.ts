@@ -16,6 +16,8 @@ import {
   BR_INPUT_MAP_CONTRIBUTION_ID,
   BR_INPUT_MAP_ID,
   battleRoyaleDefaultInputMap,
+  battleRoyalePlaytestHeldBooleanInputFields,
+  battleRoyalePlaytestInputEdgeFields,
   resolveBattleRoyaleInputIntent,
 } from './input-map.js';
 
@@ -147,6 +149,18 @@ describe('resolveBattleRoyaleInputIntent (action→intent adapter)', () => {
     );
     expect(intent.reload).toBe(true);
     expect(intent.interact).toBe(true);
+  });
+
+  it('declares BR edge-like intent fields for generic host transport buffering', () => {
+    expect(battleRoyalePlaytestInputEdgeFields).toEqual([
+      'shoot',
+      'reload',
+      'interact',
+      'drop',
+      'abilities',
+      'swapSlot',
+    ]);
+    expect(battleRoyalePlaytestHeldBooleanInputFields).toEqual(['shoot']);
   });
 
   it('reports idle (dir undefined, no shoot) when nothing is pressed', () => {

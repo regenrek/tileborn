@@ -22,11 +22,14 @@ const isAimDeg = (value: number | undefined): value is number =>
 
 export const direction8ToFacingDeg = (dir: Direction8): number => dir * 45;
 
-const clipKeyForInput = (input: RuntimePlayerInput | undefined): PlayerModelClipKey => {
+const clipKeyForInput = (
+  input: RuntimePlayerInput | undefined,
+  acceptedFireTick: number | undefined,
+): PlayerModelClipKey => {
   if (input?.reload) {
     return 'reload';
   }
-  if (input?.shoot) {
+  if (input?.shoot && acceptedFireTick !== undefined) {
     return 'shoot';
   }
   return isDirection8(input?.dir) ? 'run' : 'idle';
@@ -36,6 +39,7 @@ const animationFor = (
   player: Player,
   input: RuntimePlayerInput | undefined,
   facing: Facing | undefined,
+  acceptedFireTick: number | undefined,
 ): AnimationState | undefined => {
   if (player.modelId === undefined) {
     return undefined;
@@ -50,16 +54,18 @@ const animationFor = (
         : direction8ToFacingDeg(facing.dir);
   return {
     modelId: player.modelId,
-    clipKey: clipKeyForInput(input),
+    clipKey: clipKeyForInput(input, acceptedFireTick),
     facingDeg,
     moving,
     ...(isAimDeg(input?.aimDeg) ? { aimDeg: input.aimDeg } : {}),
+    ...(acceptedFireTick === undefined ? {} : { acceptedFireTick }),
   };
 };
 
 export const updatePlayerAnimationStates = (
   world: PluginWorld,
   getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined,
+  getAcceptedFireTick?: (playerId: string) => number | undefined,
 ): void => {
   const players = world.getComponent<Player>(PLAYER_COMPONENT);
   const animations = world.registerComponent<AnimationState>(ANIMATION_STATE_COMPONENT);
@@ -68,7 +74,12 @@ export const updatePlayerAnimationStates = (
   for (const [entity, player] of players.entries()) {
     const animation =
       player.alive === 1
-        ? animationFor(player, getPlayerInput?.(player.playerId), facings.get(entity))
+        ? animationFor(
+            player,
+            getPlayerInput?.(player.playerId),
+            facings.get(entity),
+            getAcceptedFireTick?.(player.playerId),
+          )
         : undefined;
     if (animation === undefined) {
       animations.delete(entity);

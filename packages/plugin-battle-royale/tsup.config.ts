@@ -101,6 +101,25 @@ export default defineConfig([
     external: ['@tileborne/core', '@tileborne/ipc-contracts', '@tileborne/runtime', 'effect'],
   },
   {
+    // Test-fixture boundary shared by workspace tests without importing src/
+    // files across package roots.
+    entry: { test: 'src/test/index.ts' },
+    format: ['esm'],
+    platform: 'node',
+    target: 'node22',
+    outDir: 'dist',
+    clean: false,
+    sourcemap: true,
+    dts: false,
+    external: [
+      '@tileborne/core',
+      '@tileborne/ipc-contracts',
+      '@tileborne/runtime',
+      '@tileborne/simulation',
+      'effect',
+    ],
+  },
+  {
     // Player-model concerns consumed by the desktop renderer (canonical model
     // identity + roster schema + selection policy + loadout). @tileborne/core +
     // effect stay external so the renderer's single core instance backs all

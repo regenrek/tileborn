@@ -28,6 +28,10 @@
       "types": "./src/renderer/index.ts",
       "default": "./dist/renderer.js"
     },
+    "./test": {
+      "types": "./src/test/index.ts",
+      "default": "./dist/test.js"
+    },
     "./player-models": {
       "types": "./src/player-models/index.ts",
       "default": "./dist/player-models.js"

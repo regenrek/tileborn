@@ -447,7 +447,8 @@ const sameAnimation = (
   left?.clipKey === right?.clipKey &&
   left?.facingDeg === right?.facingDeg &&
   left?.moving === right?.moving &&
-  left?.aimDeg === right?.aimDeg;
+  left?.aimDeg === right?.aimDeg &&
+  left?.acceptedFireTick === right?.acceptedFireTick;
 
 const sameStatusEffects = (
   left: readonly BattleRoyaleProtocol.PlayerStatusSnapshot[] | undefined,

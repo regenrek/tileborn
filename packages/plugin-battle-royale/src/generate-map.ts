@@ -22,6 +22,16 @@ import { layerIdFromSeed, mapIdFromSeed, objectIdFromSeed } from './id-utils.js'
 import type { GenerateMapOptions } from './types/artifact.js';
 import { SeededRng } from './rng.js';
 
+const GENERATED_TILE_SIZE = { width: 32, height: 32 } as const;
+
+const authoredPixelPositionForTileCell = (position: {
+  readonly x: number;
+  readonly y: number;
+}): { readonly x: number; readonly y: number } => ({
+  x: position.x * GENERATED_TILE_SIZE.width,
+  y: position.y * GENERATED_TILE_SIZE.height,
+});
+
 const makeMapObject = (input: {
   readonly id: MapObjectType['id'];
   readonly kind: MapObjectType['kind'];
@@ -116,7 +126,9 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
   const objects: MapObject[] = [];
 
   for (let index = 0; index < spawnCount; index += 1) {
-    const position = perimeterSpawn(index, spawnCount, width, height);
+    const position = authoredPixelPositionForTileCell(
+      perimeterSpawn(index, spawnCount, width, height),
+    );
     objects.push(
       makeMapObject({
         id: objectIdFromSeed(seed, `spawn-${index}`),
@@ -133,8 +145,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
     makeMapObject({
       id: objectIdFromSeed(seed, 'shrink-anchor'),
       kind: SHRINK_ZONE_ANCHOR_KIND,
-      x: width / 2,
-      y: height / 2,
+      ...authoredPixelPositionForTileCell({ x: width / 2, y: height / 2 }),
       layerId: objectLayerId,
       properties: {
         initialRadiusTiles: Math.max(width, height) / 2,
@@ -152,8 +163,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `loot-${index}`),
         kind: LOOT_CRATE_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { tier, respawnSeconds: 0 },
       }),
@@ -167,8 +177,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `trap-${index}`),
         kind: TRAP_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: {
           radius: ABILITY.trap.radius,
@@ -187,8 +196,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `decoy-${index}`),
         kind: DECOY_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { radius: ABILITY.decoy.radius, durationTicks: ABILITY.decoy.durationTicks },
       }),
@@ -202,8 +210,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `barrier-${index}`),
         kind: BARRIER_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { width: 32, height: 32 },
       }),
@@ -222,8 +229,8 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
     id: mapIdFromSeed(seed),
     width,
     height,
-    tileWidth: 32,
-    tileHeight: 32,
+    tileWidth: GENERATED_TILE_SIZE.width,
+    tileHeight: GENERATED_TILE_SIZE.height,
     layers: [buildGroundLayer(seed, width, height, rng), objectLayer],
     objects,
     properties: { generatorSeed: String(seed) },

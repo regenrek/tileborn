@@ -22,6 +22,7 @@ import {
   type SeededRng,
   type WeaponDefinition,
 } from '@tileborne/simulation';
+import { GameplayWeaponFired, makeGameplayEntityId } from '@tileborne/ipc-contracts';
 
 import type { ExportedArtifact } from '../types/artifact.js';
 import type { PluginWorld, RuntimePlayerInput } from '../types/runtime-plugin.js';
@@ -135,6 +136,12 @@ export interface CombatSystemContext {
   readonly defaultPlayerPhysics?: PlayerPhysicsProfile;
   readonly collisionEnvironment?: PluginCollisionEnvironment;
   readonly tick?: number;
+  readonly onWeaponSlotApplied?: (event: {
+    readonly playerId: string;
+    readonly slot: number;
+    readonly tick?: number;
+  }) => void;
+  readonly onWeaponFired?: (event: GameplayWeaponFired) => void;
 }
 
 const PROJECTILE_MUZZLE_PADDING = 1;
@@ -455,6 +462,11 @@ const processShootInput = (
     if (isValidWeaponSlot(input.swapSlot, ctx.weaponSlotCount)) {
       state.activeWeaponSlotByPlayerId.set(player.playerId, input.swapSlot);
       equippedWeapons.set(entity, { weaponId: String(ctx.weapon.id), slot: input.swapSlot });
+      ctx.onWeaponSlotApplied?.({
+        playerId: player.playerId,
+        slot: input.swapSlot,
+        ...(ctx.tick === undefined ? {} : { tick: ctx.tick }),
+      });
     }
 
     if (isValidDirection8(input.dir)) {
@@ -503,7 +515,19 @@ const processShootInput = (
       ctx.bodyByModelId,
       ctx.defaultPlayerPhysics ?? DEFAULT_PLAYER_PHYSICS,
     );
+    const origin = projectileOrigin(position, direction, ctx.delivery, body);
     spawnProjectile(world, ctx, state, entity, player, position, direction, weaponSlot, body);
+    ctx.onWeaponFired?.(
+      new GameplayWeaponFired({
+        tick: ctx.tick ?? input.tick,
+        sourceId: makeGameplayEntityId(player.playerId),
+        weaponId: ctx.weapon.id,
+        origin,
+        direction,
+        damage: ctx.weapon.damage,
+        ammoRemaining: fired.state.ammoInMagazine,
+      }),
+    );
   }
 };
 

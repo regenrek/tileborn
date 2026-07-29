@@ -236,7 +236,7 @@ export const buildBattleRoyaleRuntimeState = (
   // Collision on the package path comes from catalog-footprint object rects
   // only (the package carries no tileset pack for tile-mask collision).
   const objectCollisionRects = extractObjectCollisionRects(
-    mapPackage.map,
+    mapPackage.placements,
     mapPackage.catalog.map((entry) => entry.objectType),
   );
 

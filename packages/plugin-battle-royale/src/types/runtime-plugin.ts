@@ -1,4 +1,5 @@
 import type { BattleRoyaleAbilityId } from '@tileborne/ipc-contracts/protocols/battle-royale';
+import type { JsonValue } from '@tileborne/core';
 import type {
   RuntimeAdapter,
   RuntimeAdapterComponentStore,
@@ -58,8 +59,10 @@ export interface RuntimePluginHost extends RuntimeAdapterHost {
   readonly getPlayerInput?: (playerId: string) => RuntimePlayerInput | undefined;
   readonly msgOut?: RuntimeMessageOut;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+  readonly getPluginCheckpoint?: (pluginId: string) => JsonValue | undefined;
   readonly seed?: string | number;
   readonly config?: RuntimeAdapterConfig;
+  readonly setPluginCheckpoint?: (pluginId: string, checkpoint: JsonValue | undefined) => void;
 }
 
 export type RuntimePluginContext = RuntimeAdapterContext;

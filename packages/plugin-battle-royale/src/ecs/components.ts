@@ -64,6 +64,7 @@ export class AnimationStateComponent extends Schema.Class<AnimationStateComponen
   facingDeg: Schema.Number,
   moving: Schema.Boolean,
   aimDeg: Schema.optional(Schema.Number),
+  acceptedFireTick: Schema.optional(Schema.Int),
 }) {}
 
 /** Runtime inventory slots. S6 owns pickup semantics; S5 owns the authoritative column. */

@@ -16,6 +16,14 @@ export class TestPluginWorld implements PluginWorld {
     }
   }
 
+  createCheckpoint(): { readonly nextEntity: number } {
+    return { nextEntity: this.nextEntity };
+  }
+
+  restoreCheckpoint(checkpoint: { readonly nextEntity: number }): void {
+    this.nextEntity = Math.max(1, Math.floor(checkpoint.nextEntity));
+  }
+
   registerComponent<T extends object>(name: string): ComponentStore<T> {
     if (!this.stores.has(name)) {
       this.stores.set(name, new Map());

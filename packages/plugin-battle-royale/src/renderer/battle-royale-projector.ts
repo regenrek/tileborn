@@ -7,6 +7,7 @@
  * PixiRendererAdapter.renderFromEntities().
  */
 import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
+import type { GameplayEvent } from '@tileborne/ipc-contracts';
 import { type PlayerModelClipKey } from '@tileborne/core';
 
 import { BR_OVERLAY_SLOTS } from '../constants.js';
@@ -279,7 +280,8 @@ export type ServerFrameView =
       readonly victim: string;
       readonly tick: number;
     }
-  | { readonly kind: 'game-over'; readonly winner: string };
+  | { readonly kind: 'game-over'; readonly winner: string }
+  | { readonly kind: 'gameplay-event'; readonly sequence: number; readonly event: GameplayEvent };
 
 export interface InitialFrameInput {
   readonly tick: number;
@@ -931,7 +933,7 @@ const muzzleFlashEntity = (
 ): readonly RenderableEntity[] => {
   const animation = player.animation;
   const visual = weapon?.muzzleFlash;
-  if (animation?.clipKey !== 'shoot' || visual === undefined) {
+  if (animation?.acceptedFireTick === undefined || visual === undefined) {
     return [];
   }
   const base = spriteVisualBase(visual, clockMs);
@@ -1525,6 +1527,18 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
   }
   if (frame._tag === 'GameOver' && 'winner' in frame && typeof frame.winner === 'string') {
     return { kind: 'game-over', winner: frame.winner };
+  }
+  if (
+    frame._tag === 'GameplayEventFrame' &&
+    'event' in frame &&
+    'sequence' in frame &&
+    typeof frame.sequence === 'number'
+  ) {
+    return {
+      kind: 'gameplay-event',
+      sequence: frame.sequence,
+      event: frame.event as GameplayEvent,
+    };
   }
   return undefined;
 };

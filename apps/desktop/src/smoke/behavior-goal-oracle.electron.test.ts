@@ -700,9 +700,13 @@ describe('live behavior Goal Oracle (fresh-profile Electron)', () => {
     await expect(page.getByTestId('behavior-runtime-inspector')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Traces are retained per behavior instance/)).toBeVisible();
 
-    await page.evaluate(async (sessionId) => {
-      await window.tileborne.playtest.stop({ sessionId });
-    }, session.id);
+    await page.evaluate(async (ownedSession) => {
+      await window.tileborne.playtest.stop({
+        sessionId: ownedSession.id,
+        projectId: ownedSession.projectId,
+        mapId: ownedSession.mapId,
+      });
+    }, session);
     await capture(context!, '03-runtime-behavior-diagnostics.png');
     await stopTrace(context!, '02-recovery-and-behavior-runtime.zip');
     await closeSmokeApp(context!);

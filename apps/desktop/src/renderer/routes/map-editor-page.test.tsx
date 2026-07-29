@@ -9,6 +9,9 @@ import { createTestMap } from '@/editor/test-fixtures';
 const mapQueryMock = vi.hoisted(() => ({
   current: { isLoading: false, isError: false, data: undefined as unknown },
 }));
+const routeParamsMock = vi.hoisted(() => ({
+  current: { projectId: 'project-1', mapId: 'map-1' },
+}));
 const editorStateMock = vi.hoisted(() => ({
   current: {
     playtestActive: false,
@@ -21,10 +24,13 @@ const editorStateMock = vi.hoisted(() => ({
 }));
 const editorViewportUnmountMock = vi.hoisted(() => vi.fn());
 const playtestViewportUnmountMock = vi.hoisted(() => vi.fn());
+const playtestViewportCleanupOwners = vi.hoisted(
+  () => [] as { readonly sessionId: string; readonly projectId: string; readonly mapId: string }[],
+);
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { readonly children: ReactNode }) => <a>{children}</a>,
-  useParams: () => ({ projectId: 'project-1', mapId: 'map-1' }),
+  useParams: () => routeParamsMock.current,
   useSearch: () => ({}),
 }));
 
@@ -58,9 +64,30 @@ vi.mock('@/components/map-editor-toolbar', () => ({
 vi.mock('@/components/playtest-viewport', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
-    PlaytestViewport: ({ sessionId }: { readonly sessionId: string }) => {
-      React.useEffect(() => () => playtestViewportUnmountMock(), []);
-      return <div data-testid="single-playtest-viewport" data-session-id={sessionId} />;
+    PlaytestViewport: ({
+      sessionId,
+      projectId,
+      map,
+    }: {
+      readonly sessionId: string;
+      readonly projectId: string;
+      readonly map: { readonly id: string };
+    }) => {
+      React.useEffect(
+        () => () => {
+          playtestViewportUnmountMock();
+          playtestViewportCleanupOwners.push({ sessionId, projectId, mapId: map.id });
+        },
+        [map.id, projectId, sessionId],
+      );
+      return (
+        <div
+          data-testid="single-playtest-viewport"
+          data-session-id={sessionId}
+          data-project-id={projectId}
+          data-map-id={map.id}
+        />
+      );
     },
   };
 });
@@ -88,6 +115,7 @@ describe('MapEditorPage playtest viewport ownership', () => {
       isError: false,
       data: { map: createTestMap() },
     };
+    routeParamsMock.current = { projectId: 'project-1', mapId: 'map-1' };
     editorStateMock.current = {
       playtestActive: false,
       playtestMode: 'none',
@@ -98,6 +126,7 @@ describe('MapEditorPage playtest viewport ownership', () => {
     };
     editorViewportUnmountMock.mockReset();
     playtestViewportUnmountMock.mockReset();
+    playtestViewportCleanupOwners.splice(0);
   });
 
   afterEach(() => {
@@ -169,6 +198,51 @@ describe('MapEditorPage playtest viewport ownership', () => {
 
     expect(queryByTestId('single-playtest-viewport')).toBeNull();
     expect(playtestViewportUnmountMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up the mounted playtest owner when route project or map changes', () => {
+    const oldMap = { ...createTestMap(), id: 'map-owned-1' as never };
+    const newMap = { ...createTestMap(), id: 'map-owned-2' as never };
+    mapQueryMock.current = {
+      isLoading: false,
+      isError: false,
+      data: { map: oldMap },
+    };
+    editorStateMock.current = {
+      ...editorStateMock.current,
+      playtestActive: true,
+      playtestMode: 'single',
+      playtestSessionId: 'session-route',
+      playtestActivePlugins: ['@tileborne-plugins/example-arena'],
+    };
+    const { getByTestId, rerender, unmount } = render(<MapEditorPage />);
+    expect(getByTestId('single-playtest-viewport').getAttribute('data-project-id')).toBe(
+      'project-1',
+    );
+
+    routeParamsMock.current = { projectId: 'project-2', mapId: 'map-2' };
+    mapQueryMock.current = {
+      isLoading: false,
+      isError: false,
+      data: { map: newMap },
+    };
+    rerender(<MapEditorPage />);
+
+    expect(playtestViewportCleanupOwners).toContainEqual({
+      sessionId: 'session-route',
+      projectId: 'project-1',
+      mapId: 'map-owned-1',
+    });
+    expect(getByTestId('single-playtest-viewport').getAttribute('data-project-id')).toBe(
+      'project-2',
+    );
+
+    unmount();
+    expect(playtestViewportCleanupOwners).toContainEqual({
+      sessionId: 'session-route',
+      projectId: 'project-2',
+      mapId: 'map-owned-2',
+    });
   });
 
   it('retains the opened map editor route across transient map query churn', () => {

@@ -49,6 +49,14 @@ export function PlaytestTab() {
 
   const metrics =
     activeSession && 'runtimeMetrics' in activeSession ? activeSession.runtimeMetrics : undefined;
+  const activeSessionOwner =
+    activeSession && 'projectId' in activeSession && 'mapId' in activeSession
+      ? {
+          sessionId: activeSession.id,
+          projectId: activeSession.projectId,
+          mapId: activeSession.mapId,
+        }
+      : undefined;
   const diagnostics = metrics?.diagnostics;
   const pluginName = resolvePlaytestPluginName(
     activeSession && 'activePlugins' in activeSession
@@ -114,7 +122,16 @@ export function PlaytestTab() {
                 ) : null}
               </div>
             ) : null}
-            <Button variant="outline" size="sm" disabled={isStopping} onClick={() => void stop()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isStopping || activeSessionOwner === undefined}
+              onClick={() =>
+                activeSessionOwner === undefined
+                  ? undefined
+                  : void Promise.resolve(stop(activeSessionOwner)).catch(() => undefined)
+              }
+            >
               <SquareIcon />
               Stop playtest
             </Button>

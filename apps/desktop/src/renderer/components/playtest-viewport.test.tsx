@@ -1,10 +1,22 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ComponentProps, useLayoutEffect } from 'react';
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
+import { REQUIRED_PLAYER_MODEL_CLIP_KEYS, type PlayerModelClipKey } from '@tileborne/core';
+import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
 import { PLUGIN_ID } from '@tileborne/plugin-battle-royale/constants';
+import {
+  createBattleRoyaleProjector,
+  decodeServerFrame,
+  type BattleRoyaleProjectorConfig,
+  type PlayerModelClipRenderData,
+  type PlayerModelRenderData,
+  type SpriteVisualRenderData,
+  type WeaponVisualRenderData,
+} from '@tileborne/plugin-battle-royale/renderer';
+import { acceptedBattleRoyaleFireFlow } from '@tileborne/plugin-battle-royale/test';
 import {
   applyGameShellAuthoringCommand,
   buildRuntimeGameShellProjection,
@@ -14,10 +26,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestMap } from '@/editor/test-fixtures';
 import { resetViewportDisposeChainForTests } from '@/editor/viewport/viewport-mount-lifecycle';
+import { pointerMoveDigit3RafBridgePayloads } from '../../shared/playtest-input-bridge-fixture';
 
 type PlaytestHudOverlayComponent =
   (typeof import('@/components/playtest-hud-overlay'))['PlaytestHudOverlay'];
 type PlaytestHudOverlayProps = ComponentProps<PlaytestHudOverlayComponent>;
+type AcceptedFireRuntimeMetrics = {
+  readonly hud?: {
+    readonly gameplayEvents?: readonly { readonly _tag: string }[];
+    readonly sequencedGameplayEvents?: readonly {
+      readonly sequence: number;
+      readonly event: { readonly _tag: string };
+    }[];
+  };
+};
 
 const controllerCtorMock = vi.hoisted(() => vi.fn());
 const setShowGridMock = vi.hoisted(() => vi.fn());
@@ -36,6 +58,19 @@ const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown
 const snapshotApplySpy = vi.hoisted(() => vi.fn());
 const projectMock = vi.hoisted(() => vi.fn<(snapshot: unknown) => unknown[]>());
 const decodeServerFrameMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
+const dispatchRuntimeAudioEventMock = vi.hoisted(() =>
+  vi.fn(
+    (
+      dispatcher: { playCue: (cueId: string) => unknown } | undefined,
+      cues: readonly { readonly id: string; readonly binding?: string }[],
+      event: string,
+    ) => {
+      const cueId = cues.find((cue) => cue.binding === event)?.id;
+      if (cueId !== undefined) dispatcher?.playCue(cueId);
+      return cueId;
+    },
+  ),
+);
 const hudOverlayMock = vi.hoisted(() =>
   vi.fn<(props: PlaytestHudOverlayProps) => null>(() => null),
 );
@@ -150,29 +185,7 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
         '@tileborne/plugin-battle-royale/constants',
       )
     ).PLUGIN_ID,
-    audioCueForResolvedIntent: vi.fn(
-      (
-        cues: typeof brAudio.battleRoyaleAudioCues,
-        intent: ReturnType<typeof br.resolveBattleRoyaleInputIntent>,
-        previousIntent: ReturnType<typeof br.resolveBattleRoyaleInputIntent> | undefined,
-      ) => {
-        const byBinding = (binding: string) => cues.find((cue) => cue.binding === binding)?.id;
-        if (intent.shoot && previousIntent?.shoot !== true) return byBinding('weapon.fire');
-        if (intent.reload && previousIntent?.reload !== true) return byBinding('weapon.reload');
-        return undefined;
-      },
-    ),
-    dispatchRuntimeAudioEvent: vi.fn(
-      (
-        dispatcher: { playCue: (cueId: string) => unknown } | undefined,
-        cues: typeof brAudio.battleRoyaleAudioCues,
-        event: string,
-      ) => {
-        const cueId = cues.find((cue) => cue.binding === event)?.id;
-        if (cueId !== undefined) dispatcher?.playCue(cueId);
-        return cueId;
-      },
-    ),
+    dispatchRuntimeAudioEvent: dispatchRuntimeAudioEventMock,
     resolvePlaytestPlugin: vi.fn(() => ({
       projector: { mergeFrame: vi.fn(), project: projectMock },
       bundledAssets: [],
@@ -184,18 +197,6 @@ vi.mock('@/lib/playtest-plugin-bridge', async () => {
       audio: {
         buses: [brAudio.battleRoyaleSfxBus],
         cues: brAudio.battleRoyaleAudioCues,
-        cueForIntent: (
-          intent: ReturnType<typeof br.resolveBattleRoyaleInputIntent>,
-          previousIntent: ReturnType<typeof br.resolveBattleRoyaleInputIntent> | undefined,
-        ) => {
-          if (intent.shoot && previousIntent?.shoot !== true) {
-            return brAudio.BR_AUDIO_CUES.WeaponFire;
-          }
-          if (intent.reload && previousIntent?.reload !== true) {
-            return brAudio.BR_AUDIO_CUES.WeaponReload;
-          }
-          return undefined;
-        },
       },
       resolveInputIntent: br.resolveBattleRoyaleInputIntent,
     })),
@@ -208,7 +209,11 @@ vi.mock('@/components/playtest-hud-overlay', () => ({ PlaytestHudOverlay: hudOve
 const sessionsMock = vi.hoisted(() => ({
   current: {
     data: {
-      sessions: [] as { id: string; status?: string; runtimeMetrics?: Record<string, unknown> }[],
+      sessions: [] as {
+        id: string;
+        status?: string;
+        runtimeMetrics?: unknown;
+      }[],
     },
   },
 }));
@@ -254,6 +259,10 @@ const stableWeaponVisuals = vi.hoisted(() => ({
 }));
 const startPlaytestControlMock = vi.hoisted(() => vi.fn());
 const stopPlaytestControlMock = vi.hoisted(() => vi.fn());
+const isPlaytestStopOwnerStoppedMock = vi.hoisted(() => vi.fn());
+const stoppedPlaytestOwnerKeysMock = vi.hoisted(() => new Set<string>());
+const stoppingPlaytestOwnerPromisesMock = vi.hoisted(() => new Map<string, Promise<void>>());
+const lifecycleControlMock = vi.hoisted(() => vi.fn());
 const shellEventMock = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-playtest-player-models', () => ({
   usePlaytestPlayerModels: () => stablePlayerModels,
@@ -265,9 +274,35 @@ vi.mock('@/hooks/use-playtest-player-models', () => ({
 }));
 
 vi.mock('@/hooks/use-playtest-controls', () => ({
+  isPlaytestStopOwnerStopped: (owner: Parameters<typeof isPlaytestStopOwnerStoppedMock>[0]) =>
+    isPlaytestStopOwnerStoppedMock(owner) ||
+    stoppedPlaytestOwnerKeysMock.has(
+      `${owner.sessionId}\u0000${owner.projectId}\u0000${owner.mapId}`,
+    ),
   usePlaytestControls: () => ({
-    stop: stopPlaytestControlMock,
-    start: startPlaytestControlMock,
+    stop: async (owner: Parameters<typeof stopPlaytestControlMock>[0]) => {
+      const ownerKey = `${owner.sessionId}\u0000${owner.projectId}\u0000${owner.mapId}`;
+      if (stoppedPlaytestOwnerKeysMock.has(ownerKey)) {
+        return undefined;
+      }
+      const pendingStop = stoppingPlaytestOwnerPromisesMock.get(ownerKey);
+      if (pendingStop !== undefined) {
+        return pendingStop;
+      }
+      const stopPromise = stopPlaytestControlMock(owner)
+        .then(() => {
+          stoppedPlaytestOwnerKeysMock.add(ownerKey);
+        })
+        .finally(() => {
+          if (stoppingPlaytestOwnerPromisesMock.get(ownerKey) === stopPromise) {
+            stoppingPlaytestOwnerPromisesMock.delete(ownerKey);
+          }
+        });
+      stoppingPlaytestOwnerPromisesMock.set(ownerKey, stopPromise);
+      return stopPromise;
+    },
+    start: (...args: Parameters<typeof startPlaytestControlMock>) =>
+      startPlaytestControlMock(...args),
     isStopping: false,
     isStarting: false,
   }),
@@ -287,6 +322,88 @@ import { PlaytestViewport } from './playtest-viewport';
 
 const entityId = (id: string) => id as never;
 const itemId = (id: string) => id as never;
+const TEST_WEAPON_ID = 'weapon:00000000-0000-4000-8000-000000000001';
+
+const clip = (key: PlayerModelClipKey): PlayerModelClipRenderData => ({
+  frames: [
+    {
+      assetId: 'playermodel:hero-atlas',
+      uv: { x: REQUIRED_PLAYER_MODEL_CLIP_KEYS.indexOf(key) * 64, y: 0, w: 32, h: 32 },
+      durationMs: 100,
+    },
+  ],
+  loop: true,
+  defaultDurationMs: 100,
+});
+
+const spriteVisual = (visualId: string, assetId: string): SpriteVisualRenderData => ({
+  visualId,
+  assetId,
+  frames: [{ assetId, uv: { x: 0, y: 0, w: 24, h: 24 }, durationMs: 100 }],
+  loop: false,
+  anchor: { x: 0.5, y: 0.5 },
+});
+
+const projectorConfig = (): BattleRoyaleProjectorConfig => {
+  const model: PlayerModelRenderData = {
+    assetId: 'playermodel:hero-atlas',
+    clips: Object.fromEntries(
+      REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, clip(key)]),
+    ) as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
+    anchor: { x: 0.5, y: 1 },
+  };
+  const equipped: SpriteVisualRenderData = {
+    ...spriteVisual('weapon-equipped', 'visualrole:test:weapon'),
+    anchor: { x: 0.25, y: 0.5 },
+    anchors: {
+      grip: { point: { x: 0.25, y: 0.5 } },
+      muzzle: { point: { x: 0.75, y: 0.5 } },
+    },
+  };
+  const weapon: WeaponVisualRenderData = {
+    weaponId: TEST_WEAPON_ID,
+    equipped,
+    muzzleFlash: spriteVisual('muzzle-flash', 'visualrole:test:muzzle'),
+  };
+  return {
+    catalog: new Map([['model:hero', model]]),
+    weapons: new Map([[TEST_WEAPON_ID, weapon]]),
+    defaultWeaponId: TEST_WEAPON_ID,
+  };
+};
+
+const muzzleEntities = (entities: readonly { readonly id?: string }[]) =>
+  entities.filter((entity) => entity.id?.startsWith('br:muzzle:'));
+
+const loadRuntimeHostAcceptedFireSessionMetrics = async () => {
+  const originalUint8Array = globalThis.Uint8Array;
+  const textEncoderUint8Array = new TextEncoder().encode('').constructor as Uint8ArrayConstructor;
+  vi.stubGlobal('Uint8Array', textEncoderUint8Array);
+  try {
+    const helperModule = (await import(
+      '../../main/__tests__/playtest-runtime-host-fire-metrics' + ''
+    )) as {
+      runtimeHostAcceptedFireSessionMetrics: () => Promise<{
+        readonly flow: ReturnType<typeof acceptedBattleRoyaleFireFlow>;
+        readonly metrics: AcceptedFireRuntimeMetrics;
+      }>;
+    };
+    const { runtimeHostAcceptedFireSessionMetrics } = helperModule;
+    return await runtimeHostAcceptedFireSessionMetrics();
+  } finally {
+    vi.stubGlobal('Uint8Array', originalUint8Array);
+  }
+};
+
+const decodeAnyServerFrame = (frame: unknown): unknown => {
+  if (frame instanceof ArrayBuffer) {
+    return decodeServerFrame(new Uint8Array(frame));
+  }
+  if (ArrayBuffer.isView(frame)) {
+    return decodeServerFrame(new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength));
+  }
+  return undefined;
+};
 
 class ResizeObserverStub {
   observe = vi.fn();
@@ -394,6 +511,7 @@ describe('PlaytestViewport overlay wiring', () => {
     renderFromEntitiesSpy.mockReset();
     snapshotApplySpy.mockReset();
     hudOverlayMock.mockClear();
+    dispatchRuntimeAudioEventMock.mockClear();
     sampleInterpolatedMock.mockReset();
     sampleInterpolatedMock.mockReturnValue(undefined);
     projectMock.mockReset();
@@ -404,6 +522,12 @@ describe('PlaytestViewport overlay wiring', () => {
     startPlaytestControlMock.mockResolvedValue(undefined);
     stopPlaytestControlMock.mockReset();
     stopPlaytestControlMock.mockResolvedValue(undefined);
+    stoppedPlaytestOwnerKeysMock.clear();
+    stoppingPlaytestOwnerPromisesMock.clear();
+    isPlaytestStopOwnerStoppedMock.mockReset();
+    isPlaytestStopOwnerStoppedMock.mockReturnValue(false);
+    lifecycleControlMock.mockReset();
+    lifecycleControlMock.mockResolvedValue({ status: 'running' });
     shellEventMock.mockReset();
     shellEventMock.mockResolvedValue({ requests: [] });
     sessionsMock.current = { data: { sessions: [] } };
@@ -429,6 +553,7 @@ describe('PlaytestViewport overlay wiring', () => {
         playtestSnapshot: vi.fn(() => Promise.resolve({ players: [] })),
       },
       playtest: {
+        lifecycleControl: lifecycleControlMock,
         shellEvent: shellEventMock,
       },
     };
@@ -539,6 +664,178 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(screen.queryByTestId('shell-screen-main-menu')).toBeNull();
   });
 
+  it('passes the viewport-owned session project and map to explicit stop', async () => {
+    renderViewport();
+
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+    const latestHudOverlayCall = hudOverlayMock.mock.calls.at(-1);
+    expect(latestHudOverlayCall).toBeDefined();
+    await act(async () => {
+      await latestHudOverlayCall![0].onBackToEditor();
+    });
+
+    expect(stopPlaytestControlMock).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      mapId: stableMap.id,
+    });
+  });
+
+  it('stops the stale owned session on session switch without targeting the replacement', async () => {
+    const { rerender } = render(viewport({ sessionId: 'session-old' }));
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+    stopPlaytestControlMock.mockClear();
+
+    rerender(viewport({ sessionId: 'session-new' }));
+
+    await waitFor(() => {
+      expect(stopPlaytestControlMock).toHaveBeenCalledWith({
+        sessionId: 'session-old',
+        projectId: 'project-1',
+        mapId: stableMap.id,
+      });
+    });
+    expect(stopPlaytestControlMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-new' }),
+    );
+  });
+
+  it('stops each departed owner when a replacement unmounts before cleanup microtasks flush', async () => {
+    const runningSessions = new Set(['session-a', 'session-b']);
+    const activeRuntimes = new Set(['session-a', 'session-b']);
+    const listPlaytests = vi.fn(async () => ({
+      sessions: [...runningSessions].map((id) => ({ id, status: 'Running' })),
+    }));
+    Object.assign(
+      (window as unknown as { tileborne: { playtest: Record<string, unknown> } }).tileborne
+        .playtest,
+      { list: listPlaytests },
+    );
+    stopPlaytestControlMock.mockImplementation(
+      async (owner: {
+        readonly sessionId: string;
+        readonly projectId: string;
+        readonly mapId: string;
+      }) => {
+        runningSessions.delete(owner.sessionId);
+        activeRuntimes.delete(owner.sessionId);
+      },
+    );
+    const { rerender, unmount } = render(viewport({ sessionId: 'session-a' }));
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+    stopPlaytestControlMock.mockClear();
+
+    rerender(viewport({ sessionId: 'session-b' }));
+    unmount();
+
+    await waitFor(() => {
+      expect(stopPlaytestControlMock).toHaveBeenCalledTimes(2);
+    });
+    expect(stopPlaytestControlMock.mock.calls.map(([owner]) => owner.sessionId).sort()).toEqual([
+      'session-a',
+      'session-b',
+    ]);
+    expect(
+      (await listPlaytests()).sessions.filter((session) => session.status === 'Running'),
+    ).toEqual([]);
+    expect([...activeRuntimes]).toEqual([]);
+  });
+
+  it('does not stop for callback-only rerenders and disposes an explicit stop exactly once', async () => {
+    const { rerender, unmount } = renderViewport();
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+    stopPlaytestControlMock.mockClear();
+
+    rerender(viewport());
+    expect(stopPlaytestControlMock).not.toHaveBeenCalled();
+
+    const latestHudOverlayCall = hudOverlayMock.mock.calls.at(-1);
+    expect(latestHudOverlayCall).toBeDefined();
+    await act(async () => {
+      await latestHudOverlayCall![0].onBackToEditor();
+    });
+    expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+    expect(stopPlaytestControlMock).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      mapId: stableMap.id,
+    });
+
+    unmount();
+    expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the owned session on unmount when explicit stop fails', async () => {
+    stopPlaytestControlMock
+      .mockRejectedValueOnce(new Error('stop failed'))
+      .mockResolvedValueOnce(undefined);
+    const { unmount } = renderViewport();
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+
+    const latestHudOverlayCall = hudOverlayMock.mock.calls.at(-1);
+    expect(latestHudOverlayCall).toBeDefined();
+    await expect(latestHudOverlayCall![0].onBackToEditor()).rejects.toThrow('stop failed');
+    expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    await waitFor(() => {
+      expect(stopPlaytestControlMock).toHaveBeenCalledTimes(2);
+    });
+    expect(stopPlaytestControlMock).toHaveBeenLastCalledWith({
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      mapId: stableMap.id,
+    });
+  });
+
+  it('retries cleanup when unmount happens before explicit stop rejection settles', async () => {
+    const runningSessions = new Set(['session-1']);
+    const activeRuntimes = new Set(['session-1']);
+    let rejectFirstStop!: (error: Error) => void;
+    const firstStop = new Promise<void>((_, reject) => {
+      rejectFirstStop = reject;
+    });
+    stopPlaytestControlMock
+      .mockImplementationOnce(() => firstStop)
+      .mockImplementationOnce(
+        async (owner: {
+          readonly sessionId: string;
+          readonly projectId: string;
+          readonly mapId: string;
+        }) => {
+          expect(owner).toEqual({
+            sessionId: 'session-1',
+            projectId: 'project-1',
+            mapId: stableMap.id,
+          });
+          runningSessions.delete(owner.sessionId);
+          activeRuntimes.delete(owner.sessionId);
+        },
+      );
+    const { unmount } = renderViewport();
+    await waitFor(() => expect(hudOverlayMock).toHaveBeenCalled());
+
+    const latestHudOverlayCall = hudOverlayMock.mock.calls.at(-1);
+    expect(latestHudOverlayCall).toBeDefined();
+    const explicitStop = latestHudOverlayCall![0].onBackToEditor();
+    expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rejectFirstStop(new Error('stop failed'));
+      await expect(explicitStop).rejects.toThrow('stop failed');
+    });
+
+    await waitFor(() => {
+      expect(stopPlaytestControlMock).toHaveBeenCalledTimes(2);
+      expect([...runningSessions]).toEqual([]);
+      expect([...activeRuntimes]).toEqual([]);
+    });
+  });
+
   it('renders an authored entry after startup loading and retains it across projection refetch churn', async () => {
     shellQueryMock.current = { data: undefined };
     const { rerender } = renderViewport();
@@ -639,6 +936,100 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(
       screen.getByTestId('playtest-runtime-shell').getAttribute('data-shell-host-generation'),
     ).toBe('1');
+  });
+
+  it('routes Start Match, local pause, and resume through lifecycle IPC in session order', async () => {
+    const user = userEvent.setup();
+    lifecycleControlMock.mockImplementation(
+      async ({ command }: { readonly command: 'start' | 'pause' | 'resume' }) => ({
+        status: command === 'pause' ? 'paused' : 'running',
+      }),
+    );
+    shellQueryMock.current = {
+      data: {
+        projection: buildRuntimeGameShellProjection(
+          applyGameShellAuthoringCommand(defaultProjectGameShellState(), {
+            type: 'set-entry-screen',
+            screenId: 'main-menu',
+          }),
+        ),
+      },
+    };
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            status: 'Running',
+            runtimeMetrics: {
+              tickCount: 1,
+              playerCount: 1,
+              hud: { totalPlayers: 1, gameplayEvents: [] },
+            },
+          },
+        ],
+      },
+    };
+
+    renderViewport();
+
+    await user.click(await screen.findByTestId('shell-action-menu-single'));
+    await waitFor(() => expect(screen.getByTestId('playtest-shell-lobby')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Start Match' }));
+    await waitFor(() => expect(screen.getByTestId('in-match')).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByTestId('shell-screen-pause')).not.toBeNull());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByTestId('in-match')).not.toBeNull());
+
+    expect(lifecycleControlMock.mock.calls.map(([input]) => input)).toEqual([
+      { sessionId: 'session-1', command: 'start' },
+      { sessionId: 'session-1', command: 'pause' },
+      { sessionId: 'session-1', command: 'resume' },
+    ]);
+  });
+
+  it('keeps shell state from committing when lifecycle IPC rejects', async () => {
+    const user = userEvent.setup();
+    lifecycleControlMock.mockRejectedValueOnce(new Error('runtime session stopped'));
+    shellQueryMock.current = {
+      data: {
+        projection: buildRuntimeGameShellProjection(
+          applyGameShellAuthoringCommand(defaultProjectGameShellState(), {
+            type: 'set-entry-screen',
+            screenId: 'main-menu',
+          }),
+        ),
+      },
+    };
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            status: 'Running',
+            runtimeMetrics: {
+              tickCount: 1,
+              playerCount: 1,
+              hud: { totalPlayers: 1, gameplayEvents: [] },
+            },
+          },
+        ],
+      },
+    };
+
+    renderViewport();
+
+    await user.click(await screen.findByTestId('shell-action-menu-single'));
+    await waitFor(() => expect(screen.getByTestId('playtest-shell-lobby')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Start Match' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alertdialog').textContent).toContain('runtime session stopped'),
+    );
+    expect(screen.queryByTestId('in-match')).toBeNull();
+    expect(lifecycleControlMock).toHaveBeenCalledWith({ sessionId: 'session-1', command: 'start' });
   });
 
   it('opens the shell projection directly when query startup stays loading', async () => {
@@ -1179,7 +1570,7 @@ describe('PlaytestViewport overlay wiring', () => {
       data: {
         sessions: [
           {
-            id: 'session-1',
+            id: 'session-2',
             runtimeMetrics: {
               tickCount: 22,
               playerCount: 1,
@@ -1193,7 +1584,7 @@ describe('PlaytestViewport overlay wiring', () => {
         ],
       },
     };
-    rerender(viewport());
+    rerender(viewport({ sessionId: 'session-2' }));
 
     await user.click(screen.getByRole('button', { name: 'Start Match' }));
     expect(startPlaytestControlMock).toHaveBeenCalledTimes(1);
@@ -1201,7 +1592,7 @@ describe('PlaytestViewport overlay wiring', () => {
       data: {
         sessions: [
           {
-            id: 'session-1',
+            id: 'session-2',
             runtimeMetrics: {
               tickCount: 23,
               playerCount: 1,
@@ -1225,11 +1616,115 @@ describe('PlaytestViewport overlay wiring', () => {
         ],
       },
     };
-    rerender(viewport());
+    rerender(viewport({ sessionId: 'session-2' }));
     await waitFor(() => expect(screen.getByTestId('results-screen')).not.toBeNull());
     await user.click(screen.getByTestId('shell-action-results-menu'));
     await waitFor(() => {
       expect(stopPlaytestControlMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('keeps a retried results session disposed exactly once when restart publishes a replacement', async () => {
+    const user = userEvent.setup();
+    shellQueryMock.current = {
+      data: {
+        projection: buildRuntimeGameShellProjection(
+          applyGameShellAuthoringCommand(defaultProjectGameShellState(), {
+            type: 'set-entry-screen',
+            screenId: 'main-menu',
+          }),
+        ),
+      },
+    };
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-old',
+            runtimeMetrics: {
+              tickCount: 10,
+              playerCount: 1,
+              hud: {
+                totalPlayers: 1,
+                gameplayEvents: [],
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const { rerender, unmount } = render(viewport({ sessionId: 'session-old' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('shell-action-menu-single') ??
+          screen.queryByTestId('playtest-shell-lobby'),
+      ).not.toBeNull();
+    });
+    const singlePlayerAction = screen.queryByTestId('shell-action-menu-single');
+    if (singlePlayerAction !== null) {
+      await user.click(singlePlayerAction);
+    }
+    await waitFor(() => expect(screen.getByTestId('playtest-shell-lobby')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Start Match' }));
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-old',
+            runtimeMetrics: {
+              tickCount: 11,
+              playerCount: 1,
+              hud: {
+                totalPlayers: 1,
+                gameplayEvents: [],
+                gameOver: { winnerId: 'player-1', reason: 'last-player-standing' },
+                scoreboard: [
+                  {
+                    playerId: 'player-1',
+                    displayName: 'Ada',
+                    health: 100,
+                    alive: true,
+                    kills: 1,
+                    deaths: 0,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    };
+    rerender(viewport({ sessionId: 'session-old' }));
+    await waitFor(() => expect(screen.getByTestId('results-screen')).not.toBeNull());
+
+    await user.click(screen.getByTestId('shell-action-results-retry'));
+    await waitFor(() => {
+      expect(stopPlaytestControlMock).toHaveBeenCalledTimes(1);
+      expect(startPlaytestControlMock).toHaveBeenCalledTimes(1);
+    });
+
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-new',
+            runtimeMetrics: {
+              tickCount: 1,
+              playerCount: 1,
+              hud: { totalPlayers: 1, gameplayEvents: [] },
+            },
+          },
+        ],
+      },
+    };
+    rerender(viewport({ sessionId: 'session-new' }));
+    unmount();
+
+    await waitFor(() => {
+      expect(
+        stopPlaytestControlMock.mock.calls.filter(([owner]) => owner.sessionId === 'session-old'),
+      ).toHaveLength(1);
     });
   });
 
@@ -1336,6 +1831,164 @@ describe('PlaytestViewport overlay wiring', () => {
         animation,
       }),
     );
+  });
+
+  it('renders two accepted same-tick muzzle entities from real BR frames and none from replayed snapshots', async () => {
+    const { flow: acceptedFireFlow, metrics: hostRuntimeMetrics } =
+      await loadRuntimeHostAcceptedFireSessionMetrics();
+    const acceptedFireEvents =
+      hostRuntimeMetrics.hud?.gameplayEvents?.filter((event) => event._tag === 'WeaponFired') ?? [];
+    expect(acceptedFireEvents).toHaveLength(2);
+    expect(acceptedFireEvents).toEqual(acceptedFireFlow.events);
+    expect(acceptedFireEvents).toEqual([
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        tick: 8,
+        sourceId: 'player-1',
+        origin: { x: 17, y: 0 },
+        direction: { x: 1, y: 0 },
+      }),
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        tick: 8,
+        sourceId: 'player-2',
+        origin: expect.objectContaining({ x: expect.closeTo(10, 12), y: 27 }),
+        direction: expect.objectContaining({ x: expect.closeTo(0, 12), y: 1 }),
+      }),
+    ]);
+    expect(acceptedFireFlow.welcomeFrame.players.map((player) => player.id)).toEqual([
+      'player-1',
+      'player-2',
+    ]);
+    expect(acceptedFireFlow.acceptedDeltaFrame).toEqual(
+      expect.objectContaining({ _tag: 'DeltaSnapshot', tick: 8 }),
+    );
+    expect(
+      acceptedFireFlow.acceptedDeltaFrame.updated.map((player) => {
+        if (Option.isNone(player.animation)) {
+          return { id: player.id, acceptedFireTick: undefined };
+        }
+        return {
+          id: player.id,
+          aimDeg: player.animation.value.aimDeg,
+          acceptedFireTick: player.animation.value.acceptedFireTick,
+        };
+      }),
+    ).toEqual([
+      { id: 'player-1', aimDeg: 0, acceptedFireTick: 8 },
+      { id: 'player-2', aimDeg: 90, acceptedFireTick: 8 },
+    ]);
+    expect(acceptedFireFlow.replayDeltaFrame).toEqual(
+      expect.objectContaining({ _tag: 'DeltaSnapshot', tick: 9 }),
+    );
+    expect(hostRuntimeMetrics.hud?.gameplayEvents).toEqual(acceptedFireEvents);
+    const projector = createBattleRoyaleProjector(projectorConfig());
+    let projectorState: unknown;
+    projectMock.mockImplementation((snapshot: unknown) => {
+      projectorState = projector.mergeFrame?.(projectorState, snapshot);
+      return [...projector.project(projectorState)];
+    });
+    decodeServerFrameMock.mockImplementation((frame?: unknown) => decodeAnyServerFrame(frame));
+    const runtime = (
+      window as unknown as {
+        tileborne: { runtime: { playtestSnapshot: ReturnType<typeof vi.fn> } };
+      }
+    ).tileborne.runtime;
+    runtime.playtestSnapshot.mockResolvedValue({
+      players: [],
+      frame: acceptedFireFlow.welcomeBytes,
+    });
+
+    let capturedTick: FrameRequestCallback | undefined;
+    let onRuntimeSnapshot:
+      | ((payload: { sessionId: string; frame: Uint8Array }) => void)
+      | undefined;
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        capturedTick = callback;
+        return 1;
+      }),
+    );
+    (
+      window as unknown as {
+        tileborne: { events: { onRuntimeSnapshot: ReturnType<typeof vi.fn> } };
+      }
+    ).tileborne.events.onRuntimeSnapshot.mockImplementation((callback) => {
+      onRuntimeSnapshot = callback as typeof onRuntimeSnapshot;
+      return vi.fn();
+    });
+
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            runtimeMetrics: {
+              tickCount: 8,
+              playerCount: 2,
+              hud: { totalPlayers: 2, gameplayEvents: [] },
+            },
+          },
+        ],
+      },
+    };
+
+    const { rerender } = renderViewport();
+    await waitFor(() => {
+      expect(snapshotApplySpy).toHaveBeenCalledWith(acceptedFireFlow.welcomeFrame);
+    });
+    expect(onRuntimeSnapshot).toBeDefined();
+    onRuntimeSnapshot!({ sessionId: 'session-1', frame: acceptedFireFlow.acceptedDeltaBytes });
+    await waitFor(() => {
+      expect(snapshotApplySpy).toHaveBeenCalledWith(acceptedFireFlow.acceptedDeltaFrame);
+    });
+
+    expect(capturedTick).toBeDefined();
+    capturedTick!(0);
+    const [projected] = renderFromEntitiesSpy.mock.calls.at(-1)!;
+    const acceptedMuzzles = muzzleEntities(projected as readonly { readonly id?: string }[]);
+    expect(acceptedMuzzles.map((entity) => entity.id)).toEqual([
+      'br:muzzle:player-1',
+      'br:muzzle:player-2',
+    ]);
+    expect(new Set(acceptedMuzzles.map((entity) => entity.id)).size).toBe(2);
+    expect(acceptedMuzzles).toEqual([
+      expect.objectContaining({ x: expect.closeTo(70.56), y: expect.closeTo(0) }),
+      expect.objectContaining({ x: expect.closeTo(0, 12), y: expect.closeTo(70.56) }),
+    ]);
+    const beforeFireCueCount = window.__tilebornePlaytestAudio?.snapshot().playCount ?? 0;
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            runtimeMetrics: hostRuntimeMetrics,
+          },
+        ],
+      },
+    };
+    rerender(viewport());
+    await waitFor(() => {
+      expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(beforeFireCueCount + 2);
+    });
+
+    onRuntimeSnapshot!({ sessionId: 'session-1', frame: acceptedFireFlow.replayDeltaBytes });
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-1',
+            runtimeMetrics: hostRuntimeMetrics,
+          },
+        ],
+      },
+    };
+    rerender(viewport());
+    capturedTick!(16);
+    const [replayed] = renderFromEntitiesSpy.mock.calls.at(-1)!;
+    expect(muzzleEntities(replayed as readonly { readonly id?: string }[])).toEqual([]);
+    expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(beforeFireCueCount + 2);
   });
 
   // Regression lock for the snapshot-interpolation smoothness fix: the
@@ -1486,6 +2139,126 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(payload).not.toHaveProperty('active');
   });
 
+  it('sends pointermove-keydown-RAF frames through the playtest input bridge', async () => {
+    const playtestInput = (
+      window as unknown as { tileborne: { runtime: { playtestInput: ReturnType<typeof vi.fn> } } }
+    ).tileborne.runtime.playtestInput;
+
+    sessionsMock.current = {
+      data: { sessions: [{ id: 'session-1', runtimeMetrics: { tickCount: 5 } }] },
+    };
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+
+    const container = document.querySelector<HTMLDivElement>('[data-testid="playtest-viewport"]');
+    expect(container).not.toBeNull();
+    Object.defineProperties(container!, {
+      clientWidth: { configurable: true, value: 100 },
+      clientHeight: { configurable: true, value: 100 },
+    });
+    vi.spyOn(container!, 'getBoundingClientRect').mockReturnValue({
+      x: 10,
+      y: 20,
+      left: 10,
+      top: 20,
+      right: 110,
+      bottom: 120,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    let pointerFrame: FrameRequestCallback | undefined;
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        pointerFrame = callback;
+        return 1;
+      }),
+    );
+
+    container!.dispatchEvent(
+      new MouseEvent('pointermove', { clientX: 60, clientY: 110, bubbles: true }),
+    );
+    expect(playtestInput).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit3' }));
+
+    const edgePayload = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      aimDeg: number;
+      swapSlot: number;
+      active?: boolean;
+    };
+    expect(edgePayload).toMatchObject({ shoot: false, aimDeg: 90, swapSlot: 3 });
+    expect(edgePayload).not.toHaveProperty('active');
+
+    pointerFrame?.(16);
+
+    const aimPayload = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      aimDeg: number;
+      swapSlot?: number;
+      active?: boolean;
+    };
+    expect(aimPayload).toMatchObject({ shoot: false, aimDeg: 90 });
+    expect(aimPayload.swapSlot).toBeUndefined();
+    expect(aimPayload).not.toHaveProperty('active');
+    expect(playtestInput.mock.calls.map((call) => call[0])).toEqual(
+      pointerMoveDigit3RafBridgePayloads('session-1', 5),
+    );
+  });
+
+  it('streams coalesced cursor aim frames and left-click fires toward the cursor', async () => {
+    const playtestInput = (
+      window as unknown as { tileborne: { runtime: { playtestInput: ReturnType<typeof vi.fn> } } }
+    ).tileborne.runtime.playtestInput;
+
+    sessionsMock.current = {
+      data: { sessions: [{ id: 'session-1', runtimeMetrics: { tickCount: 5 } }] },
+    };
+
+    renderViewport();
+
+    await waitFor(() => {
+      expect(controllerCtorMock).toHaveBeenCalledTimes(1);
+    });
+
+    const container = document.querySelector<HTMLDivElement>('[data-testid="playtest-viewport"]');
+    expect(container).not.toBeNull();
+    Object.defineProperties(container!, {
+      clientWidth: { configurable: true, value: 100 },
+      clientHeight: { configurable: true, value: 100 },
+    });
+    vi.spyOn(container!, 'getBoundingClientRect').mockReturnValue({
+      x: 10,
+      y: 20,
+      left: 10,
+      top: 20,
+      right: 110,
+      bottom: 120,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    container!.dispatchEvent(
+      new MouseEvent('mousedown', { button: 0, clientX: 110, clientY: 70, bubbles: true }),
+    );
+
+    const firePayload = playtestInput.mock.calls.at(-1)?.[0] as {
+      shoot: boolean;
+      aimDeg: number;
+      active?: boolean;
+    };
+    expect(firePayload).toMatchObject({ shoot: true, aimDeg: 0 });
+    expect(firePayload).not.toHaveProperty('active');
+  });
+
   // Regression lock for the capture-lifecycle decoupling: a held mouse button
   // (PrimaryAction → shoot) must survive a `tickCount` change. If the capture
   // effect re-ran on tickCount it would tear down + recreate the resolver,
@@ -1521,8 +2294,8 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(afterPress).not.toHaveProperty('dir');
     expect(window.__tilebornePlaytestAudio?.snapshot()).toEqual(
       expect.objectContaining({
-        playCount: 2,
-        lastRequest: { cueId: 'battle-royale.weapon.fire' },
+        playCount: 1,
+        lastRequest: { cueId: 'battle-royale.shell.menu-music' },
       }),
     );
 
@@ -1545,22 +2318,47 @@ describe('PlaytestViewport overlay wiring', () => {
     expect(afterTick.shoot).toBe(true);
     expect(afterTick.dir).toBe(0);
     expect(afterTick.tick).toBe(6);
-    expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(2);
+    expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(1);
     // The capture was set up once and never torn down by the tick change.
     expect(controllerCtorMock).toHaveBeenCalledTimes(1);
   });
 
   it('plays lifecycle audio from runtime HUD events instead of raw controls', async () => {
+    const syntheticZoneStable = {
+      _tag: 'ZonePhaseChanged' as const,
+      phase: 'stable',
+      tick: 9,
+    };
     const gameplayEvents = [
       {
-        _tag: 'ItemGranted',
+        _tag: 'WeaponFired' as const,
+        sourceId: entityId('player-1'),
+        weaponId: 'battle-royale.primary' as never,
+        origin: { x: 1, y: 2 },
+        direction: { x: 1, y: 0 },
+        damage: 25,
+        ammoRemaining: 11,
+        tick: 10,
+      },
+      {
+        _tag: 'WeaponFired' as const,
+        sourceId: entityId('player-2'),
+        weaponId: 'battle-royale.primary' as never,
+        origin: { x: 10, y: 12 },
+        direction: { x: 0, y: 1 },
+        damage: 25,
+        ammoRemaining: 11,
+        tick: 10,
+      },
+      {
+        _tag: 'ItemGranted' as const,
         targetId: entityId('player-1'),
         itemId: itemId('health-pack:rare'),
         quantity: 1,
         tick: 11,
       },
       {
-        _tag: 'DamageApplied',
+        _tag: 'DamageApplied' as const,
         targetId: entityId('player-1'),
         sourceId: entityId('player-2'),
         amount: 15,
@@ -1569,19 +2367,35 @@ describe('PlaytestViewport overlay wiring', () => {
         tick: 12,
       },
       {
-        _tag: 'EntityDefeated',
+        _tag: 'EntityDefeated' as const,
         targetId: entityId('player-2'),
         sourceId: entityId('player-1'),
         tick: 13,
       },
-      { _tag: 'ZonePhaseChanged', phase: 'countdown', secondsRemaining: 9, tick: 14 },
+      { _tag: 'ZonePhaseChanged' as const, phase: 'countdown', secondsRemaining: 9, tick: 14 },
       {
-        _tag: 'MatchPhaseChanged',
+        _tag: 'MatchPhaseChanged' as const,
         phase: 'finished',
         winnerId: entityId('player-1'),
         tick: 15,
       },
     ];
+    const sequencedGameplayEvents = [
+      { sequence: -1, event: syntheticZoneStable },
+      ...gameplayEvents.map((event, sequence) => ({ sequence, event })),
+    ];
+    expect(gameplayEvents.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        origin: { x: 1, y: 2 },
+        direction: { x: 1, y: 0 },
+      }),
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        origin: { x: 10, y: 12 },
+        direction: { x: 0, y: 1 },
+      }),
+    ]);
     sessionsMock.current = {
       data: {
         sessions: [
@@ -1590,7 +2404,7 @@ describe('PlaytestViewport overlay wiring', () => {
             runtimeMetrics: {
               tickCount: 15,
               playerCount: 2,
-              hud: { totalPlayers: 2, gameplayEvents },
+              hud: { totalPlayers: 2, gameplayEvents, sequencedGameplayEvents },
             },
           },
         ],
@@ -1602,7 +2416,7 @@ describe('PlaytestViewport overlay wiring', () => {
     await waitFor(() => {
       expect(window.__tilebornePlaytestAudio?.snapshot()).toEqual(
         expect.objectContaining({
-          playCount: 6,
+          playCount: 8,
           lastRequest: { cueId: 'battle-royale.match.end' },
         }),
       );
@@ -1611,7 +2425,39 @@ describe('PlaytestViewport overlay wiring', () => {
     rerender(viewport());
 
     await waitFor(() => {
-      expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(6);
+      expect(window.__tilebornePlaytestAudio?.snapshot().playCount).toBe(8);
+    });
+
+    sessionsMock.current = {
+      data: {
+        sessions: [
+          {
+            id: 'session-2',
+            runtimeMetrics: {
+              tickCount: 15,
+              playerCount: 2,
+              hud: {
+                totalPlayers: 2,
+                gameplayEvents: [gameplayEvents[0]!],
+                sequencedGameplayEvents: [
+                  { sequence: -1, event: syntheticZoneStable },
+                  { sequence: 0, event: gameplayEvents[0]! },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    };
+    rerender(viewport({ sessionId: 'session-2' }));
+
+    await waitFor(() => {
+      expect(window.__tilebornePlaytestAudio?.snapshot()).toEqual(
+        expect.objectContaining({
+          playCount: 2,
+          lastRequest: { cueId: 'battle-royale.weapon.fire' },
+        }),
+      );
     });
   });
 });

@@ -91,8 +91,8 @@ export interface PlaytestInputCaptureHandle {
  * Attach raw-event capture for a playtest viewport. Wires window key listeners +
  * container mouse listeners into one engine `InputResolver`; on each bound-input
  * change it resolves neutral actions and emits the plugin intent. Pointer moves
- * update aim state but do not emit on their own (aim rides the next key/mouse
- * send, matching the prior cadence).
+ * are coalesced to animation frames so aim streams continuously without sending
+ * one runtime input frame per DOM pointer event.
  */
 export const attachPlaytestInputCapture = (
   options: PlaytestInputCaptureOptions,
@@ -125,6 +125,40 @@ export const attachPlaytestInputCapture = (
     onIntent(resolveIntent(resolver.resolve(), origin === undefined ? {} : { aimOrigin: origin }));
   };
 
+  let pendingPointerEmit: number | undefined;
+  const cancelPointerEmit = (): void => {
+    if (pendingPointerEmit === undefined) {
+      return;
+    }
+    window.cancelAnimationFrame(pendingPointerEmit);
+    pendingPointerEmit = undefined;
+  };
+
+  const schedulePointerEmit = (): void => {
+    if (pendingPointerEmit !== undefined) {
+      return;
+    }
+    pendingPointerEmit = window.requestAnimationFrame(() => {
+      pendingPointerEmit = undefined;
+      emit();
+    });
+  };
+
+  const applyPointerPosition = (event: MouseEvent | PointerEvent): void => {
+    if (!container) {
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    resolver.apply(
+      new MouseMoveInputEvent({
+        tick: 0,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      }),
+    );
+    pointerMoved = true;
+  };
+
   const onKeyDown = (event: KeyboardEvent): void => {
     if (!currentProfile.boundKeyCodes.has(event.code)) {
       return;
@@ -149,18 +183,8 @@ export const attachPlaytestInputCapture = (
   };
 
   const onPointerMove = (event: PointerEvent): void => {
-    if (!container) {
-      return;
-    }
-    const rect = container.getBoundingClientRect();
-    resolver.apply(
-      new MouseMoveInputEvent({
-        tick: 0,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      }),
-    );
-    pointerMoved = true;
+    applyPointerPosition(event);
+    schedulePointerEmit();
   };
 
   const onMouseDown = (event: MouseEvent): void => {
@@ -168,8 +192,10 @@ export const attachPlaytestInputCapture = (
       return;
     }
     event.preventDefault();
+    applyPointerPosition(event);
     heldMouseButtons.add(event.button);
     resolver.apply(new MouseButtonInputEvent({ tick: 0, button: event.button, pressed: true }));
+    cancelPointerEmit();
     emit();
   };
 
@@ -236,6 +262,7 @@ export const attachPlaytestInputCapture = (
       currentProfile = deriveInputCaptureProfile(nextMap, controlScheme);
     },
     dispose: (): void => {
+      cancelPointerEmit();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('mouseup', onMouseUp);

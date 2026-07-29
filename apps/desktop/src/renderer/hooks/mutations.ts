@@ -1053,9 +1053,17 @@ export function useStartPlaytest() {
 export function useStopPlaytest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (sessionId: string) =>
+    mutationFn: (input: {
+      readonly sessionId: string;
+      readonly projectId: string;
+      readonly mapId: string;
+    }) =>
       invokeIpc(() =>
-        window.tileborne.playtest.stop({ sessionId: sessionId as PlaytestSessionId }),
+        window.tileborne.playtest.stop({
+          sessionId: input.sessionId as PlaytestSessionId,
+          projectId: input.projectId as ProjectId,
+          mapId: input.mapId as MapId,
+        }),
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.playtest.all });

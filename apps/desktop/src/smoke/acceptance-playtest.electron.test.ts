@@ -546,6 +546,68 @@ const clickShellActionByPointer = async (
   }
 };
 
+const assertEmptyMatchAreaReachesViewport = async (page: SmokeContext['page']): Promise<void> => {
+  await assertStableShellState(page, { phase: 'in-match' });
+  const sample = await page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="playtest-viewport"]');
+    const shell = document.querySelector<HTMLElement>('[data-testid="playtest-runtime-shell"]');
+    const root = document.querySelector<HTMLElement>(
+      '[data-testid="playtest-runtime-shell"] .tb-root',
+    );
+    if (viewport === null || shell === null || root === null) {
+      return { ok: false, reason: 'missing-elements', point: undefined };
+    }
+    const rect = viewport.getBoundingClientRect();
+    const point = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+    const hit = document.elementFromPoint(point.x, point.y);
+    return {
+      ok: viewport === hit || viewport.contains(hit),
+      point,
+      hitTestId: hit instanceof HTMLElement ? hit.getAttribute('data-testid') : undefined,
+      hitTag: hit instanceof HTMLElement ? hit.tagName.toLowerCase() : undefined,
+      shellPointerEvents: window.getComputedStyle(shell).pointerEvents,
+      rootPointerEvents: window.getComputedStyle(root).pointerEvents,
+      rootPhase: root.dataset.phase,
+      rootPaused: root.dataset.paused,
+    };
+  });
+  if (!sample.ok || sample.point === undefined) {
+    throw new Error(`Empty match area does not hit playtest viewport: ${JSON.stringify(sample)}`);
+  }
+  await page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="playtest-viewport"]');
+    if (viewport === null) throw new Error('playtest viewport missing before empty-area click');
+    const recorder = window as unknown as { __tileborneSmokeViewportMouseDown?: unknown };
+    delete recorder.__tileborneSmokeViewportMouseDown;
+    viewport.addEventListener(
+      'mousedown',
+      (event) => {
+        recorder.__tileborneSmokeViewportMouseDown = {
+          button: event.button,
+          targetTestId:
+            event.target instanceof HTMLElement ? event.target.getAttribute('data-testid') : null,
+        };
+      },
+      { capture: true, once: true },
+    );
+  });
+  await page.mouse.click(sample.point.x, sample.point.y);
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __tileborneSmokeViewportMouseDown?: unknown })
+              .__tileborneSmokeViewportMouseDown,
+        ),
+      { timeout: 5_000 },
+    )
+    .toMatchObject({ button: 0 });
+};
+
 const pressShellActionByKeyboard = async (
   page: SmokeContext['page'],
   targetTestId: string,
@@ -686,9 +748,13 @@ describe('acceptance: playtest', () => {
     expect(session.status).toBe('Running');
     expect(session.artifactDirectory).toBeTruthy();
     expect(session.activePlugins?.length ?? 0).toBeGreaterThan(0);
-    await page.evaluate(async (sessionId) => {
-      await window.tileborne.playtest.stop({ sessionId });
-    }, session.id);
+    await page.evaluate(async (ownedSession) => {
+      await window.tileborne.playtest.stop({
+        sessionId: ownedSession.id,
+        projectId: ownedSession.projectId,
+        mapId: ownedSession.mapId,
+      });
+    }, session);
   });
 
   it('exposes authored shell phases and retry/exit lifecycle through the PlaytestViewport shell', async () => {
@@ -1285,20 +1351,26 @@ describe('acceptance: playtest', () => {
         ),
       30_000,
     );
+    await step('click empty match area with native mouse reaches viewport input', () =>
+      assertEmptyMatchAreaReachesViewport(page),
+    );
     await step('press Escape in authored runtime shell with keyboard', () =>
       page.keyboard.press('Escape'),
     );
     await expect(page.getByTestId('shell-screen-pause')).toBeVisible({ timeout: 10_000 });
     await step(
-      'press authored pause resume action with keyboard',
+      'click authored pause resume action with native mouse',
       () =>
-        pressShellActionByKeyboard(
+        clickShellActionByPointer(
           page,
           'shell-action-pause-resume',
           { phase: 'in-match', shellScreenId: 'pause' },
           () => expect(page.getByTestId('in-match')).toBeVisible({ timeout: 10_000 }),
         ),
       30_000,
+    );
+    await step('click empty match area with native mouse reaches viewport input after resume', () =>
+      assertEmptyMatchAreaReachesViewport(page),
     );
     await step('switch mocked runtime metrics to game-over', () =>
       page.evaluate(() => {

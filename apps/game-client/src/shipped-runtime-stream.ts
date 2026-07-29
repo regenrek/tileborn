@@ -7,7 +7,13 @@ import {
   type ServerFrameView,
   type ZoneView,
 } from '@tileborne/plugin-battle-royale';
-import type { HudEvent, HudMetrics, MatchResults } from '@tileborne/game-client';
+import {
+  eventKey,
+  type HudEvent,
+  type HudMetrics,
+  type MatchResults,
+} from '@tileborne/game-client';
+import type { SequencedGameplayEvent } from '@tileborne/ipc-contracts';
 import type {
   RuntimeShellBehaviorEventPayload,
   RuntimeShellNavigationRequest,
@@ -15,10 +21,13 @@ import type {
 
 type ShippedRuntimePhase = 'idle' | 'running' | 'finished';
 const ROOM_SHELL_FRAME_VERSION = 1;
+export const SHIPPED_GAMEPLAY_EVENT_WINDOW = 20;
+export const SHIPPED_SEQUENCED_GAMEPLAY_EVENT_WINDOW = 80;
 
 interface RuntimePlayerState {
   readonly playerId: string;
   readonly health: number;
+  readonly weapon?: InitialFramePlayerView['weapon'];
   readonly inventory?: { readonly itemIds: readonly string[]; readonly capacity: number };
   readonly pickupToast?: {
     readonly itemKind: string;
@@ -90,6 +99,8 @@ export interface ShippedRuntimeState {
   readonly players: ReadonlyMap<string, RuntimePlayerState>;
   readonly zone?: ZoneView;
   readonly events: readonly HudEvent[];
+  readonly sequencedEvents: readonly SequencedGameplayEvent[];
+  readonly nextSyntheticGameplayEventSequence: number;
   readonly gameOver?:
     | {
         readonly winnerId: string;
@@ -107,11 +118,14 @@ export const initialShippedRuntimeState = (
   totalPlayers: 0,
   players: new Map(),
   events: [],
+  sequencedEvents: [],
+  nextSyntheticGameplayEventSequence: -1,
 });
 
 const playerFromInitial = (player: InitialFramePlayerView): RuntimePlayerState => ({
   playerId: player.playerId,
   health: player.health,
+  ...(player.weapon === undefined ? {} : { weapon: player.weapon }),
   ...(player.inventory === undefined ? {} : { inventory: player.inventory }),
   ...(player.pickupToast === undefined ? {} : { pickupToast: player.pickupToast }),
   ...(player.damageIndicator === undefined ? {} : { damageIndicator: player.damageIndicator }),
@@ -123,6 +137,7 @@ const updatePlayer = (
   update: FramePlayerUpdateView,
 ): RuntimePlayerState => {
   const health = update.health ?? previous?.health ?? 0;
+  const weapon = update.weapon ?? previous?.weapon;
   const inventory = update.inventory ?? previous?.inventory;
   const pickupToast = update.pickupToast ?? previous?.pickupToast;
   const damageIndicator = update.damageIndicator ?? previous?.damageIndicator;
@@ -130,6 +145,7 @@ const updatePlayer = (
   return {
     playerId: update.playerId,
     health,
+    ...(weapon === undefined ? {} : { weapon }),
     ...(inventory === undefined ? {} : { inventory }),
     ...(pickupToast === undefined ? {} : { pickupToast }),
     ...(damageIndicator === undefined ? {} : { damageIndicator }),
@@ -145,43 +161,62 @@ const samePickupToast = (
   left?.quantity === right?.quantity &&
   left?.tick === right?.tick;
 
-const hasEvent = (events: readonly HudEvent[], candidate: HudEvent): boolean =>
-  events.some((event) => {
-    if (event._tag !== candidate._tag || event.tick !== candidate.tick) return false;
-    switch (event._tag) {
-      case 'DamageApplied':
-        return (
-          candidate._tag === 'DamageApplied' &&
-          event.targetId === candidate.targetId &&
-          event.sourceId === candidate.sourceId
-        );
-      case 'EntityDefeated':
-        return (
-          candidate._tag === 'EntityDefeated' &&
-          event.targetId === candidate.targetId &&
-          event.sourceId === candidate.sourceId
-        );
-      case 'ItemGranted':
-        return (
-          candidate._tag === 'ItemGranted' &&
-          event.targetId === candidate.targetId &&
-          event.itemId === candidate.itemId
-        );
-      case 'ZonePhaseChanged':
-        return candidate._tag === 'ZonePhaseChanged' && event.phase === candidate.phase;
-      case 'MatchPhaseChanged':
-        return (
-          candidate._tag === 'MatchPhaseChanged' &&
-          event.phase === candidate.phase &&
-          event.winnerId === candidate.winnerId
-        );
-      default:
-        return false;
-    }
-  });
+const trimGameplayEventWindow = (events: readonly HudEvent[]): readonly HudEvent[] =>
+  events.length <= SHIPPED_GAMEPLAY_EVENT_WINDOW
+    ? events
+    : events.slice(events.length - SHIPPED_GAMEPLAY_EVENT_WINDOW);
+
+const trimSequencedGameplayEventWindow = (
+  events: readonly SequencedGameplayEvent[],
+): readonly SequencedGameplayEvent[] =>
+  events.length <= SHIPPED_SEQUENCED_GAMEPLAY_EVENT_WINDOW
+    ? events
+    : events.slice(events.length - SHIPPED_SEQUENCED_GAMEPLAY_EVENT_WINDOW);
 
 const appendUniqueEvent = (events: readonly HudEvent[], event: HudEvent): readonly HudEvent[] =>
-  hasEvent(events, event) ? events : [...events, event];
+  events.some((previous) => eventKey(previous) === eventKey(event))
+    ? events
+    : trimGameplayEventWindow([...events, event]);
+
+const appendSequencedEvent = (
+  events: readonly SequencedGameplayEvent[],
+  event: SequencedGameplayEvent,
+): readonly SequencedGameplayEvent[] => {
+  if (events.some((previous) => previous.sequence === event.sequence)) {
+    return events;
+  }
+  return trimSequencedGameplayEventWindow([...events, event]);
+};
+
+const appendSyntheticSequencedEvents = ({
+  previousEvents,
+  nextEvents,
+  sequencedEvents,
+  nextSequence,
+}: {
+  readonly previousEvents: readonly HudEvent[];
+  readonly nextEvents: readonly HudEvent[];
+  readonly sequencedEvents: readonly SequencedGameplayEvent[];
+  readonly nextSequence: number;
+}): {
+  readonly sequencedEvents: readonly SequencedGameplayEvent[];
+  readonly nextSyntheticGameplayEventSequence: number;
+} => {
+  const previousKeys = new Set(previousEvents.map((event) => eventKey(event)));
+  let updatedSequencedEvents = sequencedEvents;
+  let sequence = nextSequence;
+  for (const event of nextEvents) {
+    if (previousKeys.has(eventKey(event))) {
+      continue;
+    }
+    updatedSequencedEvents = appendSequencedEvent(updatedSequencedEvents, { sequence, event });
+    sequence -= 1;
+  }
+  return {
+    sequencedEvents: updatedSequencedEvents,
+    nextSyntheticGameplayEventSequence: sequence,
+  };
+};
 
 const appendPlayerDeltaEvents = ({
   events,
@@ -252,6 +287,18 @@ export const applyShippedRuntimeServerFrame = (
     const players = new Map(
       frame.players.map((player) => [player.playerId, playerFromInitial(player)]),
     );
+    const events = appendUniqueEvent(state.events, {
+      _tag: 'MatchPhaseChanged',
+      tick: frame.tick,
+      phase: 'running',
+      previousPhase: 'lobby',
+    });
+    const synthetic = appendSyntheticSequencedEvents({
+      previousEvents: state.events,
+      nextEvents: events,
+      sequencedEvents: state.sequencedEvents,
+      nextSequence: state.nextSyntheticGameplayEventSequence,
+    });
     return {
       ...state,
       phase: 'running',
@@ -259,16 +306,16 @@ export const applyShippedRuntimeServerFrame = (
       totalPlayers: Math.max(state.totalPlayers, frame.players.length),
       players,
       ...(frame.zone === undefined ? {} : { zone: frame.zone }),
-      events: appendUniqueEvent(state.events, {
-        _tag: 'MatchPhaseChanged',
-        tick: frame.tick,
-        phase: 'running',
-        previousPhase: 'lobby',
-      }),
+      events,
+      sequencedEvents: synthetic.sequencedEvents,
+      nextSyntheticGameplayEventSequence: synthetic.nextSyntheticGameplayEventSequence,
     };
   }
 
   if (frame.kind === 'delta') {
+    if (frame.tick < state.tickCount) {
+      return state;
+    }
     const players = new Map(state.players);
     for (const playerId of frame.removed) {
       players.delete(playerId);
@@ -282,30 +329,60 @@ export const applyShippedRuntimeServerFrame = (
     }
     const nextZone = frame.zone ?? state.zone;
     events = appendZoneEvents(events, state.zone, nextZone, frame.tick);
+    const synthetic = appendSyntheticSequencedEvents({
+      previousEvents: state.events,
+      nextEvents: events,
+      sequencedEvents: state.sequencedEvents,
+      nextSequence: state.nextSyntheticGameplayEventSequence,
+    });
     return {
       ...state,
       phase: 'running',
-      tickCount: frame.tick,
+      tickCount: Math.max(state.tickCount, frame.tick),
       totalPlayers: Math.max(state.totalPlayers, players.size),
       players,
       ...(nextZone === undefined ? {} : { zone: nextZone }),
       events,
+      sequencedEvents: synthetic.sequencedEvents,
+      nextSyntheticGameplayEventSequence: synthetic.nextSyntheticGameplayEventSequence,
+    };
+  }
+
+  if (frame.kind === 'gameplay-event') {
+    if (frame.event.tick < state.tickCount) {
+      return state;
+    }
+    const sequencedEvent = { sequence: frame.sequence, event: frame.event };
+    return {
+      ...state,
+      tickCount: Math.max(state.tickCount, frame.event.tick),
+      events: appendUniqueEvent(state.events, frame.event),
+      sequencedEvents: appendSequencedEvent(state.sequencedEvents, sequencedEvent),
     };
   }
 
   if (frame.kind === 'killed') {
     const target = state.players.get(frame.victim);
+    const events = appendUniqueEvent(state.events, {
+      _tag: 'EntityDefeated',
+      tick: frame.tick,
+      targetId: gameplayEntityId(frame.victim),
+      sourceId: gameplayEntityId(frame.killer),
+      amount: target?.health ?? 0,
+      healthBefore: target?.health ?? 0,
+    });
+    const synthetic = appendSyntheticSequencedEvents({
+      previousEvents: state.events,
+      nextEvents: events,
+      sequencedEvents: state.sequencedEvents,
+      nextSequence: state.nextSyntheticGameplayEventSequence,
+    });
     return {
       ...state,
       tickCount: Math.max(state.tickCount, frame.tick),
-      events: appendUniqueEvent(state.events, {
-        _tag: 'EntityDefeated',
-        tick: frame.tick,
-        targetId: gameplayEntityId(frame.victim),
-        sourceId: gameplayEntityId(frame.killer),
-        amount: target?.health ?? 0,
-        healthBefore: target?.health ?? 0,
-      }),
+      events,
+      sequencedEvents: synthetic.sequencedEvents,
+      nextSyntheticGameplayEventSequence: synthetic.nextSyntheticGameplayEventSequence,
     };
   }
 
@@ -314,18 +391,27 @@ export const applyShippedRuntimeServerFrame = (
       return state;
     }
     const tick = Math.max(1, state.tickCount + 1);
+    const events = appendUniqueEvent(state.events, {
+      _tag: 'MatchPhaseChanged',
+      tick,
+      phase: 'game-over',
+      previousPhase: 'running',
+      winnerId: gameplayEntityId(frame.winner),
+    });
+    const synthetic = appendSyntheticSequencedEvents({
+      previousEvents: state.events,
+      nextEvents: events,
+      sequencedEvents: state.sequencedEvents,
+      nextSequence: state.nextSyntheticGameplayEventSequence,
+    });
     return {
       ...state,
       phase: 'finished',
       tickCount: tick,
       gameOver: { winnerId: frame.winner, tick },
-      events: appendUniqueEvent(state.events, {
-        _tag: 'MatchPhaseChanged',
-        tick,
-        phase: 'game-over',
-        previousPhase: 'running',
-        winnerId: gameplayEntityId(frame.winner),
-      }),
+      events,
+      sequencedEvents: synthetic.sequencedEvents,
+      nextSyntheticGameplayEventSequence: synthetic.nextSyntheticGameplayEventSequence,
     };
   }
 

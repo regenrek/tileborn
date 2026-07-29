@@ -13,7 +13,12 @@ import {
   type PluginHostApi,
   type RuntimeMessage,
 } from '@tileborne/runtime/worker';
-import { buildRuntimeGameShellProjection, defaultProjectGameShellState } from '@tileborne/runtime';
+import {
+  buildRuntimeGameShellProjection,
+  createRuntimeInputEdgeTransport,
+  defaultProjectGameShellState,
+  type RuntimeInputEdgeField,
+} from '@tileborne/runtime';
 import { MATCH_ENDED_CLOSE_CODE } from '@tileborne/runtime/net';
 
 import {
@@ -108,7 +113,7 @@ import {
   decodeRoomShellClientFrame,
   encodeRoomShellNavigationServerFrame,
 } from './room-transport.js';
-import type { JsonObject } from '@tileborne/core';
+import type { JsonObject, JsonValue } from '@tileborne/core';
 import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 
 export interface RoomCreateOptions {
@@ -353,6 +358,16 @@ const websocketUpgradeResponse = (client: WebSocket): Response => {
   }
 };
 
+const PLUGIN_CHECKPOINT_SIM_STATE_PREFIX = 'pluginCheckpoint:';
+
+const pluginCheckpointSimStateKey = (pluginId: string): string =>
+  `${PLUGIN_CHECKPOINT_SIM_STATE_PREFIX}${pluginId}`;
+
+const pluginIdFromCheckpointSimStateKey = (key: string): string | undefined =>
+  key.startsWith(PLUGIN_CHECKPOINT_SIM_STATE_PREFIX)
+    ? key.slice(PLUGIN_CHECKPOINT_SIM_STATE_PREFIX.length)
+    : undefined;
+
 export class PlaytestRoom implements DurableObject {
   private storageData: RoomStorage | null = null;
   private runtime: GameRuntimeApi | null = null;
@@ -361,11 +376,28 @@ export class PlaytestRoom implements DurableObject {
   private readonly socketByPlayerId = new Map<string, RoomSocketRecord>();
   private readonly inputQueueByPlayerId = new Map<string, QueuedInput<BundledRuntimeInput>>();
   private readonly inputByPlayerId = new Map<string, BundledRuntimeInput>();
+  private inputEdgeFields: readonly string[] = [];
+  private heldBooleanInputFields: readonly string[] = [];
+  private readonly queuedInputTransport = createRuntimeInputEdgeTransport<BundledRuntimeInput>(
+    () => this.inputEdgeFields as readonly RuntimeInputEdgeField<BundledRuntimeInput>[],
+    {
+      heldBooleanFields: () =>
+        this.heldBooleanInputFields as readonly RuntimeInputEdgeField<BundledRuntimeInput>[],
+    },
+  );
+  private readonly inputTransport = createRuntimeInputEdgeTransport<BundledRuntimeInput>(
+    () => this.inputEdgeFields as readonly RuntimeInputEdgeField<BundledRuntimeInput>[],
+    {
+      heldBooleanFields: () =>
+        this.heldBooleanInputFields as readonly RuntimeInputEdgeField<BundledRuntimeInput>[],
+    },
+  );
   private readonly pluginMessages: RuntimeMessage[] = [];
   private readonly pluginBinaryFrames: Uint8Array[] = [];
   private protocolBridge: BundledPluginProtocolBridge | null = null;
   private pendingMatchEnd: { readonly winnerPlayerId: string } | null = null;
   private latestReplayFrames: readonly Uint8Array[] = [];
+  private pluginCheckpointByPluginId = new Map<string, JsonValue>();
   private nextInputOrder = 0;
   private tickAlarmScheduled = false;
   private smokeHibernationQuiescing = false;
@@ -597,6 +629,43 @@ export class PlaytestRoom implements DurableObject {
     }
   }
 
+  private restorePluginCheckpoints(storage: RoomStorage | null): void {
+    this.pluginCheckpointByPluginId = new Map();
+    for (const [key, value] of Object.entries(storage?.simState ?? {})) {
+      const pluginId = pluginIdFromCheckpointSimStateKey(key);
+      if (pluginId !== undefined && pluginId.length > 0) {
+        this.pluginCheckpointByPluginId.set(pluginId, value);
+      }
+    }
+  }
+
+  private getPluginCheckpoint(pluginId: string): JsonValue | undefined {
+    return this.pluginCheckpointByPluginId.get(pluginId);
+  }
+
+  private setPluginCheckpoint(pluginId: string, checkpoint: JsonValue | undefined): void {
+    if (pluginId.length === 0 || checkpoint === undefined) {
+      this.pluginCheckpointByPluginId.delete(pluginId);
+      return;
+    }
+    this.pluginCheckpointByPluginId.set(pluginId, checkpoint);
+  }
+
+  private simStateWithPluginCheckpoints(
+    simState: RoomStorage['simState'],
+  ): RoomStorage['simState'] {
+    const next = { ...simState };
+    for (const key of Object.keys(next)) {
+      if (pluginIdFromCheckpointSimStateKey(key) !== undefined) {
+        delete next[key];
+      }
+    }
+    for (const [pluginId, checkpoint] of this.pluginCheckpointByPluginId) {
+      next[pluginCheckpointSimStateKey(pluginId)] = checkpoint;
+    }
+    return next;
+  }
+
   private runtimeRegistrations(): readonly BundledPluginRuntimeRegistration[] {
     const registrations = [
       defaultBundledPluginRuntimeRegistration,
@@ -768,9 +837,12 @@ export class PlaytestRoom implements DurableObject {
     }
     const usingCustomPluginHost = this.deps.createPluginHost !== undefined;
     const storage = await this.readStorage();
+    this.restorePluginCheckpoints(storage);
     const pluginId = resolveBundledRuntimePluginId(storage?.mapPackage);
     const registration = this.runtimeRegistrationForStorage(storage);
     this.protocolBridge = registration.protocolBridge;
+    this.inputEdgeFields = registration.playtestInputEdgeFields ?? [];
+    this.heldBooleanInputFields = registration.playtestHeldBooleanInputFields ?? [];
     const pluginHost =
       this.deps.createPluginHost?.((message) => this.emitPluginMessage(message)) ??
       makePluginHost({
@@ -779,6 +851,9 @@ export class PlaytestRoom implements DurableObject {
           getInput: (playerId) => this.getInputForPlugin(playerId),
           emitFrame: (frame) => this.emitPluginFrame(frame),
           setReplayFrames: (frames) => this.setReplayFrames(frames),
+          getPluginCheckpoint: (checkpointPluginId) => this.getPluginCheckpoint(checkpointPluginId),
+          setPluginCheckpoint: (checkpointPluginId, checkpoint) =>
+            this.setPluginCheckpoint(checkpointPluginId, checkpoint),
           ...(storage?.seed === undefined ? {} : { seed: storage.seed }),
           ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
           ...(storage?.playerModelSelections === undefined
@@ -805,6 +880,17 @@ export class PlaytestRoom implements DurableObject {
       }
       this.legacyEnvelopeEnabled = usingCustomPluginHost;
       await Effect.runPromise(runtime.start());
+      const restoredRuntimeTick =
+        storage?.lifecycle.phase === 'active' && typeof storage.simState.lastTick === 'number'
+          ? storage.simState.lastTick
+          : 0;
+      if (restoredRuntimeTick > 0) {
+        await Effect.runPromise(runtime.restoreTick(restoredRuntimeTick));
+        this.inputTransport.acknowledgePending(this.inputTransport.capturePendingAcknowledgement());
+        this.inputByPlayerId.clear();
+        this.pluginBinaryFrames.length = 0;
+        this.pendingMatchEnd = null;
+      }
       this.behaviorRuntime =
         this.deps.createBehaviorRuntime?.({
           ...(storage?.mapPackage === undefined ? {} : { mapPackage: storage.mapPackage }),
@@ -1230,6 +1316,13 @@ export class PlaytestRoom implements DurableObject {
     if (!latest) {
       return;
     }
+    if (latest.pendingSimulationCommit) {
+      const shouldContinue = await this.completeCommittedSimulationTick(latest);
+      if (shouldContinue) {
+        await this.scheduleNextAlarm();
+      }
+      return;
+    }
     const lifecycleStep = advanceLifecycleForAlarm(latest, this.nowMs(), this.nowIso());
     if (lifecycleStep.changed) {
       await this.writeStorage(lifecycleStep.storage);
@@ -1278,9 +1371,11 @@ export class PlaytestRoom implements DurableObject {
   }
 
   private drainInputQueueForTick(): void {
-    this.inputByPlayerId.clear();
     const inputs = [...this.inputQueueByPlayerId.values()];
     this.inputQueueByPlayerId.clear();
+    if (inputs.length === 0) {
+      return;
+    }
     inputs.sort(
       (left, right) =>
         left.sortKey.tick - right.sortKey.tick ||
@@ -1289,8 +1384,14 @@ export class PlaytestRoom implements DurableObject {
         left.order - right.order,
     );
     for (const input of inputs) {
-      this.inputByPlayerId.set(input.playerId, input.input);
+      this.inputByPlayerId.set(
+        input.playerId,
+        this.inputTransport.set(input.playerId, input.input),
+      );
     }
+    this.queuedInputTransport.acknowledgePending(
+      this.queuedInputTransport.capturePendingAcknowledgement(),
+    );
   }
 
   private enqueueInput(
@@ -1307,9 +1408,18 @@ export class PlaytestRoom implements DurableObject {
     this.nextInputOrder += 1;
 
     const existing = this.inputQueueByPlayerId.get(playerId);
-    if (!existing || compareQueuedInputs(queued, existing) >= 0) {
-      this.inputQueueByPlayerId.set(playerId, queued);
+    if (existing && compareQueuedInputs(queued, existing) < 0) {
+      return;
     }
+    const resolvedInput = this.queuedInputTransport.set(playerId, input);
+    this.inputQueueByPlayerId.set(playerId, { ...queued, input: resolvedInput });
+  }
+
+  private clearQueuedInputs(): void {
+    for (const playerId of this.inputQueueByPlayerId.keys()) {
+      this.queuedInputTransport.delete(playerId);
+    }
+    this.inputQueueByPlayerId.clear();
   }
 
   private broadcastPluginFrames(): void {
@@ -1354,48 +1464,93 @@ export class PlaytestRoom implements DurableObject {
       this.pluginBinaryFrames.length = 0;
     }
     this.drainInputQueueForTick();
-    try {
-      await Effect.runPromise(this.runtime.step(1));
-      await this.behaviorRuntime?.step(storage.tick + 1);
-    } finally {
-      this.inputByPlayerId.clear();
-    }
-    const shellNavigationRequests = this.behaviorRuntime?.shellNavigationRequests ?? [];
-    const shellNavigationEpoch = storage.shellNavigationEpoch ?? storage.createdAt;
-    const shellNavigationStartSequence = storage.nextShellNavigationSequence ?? 0;
+    const inputAcknowledgement = this.inputTransport.capturePendingAcknowledgement();
+    await Effect.runPromise(this.runtime.step(1));
+    this.inputTransport.acknowledgePending(inputAcknowledgement);
+    this.inputByPlayerId.clear();
     const tick = storage.tick + 1;
     const baseTick = tick % PERSIST_EVERY_N_TICKS === 0 ? tick : storage.baseTick;
     const diff = this.buildSnapshotDiff(tick, Object.keys(storage.players).length);
     const shouldPersist = tick % PERSIST_EVERY_N_TICKS === 0;
+    const shellNavigationEpoch = storage.shellNavigationEpoch ?? storage.createdAt;
+    const shellNavigationStartSequence = storage.nextShellNavigationSequence ?? 0;
     const tickStorage: RoomStorage = {
       ...storage,
       tick,
       baseTick,
       lastTickAt: this.nowIso(),
       shellNavigationEpoch,
-      nextShellNavigationSequence: shellNavigationStartSequence + shellNavigationRequests.length,
+      nextShellNavigationSequence: shellNavigationStartSequence,
       simState: {
-        ...storage.simState,
+        ...this.simStateWithPluginCheckpoints(storage.simState),
         lastTick: tick,
         playerCount: Object.keys(storage.players).length,
       },
       ...(shouldPersist ? { lastPersistedTick: tick } : {}),
+      pendingSimulationCommit: {
+        tick,
+        shellNavigationEpoch,
+        shellNavigationStartSequence,
+      },
+    };
+    await this.writeStorage(tickStorage);
+    return this.completeCommittedSimulationTick(tickStorage, {
+      baseTick,
+      diff,
+      isFirstActiveTick,
+    });
+  }
+
+  private async completeCommittedSimulationTick(
+    storage: RoomStorage,
+    options?: {
+      readonly baseTick: number;
+      readonly diff: readonly Record<string, string | number | boolean | null>[];
+      readonly isFirstActiveTick: boolean;
+    },
+  ): Promise<boolean> {
+    const pending = storage.pendingSimulationCommit;
+    if (!pending || storage.lifecycle.phase !== 'active') {
+      return false;
+    }
+    const tick = pending.tick;
+    const baseTick = options?.baseTick ?? storage.baseTick;
+    const diff = options?.diff ?? this.buildSnapshotDiff(tick, Object.keys(storage.players).length);
+    const isFirstActiveTick = options?.isFirstActiveTick ?? tick === 1;
+    let behaviorStepFailed = false;
+    try {
+      await this.behaviorRuntime?.step(tick);
+    } catch {
+      behaviorStepFailed = true;
+    }
+    const shellNavigationRequests = behaviorStepFailed
+      ? []
+      : (this.behaviorRuntime?.shellNavigationRequests ?? []);
+    const { pendingSimulationCommit: _pendingSimulationCommit, ...committedStorage } = storage;
+    const behaviorStorage: RoomStorage = {
+      ...committedStorage,
+      shellNavigationEpoch: pending.shellNavigationEpoch,
+      nextShellNavigationSequence:
+        pending.shellNavigationStartSequence + shellNavigationRequests.length,
     };
     const matchEnd = this.pendingMatchEnd;
     this.pendingMatchEnd = null;
     const next =
       matchEnd === null
-        ? tickStorage
+        ? behaviorStorage
         : {
-            ...finishRoomFromMatchEnd(tickStorage, this.nowIso(), matchEnd.winnerPlayerId),
+            ...finishRoomFromMatchEnd(behaviorStorage, this.nowIso(), matchEnd.winnerPlayerId),
             lastPersistedTick: tick,
           };
     const terminal = next.lifecycle.phase === 'finished';
-    if (shouldPersist || terminal) {
+    if (
+      terminal ||
+      shellNavigationRequests.length > 0 ||
+      pending.shellNavigationEpoch !== storage.shellNavigationEpoch ||
+      behaviorStorage.nextShellNavigationSequence !== storage.nextShellNavigationSequence ||
+      storage.pendingSimulationCommit !== undefined
+    ) {
       await this.writeStorage(next);
-    } else {
-      this.storageData = next;
-      await this.state.storage.put(STORAGE_KEY, next);
     }
     if (this.legacyEnvelopeEnabled) {
       if (tick % PERSIST_EVERY_N_TICKS === 0) {
@@ -1422,8 +1577,8 @@ export class PlaytestRoom implements DurableObject {
     }
     this.broadcastPluginFrames();
     this.broadcastShellNavigationRequests(
-      shellNavigationEpoch,
-      shellNavigationStartSequence,
+      pending.shellNavigationEpoch,
+      pending.shellNavigationStartSequence,
       shellNavigationRequests,
     );
     if (this.pluginHost && this.legacyEnvelopeEnabled) {
@@ -1433,7 +1588,7 @@ export class PlaytestRoom implements DurableObject {
       this.broadcast(new Events({ events: Option.some([{ type: 'tick', tick }]) }));
     }
     if (terminal) {
-      this.inputQueueByPlayerId.clear();
+      this.clearQueuedInputs();
       this.inputByPlayerId.clear();
       this.tickAlarmScheduled = false;
       await this.state.storage.deleteAlarm();
@@ -1529,7 +1684,7 @@ export class PlaytestRoom implements DurableObject {
     const acceptedSocketCount = this.state.getWebSockets().length;
     this.storageData = null;
     this.socketByPlayerId.clear();
-    this.inputQueueByPlayerId.clear();
+    this.clearQueuedInputs();
     this.inputByPlayerId.clear();
     this.pluginMessages.length = 0;
     this.pluginBinaryFrames.length = 0;

@@ -754,6 +754,7 @@ export function MenuShell({
           <div className="tb-actions" style={{ marginTop: '0.5rem' }}>
             <Button
               size="sm"
+              className="tb-shell-interactive-control"
               onClick={() => dispatch({ type: 'MATCH_END' })}
               data-testid="end-match"
             >

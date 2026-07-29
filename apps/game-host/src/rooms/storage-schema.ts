@@ -1,5 +1,5 @@
 import { ROOM_SCHEMA_VERSION } from './room-config.js';
-import type { JsonObject } from '@tileborne/core';
+import type { JsonObject, JsonValue } from '@tileborne/core';
 import type { RuntimeGameShellProjection } from '@tileborne/runtime';
 
 export const ROOM_LIFECYCLE_PHASES = [
@@ -96,6 +96,12 @@ export interface RoomResultsSummary {
   readonly players: readonly RoomPlayerResultSummary[];
 }
 
+export interface RoomPendingSimulationCommit {
+  readonly tick: number;
+  readonly shellNavigationEpoch: string;
+  readonly shellNavigationStartSequence: number;
+}
+
 /** Per-session player→model selection carried by the room, never the package. */
 export interface RoomPlayerModelSelection {
   readonly playerId: string;
@@ -116,7 +122,7 @@ interface RoomStorageLegacyV1 {
   readonly lastTickAt: string | null;
   readonly idempotencyKey?: string;
   readonly emptySince: string | null;
-  readonly simState: Record<string, string | number | boolean | null>;
+  readonly simState: Record<string, JsonValue>;
 }
 
 export interface RoomStorageV2 {
@@ -139,7 +145,7 @@ export interface RoomStorageV2 {
   readonly lastTickAt: string | null;
   readonly idempotencyKey?: string;
   readonly emptySince: string | null;
-  readonly simState: Record<string, string | number | boolean | null>;
+  readonly simState: Record<string, JsonValue>;
 }
 
 export interface RoomStorageV3 extends Omit<RoomStorageV2, 'schemaVersion'> {
@@ -150,6 +156,7 @@ export interface RoomStorageV3 extends Omit<RoomStorageV2, 'schemaVersion'> {
   readonly reconnect: RoomReconnectState;
   readonly currentSockets?: RoomCurrentSocketState;
   readonly results: RoomResultsSummary | null;
+  readonly pendingSimulationCommit?: RoomPendingSimulationCommit;
 }
 
 export type PersistedRoomStorage = RoomStorageLegacyV1 | RoomStorageV2 | RoomStorageV3;

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --config eslint.config.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:accepted-fire-render": "node scripts/accepted-fire-render-smoke.mjs"
   },
   "dependencies": {
     "@tileborne/core": "workspace:*",

@@ -55,6 +55,7 @@ export {
 } from './audio/user-audio-settings.js';
 export {
   dispatchGameplayLifecycleAudioEvents,
+  GAMEPLAY_AUDIO_EVENT_KEY_WINDOW,
   runtimeAudioEventsForGameplayEvent,
 } from './audio/gameplay-lifecycle-audio.js';
 export {

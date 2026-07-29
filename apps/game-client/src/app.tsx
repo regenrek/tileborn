@@ -1,4 +1,10 @@
-import { CONTROL_SCHEMES, PERSISTED_SCHEMA_VERSIONS, controlScheme } from '@tileborne/core';
+import {
+  CONTROL_SCHEMES,
+  PERSISTED_SCHEMA_VERSIONS,
+  REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  controlScheme,
+  type PlayerModelClipKey,
+} from '@tileborne/core';
 import {
   type BrowserRuntimeAudioEngineConfig,
   createLocalStorageBindingsStore,
@@ -29,12 +35,28 @@ import {
   makeNetFrameClient,
 } from '@tileborne/runtime/net';
 import {
+  createBattleRoyaleBundledAssets,
   battleRoyaleAudioCues,
   battleRoyaleDefaultInputMap,
   battleRoyaleSfxBus,
+  IMPACT_BURST_TEXTURE_ASSET_ID,
+  PLAYER_TEXTURE_ASSET_ID,
+  WEAPON_RIFLE_TEXTURE_ASSET_ID,
 } from '@tileborne/plugin-battle-royale';
+import {
+  createBattleRoyaleProjector,
+  decodeServerFrame,
+  type BattleRoyaleProjectorConfig,
+  type PlayerModelClipRenderData,
+  type PlayerModelRenderData,
+  type SpriteVisualRenderData,
+  type WeaponVisualRenderData,
+} from '@tileborne/plugin-battle-royale/renderer';
+import { BR_PRIMARY_WEAPON_ID } from '@tileborne/plugin-battle-royale/constants';
 import { battleRoyaleMenuSections } from '@tileborne/plugin-battle-royale/menu';
-import type { RuntimeGameShellProjection } from '@tileborne/runtime';
+import type { RenderableEntity, RuntimeGameShellProjection } from '@tileborne/runtime';
+import { PixiRendererAdapter } from '@tileborne/runtime';
+import { Effect } from 'effect';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
 import {
@@ -52,10 +74,22 @@ import {
 const DEFAULT_LOBBY_MAP_ID = 'map:fixture';
 const LOBBY_RECONNECT_STORAGE_KEY = `tileborne.game-client.lobby-reconnect.v${PERSISTED_SCHEMA_VERSIONS.lobbyReconnect}`;
 
+interface ShippedRuntimeRenderState {
+  readonly snapshot: unknown;
+  readonly entities: readonly RenderableEntity[];
+}
+
 interface AppProps {
   readonly audioEngineFactory?:
     | ((config: BrowserRuntimeAudioEngineConfig) => RuntimeAudioPlaybackEngine)
     | undefined;
+  readonly onRuntimeFrame?:
+    | ((
+        frame: NonNullable<ReturnType<typeof decodeShippedRuntimeServerFrame>>,
+        data: Uint8Array,
+      ) => void)
+    | undefined;
+  readonly onRuntimeRendererReady?: ((adapter: PixiRendererAdapter) => void) | undefined;
 }
 
 interface StoredLobbyReconnect {
@@ -143,6 +177,124 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
   busVolumes: settings.busVolumes ?? {},
 });
 
+const clip = (key: PlayerModelClipKey): PlayerModelClipRenderData => ({
+  frames: [
+    {
+      assetId: PLAYER_TEXTURE_ASSET_ID,
+      uv: { x: 0, y: 0, w: 48, h: 48 },
+      durationMs: 100,
+    },
+  ],
+  loop: true,
+  defaultDurationMs: 100,
+});
+
+const spriteVisual = (visualId: string, assetId: string): SpriteVisualRenderData => ({
+  visualId,
+  assetId,
+  frames: [{ assetId, uv: { x: 0, y: 0, w: 24, h: 24 }, durationMs: 100 }],
+  loop: false,
+  anchor: { x: 0.5, y: 0.5 },
+});
+
+const shippedRuntimeProjectorConfig = (): BattleRoyaleProjectorConfig => {
+  const model: PlayerModelRenderData = {
+    assetId: PLAYER_TEXTURE_ASSET_ID,
+    clips: Object.fromEntries(
+      REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, clip(key)]),
+    ) as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
+    anchor: { x: 0.5, y: 1 },
+  };
+  const equipped: SpriteVisualRenderData = {
+    ...spriteVisual('weapon-equipped', WEAPON_RIFLE_TEXTURE_ASSET_ID),
+    anchor: { x: 0.25, y: 0.5 },
+    anchors: {
+      grip: { point: { x: 0.25, y: 0.5 } },
+      muzzle: { point: { x: 0.75, y: 0.5 } },
+    },
+  };
+  const weapon: WeaponVisualRenderData = {
+    weaponId: BR_PRIMARY_WEAPON_ID,
+    equipped,
+    muzzleFlash: spriteVisual('muzzle-flash', IMPACT_BURST_TEXTURE_ASSET_ID),
+  };
+  return {
+    catalog: new Map([['model:hero', model]]),
+    weapons: new Map([[BR_PRIMARY_WEAPON_ID, weapon]]),
+    defaultWeaponId: BR_PRIMARY_WEAPON_ID,
+  };
+};
+
+const shippedRuntimeAssets = createBattleRoyaleBundledAssets();
+
+const ShippedRuntimeCanvas = ({
+  entities,
+  onRendererAdapterReady,
+}: {
+  readonly entities: readonly RenderableEntity[];
+  readonly onRendererAdapterReady?: ((adapter: PixiRendererAdapter) => void) | undefined;
+}): ReactElement => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const adapterRef = useRef<PixiRendererAdapter | null>(null);
+  const previousEntitiesRef = useRef<ReadonlyMap<string, RenderableEntity>>(new Map());
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container === null) {
+      return undefined;
+    }
+    const adapter = new PixiRendererAdapter({
+      applicationOptions: { autoStart: false, backgroundAlpha: 0 },
+    });
+    adapterRef.current = adapter;
+    let disposed = false;
+    void Effect.runPromise(
+      adapter
+        .mount(container)
+        .pipe(Effect.tap(() => adapter.loadBundledAssets(shippedRuntimeAssets))),
+    )
+      .then(() => {
+        if (!disposed) {
+          onRendererAdapterReady?.(adapter);
+          setReady(true);
+        }
+      })
+      .catch((error) => {
+        console.error('[game-client] failed to mount shipped runtime renderer', error);
+      });
+
+    return () => {
+      disposed = true;
+      adapterRef.current = null;
+      setReady(false);
+      void Effect.runPromise(adapter.dispose()).catch((error) => {
+        console.error('[game-client] failed to dispose shipped runtime renderer', error);
+      });
+    };
+  }, [onRendererAdapterReady]);
+
+  useEffect(() => {
+    const adapter = adapterRef.current;
+    if (!ready || adapter === null) {
+      return;
+    }
+    const previousById = previousEntitiesRef.current;
+    previousEntitiesRef.current = new Map(entities.map((entity) => [entity.id, entity]));
+    void Effect.runPromise(adapter.renderFromEntities(entities, previousById, 1)).catch((error) => {
+      console.error('[game-client] failed to render shipped runtime entities', error);
+    });
+  }, [entities, ready]);
+
+  return (
+    <div
+      ref={containerRef}
+      data-testid="shipped-runtime-renderer"
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+    />
+  );
+};
+
 /**
  * Brand-neutral game-client template app (ADR-0022 decision #3). Mounts the
  * generic shell with the neutral default brand and the battle-royale plugin's
@@ -150,10 +302,18 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
  * `BrandConfig` (from `branding/tokens.json`) and compose plugin sections with
  * their `menuExtensions` registrations.
  */
-export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
+export function App({
+  audioEngineFactory,
+  onRuntimeFrame,
+  onRuntimeRendererReady,
+}: AppProps = {}): ReactElement {
   const lobbyClient = useMemo(() => createGameHostLobbyClient(), []);
   const audioSettingsStore = useMemo(() => createAudioUserSettingsStore(), []);
   const runtimeClientRef = useRef<ReturnType<typeof makeNetFrameClient> | null>(null);
+  const shippedProjector = useMemo(
+    () => createBattleRoyaleProjector(shippedRuntimeProjectorConfig()),
+    [],
+  );
   const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>('idle');
   const [lobbyMessage, setLobbyMessage] = useState<string | undefined>(undefined);
   const [lobbyError, setLobbyError] = useState<string | undefined>(undefined);
@@ -179,6 +339,10 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
     readStoredLobbyReconnect(),
   );
   const [runtime, setRuntime] = useState<ShippedRuntimeState>(() => initialShippedRuntimeState());
+  const [runtimeRender, setRuntimeRender] = useState<ShippedRuntimeRenderState>(() => ({
+    snapshot: undefined,
+    entities: [],
+  }));
   const [shellNavigationRequests, setShellNavigationRequests] = useState<
     ReadonlyArray<SequencedRuntimeShellNavigationRequest>
   >([]);
@@ -386,6 +550,7 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
 
   const beginMatch = useCallback(() => {
     setRuntime(initialShippedRuntimeState(lobbySession?.playerId));
+    setRuntimeRender({ snapshot: undefined, entities: [] });
     setShellNavigationRequests([]);
     if (!lobbySession?.wsUrl) {
       return;
@@ -418,8 +583,16 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
         }
         const frame = decodeShippedRuntimeServerFrame(data);
         if (frame === undefined) return;
+        onRuntimeFrame?.(frame, data);
         if (frame.kind === 'initial' || frame.kind === 'delta') {
           void client.sendFramePromise(buildSnapshotAckFrame(frame.tick)).catch(() => undefined);
+          setRuntimeRender((current) => {
+            const decodedRenderFrame = decodeServerFrame(data);
+            const snapshot =
+              shippedProjector.mergeFrame?.(current.snapshot, decodedRenderFrame) ??
+              decodedRenderFrame;
+            return { snapshot, entities: shippedProjector.project(snapshot) };
+          });
         }
         setRuntime((state) => applyShippedRuntimeServerFrame(state, frame));
       })
@@ -428,7 +601,7 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
           runtimeClientRef.current = null;
         }
       });
-  }, [lobbySession]);
+  }, [lobbySession, onRuntimeFrame, shippedProjector]);
 
   const shellBridge = useMemo<RuntimeShellBehaviorBridge>(
     () => ({
@@ -453,6 +626,7 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
       shellBridge={shellBridge}
       shellProjection={shellProjection}
       shellAssetUrlBase={shellAssetUrlBase}
+      gameplayAudioEvents={runtime.sequencedEvents}
       {...(hudMetrics === undefined ? {} : { hudMetrics })}
       {...(results === undefined ? {} : { results })}
       renderLobby={({ matchmaking, onStartMatch, onBack }) => (
@@ -481,7 +655,17 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
       )}
       onMatchStart={beginMatch}
       onQuit={() => window.close()}
-      canvas={<div data-testid="game-canvas" style={{ width: '100%', height: '100%' }} />}
+      canvas={
+        <div
+          data-testid="game-canvas"
+          style={{ position: 'relative', width: '100%', height: '100%' }}
+        >
+          <ShippedRuntimeCanvas
+            entities={runtimeRender.entities}
+            onRendererAdapterReady={onRuntimeRendererReady}
+          />
+        </div>
+      }
     />
   );
 }

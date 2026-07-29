@@ -39,6 +39,66 @@
   flex-direction: column;
 }
 
+.tb-root[data-phase='in-match'][data-paused='false'] {
+  background: transparent;
+  pointer-events: none;
+}
+
+.tb-root[data-phase='in-match'][data-paused='false'] .tb-overlay-layer,
+.tb-root[data-phase='in-match'][data-paused='false'] .tb-overlay-layer * {
+  pointer-events: none;
+}
+
+.tb-root[data-phase='in-match'][data-paused='false']
+  .tb-overlay-layer
+  :is(
+    button:not([disabled]),
+    [href],
+    input:not([disabled]),
+    select:not([disabled]),
+    textarea:not([disabled]),
+    [role='button'],
+    [tabindex]:not([tabindex='-1']),
+    .tb-shell-interactive-control
+  ) {
+  pointer-events: auto;
+}
+
+.tb-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 2rem;
+  height: 2rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.tb-crosshair::before,
+.tb-crosshair::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tb-menu-text, #f8fafc) 92%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tb-menu-bg, #0b1220) 70%, transparent),
+    0 0 10px color-mix(in srgb, var(--tb-menu-bg, #0b1220) 55%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tb-crosshair::before {
+  width: 1.75rem;
+  height: 0.125rem;
+}
+
+.tb-crosshair::after {
+  width: 0.125rem;
+  height: 1.75rem;
+}
+
 /* Translucent scrim used by menu/pause/results overlays. */
 .tb-scrim {
   position: absolute;

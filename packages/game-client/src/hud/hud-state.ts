@@ -43,7 +43,7 @@ export function healthPercent(health: number, maxHealth: number): number {
 export function eventKey(event: HudEvent): string {
   switch (event._tag) {
     case 'WeaponFired':
-      return `WeaponFired:${event.sourceId}:${event.weaponId}:${event.tick}`;
+      return `WeaponFired:${event.sourceId}:${event.weaponId}:${event.tick}:${event.ammoRemaining}`;
     case 'DamageApplied':
       return `DamageApplied:${event.targetId}:${event.sourceId ?? 'environment'}:${event.tick}`;
     case 'EntityDefeated':

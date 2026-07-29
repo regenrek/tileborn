@@ -2,19 +2,32 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { JsonValue } from '@tileborne/core';
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
 import { LOOT_CRATE_KIND, SPAWN_POINT_KIND } from '@tileborne/plugin-battle-royale/constants';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { bundledPlugin, createBundledPluginLoader } from './bundled-plugin-loader.js';
+import {
+  bundledPlugin,
+  createBundledPluginLoader,
+  createDefaultBundledPluginProtocolBridge,
+} from './bundled-plugin-loader.js';
 import { bundledMapPackages } from './.generated/bundled-map-packages.js';
+import {
+  playtestHeldBooleanInputFields,
+  playtestInputEdgeFields,
+} from './.generated/plugin-runtime.js';
 
 const generatedRuntimeTypesPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '.generated/plugin-runtime.d.ts',
 );
 const optionalDirectionPattern = /readonly dir\?: 0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6 \| 7;/gu;
+const playtestInputEdgeFieldsDeclarationPattern =
+  /export declare const playtestInputEdgeFields: readonly string\[\];/u;
+const playtestHeldBooleanInputFieldsDeclarationPattern =
+  /export declare const playtestHeldBooleanInputFields: readonly string\[\];/u;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -58,6 +71,20 @@ describe('createBundledPluginLoader', () => {
 
     expect(source.match(optionalDirectionPattern)).toHaveLength(2);
     expect(source).not.toMatch(/readonly dir: 0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6 \| 7;/u);
+    expect(source).toMatch(playtestInputEdgeFieldsDeclarationPattern);
+    expect(source).toMatch(playtestHeldBooleanInputFieldsDeclarationPattern);
+  });
+
+  it('uses the generated BR-owned playtest input edge fields', () => {
+    expect(playtestInputEdgeFields).toEqual([
+      'shoot',
+      'reload',
+      'interact',
+      'drop',
+      'abilities',
+      'swapSlot',
+    ]);
+    expect(playtestHeldBooleanInputFields).toEqual(['shoot']);
   });
 
   it('registers the bundled BR adapter and emits live tick snapshots', async () => {
@@ -203,5 +230,83 @@ describe('createBundledPluginLoader', () => {
         ),
       ).toBe(true);
     }
+  });
+
+  it('preserves entity allocation high-water across bundled world checkpoints', async () => {
+    const checkpoints: JsonValue[] = [];
+    const pluginId = '@tileborne-plugins/checkpoint-probe';
+    const registration = {
+      id: pluginId,
+      protocolBridge: createDefaultBundledPluginProtocolBridge(),
+      createRuntimeAdapter: (host: {
+        readonly getPluginCheckpoint?: (pluginId: string) => JsonValue | undefined;
+        readonly setPluginCheckpoint?: (
+          pluginId: string,
+          checkpoint: JsonValue | undefined,
+        ) => void;
+      }) => ({
+        id: pluginId,
+        onInit: (
+          _ctx: unknown,
+          world: {
+            readonly createEntity: () => number;
+            readonly destroyEntity: (entity: number) => void;
+            readonly createCheckpoint: () => { readonly nextEntity: number };
+            readonly restoreCheckpoint: (checkpoint: { readonly nextEntity: number }) => void;
+          },
+        ) => {
+          const checkpoint = host.getPluginCheckpoint?.(pluginId) as
+            | { readonly world?: { readonly nextEntity: number } }
+            | undefined;
+          if (checkpoint?.world !== undefined) {
+            world.restoreCheckpoint(checkpoint.world);
+            return;
+          }
+          world.createEntity();
+          const high = world.createEntity();
+          world.destroyEntity(high);
+          host.setPluginCheckpoint?.(pluginId, { world: world.createCheckpoint() });
+        },
+        onTick: (
+          world: {
+            readonly createEntity: () => number;
+          },
+          _dt: number,
+          tick: number,
+        ) => {
+          host.setPluginCheckpoint?.(pluginId, { tick, created: world.createEntity() });
+        },
+      }),
+    };
+    const firstLoader = createBundledPluginLoader({
+      pluginRegistrations: [registration],
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          checkpoints.push(checkpoint);
+        }
+      },
+    });
+    const firstExecutable = await Effect.runPromise(firstLoader.loadExecutable(pluginId));
+    const firstPlugin = 'id' in firstExecutable ? firstExecutable : firstExecutable.default;
+    await Effect.runPromise(firstPlugin.onInit!({ pluginId }));
+    const allocatorCheckpoint = checkpoints.at(-1)!;
+
+    const restoredCheckpoints: JsonValue[] = [];
+    const restoredLoader = createBundledPluginLoader({
+      pluginRegistrations: [registration],
+      getPluginCheckpoint: (id) => (id === pluginId ? allocatorCheckpoint : undefined),
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          restoredCheckpoints.push(checkpoint);
+        }
+      },
+    });
+    const restoredExecutable = await Effect.runPromise(restoredLoader.loadExecutable(pluginId));
+    const restoredPlugin =
+      'id' in restoredExecutable ? restoredExecutable : restoredExecutable.default;
+    await Effect.runPromise(restoredPlugin.onInit!({ pluginId }));
+    await Effect.runPromise(restoredPlugin.onTick!({} as never, 1 / 20, 1));
+
+    expect(restoredCheckpoints.at(-1)).toEqual({ tick: 1, created: 3 });
   });
 });

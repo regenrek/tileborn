@@ -1,16 +1,18 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { hashBytes, type BehaviorId } from '@tileborne/core';
 import {
   AUDIO_USER_SETTINGS_STORAGE_KEY,
   type RuntimeAudioPlaybackEngine,
 } from '@tileborne/game-client';
+import { GameplayZonePhaseChanged } from '@tileborne/ipc-contracts';
 import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
 import { createInitialFrame, encodeServerFrame } from '@tileborne/plugin-battle-royale';
 import {
   applyGameShellAuthoringCommand,
   buildRuntimeGameShellProjection,
   defaultProjectGameShellState,
+  type PixiRendererAdapter,
   type RuntimeAudioSettings,
   type RuntimeBehaviorContext,
 } from '@tileborne/runtime';
@@ -25,6 +27,9 @@ import {
   createFakeDurableObjectState,
   installWorkerGlobals,
 } from '../../game-host/src/test-helpers/do-fake.js';
+import { acceptedBattleRoyaleFireFlow } from './test/accepted-br-fire-events.js';
+import { expectNoRendererHarnessErrorsForTest } from './test/setup.js';
+
 import { App } from './app.js';
 
 const TEST_KEY = 'test-handoff-signing-key-32-bytes!!';
@@ -32,6 +37,23 @@ const shellE2EBehaviorId = 'behavior:22222222-2222-4222-8222-222222222222' as Be
 const shellE2ECode = 'export default {}';
 const shellE2ECodeHash = hashBytes(new TextEncoder().encode(shellE2ECode));
 const shellE2EPackageId = 'mappkg:550e8400-e29b-41d4-a716-446655441000';
+
+type RuntimeRendererProbe = PixiRendererAdapter & {
+  readonly spritePoolByStringId: Map<
+    string,
+    {
+      readonly position: { readonly x: number; readonly y: number };
+      readonly texture: {
+        readonly source: { readonly width: number; readonly height: number };
+      };
+    }
+  >;
+};
+
+const muzzleSpriteIds = (renderer: RuntimeRendererProbe | undefined): string[] =>
+  [...(renderer?.spritePoolByStringId.keys() ?? [])]
+    .filter((id) => id.startsWith('br:muzzle:'))
+    .sort();
 
 vi.mock('../../game-host/src/.generated/bundled-behaviors.js', () => ({
   bundledBehaviorModules: [
@@ -313,6 +335,8 @@ describe('game-client template App', () => {
 
   afterEach(() => {
     activeRoomConnection = null;
+    cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -564,8 +588,293 @@ describe('game-client template App', () => {
   });
 
   it('feeds authoritative shipped room frames through HUD, audio, and results exactly once', async () => {
+    expectNoRendererHarnessErrorsForTest();
     const user = userEvent.setup();
     const playedCueIds: string[] = [];
+    const onRuntimeFrame = vi.fn();
+    let runtimeRenderer: RuntimeRendererProbe | undefined;
+    const nativeFetch = globalThis.fetch.bind(globalThis);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('data:')) {
+        return nativeFetch(input, init);
+      }
+      if (url.endsWith('/lobbies/create')) {
+        return jsonResponse(
+          {
+            roomId: 'room-1',
+            wsUrl: 'http://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-1',
+            joinCode: 'ABC234',
+            joinUrl: 'http://localhost/lobbies/join?code=ABC234',
+            playerId: 'player-1',
+            handoffToken: 'handoff-1',
+            reconnectToken: 'reconnect-1',
+            lobby: lobbySummary(),
+          },
+          201,
+        );
+      }
+      if (url.endsWith('/lobbies/room-1/ready')) {
+        return jsonResponse({
+          lobby: lobbySummary({ ready: true, canStart: true }),
+          canStart: true,
+        });
+      }
+      throw new Error(`unexpected fetch ${url} ${String(init?.method)}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        audioEngineFactory={() => createSpyAudioEngine(playedCueIds)}
+        onRuntimeFrame={onRuntimeFrame}
+        onRuntimeRendererReady={(adapter) => {
+          runtimeRenderer = adapter as RuntimeRendererProbe;
+        }}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('shell-screen-main-menu')).not.toBeNull());
+
+    await user.click(screen.getByTestId('br-quick-play'));
+    await user.click(screen.getByTestId('create-lobby'));
+    await waitFor(() => expect(screen.getByTestId('lobby-code').textContent).toBe('ABC234'));
+    await user.click(screen.getByTestId('ready-toggle'));
+    await waitFor(() =>
+      expect(screen.getByTestId('lobby-player-player-1').textContent).toContain('Ready'),
+    );
+    await user.click(screen.getByTestId('start-match'));
+    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const socket = MockWebSocket.instances[0]!;
+    expect(socket.url).toBe(
+      'ws://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-1',
+    );
+    expect(playedCueIds).not.toContain('battle-royale.item.collect');
+    expect(playedCueIds).not.toContain('battle-royale.player.hit');
+    expect(playedCueIds).not.toContain('battle-royale.player.eliminated');
+    expect(playedCueIds).not.toContain('battle-royale.zone.warning');
+    expect(playedCueIds).not.toContain('battle-royale.match.end');
+    socket.send.mockClear();
+
+    const acceptedFireFlow = acceptedBattleRoyaleFireFlow();
+    emitServerFrame(socket, acceptedFireFlow.welcomeFrame);
+    await waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('in-match')).not.toBeNull();
+    expect(screen.getByTestId('playtest-hud-player-name').textContent).toBe('You');
+    await waitFor(() => expect(runtimeRenderer).toBeDefined());
+    expect(screen.getByTestId('shipped-runtime-renderer').querySelector('canvas')).not.toBeNull();
+
+    const acceptedFireEvents = acceptedFireFlow.events;
+    expect(acceptedFireEvents).toHaveLength(2);
+    expect(acceptedFireEvents).toEqual([
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        tick: 8,
+        sourceId: 'player-1',
+        origin: { x: 17, y: 0 },
+        direction: { x: 1, y: 0 },
+      }),
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        tick: 8,
+        sourceId: 'player-2',
+        origin: expect.objectContaining({ x: expect.closeTo(10, 12), y: 27 }),
+        direction: expect.objectContaining({ x: expect.closeTo(0, 12), y: 1 }),
+      }),
+    ]);
+    expect(
+      acceptedFireFlow.acceptedDeltaFrame.updated.map((player) => {
+        if (Option.isNone(player.animation)) {
+          return { id: player.id, acceptedFireTick: undefined };
+        }
+        return {
+          id: player.id,
+          aimDeg: player.animation.value.aimDeg,
+          acceptedFireTick: player.animation.value.acceptedFireTick,
+        };
+      }),
+    ).toEqual([
+      { id: 'player-1', aimDeg: 0, acceptedFireTick: 8 },
+      { id: 'player-2', aimDeg: 90, acceptedFireTick: 8 },
+    ]);
+    for (const [sequence, event] of acceptedFireEvents.entries()) {
+      const decodedFrame = BattleRoyaleProtocol.decodeServerMessage(
+        BattleRoyaleProtocol.encodeServerMessage(
+          new BattleRoyaleProtocol.GameplayEventFrame({ sequence, event }),
+        ),
+      );
+      expect(decodedFrame).toBeInstanceOf(BattleRoyaleProtocol.GameplayEventFrame);
+      if (decodedFrame instanceof BattleRoyaleProtocol.GameplayEventFrame) {
+        expect(decodedFrame.event).toEqual(
+          expect.objectContaining({
+            _tag: 'WeaponFired',
+            sourceId: event.sourceId,
+            origin: event.origin,
+            direction: event.direction,
+          }),
+        );
+      }
+      emitServerFrame(socket, decodedFrame);
+    }
+    await waitFor(() =>
+      expect(playedCueIds.filter((cueId) => cueId === 'battle-royale.weapon.fire')).toHaveLength(2),
+    );
+    emitServerFrame(socket, acceptedFireFlow.acceptedDeltaFrame);
+    await waitFor(() =>
+      expect(onRuntimeFrame).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'delta', tick: 8 }),
+        expect.any(Uint8Array),
+      ),
+    );
+    await waitFor(() =>
+      expect(muzzleSpriteIds(runtimeRenderer)).toEqual([
+        'br:muzzle:player-1',
+        'br:muzzle:player-2',
+      ]),
+    );
+    const acceptedMuzzleSprites = [
+      runtimeRenderer?.spritePoolByStringId.get('br:muzzle:player-1'),
+      runtimeRenderer?.spritePoolByStringId.get('br:muzzle:player-2'),
+    ];
+    expect(acceptedMuzzleSprites).toEqual([
+      expect.objectContaining({
+        position: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+      }),
+      expect.objectContaining({
+        position: expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+      }),
+    ]);
+    expect(new Set(acceptedMuzzleSprites).size).toBe(2);
+
+    emitServerFrame(socket, acceptedFireFlow.replayDeltaFrame);
+    emitServerFrame(
+      socket,
+      new BattleRoyaleProtocol.GameplayEventFrame({ sequence: 1, event: acceptedFireEvents[1]! }),
+    );
+    await waitFor(() =>
+      expect(playedCueIds.filter((cueId) => cueId === 'battle-royale.weapon.fire')).toHaveLength(2),
+    );
+    await waitFor(() => expect(muzzleSpriteIds(runtimeRenderer)).toEqual([]));
+
+    const hitCueCountBeforePickup = playedCueIds.filter(
+      (cueId) => cueId === 'battle-royale.player.hit',
+    ).length;
+    emitServerFrame(
+      socket,
+      deltaFrame({
+        tick: 10,
+        updated: [
+          {
+            id: BattleRoyaleProtocol.makePlayerId('player-1'),
+            ...emptyDeltaOptions,
+            inventory: Option.some({ itemIds: ['health-pack'], capacity: 4 }),
+            pickupToast: Option.some({
+              itemKind: 'health-pack',
+              tier: 'common',
+              quantity: 1,
+              tick: 2,
+            }),
+          },
+        ],
+      }),
+    );
+    await waitFor(() => expect(playedCueIds).toContain('battle-royale.item.collect'));
+    expect(playedCueIds.filter((cueId) => cueId === 'battle-royale.player.hit')).toHaveLength(
+      hitCueCountBeforePickup,
+    );
+
+    emitServerFrame(
+      socket,
+      deltaFrame({
+        tick: 11,
+        updated: [
+          {
+            id: BattleRoyaleProtocol.makePlayerId('player-1'),
+            ...emptyDeltaOptions,
+            health: Option.some(65),
+            damageIndicator: Option.some({
+              sourceId: 'player-2',
+              angleDeg: 180,
+              amount: 35,
+              tick: 11,
+            }),
+          },
+        ],
+      }),
+    );
+    await waitFor(() => expect(playedCueIds).toContain('battle-royale.player.hit'));
+    expect(playedCueIds).not.toContain('battle-royale.zone.warning');
+
+    emitServerFrame(
+      socket,
+      deltaFrame({
+        tick: 12,
+        zone: { cx: 0, cy: 0, radius: 80 },
+      }),
+    );
+    emitServerFrame(
+      socket,
+      new BattleRoyaleProtocol.GameplayEventFrame({
+        sequence: 2,
+        event: new GameplayZonePhaseChanged({
+          tick: 12,
+          phase: 'shrinking',
+          previousPhase: 'stable',
+          secondsRemaining: 0,
+        }),
+      }),
+    );
+    await waitFor(() => expect(playedCueIds).toContain('battle-royale.zone.warning'));
+    expect(playedCueIds).not.toContain('battle-royale.player.eliminated');
+
+    emitServerFrame(
+      socket,
+      deltaFrame({
+        tick: 13,
+        updated: [
+          {
+            id: BattleRoyaleProtocol.makePlayerId('player-2'),
+            ...emptyDeltaOptions,
+            health: Option.some(0),
+            stats: Option.some({ kills: 0, deaths: 1 }),
+          },
+          {
+            id: BattleRoyaleProtocol.makePlayerId('player-1'),
+            ...emptyDeltaOptions,
+            stats: Option.some({ kills: 1, deaths: 0 }),
+          },
+        ],
+      }),
+    );
+    emitServerFrame(
+      socket,
+      new BattleRoyaleProtocol.PlayerKilled({
+        killer: BattleRoyaleProtocol.makePlayerId('player-1'),
+        victim: BattleRoyaleProtocol.makePlayerId('player-2'),
+        tick: 13,
+      }),
+    );
+    await waitFor(() => expect(playedCueIds).toContain('battle-royale.player.eliminated'));
+    expect(screen.getByTestId('in-match')).not.toBeNull();
+    expect(playedCueIds).not.toContain('battle-royale.match.end');
+
+    emitServerFrame(
+      socket,
+      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId('player-1') }),
+    );
+    emitServerFrame(
+      socket,
+      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId('player-1') }),
+    );
+
+    await waitFor(() =>
+      expect(playedCueIds.filter((cueId) => cueId === 'battle-royale.match.end')).toHaveLength(1),
+    );
+    expect(screen.getByTestId('results-screen')).not.toBeNull();
+    expect(screen.getByText('Victory')).not.toBeNull();
+  });
+
+  it('keeps shared browser authority running while local pause only opens the shell pause screen', async () => {
+    const user = userEvent.setup();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith('/lobbies/create')) {
@@ -593,9 +902,8 @@ describe('game-client template App', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App audioEngineFactory={() => createSpyAudioEngine(playedCueIds)} />);
+    render(<App />);
     await waitFor(() => expect(screen.getByTestId('shell-screen-main-menu')).not.toBeNull());
-
     await user.click(screen.getByTestId('br-quick-play'));
     await user.click(screen.getByTestId('create-lobby'));
     await waitFor(() => expect(screen.getByTestId('lobby-code').textContent).toBe('ABC234'));
@@ -606,15 +914,6 @@ describe('game-client template App', () => {
     await user.click(screen.getByTestId('start-match'));
     await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
     const socket = MockWebSocket.instances[0]!;
-    expect(socket.url).toBe(
-      'ws://localhost/rooms/room-1/connect?playerId=player-1&token=handoff-1',
-    );
-    expect(playedCueIds).not.toContain('battle-royale.item.collect');
-    expect(playedCueIds).not.toContain('battle-royale.player.hit');
-    expect(playedCueIds).not.toContain('battle-royale.player.eliminated');
-    expect(playedCueIds).not.toContain('battle-royale.zone.warning');
-    expect(playedCueIds).not.toContain('battle-royale.match.end');
-    socket.send.mockClear();
 
     emitServerFrame(
       socket,
@@ -630,20 +929,13 @@ describe('game-client template App', () => {
             inventory: { itemIds: [], capacity: 4 },
             stats: { kills: 0, deaths: 0 },
           },
-          {
-            playerId: 'player-2',
-            x: 10,
-            y: 0,
-            health: 100,
-            inventory: { itemIds: [], capacity: 4 },
-            stats: { kills: 0, deaths: 0 },
-          },
         ],
       }),
     );
-    await waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1));
-    expect(screen.getByTestId('in-match')).not.toBeNull();
-    expect(screen.getByTestId('playtest-hud-player-name').textContent).toBe('You');
+    await waitFor(() => expect(screen.getByTestId('playtest-hud-health-bar')).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByTestId('shell-screen-pause')).not.toBeNull());
 
     emitServerFrame(
       socket,
@@ -653,97 +945,26 @@ describe('game-client template App', () => {
           {
             id: BattleRoyaleProtocol.makePlayerId('player-1'),
             ...emptyDeltaOptions,
-            inventory: Option.some({ itemIds: ['health-pack'], capacity: 4 }),
-            pickupToast: Option.some({
-              itemKind: 'health-pack',
-              tier: 'common',
-              quantity: 1,
-              tick: 2,
-            }),
-          },
-        ],
-      }),
-    );
-    await waitFor(() => expect(playedCueIds).toContain('battle-royale.item.collect'));
-    expect(playedCueIds).not.toContain('battle-royale.player.hit');
-
-    emitServerFrame(
-      socket,
-      deltaFrame({
-        tick: 3,
-        updated: [
-          {
-            id: BattleRoyaleProtocol.makePlayerId('player-1'),
-            ...emptyDeltaOptions,
             health: Option.some(65),
-            damageIndicator: Option.some({
-              sourceId: 'player-2',
-              angleDeg: 180,
-              amount: 35,
-              tick: 3,
-            }),
           },
         ],
       }),
-    );
-    await waitFor(() => expect(playedCueIds).toContain('battle-royale.player.hit'));
-    expect(playedCueIds).not.toContain('battle-royale.zone.warning');
-
-    emitServerFrame(
-      socket,
-      deltaFrame({
-        tick: 4,
-        zone: { cx: 0, cy: 0, radius: 80 },
-      }),
-    );
-    await waitFor(() => expect(playedCueIds).toContain('battle-royale.zone.warning'));
-    expect(playedCueIds).not.toContain('battle-royale.player.eliminated');
-
-    emitServerFrame(
-      socket,
-      deltaFrame({
-        tick: 5,
-        updated: [
-          {
-            id: BattleRoyaleProtocol.makePlayerId('player-2'),
-            ...emptyDeltaOptions,
-            health: Option.some(0),
-            stats: Option.some({ kills: 0, deaths: 1 }),
-          },
-          {
-            id: BattleRoyaleProtocol.makePlayerId('player-1'),
-            ...emptyDeltaOptions,
-            stats: Option.some({ kills: 1, deaths: 0 }),
-          },
-        ],
-      }),
-    );
-    emitServerFrame(
-      socket,
-      new BattleRoyaleProtocol.PlayerKilled({
-        killer: BattleRoyaleProtocol.makePlayerId('player-1'),
-        victim: BattleRoyaleProtocol.makePlayerId('player-2'),
-        tick: 5,
-      }),
-    );
-    await waitFor(() => expect(playedCueIds).toContain('battle-royale.player.eliminated'));
-    expect(screen.getByTestId('in-match')).not.toBeNull();
-    expect(playedCueIds).not.toContain('battle-royale.match.end');
-
-    emitServerFrame(
-      socket,
-      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId('player-1') }),
-    );
-    emitServerFrame(
-      socket,
-      new BattleRoyaleProtocol.GameOver({ winner: BattleRoyaleProtocol.makePlayerId('player-1') }),
     );
 
     await waitFor(() =>
-      expect(playedCueIds.filter((cueId) => cueId === 'battle-royale.match.end')).toHaveLength(1),
+      expect(screen.getByTestId('playtest-hud-health-bar').getAttribute('aria-valuenow')).toBe(
+        '65',
+      ),
     );
-    expect(screen.getByTestId('results-screen')).not.toBeNull();
-    expect(screen.getByText('Victory')).not.toBeNull();
+    expect(screen.getByTestId('shell-screen-pause')).not.toBeNull();
+    expect(
+      fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .filter((url) => url.includes('/lobbies/')),
+    ).toEqual([
+      'http://localhost:3000/lobbies/create',
+      'http://localhost:3000/lobbies/room-1/ready',
+    ]);
   });
 
   it('reconnects the shipped runtime socket through the canonical room endpoint', async () => {

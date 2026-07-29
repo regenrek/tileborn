@@ -14,6 +14,8 @@ describe('GameplayEvent', () => {
         tick: 1,
         sourceId: 'player-1',
         weaponId: WEAPON_ID,
+        origin: { x: 1, y: 2 },
+        direction: { x: 1, y: 0 },
         damage: 25,
         ammoRemaining: 4,
       },

@@ -14,6 +14,7 @@ import {
   RuntimeMapPackageVisuals,
   RuntimeObjectPlacement,
   TileborneMap,
+  authoringPixelToRuntimeTile,
   deriveOverlayVisuals,
   deriveWeaponVisuals,
   makeRuntimeMapPackageId,
@@ -156,16 +157,18 @@ const projectPlacements = (
   }
   return Result.succeed(
     map.objects.map(
-      (object) =>
-        new RuntimeObjectPlacement({
+      (object) => {
+        const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
+        return new RuntimeObjectPlacement({
           objectId: object.id,
           typeId: object.kind,
-          x: object.x,
-          y: object.y,
+          x: tilePosition.x,
+          y: tilePosition.y,
           ...(Object.keys(object.properties).length > 0
             ? { instanceProperties: object.properties }
             : {}),
-        }),
+        });
+      },
     ),
   );
 };

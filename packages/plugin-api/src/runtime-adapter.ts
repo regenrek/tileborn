@@ -7,12 +7,18 @@ export interface RuntimeAdapterComponentStore<T extends object> {
   readonly entries: () => Iterable<[number, T]>;
 }
 
+export interface RuntimeAdapterWorldCheckpoint {
+  readonly nextEntity: number;
+}
+
 /** Minimal worker-safe world contract. Plugins may extend it with typed helpers. */
 export interface RuntimeAdapterWorld {
   readonly createEntity: () => number;
   readonly destroyEntity: (entity: number) => void;
   readonly registerComponent: <T extends object>(name: string) => RuntimeAdapterComponentStore<T>;
   readonly getComponent: <T extends object>(name: string) => RuntimeAdapterComponentStore<T>;
+  readonly createCheckpoint?: () => RuntimeAdapterWorldCheckpoint;
+  readonly restoreCheckpoint?: (checkpoint: RuntimeAdapterWorldCheckpoint) => void;
 }
 
 /** Host capabilities shared by every bundled runtime adapter. */

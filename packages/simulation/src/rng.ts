@@ -19,8 +19,17 @@ export interface SeededRng {
    * is 256-bit) and cannot reconstruct the generator — use {@link clone} for that.
    */
   readonly state: () => number;
+  /** Full serializable xoshiro lane state for exact checkpoint/resume. */
+  readonly snapshot: () => SeededRngSnapshot;
   /** A new generator resuming from this generator's exact current state. */
   readonly clone: () => SeededRng;
+}
+
+export interface SeededRngSnapshot {
+  readonly s0: string;
+  readonly s1: string;
+  readonly s2: string;
+  readonly s3: string;
 }
 
 const MASK_64 = (1n << 64n) - 1n;
@@ -106,6 +115,12 @@ const fromLanes = (lanes: Lanes): SeededRng => {
     nextFloat,
     nextInt,
     state: () => Number(lanes.s0 & MASK_32) >>> 0,
+    snapshot: () => ({
+      s0: lanes.s0.toString(10),
+      s1: lanes.s1.toString(10),
+      s2: lanes.s2.toString(10),
+      s3: lanes.s3.toString(10),
+    }),
     clone: () => fromLanes({ s0: lanes.s0, s1: lanes.s1, s2: lanes.s2, s3: lanes.s3 }),
   };
 };
@@ -119,3 +134,19 @@ export const createSeededRng = (seed: number): SeededRng => {
   const [s0, s1, s2, s3] = splitSeed(normalizeSeed(seed));
   return fromLanes({ s0, s1, s2, s3 });
 };
+
+const parseLane = (value: string): bigint => {
+  if (!/^(0|[1-9]\d*)$/u.test(value)) {
+    throw new TypeError('SeededRngSnapshot lanes must be unsigned decimal strings');
+  }
+  const lane = BigInt(value);
+  return lane;
+};
+
+export const createSeededRngFromSnapshot = (snapshot: SeededRngSnapshot): SeededRng =>
+  fromLanes({
+    s0: parseLane(snapshot.s0),
+    s1: parseLane(snapshot.s1),
+    s2: parseLane(snapshot.s2),
+    s3: parseLane(snapshot.s3),
+  });

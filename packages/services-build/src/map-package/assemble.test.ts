@@ -300,6 +300,55 @@ describe('assembleRuntimeMapPackage (ADR-0030)', () => {
     expect(loaded.manifest.entryHashes['assets/ab/sprite.png']).toBe(loaded.assets[0]?.hash);
   });
 
+  it('converts authored map pixels to runtime tile placements during package assembly', async () => {
+    const dir = await makeTempDir();
+    const pixelMap = decodePersistedTileborneMapJson({
+      id: `map:${UUID}`,
+      schemaVersion: 1,
+      size: { width: 8, height: 8 },
+      tileSize: { width: 32, height: 16 },
+      layers: [
+        {
+          kind: 'object',
+          id: `layer:${UUID}`,
+          name: 'Objects',
+          visible: true,
+          opacity: 1,
+          objectIds: [`object:${UUID}`],
+        },
+      ],
+      objects: [
+        {
+          id: `object:${UUID}`,
+          kind: `gobj:${TYPE_UUID}`,
+          x: 96,
+          y: 64,
+          layerId: `layer:${UUID}`,
+          properties: {},
+        },
+      ],
+      properties: { [PLUGIN]: { maxPlayers: 4 } },
+    });
+    let exportedPlacement: { readonly x: number; readonly y: number } | undefined;
+
+    const assembled = await Effect.runPromise(
+      assembleRuntimeMapPackage({
+        ...baseInput(dir),
+        map: pixelMap,
+        modeDataExporter: (context) => {
+          exportedPlacement = context.placements[0];
+          return Result.succeed({});
+        },
+      }),
+    );
+
+    expect(assembled.mapPackage.placements[0]).toMatchObject({ x: 3, y: 4 });
+    expect(exportedPlacement).toMatchObject({ x: 3, y: 4 });
+
+    const loaded = Result.getOrThrow(await loadRuntimeMapPackage(fsReader(dir)));
+    expect(loaded.placements[0]).toMatchObject({ x: 3, y: 4 });
+  });
+
   it("calls the active mode's exporter with the neutral projections and namespaces its section", async () => {
     const dir = await makeTempDir();
     let seenSettings: unknown;

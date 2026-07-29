@@ -49,6 +49,7 @@ export interface GameRuntimeApi {
   readonly start: () => Effect.Effect<void>;
   readonly pause: () => Effect.Effect<void>;
   readonly step: (ticks?: number) => Effect.Effect<number>;
+  readonly restoreTick: (tick: number) => Effect.Effect<number>;
   readonly resume: () => Effect.Effect<void>;
   readonly stop: () => Effect.Effect<void, RendererError | TransportError>;
   readonly state: () => Effect.Effect<GameRuntimeState>;
@@ -166,6 +167,10 @@ export const makeGameRuntime = (): GameRuntimeApi => {
     step: (ticks = 1) =>
       Effect.sync(() => {
         return ensureState().loop.step(ticks);
+      }),
+    restoreTick: (tick) =>
+      Effect.sync(() => {
+        return ensureState().loop.restoreTick(tick);
       }),
     resume: () =>
       Effect.sync(() => {

@@ -18,6 +18,12 @@ export * from './project/index.js';
 export * from './settings/plugin-settings.js';
 export * from './catalog/index.js';
 export * from './map-package/index.js';
+export {
+  authoringPixelToRuntimeTile,
+  type AuthoringPixelPoint,
+  type AuthoringPixelToRuntimeTileSize,
+  type RuntimeTilePoint,
+} from './map-package/index.js';
 export * from './map/index.js';
 export * from './map/decode.js';
 export * from './map/migrate.js';

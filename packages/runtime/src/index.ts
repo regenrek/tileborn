@@ -7,6 +7,7 @@ export * from './ecs/components.js';
 export * from './ecs/systems.js';
 export * from './ecs/world.js';
 export * from './input/input.js';
+export * from './input/edge-buffer.js';
 export * from './input/resolver.js';
 export * from './loop/game-loop.js';
 export * from './map-package/index.js';

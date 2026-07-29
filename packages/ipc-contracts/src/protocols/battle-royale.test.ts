@@ -2,6 +2,7 @@ import { Option, Schema } from 'effect';
 import { pack } from 'msgpackr';
 import { describe, expect, it } from 'vitest';
 
+import { GameplayWeaponFired } from '../contracts/gameplay-event.ts';
 import {
   BattleRoyaleMessage,
   BattleRoyaleAbility,
@@ -9,6 +10,7 @@ import {
   DeployableSnapshot,
   DeployableUpdate,
   GameOver,
+  GameplayEventFrame,
   Heartbeat,
   ObjectSnapshot,
   PlayerInput,
@@ -30,6 +32,7 @@ import {
 } from './battle-royale.ts';
 
 const player = (suffix: string) => makePlayerId(`player-${suffix}`);
+const weaponId = 'weapon:550e8400-e29b-41d4-a716-446655440000';
 
 const sampleMessages: readonly Schema.Schema.Type<typeof BattleRoyaleMessage>[] = [
   new PlayerInput({
@@ -233,6 +236,18 @@ const sampleMessages: readonly Schema.Schema.Type<typeof BattleRoyaleMessage>[] 
   new GameOver({
     winner: player('1'),
   }),
+  new GameplayEventFrame({
+    sequence: 0,
+    event: new GameplayWeaponFired({
+      tick: 6,
+      sourceId: player('1') as never,
+      weaponId: weaponId as never,
+      origin: { x: 1, y: 2 },
+      direction: { x: 1, y: 0 },
+      damage: 25,
+      ammoRemaining: 1,
+    }),
+  }),
   new WireError({
     code: 'invalid_input',
     message: 'tick out of range',
@@ -276,6 +291,35 @@ describe('BattleRoyaleProtocol wire codec', () => {
 
     const bytes = encodeMessage(delta);
     expect(bytes.byteLength).toBeLessThan(1024);
+  });
+
+  it('transports gameplay events as standalone frames ordered alongside snapshots', () => {
+    const delta = new DeltaSnapshot({
+      tick: 8,
+      serverTimestampMs: 1_050,
+      removed: [],
+      updated: [],
+      projectilesUpdated: [],
+      projectilesRemoved: [],
+      zone: Option.none(),
+    });
+    const event = new GameplayWeaponFired({
+      tick: 8,
+      sourceId: player('1') as never,
+      weaponId: weaponId as never,
+      origin: { x: 1, y: 2 },
+      direction: { x: 1, y: 0 },
+      damage: 25,
+      ammoRemaining: 1,
+    });
+    const frames = [
+      decodeMessage(encodeMessage(delta)),
+      decodeMessage(encodeMessage(new GameplayEventFrame({ sequence: 1, event }))),
+    ];
+
+    expect(frames).toEqual([delta, new GameplayEventFrame({ sequence: 1, event })]);
+    expect('gameplayEvents' in (frames[0] as object)).toBe(false);
+    expect(frames[1]).toBeInstanceOf(GameplayEventFrame);
   });
 
   it('decodes PlayerInput frames without optional aim or swap fields', () => {

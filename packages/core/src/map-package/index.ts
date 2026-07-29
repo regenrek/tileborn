@@ -100,6 +100,39 @@ export class RuntimeObjectPlacement extends Schema.Class<RuntimeObjectPlacement>
   instanceProperties: Schema.optional(JsonObject),
 }) {}
 
+/** Authored object position in pixel units (the durable map/editor coordinate space). */
+export interface AuthoringPixelPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Runtime object position in tile units (the neutral map-package coordinate space). */
+export interface RuntimeTilePoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Map tile dimensions in pixels. Width and height are independent axes. */
+export interface AuthoringPixelToRuntimeTileSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Convert authored pixel coordinates into neutral runtime tile coordinates.
+ *
+ * The map-package assembler is the only production conversion boundary; this
+ * helper keeps the contract core-owned so call sites cannot drift into
+ * duplicated axis or rounding policy.
+ */
+export const authoringPixelToRuntimeTile = (
+  point: AuthoringPixelPoint,
+  tileSize: AuthoringPixelToRuntimeTileSize,
+): RuntimeTilePoint => ({
+  x: point.x / tileSize.width,
+  y: point.y / tileSize.height,
+});
+
 /** Where a merged catalog entry came from — origin attribution for tooling/diagnostics. */
 export const RuntimeCatalogEntryOrigin = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal('project') }),

@@ -1,0 +1,27 @@
+{
+  "ai": false,
+  "assumptions": [],
+  "backend": false,
+  "generated_at": "2026-07-28T15:36:23.249024Z",
+  "included_documents": [
+    "README.md",
+    "PRODUCT_SPEC.md",
+    "UX_FLOWS.md",
+    "DESIGN_SYSTEM_SPEC.md",
+    "TECH_ARCHITECTURE.md",
+    "ADRS.md",
+    "AI_SPEC.md",
+    "SAFETY_PRIVACY_SECURITY.md",
+    "API_AND_DATA_MODEL.md",
+    "CLIENT_IMPLEMENTATION_SPEC.md",
+    "BACKEND_IMPLEMENTATION_SPEC.md",
+    "ANALYTICS_OBSERVABILITY_SPEC.md",
+    "QA_ACCEPTANCE_TESTS.md",
+    "RELEASE_READINESS.md",
+    "TASKS.md",
+    "REFERENCES.md"
+  ],
+  "platform": "desktop",
+  "source_prompt": "Playable Controls and Runtime Responsiveness",
+  "title": "Playable Controls and Runtime Responsiveness"
+}

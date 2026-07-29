@@ -71,6 +71,7 @@ import {
   GameBuildArtifact,
   GameBuildOptions,
   PlaytestService,
+  PlaytestSessionNotFoundError,
   RuntimeDeployService,
   RuntimeDeployTarget,
   activePlaytestPluginIds,
@@ -122,6 +123,7 @@ import { createDesktopUpdateHandlers } from './desktop-update-handlers.js';
 import { createDesktopUpdaterController, type DesktopUpdaterController } from '../updater.js';
 import {
   clearPlaytestRuntimeInput,
+  controlPlaytestRuntimeLifecycle,
   controlPlaytestBehaviorDebug,
   emitPlaytestShellBehaviorEvent,
   getPlaytestBehaviorDebugSnapshot,
@@ -134,7 +136,7 @@ import {
   setPlaytestRuntimeInput,
   setPlaytestRuntimeSnapshotNotifier,
   startPlaytestRuntimeHost,
-  stopPlaytestRuntimeHost,
+  stopOwnedPlaytestRuntimeHost,
 } from '../playtest-runtime-host.js';
 import { CatalogService } from '../catalog/index.js';
 import { startDesktopLocalGameHost, stopDesktopLocalGameHost } from '../local-game-host-manager.js';
@@ -437,6 +439,40 @@ const wireTrigger = <E, R>(
   Stream.runForEach(stream, () => {
     beforeEmit?.();
     return emit(triggerPayload);
+  });
+
+export const stopOwnedPlaytestSession = (input: {
+  readonly sessionId: PlaytestSession['id'];
+  readonly projectId: ProjectId;
+  readonly mapId: MapId;
+}) =>
+  Effect.gen(function* () {
+    const playtest = yield* PlaytestService;
+    const sessions = yield* playtest.list();
+    const session = sessions.find((entry) => entry.id === input.sessionId);
+    if (session === undefined) {
+      return yield* new PlaytestSessionNotFoundError({
+        sessionId: input.sessionId,
+        message: `playtest session not found: ${input.sessionId}`,
+      });
+    }
+    if (session.projectId !== input.projectId || session.mapId !== input.mapId) {
+      yield* Effect.fail(
+        new Error(
+          `playtest session owner mismatch for ${input.sessionId}: expected ${session.projectId}/${session.mapId}, received ${input.projectId}/${input.mapId}`,
+        ),
+      );
+    }
+    const stoppedRuntime = yield* Effect.tryPromise({
+      try: () => stopOwnedPlaytestRuntimeHost(input),
+      catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+    });
+    if (!stoppedRuntime) {
+      yield* Effect.fail(
+        new Error(`playtest runtime owner mismatch or inactive runtime for ${input.sessionId}`),
+      );
+    }
+    return yield* playtest.stop(input.sessionId);
   });
 
 const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
@@ -2768,6 +2804,7 @@ const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
                     startPlaytestRuntimeHost({
                       sessionId: session.id,
                       projectId,
+                      mapId,
                       packageDirectory: artifactDirectory,
                       pluginInstalls,
                       ...(selectedPlayerModelId === undefined ? {} : { selectedPlayerModelId }),
@@ -2793,14 +2830,12 @@ const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
           }),
         ),
       )
-      .add('tileborne:playtest:stop', ({ sessionId }) =>
+      .add('tileborne:playtest:stop', ({ sessionId, projectId, mapId }) =>
         ipcCatchAll('tileborne:playtest:stop')(
           Effect.gen(function* () {
-            yield* Effect.tryPromise({
-              try: () => stopPlaytestRuntimeHost(sessionId),
-              catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
-            });
-            const session = yield* playtest.stop(sessionId);
+            const session = yield* stopOwnedPlaytestSession({ sessionId, projectId, mapId }).pipe(
+              Effect.provideService(PlaytestService, playtest),
+            );
             return { session: toPlaytestSessionView(session) };
           }),
         ),
@@ -2834,6 +2869,14 @@ const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
             try: async () => ({
               snapshot: { ...(await controlPlaytestBehaviorDebug(sessionId, command)), sessionId },
             }),
+            catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
+          }),
+        ),
+      )
+      .add('tileborne:playtest:lifecycleControl', ({ sessionId, command }) =>
+        ipcCatchAll('tileborne:playtest:lifecycleControl')(
+          Effect.try({
+            try: () => ({ status: controlPlaytestRuntimeLifecycle(sessionId, command) }),
             catch: (cause) => new Error(cause instanceof Error ? cause.message : String(cause)),
           }),
         ),
@@ -3242,6 +3285,7 @@ const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
       maps,
       assets,
       registry,
+      installer,
       jobs,
       builds,
       exports,
@@ -3251,6 +3295,8 @@ const buildHandlers = (desktopUpdater: DesktopUpdaterController) =>
       behaviorReferenceIndex,
     };
   });
+
+export const buildMainIpcHandlersForTests = buildHandlers;
 
 export interface MainIpcRegistration {
   readonly handlers: RegisteredHandlers;

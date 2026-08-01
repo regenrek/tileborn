@@ -33,7 +33,7 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /**
  * Room-supplied encoded `RuntimeMapPackage`: the bundled default with a
- * single authored spawn at (10, 20) and one loot crate at (12, 18).
+ * single authored tile-space spawn at (10, 20) and one loot crate at (12, 18).
  */
 const makeMapPackage = (): unknown => {
   const pkg = clone(bundledMapPackages[0]!.mapPackage) as {
@@ -153,6 +153,9 @@ describe('createBundledPluginLoader', () => {
   it('accepts shoot-only bundled runtime input without a movement direction', async () => {
     const frames: Uint8Array[] = [];
     const loader = createBundledPluginLoader({
+      // Keep this protocol/input test independent from the default arena's
+      // edge-distributed fair-spawn layout.
+      mapPackage: makeMapPackage(),
       getPlayerIds: () => ['player-1'],
       emitFrame: (frame) => {
         frames.push(frame);
@@ -167,7 +170,7 @@ describe('createBundledPluginLoader', () => {
               interact: false,
               drop: false,
               abilities: [],
-              aimDeg: 90,
+              aimDeg: 0,
               swapSlot: 2,
             }
           : undefined,
@@ -222,11 +225,11 @@ describe('createBundledPluginLoader', () => {
 
     expect(welcome?._tag).toBe('WelcomeSnapshot');
     if (welcome?._tag === 'WelcomeSnapshot') {
-      expect(welcome.players[0]?.x).toBe(10);
-      expect(welcome.players[0]?.y).toBe(20);
+      expect(welcome.players[0]?.x).toBe(320);
+      expect(welcome.players[0]?.y).toBe(640);
       expect(
         welcome.objects?.some(
-          (object) => object.x === 12 && object.y === 18 && object.lootSource !== undefined,
+          (object) => object.x === 384 && object.y === 576 && object.lootSource !== undefined,
         ),
       ).toBe(true);
     }

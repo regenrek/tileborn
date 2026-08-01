@@ -1,4 +1,5 @@
 export * from './client.js';
+export * from './local-transform-prediction.js';
 export * from './protocol.js';
 export * from './snapshot-entity-store.js';
 export * from './snapshot-interpolator.js';

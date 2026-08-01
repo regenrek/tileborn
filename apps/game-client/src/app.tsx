@@ -33,6 +33,7 @@ import {
   DEFAULT_ROOM_RECONNECT_PATH,
   makeBrowserWebSocketTransport,
   makeNetFrameClient,
+  SnapshotEntityStore,
 } from '@tileborne/runtime/net';
 import {
   createBattleRoyaleBundledAssets,
@@ -42,6 +43,7 @@ import {
   IMPACT_BURST_TEXTURE_ASSET_ID,
   PLAYER_TEXTURE_ASSET_ID,
   WEAPON_RIFLE_TEXTURE_ASSET_ID,
+  encodeClientInputFrame,
 } from '@tileborne/plugin-battle-royale';
 import {
   createBattleRoyaleProjector,
@@ -55,7 +57,7 @@ import {
 import { BR_PRIMARY_WEAPON_ID } from '@tileborne/plugin-battle-royale/constants';
 import { battleRoyaleMenuSections } from '@tileborne/plugin-battle-royale/menu';
 import type { RenderableEntity, RuntimeGameShellProjection } from '@tileborne/runtime';
-import { PixiRendererAdapter } from '@tileborne/runtime';
+import { interpolateRenderableEntities, PixiRendererAdapter } from '@tileborne/runtime';
 import { Effect } from 'effect';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
@@ -70,6 +72,11 @@ import {
   shippedRuntimeResults,
   type ShippedRuntimeState,
 } from './shipped-runtime-stream.js';
+import {
+  applyLocalRuntimePredictionToEntities,
+  LocalRuntimePredictionController,
+  type LocalInputDirection,
+} from './local-runtime-prediction.js';
 
 const DEFAULT_LOBBY_MAP_ID = 'map:fixture';
 const LOBBY_RECONNECT_STORAGE_KEY = `tileborne.game-client.lobby-reconnect.v${PERSISTED_SCHEMA_VERSIONS.lobbyReconnect}`;
@@ -77,6 +84,12 @@ const LOBBY_RECONNECT_STORAGE_KEY = `tileborne.game-client.lobby-reconnect.v${PE
 interface ShippedRuntimeRenderState {
   readonly snapshot: unknown;
   readonly entities: readonly RenderableEntity[];
+  readonly processedInputSeqByPlayerId: Readonly<Record<string, number>>;
+}
+
+interface BrowserRuntimeInputState {
+  readonly seq: number;
+  readonly dir: LocalInputDirection | undefined;
 }
 
 interface AppProps {
@@ -310,10 +323,24 @@ export function App({
   const lobbyClient = useMemo(() => createGameHostLobbyClient(), []);
   const audioSettingsStore = useMemo(() => createAudioUserSettingsStore(), []);
   const runtimeClientRef = useRef<ReturnType<typeof makeNetFrameClient> | null>(null);
+  const localPredictionControllerRef = useRef(new LocalRuntimePredictionController());
+  const browserInputRef = useRef<BrowserRuntimeInputState>({ seq: 0, dir: undefined });
+  const runtimeTickRef = useRef(0);
+  const runtimeLocalPlayerIdRef = useRef<string | undefined>(undefined);
   const shippedProjector = useMemo(
     () => createBattleRoyaleProjector(shippedRuntimeProjectorConfig()),
     [],
   );
+  const runtimeSnapshotStoreRef = useRef<SnapshotEntityStore | undefined>(undefined);
+  if (runtimeSnapshotStoreRef.current === undefined) {
+    runtimeSnapshotStoreRef.current = new SnapshotEntityStore(shippedProjector.mergeFrame, {
+      enableInterpolation: true,
+      interpolationDelayMs: 100,
+      ...(shippedProjector.getFrameTimestamp === undefined
+        ? {}
+        : { getFrameTimestamp: shippedProjector.getFrameTimestamp }),
+    });
+  }
   const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>('idle');
   const [lobbyMessage, setLobbyMessage] = useState<string | undefined>(undefined);
   const [lobbyError, setLobbyError] = useState<string | undefined>(undefined);
@@ -342,6 +369,7 @@ export function App({
   const [runtimeRender, setRuntimeRender] = useState<ShippedRuntimeRenderState>(() => ({
     snapshot: undefined,
     entities: [],
+    processedInputSeqByPlayerId: {},
   }));
   const [shellNavigationRequests, setShellNavigationRequests] = useState<
     ReadonlyArray<SequencedRuntimeShellNavigationRequest>
@@ -548,9 +576,137 @@ export function App({
     ? { roomId: storedReconnect.roomId, playerId: storedReconnect.playerId }
     : null;
 
+  useEffect(() => {
+    runtimeTickRef.current = runtime.tickCount;
+    runtimeLocalPlayerIdRef.current = runtime.localPlayerId;
+  }, [runtime.localPlayerId, runtime.tickCount]);
+
+  useEffect(() => {
+    let rafHandle = 0;
+    const renderPredictedFrame = (): void => {
+      rafHandle = requestAnimationFrame(renderPredictedFrame);
+      setRuntimeRender((current) => {
+        const store = runtimeSnapshotStoreRef.current;
+        const latestSnapshot = store?.getCurrentFullState();
+        if (store === undefined || latestSnapshot === undefined) {
+          return current;
+        }
+        const localPlayerId = runtime.localPlayerId;
+        const interpolated = store.sampleInterpolatedFullState(performance.now());
+        const currentSnapshot = interpolated?.current ?? latestSnapshot;
+        const currentEntities = shippedProjector.project(currentSnapshot);
+        const previousEntities =
+          interpolated?.previous === undefined
+            ? []
+            : shippedProjector.project(interpolated.previous);
+        const remoteInterpolatedEntities = interpolateRenderableEntities(
+          currentEntities,
+          previousEntities,
+          interpolated?.alpha ?? 1,
+        );
+        const latestEntities = shippedProjector.project(latestSnapshot);
+        const localEntity =
+          localPlayerId === undefined || localPlayerId === null
+            ? undefined
+            : latestEntities.find((entity) => entity.id === `br:player:${localPlayerId}`);
+        if (localEntity === undefined || localPlayerId === undefined || localPlayerId === null) {
+          localPredictionControllerRef.current.reset();
+          return current;
+        }
+        const entities = applyLocalRuntimePredictionToEntities(
+          remoteInterpolatedEntities,
+          {
+            entity: localEntity,
+            acknowledgedInputSequence: current.processedInputSeqByPlayerId[localPlayerId] ?? -1,
+          },
+          localPredictionControllerRef.current,
+          performance.now(),
+        );
+        return entities === current.entities ? current : { ...current, entities };
+      });
+    };
+    rafHandle = requestAnimationFrame(renderPredictedFrame);
+    return () => cancelAnimationFrame(rafHandle);
+  }, [runtime.localPlayerId, shippedProjector]);
+
+  useEffect(() => {
+    const pressed = new Set<string>();
+    const directionFromKeys = (): LocalInputDirection | undefined => {
+      const up = pressed.has('KeyW') || pressed.has('ArrowUp');
+      const down = pressed.has('KeyS') || pressed.has('ArrowDown');
+      const left = pressed.has('KeyA') || pressed.has('ArrowLeft');
+      const right = pressed.has('KeyD') || pressed.has('ArrowRight');
+      const x = (right ? 1 : 0) - (left ? 1 : 0);
+      const y = (down ? 1 : 0) - (up ? 1 : 0);
+      if (x === 0 && y === 0) return undefined;
+      if (x === 1 && y === 0) return 0;
+      if (x === 1 && y === 1) return 1;
+      if (x === 0 && y === 1) return 2;
+      if (x === -1 && y === 1) return 3;
+      if (x === -1 && y === 0) return 4;
+      if (x === -1 && y === -1) return 5;
+      if (x === 0 && y === -1) return 6;
+      return 7;
+    };
+    const emitInputIfChanged = (): void => {
+      const client = runtimeClientRef.current;
+      const localPlayerId = runtimeLocalPlayerIdRef.current;
+      if (client === null || localPlayerId === undefined) {
+        return;
+      }
+      const dir = directionFromKeys();
+      if (dir === browserInputRef.current.dir) {
+        return;
+      }
+      const seq = browserInputRef.current.seq + 1;
+      browserInputRef.current = { seq, dir };
+      localPredictionControllerRef.current.recordInput({ sequence: seq, dir });
+      void client
+        .sendFramePromise(
+          encodeClientInputFrame({
+            tick: runtimeTickRef.current,
+            seq,
+            ...(dir === undefined ? {} : { dir }),
+            shoot: false,
+            reload: false,
+            interact: false,
+            drop: false,
+            abilities: [],
+          }),
+        )
+        .catch(() => undefined);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      pressed.add(event.code);
+      emitInputIfChanged();
+    };
+    const onKeyUp = (event: KeyboardEvent): void => {
+      pressed.delete(event.code);
+      emitInputIfChanged();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
   const beginMatch = useCallback(() => {
     setRuntime(initialShippedRuntimeState(lobbySession?.playerId));
-    setRuntimeRender({ snapshot: undefined, entities: [] });
+    browserInputRef.current = { seq: 0, dir: undefined };
+    localPredictionControllerRef.current.reset();
+    runtimeSnapshotStoreRef.current = new SnapshotEntityStore(shippedProjector.mergeFrame, {
+      enableInterpolation: true,
+      interpolationDelayMs: 100,
+      ...(shippedProjector.getFrameTimestamp === undefined
+        ? {}
+        : { getFrameTimestamp: shippedProjector.getFrameTimestamp }),
+    });
+    setRuntimeRender({ snapshot: undefined, entities: [], processedInputSeqByPlayerId: {} });
     setShellNavigationRequests([]);
     if (!lobbySession?.wsUrl) {
       return;
@@ -588,10 +744,18 @@ export function App({
           void client.sendFramePromise(buildSnapshotAckFrame(frame.tick)).catch(() => undefined);
           setRuntimeRender((current) => {
             const decodedRenderFrame = decodeServerFrame(data);
-            const snapshot =
-              shippedProjector.mergeFrame?.(current.snapshot, decodedRenderFrame) ??
-              decodedRenderFrame;
-            return { snapshot, entities: shippedProjector.project(snapshot) };
+            const store = runtimeSnapshotStoreRef.current;
+            if (store === undefined || decodedRenderFrame === undefined) {
+              return current;
+            }
+            store.apply(decodedRenderFrame);
+            const snapshot = store.getCurrentFullState();
+            return {
+              snapshot,
+              entities: shippedProjector.project(snapshot),
+              processedInputSeqByPlayerId:
+                frame.processedInputSeqByPlayerId ?? current.processedInputSeqByPlayerId,
+            };
           });
         }
         setRuntime((state) => applyShippedRuntimeServerFrame(state, frame));

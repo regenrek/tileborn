@@ -3,6 +3,7 @@ import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle
 import { encodeServerFrame } from '@tileborne/plugin-battle-royale';
 import { acceptedBattleRoyaleFireFlow } from '@tileborne/plugin-battle-royale/test';
 import type { PixiRendererAdapter } from '@tileborne/runtime';
+import { Option } from 'effect';
 import { createRoot } from 'react-dom/client';
 
 import { App } from '../app.js';
@@ -12,6 +13,7 @@ interface SmokeWindow {
     readonly playedCueIds: readonly string[];
     readonly emitAcceptedFireFlow: () => void;
     readonly emitReplayFlow: () => void;
+    readonly emitRemoteMovementFlow: () => void;
     readonly muzzleIds: () => readonly string[];
     readonly muzzleSnapshot: () => readonly {
       readonly id: string;
@@ -23,6 +25,9 @@ interface SmokeWindow {
     }[];
     readonly socketUrl: () => string | undefined;
     readonly sentCount: () => number;
+    readonly sentInputSeqs: () => readonly number[];
+    readonly spriteIds: () => readonly string[];
+    readonly spritePosition: (id: string) => { readonly x: number; readonly y: number } | undefined;
   };
 }
 
@@ -198,6 +203,28 @@ const spritePool = (): Map<string, unknown> =>
     emitFrame(flow.replayDeltaFrame);
     emitFrame(new BattleRoyaleProtocol.GameplayEventFrame({ sequence: 1, event: flow.events[1]! }));
   },
+  emitRemoteMovementFlow: () => {
+    const remoteUpdate = flow.acceptedDeltaFrame.updated.find(
+      (update) => update.id === 'player-2',
+    );
+    if (remoteUpdate === undefined) {
+      throw new Error('accepted fire fixture has no remote player update');
+    }
+    emitFrame(
+      new BattleRoyaleProtocol.DeltaSnapshot({
+        ...flow.replayDeltaFrame,
+        tick: flow.replayDeltaFrame.tick + 1,
+        serverTimestampMs: flow.replayDeltaFrame.serverTimestampMs + 100,
+        updated: [
+          {
+            ...remoteUpdate,
+            x: Option.some(110),
+            y: Option.some(10),
+          },
+        ],
+      }),
+    );
+  },
   muzzleIds: () => [...spritePool().keys()].filter((id) => id.startsWith('br:muzzle:')),
   muzzleSnapshot: () =>
     ['br:muzzle:player-1', 'br:muzzle:player-2'].map((id, index, sprites) => {
@@ -216,6 +243,29 @@ const spritePool = (): Map<string, unknown> =>
     }),
   socketUrl: () => SmokeWebSocket.instances[0]?.url,
   sentCount: () => SmokeWebSocket.instances[0]?.sent.length ?? 0,
+  sentInputSeqs: () =>
+    (SmokeWebSocket.instances[0]?.sent ?? []).flatMap((frame) => {
+      const bytes =
+        frame instanceof Uint8Array
+          ? frame
+          : frame instanceof ArrayBuffer
+            ? new Uint8Array(frame)
+            : undefined;
+      if (bytes === undefined) return [];
+      try {
+        const decoded = BattleRoyaleProtocol.decodeClientMessage(bytes);
+        return decoded._tag === 'PlayerInput' ? [decoded.seq] : [];
+      } catch {
+        return [];
+      }
+    }),
+  spriteIds: () => [...spritePool().keys()],
+  spritePosition: (id: string) => {
+    const sprite = spritePool().get(id) as
+      | { readonly position: { readonly x: number; readonly y: number } }
+      | undefined;
+    return sprite === undefined ? undefined : { x: sprite.position.x, y: sprite.position.y };
+  },
 };
 
 createRoot(document.getElementById('root')!).render(

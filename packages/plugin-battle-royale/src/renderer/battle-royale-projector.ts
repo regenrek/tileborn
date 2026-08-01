@@ -259,6 +259,7 @@ export type ServerFrameView =
   | {
       readonly kind: 'initial';
       readonly tick: number;
+      readonly processedInputSeqByPlayerId?: Readonly<Record<string, number>>;
       readonly players: readonly InitialFramePlayerView[];
       readonly objects?: readonly FrameObjectView[];
       readonly zone: ZoneView;
@@ -266,6 +267,7 @@ export type ServerFrameView =
   | {
       readonly kind: 'delta';
       readonly tick: number;
+      readonly processedInputSeqByPlayerId?: Readonly<Record<string, number>>;
       readonly removed: readonly string[];
       readonly updated: readonly FramePlayerUpdateView[];
       readonly objectsUpdated?: readonly FrameObjectView[];
@@ -1447,6 +1449,9 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
     return {
       kind: 'initial',
       tick: frame.tick,
+      ...(frame.processedInputSeqByPlayerId === undefined
+        ? {}
+        : { processedInputSeqByPlayerId: frame.processedInputSeqByPlayerId }),
       players: frame.players.map((player) => ({
         playerId: player.id,
         ...(player.team === undefined ? {} : { team: player.team }),
@@ -1478,6 +1483,9 @@ export const serverFrameToView = (frame: unknown): ServerFrameView | undefined =
     return {
       kind: 'delta',
       tick: frame.tick,
+      ...(frame.processedInputSeqByPlayerId === undefined
+        ? {}
+        : { processedInputSeqByPlayerId: frame.processedInputSeqByPlayerId }),
       removed: frame.removed,
       updated: frame.updated.map((update) => ({
         playerId: update.id,

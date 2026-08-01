@@ -585,7 +585,10 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
   const inventoryLootState = createInventoryLootSystemState(
     typeof host.seed === 'number' ? (host.seed ^ 0x9e3779b9) >>> 0 : 0x9e3779b9,
   );
-  const snapshotEmitter = createBattleRoyaleSnapshotEmitter(host.seed);
+  const processedInputSeqByPlayerId = new Map<string, number>();
+  const snapshotEmitter = createBattleRoyaleSnapshotEmitter(host.seed, {
+    getProcessedInputSeqByPlayerId: () => processedInputSeqByPlayerId,
+  });
   const msgOut = host.msgOut ?? { push: () => undefined };
   const setReplayFrames = host.setReplayFrames ?? (() => undefined);
   const mapBounds = resolveMapBoundsFromArtifact(artifact);
@@ -790,6 +793,16 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
   const isDirection8 = (dir: number | undefined): dir is Direction8 =>
     dir !== undefined && Number.isInteger(dir) && dir >= 0 && dir <= 7;
 
+  const recordProcessedInputSequences = (world: PluginWorld): void => {
+    const players = world.getComponent<Player>(PLAYER_COMPONENT);
+    for (const [, player] of players.entries()) {
+      const input = host.getPlayerInput?.(player.playerId);
+      if (input !== undefined && Number.isSafeInteger(input.seq) && input.seq >= 0) {
+        processedInputSeqByPlayerId.set(player.playerId, input.seq);
+      }
+    }
+  };
+
   const buildMovementInputs = (world: PluginWorld) => {
     const players = world.getComponent<Player>(PLAYER_COMPONENT);
     const inputs = new Map<
@@ -833,6 +846,7 @@ export const createRuntimeAdapter = (host: RuntimePluginHost): RuntimePlugin => 
       ensurePlayersSpawned(world);
       ensureZoneInitialized(world);
       ensureRuntimeEcsInitialized(world);
+      recordProcessedInputSequences(world);
 
       syncPlayerInputRuntimeComponents(
         world,

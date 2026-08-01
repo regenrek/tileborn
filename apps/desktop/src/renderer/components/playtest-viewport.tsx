@@ -59,6 +59,11 @@ import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playte
 import { usePlaytestInputBridge } from '@/components/playtest-viewport-input-bridge';
 import { assetProtocolUrl } from '@/lib/asset-url';
 import {
+  applyLocalPredictionToEntities,
+  LocalPlaytestPredictionController,
+  type LocalInputPrediction,
+} from '@/lib/local-playtest-prediction';
+import {
   assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
   assemblePlaytestWeaponVisualConfig,
@@ -362,12 +367,14 @@ function usePlaytestSnapshotRenderer({
   map,
   pluginId,
   sessionId,
+  localPredictionControllerRef,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly map: TileborneMap;
   readonly pluginId: string | undefined;
   readonly sessionId: string;
+  readonly localPredictionControllerRef: MutableRefObject<LocalPlaytestPredictionController>;
 }) {
   useEffect(() => {
     if (pluginId === undefined) {
@@ -386,6 +393,7 @@ function usePlaytestSnapshotRenderer({
       x: (map.size.width * map.tileSize.width) / 2,
       y: (map.size.height * map.tileSize.height) / 2,
     };
+    let latestProcessedInputSeqByPlayerId: Readonly<Record<string, number>> = {};
 
     const unsubscribe = window.tileborne.events.onRuntimeSnapshot((payload) => {
       if (payload.sessionId !== sessionId) {
@@ -399,6 +407,10 @@ function usePlaytestSnapshotRenderer({
       if (decoded === undefined) {
         return;
       }
+      const frameView = runtime.plugin.serverFrameToView?.(decoded);
+      if (frameView?.kind === 'initial' || frameView?.kind === 'delta') {
+        latestProcessedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
+      }
       store.apply(decoded);
     });
     let disposed = false;
@@ -410,6 +422,10 @@ function usePlaytestSnapshotRenderer({
         }
         const decoded = plugin.decodeServerFrame(snapshot.frame);
         if (decoded !== undefined) {
+          const frameView = plugin.serverFrameToView?.(decoded);
+          if (frameView?.kind === 'initial' || frameView?.kind === 'delta') {
+            latestProcessedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
+          }
           store.apply(decoded);
         }
       })
@@ -424,11 +440,13 @@ function usePlaytestSnapshotRenderer({
       if (!runtime || !container) {
         return;
       }
-      const interpolated = store.sampleInterpolatedFullState(performance.now());
-      const currentSnapshot = interpolated?.current ?? store.getCurrentFullState();
-      if (currentSnapshot === undefined) {
+      const nowMs = performance.now();
+      const interpolated = store.sampleInterpolatedFullState(nowMs);
+      const latestSnapshot = store.getCurrentFullState();
+      if (latestSnapshot === undefined) {
         return;
       }
+      const currentSnapshot = interpolated?.current ?? latestSnapshot;
       // Interpolate world-space positions ONCE so the follow-camera and the
       // sprites share the same smoothed position; anchoring the camera to the
       // discrete latest snapshot reintroduces tick-rate stutter.
@@ -437,16 +455,32 @@ function usePlaytestSnapshotRenderer({
         interpolated?.previous === undefined
           ? []
           : runtime.projector.project(interpolated.previous);
-      const entities = interpolateRenderableEntities(
+      const remoteInterpolatedEntities = interpolateRenderableEntities(
         currentEntities,
         previousEntities,
         interpolated?.alpha ?? 1,
       );
+      const latestEntities = runtime.projector.project(latestSnapshot);
+      const latestLocalEntity = latestEntities.find((entity) => entity.id === 'br:player:player-1');
+      const entities = applyLocalPredictionToEntities(
+        remoteInterpolatedEntities,
+        latestLocalEntity === undefined
+          ? undefined
+          : {
+              entity: latestLocalEntity,
+              acknowledgedInputSequence:
+                latestProcessedInputSeqByPlayerId['player-1'] ??
+                latestProcessedInputSeqByPlayerId['br:player:player-1'] ??
+                -1,
+            },
+        localPredictionControllerRef.current,
+        nowMs,
+      );
 
-      const localEntity = findLocalPlayerEntity(entities);
-      if (localEntity) {
-        camera.x = localEntity.x;
-        camera.y = localEntity.y;
+      const predictedLocalEntity = findLocalPlayerEntity(entities);
+      if (predictedLocalEntity) {
+        camera.x = predictedLocalEntity.x;
+        camera.y = predictedLocalEntity.y;
       }
       const cx = container.clientWidth / 2;
       const cy = container.clientHeight / 2;
@@ -471,7 +505,15 @@ function usePlaytestSnapshotRenderer({
       cancelAnimationFrame(rafHandle);
       unsubscribe();
     };
-  }, [containerRef, map.size.height, map.size.width, pluginId, runtimeRef, sessionId]);
+  }, [
+    containerRef,
+    localPredictionControllerRef,
+    map.size.height,
+    map.size.width,
+    pluginId,
+    runtimeRef,
+    sessionId,
+  ]);
 }
 
 export function PlaytestViewport({
@@ -482,6 +524,7 @@ export function PlaytestViewport({
 }: PlaytestViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<RuntimeBundle | null>(null);
+  const localPredictionControllerRef = useRef(new LocalPlaytestPredictionController());
   const showGrid = useEditorUiStore((state) => state.showGrid);
   const showDebugOverlay = useEditorUiStore((state) => state.showDebugOverlay);
   const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
@@ -834,7 +877,11 @@ export function PlaytestViewport({
     setShellMatchStarted(false);
     ignoredShellGameOverRef.current = undefined;
     dispatchedGameplayAudioKeysRef.current.clear();
+    localPredictionControllerRef.current.reset();
   }, [sessionId]);
+  const recordLocalPredictionInput = useCallback((input: LocalInputPrediction) => {
+    localPredictionControllerRef.current.recordInput(input);
+  }, []);
   if (
     shellProjectionCacheRef.current.projection === undefined &&
     fallbackShellProjection !== undefined
@@ -1076,6 +1123,7 @@ export function PlaytestViewport({
     map,
     pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
     sessionId,
+    localPredictionControllerRef,
   });
 
   useEffect(() => {
@@ -1096,6 +1144,7 @@ export function PlaytestViewport({
     sessionId,
     tickCount: session?.runtimeMetrics?.tickCount,
     projectAudio,
+    onLocalInput: recordLocalPredictionInput,
   });
 
   useEffect(() => {

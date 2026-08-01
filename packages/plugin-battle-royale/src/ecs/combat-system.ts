@@ -79,6 +79,9 @@ export interface MapBounds {
 }
 
 export const resolveMapBoundsFromArtifact = (artifact: ExportedArtifact): MapBounds => {
+  if (artifact.mapBounds !== undefined) {
+    return artifact.mapBounds;
+  }
   const { centerX, centerY, startRadiusTiles } = artifact.shrinkSchedule;
   return {
     minX: centerX - startRadiusTiles,

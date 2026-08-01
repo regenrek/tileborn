@@ -152,6 +152,9 @@ export const PlayerSnapshot = Schema.Struct({
 });
 export type PlayerSnapshot = typeof PlayerSnapshot.Type;
 
+export const ProcessedInputSequenceByPlayerId = Schema.Record(PlayerId, Schema.Int);
+export type ProcessedInputSequenceByPlayerId = typeof ProcessedInputSequenceByPlayerId.Type;
+
 export const PlayerUpdate = Schema.Struct({
   id: PlayerId,
   team: Schema.OptionFromOptional(Schema.String),
@@ -296,6 +299,7 @@ export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()('Welc
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
   seed: Schema.Union([Schema.String, Schema.Number]),
+  processedInputSeqByPlayerId: Schema.optional(ProcessedInputSequenceByPlayerId),
   players: Schema.Array(PlayerSnapshot),
   projectiles: Schema.Array(ProjectileSnapshot),
   deployables: Schema.optional(Schema.Array(DeployableSnapshot)),
@@ -306,6 +310,7 @@ export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()('Welc
 export class DeltaSnapshot extends Schema.TaggedClass<DeltaSnapshot>()('DeltaSnapshot', {
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
+  processedInputSeqByPlayerId: Schema.optional(ProcessedInputSequenceByPlayerId),
   removed: Schema.Array(PlayerId),
   updated: Schema.Array(PlayerUpdate),
   projectilesUpdated: Schema.Array(ProjectileUpdate),

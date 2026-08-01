@@ -278,6 +278,12 @@ export const buildBattleRoyaleRuntimeState = (
     // unrelated project content preserves the plugin default.
     lootTables: authoredLoot.length === 0 ? modeData.lootTables : authoredLoot,
     objectPlacements,
+    mapBounds: {
+      minX: 0,
+      minY: 0,
+      maxX: mapPackage.map.size.width * tileWidth,
+      maxY: mapPackage.map.size.height * tileHeight,
+    },
     ...(objectCollisionRects.length === 0 ? {} : { objectCollisionRects }),
     ...(modeData.battleRoyale === undefined ? {} : { battleRoyale: modeData.battleRoyale }),
     ...(playerModels.length === 0

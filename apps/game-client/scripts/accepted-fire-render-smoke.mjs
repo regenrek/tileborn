@@ -47,6 +47,25 @@ try {
   await page.waitForFunction(() => window.tileborneSmoke?.socketUrl() !== undefined);
   await page.evaluate(() => window.tileborneSmoke.emitAcceptedFireFlow());
   await page.waitForFunction(() => window.tileborneSmoke.sentCount() >= 1);
+  await page.waitForFunction(() =>
+    window.tileborneSmoke
+      .spriteIds()
+      .some((id) => id.includes('player-1') && !id.includes('muzzle')),
+  );
+  const playerSpriteId = await page.evaluate(() =>
+    window.tileborneSmoke
+      .spriteIds()
+      .find((id) => id.includes('player-1') && !id.includes('muzzle')),
+  );
+  const playerBeforeInput = await page.evaluate((id) => window.tileborneSmoke.spritePosition(id), playerSpriteId);
+  await page.keyboard.down('d');
+  await page.waitForFunction(() => JSON.stringify(window.tileborneSmoke.sentInputSeqs()) === '[1]');
+  await page.waitForFunction(({ id, beforeX }) => {
+    const player = window.tileborneSmoke.spritePosition(id);
+    return player !== undefined && player.x > beforeX;
+  }, { id: playerSpriteId, beforeX: playerBeforeInput.x });
+  await page.keyboard.up('d');
+  await page.waitForFunction(() => JSON.stringify(window.tileborneSmoke.sentInputSeqs()) === '[1,2]');
   await page.waitForFunction(
     () => JSON.stringify(window.tileborneSmoke.muzzleIds()) === '["br:muzzle:player-1","br:muzzle:player-2"]',
   );
@@ -72,10 +91,34 @@ try {
   }
   await page.evaluate(() => window.tileborneSmoke.emitReplayFlow());
   await page.waitForFunction(() => JSON.stringify(window.tileborneSmoke.muzzleIds()) === '[]');
+  const remoteSpriteId = await page.evaluate(() =>
+    window.tileborneSmoke
+      .spriteIds()
+      .find((id) => id.includes('player-2') && !id.includes('muzzle')),
+  );
+  const remoteBeforeMove = await page.evaluate(
+    (id) => window.tileborneSmoke.spritePosition(id),
+    remoteSpriteId,
+  );
+  await page.evaluate(() => window.tileborneSmoke.emitRemoteMovementFlow());
+  const remoteImmediatelyAfterMove = await page.evaluate(
+    (id) => window.tileborneSmoke.spritePosition(id),
+    remoteSpriteId,
+  );
+  if (remoteImmediatelyAfterMove.x >= 110) {
+    throw new Error('remote entity skipped the 100 ms interpolation buffer');
+  }
+  await page.waitForFunction(
+    ({ id, beforeX }) => {
+      const remote = window.tileborneSmoke.spritePosition(id);
+      return remote !== undefined && remote.x > beforeX && Math.abs(remote.x - 110) < 0.01;
+    },
+    { id: remoteSpriteId, beforeX: remoteBeforeMove.x },
+  );
   if (consoleErrors.length > 0) {
     throw new Error(`browser console errors: ${consoleErrors.join('\\n')}`);
   }
-  console.log('accepted fire browser render smoke passed: 2 muzzle sprites rendered, replay removed them');
+  console.log('accepted fire browser render smoke passed: input seqs [1,2], local player predicted forward, remote player retained the 100 ms interpolation buffer, 2 muzzle sprites rendered, replay removed them');
 } finally {
   await browser.close();
   await server.close();

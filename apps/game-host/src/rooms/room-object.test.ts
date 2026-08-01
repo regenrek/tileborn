@@ -87,6 +87,22 @@ const mapPackageWithCapacity = (playerCapacity: number): Record<string, unknown>
   return pkg;
 };
 
+const interiorSinglePlayerMapPackage = (): Record<string, unknown> => {
+  const pkg = cloneDefaultMapPackage() as {
+    manifest: Record<string, unknown>;
+    modeData: Record<string, Record<string, unknown>>;
+    placements: Array<Record<string, unknown>>;
+  };
+  pkg.manifest.playerCapacity = 1;
+  const modeData = pkg.modeData['@tileborne-plugins/battle-royale'];
+  if (modeData === undefined || pkg.placements[0] === undefined) {
+    throw new Error('default BR package is missing mode data or spawn placement');
+  }
+  modeData.maxPlayers = 1;
+  pkg.placements = [{ ...pkg.placements[0], x: 32, y: 32 }];
+  return pkg;
+};
+
 const makeEnv = (overrides: Partial<Env> = {}): Env => ({
   PLAYTEST_ROOM: {
     idFromName: (name: string) => ({ toString: () => name }) as DurableObjectId,
@@ -1968,17 +1984,30 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     // coordinates from the package instead of pinning magic numbers.
     const packageMap = (
       bundledMapPackages[0]!.mapPackage as unknown as {
-        map: { objects: readonly { x: number; y: number }[] };
+        map: {
+          objects: readonly { x: number; y: number }[];
+          tileSize: { width: number; height: number };
+        };
       }
     ).map;
     const secondSpawn = packageMap.objects[1]!;
-    expect(latePlayer).toMatchObject({ id: 'player-2', x: secondSpawn.x, y: secondSpawn.y });
+    expect(latePlayer).toMatchObject({
+      id: 'player-2',
+      x: secondSpawn.x * packageMap.tileSize.width,
+      y: secondSpawn.y * packageMap.tileSize.height,
+    });
   });
 
   it('routes a reserved generated player slot into BR shooting simulation', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      undefined,
+      { minReadyPlayers: 1 },
+      interiorSinglePlayerMapPackage(),
+    );
     const reserved = await room.fetch(
       new Request('https://do/players/reserve', {
         method: 'POST',
@@ -2381,7 +2410,13 @@ describe('PlaytestRoom wire protocol and plugins', () => {
   it('preserves a rapid BR slot edge when a held aim frame replaces the queued input', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      undefined,
+      { minReadyPlayers: 1 },
+      interiorSinglePlayerMapPackage(),
+    );
     const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
     const welcome = decodeBattleRoyaleMessages(server).find(
       (message) => message._tag === 'WelcomeSnapshot',

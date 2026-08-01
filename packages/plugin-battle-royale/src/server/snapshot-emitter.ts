@@ -590,17 +590,38 @@ export interface BattleRoyaleSnapshotEmitter {
   readonly emitDelta: (world: PluginWorld, tick: number, msgOut?: RuntimeMessageOut) => Uint8Array;
 }
 
+export interface BattleRoyaleSnapshotEmitterOptions {
+  readonly getProcessedInputSeqByPlayerId?: () => ReadonlyMap<string, number>;
+}
+
+const processedInputSeqByPlayerId = (
+  options: BattleRoyaleSnapshotEmitterOptions,
+): BattleRoyaleProtocol.ProcessedInputSequenceByPlayerId | undefined => {
+  const entries = [...(options.getProcessedInputSeqByPlayerId?.() ?? new Map()).entries()]
+    .filter(([, seq]) => Number.isSafeInteger(seq) && seq >= 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) {
+    return undefined;
+  }
+  return Object.fromEntries(entries.map(([playerId, seq]) => [makePlayerId(playerId), seq]));
+};
+
 export const createBattleRoyaleSnapshotEmitter = (
   seed: SnapshotSeed = 0,
+  options: BattleRoyaleSnapshotEmitterOptions = {},
 ): BattleRoyaleSnapshotEmitter => {
   let previous: CapturedSnapshot | undefined;
 
-  const encodeWelcome = (snapshot: CapturedSnapshot, tick: number): Uint8Array =>
-    encodeServerMessage(
+  const encodeWelcome = (snapshot: CapturedSnapshot, tick: number): Uint8Array => {
+    const processedInputSequences = processedInputSeqByPlayerId(options);
+    return encodeServerMessage(
       new WelcomeSnapshot({
         tick,
         serverTimestampMs: snapshot.serverTimestampMs,
         seed,
+        ...(processedInputSequences === undefined
+          ? {}
+          : { processedInputSeqByPlayerId: processedInputSequences }),
         players: snapshot.players.map((player) => ({
           id: makePlayerId(player.id),
           ...(player.team === undefined ? {} : { team: player.team }),
@@ -658,6 +679,7 @@ export const createBattleRoyaleSnapshotEmitter = (
         zone: snapshot.zone,
       }),
     );
+  };
 
   const buildWelcome = (world: PluginWorld, tick: number): Uint8Array =>
     encodeWelcome(captureSnapshot(world, tick), tick);
@@ -909,10 +931,14 @@ export const createBattleRoyaleSnapshotEmitter = (
       return [toWireObjectSnapshot(object)];
     });
 
+    const processedInputSequences = processedInputSeqByPlayerId(options);
     const frame = encodeServerMessage(
       new DeltaSnapshot({
         tick,
         serverTimestampMs: current.serverTimestampMs,
+        ...(processedInputSequences === undefined
+          ? {}
+          : { processedInputSeqByPlayerId: processedInputSequences }),
         removed,
         updated,
         projectilesUpdated,

@@ -16,6 +16,7 @@ import {
   dispatchRuntimeAudioEvent,
   resolvePlaytestPlugin,
 } from '@/lib/playtest-plugin-bridge';
+import type { LocalInputPrediction } from '@/lib/local-playtest-prediction';
 
 const LOCAL_PLAYER_INPUT_ID = 'player-1';
 
@@ -31,12 +32,14 @@ export const usePlaytestInputBridge = ({
   sessionId,
   tickCount,
   projectAudio,
+  onLocalInput,
 }: {
   readonly containerRef: RefObject<HTMLElement | null>;
   readonly pluginId: string | undefined;
   readonly sessionId: string;
   readonly tickCount: number | undefined;
   readonly projectAudio: PlaytestViewportProjectAudio | undefined;
+  readonly onLocalInput?: (input: LocalInputPrediction) => void;
 }) => {
   // The capture/resolver lifecycle MUST NOT depend on `tickCount`: a tick refresh
   // tearing down + recreating the resolver would drop held mouse/key state (a
@@ -112,6 +115,7 @@ export const usePlaytestInputBridge = ({
           ...(idle ? { active: false } : {}),
         };
         void window.tileborne.runtime.playtestInput(payload);
+        onLocalInput?.({ sequence: seq, dir: intent.dir });
       },
     });
 
@@ -123,7 +127,7 @@ export const usePlaytestInputBridge = ({
       }
       audioEngine?.dispose();
     };
-  }, [containerRef, pluginId, projectAudio, sessionId]);
+  }, [containerRef, onLocalInput, pluginId, projectAudio, sessionId]);
 };
 
 export function PlaytestInputBridgeProducer({
@@ -132,17 +136,26 @@ export function PlaytestInputBridgeProducer({
   sessionId,
   tickCount,
   projectAudio,
+  onLocalInput,
 }: {
   readonly container: HTMLElement;
   readonly pluginId: string | undefined;
   readonly sessionId: string;
   readonly tickCount: number | undefined;
   readonly projectAudio?: PlaytestViewportProjectAudio | undefined;
+  readonly onLocalInput?: (input: LocalInputPrediction) => void;
 }) {
   const containerRef = useRef<HTMLElement | null>(container);
   useEffect(() => {
     containerRef.current = container;
   }, [container]);
-  usePlaytestInputBridge({ containerRef, pluginId, sessionId, tickCount, projectAudio });
+  usePlaytestInputBridge({
+    containerRef,
+    pluginId,
+    sessionId,
+    tickCount,
+    projectAudio,
+    ...(onLocalInput === undefined ? {} : { onLocalInput }),
+  });
   return null;
 }

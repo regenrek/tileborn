@@ -24,6 +24,8 @@ import {
   type ServerFrameView,
   type ZoneView,
 } from '@/lib/playtest-plugin-bridge';
+import type { ResolvedInputIntent } from '@/lib/playtest-input';
+import type { LocalInputPrediction } from '@/lib/local-playtest-prediction';
 
 type ZoneStatusState = NonNullable<PlaytestHudState['zoneStatus']>;
 type InitialServerFrameView = Extract<ServerFrameView, { readonly kind: 'initial' }>;
@@ -105,6 +107,8 @@ export class PlaytestMultiplayerClient {
   private phase: MultiplayerConnectionPhase = 'idle';
   private errorMessage: string | null = null;
   private onSnapshotFrame: ((frame: unknown) => void) | undefined;
+  private onLocalInputPrediction: ((input: LocalInputPrediction) => void) | undefined;
+  private processedInputSeqByPlayerId: Readonly<Record<string, number>> = {};
   private lastSnapshotAckTick = -1;
   private reconnectAttempts = 0;
   private readonly transportObservations: TransportObservation[] = [];
@@ -138,8 +142,21 @@ export class PlaytestMultiplayerClient {
     };
   }
 
+  setLocalInputPredictionListener(handler: (input: LocalInputPrediction) => void): () => void {
+    this.onLocalInputPrediction = handler;
+    return () => {
+      if (this.onLocalInputPrediction === handler) {
+        this.onLocalInputPrediction = undefined;
+      }
+    };
+  }
+
   getLocalPlayerId(): string | null {
     return this.localPlayerId;
+  }
+
+  getProcessedInputSequence(playerId: string): number {
+    return this.processedInputSeqByPlayerId[playerId] ?? -1;
   }
 
   getState(): MultiplayerSessionState {
@@ -575,9 +592,11 @@ export class PlaytestMultiplayerClient {
         throw new Error('Unsupported plugin frame');
       }
       if (frameView.kind === 'initial') {
+        this.processedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
         this.onInitialFrame(pluginFrame);
         this.onSnapshotFrame?.(pluginFrame);
       } else if (frameView.kind === 'delta') {
+        this.processedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
         this.onSnapshotFrame?.(pluginFrame);
       }
       this.handlePluginFrameView(frameView);
@@ -630,6 +649,18 @@ export class PlaytestMultiplayerClient {
       ...(options?.swapSlot !== undefined ? { swapSlot: options.swapSlot } : {}),
     });
     void Effect.runPromise(client.sendFrame(brFrame)).catch(() => undefined);
+    this.onLocalInputPrediction?.({ sequence: this.seq, dir });
+  }
+
+  sendIntent(intent: ResolvedInputIntent): void {
+    this.sendInput(intent.dir as InputDirection | undefined, intent.shoot, {
+      reload: intent.reload,
+      interact: intent.interact,
+      drop: intent.drop,
+      abilities: intent.abilities,
+      ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
+      ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
+    });
   }
 
   disconnect(): void {
@@ -645,6 +676,7 @@ export class PlaytestMultiplayerClient {
     this.seq = 0;
     this.tick = 0;
     this.lastSnapshotAckTick = -1;
+    this.processedInputSeqByPlayerId = {};
     this.transportObservations.length = 0;
     this.phase = 'idle';
     this.errorMessage = null;

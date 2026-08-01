@@ -90,8 +90,8 @@ describe('buildBattleRoyaleRuntimeState', () => {
     expect(state.shrinkSchedule).toEqual({
       centerX: 16,
       centerY: 16,
-      startRadiusTiles: 20,
-      endRadiusTiles: 3,
+      startRadiusTiles: 20 * 32,
+      endRadiusTiles: 3 * 32,
       shrinkIntervalMs: ZONE.shrinkIntervalMs,
       damagePerSecond: ZONE.damagePerSecond,
     });

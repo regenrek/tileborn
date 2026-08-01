@@ -257,7 +257,10 @@ function useMultiplayerSnapshotRenderer({
         : {}),
     });
     let rafHandle = 0;
-    const camera = { x: map.size.width / 2, y: map.size.height / 2 };
+    const camera = {
+      x: (map.size.width * map.tileSize.width) / 2,
+      y: (map.size.height * map.tileSize.height) / 2,
+    };
 
     const unsubscribe = client.setSnapshotFrameListener((frame) => {
       store.apply(frame);

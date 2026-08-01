@@ -9,7 +9,54 @@ export interface SpawnClearancePair<TPoint extends SpawnLayoutPoint> {
   readonly distance: number;
 }
 
-export const MIN_SPAWN_CLEARANCE = 8;
+/** Two 12px player bodies plus the 16px opening buffer. */
+export const MIN_SPAWN_CLEARANCE = 40;
+
+export interface SpawnSafetyCircle extends SpawnLayoutPoint {
+  readonly radius: number;
+}
+
+export interface SpawnSafetyRect extends SpawnLayoutPoint {
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface SpawnSafetyPolicy {
+  readonly playerRadius: number;
+  readonly openingBuffer: number;
+  readonly hazards?: readonly SpawnSafetyCircle[];
+  readonly blockers?: readonly SpawnSafetyRect[];
+  readonly participants?: readonly SpawnLayoutPoint[];
+}
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+/** One BR-owned opening-safety predicate shared by generation, readiness, and runtime spawn. */
+export const isSpawnPointSafe = (point: SpawnLayoutPoint, policy: SpawnSafetyPolicy): boolean => {
+  const clearanceRadius = policy.playerRadius + policy.openingBuffer;
+  if (
+    policy.hazards?.some(
+      (hazard) =>
+        Math.sqrt(distanceSq(point, hazard)) < clearanceRadius + Math.max(0, hazard.radius),
+    )
+  ) {
+    return false;
+  }
+  if (
+    policy.blockers?.some((blocker) => {
+      const closestX = clamp(point.x, blocker.x, blocker.x + blocker.width);
+      const closestY = clamp(point.y, blocker.y, blocker.y + blocker.height);
+      return Math.hypot(point.x - closestX, point.y - closestY) < clearanceRadius;
+    })
+  ) {
+    return false;
+  }
+  return !policy.participants?.some(
+    (participant) =>
+      Math.sqrt(distanceSq(point, participant)) < policy.playerRadius * 2 + policy.openingBuffer,
+  );
+};
 
 export const distanceSq = (left: SpawnLayoutPoint, right: SpawnLayoutPoint): number => {
   const dx = left.x - right.x;

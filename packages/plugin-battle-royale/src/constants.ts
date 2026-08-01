@@ -40,6 +40,8 @@ export const BR_OVERLAY_SLOTS = {
 export const MIN_SPAWN_POINTS = 4;
 export const REQUIRED_SHRINK_ANCHORS = 1;
 export const MIN_LOOT_CRATES = 1;
+/** Extra neutral space around a player at match start, beyond collision radii. */
+export const SPAWN_OPENING_BUFFER = 16;
 
 export const DEFAULT_LOOT_TABLE: readonly {
   readonly itemKind: string;

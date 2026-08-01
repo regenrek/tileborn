@@ -1,7 +1,7 @@
 import {
   RuntimeMapPackage,
+  RuntimeObjectPlacement,
   type GameObjectComponent,
-  type RuntimeObjectPlacement,
 } from '@tileborne/core';
 import { RuntimeProjectContent } from '@tileborne/plugin-api/project-content';
 import { Schema } from 'effect';
@@ -203,6 +203,24 @@ export const buildBattleRoyaleRuntimeState = (
   const modeData = decodeBattleRoyaleModeData(modeDataWire);
   const projectContent = Schema.decodeUnknownSync(RuntimeProjectContent)(mapPackage.content);
   const authoredLoot = projectLootEntries(projectContent);
+  const tileWidth = mapPackage.map.tileSize.width;
+  const tileHeight = mapPackage.map.tileSize.height;
+  const radialTileSize = Math.max(tileWidth, tileHeight);
+  // RuntimeMapPackage is neutral tile-space. BR's established simulation and
+  // projector contract is pixel-world, so adapt exactly once at the plugin
+  // boundary before any spawn, collision, gameplay, or visual owner sees it.
+  const worldPlacements = mapPackage.placements.map(
+    (placement) =>
+      new RuntimeObjectPlacement({
+        objectId: placement.objectId,
+        typeId: placement.typeId,
+        x: placement.x * tileWidth,
+        y: placement.y * tileHeight,
+        ...(placement.instanceProperties === undefined
+          ? {}
+          : { instanceProperties: placement.instanceProperties }),
+      }),
+  );
 
   const resolveRole = buildRoleResolver(mapPackage);
   const grouped: Record<PlacementRole, ObjectPlacement[]> = {
@@ -213,7 +231,7 @@ export const buildBattleRoyaleRuntimeState = (
     decoy: [],
   };
   const spawnPoints: SpawnPointArtifact[] = [];
-  for (const placement of mapPackage.placements) {
+  for (const placement of worldPlacements) {
     const role = resolveRole(placement);
     if (role === undefined) {
       continue;
@@ -236,7 +254,7 @@ export const buildBattleRoyaleRuntimeState = (
   // Collision on the package path comes from catalog-footprint object rects
   // only (the package carries no tileset pack for tile-mask collision).
   const objectCollisionRects = extractObjectCollisionRects(
-    mapPackage.placements,
+    worldPlacements,
     mapPackage.catalog.map((entry) => entry.objectType),
   );
 
@@ -248,7 +266,13 @@ export const buildBattleRoyaleRuntimeState = (
     maxPlayers: modeData.maxPlayers,
     spawnPoints,
     spawnAnchors: spawnPoints,
-    shrinkSchedule: modeData.shrinkSchedule,
+    shrinkSchedule: {
+      ...modeData.shrinkSchedule,
+      centerX: modeData.shrinkSchedule.centerX * tileWidth,
+      centerY: modeData.shrinkSchedule.centerY * tileHeight,
+      startRadiusTiles: modeData.shrinkSchedule.startRadiusTiles * radialTileSize,
+      endRadiusTiles: modeData.shrinkSchedule.endRadiusTiles * radialTileSize,
+    },
     // A project-authored loot table with valid item references is executable
     // game content and intentionally overrides the mode template. Empty or
     // unrelated project content preserves the plugin default.

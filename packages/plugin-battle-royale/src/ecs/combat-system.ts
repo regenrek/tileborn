@@ -79,15 +79,12 @@ export interface MapBounds {
 }
 
 export const resolveMapBoundsFromArtifact = (artifact: ExportedArtifact): MapBounds => {
-  const tileWidth = artifact.collision?.tileWidth ?? 32;
-  const tileHeight = artifact.collision?.tileHeight ?? 32;
   const { centerX, centerY, startRadiusTiles } = artifact.shrinkSchedule;
-  const radius = startRadiusTiles * Math.max(tileWidth, tileHeight);
   return {
-    minX: centerX - radius,
-    minY: centerY - radius,
-    maxX: centerX + radius,
-    maxY: centerY + radius,
+    minX: centerX - startRadiusTiles,
+    minY: centerY - startRadiusTiles,
+    maxX: centerX + startRadiusTiles,
+    maxY: centerY + startRadiusTiles,
   };
 };
 

@@ -226,7 +226,8 @@ function usePlaytestRuntimeMount({
   runtimeRef,
   projectId,
   map,
-  pluginId,
+  rendererCapabilityId,
+  enabled,
   builtModels,
   builtOverlays,
   builtWeapons,
@@ -235,21 +236,18 @@ function usePlaytestRuntimeMount({
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly projectId: string;
   readonly map: TileborneMap;
-  readonly pluginId: string | undefined;
+  readonly rendererCapabilityId: string | undefined;
+  readonly enabled: boolean;
   readonly builtModels: readonly BuiltPlayerModel[];
   readonly builtOverlays: readonly BuiltOverlayVisual[];
   readonly builtWeapons: readonly BuiltWeaponVisual[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) {
+    if (!container || !enabled || rendererCapabilityId === undefined) {
       return undefined;
     }
-    if (pluginId === undefined) {
-      console.error('[playtest] active game mode does not declare capabilities.renderer');
-      return undefined;
-    }
-    const basePlugin = resolvePlaytestPlugin(pluginId);
+    const basePlugin = resolvePlaytestPlugin(rendererCapabilityId);
     // The configured plugin is resolved inside performMount once the chosen
     // player-model atlases are fetched; onMounted reads this holder.
     let resolved: ResolvedPlaytestPlugin = basePlugin;
@@ -278,7 +276,7 @@ function usePlaytestRuntimeMount({
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
-            resolved = resolvePlaytestPlugin(pluginId, {
+            resolved = resolvePlaytestPlugin(rendererCapabilityId, {
               ...(playerModels === undefined ? {} : { playerModels }),
               ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
               ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
@@ -347,9 +345,10 @@ function usePlaytestRuntimeMount({
     };
   }, [
     containerRef,
+    enabled,
     map,
-    pluginId,
     projectId,
+    rendererCapabilityId,
     runtimeRef,
     builtModels,
     builtOverlays,
@@ -383,7 +382,10 @@ function usePlaytestSnapshotRenderer({
         : {}),
     });
     let rafHandle = 0;
-    const camera = { x: map.size.width / 2, y: map.size.height / 2 };
+    const camera = {
+      x: (map.size.width * map.tileSize.width) / 2,
+      y: (map.size.height * map.tileSize.height) / 2,
+    };
 
     const unsubscribe = window.tileborne.events.onRuntimeSnapshot((payload) => {
       if (payload.sessionId !== sessionId) {
@@ -573,6 +575,14 @@ export function PlaytestViewport({
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
   const rendererResolution = useMemo(
     () => {
+      if (contributionsQuery.isLoading) {
+        return { loading: true } as const;
+      }
+      if (contributionsQuery.isError) {
+        return {
+          error: `Could not load game-mode contributions: ${formatShellError(contributionsQuery.error)}`,
+        } as const;
+      }
       if (rendererKey === undefined) {
         return {
           error:
@@ -591,8 +601,17 @@ export function PlaytestViewport({
       }
     },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
-    [rendererKey, manifestHudLayout, projectHudLayout, hudOverlayVersion],
+    [
+      contributionsQuery.error,
+      contributionsQuery.isError,
+      contributionsQuery.isLoading,
+      rendererKey,
+      manifestHudLayout,
+      projectHudLayout,
+      hudOverlayVersion,
+    ],
   );
+  const rendererLoading = 'loading' in rendererResolution;
   const resolvedPlugin = 'plugin' in rendererResolution ? rendererResolution.plugin : undefined;
   const rendererError = 'error' in rendererResolution ? rendererResolution.error : undefined;
   const bumpHudOverlayVersion = useCallback(
@@ -1045,7 +1064,8 @@ export function PlaytestViewport({
     runtimeRef,
     projectId,
     map,
-    pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
+    rendererCapabilityId: rendererKey,
+    enabled: canStartPlaytestRuntime && resolvedPlugin !== undefined,
     builtModels,
     builtOverlays,
     builtWeapons,
@@ -1097,6 +1117,16 @@ export function PlaytestViewport({
       <div className="absolute inset-0 z-20 grid place-items-center bg-background/95 p-6">
         <p role="alert" className="max-w-xl text-sm text-destructive">
           {rendererError}
+        </p>
+      </div>
+    );
+  }
+
+  if (rendererLoading) {
+    return (
+      <div className="absolute inset-0 z-20 grid place-items-center bg-background/95 p-6">
+        <p role="status" className="max-w-xl text-sm text-muted-foreground">
+          Loading game-mode renderer…
         </p>
       </div>
     );

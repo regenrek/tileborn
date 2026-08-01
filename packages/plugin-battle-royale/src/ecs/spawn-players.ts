@@ -1,4 +1,5 @@
-import { DAMAGE } from '../constants.js';
+import { ABILITY, DAMAGE, MOVEMENT, SPAWN_OPENING_BUFFER } from '../constants.js';
+import { isSpawnPointSafe } from '../spawn-layout.js';
 import type { ExportedArtifact, SpawnPointArtifact } from '../types/artifact.js';
 import {
   assertBattleRoyaleTeamTopology,
@@ -39,8 +40,38 @@ export interface SpawnPlayersOptions {
   readonly matchMode?: BattleRoyaleMatchMode;
 }
 
-const resolveSpawnMarkers = (artifact: ExportedArtifact): readonly SpawnPointArtifact[] =>
-  selectBattleRoyaleSpawnTeamSlots(artifact.spawnAnchors, artifact.maxPlayers);
+const resolveSpawnMarkers = (artifact: ExportedArtifact): readonly SpawnPointArtifact[] => {
+  const hazards = artifact.objectPlacements
+    .filter((placement) => placement.role === 'trap')
+    .map((placement) => ({
+      x: placement.x,
+      y: placement.y,
+      radius: placement.properties.radius ?? ABILITY.trap.radius,
+    }));
+  const blockers = (artifact.objectCollisionRects ?? []).filter((rect) => rect.blocksMovement);
+  const environmentSafe = artifact.spawnAnchors.filter((spawn) =>
+    isSpawnPointSafe(spawn, {
+      playerRadius: MOVEMENT.radius,
+      openingBuffer: SPAWN_OPENING_BUFFER,
+      hazards,
+      blockers,
+    }),
+  );
+  const selected = selectBattleRoyaleSpawnTeamSlots(environmentSafe, artifact.maxPlayers);
+  const accepted: SpawnPointArtifact[] = [];
+  for (const spawn of selected) {
+    if (
+      isSpawnPointSafe(spawn, {
+        playerRadius: MOVEMENT.radius,
+        openingBuffer: SPAWN_OPENING_BUFFER,
+        participants: accepted,
+      })
+    ) {
+      accepted.push(spawn);
+    }
+  }
+  return accepted;
+};
 
 export const resolveSpawnSlots = (artifact: ExportedArtifact): readonly SpawnSlot[] =>
   resolveSpawnMarkers(artifact).map((marker) => ({ x: marker.x, y: marker.y }));

@@ -38,7 +38,7 @@
     "@tileborne/asset-pipeline": "workspace:*",
     "@tileborne/core": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
-    "effect": "4.0.0-beta.78",
+    "effect": "4.0.0-beta.102",
     "msgpackr": "2.0.1",
     "pixi.js": "8.18.1"
   },

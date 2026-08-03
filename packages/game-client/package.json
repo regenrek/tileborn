@@ -29,7 +29,7 @@
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/runtime": "workspace:*",
     "@tileborne/ui": "workspace:*",
-    "effect": "4.0.0-beta.78"
+    "effect": "4.0.0-beta.102"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.9.1",

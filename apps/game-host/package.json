@@ -40,7 +40,7 @@
     "@tileborne/core": "workspace:*",
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/runtime": "workspace:*",
-    "effect": "4.0.0-beta.78",
+    "effect": "4.0.0-beta.102",
     "esbuild": "0.25.5",
     "hono": "4.12.27",
     "miniflare": "4.20260603.0",

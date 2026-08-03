@@ -22,7 +22,7 @@
     "@tileborne/core": "workspace:*",
     "@tileborne/plugin-api": "workspace:*",
     "@tileborne/services-foundation": "workspace:*",
-    "effect": "4.0.0-beta.78"
+    "effect": "4.0.0-beta.102"
   },
   "devDependencies": {
     "@types/node": "22.19.19",

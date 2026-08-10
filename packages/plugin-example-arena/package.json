@@ -27,7 +27,7 @@
     "@tileborne/runtime": "workspace:*",
     "@tileborne/simulation": "workspace:*",
     "effect": "4.0.0-beta.78",
-    "msgpackr": "2.0.1"
+    "msgpackr": "2.0.5"
   },
   "devDependencies": {
     "@tileborne/services-plugin": "workspace:*",

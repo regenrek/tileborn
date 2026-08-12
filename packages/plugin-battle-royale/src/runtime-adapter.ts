@@ -532,7 +532,8 @@ const transientAnimationState = (value: object): object => {
   if (!('acceptedFireTick' in value)) {
     return value;
   }
-  const { acceptedFireTick: _acceptedFireTick, ...rest } = value as AnimationState;
+  const rest = { ...value };
+  Reflect.deleteProperty(rest, 'acceptedFireTick');
   return rest;
 };
 
@@ -540,7 +541,8 @@ const clearAcceptedFireAnimationMarkers = (world: PluginWorld): void => {
   const animations = world.registerComponent<AnimationState>(ANIMATION_STATE_COMPONENT);
   for (const [entity, animation] of animations.entries()) {
     if (animation.acceptedFireTick !== undefined) {
-      const { acceptedFireTick: _acceptedFireTick, ...rest } = animation;
+      const rest = { ...animation };
+      Reflect.deleteProperty(rest, 'acceptedFireTick');
       animations.set(entity, rest);
     }
   }

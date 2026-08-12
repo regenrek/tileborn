@@ -31,8 +31,8 @@ export const ciFastEscalationRules = Object.freeze([
   escalation('desktop', ['apps/desktop/'], ['@tileborne/desktop...']),
 ]);
 
-const ciFastRootContractCommands = Object.freeze([
-  ciFastStep(['format'], ['pnpm', 'format:check']),
+const ciFastFormatCommand = ciFastStep(['format'], ['pnpm', 'format:check']);
+const ciFastDesktopReleaseContractCommands = Object.freeze([
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:policy']),
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:status']),
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:docs']),
@@ -40,7 +40,6 @@ const ciFastRootContractCommands = Object.freeze([
 ]);
 
 const ciFastDesktopCandidateCommands = Object.freeze([
-  ciFastStep(['build'], ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...']),
   ciFastStep(['desktop-smoke'], ['pnpm', 'test:desktop-smoke']),
   ciFastStep(
     ['packaged-runtime'],
@@ -304,10 +303,14 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     ...filters.flatMap((filter) => ['--filter', filter]),
   ];
   const includesDesktopCandidateScope = filters.includes('@tileborne/desktop...');
+  const includesDesktopReleaseContractScope = escalations.some(({ id }) =>
+    ['root-config', 'release-scripts', 'workflows', 'docs', 'desktop'].includes(id),
+  );
   const steps = [
     ciFastStep(['install'], ['pnpm', 'install', '--frozen-lockfile']),
     ciFastStep(['build', 'lint', 'typecheck', 'test'], turboCommand),
-    ...ciFastRootContractCommands,
+    ciFastFormatCommand,
+    ...(includesDesktopReleaseContractScope ? ciFastDesktopReleaseContractCommands : []),
     ...(includesDesktopCandidateScope ? ciFastDesktopCandidateCommands : []),
   ];
 

@@ -207,7 +207,7 @@ describe('canonical release gates', () => {
     expect(workflow).toContain('TURBO_SCM_BASE:');
     expect(workflow).toContain('TURBO_SCM_HEAD: ${{ github.sha }}');
     expect(workflow).toContain('sudo apt-get update && sudo apt-get install -y xvfb');
-    expect(workflow).toContain('run: xvfb-run -a pnpm ci:fast');
+    expect(workflow).toContain('run: xvfb-run -a node scripts/release-gates.mjs ci-fast');
     expect(workflow).toContain('run: corepack enable');
     expect(read('scripts/release-gates.mjs')).toContain('GITHUB_STEP_SUMMARY');
     expect(read('scripts/release-gates.mjs')).toContain('Escalations');
@@ -461,7 +461,7 @@ describe('canonical release gates', () => {
     expect(requiredStatusChecks.map(({ context }) => context)).toEqual(['ci-fast']);
   });
 
-  it('plans one affected Turbo command plus isolated root contracts for ci-fast', () => {
+  it('plans one affected Turbo command without unrelated desktop release contracts', () => {
     const plan = createCiFastPlan({
       base: 'base-sha',
       head: 'head-sha',
@@ -479,18 +479,14 @@ describe('canonical release gates', () => {
       plan.commands.filter((command) => command[0] === 'pnpm' && command[1] === 'turbo'),
     ).toEqual([['pnpm', 'turbo', 'run', 'build', 'lint', 'typecheck', 'test', '--affected']]);
     expect(plan.commands).toContainEqual(['pnpm', 'format:check']);
-    expect(plan.commands).toContainEqual(['pnpm', 'release:desktop:policy']);
-    expect(plan.commands).toContainEqual(['pnpm', 'release:desktop:status']);
-    expect(plan.commands).toContainEqual(['pnpm', 'release:desktop:docs']);
-    expect(plan.commands).toContainEqual(['pnpm', 'test:desktop-release-contract']);
+    expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:policy']);
+    expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:status']);
+    expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:docs']);
+    expect(plan.commands).not.toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(plan.steps.map(({ gateIds }) => gateIds)).toEqual([
       ['install'],
       ['build', 'lint', 'typecheck', 'test'],
       ['format'],
-      ['desktop-release-contract'],
-      ['desktop-release-contract'],
-      ['desktop-release-contract'],
-      ['desktop-release-contract'],
     ]);
   });
 
@@ -529,15 +525,9 @@ describe('canonical release gates', () => {
       '--filter',
       '@tileborne/docs...',
     ]);
+    expect(docsPlan.commands).toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(desktopPlan.escalations.map(({ id }) => id)).toEqual(['desktop']);
     expect(desktopPlan.commands[1]).toContain('@tileborne/desktop...');
-    expect(desktopPlan.commands).toContainEqual([
-      'pnpm',
-      'turbo',
-      'run',
-      'build',
-      '--filter=@tileborne/desktop^...',
-    ]);
     expect(desktopPlan.commands).toContainEqual(['pnpm', 'test:desktop-smoke']);
     expect(desktopPlan.commands).toContainEqual([
       'pnpm',
@@ -549,7 +539,7 @@ describe('canonical release gates', () => {
       desktopPlan.commands.filter(
         (command) => command[0] === 'pnpm' && command[1] === 'turbo' && command.includes('build'),
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['desktop-smoke']);
     expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['packaged-runtime']);
     expect(rootPlan.escalations.map(({ id }) => id)).toEqual([
@@ -674,7 +664,6 @@ describe('canonical release gates', () => {
         'release:desktop:status',
         'release:desktop:docs',
         'test:desktop-release-contract',
-        'turbo run build --filter=@tileborne/desktop^...',
         'test:desktop-smoke',
         '--filter @tileborne/desktop test:packaged-smoke',
       ]);

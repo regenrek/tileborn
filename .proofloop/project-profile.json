@@ -54,7 +54,7 @@
   },
   "validation": {
     "cwd": ".",
-    "command": "pnpm --filter @tileborne/cli test",
+    "command": "pnpm --filter @tileborne/game-host exec vitest run --config vitest.config.ts src/build-manifest.test.ts",
     "full_suite_command": null,
     "timeout_seconds": 300
   },

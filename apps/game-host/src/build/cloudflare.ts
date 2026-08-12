@@ -453,7 +453,6 @@ const buildCloudflareGameHostInto = async (
     createdAt: input.createdAt,
   };
   const bundledBehaviorsSource = await buildBundledBehaviorsSource(input.mapPackages);
-  await bundleBehaviorWorker(outDir, bundledBehaviorsSource, buildAssets.behaviorWorkerEntry);
 
   // Two-pass fixed-point build (see the `workerFiles` convention in
   // types.ts): the manifest is embedded INTO worker.js, so pass 1 bundles
@@ -462,14 +461,20 @@ const buildCloudflareGameHostInto = async (
   // manifest. The shipped worker.js intentionally does not hash to the
   // recorded entries; `buildId` covers the pre-embed worker.
   let manifest = buildBundledManifest(manifestBase);
-  await bundleWorker(
-    outDir,
-    manifest,
-    bundledMapPackages,
-    input.runtimeVersion,
-    buildAssets.workerEntry,
-    input.smokeControlsEnabled === true,
-  );
+  // The behavior bundle and first worker pass have no data dependency and
+  // write distinct outputs. Overlap them, then keep the hash-dependent final
+  // worker pass sequential.
+  await Promise.all([
+    bundleBehaviorWorker(outDir, bundledBehaviorsSource, buildAssets.behaviorWorkerEntry),
+    bundleWorker(
+      outDir,
+      manifest,
+      bundledMapPackages,
+      input.runtimeVersion,
+      buildAssets.workerEntry,
+      input.smokeControlsEnabled === true,
+    ),
+  ]);
   checkpoint();
 
   const workerFiles: BundledManifestFileEntry[] = [

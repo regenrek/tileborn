@@ -54,7 +54,7 @@
   },
   "validation": {
     "cwd": ".",
-    "command": "pnpm test:release-gates",
+    "command": "pnpm --filter @tileborne/cli test",
     "full_suite_command": null,
     "timeout_seconds": 300
   },

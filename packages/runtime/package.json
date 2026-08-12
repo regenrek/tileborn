@@ -43,7 +43,7 @@
     "pixi.js": "8.18.1"
   },
   "devDependencies": {
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   },
   "license": "MIT"
 }

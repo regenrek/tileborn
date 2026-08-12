@@ -29,7 +29,7 @@
     "generate": "node scripts/generate-capabilities.mjs",
     "typecheck": "pnpm generate && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
     "lint": "eslint .",
-    "test": "pnpm build && vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests",
     "build": "pnpm generate && tsc -b tsconfig.json"
   },
   "dependencies": {

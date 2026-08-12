@@ -18,10 +18,34 @@
     },
     "lint": {},
     "test": {
+      "dependsOn": ["^build"]
+    },
+    "@tileborne/cli#test": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/desktop#test": {
+      "dependsOn": ["^build"]
+    },
+    "@tileborne/game-host#test": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/game-sdk#test": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/ipc-contracts#test": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/plugin-battle-royale#test": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@tileborne/services-app#test": {
       "dependsOn": ["^build", "build"]
     },
     "@tileborne/services-build#test": {
       "dependsOn": ["@tileborne/cli#build", "^build", "build"]
+    },
+    "@tileborne/ui#test": {
+      "dependsOn": ["^build", "build"]
     },
     "test:cli-e2e": {
       "dependsOn": ["^build", "build"]

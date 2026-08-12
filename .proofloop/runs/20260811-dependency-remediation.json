@@ -1,0 +1,84 @@
+{
+  "schema_version": 3,
+  "kind": "proofloop-herdr-sol-luna-fable/run-contract",
+  "task": {
+    "id": "20260811-dependency-remediation",
+    "source": "Maintainer-approved dependency security remediation and Vitest refresh",
+    "goal": "Upgrade every workspace Vitest declaration to the latest stable release and resolve the known vulnerable dependency versions without broadening package majors",
+    "hypothesis": "Exact stable pins and central same-major overrides clear the known advisories while preserving the focused release-gate operating path"
+  },
+  "project_profile": ".proofloop/project-profile.json",
+  "phase": "build",
+  "writer": "sol",
+  "allowed_paths": [
+    "package.json",
+    "apps/*/package.json",
+    "packages/*/package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml"
+  ],
+  "test_policy": {
+    "baseline_record": ".proofloop/evidence/20260811-dependency-remediation/test-baseline.json",
+    "result_record": ".proofloop/evidence/20260811-dependency-remediation/test-gate.json",
+    "ephemeral_directory": ".proofloop/evidence/20260811-dependency-remediation/probes",
+    "admission_record": ".proofloop/evidence/20260811-dependency-remediation/test-admission.json",
+    "permanent": {
+      "max_new_invariants": 0,
+      "max_changed_test_files": 0,
+      "max_added_test_lines": 0
+    },
+    "full_suite": {
+      "allowed": false,
+      "reason": null
+    }
+  },
+  "luna_mode": null,
+  "fable_stage": null,
+  "validation": {
+    "cwd": ".",
+    "command": "pnpm test:release-gates",
+    "timeout_seconds": 300,
+    "pass_criteria": [
+      "command exits successfully",
+      "release gate invariants pass with Vitest 4.1.10",
+      "dependency policy remains valid"
+    ]
+  },
+  "evidence": {
+    "directory": ".proofloop/evidence/20260811-dependency-remediation",
+    "required": [
+      "baseline",
+      "diff",
+      "validation-result",
+      "test-gate",
+      "handoff",
+      "pane-ownership"
+    ]
+  },
+  "budgets": {
+    "checkpoint_minutes": 20,
+    "hard_stop_minutes": 45,
+    "max_patch_batches": 1
+  },
+  "stop_conditions": [
+    "out-of-scope write",
+    "second writer or nested delegation",
+    "hypothesis disproved or scope broadened",
+    "checkpoint or hard-stop exceeded",
+    "manual acceptance boundary reached"
+  ],
+  "manual_acceptance": {
+    "required": false,
+    "owner": "human",
+    "criteria": []
+  },
+  "cleanup": {
+    "ownership_record": ".proofloop/evidence/20260811-dependency-remediation/pane-ownership.json",
+    "sentinel_process_record": ".proofloop/evidence/20260811-dependency-remediation/sentinel-process.json",
+    "sentinel_state_record": ".proofloop/evidence/20260811-dependency-remediation/sentinel-state.json",
+    "stop_recorded_sentinel_process": true,
+    "close_recorded_workflow_panes": true,
+    "leave_preexisting_panes_open": true,
+    "retire_sentinel_state": true
+  }
+}

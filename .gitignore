@@ -144,5 +144,6 @@ packages/runtime-wasm/src/**/*.js.map
 .plandb
 .turbo
 .refs
+.proofloop/evidence/
 project.json
 project.lock.json

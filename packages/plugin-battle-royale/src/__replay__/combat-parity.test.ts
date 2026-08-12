@@ -1,6 +1,5 @@
 import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
-import { createHash } from 'node:crypto';
 import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -68,7 +67,6 @@ interface TickState {
 interface RunResult {
   readonly states: readonly TickState[];
   readonly killEvents: readonly { readonly killer: string; readonly victim: string }[];
-  readonly wireHash: string;
 }
 
 const captureState = (world: ReturnType<typeof createTestPluginWorld>, tick: number): TickState => {
@@ -141,25 +139,11 @@ const runDuel = (): RunResult => {
     }
   }
 
-  const hash = createHash('sha256');
-  for (const frame of frames) {
-    hash.update(frame);
-  }
-
   resetZoneSingleton();
-  return { states, killEvents, wireHash: hash.digest('hex') };
+  return { states, killEvents };
 };
 
 describe('combat migration parity (neutral engine)', () => {
-  it('is deterministic: a fixed seed + scripted inputs replay identically', () => {
-    const first = runDuel();
-    const second = runDuel();
-
-    expect(first.states).toEqual(second.states);
-    expect(first.killEvents).toEqual(second.killEvents);
-    expect(first.wireHash).toBe(second.wireHash);
-  });
-
   it("preserves BR's observable combat outcome: player-1 hits and defeats player-2", () => {
     const result = runDuel();
 

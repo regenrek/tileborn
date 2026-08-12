@@ -58,20 +58,13 @@ const actionState = (overrides: {
 });
 
 describe('battle royale input-map contribution', () => {
-  it('decodes the manifest inputMaps slot data against the @tileborne/core InputMap schema', () => {
-    const decoded = decodeInputMap(BR_INPUT_MAP_CONTRIBUTION_ID, readManifestInputMapData());
-    expect(Result.isSuccess(decoded)).toBe(true);
-    if (Result.isSuccess(decoded)) {
-      expect(decoded.success.id).toBe(BR_INPUT_MAP_ID);
-      // Every bound action carries a value-kind declaration.
-      expect(findUndeclaredBoundActions(decoded.success)).toEqual([]);
-    }
-  });
-
   it('keeps the code-built default map in sync with the manifest (both decode equal)', () => {
     const fromManifest = decodeInputMap(BR_INPUT_MAP_CONTRIBUTION_ID, readManifestInputMapData());
     expect(Result.isSuccess(fromManifest)).toBe(true);
     if (Result.isSuccess(fromManifest)) {
+      expect(fromManifest.success.id).toBe(BR_INPUT_MAP_ID);
+      // Every bound action carries a value-kind declaration.
+      expect(findUndeclaredBoundActions(fromManifest.success)).toEqual([]);
       expect(battleRoyaleDefaultInputMap()).toEqual(fromManifest.success);
     }
   });

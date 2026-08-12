@@ -15,6 +15,15 @@ Before substantial work:
 - When several already-known tool calls are independent, read-only, and non-conflicting, run them concurrently inside one `functions.exec` call using `Promise.allSettled`. Inspect every result.
 - Keep dependent or adaptive calls, writes, approvals, waits or resumes, and conflicting mutations sequential. Limit fan-out and combined output.
 
+## Proofloop
+
+- For bounded implementation runs that need independent verification, use the
+  Sol-Luna-Fable Proofloop profile at `.proofloop/project-profile.json`.
+- Keep Sol as the sole writer. Luna and Fable are read-only and are selected
+  only when the run contract names them.
+- Proofloop does not own legacy test retirement; perform approved retirement
+  before taking a new Proofloop baseline.
+
 ## Verification Policy: Operating Path First
 
 - Prove the real operating path before adding tests, guardrails, fixtures, or

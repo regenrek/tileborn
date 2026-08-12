@@ -32,14 +32,6 @@ const readManifestHudLayoutData = (): unknown => {
 };
 
 describe('battle royale hud-layout contribution', () => {
-  it('decodes the manifest hudLayouts slot data against the @tileborne/core HudLayout schema', () => {
-    const decoded = decodeHudLayout(BR_HUD_LAYOUT_CONTRIBUTION_ID, readManifestHudLayoutData());
-    expect(Result.isSuccess(decoded)).toBe(true);
-    if (Result.isSuccess(decoded)) {
-      expect(decoded.success.id).toBe(BR_HUD_LAYOUT_ID);
-    }
-  });
-
   it('keeps the code-built default layout in sync with the manifest (both decode equal)', () => {
     const fromManifest = decodeHudLayout(
       BR_HUD_LAYOUT_CONTRIBUTION_ID,
@@ -47,6 +39,7 @@ describe('battle royale hud-layout contribution', () => {
     );
     expect(Result.isSuccess(fromManifest)).toBe(true);
     if (Result.isSuccess(fromManifest)) {
+      expect(fromManifest.success.id).toBe(BR_HUD_LAYOUT_ID);
       expect(battleRoyaleDefaultHudLayout()).toEqual(fromManifest.success);
     }
   });

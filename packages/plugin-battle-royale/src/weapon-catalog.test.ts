@@ -35,19 +35,6 @@ const readManifestWeaponCatalogData = (): unknown => {
 };
 
 describe('battle royale weapon catalog contribution', () => {
-  it('decodes the manifest weaponCatalogs slot data against the @tileborne/simulation schemas', () => {
-    const decoded = decodeWeaponCatalog(
-      BR_WEAPON_CATALOG_CONTRIBUTION_ID,
-      readManifestWeaponCatalogData(),
-    );
-    expect(Result.isSuccess(decoded)).toBe(true);
-    if (Result.isSuccess(decoded)) {
-      const entry = decoded.success.weapons[0];
-      expect(entry?.weapon.id).toBe(BR_PRIMARY_WEAPON_ID);
-      expect(entry?.delivery._tag).toBe('ProjectileDelivery');
-    }
-  });
-
   it('merges the manifest weapon pack through the typed registry without errors', () => {
     const decoded = decodeWeaponCatalog(
       BR_WEAPON_CATALOG_CONTRIBUTION_ID,
@@ -57,6 +44,10 @@ describe('battle royale weapon catalog contribution', () => {
     if (Result.isFailure(decoded)) {
       return;
     }
+    const entry = decoded.success.weapons[0];
+    expect(entry?.weapon.id).toBe(BR_PRIMARY_WEAPON_ID);
+    expect(entry?.delivery._tag).toBe('ProjectileDelivery');
+
     const merged = mergeWeaponCatalogs([
       { contributionId: BR_WEAPON_CATALOG_CONTRIBUTION_ID, catalog: decoded.success },
     ]);

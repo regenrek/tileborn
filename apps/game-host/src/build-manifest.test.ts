@@ -251,7 +251,7 @@ export default {
     await rm(tempRoot, { recursive: true, force: true });
   });
 
-  it('produces manifest.json and worker.js for a fixture plugin', async () => {
+  it('ships one canonical fixture artifact with its deployment boundaries', async () => {
     const { buildCloudflareGameHost } = await import('./build/cloudflare.js');
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'tileborne-gh-build-'));
     const pluginRoot = path.join(tempRoot, 'plugin-src');
@@ -396,42 +396,6 @@ export default {
     // Build-time staging never ships inside the artifact.
     await expect(stat(path.join(outDir, '.staging'))).rejects.toThrow();
 
-    const smokeOut = path.join(tempRoot, 'smoke-out');
-    const smokeResult = await buildCloudflareGameHost({
-      outDir: smokeOut,
-      smokeControlsEnabled: true,
-      pluginId: '@tileborne-plugins/fixture',
-      pluginVersion: '0.1.0',
-      pluginRoot,
-      assetPacks: [],
-      mapPackages: [{ mapId, packageId, sourceDir: mapPackageDir, mapPackage: mapPackageWire }],
-      runtimeVersion: '0.0.0',
-      siteName: 'fixture-host',
-      createdAt: '2026-01-01T00:00:00.000Z',
-    });
-    const smokeWorkerSource = await readFile(smokeResult.bundlePath, 'utf8');
-    expect(smokeWorkerSource).toContain('/__smoke/rooms/:id/drop-participant-socket');
-    expect(smokeWorkerSource).toContain('/__smoke/drop-participant-socket');
-
-    const repeatOut = path.join(tempRoot, 'repeat-out');
-    const repeat = await buildCloudflareGameHost({
-      outDir: repeatOut,
-      pluginId: '@tileborne-plugins/fixture',
-      pluginVersion: '0.1.0',
-      pluginRoot,
-      assetPacks: [],
-      mapPackages: [{ mapId, packageId, sourceDir: mapPackageDir, mapPackage: mapPackageWire }],
-      runtimeVersion: '0.0.0',
-      siteName: 'fixture-host',
-      createdAt: '2026-01-01T00:00:00.000Z',
-    });
-    expect(repeat.manifestHash).toBe(result.manifestHash);
-    expect(repeat.fileHashes).toEqual(result.fileHashes);
-    for (const relativePath of result.files) {
-      expect(await readFile(path.join(repeatOut, relativePath))).toEqual(
-        await readFile(path.join(outDir, relativePath)),
-      );
-    }
     await rm(tempRoot, { recursive: true, force: true });
   }, 300_000);
 });

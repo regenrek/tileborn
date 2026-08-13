@@ -11,7 +11,7 @@
       "outputs": ["dist/**"]
     },
     "@tileborne/game-host#typecheck": {
-      "dependsOn": ["@tileborne/plugin-battle-royale#build", "^typecheck"]
+      "dependsOn": ["@tileborne/plugin-battle-royale#build", "^typecheck", "build"]
     },
     "typecheck": {
       "dependsOn": ["^build", "^typecheck"]

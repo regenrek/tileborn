@@ -26,8 +26,6 @@
   "scripts": {
     "generate:bundled": "node scripts/generate-bundled-modules.mjs",
     "prebuild": "node scripts/generate-bundled-modules.mjs",
-    "pretypecheck": "node scripts/generate-bundled-modules.mjs",
-    "pretest": "node scripts/generate-bundled-modules.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.smoke.json",
     "lint": "eslint .",
     "test": "vitest run",

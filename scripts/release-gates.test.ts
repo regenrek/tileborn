@@ -181,6 +181,9 @@ describe('canonical release gates', () => {
     const turbo = JSON.parse(read('turbo.json')) as {
       readonly tasks: Record<string, { readonly dependsOn?: readonly string[] }>;
     };
+    const gameHostPackage = JSON.parse(read('apps/game-host/package.json')) as {
+      readonly scripts: Record<string, string>;
+    };
 
     expect(rootPackage.scripts.ci).toBe('pnpm ci:fast');
     expect(rootPackage.scripts['ci:fast']).toBe('pnpm release:gates:ci-fast');
@@ -196,6 +199,10 @@ describe('canonical release gates', () => {
     expect(turbo.tasks['@tileborne/services-build#test']?.dependsOn).toContain(
       '@tileborne/cli#build',
     );
+    expect(turbo.tasks['@tileborne/game-host#typecheck']?.dependsOn).toContain('build');
+    expect(gameHostPackage.scripts.prebuild).toBe('node scripts/generate-bundled-modules.mjs');
+    expect(gameHostPackage.scripts.pretypecheck).toBeUndefined();
+    expect(gameHostPackage.scripts.pretest).toBeUndefined();
   });
 
   it('makes GitHub Actions expose one affected-scope ci-fast summary check', () => {

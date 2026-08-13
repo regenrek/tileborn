@@ -2,4 +2,5 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
-exec node "$repo_root/scripts/security/check-forbidden-paths.mjs" --staged
+node "$repo_root/scripts/security/check-forbidden-paths.mjs" --staged
+exec pnpm --dir "$repo_root" verify:staged

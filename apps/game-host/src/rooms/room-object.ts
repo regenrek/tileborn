@@ -1526,7 +1526,8 @@ export class PlaytestRoom implements DurableObject {
     const shellNavigationRequests = behaviorStepFailed
       ? []
       : (this.behaviorRuntime?.shellNavigationRequests ?? []);
-    const { pendingSimulationCommit: _pendingSimulationCommit, ...committedStorage } = storage;
+    const committedStorage = { ...storage };
+    Reflect.deleteProperty(committedStorage, 'pendingSimulationCommit');
     const behaviorStorage: RoomStorage = {
       ...committedStorage,
       shellNavigationEpoch: pending.shellNavigationEpoch,

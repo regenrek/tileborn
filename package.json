@@ -48,6 +48,8 @@
     "security:forbidden": "node scripts/security/check-forbidden-paths.mjs --tracked",
     "security:supply-chain": "node scripts/security/check-supply-chain-policy.mjs",
     "security:check": "bash scripts/secleak-check.sh",
+    "verify:staged": "lint-staged --concurrent false",
+    "verify:push": "node scripts/git-hooks/pre-push.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -58,6 +60,7 @@
     "eslint-import-resolver-typescript": "4.4.4",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-react-hooks": "7.1.1",
+    "lint-staged": "17.3.0",
     "prettier": "3.8.3",
     "turbo": "2.9.14",
     "typescript": "6.0.3",

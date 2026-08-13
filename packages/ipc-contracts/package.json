@@ -21,6 +21,10 @@
     "./contracts/multiplayer": {
       "types": "./dist/contracts/multiplayer.d.ts",
       "default": "./dist/contracts/multiplayer.js"
+    },
+    "./contracts/gameplay-event": {
+      "types": "./dist/contracts/gameplay-event.d.ts",
+      "default": "./dist/contracts/gameplay-event.js"
     }
   },
   "scripts": {

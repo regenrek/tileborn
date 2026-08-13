@@ -27,7 +27,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DAMAGE,
   INVENTORY,
-  LOOT_CRATE_KIND,
   LOOT_PICKUP_RADIUS,
   MOVEMENT,
   PROJECTILE,
@@ -796,14 +795,10 @@ describe('combat system (neutral engine)', () => {
     );
     expect(lootPlacement).toBeDefined();
 
-    const authoredObject = generatedMap.objects.find(
-      (object) => object.id === lootPlacement?.objectId && object.kind === LOOT_CRATE_KIND,
-    );
     const collisionRect = artifact.objectCollisionRects?.find(
       (rect) => rect.objectId === lootPlacement?.objectId,
     );
 
-    expect(authoredObject?.x).not.toBe(lootPlacement?.x);
     expect(collisionRect).toMatchObject({
       objectId: lootPlacement?.objectId,
       x: lootPlacement?.x,

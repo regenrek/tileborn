@@ -86,10 +86,10 @@ export const makeReplayFixtureMap = () =>
     tileWidth: TILE_SIZE,
     tileHeight: TILE_SIZE,
     objects: [
-      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 64, 256),
+      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 256, 64),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
     ],
     properties: { maxPlayers: REPLAY_MAX_PLAYERS },
   });

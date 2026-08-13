@@ -44,9 +44,9 @@ const makeDuelMapPackage = (): unknown =>
       tileWidth: 32,
       tileHeight: 32,
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 10, 16),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 40, 16),
-        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 112, 64),
+        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
       ],
       properties: { maxPlayers: 2 },
     }),
@@ -158,10 +158,6 @@ describe('combat migration parity (neutral engine)', () => {
       killer: String(BattleRoyaleProtocol.makePlayerId('player-1')),
       victim: String(BattleRoyaleProtocol.makePlayerId('player-2')),
     });
-  });
-
-  it('applies exact projectile damage: health steps straight to zero on a lethal hit', () => {
-    const result = runDuel();
     const loserSeries = result.states.map(
       (state) => state.players.find((player) => player.playerId === 'player-2')!.health,
     );

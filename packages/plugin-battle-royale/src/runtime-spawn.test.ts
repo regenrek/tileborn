@@ -126,10 +126,10 @@ const makeSpawnFixtureMap = () =>
     tileWidth: 32,
     tileHeight: 32,
     objects: [
-      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 64, 256),
+      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 256, 64),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
     ],
     properties: { maxPlayers: DEFAULT_MAX_PLAYERS },
   });
@@ -182,9 +182,9 @@ describe('spawnPlayersFromArtifact', () => {
     const slots = resolveSpawnSlots(artifact);
 
     expect(slots).toEqual([
-      { x: 0.125, y: 0.03125 },
-      { x: 0.1875, y: 0.0625 },
-      { x: 0.0625, y: 0.09375 },
+      { x: 64, y: 64 },
+      { x: 256, y: 64 },
+      { x: 64, y: 256 },
     ]);
   });
 
@@ -197,21 +197,21 @@ describe('spawnPlayersFromArtifact', () => {
       tileHeight: 32,
       properties: { maxPlayers: 3 },
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 1, 1),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 1),
-        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 3, 1),
-        makeTestObject(TEST_OBJECT_IDS[3], SPAWN_POINT_KIND, 40, 1),
-        makeTestObject(TEST_OBJECT_IDS[4], SPAWN_POINT_KIND, 1, 40),
-        makeTestObject(TEST_OBJECT_IDS[5], SPAWN_POINT_KIND, 40, 40),
-        makeTestObject(TEST_OBJECT_IDS[6], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 96, 64),
+        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 128, 64),
+        makeTestObject(TEST_OBJECT_IDS[3], SPAWN_POINT_KIND, 512, 64),
+        makeTestObject(TEST_OBJECT_IDS[4], SPAWN_POINT_KIND, 64, 512),
+        makeTestObject(TEST_OBJECT_IDS[5], SPAWN_POINT_KIND, 512, 512),
+        makeTestObject(TEST_OBJECT_IDS[6], 'shrink-zone-anchor', 1024, 1024),
       ],
     });
     const artifact = exportRuntimeArtifact(map);
 
     expect(resolveSpawnSlots(artifact)).toEqual([
-      { x: 0.03125, y: 0.03125 },
-      { x: 1.25, y: 1.25 },
-      { x: 1.25, y: 0.03125 },
+      { x: 64, y: 64 },
+      { x: 512, y: 512 },
+      { x: 512, y: 64 },
     ]);
   });
 
@@ -224,10 +224,10 @@ describe('spawnPlayersFromArtifact', () => {
       tileHeight: 32,
       properties: { maxPlayers: 2 },
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 1, 1),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 2),
-        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 3, 3),
-        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 256),
+        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 448, 448),
+        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
       ],
     });
     const artifact = exportRuntimeArtifact(map);
@@ -248,9 +248,13 @@ describe('createRuntimeAdapter', () => {
       tileWidth: 32,
       tileHeight: 32,
       objects: TEST_OBJECT_IDS.map((id, index) =>
-        makeTestObject(id, SPAWN_POINT_KIND, 4 + (index % 4) * 12, 4 + Math.floor(index / 4) * 40, {
-          team: 'solo',
-        }),
+        makeTestObject(
+          id,
+          SPAWN_POINT_KIND,
+          64 + (index % 4) * 128,
+          64 + Math.floor(index / 4) * 256,
+          { team: 'solo' },
+        ),
       ),
       properties: {
         [PLUGIN_ID]: {
@@ -671,7 +675,9 @@ describe('createRuntimeAdapter', () => {
       | {
           readonly worldComponents?: readonly {
             readonly name?: string;
-            readonly entries?: readonly { readonly value?: { readonly acceptedFireTick?: number } }[];
+            readonly entries?: readonly {
+              readonly value?: { readonly acceptedFireTick?: number };
+            }[];
           }[];
         }
       | undefined;
@@ -819,14 +825,14 @@ describe('createRuntimeAdapter', () => {
         tileWidth: 32,
         tileHeight: 32,
         objects: [
-          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 4),
-          makeTestObject(TEST_OBJECT_IDS[1], 'shrink-zone-anchor', 16, 16),
-          makeTestObject(TEST_OBJECT_IDS[2], LOOT_CRATE_KIND, 4, 4, {
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], 'shrink-zone-anchor', 512, 512),
+          makeTestObject(TEST_OBJECT_IDS[2], LOOT_CRATE_KIND, 96, 64, {
             itemKind: 'rifle',
             tier: 'common',
             weight: 1,
           }),
-          makeTestObject(TEST_OBJECT_IDS[3], LOOT_CRATE_KIND, 4, 4, {
+          makeTestObject(TEST_OBJECT_IDS[3], LOOT_CRATE_KIND, 96, 64, {
             itemKind: 'armor-vest',
             tier: 'rare',
             weight: 3,
@@ -924,11 +930,11 @@ describe('createRuntimeAdapter', () => {
         tileWidth: 32,
         tileHeight: 32,
         objects: [
-          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 16, 16),
-          makeTestObject(TEST_OBJECT_IDS[3], 'trap', 5, 5, { radius: 28 }),
-          makeTestObject(TEST_OBJECT_IDS[4], 'decoy', 7, 5, { durationTicks: 90 }),
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 64),
+          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 512, 512),
+          makeTestObject(TEST_OBJECT_IDS[3], 'trap', 512, 640, { radius: 28 }),
+          makeTestObject(TEST_OBJECT_IDS[4], 'decoy', 640, 640, { durationTicks: 90 }),
         ],
         properties: { maxPlayers: 2 },
       }),
@@ -961,9 +967,9 @@ describe('createRuntimeAdapter', () => {
         tileWidth: 32,
         tileHeight: 32,
         objects: [
-          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 4),
-          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 6, 4),
-          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 16, 16),
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 64),
+          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 512, 512),
         ],
         properties: { maxPlayers: 2 },
       }),

@@ -97,7 +97,7 @@ const makeFixtureMap = () =>
     tileHeight: 32,
     objects: [
       makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 16, 16),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 4, 4),
+      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 900, 900),
       makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
     ],
   });
@@ -210,7 +210,7 @@ describe('zone damage', () => {
     registerPlayerStores(world);
 
     const entity = world.createEntity();
-    world.getComponent(POSITION_COMPONENT).set(entity, { x: 100, y: 100 });
+    world.getComponent(POSITION_COMPONENT).set(entity, { x: 900, y: 900 });
     world.getComponent(PLAYER_COMPONENT).set(entity, {
       playerId: 'player-outside',
       health: DAMAGE.playerHealth,
@@ -288,7 +288,7 @@ describe('last-man-standing', () => {
     world.getComponent(TEAM_COMPONENT).set(inside, { team: 'solo' });
 
     const outside = world.createEntity();
-    world.getComponent(POSITION_COMPONENT).set(outside, { x: 100, y: 100 });
+    world.getComponent(POSITION_COMPONENT).set(outside, { x: 900, y: 900 });
     world.getComponent(PLAYER_COMPONENT).set(outside, {
       playerId: 'player-outside',
       health: DAMAGE.playerHealth,

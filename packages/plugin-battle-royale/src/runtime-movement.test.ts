@@ -132,8 +132,8 @@ const spawnTwoPlayerMapPackage = () =>
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 10, 20),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 30, 40),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 64),
       ],
       properties: { maxPlayers: 2 },
     }),
@@ -465,10 +465,10 @@ describe('applyMovementTick', () => {
     plugin.onTick?.(world, DT, 1);
 
     const positions = positionsByPlayerId(world);
-    expect(positions.get('player-1')?.x).toBeCloseTo(10 + MOVEMENT.speed * DT);
-    expect(positions.get('player-1')?.y).toBeCloseTo(20);
-    expect(positions.get('player-2')?.x).toBeCloseTo(30);
-    expect(positions.get('player-2')?.y).toBeCloseTo(40 + MOVEMENT.speed * DT);
+    expect(positions.get('player-1')?.x).toBeCloseTo(64 + MOVEMENT.speed * DT);
+    expect(positions.get('player-1')?.y).toBeCloseTo(64);
+    expect(positions.get('player-2')?.x).toBeCloseTo(256);
+    expect(positions.get('player-2')?.y).toBeCloseTo(64 + MOVEMENT.speed * DT);
   });
 
   it('keeps a player stationary while holding PrimaryAction without movement input', () => {
@@ -495,8 +495,8 @@ describe('applyMovementTick', () => {
     plugin.onTick?.(world, DT, 1);
 
     const positions = positionsByPlayerId(world);
-    expect(positions.get('player-1')?.x).toBeCloseTo(10);
-    expect(positions.get('player-1')?.y).toBeCloseTo(20);
+    expect(positions.get('player-1')?.x).toBeCloseTo(64);
+    expect(positions.get('player-1')?.y).toBeCloseTo(64);
     expect([...world.getComponent<Projectile>(PROJECTILE_COMPONENT).entries()]).toHaveLength(1);
   });
 });

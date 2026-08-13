@@ -41,12 +41,12 @@ const fixtureMap = (objects: MapObject[]): TileborneMap =>
 describe('validateMap', () => {
   it('passes when spawn, anchor, and loot requirements are met', () => {
     const map = fixtureMap([
-      makeTestObject(TEST_OBJECT_IDS[0], 'spawn-point', 1, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], 'spawn-point', 12, 1),
-      makeTestObject(TEST_OBJECT_IDS[2], 'spawn-point', 1, 12),
-      makeTestObject(TEST_OBJECT_IDS[3], 'spawn-point', 12, 12),
-      makeTestObject(TEST_OBJECT_IDS[4], 'shrink-zone-anchor', 32, 32),
-      makeTestObject(TEST_OBJECT_IDS[5], 'loot-crate', 10, 10, { tier: 'common' }),
+      makeTestObject(TEST_OBJECT_IDS[0], 'spawn-point', 64, 64),
+      makeTestObject(TEST_OBJECT_IDS[1], 'spawn-point', 256, 64),
+      makeTestObject(TEST_OBJECT_IDS[2], 'spawn-point', 64, 256),
+      makeTestObject(TEST_OBJECT_IDS[3], 'spawn-point', 256, 256),
+      makeTestObject(TEST_OBJECT_IDS[4], 'shrink-zone-anchor', 1024, 1024),
+      makeTestObject(TEST_OBJECT_IDS[5], 'loot-crate', 512, 512, { tier: 'common' }),
     ]);
     expect(validateMap(map)).toEqual({ ok: true, issues: [] });
   });
@@ -77,7 +77,7 @@ describe('validateMap', () => {
     expect(result.issues).toContainEqual({
       severity: 'warning',
       message:
-        'Closest spawn points are 1.4 world units apart; keep at least 8 for player clearance',
+        'Closest spawn points are 1.4 world units apart; keep at least 40 for player clearance',
       location: 'objects',
     });
   });

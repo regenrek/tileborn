@@ -87,7 +87,7 @@ describe('buildBattleRoyaleRuntimeState', () => {
       { x: 4, y: 4, team: 'solo', weight: 1 },
     ]);
     expect(state.spawnAnchors).toEqual(state.spawnPoints);
-    expect(state.mapBounds).toEqual({ minX: 0, minY: 0, maxX: 320, maxY: 320 });
+    expect(state.mapBounds).toEqual({ minX: 0, minY: 0, maxX: 1024, maxY: 1024 });
     expect(state.shrinkSchedule).toEqual({
       centerX: 16,
       centerY: 16,

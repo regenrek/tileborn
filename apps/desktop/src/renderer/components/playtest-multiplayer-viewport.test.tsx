@@ -41,6 +41,7 @@ const projectStateMock = vi.hoisted(() => ({
 const setCameraMock = vi.hoisted(() => vi.fn());
 const renderFromEntitiesSpy = vi.hoisted(() => vi.fn());
 const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
+const currentFullStateMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const projectMock = vi.hoisted(() => vi.fn<(snapshot: unknown) => unknown[]>());
 
 vi.mock('@tileborne/runtime', () => ({
@@ -57,7 +58,7 @@ vi.mock('@tileborne/runtime', () => ({
   SnapshotEntityStore: class SnapshotEntityStore {
     apply = vi.fn();
     sampleInterpolatedFullState = sampleInterpolatedMock;
-    getCurrentFullState = vi.fn(() => undefined);
+    getCurrentFullState = currentFullStateMock;
     getPreviousFullState = vi.fn(() => undefined);
   },
   // Neutral input-resolver stubs (ADR-0024): the input bridge constructs an
@@ -255,6 +256,8 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
     renderFromEntitiesSpy.mockReset();
     sampleInterpolatedMock.mockReset();
     sampleInterpolatedMock.mockReturnValue(undefined);
+    currentFullStateMock.mockReset();
+    currentFullStateMock.mockReturnValue(undefined);
     projectMock.mockReset();
     projectMock.mockReturnValue([]);
     editorStateMock.current = {
@@ -491,6 +494,7 @@ describe('PlaytestMultiplayerViewport overlay wiring', () => {
       current: currentSnapshot,
       alpha: 0.5,
     });
+    currentFullStateMock.mockReturnValue({ tag: 'latest' });
 
     let capturedTick: FrameRequestCallback | undefined;
     vi.stubGlobal(

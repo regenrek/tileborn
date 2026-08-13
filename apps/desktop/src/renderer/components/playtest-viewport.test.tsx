@@ -54,6 +54,7 @@ const editorStateMock = vi.hoisted(() => ({
 const setCameraMock = vi.hoisted(() => vi.fn());
 const renderFromEntitiesSpy = vi.hoisted(() => vi.fn());
 const sampleInterpolatedMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
+const currentFullStateMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const snapshotApplySpy = vi.hoisted(() => vi.fn());
 const projectMock = vi.hoisted(() => vi.fn<(snapshot: unknown) => unknown[]>());
 const decodeServerFrameMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
@@ -101,7 +102,7 @@ vi.mock('@tileborne/runtime', async () => {
         this.current = frame;
       });
       sampleInterpolatedFullState = sampleInterpolatedMock;
-      getCurrentFullState = vi.fn(() => this.current);
+      getCurrentFullState = vi.fn(() => currentFullStateMock() ?? this.current);
       getPreviousFullState = vi.fn(() => undefined);
     },
     // Real interpolation (not identity) so the render-loop test can assert the
@@ -513,6 +514,8 @@ describe('PlaytestViewport overlay wiring', () => {
     dispatchRuntimeAudioEventMock.mockClear();
     sampleInterpolatedMock.mockReset();
     sampleInterpolatedMock.mockReturnValue(undefined);
+    currentFullStateMock.mockReset();
+    currentFullStateMock.mockReturnValue(undefined);
     projectMock.mockReset();
     projectMock.mockReturnValue([]);
     decodeServerFrameMock.mockReset();
@@ -2019,6 +2022,7 @@ describe('PlaytestViewport overlay wiring', () => {
       current: currentSnapshot,
       alpha: 0.5,
     });
+    currentFullStateMock.mockReturnValue({ tag: 'latest' });
 
     let capturedTick: FrameRequestCallback | undefined;
     vi.stubGlobal(
@@ -2086,6 +2090,7 @@ describe('PlaytestViewport overlay wiring', () => {
       current: currentSnapshot,
       alpha: 1,
     });
+    currentFullStateMock.mockReturnValue({ tag: 'latest' });
 
     let capturedTick: FrameRequestCallback | undefined;
     vi.stubGlobal(

@@ -348,12 +348,12 @@ describe('canonical readiness report', () => {
       tileWidth: 32,
       tileHeight: 32,
       objects: [
-        object(0, 'spawn-point', 1, 1),
-        object(1, 'spawn-point', 12, 1),
-        object(2, 'spawn-point', 1, 12),
-        object(3, 'spawn-point', 12, 12),
-        object(4, 'shrink-zone-anchor', 32, 32),
-        object(5, 'loot-crate', 10, 10),
+        object(0, 'spawn-point', 64, 64),
+        object(1, 'spawn-point', 256, 64),
+        object(2, 'spawn-point', 64, 256),
+        object(3, 'spawn-point', 256, 256),
+        object(4, 'shrink-zone-anchor', 1024, 1024),
+        object(5, 'loot-crate', 512, 512),
       ],
     });
     const invalidMap = makeTileborneMap({

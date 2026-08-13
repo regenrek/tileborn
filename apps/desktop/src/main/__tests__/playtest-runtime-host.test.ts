@@ -1516,7 +1516,7 @@ describe('playtest-runtime-host', () => {
 
     await waitForTickCount(sessionId, 2);
     const before = getPlaytestRuntimeSnapshot(sessionId);
-    expect(before?.players[0]).toMatchObject({ playerId: 'player-1', x: 0.3125, y: 0.625 });
+    expect(before?.players[0]).toMatchObject({ playerId: 'player-1', x: 10, y: 20 });
 
     setPlaytestRuntimeInput(sessionId, 'player-1', {
       tick: 3,
@@ -1575,8 +1575,8 @@ describe('playtest-runtime-host', () => {
     const beforeStartHealth = getPlaytestRuntimeMetrics(sessionId)?.hud?.localPlayer?.health;
     expect(beforeStartSnapshot?.players[0]).toMatchObject({
       playerId: 'player-1',
-      x: 0.3125,
-      y: 0.625,
+      x: 10,
+      y: 20,
     });
     expect(beforeStartHealth).toBeGreaterThan(0);
 
@@ -1694,7 +1694,7 @@ describe('playtest-runtime-host', () => {
     await waitForTickCount(sessionId, 2);
 
     const snapshot = getPlaytestRuntimeSnapshot(sessionId);
-    expect(snapshot?.players).toEqual([{ playerId: 'player-1', x: 2.5, y: 3 }]);
+    expect(snapshot?.players).toEqual([{ playerId: 'player-1', x: 80, y: 96 }]);
     expect(snapshot?.frame).toBeInstanceOf(Uint8Array);
     const frame = decodeServerFrame(snapshot!.frame!);
     expect(frame).toMatchObject({

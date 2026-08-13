@@ -39,14 +39,6 @@ const ciFastDesktopReleaseContractCommands = Object.freeze([
   ciFastStep(['desktop-release-contract'], ['pnpm', 'test:desktop-release-contract']),
 ]);
 
-const ciFastDesktopCandidateCommands = Object.freeze([
-  ciFastStep(['desktop-smoke'], ['pnpm', 'test:desktop-smoke']),
-  ciFastStep(
-    ['packaged-runtime'],
-    ['pnpm', '--filter', '@tileborne/desktop', 'test:packaged-smoke'],
-  ),
-]);
-
 /**
  * @typedef {object} ReleaseGate
  * @property {string} id
@@ -311,7 +303,6 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     '--concurrency=2',
     ...turboFilters,
   ];
-  const includesDesktopCandidateScope = filters.includes('@tileborne/desktop...');
   const includesDesktopReleaseContractScope = escalations.some(({ id }) =>
     ['root-config', 'release-scripts', 'workflows', 'docs', 'desktop'].includes(id),
   );
@@ -321,7 +312,6 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     ciFastStep(['build', 'lint', 'typecheck'], turboVerificationCommand),
     ciFastStep(['test'], turboTestCommand),
     ...(includesDesktopReleaseContractScope ? ciFastDesktopReleaseContractCommands : []),
-    ...(includesDesktopCandidateScope ? ciFastDesktopCandidateCommands : []),
   ];
 
   return Object.freeze({

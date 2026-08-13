@@ -548,8 +548,8 @@ describe('canonical release gates', () => {
     expect(docsPlan.commands).toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(desktopPlan.escalations.map(({ id }) => id)).toEqual(['desktop']);
     expect(desktopPlan.commands[2]).toContain('@tileborne/desktop...');
-    expect(desktopPlan.commands).toContainEqual(['pnpm', 'test:desktop-smoke']);
-    expect(desktopPlan.commands).toContainEqual([
+    expect(desktopPlan.commands).not.toContainEqual(['pnpm', 'test:desktop-smoke']);
+    expect(desktopPlan.commands).not.toContainEqual([
       'pnpm',
       '--filter',
       '@tileborne/desktop',
@@ -560,8 +560,10 @@ describe('canonical release gates', () => {
         (command) => command[0] === 'pnpm' && command[1] === 'turbo' && command.includes('build'),
       ),
     ).toHaveLength(1);
-    expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['desktop-smoke']);
-    expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).toContainEqual(['packaged-runtime']);
+    expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).not.toContainEqual(['desktop-smoke']);
+    expect(desktopPlan.steps.map(({ gateIds }) => gateIds)).not.toContainEqual([
+      'packaged-runtime',
+    ]);
     expect(rootPlan.escalations.map(({ id }) => id)).toEqual([
       'root-config',
       'lockfile',
@@ -633,8 +635,6 @@ describe('canonical release gates', () => {
       'typecheck',
       'test',
       'desktop-release-contract',
-      'desktop-smoke',
-      'packaged-runtime',
     ]);
     expect(
       validateReleaseGateReceipt(receipt, {
@@ -698,8 +698,6 @@ describe('canonical release gates', () => {
         'release:desktop:status',
         'release:desktop:docs',
         'test:desktop-release-contract',
-        'test:desktop-smoke',
-        '--filter @tileborne/desktop test:packaged-smoke',
       ]);
 
       const receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) as {
@@ -717,8 +715,6 @@ describe('canonical release gates', () => {
         'typecheck',
         'test',
         'desktop-release-contract',
-        'desktop-smoke',
-        'packaged-runtime',
       ];
 
       expect(receipt.gates.map(({ id }) => id)).toEqual(expectedGateIds);

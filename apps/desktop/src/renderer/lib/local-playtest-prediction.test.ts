@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import type { RenderableEntity } from '@tileborne/runtime';
 
 import {
   applyLocalPredictionToEntities,
   LocalPlaytestPredictionController,
 } from './local-playtest-prediction';
 
-const localEntity = (x = 0, y = 0) => ({
+const localEntity = (x = 0, y = 0): RenderableEntity => ({
   id: 'br:player:player-1',
-  kind: 'sprite' as const,
+  assetId: 'player',
   x,
   y,
-  texture: 'player',
-  width: 16,
-  height: 16,
   rotation: 0,
 });
 

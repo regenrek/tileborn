@@ -5,7 +5,6 @@ import userEvent from '@testing-library/user-event';
 import { type ComponentProps, useLayoutEffect } from 'react';
 import { Effect, Option } from 'effect';
 import { REQUIRED_PLAYER_MODEL_CLIP_KEYS, type PlayerModelClipKey } from '@tileborne/core';
-import * as BattleRoyaleProtocol from '@tileborne/ipc-contracts/protocols/battle-royale';
 import { PLUGIN_ID } from '@tileborne/plugin-battle-royale/constants';
 import {
   createBattleRoyaleProjector,

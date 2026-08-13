@@ -86,8 +86,7 @@ export function usePlaytestControls() {
       if (pendingStop !== undefined) {
         return pendingStop;
       }
-      let stopPromise!: Promise<void>;
-      stopPromise = (async () => {
+      const stopPromise = (async () => {
         const sessionId = owner.sessionId;
         const clearActiveSession = () => {
           if (useEditorUiStore.getState().playtestSessionId === sessionId) {
@@ -122,13 +121,16 @@ export function usePlaytestControls() {
           }
           notifyError(error instanceof Error ? error.message : 'Failed to stop playtest');
           throw error;
-        } finally {
-          if (stoppingPlaytestOwnerPromises.get(ownerKey) === stopPromise) {
-            stoppingPlaytestOwnerPromises.delete(ownerKey);
-          }
         }
       })();
       stoppingPlaytestOwnerPromises.set(ownerKey, stopPromise);
+      void stopPromise
+        .finally(() => {
+          if (stoppingPlaytestOwnerPromises.get(ownerKey) === stopPromise) {
+            stoppingPlaytestOwnerPromises.delete(ownerKey);
+          }
+        })
+        .catch(() => undefined);
       return stopPromise;
     },
     [

@@ -1,9 +1,14 @@
 /* global process */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 
 const zeroSha = /^0+$/;
 const remoteName = process.argv[2] || 'origin';
+const repoRoot = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).stdout.trim();
 
 const git = (...args) => {
   const result = spawnSync('git', args, { encoding: 'utf8' });
@@ -44,22 +49,50 @@ for (const update of updates) {
 
 if (ranges.size === 0) process.exit(0);
 
-if (git('status', '--porcelain')) {
-  process.stderr.write(
-    'Warning: pre-push verification reads the current working tree, which has local changes.\n',
-  );
-}
-
 for (const { base, head } of ranges.values()) {
   process.stdout.write(`Verifying affected lint and typecheck for ${base}...${head}\n`);
-  const result = spawnSync(
-    'pnpm',
-    ['turbo', 'run', 'lint', 'typecheck', '--affected', '--output-logs=errors-only'],
-    {
+  const worktree = mkdtempSync(path.join(os.tmpdir(), 'tileborn-pre-push-'));
+  let registeredWorktree = false;
+  let status;
+  try {
+    const checkout = spawnSync('git', ['worktree', 'add', '--detach', '--quiet', worktree, head], {
+      cwd: repoRoot,
       stdio: 'inherit',
-      env: { ...process.env, TURBO_SCM_BASE: base, TURBO_SCM_HEAD: head },
-    },
-  );
-  if (result.error !== undefined) throw result.error;
-  if (result.status !== 0) process.exit(result.status ?? 1);
+    });
+    if (checkout.error !== undefined) throw checkout.error;
+    status = checkout.status ?? 1;
+    if (status === 0) {
+      registeredWorktree = true;
+      const install = spawnSync(
+        'pnpm',
+        ['install', '--offline', '--frozen-lockfile', '--ignore-scripts', '--reporter=append-only'],
+        { cwd: worktree, stdio: 'inherit' },
+      );
+      if (install.error !== undefined) throw install.error;
+      status = install.status ?? 1;
+    }
+
+    if (status === 0) {
+      const verify = spawnSync(
+        'pnpm',
+        ['turbo', 'run', 'lint', 'typecheck', '--affected', '--output-logs=errors-only'],
+        {
+          cwd: worktree,
+          stdio: 'inherit',
+          env: { ...process.env, TURBO_SCM_BASE: base, TURBO_SCM_HEAD: head },
+        },
+      );
+      if (verify.error !== undefined) throw verify.error;
+      status = verify.status ?? 1;
+    }
+  } finally {
+    if (registeredWorktree) {
+      spawnSync('git', ['worktree', 'remove', '--force', worktree], {
+        cwd: repoRoot,
+        stdio: 'ignore',
+      });
+    }
+    rmSync(worktree, { recursive: true, force: true });
+  }
+  if (status !== 0) process.exit(status);
 }

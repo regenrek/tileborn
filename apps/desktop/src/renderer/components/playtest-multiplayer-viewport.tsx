@@ -34,11 +34,7 @@ import {
 } from '@/editor/viewport/viewport-asset-manifest';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import {
-  resolvePlaytestPlugin,
-  type InputDirection,
-  type ResolvedPlaytestPlugin,
-} from '@/lib/playtest-plugin-bridge';
+import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import { usePluginContributions, useProject } from '@/hooks/queries';
 import { useHudEditing } from '@/hooks/use-hud-editing';
 import {
@@ -273,7 +269,9 @@ function useMultiplayerSnapshotRenderer({
     });
     const maybePredictionClient = client as PlaytestMultiplayerClient & {
       readonly setLocalInputPredictionListener?:
-        | ((handler: Parameters<PlaytestMultiplayerClient['setLocalInputPredictionListener']>[0]) => () => void)
+        | ((
+            handler: Parameters<PlaytestMultiplayerClient['setLocalInputPredictionListener']>[0],
+          ) => () => void)
         | undefined;
       readonly getProcessedInputSequence?: ((playerId: string) => number) | undefined;
     };

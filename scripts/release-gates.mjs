@@ -308,7 +308,7 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     'run',
     'test',
     '--affected',
-    '--concurrency=1',
+    '--concurrency=2',
     ...turboFilters,
   ];
   const includesDesktopCandidateScope = filters.includes('@tileborne/desktop...');

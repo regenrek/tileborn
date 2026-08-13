@@ -195,7 +195,7 @@ describe('canonical release gates', () => {
     expect(rootPackage.scripts['release:gates:matrix']).toBe(
       'node scripts/release-gates.mjs matrix',
     );
-    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=1');
+    expect(rootPackage.scripts.test).toBe('turbo run test --concurrency=2');
     expect(turbo.tasks['@tileborne/services-build#test']?.dependsOn).toContain(
       '@tileborne/cli#build',
     );
@@ -468,7 +468,7 @@ describe('canonical release gates', () => {
     expect(requiredStatusChecks.map(({ context }) => context)).toEqual(['ci-fast']);
   });
 
-  it('plans affected verification before serial package tests', () => {
+  it('plans affected verification before bounded-parallel package tests', () => {
     const plan = createCiFastPlan({
       base: 'base-sha',
       head: 'head-sha',
@@ -486,7 +486,7 @@ describe('canonical release gates', () => {
       plan.commands.filter((command) => command[0] === 'pnpm' && command[1] === 'turbo'),
     ).toEqual([
       ['pnpm', 'turbo', 'run', 'build', 'lint', 'typecheck', '--affected'],
-      ['pnpm', 'turbo', 'run', 'test', '--affected', '--concurrency=1'],
+      ['pnpm', 'turbo', 'run', 'test', '--affected', '--concurrency=2'],
     ]);
     expect(plan.commands).toContainEqual(['pnpm', 'format:check']);
     expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:policy']);
@@ -541,7 +541,7 @@ describe('canonical release gates', () => {
       'run',
       'test',
       '--affected',
-      '--concurrency=1',
+      '--concurrency=2',
       '--filter',
       '@tileborne/docs...',
     ]);
@@ -589,7 +589,7 @@ describe('canonical release gates', () => {
       'run',
       'test',
       '--affected',
-      '--concurrency=1',
+      '--concurrency=2',
       '--filter',
       '@tileborne/desktop...',
       '--filter',
@@ -693,7 +693,7 @@ describe('canonical release gates', () => {
         'install --frozen-lockfile',
         'format:check',
         'turbo run build lint typecheck --affected --filter @tileborne/desktop...',
-        'turbo run test --affected --concurrency=1 --filter @tileborne/desktop...',
+        'turbo run test --affected --concurrency=2 --filter @tileborne/desktop...',
         'release:desktop:policy',
         'release:desktop:status',
         'release:desktop:docs',

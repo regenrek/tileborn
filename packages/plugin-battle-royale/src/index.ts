@@ -108,6 +108,7 @@ export type {
 export {
   BR_INPUT_MAP_CONTRIBUTION_ID,
   BR_INPUT_MAP_ID,
+  battleRoyalePlaytestInputEdgeFields,
   battleRoyaleDefaultInputMap,
   buildBattleRoyaleInputMapData,
   resolveBattleRoyaleInputIntent,

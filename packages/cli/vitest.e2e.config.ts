@@ -3,7 +3,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['src/__e2e__/**/*.test.ts'],
-    exclude: ['dist/**', 'node_modules/**'],
+    // The spec §12 sweep is owned by the regular CLI suite, which also keeps
+    // its process-heavy tests serialized. Do not execute it again here.
+    exclude: ['dist/**', 'node_modules/**', 'src/__e2e__/spec-section-12-sweep.test.ts'],
     globalSetup: ['./src/__e2e__/global-setup.ts'],
     testTimeout: 60_000,
     hookTimeout: 60_000,

@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import { pack, unpack } from 'msgpackr';
 import { REQUIRED_PLAYER_MODEL_CLIP_KEYS } from '@tileborne/core';
+import { GameplayEvent } from '../contracts/gameplay-event.js';
 import { BattleRoyaleAbilityId, Direction8 } from './battle-royale-input.js';
 
 export {
@@ -56,6 +57,7 @@ export const PlayerAnimationState = Schema.Struct({
   facingDeg: Schema.Number,
   moving: Schema.Boolean,
   aimDeg: Schema.optional(Schema.Number),
+  acceptedFireTick: Schema.optional(Schema.Int),
 });
 export type PlayerAnimationState = typeof PlayerAnimationState.Type;
 
@@ -149,6 +151,9 @@ export const PlayerSnapshot = Schema.Struct({
   animation: Schema.optional(PlayerAnimationState),
 });
 export type PlayerSnapshot = typeof PlayerSnapshot.Type;
+
+export const ProcessedInputSequenceByPlayerId = Schema.Record(PlayerId, Schema.Int);
+export type ProcessedInputSequenceByPlayerId = typeof ProcessedInputSequenceByPlayerId.Type;
 
 export const PlayerUpdate = Schema.Struct({
   id: PlayerId,
@@ -294,6 +299,7 @@ export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()('Welc
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
   seed: Schema.Union([Schema.String, Schema.Number]),
+  processedInputSeqByPlayerId: Schema.optional(ProcessedInputSequenceByPlayerId),
   players: Schema.Array(PlayerSnapshot),
   projectiles: Schema.Array(ProjectileSnapshot),
   deployables: Schema.optional(Schema.Array(DeployableSnapshot)),
@@ -304,6 +310,7 @@ export class WelcomeSnapshot extends Schema.TaggedClass<WelcomeSnapshot>()('Welc
 export class DeltaSnapshot extends Schema.TaggedClass<DeltaSnapshot>()('DeltaSnapshot', {
   tick: Schema.Int,
   serverTimestampMs: Schema.Number,
+  processedInputSeqByPlayerId: Schema.optional(ProcessedInputSequenceByPlayerId),
   removed: Schema.Array(PlayerId),
   updated: Schema.Array(PlayerUpdate),
   projectilesUpdated: Schema.Array(ProjectileUpdate),
@@ -333,6 +340,14 @@ export class GameOver extends Schema.TaggedClass<GameOver>()('GameOver', {
   winner: PlayerId,
 }) {}
 
+export class GameplayEventFrame extends Schema.TaggedClass<GameplayEventFrame>()(
+  'GameplayEventFrame',
+  {
+    sequence: Schema.Int,
+    event: GameplayEvent,
+  },
+) {}
+
 export class WireError extends Schema.TaggedClass<WireError>()('Error', {
   code: Schema.String,
   message: Schema.String,
@@ -348,6 +363,7 @@ export const ServerToClientMessage = Schema.Union([
   PlayerLeft,
   PlayerKilled,
   GameOver,
+  GameplayEventFrame,
   WireError,
 ]);
 export type ServerToClientMessage = Schema.Schema.Type<typeof ServerToClientMessage>;
@@ -362,6 +378,7 @@ export const BattleRoyaleMessage = Schema.Union([
   PlayerLeft,
   PlayerKilled,
   GameOver,
+  GameplayEventFrame,
   WireError,
 ]);
 export type BattleRoyaleMessage = Schema.Schema.Type<typeof BattleRoyaleMessage>;

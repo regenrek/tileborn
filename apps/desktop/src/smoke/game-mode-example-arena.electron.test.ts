@@ -98,9 +98,13 @@ describe('acceptance: Example Arena game-mode extension contract', () => {
     );
     expect(session.status).toBe('Running');
     expect(session.activePlugins).toEqual([EXAMPLE_ARENA_PLUGIN_ID]);
-    await page.evaluate(async (sessionId) => {
-      await window.tileborne.playtest.stop({ sessionId });
-    }, session.id);
+    await page.evaluate(async (ownedSession) => {
+      await window.tileborne.playtest.stop({
+        sessionId: ownedSession.id,
+        projectId: ownedSession.projectId,
+        mapId: ownedSession.mapId,
+      });
+    }, session);
 
     const { jobId } = await page.evaluate(
       async ({ pid, mid }) =>

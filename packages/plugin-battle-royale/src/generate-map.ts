@@ -14,13 +14,26 @@ import {
   BARRIER_KIND,
   DECOY_KIND,
   LOOT_CRATE_KIND,
+  MOVEMENT,
   SHRINK_ZONE_ANCHOR_KIND,
+  SPAWN_OPENING_BUFFER,
   SPAWN_POINT_KIND,
   TRAP_KIND,
 } from './constants.js';
 import { layerIdFromSeed, mapIdFromSeed, objectIdFromSeed } from './id-utils.js';
 import type { GenerateMapOptions } from './types/artifact.js';
 import { SeededRng } from './rng.js';
+import { isSpawnPointSafe } from './spawn-layout.js';
+
+const GENERATED_TILE_SIZE = { width: 32, height: 32 } as const;
+
+const authoredPixelPositionForTileCell = (position: {
+  readonly x: number;
+  readonly y: number;
+}): { readonly x: number; readonly y: number } => ({
+  x: position.x * GENERATED_TILE_SIZE.width,
+  y: position.y * GENERATED_TILE_SIZE.height,
+});
 
 const makeMapObject = (input: {
   readonly id: MapObjectType['id'];
@@ -87,6 +100,7 @@ const poissonLikePoints = (
   width: number,
   height: number,
   minDistance: number,
+  accept: (point: { readonly x: number; readonly y: number }) => boolean = () => true,
 ): Array<{ readonly x: number; readonly y: number }> => {
   const points: Array<{ readonly x: number; readonly y: number }> = [];
   const maxAttempts = count * 40;
@@ -102,7 +116,7 @@ const poissonLikePoints = (
       const dy = point.y - candidate.y;
       return Math.hypot(dx, dy) < minDistance;
     });
-    if (!tooClose) {
+    if (!tooClose && accept(candidate)) {
       points.push(candidate);
     }
   }
@@ -114,9 +128,28 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
   const { width, height, spawnCount, lootDensity } = opts;
   const objectLayerId = layerIdFromSeed(seed, 'objects');
   const objects: MapObject[] = [];
+  const spawnCells = Array.from({ length: spawnCount }, (_, index) =>
+    perimeterSpawn(index, spawnCount, width, height),
+  );
+  const spawnClearOfCircle = (point: { readonly x: number; readonly y: number }, radius: number) =>
+    spawnCells.every((spawn) =>
+      isSpawnPointSafe(spawn, {
+        playerRadius: MOVEMENT.radius / GENERATED_TILE_SIZE.width,
+        openingBuffer: SPAWN_OPENING_BUFFER / GENERATED_TILE_SIZE.width,
+        hazards: [{ ...point, radius }],
+      }),
+    );
+  const spawnClearOfTileBlocker = (point: { readonly x: number; readonly y: number }) =>
+    spawnCells.every((spawn) =>
+      isSpawnPointSafe(spawn, {
+        playerRadius: MOVEMENT.radius / GENERATED_TILE_SIZE.width,
+        openingBuffer: SPAWN_OPENING_BUFFER / GENERATED_TILE_SIZE.width,
+        blockers: [{ ...point, width: 1, height: 1 }],
+      }),
+    );
 
-  for (let index = 0; index < spawnCount; index += 1) {
-    const position = perimeterSpawn(index, spawnCount, width, height);
+  for (const [index, spawnCell] of spawnCells.entries()) {
+    const position = authoredPixelPositionForTileCell(spawnCell);
     objects.push(
       makeMapObject({
         id: objectIdFromSeed(seed, `spawn-${index}`),
@@ -133,18 +166,19 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
     makeMapObject({
       id: objectIdFromSeed(seed, 'shrink-anchor'),
       kind: SHRINK_ZONE_ANCHOR_KIND,
-      x: width / 2,
-      y: height / 2,
+      ...authoredPixelPositionForTileCell({ x: width / 2, y: height / 2 }),
       layerId: objectLayerId,
       properties: {
-        initialRadiusTiles: Math.max(width, height) / 2,
+        // Cover the rectangular opening map, including deterministic perimeter
+        // spawns. The first shrink phase can then reduce the safe area normally.
+        initialRadiusTiles: Math.hypot(width, height) / 2,
         finalRadiusTiles: 4,
       },
     }),
   );
 
   const lootCount = Math.max(1, Math.round((width * height * lootDensity) / 100));
-  const lootPoints = poissonLikePoints(rng, lootCount, width, height, 4);
+  const lootPoints = poissonLikePoints(rng, lootCount, width, height, 4, spawnClearOfTileBlocker);
   for (const [index, point] of lootPoints.entries()) {
     const tierRoll = rng.nextFloat();
     const tier = tierRoll < 0.7 ? 'common' : tierRoll < 0.9 ? 'rare' : 'epic';
@@ -152,8 +186,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `loot-${index}`),
         kind: LOOT_CRATE_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { tier, respawnSeconds: 0 },
       }),
@@ -161,14 +194,15 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
   }
 
   const trapCount = Math.max(1, Math.floor(spawnCount / 2));
-  const trapPoints = poissonLikePoints(rng, trapCount, width, height, 6);
+  const trapPoints = poissonLikePoints(rng, trapCount, width, height, 6, (point) =>
+    spawnClearOfCircle(point, ABILITY.trap.radius / GENERATED_TILE_SIZE.width),
+  );
   for (const [index, point] of trapPoints.entries()) {
     objects.push(
       makeMapObject({
         id: objectIdFromSeed(seed, `trap-${index}`),
         kind: TRAP_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: {
           radius: ABILITY.trap.radius,
@@ -187,8 +221,7 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
       makeMapObject({
         id: objectIdFromSeed(seed, `decoy-${index}`),
         kind: DECOY_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { radius: ABILITY.decoy.radius, durationTicks: ABILITY.decoy.durationTicks },
       }),
@@ -196,14 +229,20 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
   }
 
   const barrierCount = Math.max(2, Math.floor(Math.min(width, height) / 12));
-  const barrierPoints = poissonLikePoints(rng, barrierCount, width, height, 7);
+  const barrierPoints = poissonLikePoints(
+    rng,
+    barrierCount,
+    width,
+    height,
+    7,
+    spawnClearOfTileBlocker,
+  );
   for (const [index, point] of barrierPoints.entries()) {
     objects.push(
       makeMapObject({
         id: objectIdFromSeed(seed, `barrier-${index}`),
         kind: BARRIER_KIND,
-        x: point.x,
-        y: point.y,
+        ...authoredPixelPositionForTileCell(point),
         layerId: objectLayerId,
         properties: { width: 32, height: 32 },
       }),
@@ -222,8 +261,8 @@ export const generateMap = (seed: string | number, opts: GenerateMapOptions): Ti
     id: mapIdFromSeed(seed),
     width,
     height,
-    tileWidth: 32,
-    tileHeight: 32,
+    tileWidth: GENERATED_TILE_SIZE.width,
+    tileHeight: GENERATED_TILE_SIZE.height,
     layers: [buildGroundLayer(seed, width, height, rng), objectLayer],
     objects,
     properties: { generatorSeed: String(seed) },

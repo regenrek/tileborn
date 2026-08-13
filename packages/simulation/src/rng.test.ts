@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSeededRng } from './rng.js';
+import { createSeededRng, createSeededRngFromSnapshot } from './rng.js';
 
 const sequence = (seed: number, length: number): number[] => {
   const rng = createSeededRng(seed);
@@ -74,6 +74,20 @@ describe('createSeededRng', () => {
     const fromOriginal = [rng.nextUint32(), rng.nextUint32(), rng.nextUint32()];
     const fromClone = [forked.nextUint32(), forked.nextUint32(), forked.nextUint32()];
     expect(fromClone).toEqual(fromOriginal);
+  });
+
+  it('snapshot resumes from the exact current state after serialization', () => {
+    const rng = createSeededRng(77);
+    rng.nextUint32();
+    rng.nextUint32();
+    const snapshot = JSON.parse(JSON.stringify(rng.snapshot())) as ReturnType<typeof rng.snapshot>;
+    const restored = createSeededRngFromSnapshot(snapshot);
+
+    expect([restored.nextUint32(), restored.nextUint32(), restored.nextUint32()]).toEqual([
+      rng.nextUint32(),
+      rng.nextUint32(),
+      rng.nextUint32(),
+    ]);
   });
 
   it('exposes a stable 32-bit state fingerprint that advances with the stream', () => {

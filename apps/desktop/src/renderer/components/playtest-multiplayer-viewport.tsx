@@ -34,11 +34,7 @@ import {
 } from '@/editor/viewport/viewport-asset-manifest';
 import { pixiTextureFromBytes } from '@/editor/viewport/pixi-texture-from-bytes';
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import {
-  resolvePlaytestPlugin,
-  type InputDirection,
-  type ResolvedPlaytestPlugin,
-} from '@/lib/playtest-plugin-bridge';
+import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import { usePluginContributions, useProject } from '@/hooks/queries';
 import { useHudEditing } from '@/hooks/use-hud-editing';
 import {
@@ -55,6 +51,10 @@ import type { BuiltPlayerModel } from '@/lib/player-model-render';
 import type { BuiltOverlayVisual } from '@/lib/overlay-visual-render';
 import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import type { PlaytestMultiplayerClient } from '@/lib/playtest-multiplayer-client';
+import {
+  applyLocalPredictionToEntities,
+  LocalPlaytestPredictionController,
+} from '@/lib/local-playtest-prediction';
 import type {
   LocalMultiplayerParticipantSession,
   LocalMultiplayerRoomResults,
@@ -234,12 +234,14 @@ function useMultiplayerSnapshotRenderer({
   runtimeRef,
   map,
   rendererCapabilityId,
+  localPredictionControllerRef,
 }: {
   readonly client: PlaytestMultiplayerClient | null;
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly map: TileborneMap;
   readonly rendererCapabilityId: string | undefined;
+  readonly localPredictionControllerRef: MutableRefObject<LocalPlaytestPredictionController>;
 }) {
   useEffect(() => {
     if (!client || rendererCapabilityId === undefined) {
@@ -257,11 +259,26 @@ function useMultiplayerSnapshotRenderer({
         : {}),
     });
     let rafHandle = 0;
-    const camera = { x: map.size.width / 2, y: map.size.height / 2 };
+    const camera = {
+      x: (map.size.width * map.tileSize.width) / 2,
+      y: (map.size.height * map.tileSize.height) / 2,
+    };
 
     const unsubscribe = client.setSnapshotFrameListener((frame) => {
       store.apply(frame);
     });
+    const maybePredictionClient = client as PlaytestMultiplayerClient & {
+      readonly setLocalInputPredictionListener?:
+        | ((
+            handler: Parameters<PlaytestMultiplayerClient['setLocalInputPredictionListener']>[0],
+          ) => () => void)
+        | undefined;
+      readonly getProcessedInputSequence?: ((playerId: string) => number) | undefined;
+    };
+    const unsubscribeLocalPrediction =
+      maybePredictionClient.setLocalInputPredictionListener?.((input) => {
+        localPredictionControllerRef.current.recordInput(input);
+      }) ?? (() => undefined);
 
     const renderTick = (): void => {
       rafHandle = requestAnimationFrame(renderTick);
@@ -270,11 +287,13 @@ function useMultiplayerSnapshotRenderer({
       if (!runtime || !container) {
         return;
       }
-      const interpolated = store.sampleInterpolatedFullState(performance.now());
-      const currentSnapshot = interpolated?.current ?? store.getCurrentFullState();
-      if (currentSnapshot === undefined) {
+      const nowMs = performance.now();
+      const interpolated = store.sampleInterpolatedFullState(nowMs);
+      const latestSnapshot = store.getCurrentFullState();
+      if (latestSnapshot === undefined) {
         return;
       }
+      const currentSnapshot = interpolated?.current ?? latestSnapshot;
       // Interpolate world-space positions ONCE so the follow-camera and the
       // sprites share the same smoothed position; anchoring the camera to the
       // discrete latest snapshot reintroduces tick-rate stutter.
@@ -283,7 +302,7 @@ function useMultiplayerSnapshotRenderer({
         interpolated?.previous === undefined
           ? []
           : runtime.projector.project(interpolated.previous);
-      const entities = interpolateRenderableEntities(
+      const remoteInterpolatedEntities = interpolateRenderableEntities(
         currentEntities,
         previousEntities,
         interpolated?.alpha ?? 1,
@@ -291,6 +310,23 @@ function useMultiplayerSnapshotRenderer({
 
       const localPlayerId = client.getLocalPlayerId();
       const localEntityId = localPlayerId !== null ? `br:player:${localPlayerId}` : undefined;
+      const latestEntities = runtime.projector.project(latestSnapshot);
+      const latestLocalEntity =
+        localEntityId === undefined
+          ? undefined
+          : latestEntities.find((entity) => entity.id === localEntityId);
+      const entities = applyLocalPredictionToEntities(
+        remoteInterpolatedEntities,
+        latestLocalEntity === undefined || localPlayerId === null
+          ? undefined
+          : {
+              entity: latestLocalEntity,
+              acknowledgedInputSequence:
+                maybePredictionClient.getProcessedInputSequence?.(localPlayerId) ?? -1,
+            },
+        localPredictionControllerRef.current,
+        nowMs,
+      );
       const localEntity =
         localEntityId !== undefined
           ? entities.find((entity) => entity.id === localEntityId)
@@ -319,9 +355,18 @@ function useMultiplayerSnapshotRenderer({
 
     return () => {
       cancelAnimationFrame(rafHandle);
+      unsubscribeLocalPrediction();
       unsubscribe();
     };
-  }, [client, containerRef, map.size.height, map.size.width, runtimeRef, rendererCapabilityId]);
+  }, [
+    client,
+    containerRef,
+    localPredictionControllerRef,
+    map.size.height,
+    map.size.width,
+    runtimeRef,
+    rendererCapabilityId,
+  ]);
 }
 
 function useMultiplayerInputBridge({
@@ -355,14 +400,7 @@ function useMultiplayerInputBridge({
       profile: plugin.inputCaptureProfile,
       resolveIntent: plugin.resolveInputIntent,
       onIntent: (intent) => {
-        client.sendInput(intent.dir as InputDirection | undefined, intent.shoot, {
-          reload: intent.reload,
-          interact: intent.interact,
-          drop: intent.drop,
-          abilities: intent.abilities,
-          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
-          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
-        });
+        client.sendIntent(intent);
       },
     });
 
@@ -522,6 +560,7 @@ function MultiplayerLobbyOverlay({
 export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultiplayerViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<RuntimeBundle | null>(null);
+  const localPredictionControllerRef = useRef(new LocalPlaytestPredictionController());
   const showGrid = useEditorUiStore((state) => state.showGrid);
   const showDebugOverlay = useEditorUiStore((state) => state.showDebugOverlay);
   const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
@@ -626,6 +665,7 @@ export function PlaytestMultiplayerViewport({ projectId, map }: PlaytestMultipla
     runtimeRef,
     map,
     rendererCapabilityId: usableRendererCapabilityId,
+    localPredictionControllerRef,
   });
   useMultiplayerInputBridge({
     client,

@@ -20,6 +20,14 @@ export class GameplayWeaponFired extends Schema.TaggedClass<GameplayWeaponFired>
   tick: Schema.Int,
   sourceId: GameplayEntityId,
   weaponId: WeaponDefinitionId,
+  origin: Schema.Struct({
+    x: Schema.Number,
+    y: Schema.Number,
+  }),
+  direction: Schema.Struct({
+    x: Schema.Number,
+    y: Schema.Number,
+  }),
   damage: Schema.Number,
   ammoRemaining: Schema.Int,
 }) {}
@@ -128,3 +136,9 @@ export const GameplayEvent = Schema.Union([
   GameplayMatchPhaseChanged,
 ]);
 export type GameplayEvent = Schema.Schema.Type<typeof GameplayEvent>;
+
+export const SequencedGameplayEvent = Schema.Struct({
+  sequence: Schema.Int,
+  event: GameplayEvent,
+});
+export type SequencedGameplayEvent = Schema.Schema.Type<typeof SequencedGameplayEvent>;

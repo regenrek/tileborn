@@ -16,3 +16,9 @@ export type {
   RuntimeClientInputFrame,
   RuntimeServerLifecycleFrameView,
 } from './host-protocol-bridge.js';
+export {
+  battleRoyalePlaytestHeldBooleanInputFields,
+  battleRoyalePlaytestHeldBooleanInputFields as playtestHeldBooleanInputFields,
+  battleRoyalePlaytestInputEdgeFields,
+  battleRoyalePlaytestInputEdgeFields as playtestInputEdgeFields,
+} from './input-map.js';

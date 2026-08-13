@@ -27,6 +27,7 @@ const pluginBattleRoyaleManifestPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../../plugin-battle-royale/tileborne-plugin.json',
 );
+const menuCssPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../styles/menu.css');
 
 const battleRoyaleFixtureProjection = async () => {
   const raw = JSON.parse(await readFile(pluginBattleRoyaleManifestPath, 'utf8')) as {
@@ -69,6 +70,36 @@ describe('RuntimeRoot', () => {
 
     await user.click(screen.getByTestId('results-back'));
     expect(screen.getByTestId('main-menu')).toBeInTheDocument();
+  });
+
+  it('makes the unpaused in-match shell pointer-transparent except controls', async () => {
+    const user = userEvent.setup();
+    render(<RuntimeRoot initialState={{ ...initialMenuState, phase: 'in-match' }} />);
+
+    const root = screen.getByRole('application');
+    expect(root).toHaveAttribute('data-phase', 'in-match');
+    expect(root).toHaveAttribute('data-paused', 'false');
+    const crosshair = screen.getByTestId('runtime-crosshair');
+    expect(crosshair).toBeInTheDocument();
+    expect(crosshair).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('end-match')).toHaveClass('tb-shell-interactive-control');
+
+    const menuCss = await readFile(menuCssPath, 'utf8');
+    expect(menuCss).toContain(".tb-root[data-phase='in-match'][data-paused='false']");
+    expect(menuCss).toContain('pointer-events: none;');
+    expect(menuCss).toContain('.tb-shell-interactive-control');
+    expect(menuCss).toContain('pointer-events: auto;');
+    expect(menuCss).toContain('.tb-crosshair');
+    expect(menuCss).toContain('transform: translate(-50%, -50%);');
+
+    await user.click(screen.getByTestId('end-match'));
+    expect(screen.getByTestId('results-screen')).toBeInTheDocument();
+  });
+
+  it('hides the centered crosshair when the match is paused', () => {
+    render(<RuntimeRoot initialState={{ ...initialMenuState, phase: 'in-match', paused: true }} />);
+
+    expect(screen.queryByTestId('runtime-crosshair')).toBeNull();
   });
 
   it('keeps deterministic keyboard focus and Back policy across shell screens', async () => {
@@ -795,6 +826,72 @@ describe('RuntimeRoot', () => {
     await waitFor(() => expect(screen.getByTestId('main-menu')).toBeInTheDocument());
   });
 
+  it('gates match start, pause, and resume on lifecycle hooks', async () => {
+    const user = userEvent.setup();
+    let resolveStart: (() => void) | undefined;
+    let resolvePause: (() => void) | undefined;
+    let resolveResume: (() => void) | undefined;
+    const calls: string[] = [];
+    render(
+      <RuntimeRoot
+        onMatchStart={() =>
+          new Promise<void>((resolve) => {
+            calls.push('start');
+            resolveStart = resolve;
+          })
+        }
+        onPause={() =>
+          new Promise<void>((resolve) => {
+            calls.push('pause');
+            resolvePause = resolve;
+          })
+        }
+        onResume={() =>
+          new Promise<void>((resolve) => {
+            calls.push('resume');
+            resolveResume = resolve;
+          })
+        }
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('main-menu')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('play-button'));
+    await user.click(screen.getByTestId('start-match'));
+    expect(screen.queryByTestId('in-match')).toBeNull();
+    expect(calls).toEqual(['start']);
+    resolveStart?.();
+    await waitFor(() => expect(screen.getByTestId('in-match')).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('pause-overlay')).toBeNull();
+    expect(calls).toEqual(['start', 'pause']);
+    resolvePause?.();
+    await waitFor(() => expect(screen.getByTestId('pause-overlay')).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('in-match')).toBeNull();
+    expect(calls).toEqual(['start', 'pause', 'resume']);
+    resolveResume?.();
+    await waitFor(() => expect(screen.getByTestId('in-match')).toBeInTheDocument());
+  });
+
+  it('keeps the current shell state visible and reports lifecycle hook rejection', async () => {
+    const user = userEvent.setup();
+    render(
+      <RuntimeRoot onMatchStart={() => Promise.reject(new Error('runtime session stopped'))} />,
+    );
+    await waitFor(() => expect(screen.getByTestId('main-menu')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('play-button'));
+    await user.click(screen.getByTestId('start-match'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alertdialog')).toHaveTextContent('runtime session stopped'),
+    );
+    expect(screen.queryByTestId('in-match')).toBeNull();
+  });
+
   it('opens settings, switches tabs, and goes back', async () => {
     const user = userEvent.setup();
     render(<RuntimeRoot />);
@@ -1092,10 +1189,31 @@ describe('RuntimeRoot', () => {
           binding: 'environment.zoneWarning',
         },
         { id: 'cue:end', label: 'End', busId: 'sfx', defaultVolume: 1, binding: 'match.end' },
+        { id: 'cue:fire', label: 'Fire', busId: 'sfx', defaultVolume: 1, binding: 'weapon.fire' },
       ],
       engineFactory,
     };
     const gameplayEvents = [
+      {
+        _tag: 'WeaponFired',
+        sourceId: entityId('player-1'),
+        weaponId: entityId('battle-royale.primary'),
+        origin: { x: 1, y: 2 },
+        direction: { x: 1, y: 0 },
+        damage: 25,
+        ammoRemaining: 11,
+        tick: 8,
+      },
+      {
+        _tag: 'WeaponFired',
+        sourceId: entityId('player-2'),
+        weaponId: entityId('battle-royale.primary'),
+        origin: { x: 10, y: 12 },
+        direction: { x: 0, y: 1 },
+        damage: 25,
+        ammoRemaining: 11,
+        tick: 8,
+      },
       {
         _tag: 'ItemGranted',
         targetId: entityId('player-1'),
@@ -1126,11 +1244,13 @@ describe('RuntimeRoot', () => {
         tick: 5,
       },
     ];
+    const gameplayAudioEvents = gameplayEvents.map((event, sequence) => ({ sequence, event }));
 
     const { rerender } = render(
       <RuntimeRoot
         initialState={{ ...initialMenuState, phase: 'in-match' as const }}
         audio={audio}
+        gameplayAudioEvents={gameplayAudioEvents}
         hudMetrics={{ playerCount: 2, tickCount: 5, hud: { totalPlayers: 2, gameplayEvents } }}
       />,
     );
@@ -1141,6 +1261,7 @@ describe('RuntimeRoot', () => {
       expect(playCue).toHaveBeenCalledWith('cue:eliminated');
       expect(playCue).toHaveBeenCalledWith('cue:zone');
       expect(playCue).toHaveBeenCalledWith('cue:end');
+      expect(playCue.mock.calls.filter(([cueId]) => cueId === 'cue:fire')).toHaveLength(2);
     });
     const lifecycleCallCount = playCue.mock.calls.length;
 
@@ -1148,11 +1269,113 @@ describe('RuntimeRoot', () => {
       <RuntimeRoot
         initialState={{ ...initialMenuState, phase: 'in-match' as const }}
         audio={audio}
+        gameplayAudioEvents={gameplayAudioEvents}
         hudMetrics={{ playerCount: 2, tickCount: 5, hud: { totalPlayers: 2, gameplayEvents } }}
       />,
     );
 
     await waitFor(() => expect(playCue).toHaveBeenCalledTimes(lifecycleCallCount));
+  });
+
+  it('plays the same accepted fire cue once per retried browser match', async () => {
+    const user = userEvent.setup();
+    const playCue = vi.fn();
+    const engineFactory = vi.fn(() => ({
+      playCue,
+      setSettings: vi.fn(),
+      setFocusState: vi.fn(),
+      snapshot: vi.fn(() => ({
+        supported: true,
+        focusState: 'focused' as const,
+        settings: {
+          masterVolume: 1,
+          muted: false,
+          muteOnFocusLoss: true,
+          busVolumes: {},
+        },
+        playCount: 0,
+        audiblePlayCount: 0,
+        unsupportedPlayCount: 0,
+      })),
+      dispose: vi.fn(),
+    }));
+    const audio = {
+      settings: {
+        masterVolume: 1,
+        muted: false,
+        muteOnFocusLoss: true,
+        busVolumes: {},
+      },
+      buses: [{ id: 'sfx', label: 'SFX', kind: 'sfx' as const, defaultVolume: 1 }],
+      cues: [
+        { id: 'cue:fire', label: 'Fire', busId: 'sfx', defaultVolume: 1, binding: 'weapon.fire' },
+      ],
+      engineFactory,
+    };
+    const acceptedFireEvent = {
+      _tag: 'WeaponFired',
+      sourceId: entityId('player-1'),
+      weaponId: entityId('battle-royale.primary'),
+      origin: { x: 1, y: 2 },
+      direction: { x: 1, y: 0 },
+      damage: 25,
+      ammoRemaining: 11,
+      tick: 8,
+    } as const;
+    let setGameplayEvents:
+      | ((events: readonly [typeof acceptedFireEvent] | readonly []) => void)
+      | undefined;
+    let setGameplayAudioEvents:
+      | ((
+          events:
+            | readonly [{ readonly sequence: number; readonly event: typeof acceptedFireEvent }]
+            | readonly [],
+        ) => void)
+      | undefined;
+    function RetryHarness(): ReactElement {
+      const [gameplayEvents, setEvents] = useState<
+        readonly [typeof acceptedFireEvent] | readonly []
+      >([]);
+      const [gameplayAudioEvents, setAudioEvents] = useState<
+        | readonly [{ readonly sequence: number; readonly event: typeof acceptedFireEvent }]
+        | readonly []
+      >([]);
+      setGameplayEvents = setEvents;
+      setGameplayAudioEvents = setAudioEvents;
+      return (
+        <RuntimeRoot
+          audio={audio}
+          gameplayAudioEvents={gameplayAudioEvents}
+          hudMetrics={{
+            playerCount: 1,
+            tickCount: 8,
+            hud: { totalPlayers: 1, gameplayEvents },
+          }}
+        />
+      );
+    }
+
+    render(<RetryHarness />);
+    await waitFor(() => expect(screen.getByTestId('main-menu')).toBeInTheDocument());
+
+    await user.click(screen.getByTestId('play-button'));
+    await user.click(screen.getByTestId('start-match'));
+    setGameplayEvents?.([acceptedFireEvent]);
+    setGameplayAudioEvents?.([{ sequence: 0, event: acceptedFireEvent }]);
+    await waitFor(() =>
+      expect(playCue.mock.calls.filter(([cueId]) => cueId === 'cue:fire')).toHaveLength(1),
+    );
+
+    await user.click(screen.getByTestId('end-match'));
+    await user.click(screen.getByTestId('play-again'));
+    await user.click(screen.getByTestId('start-match'));
+    setGameplayEvents?.([]);
+    setGameplayAudioEvents?.([]);
+    setGameplayEvents?.([acceptedFireEvent]);
+    setGameplayAudioEvents?.([{ sequence: 0, event: acceptedFireEvent }]);
+    await waitFor(() =>
+      expect(playCue.mock.calls.filter(([cueId]) => cueId === 'cue:fire')).toHaveLength(2),
+    );
   });
 
   it('renders contributed sections into named slots and lets them drive the shell', async () => {

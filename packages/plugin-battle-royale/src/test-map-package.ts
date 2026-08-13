@@ -12,6 +12,7 @@ import {
   RuntimeMapPackageVisuals,
   RuntimeObjectPlacement,
   TileborneMap,
+  authoringPixelToRuntimeTile,
   deriveOverlayVisuals,
   deriveWeaponVisuals,
   type GameObjectType,
@@ -51,20 +52,20 @@ export const toCatalogEntries = (
     (objectType) => new RuntimeCatalogEntry({ origin: { _tag: 'plugin', pluginId }, objectType }),
   );
 
-/** Same role-free projection assembly performs (`map.objects` → placements). */
+/** Same authored-pixel → runtime-tile projection assembly performs. */
 const projectPlacements = (map: TileborneMap): readonly RuntimeObjectPlacement[] =>
-  map.objects.map(
-    (object) =>
-      new RuntimeObjectPlacement({
-        objectId: object.id,
-        typeId: object.kind,
-        x: object.x,
-        y: object.y,
-        ...(Object.keys(object.properties).length > 0
-          ? { instanceProperties: object.properties }
-          : {}),
-      }),
-  );
+  map.objects.map((object) => {
+    const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
+    return new RuntimeObjectPlacement({
+      objectId: object.id,
+      typeId: object.kind,
+      x: tilePosition.x,
+      y: tilePosition.y,
+      ...(Object.keys(object.properties).length > 0
+        ? { instanceProperties: object.properties }
+        : {}),
+    });
+  });
 
 const namespacedSettings = (map: TileborneMap): Record<string, JsonObject> =>
   Object.fromEntries(

@@ -12,15 +12,15 @@
     "prebuild": "node --input-type=module -e \"import { rmSync } from 'node:fs'; for (const path of ['out', '.vite/build']) rmSync(path, { recursive: true, force: true });\"",
     "build": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js package",
     "package": "node ../../node_modules/@electron-forge/cli/dist/electron-forge.js make",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.main-tests.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts --passWithNoTests",
-    "test:renderer-boot": "vitest run --config vitest.electron.config.ts",
-    "test:electron-smoke": "vitest run --config vitest.electron.config.ts",
+    "test:renderer-boot": "vitest run --config vitest.electron.config.ts src/smoke/renderer-boot.test.ts",
+    "test:electron-smoke": "node scripts/run-electron-smoke.mjs",
     "test:packaged-smoke": "vitest run --config vitest.smoke.config.ts src/smoke/packaged-runtime-closure.smoke.spec.ts",
     "test:creator-performance-native": "vitest run --config vitest.electron.config.ts src/smoke/creator-performance-native.electron.test.ts",
     "verify:electron-main-local-behavior": "node scripts/verify-electron-main-local-behavior.mjs",
-    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts src/smoke/boot.cjs.smoke.spec.ts src/smoke/lifecycle.smoke.spec.ts",
     "test:desktop-smoke": "pnpm test:electron-smoke && pnpm test:smoke",
     "test:all": "pnpm test && pnpm test:smoke"
   },
@@ -86,7 +86,7 @@
     "shadcn": "4.10.0",
     "tailwindcss": "4.3.0",
     "vite": "8.0.16",
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   },
   "config": {
     "forge": "./electron-forge.config.cjs"

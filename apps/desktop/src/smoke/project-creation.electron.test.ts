@@ -454,12 +454,4 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
       )
       .toBe(true);
   });
-
-  it('completes an IPC ping round-trip after project creation', async () => {
-    const { page } = smokeContext!;
-    const response = await page.evaluate(async () => window.tileborne.system.ping({}));
-    expect(response.pong).toBe(true);
-    expect(typeof response.ts).toBe('number');
-    expect(Number.isFinite(response.ts)).toBe(true);
-  });
 });

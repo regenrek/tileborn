@@ -1,0 +1,71 @@
+{
+  "schema_version": 3,
+  "kind": "proofloop-herdr-sol-luna-fable/run-contract",
+  "task": {
+    "id": "20260811-test-graph",
+    "source": "User request to make Tileborne tests faster",
+    "goal": "Remove unnecessary package self-builds while preserving every test that consumes built artifacts",
+    "hypothesis": "The blanket self-build edge is redundant for source-only suites; explicit artifact-owner edges preserve correctness with fewer affected tasks"
+  },
+  "project_profile": ".proofloop/project-profile.json",
+  "phase": "build",
+  "writer": "sol",
+  "allowed_paths": ["turbo.json", "packages/game-sdk/package.json"],
+  "test_policy": {
+    "baseline_record": ".proofloop/evidence/20260811-test-graph/test-baseline.json",
+    "result_record": ".proofloop/evidence/20260811-test-graph/test-gate.json",
+    "ephemeral_directory": ".proofloop/evidence/20260811-test-graph/probes",
+    "admission_record": ".proofloop/evidence/20260811-test-graph/test-admission.json",
+    "permanent": {
+      "max_new_invariants": 0,
+      "max_changed_test_files": 0,
+      "max_added_test_lines": 0
+    },
+    "full_suite": {
+      "allowed": false,
+      "reason": null
+    }
+  },
+  "luna_mode": null,
+  "fable_stage": null,
+  "validation": {
+    "cwd": ".",
+    "command": "pnpm turbo run test --filter=@tileborne/game-sdk --filter=@tileborne/test-fixtures --concurrency=1",
+    "timeout_seconds": 300,
+    "pass_criteria": [
+      "command exits successfully",
+      "game-sdk built-output tests pass",
+      "test-fixtures source tests pass"
+    ]
+  },
+  "evidence": {
+    "directory": ".proofloop/evidence/20260811-test-graph",
+    "required": ["baseline", "diff", "validation-result", "test-gate", "handoff", "pane-ownership"]
+  },
+  "budgets": {
+    "checkpoint_minutes": 20,
+    "hard_stop_minutes": 45,
+    "max_patch_batches": 1
+  },
+  "stop_conditions": [
+    "out-of-scope write",
+    "second writer or nested delegation",
+    "hypothesis disproved or scope broadened",
+    "checkpoint or hard-stop exceeded",
+    "manual acceptance boundary reached"
+  ],
+  "manual_acceptance": {
+    "required": false,
+    "owner": "human",
+    "criteria": []
+  },
+  "cleanup": {
+    "ownership_record": ".proofloop/evidence/20260811-test-graph/pane-ownership.json",
+    "sentinel_process_record": ".proofloop/evidence/20260811-test-graph/sentinel-process.json",
+    "sentinel_state_record": ".proofloop/evidence/20260811-test-graph/sentinel-state.json",
+    "stop_recorded_sentinel_process": true,
+    "close_recorded_workflow_panes": true,
+    "leave_preexisting_panes_open": true,
+    "retire_sentinel_state": true
+  }
+}

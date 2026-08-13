@@ -168,7 +168,9 @@ export class MapObject extends Schema.Class<MapObject>('MapObject')({
    * {@link migrateLegacyMapJson} which maps legacy kinds to catalog ids.
    */
   kind: GameObjectTypeId,
+  /** World position in authored pixel units (map coordinate space). */
   x: Schema.Number,
+  /** World position in authored pixel units (map coordinate space). */
   y: Schema.Number,
   width: Schema.OptionFromOptionalKey(Schema.Number),
   height: Schema.OptionFromOptionalKey(Schema.Number),

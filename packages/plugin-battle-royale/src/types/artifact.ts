@@ -155,6 +155,14 @@ export const MapCollisionArtifactSchema = Schema.Struct({
 });
 export type MapCollisionArtifact = typeof MapCollisionArtifactSchema.Type;
 
+export const MapBoundsArtifactSchema = Schema.Struct({
+  minX: Schema.Number,
+  minY: Schema.Number,
+  maxX: Schema.Number,
+  maxY: Schema.Number,
+});
+export type MapBoundsArtifact = typeof MapBoundsArtifactSchema.Type;
+
 export const ObjectCollisionRectArtifactSchema = Schema.Struct({
   objectId: ObjectId,
   x: Schema.Number,
@@ -189,6 +197,7 @@ export const BattleRoyaleArtifactSchema = Schema.Struct({
   shrinkSchedule: ShrinkScheduleSchema,
   lootTables: Schema.Array(LootTableEntrySchema),
   objectPlacements: Schema.Array(ObjectPlacementSchema),
+  mapBounds: Schema.optional(MapBoundsArtifactSchema),
   collision: Schema.optional(MapCollisionArtifactSchema),
   objectCollisionRects: Schema.optional(Schema.Array(ObjectCollisionRectArtifactSchema)),
   tilesetPack: Schema.optional(RuntimeTilesetPackSchema),

@@ -26,8 +26,6 @@
   "scripts": {
     "generate:bundled": "node scripts/generate-bundled-modules.mjs",
     "prebuild": "node scripts/generate-bundled-modules.mjs",
-    "pretypecheck": "node scripts/generate-bundled-modules.mjs",
-    "pretest": "node scripts/generate-bundled-modules.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.smoke.json",
     "lint": "eslint .",
     "test": "vitest run",
@@ -42,7 +40,7 @@
     "@tileborne/runtime": "workspace:*",
     "effect": "4.0.0-beta.78",
     "esbuild": "0.25.5",
-    "hono": "4.12.27",
+    "hono": "4.12.34",
     "miniflare": "4.20260603.0",
     "msgpackr": "2.0.1"
   },
@@ -53,7 +51,7 @@
     "@tileborne/test-fixtures": "workspace:*",
     "@types/node": "22.19.19",
     "typescript": "6.0.3",
-    "vitest": "4.1.7",
+    "vitest": "4.1.10",
     "wrangler": "4.98.0"
   },
   "license": "MIT"

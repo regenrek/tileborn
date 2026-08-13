@@ -61,6 +61,16 @@ export class GameLoop {
     this.lastTimeMs = this.clock.now();
   }
 
+  restoreTick(tick: number): number {
+    if (!Number.isInteger(tick) || tick < 0) {
+      throw new RangeError('restore tick must be a non-negative integer');
+    }
+    this.currentTick = tick;
+    this.accumulatorMs = 0;
+    this.lastTimeMs = this.clock.now();
+    return this.currentTick;
+  }
+
   step(ticks = 1): number {
     if (!Number.isInteger(ticks) || ticks < 0) {
       throw new RangeError('step ticks must be a non-negative integer');

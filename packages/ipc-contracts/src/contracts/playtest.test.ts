@@ -6,10 +6,13 @@ import { makeMapId, makeProjectId } from '@tileborne/core';
 import {
   PlaytestBehaviorDebugControlRequest,
   PlaytestBehaviorDebugInspectResponse,
+  PlaytestLifecycleControlRequest,
+  PlaytestLifecycleControlResponse,
   PlaytestListResponse,
   PlaytestRuntimeMetrics,
   PlaytestSessionView,
   PlaytestStartResponse,
+  PlaytestStopRequest,
 } from './playtest.js';
 
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -227,6 +230,14 @@ describe('playtest IPC contracts', () => {
     roundTrip(PlaytestListResponse, { sessions: [session] });
   });
 
+  it('round-trips playtest stop owner identity', () => {
+    roundTrip(PlaytestStopRequest, {
+      sessionId,
+      projectId,
+      mapId,
+    });
+  });
+
   it('round-trips bounded behavior inspector snapshots and debug controls', () => {
     roundTrip(PlaytestBehaviorDebugControlRequest, {
       sessionId,
@@ -268,6 +279,16 @@ describe('playtest IPC contracts', () => {
           hash: 'sha256:fixture',
         },
       },
+    });
+  });
+
+  it('round-trips playtest lifecycle controls', () => {
+    roundTrip(PlaytestLifecycleControlRequest, {
+      sessionId,
+      command: 'pause',
+    });
+    roundTrip(PlaytestLifecycleControlResponse, {
+      status: 'paused',
     });
   });
 });

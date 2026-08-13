@@ -9,7 +9,7 @@ const SNAPSHOT_INTERVAL = 30;
 const SCRIPTED_INPUT_LOG = buildScriptedInputLog(REPLAY_TICK_COUNT);
 
 describe('deterministic replay', () => {
-  it('produces byte-identical periodic snapshots across consecutive runs', () => {
+  it('produces byte-identical periodic and final snapshots across consecutive runs', () => {
     const first = runReplayScenario({
       seed: REPLAY_SEED,
       inputLog: SCRIPTED_INPUT_LOG,
@@ -26,22 +26,6 @@ describe('deterministic replay', () => {
     expect(first.snapshots).toHaveLength(REPLAY_TICK_COUNT / SNAPSHOT_INTERVAL);
     expect(Buffer.from(first.snapshotBytes)).toEqual(Buffer.from(second.snapshotBytes));
     expect(first.snapshotHashes).toEqual(second.snapshotHashes);
-  });
-
-  it('produces byte-identical final snapshots across consecutive runs', () => {
-    const first = runReplayScenario({
-      seed: REPLAY_SEED,
-      inputLog: SCRIPTED_INPUT_LOG,
-      tickCount: REPLAY_TICK_COUNT,
-      snapshotInterval: SNAPSHOT_INTERVAL,
-    });
-    const second = runReplayScenario({
-      seed: REPLAY_SEED,
-      inputLog: SCRIPTED_INPUT_LOG,
-      tickCount: REPLAY_TICK_COUNT,
-      snapshotInterval: SNAPSHOT_INTERVAL,
-    });
-
     expect(Buffer.from(first.finalSnapshotBytes)).toEqual(Buffer.from(second.finalSnapshotBytes));
     expect(first.finalSnapshotHash).toBe(second.finalSnapshotHash);
   });

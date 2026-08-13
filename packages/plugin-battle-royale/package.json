@@ -28,6 +28,10 @@
       "types": "./src/renderer/index.ts",
       "default": "./dist/renderer.js"
     },
+    "./test": {
+      "types": "./src/test/index.ts",
+      "default": "./dist/test.js"
+    },
     "./player-models": {
       "types": "./src/player-models/index.ts",
       "default": "./dist/player-models.js"
@@ -69,6 +73,6 @@
     "react-dom": "19.2.6",
     "tsup": "8.5.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   }
 }

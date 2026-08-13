@@ -8,28 +8,22 @@ import {
   type RefObject,
 } from 'react';
 import type { TileborneMap } from '@tileborne/core';
-import { Button } from '@tileborne/ui';
+import { Button, cn } from '@tileborne/ui';
 import { PencilRulerIcon } from 'lucide-react';
 import type { ProjectId } from '@tileborne/core';
 import type { PlaytestSessionId } from '@tileborne/services-build';
 import {
   audioAuthoringStateFromDocument,
   buildRuntimeAudioProjectionFromAuthoring,
-  defaultRuntimeAudioSettings,
   decodeRuntimeGameShellProjection,
   interpolateRenderableEntities,
   PixiRendererAdapter,
   SnapshotEntityStore,
-  type RuntimeAudioBusDefinition,
-  type RuntimeAudioCueDefinition,
-  type RuntimeAudioSettings,
   type RuntimeGameShellProjection,
   type RenderableEntity,
   type RenderableEntityProjector,
 } from '@tileborne/runtime';
 import {
-  bindBrowserRuntimeAudioFocusState,
-  createBrowserRuntimeAudioEngine,
   dispatchGameplayLifecycleAudioEvents,
   initialMenuState,
   RuntimeRoot,
@@ -61,14 +55,14 @@ import {
 import { useHudEditing } from '@/hooks/use-hud-editing';
 import { readProjectHudLayout } from '@/lib/project-hud-layout';
 import { usePlaytestControls } from '@/hooks/use-playtest-controls';
-import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import {
-  audioCueForResolvedIntent,
-  dispatchRuntimeAudioEvent,
-  resolvePlaytestPlugin,
-  type ResolvedPlaytestPlugin,
-} from '@/lib/playtest-plugin-bridge';
+import { resolvePlaytestPlugin, type ResolvedPlaytestPlugin } from '@/lib/playtest-plugin-bridge';
+import { usePlaytestInputBridge } from '@/components/playtest-viewport-input-bridge';
 import { assetProtocolUrl } from '@/lib/asset-url';
+import {
+  applyLocalPredictionToEntities,
+  LocalPlaytestPredictionController,
+  type LocalInputPrediction,
+} from '@/lib/local-playtest-prediction';
 import {
   assemblePlaytestOverlayVisualConfig,
   assemblePlaytestPlayerModelConfig,
@@ -78,11 +72,15 @@ import {
   usePlaytestWeaponVisuals,
 } from '@/hooks/use-playtest-player-models';
 import type { BuiltPlayerModel } from '@/lib/player-model-render';
+
+type PendingPlaytestOwnerDisposal = {
+  readonly ownerKey: string;
+  readonly cancel: () => void;
+};
 import type { BuiltOverlayVisual } from '@/lib/overlay-visual-render';
 import type { BuiltWeaponVisual } from '@/lib/weapon-visual-render';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
-const LOCAL_PLAYER_INPUT_ID = 'player-1';
 const SHELL_FALLBACK_TIMEOUT_MS = 10_000;
 
 type ShellFallbackStatus = 'idle' | 'pending' | 'success' | 'invalid' | 'error' | 'timeout';
@@ -233,7 +231,8 @@ function usePlaytestRuntimeMount({
   runtimeRef,
   projectId,
   map,
-  pluginId,
+  rendererCapabilityId,
+  enabled,
   builtModels,
   builtOverlays,
   builtWeapons,
@@ -242,21 +241,18 @@ function usePlaytestRuntimeMount({
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly projectId: string;
   readonly map: TileborneMap;
-  readonly pluginId: string | undefined;
+  readonly rendererCapabilityId: string | undefined;
+  readonly enabled: boolean;
   readonly builtModels: readonly BuiltPlayerModel[];
   readonly builtOverlays: readonly BuiltOverlayVisual[];
   readonly builtWeapons: readonly BuiltWeaponVisual[];
 }) {
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) {
+    if (!container || !enabled || rendererCapabilityId === undefined) {
       return undefined;
     }
-    if (pluginId === undefined) {
-      console.error('[playtest] active game mode does not declare capabilities.renderer');
-      return undefined;
-    }
-    const basePlugin = resolvePlaytestPlugin(pluginId);
+    const basePlugin = resolvePlaytestPlugin(rendererCapabilityId);
     // The configured plugin is resolved inside performMount once the chosen
     // player-model atlases are fetched; onMounted reads this holder.
     let resolved: ResolvedPlaytestPlugin = basePlugin;
@@ -285,7 +281,7 @@ function usePlaytestRuntimeMount({
                 ? assemblePlaytestWeaponVisualConfig(builtWeapons)
                 : undefined,
             ]);
-            resolved = resolvePlaytestPlugin(pluginId, {
+            resolved = resolvePlaytestPlugin(rendererCapabilityId, {
               ...(playerModels === undefined ? {} : { playerModels }),
               ...(overlayVisuals === undefined ? {} : { overlayVisuals }),
               ...(weaponVisuals === undefined ? {} : { weaponVisuals }),
@@ -354,9 +350,10 @@ function usePlaytestRuntimeMount({
     };
   }, [
     containerRef,
+    enabled,
     map,
-    pluginId,
     projectId,
+    rendererCapabilityId,
     runtimeRef,
     builtModels,
     builtOverlays,
@@ -370,12 +367,14 @@ function usePlaytestSnapshotRenderer({
   map,
   pluginId,
   sessionId,
+  localPredictionControllerRef,
 }: {
   readonly containerRef: RefObject<HTMLDivElement | null>;
   readonly runtimeRef: MutableRefObject<RuntimeBundle | null>;
   readonly map: TileborneMap;
   readonly pluginId: string | undefined;
   readonly sessionId: string;
+  readonly localPredictionControllerRef: MutableRefObject<LocalPlaytestPredictionController>;
 }) {
   useEffect(() => {
     if (pluginId === undefined) {
@@ -390,7 +389,11 @@ function usePlaytestSnapshotRenderer({
         : {}),
     });
     let rafHandle = 0;
-    const camera = { x: map.size.width / 2, y: map.size.height / 2 };
+    const camera = {
+      x: (map.size.width * map.tileSize.width) / 2,
+      y: (map.size.height * map.tileSize.height) / 2,
+    };
+    let latestProcessedInputSeqByPlayerId: Readonly<Record<string, number>> = {};
 
     const unsubscribe = window.tileborne.events.onRuntimeSnapshot((payload) => {
       if (payload.sessionId !== sessionId) {
@@ -404,6 +407,10 @@ function usePlaytestSnapshotRenderer({
       if (decoded === undefined) {
         return;
       }
+      const frameView = runtime.plugin.serverFrameToView?.(decoded);
+      if (frameView?.kind === 'initial' || frameView?.kind === 'delta') {
+        latestProcessedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
+      }
       store.apply(decoded);
     });
     let disposed = false;
@@ -415,6 +422,10 @@ function usePlaytestSnapshotRenderer({
         }
         const decoded = plugin.decodeServerFrame(snapshot.frame);
         if (decoded !== undefined) {
+          const frameView = plugin.serverFrameToView?.(decoded);
+          if (frameView?.kind === 'initial' || frameView?.kind === 'delta') {
+            latestProcessedInputSeqByPlayerId = frameView.processedInputSeqByPlayerId ?? {};
+          }
           store.apply(decoded);
         }
       })
@@ -429,11 +440,13 @@ function usePlaytestSnapshotRenderer({
       if (!runtime || !container) {
         return;
       }
-      const interpolated = store.sampleInterpolatedFullState(performance.now());
-      const currentSnapshot = interpolated?.current ?? store.getCurrentFullState();
-      if (currentSnapshot === undefined) {
+      const nowMs = performance.now();
+      const interpolated = store.sampleInterpolatedFullState(nowMs);
+      const latestSnapshot = store.getCurrentFullState();
+      if (latestSnapshot === undefined) {
         return;
       }
+      const currentSnapshot = interpolated?.current ?? latestSnapshot;
       // Interpolate world-space positions ONCE so the follow-camera and the
       // sprites share the same smoothed position; anchoring the camera to the
       // discrete latest snapshot reintroduces tick-rate stutter.
@@ -442,16 +455,32 @@ function usePlaytestSnapshotRenderer({
         interpolated?.previous === undefined
           ? []
           : runtime.projector.project(interpolated.previous);
-      const entities = interpolateRenderableEntities(
+      const remoteInterpolatedEntities = interpolateRenderableEntities(
         currentEntities,
         previousEntities,
         interpolated?.alpha ?? 1,
       );
+      const latestEntities = runtime.projector.project(latestSnapshot);
+      const latestLocalEntity = latestEntities.find((entity) => entity.id === 'br:player:player-1');
+      const entities = applyLocalPredictionToEntities(
+        remoteInterpolatedEntities,
+        latestLocalEntity === undefined
+          ? undefined
+          : {
+              entity: latestLocalEntity,
+              acknowledgedInputSequence:
+                latestProcessedInputSeqByPlayerId['player-1'] ??
+                latestProcessedInputSeqByPlayerId['br:player:player-1'] ??
+                -1,
+            },
+        localPredictionControllerRef.current,
+        nowMs,
+      );
 
-      const localEntity = findLocalPlayerEntity(entities);
-      if (localEntity) {
-        camera.x = localEntity.x;
-        camera.y = localEntity.y;
+      const predictedLocalEntity = findLocalPlayerEntity(entities);
+      if (predictedLocalEntity) {
+        camera.x = predictedLocalEntity.x;
+        camera.y = predictedLocalEntity.y;
       }
       const cx = container.clientWidth / 2;
       const cy = container.clientHeight / 2;
@@ -476,121 +505,15 @@ function usePlaytestSnapshotRenderer({
       cancelAnimationFrame(rafHandle);
       unsubscribe();
     };
-  }, [containerRef, map.size.height, map.size.width, pluginId, runtimeRef, sessionId]);
-}
-
-function usePlaytestInputBridge({
-  containerRef,
-  pluginId,
-  sessionId,
-  tickCount,
-  projectAudio,
-}: {
-  readonly containerRef: RefObject<HTMLDivElement | null>;
-  readonly pluginId: string | undefined;
-  readonly sessionId: string;
-  readonly tickCount: number | undefined;
-  readonly projectAudio:
-    | {
-        readonly buses: readonly RuntimeAudioBusDefinition[];
-        readonly cues: readonly RuntimeAudioCueDefinition[];
-        readonly settings: RuntimeAudioSettings;
-      }
-    | undefined;
-}) {
-  // The capture/resolver lifecycle MUST NOT depend on `tickCount`: a tick refresh
-  // tearing down + recreating the resolver would drop held mouse/key state (a
-  // held mouse has no repeat `mousedown`, so PrimaryAction/`shoot` would silently
-  // clear on the next tick). Keep the latest tick in a ref the emit path reads so
-  // outgoing frames carry the current tick without re-running the effect.
-  const tickCountRef = useRef(tickCount);
-  useEffect(() => {
-    tickCountRef.current = tickCount;
-  }, [tickCount]);
-
-  useEffect(() => {
-    if (pluginId === undefined) {
-      return undefined;
-    }
-    // Remap-apply policy (ADR-0024): a keybind remap is persisted by the
-    // Controls UI (a separate player-settings surface) to the shared overlay
-    // store; the desktop playtest has no in-session Controls UI to wire a live
-    // `handle.setEffectiveMap` to, so remaps apply on the NEXT playtest session.
-    // `resolvePlaytestPlugin` reloads the LATEST persisted overlay every time
-    // this effect (re)runs — i.e. on each capture-attach — so a session always
-    // starts on the freshest saved bindings. The live `setEffectiveMap` seam
-    // stays available for a future same-surface remap UI.
-    const plugin = resolvePlaytestPlugin(pluginId);
-    const audioBuses = [...(plugin.audio?.buses ?? []), ...(projectAudio?.buses ?? [])];
-    const audioCues = [...(plugin.audio?.cues ?? []), ...(projectAudio?.cues ?? [])];
-    const audioEngine =
-      audioCues.length === 0
-        ? undefined
-        : createBrowserRuntimeAudioEngine({
-            buses: audioBuses,
-            cues: audioCues,
-            settings: projectAudio?.settings ?? defaultRuntimeAudioSettings(),
-          });
-    const unbindAudioFocusState =
-      audioEngine === undefined ? undefined : bindBrowserRuntimeAudioFocusState(audioEngine);
-    if (audioEngine !== undefined) {
-      window.__tilebornePlaytestAudio = audioEngine;
-      dispatchRuntimeAudioEvent(audioEngine, audioCues, 'shell.menuMusic');
-    }
-    let seq = 0;
-    let previousIntent: ReturnType<ResolvedPlaytestPlugin['resolveInputIntent']> | undefined;
-
-    const handle = attachPlaytestInputCapture({
-      container: containerRef.current,
-      inputMap: plugin.inputMap,
-      controlScheme: plugin.controlScheme,
-      profile: plugin.inputCaptureProfile,
-      resolveIntent: plugin.resolveInputIntent,
-      onIntent: (intent) => {
-        seq += 1;
-        const audioCueId =
-          audioCueForResolvedIntent(projectAudio?.cues ?? [], intent, previousIntent) ??
-          plugin.audio?.cueForIntent(intent, previousIntent);
-        if (audioCueId !== undefined) {
-          audioEngine?.playCue(audioCueId);
-        }
-        previousIntent = intent;
-        const idle =
-          intent.dir === undefined &&
-          !intent.shoot &&
-          !intent.reload &&
-          !intent.interact &&
-          !intent.drop &&
-          intent.abilities.length === 0 &&
-          intent.swapSlot === undefined;
-        const payload = {
-          sessionId: sessionId as PlaytestSessionId,
-          playerId: LOCAL_PLAYER_INPUT_ID,
-          tick: tickCountRef.current ?? 0,
-          seq,
-          ...(intent.dir === undefined ? {} : { dir: intent.dir }),
-          shoot: intent.shoot,
-          reload: intent.reload,
-          interact: intent.interact,
-          drop: intent.drop,
-          abilities: [...intent.abilities],
-          ...(intent.aimDeg === undefined ? {} : { aimDeg: intent.aimDeg }),
-          ...(intent.swapSlot === undefined ? {} : { swapSlot: intent.swapSlot }),
-          ...(idle ? { active: false } : {}),
-        };
-        void window.tileborne.runtime.playtestInput(payload);
-      },
-    });
-
-    return () => {
-      handle.dispose();
-      unbindAudioFocusState?.();
-      if (window.__tilebornePlaytestAudio === audioEngine) {
-        window.__tilebornePlaytestAudio = undefined;
-      }
-      audioEngine?.dispose();
-    };
-  }, [containerRef, pluginId, projectAudio, sessionId]);
+  }, [
+    containerRef,
+    localPredictionControllerRef,
+    map.size.height,
+    map.size.width,
+    pluginId,
+    runtimeRef,
+    sessionId,
+  ]);
 }
 
 export function PlaytestViewport({
@@ -601,6 +524,7 @@ export function PlaytestViewport({
 }: PlaytestViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<RuntimeBundle | null>(null);
+  const localPredictionControllerRef = useRef(new LocalPlaytestPredictionController());
   const showGrid = useEditorUiStore((state) => state.showGrid);
   const showDebugOverlay = useEditorUiStore((state) => state.showDebugOverlay);
   const showCollisionOverlay = useEditorUiStore((state) => state.showCollisionOverlay);
@@ -694,6 +618,14 @@ export function PlaytestViewport({
   const [hudOverlayVersion, setHudOverlayVersion] = useState(0);
   const rendererResolution = useMemo(
     () => {
+      if (contributionsQuery.isLoading) {
+        return { loading: true } as const;
+      }
+      if (contributionsQuery.isError) {
+        return {
+          error: `Could not load game-mode contributions: ${formatShellError(contributionsQuery.error)}`,
+        } as const;
+      }
       if (rendererKey === undefined) {
         return {
           error:
@@ -712,8 +644,17 @@ export function PlaytestViewport({
       }
     },
     // hudOverlayVersion re-resolves after the HUD editor persists an overlay.
-    [rendererKey, manifestHudLayout, projectHudLayout, hudOverlayVersion],
+    [
+      contributionsQuery.error,
+      contributionsQuery.isError,
+      contributionsQuery.isLoading,
+      rendererKey,
+      manifestHudLayout,
+      projectHudLayout,
+      hudOverlayVersion,
+    ],
   );
+  const rendererLoading = 'loading' in rendererResolution;
   const resolvedPlugin = 'plugin' in rendererResolution ? rendererResolution.plugin : undefined;
   const rendererError = 'error' in rendererResolution ? rendererResolution.error : undefined;
   const bumpHudOverlayVersion = useCallback(
@@ -797,6 +738,53 @@ export function PlaytestViewport({
                     gameOver: shellGameOver,
                   },
           };
+  const stopPlaytestRef = useRef(stop);
+  useEffect(() => {
+    stopPlaytestRef.current = stop;
+  }, [stop]);
+  const playtestOwner = useMemo(
+    () => ({ sessionId, projectId, mapId: map.id }),
+    [map.id, projectId, sessionId],
+  );
+  const playtestOwnerKey = `${sessionId}\u0000${projectId}\u0000${map.id}`;
+  const stopCurrentPlaytest = useCallback(() => {
+    return stopPlaytestRef.current(playtestOwner);
+  }, [playtestOwner]);
+  const pendingPlaytestOwnerDisposalsRef = useRef(new Map<string, PendingPlaytestOwnerDisposal>());
+  useEffect(() => {
+    const pendingDisposal = pendingPlaytestOwnerDisposalsRef.current.get(playtestOwnerKey);
+    if (pendingDisposal !== undefined) {
+      pendingDisposal.cancel();
+      pendingPlaytestOwnerDisposalsRef.current.delete(playtestOwnerKey);
+    }
+
+    return () => {
+      const pendingDisposal = pendingPlaytestOwnerDisposalsRef.current.get(playtestOwnerKey);
+      if (pendingDisposal !== undefined) {
+        pendingDisposal.cancel();
+      }
+
+      let cancelled = false;
+      const cancel = () => {
+        cancelled = true;
+      };
+      queueMicrotask(() => {
+        if (
+          cancelled ||
+          pendingPlaytestOwnerDisposalsRef.current.get(playtestOwnerKey)?.cancel !== cancel
+        ) {
+          return;
+        }
+        pendingPlaytestOwnerDisposalsRef.current.delete(playtestOwnerKey);
+        const stopOwnedPlaytest = () => stopPlaytestRef.current(playtestOwner);
+        void stopOwnedPlaytest().catch(() => stopOwnedPlaytest().catch(() => undefined));
+      });
+      pendingPlaytestOwnerDisposalsRef.current.set(playtestOwnerKey, {
+        ownerKey: playtestOwnerKey,
+        cancel,
+      });
+    };
+  }, [playtestOwner, playtestOwnerKey]);
   const startCurrentPlaytest = useCallback(async () => {
     await start(
       projectId,
@@ -809,12 +797,30 @@ export function PlaytestViewport({
     setShellMatchStarted(false);
     pendingShellRetryKeys.add(shellCacheKey);
     setShellRetryEpoch((epoch) => epoch + 1);
-    await stop();
+    await stopCurrentPlaytest();
     await startCurrentPlaytest();
-  }, [currentShellGameOver, shellCacheKey, startCurrentPlaytest, stop]);
+  }, [currentShellGameOver, shellCacheKey, startCurrentPlaytest, stopCurrentPlaytest]);
   const exitCurrentPlaytest = useCallback(() => {
-    void stop();
-  }, [stop]);
+    void stopCurrentPlaytest().catch(() => undefined);
+  }, [stopCurrentPlaytest]);
+  const controlCurrentPlaytestLifecycle = useCallback(
+    async (command: 'start' | 'pause' | 'resume') => {
+      if (!sessionId) {
+        throw new Error('Cannot control playtest lifecycle without an active session.');
+      }
+      const response = await window.tileborne.playtest.lifecycleControl({
+        sessionId: sessionId as PlaytestSessionId,
+        command,
+      });
+      const expectedStatus = command === 'pause' ? 'paused' : 'running';
+      if (response.status !== expectedStatus) {
+        throw new Error(
+          `Playtest lifecycle ${command} returned ${response.status}; expected ${expectedStatus}.`,
+        );
+      }
+    },
+    [sessionId],
+  );
   const noopShellEffect = useCallback(() => undefined, []);
   const runtimeInitialState = useMemo(
     () => ({ ...initialMenuState, phase: 'menu' as const, screen: 'main' as const }),
@@ -870,7 +876,12 @@ export function PlaytestViewport({
     setShellNavigationRequests([]);
     setShellMatchStarted(false);
     ignoredShellGameOverRef.current = undefined;
+    dispatchedGameplayAudioKeysRef.current.clear();
+    localPredictionControllerRef.current.reset();
   }, [sessionId]);
+  const recordLocalPredictionInput = useCallback((input: LocalInputPrediction) => {
+    localPredictionControllerRef.current.recordInput(input);
+  }, []);
   if (
     shellProjectionCacheRef.current.projection === undefined &&
     fallbackShellProjection !== undefined
@@ -1054,21 +1065,26 @@ export function PlaytestViewport({
           {...(shellHudMetrics === undefined ? {} : { hudMetrics: shellHudMetrics })}
           {...(shellResults === undefined ? {} : { results: shellResults })}
           onPlay={noopShellEffect}
-          onMatchStart={() => {
+          onMatchStart={async () => {
+            await controlCurrentPlaytestLifecycle('start');
             ignoredShellGameOverRef.current = currentShellGameOver;
             setShellMatchStarted(true);
           }}
+          onPause={() => controlCurrentPlaytestLifecycle('pause')}
+          onResume={() => controlCurrentPlaytestLifecycle('resume')}
           onPlayAgain={() => {
             void restartCurrentPlaytest();
           }}
           onExitToMenu={exitCurrentPlaytest}
-          onQuit={stop}
+          onQuit={stopCurrentPlaytest}
           renderLobby={renderPlaytestLobby}
         />
       ),
     [
       displayedShellProjection,
       cachedShellProjectionSource,
+      controlCurrentPlaytestLifecycle,
+      currentShellGameOver,
       exitCurrentPlaytest,
       map.id,
       noopShellEffect,
@@ -1086,7 +1102,7 @@ export function PlaytestViewport({
       shellHudMetrics,
       shellResults,
       sessionId,
-      stop,
+      stopCurrentPlaytest,
     ],
   );
 
@@ -1095,7 +1111,8 @@ export function PlaytestViewport({
     runtimeRef,
     projectId,
     map,
-    pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
+    rendererCapabilityId: rendererKey,
+    enabled: canStartPlaytestRuntime && resolvedPlugin !== undefined,
     builtModels,
     builtOverlays,
     builtWeapons,
@@ -1106,6 +1123,7 @@ export function PlaytestViewport({
     map,
     pluginId: canStartPlaytestRuntime ? rendererKey : undefined,
     sessionId,
+    localPredictionControllerRef,
   });
 
   useEffect(() => {
@@ -1126,6 +1144,7 @@ export function PlaytestViewport({
     sessionId,
     tickCount: session?.runtimeMetrics?.tickCount,
     projectAudio,
+    onLocalInput: recordLocalPredictionInput,
   });
 
   useEffect(() => {
@@ -1133,13 +1152,13 @@ export function PlaytestViewport({
     dispatchGameplayLifecycleAudioEvents({
       engine: window.__tilebornePlaytestAudio,
       cues: [...pluginAudioCues, ...(projectAudio?.cues ?? [])],
-      events: session?.runtimeMetrics?.hud?.gameplayEvents ?? [],
+      events: session?.runtimeMetrics?.hud?.sequencedGameplayEvents ?? [],
       seenKeys: dispatchedGameplayAudioKeysRef.current,
     });
   }, [
     projectAudio?.cues,
     resolvedPlugin?.audio?.cues,
-    session?.runtimeMetrics?.hud?.gameplayEvents,
+    session?.runtimeMetrics?.hud?.sequencedGameplayEvents,
   ]);
 
   if (rendererError !== undefined) {
@@ -1152,6 +1171,16 @@ export function PlaytestViewport({
     );
   }
 
+  if (rendererLoading) {
+    return (
+      <div className="absolute inset-0 z-20 grid place-items-center bg-background/95 p-6">
+        <p role="status" className="max-w-xl text-sm text-muted-foreground">
+          Loading game-mode renderer…
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="absolute inset-0 z-20 flex min-h-0 flex-col bg-background/95 backdrop-blur-sm">
       <PlaytestOverlay
@@ -1159,7 +1188,7 @@ export function PlaytestViewport({
         activePlugins={activePlugins}
         session={session}
         isStopping={isStopping}
-        onStop={stop}
+        onStop={stopCurrentPlaytest}
       />
       <div className="relative min-h-0 flex-1">
         <div
@@ -1173,9 +1202,9 @@ export function PlaytestViewport({
           projectId={projectId}
           mapId={map.id}
           isRestarting={isStarting || isStopping}
-          onBackToEditor={stop}
+          onBackToEditor={stopCurrentPlaytest}
           onPlayAgain={async (nextProjectId, nextMapId) => {
-            await stop();
+            await stopCurrentPlaytest();
             await start(
               nextProjectId,
               nextMapId,
@@ -1192,7 +1221,7 @@ export function PlaytestViewport({
           onMoveWidget={hudEditing.moveWidget}
         />
         <div
-          className="absolute inset-0 z-30"
+          className={cn('tb-runtime-shell-host absolute inset-0 z-30 pointer-events-auto')}
           data-testid="playtest-runtime-shell"
           data-shell-query-status={shellQuery.status}
           data-shell-query-fetch-status={shellQuery.fetchStatus}

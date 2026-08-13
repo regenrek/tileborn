@@ -9,7 +9,14 @@ import {
   type ProjectId,
 } from '@tileborne/core';
 import type { RuntimeModeDataExporter } from '@tileborne/plugin-api';
-import { makeGameRuntime, makePluginHost, type RuntimePlugin } from '@tileborne/runtime';
+import {
+  createRuntimeInputEdgeTransport,
+  makeGameRuntime,
+  makePluginHost,
+  type RuntimeInputEdgeTransport,
+  type RuntimeInputEdgeField,
+  type RuntimePlugin,
+} from '@tileborne/runtime';
 import {
   loadRuntimeMapPackage,
   type RuntimeMapPackageEntryReader,
@@ -67,6 +74,8 @@ export interface PlaytestRuntimePlayerInput {
   readonly swapSlot?: number;
 }
 
+type PlaytestRuntimeInputEdgeField = RuntimeInputEdgeField<PlaytestRuntimePlayerInput>;
+
 export interface PlaytestRuntimePlayerSnapshot {
   readonly playerId: string;
   readonly x: number;
@@ -79,7 +88,9 @@ export interface PlaytestRuntimeSnapshot {
 }
 
 interface PlaytestSessionState {
-  readonly inputByPlayerId: Map<string, PlaytestRuntimePlayerInput>;
+  readonly inputTransport: RuntimeInputEdgeTransport<PlaytestRuntimePlayerInput>;
+  inputEdgeFields: readonly PlaytestRuntimeInputEdgeField[];
+  heldBooleanInputFields: readonly PlaytestRuntimeInputEdgeField[];
   readonly world: PlaytestPluginWorld;
   readonly diagnosticsRecorder: PlaytestRuntimeDiagnosticsRecorder;
   seedFrame?: Uint8Array;
@@ -105,6 +116,8 @@ interface RuntimePluginModule {
     readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
     readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
   }) => PlaytestTickPlugin;
+  readonly playtestInputEdgeFields?: readonly PlaytestRuntimeInputEdgeField[];
+  readonly playtestHeldBooleanInputFields?: readonly PlaytestRuntimeInputEdgeField[];
   /**
    * Plugin-owned world→HUD derivation (HUD-state SSOT). When the runtime
    * bundle exports it, the host's HUD tracker delegates the per-tick world
@@ -121,8 +134,10 @@ interface RuntimePluginModule {
 
 interface ActivePlaytestRuntime {
   readonly projectId?: ProjectId;
+  readonly mapId?: string;
   readonly getMetrics: () => PlaytestRuntimeMetrics;
   readonly behaviorDebug?: PlaytestBehaviorDebugState;
+  lifecycle: PlaytestRuntimeLifecycleStatus;
   shellNavigationSequence: number;
   shellNavigationRequests: {
     readonly sequence: number;
@@ -132,6 +147,8 @@ interface ActivePlaytestRuntime {
   readonly stop: () => Promise<void>;
 }
 
+export type PlaytestRuntimeLifecycleCommand = 'start' | 'pause' | 'resume';
+export type PlaytestRuntimeLifecycleStatus = 'waiting-to-start' | 'running' | 'paused';
 export type PlaytestBehaviorDebugStatus = 'running' | 'paused';
 
 export interface PlaytestBehaviorSourceLocation {
@@ -300,6 +317,24 @@ interface PlainRuntimeStubModule {
 const readPlainStub = (moduleValue: RuntimePluginModule): PlaytestTickPlugin | undefined => {
   const plainModule = moduleValue as PlainRuntimeStubModule;
   return plainModule.default;
+};
+
+const readPlaytestInputEdgeFields = (
+  moduleValue: RuntimePluginModule,
+): readonly PlaytestRuntimeInputEdgeField[] => {
+  const fields = moduleValue.playtestInputEdgeFields ?? [];
+  return fields.filter(
+    (field): field is PlaytestRuntimeInputEdgeField => typeof field === 'string',
+  );
+};
+
+const readPlaytestHeldBooleanInputFields = (
+  moduleValue: RuntimePluginModule,
+): readonly PlaytestRuntimeInputEdgeField[] => {
+  const fields = moduleValue.playtestHeldBooleanInputFields ?? [];
+  return fields.filter(
+    (field): field is PlaytestRuntimeInputEdgeField => typeof field === 'string',
+  );
 };
 
 const encodeMapPackage = Schema.encodeSync(RuntimeMapPackage);
@@ -581,6 +616,10 @@ const loadPluginForPlaytest = async (
     readonly getPlayerInput: (playerId: string) => PlaytestRuntimePlayerInput | undefined;
     readonly msgOut: { readonly push: (frame: Uint8Array) => void };
     readonly recordMapPackage?: (mapPackage: unknown) => void;
+    readonly recordInputEdgeFields?: (fields: readonly PlaytestRuntimeInputEdgeField[]) => void;
+    readonly recordHeldBooleanInputFields?: (
+      fields: readonly PlaytestRuntimeInputEdgeField[],
+    ) => void;
     readonly setSeedFrame: (frame: Uint8Array | undefined) => void;
     readonly setHudWorldStateDeriver?: (deriver: PlaytestHudWorldStateDeriver) => void;
     readonly selectedPlayerModelId?: string;
@@ -588,6 +627,8 @@ const loadPluginForPlaytest = async (
 ): Promise<PlaytestTickPlugin> => {
   const runtimeEntry = await resolveRuntimeEntry(rootPath);
   const runtimeModule = await loadRuntimeModule(runtimeEntry);
+  hostExtras.recordInputEdgeFields?.(readPlaytestInputEdgeFields(runtimeModule));
+  hostExtras.recordHeldBooleanInputFields?.(readPlaytestHeldBooleanInputFields(runtimeModule));
 
   if (typeof runtimeModule.derivePlaytestHudWorldState === 'function') {
     hostExtras.setHudWorldStateDeriver?.(runtimeModule.derivePlaytestHudWorldState);
@@ -644,6 +685,8 @@ const logRuntimeError = async (
 export const getPlaytestRuntimeMetrics = (sessionId: string): PlaytestRuntimeMetrics | undefined =>
   activeRuntimes.get(sessionId)?.getMetrics();
 
+export const getActivePlaytestRuntimeCountForTests = (): number => activeRuntimes.size;
+
 export const setPlaytestRuntimeInput = (
   sessionId: string,
   playerId: string,
@@ -654,13 +697,20 @@ export const setPlaytestRuntimeInput = (
     return;
   }
   const currentTick = activeRuntimes.get(sessionId)?.getMetrics().tickCount ?? 0;
-  state.diagnosticsRecorder.recordInput(playerId, input, currentTick);
-  state.inputByPlayerId.set(playerId, input);
+  const resolvedInput = state.inputTransport.set(playerId, input);
+  state.diagnosticsRecorder.recordInput(playerId, resolvedInput, currentTick);
 };
 
 export const clearPlaytestRuntimeInput = (sessionId: string, playerId: string): void => {
-  sessionStates.get(sessionId)?.inputByPlayerId.delete(playerId);
+  const state = sessionStates.get(sessionId);
+  state?.inputTransport.delete(playerId);
 };
+
+export const getPlaytestRuntimeInputForTests = (
+  sessionId: string,
+  playerId: string,
+): PlaytestRuntimePlayerInput | undefined =>
+  sessionStates.get(sessionId)?.inputTransport.get(playerId);
 
 export const getPlaytestRuntimeSnapshot = (
   sessionId: string,
@@ -700,6 +750,7 @@ export const getPlaytestRuntimeSnapshot = (
 export const startPlaytestRuntimeHost = async (input: {
   readonly sessionId: string;
   readonly projectId?: ProjectId;
+  readonly mapId?: string;
   /** Directory holding the assembled `RuntimeMapPackage` this host boots from. */
   readonly packageDirectory: string;
   readonly pluginInstalls: readonly { readonly pluginId: string; readonly rootPath: string }[];
@@ -715,13 +766,22 @@ export const startPlaytestRuntimeHost = async (input: {
   const behaviorRuntime = await startPlaytestBehaviorRuntime(input.packageDirectory);
 
   const pluginWorld = createPlaytestPluginWorld();
-  const inputByPlayerId = new Map<string, PlaytestRuntimePlayerInput>();
+  const inputEdgeFields = new Set<PlaytestRuntimeInputEdgeField>();
+  const heldBooleanInputFields = new Set<PlaytestRuntimeInputEdgeField>();
+  const inputTransport = createRuntimeInputEdgeTransport<PlaytestRuntimePlayerInput>(
+    () => [...inputEdgeFields],
+    {
+      heldBooleanFields: () => [...heldBooleanInputFields],
+    },
+  );
   const diagnosticsRecorder = createPlaytestRuntimeDiagnosticsRecorder({
     tickRate: TICK_RATE,
     tickBudgetMs: TICK_MS,
   });
   const sessionState: PlaytestSessionState = {
-    inputByPlayerId,
+    inputTransport,
+    inputEdgeFields: [],
+    heldBooleanInputFields: [],
     world: pluginWorld,
     diagnosticsRecorder,
   };
@@ -774,9 +834,21 @@ export const startPlaytestRuntimeHost = async (input: {
   try {
     for (const install of input.pluginInstalls) {
       const plugin = await loadPluginForPlaytest(install.pluginId, install.rootPath, mapPackage, {
-        getPlayerInput: (playerId) => inputByPlayerId.get(playerId),
+        getPlayerInput: (playerId) => inputTransport.get(playerId),
         msgOut,
         recordMapPackage: diagnosticsRecorder.recordMapPackage,
+        recordInputEdgeFields: (fields) => {
+          for (const field of fields) {
+            inputEdgeFields.add(field);
+          }
+          sessionState.inputEdgeFields = [...inputEdgeFields];
+        },
+        recordHeldBooleanInputFields: (fields) => {
+          for (const field of fields) {
+            heldBooleanInputFields.add(field);
+          }
+          sessionState.heldBooleanInputFields = [...heldBooleanInputFields];
+        },
         setSeedFrame: (frame) => {
           if (frame === undefined) {
             delete sessionState.seedFrame;
@@ -814,7 +886,6 @@ export const startPlaytestRuntimeHost = async (input: {
     );
 
     await Effect.runPromise(gameRuntime.init({ tickRate: TICK_RATE, pluginHost }));
-    await Effect.runPromise(gameRuntime.start());
     const runtime = gameRuntime;
 
     for (const plugin of loadedPlugins) {
@@ -830,10 +901,18 @@ export const startPlaytestRuntimeHost = async (input: {
     metricsState.state.playerCount = countPlayers(pluginWorld);
     maybeNotifyPlaytestChanged();
 
+    let tickInFlight = false;
     const interval = setInterval(() => {
+      const active = activeRuntimes.get(input.sessionId);
+      if (active?.lifecycle !== 'running' || tickInFlight) {
+        return;
+      }
+      tickInFlight = true;
       const tickStartedAt = performance.now();
+      const inputAcknowledgement = inputTransport.capturePendingAcknowledgement();
       void Effect.runPromise(runtime.step(1))
         .then(async () => {
+          inputTransport.acknowledgePending(inputAcknowledgement);
           if (behaviorRuntime?.status === 'running') {
             await stepPlaytestBehaviorRuntime(behaviorRuntime);
           }
@@ -855,12 +934,14 @@ export const startPlaytestRuntimeHost = async (input: {
             message,
           });
           maybeNotifyPlaytestChanged();
+        })
+        .finally(() => {
+          tickInFlight = false;
         });
     }, TICK_MS);
 
     const stop = async (): Promise<void> => {
       clearInterval(interval);
-      sessionStates.delete(input.sessionId);
       for (const plugin of loadedPlugins) {
         plugin.onShutdown?.();
       }
@@ -873,8 +954,10 @@ export const startPlaytestRuntimeHost = async (input: {
 
     activeRuntimes.set(input.sessionId, {
       ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+      ...(input.mapId === undefined ? {} : { mapId: input.mapId }),
       getMetrics: metricsState.getMetrics,
       ...(behaviorRuntime === undefined ? {} : { behaviorDebug: behaviorRuntime }),
+      lifecycle: 'waiting-to-start',
       shellNavigationSequence: 0,
       shellNavigationRequests: [],
       interval,
@@ -906,17 +989,53 @@ export const startPlaytestRuntimeHost = async (input: {
   }
 };
 
+export const controlPlaytestRuntimeLifecycle = (
+  sessionId: string,
+  command: PlaytestRuntimeLifecycleCommand,
+): PlaytestRuntimeLifecycleStatus => {
+  const active = activeRuntimes.get(sessionId);
+  if (active === undefined) {
+    throw new Error(`playtest runtime is not active for ${sessionId}`);
+  }
+  if (command === 'start' || command === 'resume') {
+    active.lifecycle = 'running';
+  } else {
+    active.lifecycle = 'paused';
+  }
+  maybeNotifyPlaytestChanged();
+  return active.lifecycle;
+};
+
 export const stopPlaytestRuntimeHost = async (sessionId: string): Promise<void> => {
   const active = activeRuntimes.get(sessionId);
   if (!active) {
     return;
   }
-  activeRuntimes.delete(sessionId);
-  sessionStates.delete(sessionId);
   if (active.interval) {
     clearInterval(active.interval);
   }
   await active.stop();
+  activeRuntimes.delete(sessionId);
+  sessionStates.delete(sessionId);
+};
+
+export const stopOwnedPlaytestRuntimeHost = async (input: {
+  readonly sessionId: string;
+  readonly projectId?: ProjectId;
+  readonly mapId?: string;
+}): Promise<boolean> => {
+  const active = activeRuntimes.get(input.sessionId);
+  if (!active) {
+    return false;
+  }
+  if (input.projectId !== undefined && active.projectId !== input.projectId) {
+    return false;
+  }
+  if (input.mapId !== undefined && active.mapId !== input.mapId) {
+    return false;
+  }
+  await stopPlaytestRuntimeHost(input.sessionId);
+  return true;
 };
 
 export const getPlaytestBehaviorDebugSnapshot = (

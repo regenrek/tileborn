@@ -60,6 +60,21 @@ describe('attachPlaytestInputCapture (neutral pipeline, no hardcoded SHOOT_KEY)'
 
   const attach = (): { intents: ResolvedInputIntent[]; container: HTMLDivElement } => {
     const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { configurable: true, value: 100 },
+      clientHeight: { configurable: true, value: 100 },
+    });
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({
+      x: 10,
+      y: 20,
+      left: 10,
+      top: 20,
+      right: 110,
+      bottom: 120,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
     document.body.appendChild(container);
     const intents: ResolvedInputIntent[] = [];
     const inputMap = battleRoyaleDefaultInputMap();
@@ -88,6 +103,50 @@ describe('attachPlaytestInputCapture (neutral pipeline, no hardcoded SHOOT_KEY)'
     expect(intents.at(-1)?.shoot).toBe(true);
     container.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
     expect(intents.at(-1)?.shoot).toBe(false);
+  });
+
+  it('coalesces pointer aim and emits the latest aim once per animation frame', () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const requestAnimationFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callbacks.push(callback);
+        return callbacks.length;
+      });
+    const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+      // no-op
+    });
+
+    const { intents, container } = attach();
+
+    container.dispatchEvent(
+      new MouseEvent('pointermove', { clientX: 80, clientY: 70, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent('pointermove', { clientX: 60, clientY: 110, bubbles: true }),
+    );
+
+    expect(intents).toHaveLength(0);
+    expect(callbacks).toHaveLength(1);
+    callbacks[0]?.(16);
+
+    expect(intents).toHaveLength(1);
+    expect(intents.at(-1)).toMatchObject({ shoot: false, aimDeg: 90 });
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+    handle?.dispose();
+    requestAnimationFrame.mockRestore();
+    cancelAnimationFrame.mockRestore();
+  });
+
+  it('left click fires toward the current cursor position even before a pointermove', () => {
+    const { intents, container } = attach();
+
+    container.dispatchEvent(
+      new MouseEvent('mousedown', { button: 0, clientX: 110, clientY: 70, bubbles: true }),
+    );
+
+    expect(intents.at(-1)).toMatchObject({ shoot: true, aimDeg: 0 });
   });
 
   it('clears PrimaryAction when the mouse is released OUTSIDE the viewport (release is global)', () => {

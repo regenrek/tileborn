@@ -29,7 +29,7 @@
     "generate": "node scripts/generate-capabilities.mjs",
     "typecheck": "pnpm generate && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.examples.json",
     "lint": "eslint .",
-    "test": "pnpm build && vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests",
     "build": "pnpm generate && tsc -b tsconfig.json"
   },
   "dependencies": {
@@ -39,7 +39,7 @@
   "devDependencies": {
     "@types/node": "22.19.19",
     "prettier": "3.8.3",
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   },
   "license": "MIT"
 }

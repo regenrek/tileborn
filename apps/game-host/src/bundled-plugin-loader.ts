@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import type { JsonValue } from '@tileborne/core';
 import type { RuntimePlugin, RuntimePluginLoader } from '@tileborne/runtime/worker';
 
 import { bundledPlugin } from './.generated/bundled-plugin.js';
@@ -9,6 +10,8 @@ import {
   decodeServerLifecycleFrame,
   encodeTransportErrorFrame,
   encodeInvalidClientFrame,
+  playtestHeldBooleanInputFields,
+  playtestInputEdgeFields,
   snapshotTickFromServerFrame,
   type RuntimeClientInputFrame,
 } from './.generated/plugin-runtime.js';
@@ -27,6 +30,8 @@ interface BundledPluginWorld {
   readonly destroyEntity: (entity: number) => void;
   readonly registerComponent: <T extends object>(name: string) => BundledComponentStore<T>;
   readonly getComponent: <T extends object>(name: string) => BundledComponentStore<T>;
+  readonly createCheckpoint: () => { readonly nextEntity: number };
+  readonly restoreCheckpoint: (checkpoint: { readonly nextEntity: number }) => void;
 }
 
 export type BundledRuntimeInput = object;
@@ -74,6 +79,8 @@ interface BundledRuntimeAdapter {
 
 export interface BundledPluginRuntimeRegistration {
   readonly id: string;
+  readonly playtestInputEdgeFields?: readonly string[];
+  readonly playtestHeldBooleanInputFields?: readonly string[];
   readonly protocolBridge: BundledPluginProtocolBridge;
   readonly createRuntimeAdapter: (host: {
     readonly getMapPackage: () => unknown;
@@ -82,7 +89,9 @@ export interface BundledPluginRuntimeRegistration {
     readonly getPlayerInput?: (playerId: string) => BundledRuntimeInput | undefined;
     readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
     readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+    readonly getPluginCheckpoint?: (pluginId: string) => JsonValue | undefined;
     readonly seed?: string | number;
+    readonly setPluginCheckpoint?: (pluginId: string, checkpoint: JsonValue | undefined) => void;
   }) => BundledRuntimeAdapter;
 }
 
@@ -96,6 +105,8 @@ interface BundledPluginLoaderOptions {
   readonly getInput?: (playerId: string) => BundledRuntimeInput | undefined;
   readonly emitFrame?: (frame: Uint8Array) => void;
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+  readonly getPluginCheckpoint?: (pluginId: string) => JsonValue | undefined;
+  readonly setPluginCheckpoint?: (pluginId: string, checkpoint: JsonValue | undefined) => void;
   readonly seed?: string | number;
   /** Encoded `RuntimeMapPackage` wire JSON the room boots from (ADR-0030). */
   readonly mapPackage?: unknown;
@@ -118,6 +129,14 @@ class InMemoryBundledPluginWorld implements BundledPluginWorld {
     for (const store of this.stores.values()) {
       store.delete(entity);
     }
+  }
+
+  createCheckpoint(): { readonly nextEntity: number } {
+    return { nextEntity: this.nextEntity };
+  }
+
+  restoreCheckpoint(checkpoint: { readonly nextEntity: number }): void {
+    this.nextEntity = Math.max(1, Math.floor(checkpoint.nextEntity));
   }
 
   registerComponent<T extends object>(name: string): BundledComponentStore<T> {
@@ -242,6 +261,8 @@ export const createDefaultBundledPluginProtocolBridge = (): BundledPluginProtoco
 
 export const defaultBundledPluginRuntimeRegistration: BundledPluginRuntimeRegistration = {
   id: bundledPlugin.id,
+  playtestInputEdgeFields,
+  playtestHeldBooleanInputFields,
   protocolBridge: createDefaultBundledPluginProtocolBridge(),
   createRuntimeAdapter: (host) =>
     createRuntimeAdapter({
@@ -290,6 +311,12 @@ export const createBundledPluginLoader = (
           ...(options.setReplayFrames === undefined
             ? {}
             : { setReplayFrames: options.setReplayFrames }),
+          ...(options.getPluginCheckpoint === undefined
+            ? {}
+            : { getPluginCheckpoint: options.getPluginCheckpoint }),
+          ...(options.setPluginCheckpoint === undefined
+            ? {}
+            : { setPluginCheckpoint: options.setPluginCheckpoint }),
           ...(options.seed === undefined ? {} : { seed: options.seed }),
         });
         return { default: toRuntimePlugin(adapter) };

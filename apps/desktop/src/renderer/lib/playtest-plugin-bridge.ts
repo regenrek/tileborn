@@ -103,21 +103,6 @@ import {
   runtimeAudioCueForEvent,
 } from '@tileborne/runtime';
 
-const cueByBinding = (
-  cues: readonly RuntimeAudioCueDefinition[],
-  binding: string,
-): string | undefined => cues.find((cue) => cue.binding === binding)?.id;
-
-export const audioCueForResolvedIntent = (
-  cues: readonly RuntimeAudioCueDefinition[],
-  intent: ResolvedInputIntent,
-  previousIntent: ResolvedInputIntent | undefined,
-): string | undefined => {
-  if (intent.shoot && previousIntent?.shoot !== true) return cueByBinding(cues, 'weapon.fire');
-  if (intent.reload && previousIntent?.reload !== true) return cueByBinding(cues, 'weapon.reload');
-  return undefined;
-};
-
 export const audioCueForRuntimeEvent = (
   cues: readonly RuntimeAudioCueDefinition[],
   event: Parameters<typeof runtimeAudioCueForEvent>[1],
@@ -290,19 +275,11 @@ export interface ResolvedPlaytestPlugin {
   readonly controlScheme: ControlScheme;
   /** Which key codes / mouse buttons are bound in the active scheme. */
   readonly inputCaptureProfile: InputCaptureProfile;
-  /**
-   * Optional plugin-owned audio contribution. The shell stays generic: it asks
-   * the active mode which cue, if any, should fire for the resolved input
-   * intent, then sends that cue through the shared browser runtime audio engine.
-   */
+  /** Optional plugin-owned audio contribution. */
   readonly audio?:
     | {
         readonly buses: readonly RuntimeAudioBusDefinition[];
         readonly cues: readonly RuntimeAudioCueDefinition[];
-        readonly cueForIntent: (
-          intent: ResolvedInputIntent,
-          previousIntent: ResolvedInputIntent | undefined,
-        ) => string | undefined;
       }
     | undefined;
   /**
@@ -414,8 +391,6 @@ const createBattleRoyalePlaytestPlugin: ModeRenderProvider = (options) => {
         },
       ],
       cues: audioCues,
-      cueForIntent: (intent, previousIntent) =>
-        audioCueForResolvedIntent(audioCues, intent, previousIntent),
     },
     resolveInputIntent: (actions, context) => resolveBattleRoyaleInputIntent(actions, context),
   };

@@ -16,6 +16,8 @@ import {
   BR_INPUT_MAP_CONTRIBUTION_ID,
   BR_INPUT_MAP_ID,
   battleRoyaleDefaultInputMap,
+  battleRoyalePlaytestHeldBooleanInputFields,
+  battleRoyalePlaytestInputEdgeFields,
   resolveBattleRoyaleInputIntent,
 } from './input-map.js';
 
@@ -56,20 +58,13 @@ const actionState = (overrides: {
 });
 
 describe('battle royale input-map contribution', () => {
-  it('decodes the manifest inputMaps slot data against the @tileborne/core InputMap schema', () => {
-    const decoded = decodeInputMap(BR_INPUT_MAP_CONTRIBUTION_ID, readManifestInputMapData());
-    expect(Result.isSuccess(decoded)).toBe(true);
-    if (Result.isSuccess(decoded)) {
-      expect(decoded.success.id).toBe(BR_INPUT_MAP_ID);
-      // Every bound action carries a value-kind declaration.
-      expect(findUndeclaredBoundActions(decoded.success)).toEqual([]);
-    }
-  });
-
   it('keeps the code-built default map in sync with the manifest (both decode equal)', () => {
     const fromManifest = decodeInputMap(BR_INPUT_MAP_CONTRIBUTION_ID, readManifestInputMapData());
     expect(Result.isSuccess(fromManifest)).toBe(true);
     if (Result.isSuccess(fromManifest)) {
+      expect(fromManifest.success.id).toBe(BR_INPUT_MAP_ID);
+      // Every bound action carries a value-kind declaration.
+      expect(findUndeclaredBoundActions(fromManifest.success)).toEqual([]);
       expect(battleRoyaleDefaultInputMap()).toEqual(fromManifest.success);
     }
   });
@@ -147,6 +142,18 @@ describe('resolveBattleRoyaleInputIntent (action→intent adapter)', () => {
     );
     expect(intent.reload).toBe(true);
     expect(intent.interact).toBe(true);
+  });
+
+  it('declares BR edge-like intent fields for generic host transport buffering', () => {
+    expect(battleRoyalePlaytestInputEdgeFields).toEqual([
+      'shoot',
+      'reload',
+      'interact',
+      'drop',
+      'abilities',
+      'swapSlot',
+    ]);
+    expect(battleRoyalePlaytestHeldBooleanInputFields).toEqual(['shoot']);
   });
 
   it('reports idle (dir undefined, no shoot) when nothing is pressed', () => {

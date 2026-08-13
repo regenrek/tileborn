@@ -82,8 +82,8 @@ const makeSpawnFixtureMap = (battleRoyale?: Record<string, unknown>) =>
     tileWidth: 32,
     tileHeight: 32,
     objects: [
-      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 256, 256),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
     ],
     ...(battleRoyale ? { properties: { battleRoyale } } : {}),
   });
@@ -112,6 +112,7 @@ describe('BattleRoyaleConfig overrides', () => {
         interact: false,
         drop: false,
         abilities: [],
+        aimDeg: 0,
       }),
       config: {
         projectile: { speed: OVERRIDE_PROJECTILE_SPEED },
@@ -158,6 +159,7 @@ describe('BattleRoyaleConfig overrides', () => {
         interact: false,
         drop: false,
         abilities: [],
+        aimDeg: 0,
       }),
     });
 

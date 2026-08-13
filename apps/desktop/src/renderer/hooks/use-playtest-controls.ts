@@ -7,6 +7,30 @@ import { notifyError, notifyInfo, notifySuccess } from '@/stores/app-notificatio
 import { useEditorCommandsBridge } from '@/stores/editor-commands-bridge';
 import { useEditorUiStore } from '@/stores/editor-ui-store';
 
+export type PlaytestStopOwner = {
+  readonly sessionId: string;
+  readonly projectId: string;
+  readonly mapId: string;
+};
+
+const stoppedPlaytestOwnerKeys = new Set<string>();
+const stoppingPlaytestOwnerPromises = new Map<string, Promise<void>>();
+
+export const playtestStopOwnerKey = (owner: PlaytestStopOwner): string =>
+  `${owner.sessionId}\u0000${owner.projectId}\u0000${owner.mapId}`;
+
+export const isPlaytestStopOwnerStopped = (owner: PlaytestStopOwner): boolean =>
+  stoppedPlaytestOwnerKeys.has(playtestStopOwnerKey(owner));
+
+const markPlaytestStopOwnerStopped = (owner: PlaytestStopOwner): void => {
+  stoppedPlaytestOwnerKeys.add(playtestStopOwnerKey(owner));
+};
+
+export const resetPlaytestStopCoordinatorForTests = (): void => {
+  stoppedPlaytestOwnerKeys.clear();
+  stoppingPlaytestOwnerPromises.clear();
+};
+
 export function usePlaytestControls() {
   const startPlaytest = useStartPlaytest();
   const stopPlaytest = useStopPlaytest();
@@ -14,7 +38,6 @@ export function usePlaytestControls() {
   const setPlaytestSessionId = useEditorUiStore((state) => state.setPlaytestSessionId);
   const setPlaytestActivePlugins = useEditorUiStore((state) => state.setPlaytestActivePlugins);
   const setPlaytestMode = useEditorUiStore((state) => state.setPlaytestMode);
-  const playtestSessionId = useEditorUiStore((state) => state.playtestSessionId);
 
   const start = useCallback(
     async (
@@ -53,32 +76,71 @@ export function usePlaytestControls() {
     ],
   );
 
-  const stop = useCallback(async () => {
-    if (!playtestSessionId) {
-      setPlaytestActive(false);
-      setPlaytestSessionId(null);
-      setPlaytestActivePlugins([]);
-      return;
-    }
-    try {
-      await stopPlaytest.mutateAsync(playtestSessionId);
-      notifySuccess('Playtest stopped');
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : 'Failed to stop playtest');
-    } finally {
-      setPlaytestActive(false);
-      setPlaytestSessionId(null);
-      setPlaytestActivePlugins([]);
-      setPlaytestMode('none');
-    }
-  }, [
-    playtestSessionId,
-    setPlaytestActive,
-    setPlaytestActivePlugins,
-    setPlaytestMode,
-    setPlaytestSessionId,
-    stopPlaytest,
-  ]);
+  const stop = useCallback(
+    async (owner: PlaytestStopOwner) => {
+      const ownerKey = playtestStopOwnerKey(owner);
+      if (stoppedPlaytestOwnerKeys.has(ownerKey)) {
+        return undefined;
+      }
+      const pendingStop = stoppingPlaytestOwnerPromises.get(ownerKey);
+      if (pendingStop !== undefined) {
+        return pendingStop;
+      }
+      const stopPromise = (async () => {
+        const sessionId = owner.sessionId;
+        const clearActiveSession = () => {
+          if (useEditorUiStore.getState().playtestSessionId === sessionId) {
+            setPlaytestActive(false);
+            setPlaytestSessionId(null);
+            setPlaytestActivePlugins([]);
+            setPlaytestMode('none');
+          }
+        };
+        try {
+          const response = await stopPlaytest.mutateAsync({
+            sessionId,
+            projectId: owner.projectId as ProjectId,
+            mapId: owner.mapId as MapId,
+          });
+          if (response.session.status === 'Stopped') {
+            markPlaytestStopOwnerStopped(owner);
+            clearActiveSession();
+          }
+          notifySuccess('Playtest stopped');
+        } catch (error) {
+          const reconciledStopped = await window.tileborne.playtest
+            .list({})
+            .then((response) => {
+              const current = response.sessions.find((session) => session.id === sessionId);
+              return current === undefined || current.status === 'Stopped';
+            })
+            .catch(() => false);
+          if (reconciledStopped) {
+            markPlaytestStopOwnerStopped(owner);
+            clearActiveSession();
+          }
+          notifyError(error instanceof Error ? error.message : 'Failed to stop playtest');
+          throw error;
+        }
+      })();
+      stoppingPlaytestOwnerPromises.set(ownerKey, stopPromise);
+      void stopPromise
+        .finally(() => {
+          if (stoppingPlaytestOwnerPromises.get(ownerKey) === stopPromise) {
+            stoppingPlaytestOwnerPromises.delete(ownerKey);
+          }
+        })
+        .catch(() => undefined);
+      return stopPromise;
+    },
+    [
+      setPlaytestActive,
+      setPlaytestActivePlugins,
+      setPlaytestMode,
+      setPlaytestSessionId,
+      stopPlaytest,
+    ],
+  );
 
   return {
     start,

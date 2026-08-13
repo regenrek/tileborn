@@ -21,6 +21,10 @@
     "./contracts/multiplayer": {
       "types": "./dist/contracts/multiplayer.d.ts",
       "default": "./dist/contracts/multiplayer.js"
+    },
+    "./contracts/gameplay-event": {
+      "types": "./dist/contracts/gameplay-event.d.ts",
+      "default": "./dist/contracts/gameplay-event.js"
     }
   },
   "scripts": {
@@ -40,7 +44,7 @@
   "devDependencies": {
     "@effect/vitest": "4.0.0-beta.78",
     "typescript": "6.0.3",
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   },
   "license": "MIT"
 }

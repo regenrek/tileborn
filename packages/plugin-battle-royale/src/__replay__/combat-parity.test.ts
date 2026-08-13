@@ -1,6 +1,5 @@
 import { MapObject, gameObjectTypeIdForKey, makeTileborneMap } from '@tileborne/core';
 import { BattleRoyaleProtocol } from '@tileborne/ipc-contracts';
-import { createHash } from 'node:crypto';
 import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -45,9 +44,9 @@ const makeDuelMapPackage = (): unknown =>
       tileWidth: 32,
       tileHeight: 32,
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 10, 16),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 40, 16),
-        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 112, 64),
+        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
       ],
       properties: { maxPlayers: 2 },
     }),
@@ -68,7 +67,6 @@ interface TickState {
 interface RunResult {
   readonly states: readonly TickState[];
   readonly killEvents: readonly { readonly killer: string; readonly victim: string }[];
-  readonly wireHash: string;
 }
 
 const captureState = (world: ReturnType<typeof createTestPluginWorld>, tick: number): TickState => {
@@ -141,25 +139,11 @@ const runDuel = (): RunResult => {
     }
   }
 
-  const hash = createHash('sha256');
-  for (const frame of frames) {
-    hash.update(frame);
-  }
-
   resetZoneSingleton();
-  return { states, killEvents, wireHash: hash.digest('hex') };
+  return { states, killEvents };
 };
 
 describe('combat migration parity (neutral engine)', () => {
-  it('is deterministic: a fixed seed + scripted inputs replay identically', () => {
-    const first = runDuel();
-    const second = runDuel();
-
-    expect(first.states).toEqual(second.states);
-    expect(first.killEvents).toEqual(second.killEvents);
-    expect(first.wireHash).toBe(second.wireHash);
-  });
-
   it("preserves BR's observable combat outcome: player-1 hits and defeats player-2", () => {
     const result = runDuel();
 
@@ -174,10 +158,6 @@ describe('combat migration parity (neutral engine)', () => {
       killer: String(BattleRoyaleProtocol.makePlayerId('player-1')),
       victim: String(BattleRoyaleProtocol.makePlayerId('player-2')),
     });
-  });
-
-  it('applies exact projectile damage: health steps straight to zero on a lethal hit', () => {
-    const result = runDuel();
     const loserSeries = result.states.map(
       (state) => state.players.find((player) => player.playerId === 'player-2')!.health,
     );

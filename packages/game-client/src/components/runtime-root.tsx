@@ -1,4 +1,5 @@
 import type { BrandConfig, HudLayout } from '@tileborne/core';
+import type { SequencedGameplayEvent } from '@tileborne/ipc-contracts';
 import { dispatchRuntimeAudioEvent, type RuntimeGameShellProjection } from '@tileborne/runtime';
 import {
   useCallback,
@@ -177,7 +178,11 @@ export interface RuntimeRootProps {
   /** Side-effect hook fired when the player starts a match flow (menu -> lobby). */
   readonly onPlay?: () => void;
   /** Side-effect hook fired when the shell enters the authoritative match runtime. */
-  readonly onMatchStart?: () => void;
+  readonly onMatchStart?: () => void | Promise<void>;
+  /** Side-effect hook fired when local pause freezes authoritative match runtime. */
+  readonly onPause?: () => void | Promise<void>;
+  /** Side-effect hook fired when local pause resumes authoritative match runtime. */
+  readonly onResume?: () => void | Promise<void>;
   /** Side-effect hook fired when the shell leaves the authoritative match runtime for results. */
   readonly onMatchEnd?: () => void;
   /** Side-effect hook fired when results retry requests a new playtest/match session. */
@@ -209,6 +214,7 @@ export interface RuntimeRootProps {
    * metrics are present; the pause scrim layers above it.
    */
   readonly hudMetrics?: HudMetrics;
+  readonly gameplayAudioEvents?: readonly SequencedGameplayEvent[];
   readonly hudLayout?: HudLayout;
   readonly hudWidgets?: readonly HudWidgetRegistration[];
   readonly hudInsets?: HudInsets;
@@ -238,6 +244,8 @@ export function RuntimeRoot({
   onBoot,
   onPlay,
   onMatchStart,
+  onPause,
+  onResume,
   onMatchEnd,
   onPlayAgain,
   onExitToMenu,
@@ -248,6 +256,7 @@ export function RuntimeRoot({
   audio,
   renderLobby,
   hudMetrics,
+  gameplayAudioEvents = [],
   hudLayout,
   hudWidgets,
   hudInsets,
@@ -285,8 +294,69 @@ export function RuntimeRoot({
         }
         onPlay?.();
       }
+
+      const emitShellAction = () => {
+        if (shellProjection !== undefined) return;
+        const shellEvent = shellActionEventForMenuEvent(state, event);
+        if (shellEvent !== undefined) {
+          shellBridge?.emitShellEvent(shellEvent);
+        }
+      };
+
+      const dispatchAfterLifecycle = (
+        effect: (() => void | Promise<void>) | undefined,
+        errorTitle: string,
+        onSuccess?: () => void,
+      ) => {
+        try {
+          const result = effect?.();
+          if (result instanceof Promise) {
+            void result.then(
+              () => {
+                onSuccess?.();
+                emitShellAction();
+                dispatch(event);
+              },
+              (cause: unknown) => {
+                dispatch({
+                  type: 'ERROR',
+                  error: {
+                    title: errorTitle,
+                    message:
+                      cause instanceof Error ? cause.message : 'Runtime lifecycle control failed.',
+                  },
+                });
+              },
+            );
+            return;
+          }
+          onSuccess?.();
+          emitShellAction();
+          dispatch(event);
+        } catch (cause) {
+          dispatch({
+            type: 'ERROR',
+            error: {
+              title: errorTitle,
+              message: cause instanceof Error ? cause.message : 'Runtime lifecycle control failed.',
+            },
+          });
+        }
+      };
+
       if (event.type === 'MATCH_START') {
-        onMatchStart?.();
+        dispatchAfterLifecycle(onMatchStart, 'Failed to start match', () => {
+          dispatchedGameplayAudioKeysRef.current.clear();
+        });
+        return;
+      }
+      if (event.type === 'PAUSE') {
+        dispatchAfterLifecycle(onPause, 'Failed to pause match');
+        return;
+      }
+      if (event.type === 'RESUME') {
+        dispatchAfterLifecycle(onResume, 'Failed to resume match');
+        return;
       }
       if (event.type === 'MATCH_END') {
         onMatchEnd?.();
@@ -297,12 +367,7 @@ export function RuntimeRoot({
       if (event.type === 'TO_MENU') {
         onExitToMenu?.();
       }
-      if (shellProjection === undefined) {
-        const shellEvent = shellActionEventForMenuEvent(state, event);
-        if (shellEvent !== undefined) {
-          shellBridge?.emitShellEvent(shellEvent);
-        }
-      }
+      emitShellAction();
       dispatch(event);
     },
     [
@@ -310,8 +375,10 @@ export function RuntimeRoot({
       onExitToMenu,
       onMatchEnd,
       onMatchStart,
+      onPause,
       onPlay,
       onPlayAgain,
+      onResume,
       shellBridge,
       shellProjection,
       state,
@@ -394,9 +461,9 @@ export function RuntimeRoot({
         continue;
       }
       const event = menuEventForShellNavigationRequest(state, entry.request);
-      if (event !== undefined) dispatch(event);
+      if (event !== undefined) dispatchWithEffects(event);
     }
-  }, [dispatch, shellBridge?.shellNavigationRequests, state]);
+  }, [dispatchWithEffects, shellBridge?.shellNavigationRequests, state]);
 
   // Boot on mount when starting from the boot phase. We deliberately avoid a
   // cross-render "already booted" ref: under React StrictMode the effect runs
@@ -463,10 +530,10 @@ export function RuntimeRoot({
     dispatchGameplayLifecycleAudioEvents({
       engine: window.__tileborneRuntimeAudio,
       cues: audio?.cues ?? [],
-      events: hudMetrics?.hud?.gameplayEvents ?? [],
+      events: gameplayAudioEvents,
       seenKeys: dispatchedGameplayAudioKeysRef.current,
     });
-  }, [audio?.cues, hudMetrics?.hud?.gameplayEvents]);
+  }, [audio?.cues, gameplayAudioEvents]);
 
   useEffect(() => {
     if (state.phase !== 'in-match' || hudMetrics?.hud?.gameOver === undefined) {
@@ -518,15 +585,15 @@ export function RuntimeRoot({
     let frame = 0;
     const dispatchBack = () => {
       if (state.phase === 'in-match') {
-        dispatch({ type: state.paused ? 'RESUME' : 'PAUSE' });
+        dispatchWithEffects({ type: state.paused ? 'RESUME' : 'PAUSE' });
       } else if (state.phase === 'menu' && state.screen !== 'main') {
-        dispatch({ type: 'BACK' });
+        dispatchWithEffects({ type: 'BACK' });
       } else if (
         state.phase === 'lobby' ||
         state.phase === 'matchmaking' ||
         state.phase === 'results'
       ) {
-        dispatch({ type: 'BACK' });
+        dispatchWithEffects({ type: 'BACK' });
       }
     };
     const shouldRunDirection = (action: 'next' | 'previous', now: number): boolean => {
@@ -593,7 +660,7 @@ export function RuntimeRoot({
     };
     frame = window.requestAnimationFrame(poll);
     return () => window.cancelAnimationFrame(frame);
-  }, [dispatch, gamepadPollingEnabled, state.phase, state.paused, state.screen]);
+  }, [dispatchWithEffects, gamepadPollingEnabled, state.phase, state.paused, state.screen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -622,23 +689,29 @@ export function RuntimeRoot({
       event.preventDefault();
       event.stopImmediatePropagation();
       if (state.phase === 'in-match') {
-        dispatch({ type: state.paused ? 'RESUME' : 'PAUSE' });
+        dispatchWithEffects({ type: state.paused ? 'RESUME' : 'PAUSE' });
       } else if (
         state.phase === 'menu' &&
         (state.screen !== 'main' || state.shellScreenHistory.length > 0)
       ) {
-        dispatch({ type: 'BACK' });
+        dispatchWithEffects({ type: 'BACK' });
       } else if (
         state.phase === 'lobby' ||
         state.phase === 'matchmaking' ||
         state.phase === 'results'
       ) {
-        dispatch({ type: 'BACK' });
+        dispatchWithEffects({ type: 'BACK' });
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [state.phase, state.paused, state.screen, state.shellScreenHistory.length, dispatch]);
+  }, [
+    state.phase,
+    state.paused,
+    state.screen,
+    state.shellScreenHistory.length,
+    dispatchWithEffects,
+  ]);
 
   const style = {
     ...brandThemeVars(brand),
@@ -651,6 +724,7 @@ export function RuntimeRoot({
       className="tb-root"
       style={style}
       data-phase={state.phase}
+      data-paused={state.paused ? 'true' : 'false'}
       data-screen={state.screen}
       data-shell-screen-id={state.shellScreenId ?? ''}
       role="application"
@@ -661,6 +735,9 @@ export function RuntimeRoot({
         {canvas}
       </div>
       <div className="tb-overlay-layer">
+        {state.phase === 'in-match' && !state.paused ? (
+          <div className="tb-crosshair" data-testid="runtime-crosshair" aria-hidden="true" />
+        ) : null}
         {state.phase === 'in-match' && hudMetrics !== undefined ? (
           <HudOverlay
             metrics={hudMetrics}

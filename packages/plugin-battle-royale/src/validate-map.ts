@@ -1,6 +1,8 @@
 import type { TileborneMap } from '@tileborne/core';
 
 import {
+  ABILITY,
+  BARRIER_KIND,
   LOOT_CRATE_KEY,
   LOOT_CRATE_KIND,
   MIN_LOOT_CRATES,
@@ -8,10 +10,13 @@ import {
   REQUIRED_SHRINK_ANCHORS,
   SHRINK_ZONE_ANCHOR_KEY,
   SHRINK_ZONE_ANCHOR_KIND,
+  MOVEMENT,
+  SPAWN_OPENING_BUFFER,
   SPAWN_POINT_KEY,
   SPAWN_POINT_KIND,
+  TRAP_KIND,
 } from './constants.js';
-import { MIN_SPAWN_CLEARANCE, findClosestSpawnPair } from './spawn-layout.js';
+import { MIN_SPAWN_CLEARANCE, findClosestSpawnPair, isSpawnPointSafe } from './spawn-layout.js';
 import type { ValidationIssue, ValidationResult } from './types/artifact.js';
 
 const countByKind = (map: TileborneMap): Map<string, number> => {
@@ -59,6 +64,41 @@ export const validateMap = (map: TileborneMap): ValidationResult => {
           1,
         )} world units apart; keep at least ${MIN_SPAWN_CLEARANCE} for player clearance`,
         'objects',
+      ),
+    );
+  }
+
+  const hazards = objectsByKind(map, TRAP_KIND).map((trap) => ({
+    x: trap.x,
+    y: trap.y,
+    radius:
+      typeof trap.properties.radius === 'number' ? trap.properties.radius : ABILITY.trap.radius,
+  }));
+  const blockers = objectsByKind(map, BARRIER_KIND).map((barrier) => ({
+    x: barrier.x,
+    y: barrier.y,
+    width:
+      typeof barrier.properties.width === 'number' ? barrier.properties.width : map.tileSize.width,
+    height:
+      typeof barrier.properties.height === 'number'
+        ? barrier.properties.height
+        : map.tileSize.height,
+  }));
+  const unsafeSpawn = spawnObjects.find(
+    (spawn) =>
+      !isSpawnPointSafe(spawn, {
+        playerRadius: MOVEMENT.radius,
+        openingBuffer: SPAWN_OPENING_BUFFER,
+        hazards,
+        blockers,
+      }),
+  );
+  if (unsafeSpawn !== undefined) {
+    issues.push(
+      issue(
+        'error',
+        'Spawn points must keep opening clearance from traps and blocking objects',
+        `objects.${unsafeSpawn.id}`,
       ),
     );
   }

@@ -6,6 +6,7 @@ import {
   RuntimeMapPackage,
   RuntimeMapPackageManifest,
   RuntimeObjectPlacement,
+  authoringPixelToRuntimeTile,
   makeRuntimeMapPackageId,
 } from './index.js';
 
@@ -129,6 +130,17 @@ describe('RuntimeMapPackage schema (ADR-0030)', () => {
       'x',
       'y',
     ]);
+  });
+
+  it('converts authored pixel positions to runtime tiles on independent axes', () => {
+    expect(authoringPixelToRuntimeTile({ x: 96, y: 64 }, { width: 32, height: 16 })).toEqual({
+      x: 3,
+      y: 4,
+    });
+    expect(authoringPixelToRuntimeTile({ x: 48, y: 40 }, { width: 24, height: 20 })).toEqual({
+      x: 2,
+      y: 2,
+    });
   });
 
   it('rejects a manifest with a malformed content hash', () => {

@@ -5,7 +5,7 @@ import { BehaviorId, JsonObject, MapId, ProjectId } from '@tileborne/core';
 import { defineContract } from '../contract.js';
 import { createRegistry } from '../registry.js';
 import { IpcContractErrors } from './common.js';
-import { GameplayEvent } from './gameplay-event.js';
+import { GameplayEvent, SequencedGameplayEvent } from './gameplay-event.js';
 import { GameShellRegisteredEvent } from './game-shell.js';
 
 export const PlaytestSessionId = Schema.String.check(
@@ -158,6 +158,7 @@ export const PlaytestRuntimeHud = Schema.Struct({
   scoreboard: Schema.optional(Schema.Array(PlaytestRuntimeScoreboardEntry)),
   minimap: Schema.optional(PlaytestRuntimeMinimap),
   gameplayEvents: Schema.Array(GameplayEvent),
+  sequencedGameplayEvents: Schema.optional(Schema.Array(SequencedGameplayEvent)),
   gameOver: Schema.optional(PlaytestRuntimeGameOver),
 });
 
@@ -272,6 +273,8 @@ export const PlaytestStartResponse = Schema.Struct({
 
 export const PlaytestStopRequest = Schema.Struct({
   sessionId: PlaytestSessionId,
+  projectId: ProjectId,
+  mapId: MapId,
 });
 export const PlaytestStopResponse = Schema.Struct({
   session: PlaytestSessionView,
@@ -353,6 +356,14 @@ export const PlaytestBehaviorDebugControlRequest = Schema.Struct({
 });
 export const PlaytestBehaviorDebugControlResponse = PlaytestBehaviorDebugInspectResponse;
 
+export const PlaytestLifecycleControlRequest = Schema.Struct({
+  sessionId: PlaytestSessionId,
+  command: Schema.Literals(['start', 'pause', 'resume'] as const),
+});
+export const PlaytestLifecycleControlResponse = Schema.Struct({
+  status: Schema.Literals(['waiting-to-start', 'running', 'paused'] as const),
+});
+
 export const PlaytestShellEventRequest = Schema.Struct({
   sessionId: PlaytestSessionId,
   event: Schema.Struct({
@@ -409,6 +420,13 @@ export const PlaytestBehaviorDebugControlContract = defineContract({
   errors: IpcContractErrors,
 });
 
+export const PlaytestLifecycleControlContract = defineContract({
+  channel: 'tileborne:playtest:lifecycleControl',
+  request: PlaytestLifecycleControlRequest,
+  response: PlaytestLifecycleControlResponse,
+  errors: IpcContractErrors,
+});
+
 export const PlaytestShellEventContract = defineContract({
   channel: 'tileborne:playtest:shellEvent',
   request: PlaytestShellEventRequest,
@@ -422,6 +440,7 @@ export const PlaytestContracts = [
   PlaytestListContract,
   PlaytestBehaviorDebugInspectContract,
   PlaytestBehaviorDebugControlContract,
+  PlaytestLifecycleControlContract,
   PlaytestShellEventContract,
 ] as const;
 

@@ -125,6 +125,16 @@ describe('GameLoop', () => {
     expect(ticks).toEqual([1]);
   });
 
+  it('restores the current tick without dispatching historical updates', () => {
+    const ticks: number[] = [];
+    const loop = new GameLoop({ update: (_dt, tick) => ticks.push(tick) });
+    expect(loop.restoreTick(72_000)).toBe(72_000);
+    expect(loop.tick).toBe(72_000);
+    expect(ticks).toEqual([]);
+    expect(loop.step(1)).toBe(72_001);
+    expect(ticks).toEqual([72_001]);
+  });
+
   it('caps catch-up work after a large frame', () => {
     let updates = 0;
     const clock = new DeterministicClock();

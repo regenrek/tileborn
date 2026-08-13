@@ -7,7 +7,9 @@ import {
   makeClipId,
   makePackId,
   makeTileborneMap,
+  type JsonValue,
 } from '@tileborne/core';
+import { dispatchGameplayLifecycleAudioEvents } from '@tileborne/game-client';
 import { decodeServerMessage } from '@tileborne/ipc-contracts/protocols/battle-royale';
 import { makeCombatEntityId, makeTeamId, type HitContext } from '@tileborne/simulation';
 import { Option } from 'effect';
@@ -17,6 +19,7 @@ import {
   ABILITY,
   DAMAGE,
   DEFAULT_MAX_PLAYERS,
+  LOOT_CRATE_KIND,
   MOVEMENT,
   PLUGIN_ID,
   SPAWN_POINT_KIND,
@@ -24,10 +27,13 @@ import {
 } from './constants.js';
 import { createBattleRoyaleHitPolicy } from './ecs/combat-world-view.js';
 import {
+  ANIMATION_STATE_COMPONENT,
+  FACING_COMPONENT,
   PLAYER_COMPONENT,
   POSITION_COMPONENT,
   TEAM_COMPONENT,
   VELOCITY_COMPONENT,
+  type AnimationState,
   type Player,
   type Team,
 } from './ecs/components.js';
@@ -41,6 +47,7 @@ import {
   resolveSpawnSlots,
   spawnPlayersFromArtifact,
 } from './ecs/spawn-players.js';
+import { updatePlayerAnimationStates } from './ecs/player-animation.js';
 import { TEST_LAYER_ID, TEST_MAP_ID, TEST_OBJECT_IDS } from './id-utils.js';
 import { createRuntimeAdapter } from './runtime-adapter.js';
 import { buildTestMapPackage, buildTestRuntimeArtifact } from './test-map-package.js';
@@ -119,10 +126,10 @@ const makeSpawnFixtureMap = () =>
     tileWidth: 32,
     tileHeight: 32,
     objects: [
-      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 6, 2),
-      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+      makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+      makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 64, 256),
+      makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 256, 64),
+      makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
     ],
     properties: { maxPlayers: DEFAULT_MAX_PLAYERS },
   });
@@ -175,9 +182,9 @@ describe('spawnPlayersFromArtifact', () => {
     const slots = resolveSpawnSlots(artifact);
 
     expect(slots).toEqual([
-      { x: 4, y: 1 },
-      { x: 6, y: 2 },
-      { x: 2, y: 3 },
+      { x: 64, y: 64 },
+      { x: 256, y: 64 },
+      { x: 64, y: 256 },
     ]);
   });
 
@@ -190,21 +197,21 @@ describe('spawnPlayersFromArtifact', () => {
       tileHeight: 32,
       properties: { maxPlayers: 3 },
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 1, 1),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 1),
-        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 3, 1),
-        makeTestObject(TEST_OBJECT_IDS[3], SPAWN_POINT_KIND, 40, 1),
-        makeTestObject(TEST_OBJECT_IDS[4], SPAWN_POINT_KIND, 1, 40),
-        makeTestObject(TEST_OBJECT_IDS[5], SPAWN_POINT_KIND, 40, 40),
-        makeTestObject(TEST_OBJECT_IDS[6], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 96, 64),
+        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 128, 64),
+        makeTestObject(TEST_OBJECT_IDS[3], SPAWN_POINT_KIND, 512, 64),
+        makeTestObject(TEST_OBJECT_IDS[4], SPAWN_POINT_KIND, 64, 512),
+        makeTestObject(TEST_OBJECT_IDS[5], SPAWN_POINT_KIND, 512, 512),
+        makeTestObject(TEST_OBJECT_IDS[6], 'shrink-zone-anchor', 1024, 1024),
       ],
     });
     const artifact = exportRuntimeArtifact(map);
 
     expect(resolveSpawnSlots(artifact)).toEqual([
-      { x: 1, y: 1 },
-      { x: 40, y: 40 },
-      { x: 40, y: 1 },
+      { x: 64, y: 64 },
+      { x: 512, y: 512 },
+      { x: 512, y: 64 },
     ]);
   });
 
@@ -217,10 +224,10 @@ describe('spawnPlayersFromArtifact', () => {
       tileHeight: 32,
       properties: { maxPlayers: 2 },
       objects: [
-        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 1, 1),
-        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 2),
-        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 3, 3),
-        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 16, 16),
+        makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+        makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 256),
+        makeTestObject(TEST_OBJECT_IDS[2], SPAWN_POINT_KIND, 448, 448),
+        makeTestObject(TEST_OBJECT_IDS[3], 'shrink-zone-anchor', 512, 512),
       ],
     });
     const artifact = exportRuntimeArtifact(map);
@@ -241,9 +248,13 @@ describe('createRuntimeAdapter', () => {
       tileWidth: 32,
       tileHeight: 32,
       objects: TEST_OBJECT_IDS.map((id, index) =>
-        makeTestObject(id, SPAWN_POINT_KIND, 4 + (index % 4) * 12, 4 + Math.floor(index / 4) * 40, {
-          team: 'solo',
-        }),
+        makeTestObject(
+          id,
+          SPAWN_POINT_KIND,
+          64 + (index % 4) * 128,
+          64 + Math.floor(index / 4) * 256,
+          { team: 'solo' },
+        ),
       ),
       properties: {
         [PLUGIN_ID]: {
@@ -413,9 +424,501 @@ describe('createRuntimeAdapter', () => {
           facingDeg: 90,
           moving: false,
           aimDeg: 90,
+          acceptedFireTick: 1,
         });
       }
     }
+  });
+
+  it('does not carry shoot animation or accepted fire VFX marker onto cooldown-rejected held shoot input', () => {
+    const world = createTestPluginWorld();
+    const frames: Uint8Array[] = [];
+    let tick = 1;
+    const plugin = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPlayerModelSelections: () => [{ playerId: 'player-1', modelId: 'model:hero' }],
+      getPlayerInput: (playerId) =>
+        playerId === 'player-1'
+          ? {
+              tick,
+              seq: tick,
+              shoot: true,
+              reload: false,
+              interact: false,
+              drop: false,
+              abilities: [],
+              aimDeg: 0,
+              swapSlot: 1,
+            }
+          : undefined,
+      msgOut: { push: (frame) => frames.push(frame) },
+    });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+    frames.length = 0;
+    plugin.onTick?.(world, 1 / MOVEMENT.tickRate, tick);
+    tick = 2;
+    plugin.onTick?.(world, 1 / MOVEMENT.tickRate, tick);
+
+    const frame = decodeServerMessage(frames.at(-1)!);
+    expect(frame._tag).toBe('DeltaSnapshot');
+    if (frame._tag === 'DeltaSnapshot') {
+      const player = frame.updated.find((entry) => entry.id === 'player-1');
+      expect(player).toBeDefined();
+      expect(Option.isSome(player!.animation)).toBe(true);
+      if (Option.isSome(player!.animation)) {
+        expect(player!.animation.value).toMatchObject({
+          modelId: 'model:hero',
+          clipKey: 'idle',
+          facingDeg: 0,
+          moving: false,
+          aimDeg: 0,
+        });
+        expect(player!.animation.value.acceptedFireTick).toBeUndefined();
+      }
+    }
+  });
+
+  it('marks animation state only when combat reports an accepted fire tick', () => {
+    const world = createTestPluginWorld();
+    const entity = world.createEntity();
+    world.registerComponent<Player>(PLAYER_COMPONENT).set(entity, {
+      playerId: 'player-1',
+      health: DAMAGE.playerHealth,
+      alive: 1,
+      team: 'solo',
+      modelId: 'model:hero',
+    });
+    world.registerComponent(FACING_COMPONENT).set(entity, { dir: 0 });
+
+    updatePlayerAnimationStates(
+      world,
+      () => ({
+        tick: 8,
+        seq: 8,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+        aimDeg: 0,
+      }),
+      () => 8,
+    );
+    expect(world.getComponent<AnimationState>(ANIMATION_STATE_COMPONENT).get(entity)).toEqual(
+      expect.objectContaining({ clipKey: 'shoot', acceptedFireTick: 8 }),
+    );
+
+    updatePlayerAnimationStates(
+      world,
+      () => ({
+        tick: 9,
+        seq: 9,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        abilities: [],
+        aimDeg: 0,
+      }),
+      () => undefined,
+    );
+    expect(
+      world.getComponent<AnimationState>(ANIMATION_STATE_COMPONENT).get(entity)?.acceptedFireTick,
+    ).toBeUndefined();
+    expect(world.getComponent<AnimationState>(ANIMATION_STATE_COMPONENT).get(entity)?.clipKey).toBe(
+      'idle',
+    );
+  });
+
+  it('restores and persists active weapon slots through the plugin checkpoint codec', () => {
+    const world = createTestPluginWorld();
+    const frames: Uint8Array[] = [];
+    const checkpoints: unknown[] = [];
+    let currentTick = 0;
+    const plugin = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPluginCheckpoint: (pluginId) =>
+        pluginId === PLUGIN_ID
+          ? {
+              activeWeaponSlots: [
+                { playerId: 'player-1', slot: 3 },
+                { playerId: '', slot: 4 },
+                { playerId: 'player-ignored', slot: 0 },
+                { playerId: 'player-ignored-too', slot: 1.5 },
+              ],
+            }
+          : undefined,
+      getPlayerInput: (playerId) => {
+        if (currentTick !== 1) {
+          return undefined;
+        }
+        return {
+          tick: 1,
+          seq: 1,
+          shoot: playerId === 'player-1',
+          reload: false,
+          interact: false,
+          drop: false,
+          abilities: [],
+          aimDeg: 90,
+          ...(playerId === 'player-2' ? { swapSlot: 2 } : {}),
+        };
+      },
+      msgOut: { push: (frame) => frames.push(frame) },
+      setPluginCheckpoint: (pluginId, checkpoint) => {
+        checkpoints.push({ pluginId, checkpoint });
+      },
+    });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+    frames.length = 0;
+    currentTick = 1;
+    plugin.onTick?.(world, 1 / MOVEMENT.tickRate, 1);
+
+    const frame = decodeServerMessage(frames.at(-1)!);
+    expect(frame._tag).toBe('DeltaSnapshot');
+    if (frame._tag === 'DeltaSnapshot') {
+      const projectileSlots = frame.projectilesUpdated.flatMap((projectile) =>
+        projectile.weaponSlot._tag === 'Some' ? [projectile.weaponSlot.value] : [],
+      );
+      expect(projectileSlots).toContain(3);
+    }
+    expect(checkpoints.at(-1)).toMatchObject({
+      pluginId: PLUGIN_ID,
+      checkpoint: {
+        version: 2,
+        tick: 1,
+        activeWeaponSlots: [
+          { playerId: 'player-1', slot: 3 },
+          { playerId: 'player-2', slot: 2 },
+        ],
+        combat: {
+          weaponStates: expect.arrayContaining([
+            expect.objectContaining({ playerId: 'player-1' }),
+            expect.objectContaining({ playerId: 'player-2' }),
+          ]),
+        },
+      },
+    });
+    expect(
+      (
+        checkpoints.at(-1) as
+          | {
+              readonly checkpoint?: {
+                readonly worldComponents?: readonly unknown[];
+              };
+            }
+          | undefined
+      )?.checkpoint?.worldComponents?.length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('keeps accepted fire animation markers out of replay frames and checkpoints', () => {
+    const world = createTestPluginWorld();
+    const frames: Uint8Array[] = [];
+    const replayFrames: Uint8Array[] = [];
+    const checkpoints: JsonValue[] = [];
+    let currentTick = 0;
+    const plugin = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPlayerModelSelections: () => [{ playerId: 'player-1', modelId: 'model:hero' }],
+      getPlayerInput: (playerId) =>
+        playerId === 'player-1' && currentTick === 1
+          ? {
+              tick: 1,
+              seq: 1,
+              shoot: true,
+              reload: false,
+              interact: false,
+              drop: false,
+              abilities: [],
+              aimDeg: 0,
+              swapSlot: 1,
+            }
+          : undefined,
+      msgOut: { push: (frame) => frames.push(frame) },
+      setReplayFrames: (frames) => {
+        replayFrames.splice(0, replayFrames.length, ...frames);
+      },
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          checkpoints.push(checkpoint);
+        }
+      },
+    });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+    frames.length = 0;
+    currentTick = 1;
+    plugin.onTick?.(world, 1 / MOVEMENT.tickRate, 1);
+
+    const liveDelta = decodeServerMessage(frames.at(-1)!);
+    expect(liveDelta._tag).toBe('DeltaSnapshot');
+    if (liveDelta._tag === 'DeltaSnapshot') {
+      const player = liveDelta.updated.find((entry) => entry.id === 'player-1');
+      expect(player).toBeDefined();
+      expect(Option.isSome(player!.animation)).toBe(true);
+      if (Option.isSome(player!.animation)) {
+        expect(player!.animation.value.acceptedFireTick).toBe(1);
+      }
+    }
+
+    const replayWelcome = decodeServerMessage(replayFrames.at(-1)!);
+    expect(replayWelcome._tag).toBe('WelcomeSnapshot');
+    if (replayWelcome._tag === 'WelcomeSnapshot') {
+      const player = replayWelcome.players.find((entry) => entry.id === 'player-1');
+      expect(player?.animation?.acceptedFireTick).toBeUndefined();
+    }
+
+    const checkpoint = checkpoints.at(-1) as
+      | {
+          readonly worldComponents?: readonly {
+            readonly name?: string;
+            readonly entries?: readonly {
+              readonly value?: { readonly acceptedFireTick?: number };
+            }[];
+          }[];
+        }
+      | undefined;
+    const animationEntries =
+      checkpoint?.worldComponents?.find((component) => component.name === ANIMATION_STATE_COMPONENT)
+        ?.entries ?? [];
+    expect(animationEntries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: expect.not.objectContaining({ acceptedFireTick: expect.any(Number) }),
+        }),
+      ]),
+    );
+
+    const restoredFrames: Uint8Array[] = [];
+    const restored = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPluginCheckpoint: (pluginId) => (pluginId === PLUGIN_ID ? checkpoints.at(-1) : undefined),
+      msgOut: { push: (frame) => restoredFrames.push(frame) },
+    });
+    restored.onInit?.({ pluginId: restored.id }, createTestPluginWorld());
+    const restoredWelcome = decodeServerMessage(restoredFrames.at(-1)!);
+    expect(restoredWelcome._tag).toBe('WelcomeSnapshot');
+    if (restoredWelcome._tag === 'WelcomeSnapshot') {
+      const player = restoredWelcome.players.find((entry) => entry.id === 'player-1');
+      expect(player?.animation?.acceptedFireTick).toBeUndefined();
+    }
+  });
+
+  it('dispatches the first accepted fire after checkpoint reconstruction exactly once', () => {
+    const world = createTestPluginWorld();
+    const frames: Uint8Array[] = [];
+    const checkpoints: JsonValue[] = [];
+    const playedCueIds: string[] = [];
+    const seenAudioEventKeys = new Set<string>();
+    const audioEngine = {
+      playCue: (cueId: string) => playedCueIds.push(cueId),
+    };
+    const audioCues = [
+      {
+        id: 'cue:fire',
+        label: 'Fire',
+        busId: 'sfx',
+        defaultVolume: 1,
+        binding: 'weapon.fire',
+      },
+    ] as const;
+    let currentTick = 0;
+    const playerInput = () => ({
+      tick: currentTick,
+      seq: currentTick,
+      shoot: currentTick === 1 || currentTick === 9,
+      reload: false,
+      interact: false,
+      drop: false,
+      abilities: [],
+      aimDeg: 0,
+      swapSlot: 1,
+    });
+    const plugin = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPlayerModelSelections: () => [{ playerId: 'player-1', modelId: 'model:hero' }],
+      getPlayerInput: (playerId) => (playerId === 'player-1' ? playerInput() : undefined),
+      msgOut: { push: (frame) => frames.push(frame) },
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          checkpoints.push(checkpoint);
+        }
+      },
+    });
+
+    plugin.onInit?.({ pluginId: plugin.id }, world);
+    frames.length = 0;
+    currentTick = 1;
+    plugin.onTick?.(world, 1 / MOVEMENT.tickRate, 1);
+
+    const firstGameplayFrame = frames.map(decodeServerMessage).find((frame) => {
+      return frame._tag === 'GameplayEventFrame';
+    });
+    expect(firstGameplayFrame?._tag).toBe('GameplayEventFrame');
+    if (firstGameplayFrame?._tag !== 'GameplayEventFrame') {
+      throw new Error('expected accepted gameplay event before checkpoint reconstruction');
+    }
+    expect(firstGameplayFrame.sequence).toBe(0);
+    expect(
+      dispatchGameplayLifecycleAudioEvents({
+        engine: audioEngine,
+        cues: audioCues,
+        events: [{ sequence: firstGameplayFrame.sequence, event: firstGameplayFrame.event }],
+        seenKeys: seenAudioEventKeys,
+      }),
+    ).toEqual(['cue:fire']);
+    expect(checkpoints.at(-1)).toEqual(expect.objectContaining({ gameplayEventSequence: 1 }));
+
+    const restoredFrames: Uint8Array[] = [];
+    const restored = createRuntimeAdapter({
+      getMapPackage: () => makeRuntimeMapPackage(),
+      getPlayerInput: (playerId) => (playerId === 'player-1' ? playerInput() : undefined),
+      getPluginCheckpoint: (pluginId) => (pluginId === PLUGIN_ID ? checkpoints.at(-1) : undefined),
+      msgOut: { push: (frame) => restoredFrames.push(frame) },
+    });
+
+    const restoredWorld = createTestPluginWorld();
+    restored.onInit?.({ pluginId: restored.id }, restoredWorld);
+    restoredFrames.length = 0;
+    for (currentTick = 2; currentTick <= 9; currentTick += 1) {
+      restored.onTick?.(restoredWorld, 1 / MOVEMENT.tickRate, currentTick);
+    }
+
+    const restoredGameplayFrame = restoredFrames.map(decodeServerMessage).find((frame) => {
+      return frame._tag === 'GameplayEventFrame';
+    });
+    expect(restoredGameplayFrame?._tag).toBe('GameplayEventFrame');
+    if (restoredGameplayFrame?._tag !== 'GameplayEventFrame') {
+      throw new Error('expected accepted gameplay event after checkpoint reconstruction');
+    }
+    expect(restoredGameplayFrame.sequence).toBe(1);
+    expect(
+      dispatchGameplayLifecycleAudioEvents({
+        engine: audioEngine,
+        cues: audioCues,
+        events: [{ sequence: restoredGameplayFrame.sequence, event: restoredGameplayFrame.event }],
+        seenKeys: seenAudioEventKeys,
+      }),
+    ).toEqual(['cue:fire']);
+    expect(playedCueIds).toEqual(['cue:fire', 'cue:fire']);
+
+    expect(
+      dispatchGameplayLifecycleAudioEvents({
+        engine: audioEngine,
+        cues: audioCues,
+        events: [{ sequence: restoredGameplayFrame.sequence, event: restoredGameplayFrame.event }],
+        seenKeys: seenAudioEventKeys,
+      }),
+    ).toEqual([]);
+    expect(playedCueIds).toEqual(['cue:fire', 'cue:fire']);
+  });
+
+  it('restores gameplay RNG and allocator state across hibernation checkpoints', () => {
+    const mapPackage = makeRuntimeMapPackage(
+      makeTileborneMap({
+        id: TEST_MAP_ID,
+        width: 32,
+        height: 32,
+        tileWidth: 32,
+        tileHeight: 32,
+        objects: [
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], 'shrink-zone-anchor', 512, 512),
+          makeTestObject(TEST_OBJECT_IDS[2], LOOT_CRATE_KIND, 96, 64, {
+            itemKind: 'rifle',
+            tier: 'common',
+            weight: 1,
+          }),
+          makeTestObject(TEST_OBJECT_IDS[3], LOOT_CRATE_KIND, 96, 64, {
+            itemKind: 'armor-vest',
+            tier: 'rare',
+            weight: 3,
+          }),
+        ],
+        properties: {
+          maxPlayers: 1,
+          [PLUGIN_ID]: {
+            lootTables: [
+              { itemKind: 'rifle', tier: 'common', weight: 1 },
+              { itemKind: 'armor-vest', tier: 'rare', weight: 3 },
+            ],
+          },
+        },
+      }),
+    );
+    let currentTick = 0;
+    const inputForTick = () => ({
+      tick: currentTick,
+      seq: currentTick,
+      shoot: false,
+      reload: false,
+      interact: currentTick === 1 || currentTick === 2,
+      drop: false,
+      abilities: [],
+      aimDeg: 90,
+    });
+    const checkpoints: JsonValue[] = [];
+    const continuousWorld = createTestPluginWorld();
+    const continuous = createRuntimeAdapter({
+      getMapPackage: () => mapPackage,
+      seed: 123,
+      getPlayerIds: () => ['player-1'],
+      getPlayerInput: () => inputForTick(),
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          checkpoints.push(checkpoint);
+        }
+      },
+    });
+
+    continuous.onInit?.({ pluginId: continuous.id }, continuousWorld);
+    currentTick = 1;
+    continuous.onTick?.(continuousWorld, 1 / MOVEMENT.tickRate, 1);
+    const checkpointAfterFirstRoll = checkpoints.at(-1)!;
+    currentTick = 2;
+    continuous.onTick?.(continuousWorld, 1 / MOVEMENT.tickRate, 2);
+    const continuousAfterSecondRoll = checkpoints.at(-1)!;
+
+    const reconstructedCheckpoints: JsonValue[] = [];
+    const reconstructedWorld = createTestPluginWorld();
+    const reconstructed = createRuntimeAdapter({
+      getMapPackage: () => mapPackage,
+      seed: 123,
+      getPlayerIds: () => ['player-1'],
+      getPlayerInput: () => inputForTick(),
+      getPluginCheckpoint: (pluginId) =>
+        pluginId === PLUGIN_ID ? checkpointAfterFirstRoll : undefined,
+      setPluginCheckpoint: (_pluginId, checkpoint) => {
+        if (checkpoint !== undefined) {
+          reconstructedCheckpoints.push(checkpoint);
+        }
+      },
+    });
+
+    reconstructed.onInit?.({ pluginId: reconstructed.id }, reconstructedWorld);
+    currentTick = 2;
+    reconstructed.onTick?.(reconstructedWorld, 1 / MOVEMENT.tickRate, 2);
+
+    expect(reconstructedCheckpoints.at(-1)).toEqual(continuousAfterSecondRoll);
+    const continuousNextEntity = (
+      continuousAfterSecondRoll as { readonly world?: { readonly nextEntity?: number } }
+    ).world?.nextEntity;
+    expect(continuousNextEntity).toBeDefined();
+    expect(continuousNextEntity).toBeGreaterThan(4);
+
+    const allocatorWorld = createTestPluginWorld();
+    const low = allocatorWorld.createEntity();
+    const high = allocatorWorld.createEntity();
+    allocatorWorld.destroyEntity(high);
+    const allocatorCheckpoint = allocatorWorld.createCheckpoint();
+    const restoredAllocatorWorld = createTestPluginWorld();
+    restoredAllocatorWorld.restoreCheckpoint(allocatorCheckpoint);
+
+    expect(restoredAllocatorWorld.createEntity()).toBeGreaterThan(high);
+    expect(low).toBe(1);
   });
 
   it('emits authored trap and decoy deployables in the welcome snapshot', () => {
@@ -427,11 +930,11 @@ describe('createRuntimeAdapter', () => {
         tileWidth: 32,
         tileHeight: 32,
         objects: [
-          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 1),
-          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 2, 3),
-          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 16, 16),
-          makeTestObject(TEST_OBJECT_IDS[3], 'trap', 5, 5, { radius: 28 }),
-          makeTestObject(TEST_OBJECT_IDS[4], 'decoy', 7, 5, { durationTicks: 90 }),
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 64),
+          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 512, 512),
+          makeTestObject(TEST_OBJECT_IDS[3], 'trap', 512, 640, { radius: 28 }),
+          makeTestObject(TEST_OBJECT_IDS[4], 'decoy', 640, 640, { durationTicks: 90 }),
         ],
         properties: { maxPlayers: 2 },
       }),
@@ -464,9 +967,9 @@ describe('createRuntimeAdapter', () => {
         tileWidth: 32,
         tileHeight: 32,
         objects: [
-          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 4, 4),
-          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 6, 4),
-          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 16, 16),
+          makeTestObject(TEST_OBJECT_IDS[0], SPAWN_POINT_KIND, 64, 64),
+          makeTestObject(TEST_OBJECT_IDS[1], SPAWN_POINT_KIND, 256, 64),
+          makeTestObject(TEST_OBJECT_IDS[2], 'shrink-zone-anchor', 512, 512),
         ],
         properties: { maxPlayers: 2 },
       }),

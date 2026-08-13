@@ -6,6 +6,7 @@
  * desktop-app-specific (fonts, viewport sizing, electron drag region).
  */
 @import '@tileborne/ui/styles/index.css';
+@import '../../../../packages/game-client/src/styles/menu.css';
 @import '@fontsource-variable/ibm-plex-sans';
 
 /**
@@ -22,6 +23,15 @@
 @source "../../../../packages/ui/src/**/*.{ts,tsx,js,jsx}";
 /* Shared HUD chassis lives in @tileborne/game-client (same reasoning as above). */
 @source "../../../../packages/game-client/src/**/*.{ts,tsx,js,jsx}";
+
+.tb-runtime-shell-host:has(> .tb-root[data-phase='in-match'][data-paused='false']) {
+  pointer-events: none;
+}
+
+.tb-runtime-shell-host:has(> .tb-root:not([data-phase='in-match'])),
+.tb-runtime-shell-host:has(> .tb-root[data-phase='in-match'][data-paused='true']) {
+  pointer-events: auto;
+}
 
 @theme inline {
   --font-sans: 'IBM Plex Sans Variable', Inter, system-ui, sans-serif;

@@ -54,7 +54,7 @@ import {
 } from './components.js';
 
 export interface InventoryLootSystemState {
-  readonly rng: SeededRng;
+  rng: SeededRng;
   readonly consumedDropInputByPlayerId: Map<string, string>;
   readonly consumedInteractInputByPlayerId: Map<string, string>;
 }

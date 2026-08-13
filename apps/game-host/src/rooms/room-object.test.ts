@@ -25,6 +25,12 @@ import {
 } from '../../../../packages/plugin-example-arena/src/host-protocol-bridge.js';
 import { createRuntimeAdapter as createArenaRuntimeAdapter } from '../../../../packages/plugin-example-arena/src/runtime-adapter.js';
 import type { ArenaRuntimeInput } from '../../../../packages/plugin-example-arena/src/types/runtime-plugin.js';
+import { createRuntimeAdapter as createBattleRoyaleRuntimeAdapter } from '../../../../packages/plugin-battle-royale/src/runtime-adapter.js';
+import { PLUGIN_ID as BATTLE_ROYALE_PLUGIN_ID } from '../../../../packages/plugin-battle-royale/src/constants.js';
+import type {
+  RuntimePlayerInput,
+  RuntimePluginHost,
+} from '../../../../packages/plugin-battle-royale/src/types/runtime-plugin.js';
 import {
   ArenaPlayerInput,
   ArenaSnapshotAck,
@@ -39,7 +45,10 @@ import {
 import { menuEventForShellNavigationRequest } from '../../../../packages/game-client/src/shell-behavior-bridge.js';
 import { mintHandoffToken } from './handoff-token.js';
 import { MAX_QUEUED_INPUTS_PER_PLAYER, PlaytestRoom } from './room-object.js';
-import type { BundledPluginRuntimeRegistration } from '../bundled-plugin-loader.js';
+import {
+  defaultBundledPluginRuntimeRegistration,
+  type BundledPluginRuntimeRegistration,
+} from '../bundled-plugin-loader.js';
 import { STORAGE_KEY, type RoomStorage } from './storage-schema.js';
 import {
   INVALID_HANDOFF_CLOSE_CODE,
@@ -75,6 +84,22 @@ const cloneDefaultMapPackage = (): Record<string, unknown> =>
 const mapPackageWithCapacity = (playerCapacity: number): Record<string, unknown> => {
   const pkg = cloneDefaultMapPackage();
   (pkg.manifest as Record<string, unknown>).playerCapacity = playerCapacity;
+  return pkg;
+};
+
+const interiorSinglePlayerMapPackage = (): Record<string, unknown> => {
+  const pkg = cloneDefaultMapPackage() as {
+    manifest: Record<string, unknown>;
+    modeData: Record<string, Record<string, unknown>>;
+    placements: Array<Record<string, unknown>>;
+  };
+  pkg.manifest.playerCapacity = 1;
+  const modeData = pkg.modeData['@tileborne-plugins/battle-royale'];
+  if (modeData === undefined || pkg.placements[0] === undefined) {
+    throw new Error('default BR package is missing mode data or spawn placement');
+  }
+  modeData.maxPlayers = 1;
+  pkg.placements = [{ ...pkg.placements[0], x: 32, y: 32 }];
   return pkg;
 };
 
@@ -1959,17 +1984,30 @@ describe('PlaytestRoom wire protocol and plugins', () => {
     // coordinates from the package instead of pinning magic numbers.
     const packageMap = (
       bundledMapPackages[0]!.mapPackage as unknown as {
-        map: { objects: readonly { x: number; y: number }[] };
+        map: {
+          objects: readonly { x: number; y: number }[];
+          tileSize: { width: number; height: number };
+        };
       }
     ).map;
     const secondSpawn = packageMap.objects[1]!;
-    expect(latePlayer).toMatchObject({ id: 'player-2', x: secondSpawn.x, y: secondSpawn.y });
+    expect(latePlayer).toMatchObject({
+      id: 'player-2',
+      x: secondSpawn.x * packageMap.tileSize.width,
+      y: secondSpawn.y * packageMap.tileSize.height,
+    });
   });
 
   it('routes a reserved generated player slot into BR shooting simulation', async () => {
     installWorkerGlobals();
     const state = createFakeDurableObjectState();
-    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      undefined,
+      { minReadyPlayers: 1 },
+      interiorSinglePlayerMapPackage(),
+    );
     const reserved = await room.fetch(
       new Request('https://do/players/reserve', {
         method: 'POST',
@@ -2367,6 +2405,780 @@ describe('PlaytestRoom wire protocol and plugins', () => {
         expect(movedPlayer.x.value).toBeLessThan(initialPlayer?.x ?? 0);
       }
     }
+  });
+
+  it('preserves a rapid BR slot edge when a held aim frame replaces the queued input', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      undefined,
+      { minReadyPlayers: 1 },
+      interiorSinglePlayerMapPackage(),
+    );
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    const welcome = decodeBattleRoyaleMessages(server).find(
+      (message) => message._tag === 'WelcomeSnapshot',
+    );
+    if (welcome?._tag !== 'WelcomeSnapshot') {
+      throw new Error('expected BR welcome snapshot');
+    }
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: true, aimDeg: 45, swapSlot: 3 }),
+    );
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 2, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await room.alarm();
+
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 3, dir: 0, shoot: true, aimDeg: 90 }),
+    );
+    await room.alarm();
+
+    const projectileSlots = decodeBattleRoyaleMessages(server).flatMap((message) =>
+      message._tag === 'DeltaSnapshot'
+        ? message.projectilesUpdated.flatMap((projectile) =>
+            projectile.weaponSlot._tag === 'Some' ? [projectile.weaponSlot.value] : [],
+          )
+        : [],
+    );
+    expect(projectileSlots.filter((slot) => slot === 3)).toHaveLength(1);
+  });
+
+  it('does not redeliver consumed BR edges from an aim frame queued during behavior runtime step', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const deliveredInputs: {
+      readonly runtimeTick: number;
+      readonly input: {
+        readonly tick?: number;
+        readonly seq?: number;
+        readonly reload?: boolean;
+        readonly abilities?: readonly string[];
+        readonly aimDeg?: number;
+        readonly swapSlot?: number;
+      };
+    }[] = [];
+    let releaseBehaviorStep: (() => void) | undefined;
+    let behaviorStepStarted: (() => void) | undefined;
+    const firstBehaviorStepStarted = new Promise<void>((resolve) => {
+      behaviorStepStarted = resolve;
+    });
+    const firstBehaviorStepReleased = new Promise<void>((resolve) => {
+      releaseBehaviorStep = resolve;
+    });
+    let blockNextBehaviorStep = true;
+    const behaviorRuntime = {
+      snapshot: undefined,
+      diagnostics: [],
+      shellNavigationRequests: [],
+      emitShellEvent: vi.fn(),
+      step: vi.fn(async () => {
+        if (blockNextBehaviorStep) {
+          blockNextBehaviorStep = false;
+          behaviorStepStarted?.();
+          await firstBehaviorStepReleased;
+        }
+        return { status: 'advanced' };
+      }),
+    };
+    const instrumentedPluginId = 'plugin:test-br-edge-interleaving';
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = instrumentedPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: instrumentedPluginId,
+      createRuntimeAdapter: (host) => ({
+        id: instrumentedPluginId,
+        onTick: (_world, _dt, runtimeTick) => {
+          const input = host.getPlayerInput?.('player-1') as
+            | {
+                readonly tick?: number;
+                readonly seq?: number;
+                readonly reload?: boolean;
+                readonly abilities?: readonly string[];
+                readonly aimDeg?: number;
+                readonly swapSlot?: number;
+              }
+            | undefined;
+          if (input !== undefined) {
+            deliveredInputs.push({
+              runtimeTick,
+              input: {
+                tick: input.tick,
+                seq: input.seq,
+                reload: input.reload,
+                abilities: [...(input.abilities ?? [])],
+                aimDeg: input.aimDeg,
+                swapSlot: input.swapSlot,
+              },
+            });
+          }
+        },
+      }),
+    };
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      {
+        createBehaviorRuntime: () => behaviorRuntime,
+        pluginRegistrations: [instrumentedRegistration],
+      },
+      { minReadyPlayers: 1 },
+      instrumentedMapPackage,
+    );
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: false,
+        reload: true,
+        abilities: [BattleRoyaleProtocol.BattleRoyaleAbility.dash],
+        aimDeg: 45,
+        swapSlot: 3,
+      }),
+    );
+    const blockedTick = room.alarm();
+    await firstBehaviorStepStarted;
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 2, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    releaseBehaviorStep?.();
+    await blockedTick;
+
+    await room.alarm();
+
+    const deliveriesWithEdges = deliveredInputs.filter(
+      ({ input }) =>
+        input.reload || (input.abilities?.length ?? 0) > 0 || input.swapSlot !== undefined,
+    );
+    expect(deliveriesWithEdges).toEqual([
+      {
+        runtimeTick: 1,
+        input: {
+          tick: 1,
+          seq: 1,
+          reload: true,
+          abilities: [BattleRoyaleProtocol.BattleRoyaleAbility.dash],
+          aimDeg: 45,
+          swapSlot: 3,
+        },
+      },
+    ]);
+    expect(deliveredInputs.at(-1)?.input).toMatchObject({
+      tick: 2,
+      seq: 2,
+      reload: false,
+      abilities: [],
+      aimDeg: 90,
+    });
+    expect(deliveredInputs.at(-1)?.input.swapSlot).toBeUndefined();
+  });
+
+  it('clears held BR one-shot booleans after acknowledgement while shoot remains held', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const deliveredInputs: {
+      readonly runtimeTick: number;
+      readonly input: {
+        readonly tick?: number;
+        readonly seq?: number;
+        readonly shoot?: boolean;
+        readonly reload?: boolean;
+        readonly interact?: boolean;
+        readonly drop?: boolean;
+        readonly aimDeg?: number;
+      };
+    }[] = [];
+    const instrumentedPluginId = 'plugin:test-br-held-boolean-edges';
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = instrumentedPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: instrumentedPluginId,
+      createRuntimeAdapter: (host) => ({
+        id: instrumentedPluginId,
+        onTick: (_world, _dt, runtimeTick) => {
+          const input = host.getPlayerInput?.('player-1') as
+            | {
+                readonly tick?: number;
+                readonly seq?: number;
+                readonly shoot?: boolean;
+                readonly reload?: boolean;
+                readonly interact?: boolean;
+                readonly drop?: boolean;
+                readonly aimDeg?: number;
+              }
+            | undefined;
+          if (input !== undefined) {
+            deliveredInputs.push({
+              runtimeTick,
+              input: {
+                tick: input.tick,
+                seq: input.seq,
+                shoot: input.shoot,
+                reload: input.reload,
+                interact: input.interact,
+                drop: input.drop,
+                aimDeg: input.aimDeg,
+              },
+            });
+          }
+        },
+      }),
+    };
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      { pluginRegistrations: [instrumentedRegistration] },
+      { minReadyPlayers: 1 },
+      instrumentedMapPackage,
+    );
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({
+        tick: 1,
+        seq: 1,
+        dir: 0,
+        shoot: true,
+        reload: true,
+        interact: true,
+        drop: true,
+        aimDeg: 45,
+      }),
+    );
+    await room.alarm();
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({
+        tick: 2,
+        seq: 2,
+        dir: 0,
+        shoot: true,
+        reload: true,
+        interact: true,
+        drop: true,
+        aimDeg: 45,
+      }),
+    );
+    await room.alarm();
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 3, seq: 3, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await room.alarm();
+
+    expect(deliveredInputs.map(({ input }) => input)).toEqual([
+      {
+        tick: 1,
+        seq: 1,
+        shoot: true,
+        reload: true,
+        interact: true,
+        drop: true,
+        aimDeg: 45,
+      },
+      {
+        tick: 2,
+        seq: 2,
+        shoot: true,
+        reload: false,
+        interact: false,
+        drop: false,
+        aimDeg: 45,
+      },
+      {
+        tick: 3,
+        seq: 3,
+        shoot: false,
+        reload: false,
+        interact: false,
+        drop: false,
+        aimDeg: 90,
+      },
+    ]);
+  });
+
+  it('replays an unacknowledged BR slot edge exactly once after a failed tick retry', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    let failNextStep = true;
+    const instrumentedPluginId = 'plugin:test-br-swap-slot-retry';
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = instrumentedPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: instrumentedPluginId,
+      createRuntimeAdapter: (host) => createBattleRoyaleRuntimeAdapter(host as RuntimePluginHost),
+    };
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      {
+        createRuntime: () => {
+          const runtime = makeGameRuntime();
+          return {
+            ...runtime,
+            step: (ticks?: number) => {
+              if (failNextStep) {
+                failNextStep = false;
+                return Effect.sync(() => {
+                  throw new Error('transient runtime tick failure');
+                });
+              }
+              return runtime.step(ticks);
+            },
+          };
+        },
+        pluginRegistrations: [instrumentedRegistration],
+      },
+      { minReadyPlayers: 1 },
+      instrumentedMapPackage,
+    );
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: true, aimDeg: 45, swapSlot: 3 }),
+    );
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 2, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await expect(room.alarm()).rejects.toThrow('transient runtime tick failure');
+
+    await room.alarm();
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 3, dir: 0, shoot: true, aimDeg: 90 }),
+    );
+    await room.alarm();
+
+    const projectileSlots = decodeBattleRoyaleMessages(server).flatMap((message) =>
+      message._tag === 'DeltaSnapshot'
+        ? message.projectilesUpdated.flatMap((projectile) =>
+            projectile.weaponSlot._tag === 'Some' ? [projectile.weaponSlot.value] : [],
+          )
+        : [],
+    );
+    expect(projectileSlots.filter((slot) => slot === 3)).toHaveLength(1);
+  });
+
+  it('restores opaque plugin checkpoints through the generic plugin host', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const checkpointPluginId = 'plugin:test-opaque-checkpoint';
+    const checkpoint = {
+      marker: 'opaque-room-checkpoint',
+      nested: { slot: 3, values: ['kept'] },
+    };
+    const observedRestoredCheckpoints: unknown[] = [];
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = checkpointPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: checkpointPluginId,
+      createRuntimeAdapter: (host): RuntimePlugin => {
+        observedRestoredCheckpoints.push(host.getPluginCheckpoint?.(checkpointPluginId));
+        return {
+          id: checkpointPluginId,
+          onTick: () => {
+            host.setPluginCheckpoint?.(checkpointPluginId, checkpoint);
+          },
+        };
+      },
+    };
+    const env = makeEnv();
+    const deps: ConstructorParameters<typeof PlaytestRoom>[2] = {
+      pluginRegistrations: [instrumentedRegistration],
+    };
+    const room = await initRoom(state, env, deps, { minReadyPlayers: 1 }, instrumentedMapPackage);
+
+    await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.alarm();
+    expect(observedRestoredCheckpoints).toEqual([undefined]);
+
+    const reconstructedRoom = new PlaytestRoom(asDurableObjectState(state), env, deps);
+    const reconstruction = await reconstructedRoom.fetch(
+      new Request('https://do/__smoke/reconstruction?roomId=room-1'),
+    );
+
+    expect(reconstruction.status).toBe(200);
+    expect(observedRestoredCheckpoints).toEqual([undefined, checkpoint]);
+  });
+
+  it('commits BR output without replaying gameplay after behavior runtime step rejects', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    let rejectNextBehaviorStep = true;
+    const runtimeStepTicks: number[] = [];
+    const deliveredSwapSlots: {
+      readonly observedAt: 'original tick' | 'reconstruction fast-forward' | 'successor alarm';
+      readonly tick?: number;
+      readonly seq?: number;
+      readonly swapSlot: number;
+    }[] = [];
+    let runtimeDeliveryPhase: 'original tick' | 'reconstruction fast-forward' | 'successor alarm' =
+      'original tick';
+    let emittedMatchEnd = false;
+    const behaviorRuntime = {
+      snapshot: undefined,
+      diagnostics: [],
+      shellNavigationRequests: [],
+      emitShellEvent: vi.fn(),
+      step: vi.fn(async () => {
+        if (rejectNextBehaviorStep) {
+          rejectNextBehaviorStep = false;
+          throw new Error('behavior runtime failed after gameplay');
+        }
+        return { status: 'advanced' };
+      }),
+    };
+    const checkpointComponents = (storage: RoomStorage | undefined, name: string) => {
+      const checkpoint = storage?.simState[
+        `pluginCheckpoint:${BATTLE_ROYALE_PLUGIN_ID}`
+      ] as unknown;
+      if (typeof checkpoint !== 'object' || checkpoint === null || Array.isArray(checkpoint)) {
+        return [];
+      }
+      const worldComponents = (checkpoint as { readonly worldComponents?: unknown })
+        .worldComponents;
+      if (!Array.isArray(worldComponents)) {
+        return [];
+      }
+      const component = worldComponents.find(
+        (entry): entry is { readonly entries: unknown[]; readonly name: string } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          !Array.isArray(entry) &&
+          (entry as { readonly name?: unknown }).name === name &&
+          Array.isArray((entry as { readonly entries?: unknown }).entries),
+      );
+      return component?.entries ?? [];
+    };
+    const checkpointValue = (
+      storage: RoomStorage | undefined,
+      componentName: string,
+      entity: number,
+    ) => {
+      const entry = checkpointComponents(storage, componentName).find(
+        (candidate): candidate is { readonly entity: number; readonly value: unknown } =>
+          typeof candidate === 'object' &&
+          candidate !== null &&
+          !Array.isArray(candidate) &&
+          (candidate as { readonly entity?: unknown }).entity === entity,
+      );
+      return entry?.value;
+    };
+    const instrumentedPluginId = 'plugin:test-br-behavior-failure-retry';
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = instrumentedPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: instrumentedPluginId,
+      createRuntimeAdapter: (host) => {
+        const pluginHost = host as RuntimePluginHost;
+        const adapter = createBattleRoyaleRuntimeAdapter(pluginHost);
+        return {
+          ...adapter,
+          onTick: (world, dt, tick) => {
+            const input = pluginHost.getPlayerInput?.('player-1') as RuntimePlayerInput | undefined;
+            if (input?.swapSlot === 3) {
+              deliveredSwapSlots.push({
+                observedAt: runtimeDeliveryPhase,
+                tick: input.tick,
+                seq: input.seq,
+                swapSlot: input.swapSlot,
+              });
+            }
+            adapter.onTick?.(world, dt, tick);
+            if (runtimeDeliveryPhase === 'successor alarm' && !emittedMatchEnd) {
+              emittedMatchEnd = true;
+              pluginHost.msgOut?.push(
+                BattleRoyaleProtocol.encodeServerMessage(
+                  new BattleRoyaleProtocol.GameOver({
+                    winner: BattleRoyaleProtocol.makePlayerId('player-1'),
+                  }),
+                ),
+              );
+            }
+          },
+        };
+      },
+    };
+    const env = makeEnv();
+    const deps: ConstructorParameters<typeof PlaytestRoom>[2] = {
+      createRuntime: () => {
+        const runtime = makeGameRuntime();
+        return {
+          ...runtime,
+          step: (ticks?: number) =>
+            runtime.step(ticks).pipe(
+              Effect.tap((advancedTick) =>
+                Effect.sync(() => {
+                  runtimeStepTicks.push(advancedTick);
+                }),
+              ),
+            ),
+        };
+      },
+      createBehaviorRuntime: () => behaviorRuntime,
+      pluginRegistrations: [instrumentedRegistration],
+    };
+    const room = await initRoom(state, env, deps, { minReadyPlayers: 1 }, instrumentedMapPackage);
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: true, aimDeg: 45 }),
+    );
+
+    await room.alarm();
+    expect(behaviorRuntime.step).toHaveBeenCalledTimes(1);
+    expect(runtimeStepTicks).toEqual([1]);
+    const afterFailedBehaviorStep = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(afterFailedBehaviorStep?.tick).toBe(1);
+    expect(afterFailedBehaviorStep?.pendingSimulationCommit).toBeUndefined();
+    const playerCheckpointEntry = checkpointComponents(afterFailedBehaviorStep, 'Player').find(
+      (
+        entry,
+      ): entry is { readonly entity: number; readonly value: { readonly playerId: string } } =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        !Array.isArray(entry) &&
+        typeof (entry as { readonly entity?: unknown }).entity === 'number' &&
+        typeof (entry as { readonly value?: { readonly playerId?: unknown } }).value?.playerId ===
+          'string' &&
+        (entry as { readonly value: { readonly playerId: string } }).value.playerId === 'player-1',
+    );
+    expect(playerCheckpointEntry).toBeDefined();
+    const playerEntity = playerCheckpointEntry!.entity;
+    const tickOnePosition = checkpointValue(afterFailedBehaviorStep, 'Position', playerEntity);
+    const tickOnePlayer = checkpointValue(afterFailedBehaviorStep, 'Player', playerEntity);
+    const tickOneWeaponState = checkpointValue(
+      afterFailedBehaviorStep,
+      'WeaponRuntimeState',
+      playerEntity,
+    );
+    expect(tickOnePosition).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
+    expect(tickOnePlayer).toMatchObject({ health: expect.any(Number), alive: 1 });
+    expect(tickOneWeaponState).toMatchObject({ ammoInMagazine: 2, slot: 1 });
+    expect(checkpointComponents(afterFailedBehaviorStep, 'Projectile')).toHaveLength(1);
+    const serverMessagesAfterCommit = decodeBattleRoyaleMessages(server);
+    expect(serverMessagesAfterCommit.some((message) => message._tag === 'DeltaSnapshot')).toBe(
+      true,
+    );
+
+    runtimeDeliveryPhase = 'reconstruction fast-forward';
+    const reconstructedRoom = new PlaytestRoom(asDurableObjectState(state), env, deps);
+    const reconstruction = await reconstructedRoom.fetch(
+      new Request('https://do/__smoke/reconstruction?roomId=room-1'),
+    );
+    expect(reconstruction.status).toBe(200);
+    expect(await reconstruction.json()).toMatchObject({
+      playtestId: 'room-1',
+      metrics: {
+        tick: 1,
+      },
+    });
+    expect(behaviorRuntime.step).toHaveBeenCalledTimes(1);
+    expect(runtimeStepTicks).toEqual([1]);
+    const afterReconstruction = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    expect(afterReconstruction?.tick).toBe(1);
+    expect(afterReconstruction?.simState.lastTick).toBe(1);
+    expect(afterReconstruction?.pendingSimulationCommit).toBeUndefined();
+
+    rejectNextBehaviorStep = true;
+    runtimeDeliveryPhase = 'successor alarm';
+    await reconstructedRoom.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 2, dir: 0, shoot: true, aimDeg: 45, swapSlot: 3 }),
+    );
+    await reconstructedRoom.alarm();
+    expect(behaviorRuntime.step).toHaveBeenCalledTimes(2);
+    expect(runtimeStepTicks).toEqual([1, 2]);
+    expect(deliveredSwapSlots).toEqual([
+      { observedAt: 'successor alarm', tick: 2, seq: 2, swapSlot: 3 },
+    ]);
+    const afterSuccessorAlarm = await state.storage.get<RoomStorage>(STORAGE_KEY);
+    const tickTwoPosition = checkpointValue(afterSuccessorAlarm, 'Position', playerEntity);
+    const tickTwoPlayer = checkpointValue(afterSuccessorAlarm, 'Player', playerEntity);
+    const tickTwoWeaponState = checkpointValue(
+      afterSuccessorAlarm,
+      'WeaponRuntimeState',
+      playerEntity,
+    );
+    expect(tickTwoPosition).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
+    expect(tickTwoPosition).not.toEqual(tickOnePosition);
+    expect(tickTwoPlayer).toMatchObject({ alive: 1, health: expect.any(Number) });
+    expect((tickTwoPlayer as { readonly health: number }).health).toBeLessThan(
+      (tickOnePlayer as { readonly health: number }).health,
+    );
+    expect(tickTwoWeaponState).toMatchObject({ slot: 3 });
+    expect(checkpointComponents(afterSuccessorAlarm, 'Projectile').length).toBeGreaterThanOrEqual(
+      1,
+    );
+    expect(afterSuccessorAlarm).toMatchObject({
+      tick: 2,
+      simState: { lastTick: 2 },
+      lifecycle: { phase: 'finished', reason: 'match complete' },
+      results: {
+        reason: 'match complete',
+        players: [{ playerId: 'player-1', outcome: 'completed', placement: 1 }],
+      },
+    });
+    const gameOverMessages = decodeBattleRoyaleMessages(server).filter(
+      (message): message is BattleRoyaleProtocol.GameOver => message._tag === 'GameOver',
+    );
+    expect(gameOverMessages.map((message) => message.winner)).toEqual(['player-1']);
+    expect(afterSuccessorAlarm?.pendingSimulationCommit).toBeUndefined();
+  });
+
+  it('preserves other players unacknowledged BR edges when one player queues aim before retry', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    let failNextStep = true;
+    const consumedSwapSlots: { readonly playerId: string; readonly slot: number }[] = [];
+    const observedSlotByPlayerId = new Map<string, number>();
+    const instrumentedPluginId = 'plugin:test-br-multi-player-edge-retry';
+    const instrumentedMapPackage = cloneDefaultMapPackage();
+    (instrumentedMapPackage.manifest as Record<string, unknown>).pluginId = instrumentedPluginId;
+    const instrumentedRegistration: BundledPluginRuntimeRegistration = {
+      ...defaultBundledPluginRuntimeRegistration,
+      id: instrumentedPluginId,
+      createRuntimeAdapter: (host): RuntimePlugin => ({
+        id: instrumentedPluginId,
+        onTick: () => {
+          for (const playerId of ['player-1', 'player-2']) {
+            const input = host.getPlayerInput?.(playerId) as
+              | { readonly swapSlot?: number }
+              | undefined;
+            if (
+              input?.swapSlot !== undefined &&
+              observedSlotByPlayerId.get(playerId) !== input.swapSlot
+            ) {
+              observedSlotByPlayerId.set(playerId, input.swapSlot);
+              consumedSwapSlots.push({ playerId, slot: input.swapSlot });
+            }
+          }
+        },
+      }),
+    };
+    const room = await initRoom(
+      state,
+      makeEnv(),
+      {
+        createRuntime: () => {
+          const runtime = makeGameRuntime();
+          return {
+            ...runtime,
+            step: (ticks?: number) => {
+              if (failNextStep) {
+                failNextStep = false;
+                return Effect.sync(() => {
+                  throw new Error('transient runtime tick failure');
+                });
+              }
+              return runtime.step(ticks);
+            },
+          };
+        },
+        pluginRegistrations: [instrumentedRegistration],
+      },
+      { minReadyPlayers: 2 },
+      instrumentedMapPackage,
+    );
+    const playerOne = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+    const playerTwo = await connectPlayerViaFetch(room, state, 'room-1', 'player-2');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    expect((await readyPlayer(room, 'player-2')).status).toBe(200);
+    await room.webSocketMessage(
+      playerOne as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: false, aimDeg: 45, swapSlot: 3 }),
+    );
+    await room.webSocketMessage(
+      playerTwo as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: false, aimDeg: 135, swapSlot: 2 }),
+    );
+    await expect(room.alarm()).rejects.toThrow('transient runtime tick failure');
+    expect(consumedSwapSlots).toEqual([]);
+
+    await room.webSocketMessage(
+      playerOne as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 2, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await room.alarm();
+    expect(consumedSwapSlots).toEqual([
+      { playerId: 'player-1', slot: 3 },
+      { playerId: 'player-2', slot: 2 },
+    ]);
+
+    await room.webSocketMessage(
+      playerOne as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 3, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await room.webSocketMessage(
+      playerTwo as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 2, dir: 0, shoot: false, aimDeg: 135 }),
+    );
+    await room.alarm();
+    expect(consumedSwapSlots).toEqual([
+      { playerId: 'player-1', slot: 3 },
+      { playerId: 'player-2', slot: 2 },
+    ]);
+  });
+
+  it('does not apply a stale BR slot edge from a rejected out-of-order input', async () => {
+    installWorkerGlobals();
+    const state = createFakeDurableObjectState();
+    const room = await initRoom(state, makeEnv(), undefined, { minReadyPlayers: 1 });
+    const server = await connectPlayerViaFetch(room, state, 'room-1', 'player-1');
+
+    expect((await readyPlayer(room, 'player-1')).status).toBe(200);
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 2, dir: 0, shoot: false, aimDeg: 90 }),
+    );
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 1, seq: 1, dir: 0, shoot: false, aimDeg: 45, swapSlot: 3 }),
+    );
+    await room.alarm();
+
+    await room.webSocketMessage(
+      server as WebSocket,
+      encodeBrInputFrame({ tick: 2, seq: 3, dir: 0, shoot: true, aimDeg: 90 }),
+    );
+    await room.alarm();
+
+    const projectileSlots = decodeBattleRoyaleMessages(server).flatMap((message) =>
+      message._tag === 'DeltaSnapshot'
+        ? message.projectilesUpdated.flatMap((projectile) =>
+            projectile.weaponSlot._tag === 'Some' ? [projectile.weaponSlot.value] : [],
+          )
+        : [],
+    );
+    expect(projectileSlots.filter((slot) => slot === 3)).toHaveLength(0);
   });
 
   it('invokes plugin onTick and fans out plugin messages', async () => {

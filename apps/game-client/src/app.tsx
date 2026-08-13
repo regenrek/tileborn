@@ -1,4 +1,10 @@
-import { CONTROL_SCHEMES, PERSISTED_SCHEMA_VERSIONS, controlScheme } from '@tileborne/core';
+import {
+  CONTROL_SCHEMES,
+  PERSISTED_SCHEMA_VERSIONS,
+  REQUIRED_PLAYER_MODEL_CLIP_KEYS,
+  controlScheme,
+  type PlayerModelClipKey,
+} from '@tileborne/core';
 import {
   type BrowserRuntimeAudioEngineConfig,
   createLocalStorageBindingsStore,
@@ -27,14 +33,32 @@ import {
   DEFAULT_ROOM_RECONNECT_PATH,
   makeBrowserWebSocketTransport,
   makeNetFrameClient,
+  SnapshotEntityStore,
 } from '@tileborne/runtime/net';
 import {
+  createBattleRoyaleBundledAssets,
   battleRoyaleAudioCues,
   battleRoyaleDefaultInputMap,
   battleRoyaleSfxBus,
+  IMPACT_BURST_TEXTURE_ASSET_ID,
+  PLAYER_TEXTURE_ASSET_ID,
+  WEAPON_RIFLE_TEXTURE_ASSET_ID,
+  encodeClientInputFrame,
 } from '@tileborne/plugin-battle-royale';
+import {
+  createBattleRoyaleProjector,
+  decodeServerFrame,
+  type BattleRoyaleProjectorConfig,
+  type PlayerModelClipRenderData,
+  type PlayerModelRenderData,
+  type SpriteVisualRenderData,
+  type WeaponVisualRenderData,
+} from '@tileborne/plugin-battle-royale/renderer';
+import { BR_PRIMARY_WEAPON_ID } from '@tileborne/plugin-battle-royale/constants';
 import { battleRoyaleMenuSections } from '@tileborne/plugin-battle-royale/menu';
-import type { RuntimeGameShellProjection } from '@tileborne/runtime';
+import type { RenderableEntity, RuntimeGameShellProjection } from '@tileborne/runtime';
+import { interpolateRenderableEntities, PixiRendererAdapter } from '@tileborne/runtime';
+import { Effect } from 'effect';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
 import {
@@ -48,14 +72,37 @@ import {
   shippedRuntimeResults,
   type ShippedRuntimeState,
 } from './shipped-runtime-stream.js';
+import {
+  applyLocalRuntimePredictionToEntities,
+  LocalRuntimePredictionController,
+  type LocalInputDirection,
+} from './local-runtime-prediction.js';
 
 const DEFAULT_LOBBY_MAP_ID = 'map:fixture';
 const LOBBY_RECONNECT_STORAGE_KEY = `tileborne.game-client.lobby-reconnect.v${PERSISTED_SCHEMA_VERSIONS.lobbyReconnect}`;
+
+interface ShippedRuntimeRenderState {
+  readonly snapshot: unknown;
+  readonly entities: readonly RenderableEntity[];
+  readonly processedInputSeqByPlayerId: Readonly<Record<string, number>>;
+}
+
+interface BrowserRuntimeInputState {
+  readonly seq: number;
+  readonly dir: LocalInputDirection | undefined;
+}
 
 interface AppProps {
   readonly audioEngineFactory?:
     | ((config: BrowserRuntimeAudioEngineConfig) => RuntimeAudioPlaybackEngine)
     | undefined;
+  readonly onRuntimeFrame?:
+    | ((
+        frame: NonNullable<ReturnType<typeof decodeShippedRuntimeServerFrame>>,
+        data: Uint8Array,
+      ) => void)
+    | undefined;
+  readonly onRuntimeRendererReady?: ((adapter: PixiRendererAdapter) => void) | undefined;
 }
 
 interface StoredLobbyReconnect {
@@ -143,6 +190,124 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
   busVolumes: settings.busVolumes ?? {},
 });
 
+const clip = (): PlayerModelClipRenderData => ({
+  frames: [
+    {
+      assetId: PLAYER_TEXTURE_ASSET_ID,
+      uv: { x: 0, y: 0, w: 48, h: 48 },
+      durationMs: 100,
+    },
+  ],
+  loop: true,
+  defaultDurationMs: 100,
+});
+
+const spriteVisual = (visualId: string, assetId: string): SpriteVisualRenderData => ({
+  visualId,
+  assetId,
+  frames: [{ assetId, uv: { x: 0, y: 0, w: 24, h: 24 }, durationMs: 100 }],
+  loop: false,
+  anchor: { x: 0.5, y: 0.5 },
+});
+
+const shippedRuntimeProjectorConfig = (): BattleRoyaleProjectorConfig => {
+  const model: PlayerModelRenderData = {
+    assetId: PLAYER_TEXTURE_ASSET_ID,
+    clips: Object.fromEntries(
+      REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, clip()]),
+    ) as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
+    anchor: { x: 0.5, y: 1 },
+  };
+  const equipped: SpriteVisualRenderData = {
+    ...spriteVisual('weapon-equipped', WEAPON_RIFLE_TEXTURE_ASSET_ID),
+    anchor: { x: 0.25, y: 0.5 },
+    anchors: {
+      grip: { point: { x: 0.25, y: 0.5 } },
+      muzzle: { point: { x: 0.75, y: 0.5 } },
+    },
+  };
+  const weapon: WeaponVisualRenderData = {
+    weaponId: BR_PRIMARY_WEAPON_ID,
+    equipped,
+    muzzleFlash: spriteVisual('muzzle-flash', IMPACT_BURST_TEXTURE_ASSET_ID),
+  };
+  return {
+    catalog: new Map([['model:hero', model]]),
+    weapons: new Map([[BR_PRIMARY_WEAPON_ID, weapon]]),
+    defaultWeaponId: BR_PRIMARY_WEAPON_ID,
+  };
+};
+
+const shippedRuntimeAssets = createBattleRoyaleBundledAssets();
+
+const ShippedRuntimeCanvas = ({
+  entities,
+  onRendererAdapterReady,
+}: {
+  readonly entities: readonly RenderableEntity[];
+  readonly onRendererAdapterReady?: ((adapter: PixiRendererAdapter) => void) | undefined;
+}): ReactElement => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const adapterRef = useRef<PixiRendererAdapter | null>(null);
+  const previousEntitiesRef = useRef<ReadonlyMap<string, RenderableEntity>>(new Map());
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container === null) {
+      return undefined;
+    }
+    const adapter = new PixiRendererAdapter({
+      applicationOptions: { autoStart: false, backgroundAlpha: 0 },
+    });
+    adapterRef.current = adapter;
+    let disposed = false;
+    void Effect.runPromise(
+      adapter
+        .mount(container)
+        .pipe(Effect.tap(() => adapter.loadBundledAssets(shippedRuntimeAssets))),
+    )
+      .then(() => {
+        if (!disposed) {
+          onRendererAdapterReady?.(adapter);
+          setReady(true);
+        }
+      })
+      .catch((error) => {
+        console.error('[game-client] failed to mount shipped runtime renderer', error);
+      });
+
+    return () => {
+      disposed = true;
+      adapterRef.current = null;
+      setReady(false);
+      void Effect.runPromise(adapter.dispose()).catch((error) => {
+        console.error('[game-client] failed to dispose shipped runtime renderer', error);
+      });
+    };
+  }, [onRendererAdapterReady]);
+
+  useEffect(() => {
+    const adapter = adapterRef.current;
+    if (!ready || adapter === null) {
+      return;
+    }
+    const previousById = previousEntitiesRef.current;
+    previousEntitiesRef.current = new Map(entities.map((entity) => [entity.id, entity]));
+    void Effect.runPromise(adapter.renderFromEntities(entities, previousById, 1)).catch((error) => {
+      console.error('[game-client] failed to render shipped runtime entities', error);
+    });
+  }, [entities, ready]);
+
+  return (
+    <div
+      ref={containerRef}
+      data-testid="shipped-runtime-renderer"
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+    />
+  );
+};
+
 /**
  * Brand-neutral game-client template app (ADR-0022 decision #3). Mounts the
  * generic shell with the neutral default brand and the battle-royale plugin's
@@ -150,10 +315,32 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
  * `BrandConfig` (from `branding/tokens.json`) and compose plugin sections with
  * their `menuExtensions` registrations.
  */
-export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
+export function App({
+  audioEngineFactory,
+  onRuntimeFrame,
+  onRuntimeRendererReady,
+}: AppProps = {}): ReactElement {
   const lobbyClient = useMemo(() => createGameHostLobbyClient(), []);
   const audioSettingsStore = useMemo(() => createAudioUserSettingsStore(), []);
   const runtimeClientRef = useRef<ReturnType<typeof makeNetFrameClient> | null>(null);
+  const localPredictionControllerRef = useRef(new LocalRuntimePredictionController());
+  const browserInputRef = useRef<BrowserRuntimeInputState>({ seq: 0, dir: undefined });
+  const runtimeTickRef = useRef(0);
+  const runtimeLocalPlayerIdRef = useRef<string | undefined>(undefined);
+  const shippedProjector = useMemo(
+    () => createBattleRoyaleProjector(shippedRuntimeProjectorConfig()),
+    [],
+  );
+  const runtimeSnapshotStoreRef = useRef<SnapshotEntityStore | undefined>(undefined);
+  if (runtimeSnapshotStoreRef.current === undefined) {
+    runtimeSnapshotStoreRef.current = new SnapshotEntityStore(shippedProjector.mergeFrame, {
+      enableInterpolation: true,
+      interpolationDelayMs: 100,
+      ...(shippedProjector.getFrameTimestamp === undefined
+        ? {}
+        : { getFrameTimestamp: shippedProjector.getFrameTimestamp }),
+    });
+  }
   const [lobbyStatus, setLobbyStatus] = useState<LobbyPanelStatus>('idle');
   const [lobbyMessage, setLobbyMessage] = useState<string | undefined>(undefined);
   const [lobbyError, setLobbyError] = useState<string | undefined>(undefined);
@@ -179,6 +366,11 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
     readStoredLobbyReconnect(),
   );
   const [runtime, setRuntime] = useState<ShippedRuntimeState>(() => initialShippedRuntimeState());
+  const [runtimeRender, setRuntimeRender] = useState<ShippedRuntimeRenderState>(() => ({
+    snapshot: undefined,
+    entities: [],
+    processedInputSeqByPlayerId: {},
+  }));
   const [shellNavigationRequests, setShellNavigationRequests] = useState<
     ReadonlyArray<SequencedRuntimeShellNavigationRequest>
   >([]);
@@ -384,8 +576,137 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
     ? { roomId: storedReconnect.roomId, playerId: storedReconnect.playerId }
     : null;
 
+  useEffect(() => {
+    runtimeTickRef.current = runtime.tickCount;
+    runtimeLocalPlayerIdRef.current = runtime.localPlayerId;
+  }, [runtime.localPlayerId, runtime.tickCount]);
+
+  useEffect(() => {
+    let rafHandle = 0;
+    const renderPredictedFrame = (): void => {
+      rafHandle = requestAnimationFrame(renderPredictedFrame);
+      setRuntimeRender((current) => {
+        const store = runtimeSnapshotStoreRef.current;
+        const latestSnapshot = store?.getCurrentFullState();
+        if (store === undefined || latestSnapshot === undefined) {
+          return current;
+        }
+        const localPlayerId = runtime.localPlayerId;
+        const interpolated = store.sampleInterpolatedFullState(performance.now());
+        const currentSnapshot = interpolated?.current ?? latestSnapshot;
+        const currentEntities = shippedProjector.project(currentSnapshot);
+        const previousEntities =
+          interpolated?.previous === undefined
+            ? []
+            : shippedProjector.project(interpolated.previous);
+        const remoteInterpolatedEntities = interpolateRenderableEntities(
+          currentEntities,
+          previousEntities,
+          interpolated?.alpha ?? 1,
+        );
+        const latestEntities = shippedProjector.project(latestSnapshot);
+        const localEntity =
+          localPlayerId === undefined || localPlayerId === null
+            ? undefined
+            : latestEntities.find((entity) => entity.id === `br:player:${localPlayerId}`);
+        if (localEntity === undefined || localPlayerId === undefined || localPlayerId === null) {
+          localPredictionControllerRef.current.reset();
+          return current;
+        }
+        const entities = applyLocalRuntimePredictionToEntities(
+          remoteInterpolatedEntities,
+          {
+            entity: localEntity,
+            acknowledgedInputSequence: current.processedInputSeqByPlayerId[localPlayerId] ?? -1,
+          },
+          localPredictionControllerRef.current,
+          performance.now(),
+        );
+        return entities === current.entities ? current : { ...current, entities };
+      });
+    };
+    rafHandle = requestAnimationFrame(renderPredictedFrame);
+    return () => cancelAnimationFrame(rafHandle);
+  }, [runtime.localPlayerId, shippedProjector]);
+
+  useEffect(() => {
+    const pressed = new Set<string>();
+    const directionFromKeys = (): LocalInputDirection | undefined => {
+      const up = pressed.has('KeyW') || pressed.has('ArrowUp');
+      const down = pressed.has('KeyS') || pressed.has('ArrowDown');
+      const left = pressed.has('KeyA') || pressed.has('ArrowLeft');
+      const right = pressed.has('KeyD') || pressed.has('ArrowRight');
+      const x = (right ? 1 : 0) - (left ? 1 : 0);
+      const y = (down ? 1 : 0) - (up ? 1 : 0);
+      if (x === 0 && y === 0) return undefined;
+      if (x === 1 && y === 0) return 0;
+      if (x === 1 && y === 1) return 1;
+      if (x === 0 && y === 1) return 2;
+      if (x === -1 && y === 1) return 3;
+      if (x === -1 && y === 0) return 4;
+      if (x === -1 && y === -1) return 5;
+      if (x === 0 && y === -1) return 6;
+      return 7;
+    };
+    const emitInputIfChanged = (): void => {
+      const client = runtimeClientRef.current;
+      const localPlayerId = runtimeLocalPlayerIdRef.current;
+      if (client === null || localPlayerId === undefined) {
+        return;
+      }
+      const dir = directionFromKeys();
+      if (dir === browserInputRef.current.dir) {
+        return;
+      }
+      const seq = browserInputRef.current.seq + 1;
+      browserInputRef.current = { seq, dir };
+      localPredictionControllerRef.current.recordInput({ sequence: seq, dir });
+      void client
+        .sendFramePromise(
+          encodeClientInputFrame({
+            tick: runtimeTickRef.current,
+            seq,
+            ...(dir === undefined ? {} : { dir }),
+            shoot: false,
+            reload: false,
+            interact: false,
+            drop: false,
+            abilities: [],
+          }),
+        )
+        .catch(() => undefined);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      pressed.add(event.code);
+      emitInputIfChanged();
+    };
+    const onKeyUp = (event: KeyboardEvent): void => {
+      pressed.delete(event.code);
+      emitInputIfChanged();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
   const beginMatch = useCallback(() => {
     setRuntime(initialShippedRuntimeState(lobbySession?.playerId));
+    browserInputRef.current = { seq: 0, dir: undefined };
+    localPredictionControllerRef.current.reset();
+    runtimeSnapshotStoreRef.current = new SnapshotEntityStore(shippedProjector.mergeFrame, {
+      enableInterpolation: true,
+      interpolationDelayMs: 100,
+      ...(shippedProjector.getFrameTimestamp === undefined
+        ? {}
+        : { getFrameTimestamp: shippedProjector.getFrameTimestamp }),
+    });
+    setRuntimeRender({ snapshot: undefined, entities: [], processedInputSeqByPlayerId: {} });
     setShellNavigationRequests([]);
     if (!lobbySession?.wsUrl) {
       return;
@@ -418,8 +739,24 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
         }
         const frame = decodeShippedRuntimeServerFrame(data);
         if (frame === undefined) return;
+        onRuntimeFrame?.(frame, data);
         if (frame.kind === 'initial' || frame.kind === 'delta') {
           void client.sendFramePromise(buildSnapshotAckFrame(frame.tick)).catch(() => undefined);
+          setRuntimeRender((current) => {
+            const decodedRenderFrame = decodeServerFrame(data);
+            const store = runtimeSnapshotStoreRef.current;
+            if (store === undefined || decodedRenderFrame === undefined) {
+              return current;
+            }
+            store.apply(decodedRenderFrame);
+            const snapshot = store.getCurrentFullState();
+            return {
+              snapshot,
+              entities: shippedProjector.project(snapshot),
+              processedInputSeqByPlayerId:
+                frame.processedInputSeqByPlayerId ?? current.processedInputSeqByPlayerId,
+            };
+          });
         }
         setRuntime((state) => applyShippedRuntimeServerFrame(state, frame));
       })
@@ -428,7 +765,7 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
           runtimeClientRef.current = null;
         }
       });
-  }, [lobbySession]);
+  }, [lobbySession, onRuntimeFrame, shippedProjector]);
 
   const shellBridge = useMemo<RuntimeShellBehaviorBridge>(
     () => ({
@@ -453,6 +790,7 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
       shellBridge={shellBridge}
       shellProjection={shellProjection}
       shellAssetUrlBase={shellAssetUrlBase}
+      gameplayAudioEvents={runtime.sequencedEvents}
       {...(hudMetrics === undefined ? {} : { hudMetrics })}
       {...(results === undefined ? {} : { results })}
       renderLobby={({ matchmaking, onStartMatch, onBack }) => (
@@ -481,7 +819,17 @@ export function App({ audioEngineFactory }: AppProps = {}): ReactElement {
       )}
       onMatchStart={beginMatch}
       onQuit={() => window.close()}
-      canvas={<div data-testid="game-canvas" style={{ width: '100%', height: '100%' }} />}
+      canvas={
+        <div
+          data-testid="game-canvas"
+          style={{ position: 'relative', width: '100%', height: '100%' }}
+        >
+          <ShippedRuntimeCanvas
+            entities={runtimeRender.entities}
+            onRendererAdapterReady={onRuntimeRendererReady}
+          />
+        </div>
+      }
     />
   );
 }

@@ -179,6 +179,24 @@ export interface BattleRoyaleInputIntent {
   readonly swapSlot?: number;
 }
 
+/**
+ * BR-owned declaration of intent fields that represent edge-like commands on
+ * the host transport. The shell may preserve/ack these generically, but only BR
+ * defines which intent fields are command edges.
+ */
+export const battleRoyalePlaytestInputEdgeFields = [
+  'shoot',
+  'reload',
+  'interact',
+  'drop',
+  'abilities',
+  'swapSlot',
+] as const satisfies readonly (keyof BattleRoyaleInputIntent)[];
+
+export const battleRoyalePlaytestHeldBooleanInputFields = [
+  'shoot',
+] as const satisfies readonly (keyof BattleRoyaleInputIntent)[];
+
 /** Origin (viewport-center / local-player screen position) aim angle is measured from. */
 export interface BattleRoyaleAimContext {
   readonly aimOrigin?: { readonly x: number; readonly y: number };

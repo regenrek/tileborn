@@ -3,6 +3,7 @@ import {
   type CollisionFootprintComponent,
   type CollisionFootprintPart,
   type GameObjectType,
+  type RuntimeObjectPlacement,
   type TileborneMap,
 } from '@tileborne/core';
 import type { TileIdType, TilesetPack } from '@tileborne/sdk-tileset/schemas';
@@ -82,17 +83,17 @@ const findCollisionFootprint = (
   );
 
 const placeFootprintPart = (
-  object: TileborneMap['objects'][number],
+  placement: RuntimeObjectPlacement,
   part: CollisionFootprintPart,
 ): ObjectCollisionRectArtifact | undefined => {
   if (part.width <= 0 || part.height <= 0) {
     return undefined;
   }
-  const offset = readCollisionFootprintOffset(object.properties);
+  const offset = readCollisionFootprintOffset(placement.instanceProperties ?? {});
   return {
-    objectId: object.id,
-    x: object.x + offset.x + part.x,
-    y: object.y + offset.y + part.y,
+    objectId: placement.objectId,
+    x: placement.x + offset.x + part.x,
+    y: placement.y + offset.y + part.y,
     width: part.width,
     height: part.height,
     blocksMovement: part.blocksMovement,
@@ -102,7 +103,7 @@ const placeFootprintPart = (
 };
 
 export const extractObjectCollisionRects = (
-  map: TileborneMap,
+  placements: readonly RuntimeObjectPlacement[],
   objectTypes: readonly GameObjectType[] | undefined,
 ): readonly ObjectCollisionRectArtifact[] => {
   if (objectTypes === undefined || objectTypes.length === 0) {
@@ -115,13 +116,13 @@ export const extractObjectCollisionRects = (
     }),
   );
   const rects: ObjectCollisionRectArtifact[] = [];
-  for (const object of map.objects) {
-    const footprint = footprintByKind.get(String(object.kind));
+  for (const placement of placements) {
+    const footprint = footprintByKind.get(String(placement.typeId));
     if (footprint === undefined) {
       continue;
     }
     for (const part of footprint.parts) {
-      const rect = placeFootprintPart(object, part);
+      const rect = placeFootprintPart(placement, part);
       if (rect !== undefined) {
         rects.push(rect);
       }

@@ -299,6 +299,8 @@ export declare function encodeTransportErrorFrame(code: string, message: string)
 export declare function encodeInvalidClientFrame(): Uint8Array;
 export declare function isWelcomeFrame(bytes: Uint8Array): boolean;
 export declare function snapshotTickFromServerFrame(bytes: Uint8Array): number | undefined;
+export declare const playtestInputEdgeFields: readonly string[];
+export declare const playtestHeldBooleanInputFields: readonly string[];
 
 export declare function createRuntimeAdapter(host: {
   readonly getMapPackage: () => unknown;
@@ -320,6 +322,17 @@ export declare function createRuntimeAdapter(host: {
   } | undefined;
   readonly msgOut?: { readonly push: (frame: Uint8Array) => void };
   readonly setReplayFrames?: (frames: readonly Uint8Array[]) => void;
+  readonly getGameplayCheckpoint?: () => {
+    readonly activeWeaponSlots?: readonly {
+      readonly playerId: string;
+      readonly slot: number;
+    }[];
+  } | undefined;
+  readonly onWeaponSlotApplied?: (event: {
+    readonly playerId: string;
+    readonly slot: number;
+    readonly tick?: number;
+  }) => void;
   readonly seed?: string | number;
 }): {
   readonly id: string;

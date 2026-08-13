@@ -240,6 +240,8 @@ const decodeRuntimeBattleRoyaleArtifact = (input: unknown): BattleRoyaleArtifact
     throw schemaError('schemaVersion must be 1', 'schemaVersion');
   }
   const shrinkSchedule = readRecord(record.shrinkSchedule, 'shrinkSchedule');
+  const mapBounds =
+    record.mapBounds === undefined ? undefined : readRecord(record.mapBounds, 'mapBounds');
   const artifact: BattleRoyaleArtifact = {
     schemaVersion: 1,
     maxPlayers: readNumber(record, 'maxPlayers', 'artifact'),
@@ -263,6 +265,16 @@ const decodeRuntimeBattleRoyaleArtifact = (input: unknown): BattleRoyaleArtifact
     objectPlacements: readArray(record.objectPlacements, 'objectPlacements').map(
       (placement, index) => decodeObjectPlacement(placement, `objectPlacements[${index}]`),
     ),
+    ...(mapBounds === undefined
+      ? {}
+      : {
+          mapBounds: {
+            minX: readNumber(mapBounds, 'minX', 'mapBounds'),
+            minY: readNumber(mapBounds, 'minY', 'mapBounds'),
+            maxX: readNumber(mapBounds, 'maxX', 'mapBounds'),
+            maxY: readNumber(mapBounds, 'maxY', 'mapBounds'),
+          },
+        }),
     ...(record.collision === undefined ? {} : { collision: decodeCollision(record.collision) }),
     ...(record.objectCollisionRects === undefined
       ? {}
@@ -639,6 +651,20 @@ export const validateDecodedBattleRoyaleArtifact = (
     issues.push(
       createValidationIssue('shrink damage must be non-negative', 'shrinkSchedule.damagePerSecond'),
     );
+  }
+
+  if (artifact.mapBounds !== undefined) {
+    const { minX, minY, maxX, maxY } = artifact.mapBounds;
+    if (![minX, minY, maxX, maxY].every(Number.isFinite)) {
+      issues.push(createValidationIssue('map bounds must be finite', 'mapBounds'));
+    } else {
+      if (maxX <= minX) {
+        issues.push(createValidationIssue('map maxX must exceed minX', 'mapBounds.maxX'));
+      }
+      if (maxY <= minY) {
+        issues.push(createValidationIssue('map maxY must exceed minY', 'mapBounds.maxY'));
+      }
+    }
   }
 
   if (artifact.lootTables.length === 0) {

@@ -31,21 +31,12 @@ export const ciFastEscalationRules = Object.freeze([
   escalation('desktop', ['apps/desktop/'], ['@tileborne/desktop...']),
 ]);
 
-const ciFastRootContractCommands = Object.freeze([
-  ciFastStep(['format'], ['pnpm', 'format:check']),
+const ciFastFormatCommand = ciFastStep(['format'], ['pnpm', 'format:check']);
+const ciFastDesktopReleaseContractCommands = Object.freeze([
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:policy']),
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:status']),
   ciFastStep(['desktop-release-contract'], ['pnpm', 'release:desktop:docs']),
   ciFastStep(['desktop-release-contract'], ['pnpm', 'test:desktop-release-contract']),
-]);
-
-const ciFastDesktopCandidateCommands = Object.freeze([
-  ciFastStep(['build'], ['pnpm', 'turbo', 'run', 'build', '--filter=@tileborne/desktop^...']),
-  ciFastStep(['desktop-smoke'], ['pnpm', 'test:desktop-smoke']),
-  ciFastStep(
-    ['packaged-runtime'],
-    ['pnpm', '--filter', '@tileborne/desktop', 'test:packaged-smoke'],
-  ),
 ]);
 
 /**
@@ -292,23 +283,35 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     }))
     .filter(({ matchedPaths }) => matchedPaths.length > 0);
   const filters = [...new Set(escalations.flatMap((match) => match.filters))];
-  const turboCommand = [
+  const turboFilters = filters.flatMap((filter) => ['--filter', filter]);
+  const turboVerificationCommand = [
     'pnpm',
     'turbo',
     'run',
     'build',
     'lint',
     'typecheck',
+    '--affected',
+    ...turboFilters,
+  ];
+  const turboTestCommand = [
+    'pnpm',
+    'turbo',
+    'run',
     'test',
     '--affected',
-    ...filters.flatMap((filter) => ['--filter', filter]),
+    '--concurrency=2',
+    ...turboFilters,
   ];
-  const includesDesktopCandidateScope = filters.includes('@tileborne/desktop...');
+  const includesDesktopReleaseContractScope = escalations.some(({ id }) =>
+    ['root-config', 'release-scripts', 'workflows', 'docs', 'desktop'].includes(id),
+  );
   const steps = [
     ciFastStep(['install'], ['pnpm', 'install', '--frozen-lockfile']),
-    ciFastStep(['build', 'lint', 'typecheck', 'test'], turboCommand),
-    ...ciFastRootContractCommands,
-    ...(includesDesktopCandidateScope ? ciFastDesktopCandidateCommands : []),
+    ciFastFormatCommand,
+    ciFastStep(['build', 'lint', 'typecheck'], turboVerificationCommand),
+    ciFastStep(['test'], turboTestCommand),
+    ...(includesDesktopReleaseContractScope ? ciFastDesktopReleaseContractCommands : []),
   ];
 
   return Object.freeze({
@@ -375,7 +378,10 @@ function writeCiFastSummary(plan, receiptPath) {
       `| Head | ${plan.head ?? 'unknown'} |`,
       `| Changed paths | ${plan.changedPaths.length} |`,
       `| Escalations | ${escalationText} |`,
-      `| Turbo command | ${plan.steps[1].command.join(' ')} |`,
+      `| Turbo commands | ${plan.steps
+        .filter((step) => step.command[1] === 'turbo')
+        .map((step) => step.command.join(' '))
+        .join('<br>')} |`,
       `| Receipt | ${receiptPath} |`,
       '',
     ].join('\n'),

@@ -91,7 +91,7 @@ export function PlaytestOverlay({
 
   const confirmStop = useCallback(() => {
     setConfirmOpen(false);
-    void onStop();
+    void Promise.resolve(onStop()).catch(() => undefined);
   }, [onStop]);
 
   useEffect(() => {

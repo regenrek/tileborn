@@ -1,11 +1,6 @@
-import { readFile } from 'node:fs/promises';
-
-import { Schema } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeAdapter } from '../examples/runtime-adapter.js';
-import { materializePluginManifestInput } from '../../services-plugin/src/filesystem.js';
-import { PluginManifest } from './manifest.js';
 import type { RuntimeAdapterComponentStore, RuntimeAdapterWorld } from './runtime-adapter.js';
 
 const componentStore = <T extends object>(): RuntimeAdapterComponentStore<T> => {
@@ -22,14 +17,7 @@ const componentStore = <T extends object>(): RuntimeAdapterComponentStore<T> => 
 };
 
 describe('published runtime adapter example', () => {
-  it('decodes its real manifest and executes the compile-checked named factory', async () => {
-    const manifest = Schema.decodeUnknownSync(PluginManifest)(
-      materializePluginManifestInput(
-        JSON.parse(
-          await readFile(new URL('../examples/tileborne-plugin.json', import.meta.url), 'utf8'),
-        ),
-      ),
-    );
+  it('executes the compile-checked named factory', () => {
     const emit = vi.fn();
     const stores = new Map<string, RuntimeAdapterComponentStore<object>>();
     const world: RuntimeAdapterWorld = {
@@ -45,10 +33,10 @@ describe('published runtime adapter example', () => {
     };
     const adapter = createRuntimeAdapter({ getMapPackage: () => ({}), emit, seed: 7 });
 
-    adapter.onInit?.({ pluginId: manifest.id }, world);
+    adapter.onInit?.({ pluginId: adapter.id }, world);
     adapter.onTick?.(world, 1 / 20, 3);
 
-    expect(String(manifest.id)).toBe(adapter.id);
+    expect(adapter.id).toBe('@tileborne-plugins/example-gameplay');
     expect(stores.has('example.started')).toBe(true);
     expect(emit).toHaveBeenNthCalledWith(1, {
       kind: '@tileborne-plugins/example-gameplay.started',

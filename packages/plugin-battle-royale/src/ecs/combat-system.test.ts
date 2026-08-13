@@ -33,6 +33,7 @@ import {
   SPAWN_POINT_KIND,
 } from '../constants.js';
 import { DEFAULT_BATTLE_ROYALE_CONFIG } from '../battle-royale-config.js';
+import { generateMap } from '../generate-map.js';
 import {
   AMMO_RESERVE_COMPONENT,
   BREAKABLE_COMPONENT,
@@ -141,6 +142,7 @@ interface CtxOptions {
   readonly blockers?: ReturnType<typeof buildCombatBlockers>;
   readonly roomRules?: Parameters<typeof createBattleRoyaleHitPolicy>[0];
   readonly tick?: number;
+  readonly onWeaponFired?: CombatSystemContext['onWeaponFired'];
 }
 
 const makeContext = (
@@ -164,6 +166,7 @@ const makeContext = (
   initialAmmoReserve: CONFIG.projectile.initialAmmoReserve,
   projectileBoundsRadius: CONFIG.projectile.radius,
   ...(options.tick === undefined ? {} : { tick: options.tick }),
+  ...(options.onWeaponFired === undefined ? {} : { onWeaponFired: options.onWeaponFired }),
 });
 
 const shooterInput = (
@@ -369,6 +372,42 @@ describe('combat system (neutral engine)', () => {
 
     runCombatSystem(world, ctx, state);
     expect(countProjectiles(world)).toBe(2);
+  });
+
+  it('emits one gameplay event for each accepted weapon fire outcome', () => {
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(world, 'player-1', 0, 0);
+    const state = createCombatSystemState();
+    const events: Parameters<NonNullable<CombatSystemContext['onWeaponFired']>>[0][] = [];
+    const ctx = makeContext(world, createDamageSystemState(), {
+      tick: 7,
+      getPlayerInput: inputForPlayer('player-1'),
+      onWeaponFired: (event) => events.push(event),
+    });
+
+    runCombatSystem(world, ctx, state);
+    const [spawnedProjectile] = projectileEntries(world);
+    const advancedProjectilePosition = world
+      .getComponent<Position>(POSITION_COMPONENT)
+      .get(spawnedProjectile![0]);
+    runCombatSystem(world, ctx, state);
+
+    expect(countProjectiles(world)).toBe(1);
+    expect(advancedProjectilePosition?.x).toBeGreaterThan(events[0]!.origin.x);
+    expect(advancedProjectilePosition?.y).toBe(events[0]!.origin.y);
+    expect(events).toEqual([
+      expect.objectContaining({
+        _tag: 'WeaponFired',
+        tick: 7,
+        sourceId: 'player-1',
+        weaponId: WEAPON_ENTRY.weapon.id,
+        origin: { x: PROJECTILE_MUZZLE_OFFSET, y: 0 },
+        direction: { x: spawnedProjectile![1].dirX, y: spawnedProjectile![1].dirY },
+        damage: WEAPON_ENTRY.weapon.damage,
+        ammoRemaining: CONFIG.projectile.magazineSize - 1,
+      }),
+    ]);
   });
 
   it('stops firing when the magazine is empty instead of topping ammo back up', () => {
@@ -739,6 +778,52 @@ describe('combat system (neutral engine)', () => {
     });
 
     runCombatSystem(world, ctx, createCombatSystemState());
+
+    expect(countProjectiles(world)).toBe(0);
+  });
+
+  it('blocks projectiles at generated object runtime placement coordinates', () => {
+    const generatedMap = generateMap('generated-runtime-collision', {
+      width: 48,
+      height: 40,
+      spawnCount: 8,
+      lootDensity: 0.4,
+    });
+    const artifact = buildTestRuntimeArtifact(generatedMap);
+    const lootPlacement = artifact.objectPlacements.find(
+      (placement) => placement.role === 'loot-crate' && placement.x > 0,
+    );
+    expect(lootPlacement).toBeDefined();
+
+    const collisionRect = artifact.objectCollisionRects?.find(
+      (rect) => rect.objectId === lootPlacement?.objectId,
+    );
+
+    expect(collisionRect).toMatchObject({
+      objectId: lootPlacement?.objectId,
+      x: lootPlacement?.x,
+      y: lootPlacement?.y,
+      blocksProjectiles: true,
+    });
+
+    const blockers = buildCombatBlockers(PluginCollisionEnvironment.fromArtifact(artifact));
+    const world = createTestPluginWorld();
+    registerStores(world);
+    spawnPlayer(
+      world,
+      'player-1',
+      collisionRect!.x - PROJECTILE_MUZZLE_OFFSET - WEAPON_ENTRY.delivery.speed / 2,
+      collisionRect!.y + 1,
+    );
+
+    runCombatSystem(
+      world,
+      makeContext(world, createDamageSystemState(), {
+        getPlayerInput: inputForPlayer('player-1'),
+        blockers,
+      }),
+      createCombatSystemState(),
+    );
 
     expect(countProjectiles(world)).toBe(0);
   });

@@ -22,6 +22,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: [
       'src/main/**/*.test.ts',
+      'src/main/**/*.test.tsx',
       'src/preload/**/*.test.ts',
       'src/renderer/**/*.test.ts',
       'src/renderer/**/*.test.tsx',

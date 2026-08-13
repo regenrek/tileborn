@@ -25,8 +25,11 @@ export default defineConfig({
     // real filesystem/package work. Five seconds is not a valid correctness
     // boundary under the full parallel workspace release gate; timing out a
     // process.chdir test also lets cleanup invalidate the next child cwd.
+    // Keep each file in an isolated process, but allow independent files to
+    // overlap; their sequential suites still serialize shared work in-file.
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    maxWorkers: 1,
+    pool: 'forks',
+    maxWorkers: 4,
   },
 });

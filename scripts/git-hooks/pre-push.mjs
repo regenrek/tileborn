@@ -65,7 +65,13 @@ for (const { base, head } of ranges.values()) {
       registeredWorktree = true;
       const install = spawnSync(
         'pnpm',
-        ['install', '--offline', '--frozen-lockfile', '--ignore-scripts', '--reporter=append-only'],
+        [
+          'install',
+          '--prefer-offline',
+          '--frozen-lockfile',
+          '--ignore-scripts',
+          '--reporter=append-only',
+        ],
         { cwd: worktree, stdio: 'inherit' },
       );
       if (install.error !== undefined) throw install.error;

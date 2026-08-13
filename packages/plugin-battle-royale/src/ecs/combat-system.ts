@@ -22,7 +22,10 @@ import {
   type SeededRng,
   type WeaponDefinition,
 } from '@tileborne/simulation';
-import { GameplayWeaponFired, makeGameplayEntityId } from '@tileborne/ipc-contracts';
+import {
+  GameplayWeaponFired,
+  makeGameplayEntityId,
+} from '@tileborne/ipc-contracts/contracts/gameplay-event';
 
 import type { ExportedArtifact } from '../types/artifact.js';
 import type { PluginWorld, RuntimePlayerInput } from '../types/runtime-plugin.js';

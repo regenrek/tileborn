@@ -190,7 +190,7 @@ const normalizeAudioSettings = (settings: AudioSettingsValue): AudioSettingsValu
   busVolumes: settings.busVolumes ?? {},
 });
 
-const clip = (key: PlayerModelClipKey): PlayerModelClipRenderData => ({
+const clip = (): PlayerModelClipRenderData => ({
   frames: [
     {
       assetId: PLAYER_TEXTURE_ASSET_ID,
@@ -214,7 +214,7 @@ const shippedRuntimeProjectorConfig = (): BattleRoyaleProjectorConfig => {
   const model: PlayerModelRenderData = {
     assetId: PLAYER_TEXTURE_ASSET_ID,
     clips: Object.fromEntries(
-      REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, clip(key)]),
+      REQUIRED_PLAYER_MODEL_CLIP_KEYS.map((key) => [key, clip()]),
     ) as Record<PlayerModelClipKey, PlayerModelClipRenderData>,
     anchor: { x: 0.5, y: 1 },
   };

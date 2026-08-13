@@ -8,4 +8,14 @@ export default [
       'import/no-extraneous-dependencies': 'off',
     },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        URL: 'readonly',
+        window: 'readonly',
+      },
+    },
+  },
 ];

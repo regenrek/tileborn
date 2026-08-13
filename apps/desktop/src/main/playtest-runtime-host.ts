@@ -768,11 +768,12 @@ export const startPlaytestRuntimeHost = async (input: {
   const pluginWorld = createPlaytestPluginWorld();
   const inputEdgeFields = new Set<PlaytestRuntimeInputEdgeField>();
   const heldBooleanInputFields = new Set<PlaytestRuntimeInputEdgeField>();
-  const inputTransport = createRuntimeInputEdgeTransport<PlaytestRuntimePlayerInput>(() => [
-    ...inputEdgeFields,
-  ], {
-    heldBooleanFields: () => [...heldBooleanInputFields],
-  });
+  const inputTransport = createRuntimeInputEdgeTransport<PlaytestRuntimePlayerInput>(
+    () => [...inputEdgeFields],
+    {
+      heldBooleanFields: () => [...heldBooleanInputFields],
+    },
+  );
   const diagnosticsRecorder = createPlaytestRuntimeDiagnosticsRecorder({
     tickRate: TICK_RATE,
     tickBudgetMs: TICK_MS,

@@ -57,21 +57,33 @@ try {
       .spriteIds()
       .find((id) => id.includes('player-1') && !id.includes('muzzle')),
   );
-  const playerBeforeInput = await page.evaluate((id) => window.tileborneSmoke.spritePosition(id), playerSpriteId);
+  const playerBeforeInput = await page.evaluate(
+    (id) => window.tileborneSmoke.spritePosition(id),
+    playerSpriteId,
+  );
   await page.keyboard.down('d');
   await page.waitForFunction(() => JSON.stringify(window.tileborneSmoke.sentInputSeqs()) === '[1]');
-  await page.waitForFunction(({ id, beforeX }) => {
-    const player = window.tileborneSmoke.spritePosition(id);
-    return player !== undefined && player.x > beforeX;
-  }, { id: playerSpriteId, beforeX: playerBeforeInput.x });
-  await page.keyboard.up('d');
-  await page.waitForFunction(() => JSON.stringify(window.tileborneSmoke.sentInputSeqs()) === '[1,2]');
   await page.waitForFunction(
-    () => JSON.stringify(window.tileborneSmoke.muzzleIds()) === '["br:muzzle:player-1","br:muzzle:player-2"]',
+    ({ id, beforeX }) => {
+      const player = window.tileborneSmoke.spritePosition(id);
+      return player !== undefined && player.x > beforeX;
+    },
+    { id: playerSpriteId, beforeX: playerBeforeInput.x },
+  );
+  await page.keyboard.up('d');
+  await page.waitForFunction(
+    () => JSON.stringify(window.tileborneSmoke.sentInputSeqs()) === '[1,2]',
+  );
+  await page.waitForFunction(
+    () =>
+      JSON.stringify(window.tileborneSmoke.muzzleIds()) ===
+      '["br:muzzle:player-1","br:muzzle:player-2"]',
   );
   const acceptedMuzzles = await page.evaluate(() => window.tileborneSmoke.muzzleSnapshot());
   if (new Set(acceptedMuzzles.map((entry) => entry.spriteOrdinal)).size !== 2) {
-    throw new Error(`expected distinct muzzle sprites, received ${JSON.stringify(acceptedMuzzles)}`);
+    throw new Error(
+      `expected distinct muzzle sprites, received ${JSON.stringify(acceptedMuzzles)}`,
+    );
   }
   const expected = [
     { id: 'br:muzzle:player-1', x: 17.64, y: 0, width: 48, height: 48 },
@@ -118,7 +130,9 @@ try {
   if (consoleErrors.length > 0) {
     throw new Error(`browser console errors: ${consoleErrors.join('\\n')}`);
   }
-  console.log('accepted fire browser render smoke passed: input seqs [1,2], local player predicted forward, remote player retained the 100 ms interpolation buffer, 2 muzzle sprites rendered, replay removed them');
+  console.log(
+    'accepted fire browser render smoke passed: input seqs [1,2], local player predicted forward, remote player retained the 100 ms interpolation buffer, 2 muzzle sprites rendered, replay removed them',
+  );
 } finally {
   await browser.close();
   await server.close();

@@ -171,7 +171,10 @@ export const createPlaytestRuntimeHudTracker = (
   let gameOver: PlaytestRuntimeHudState['gameOver'];
   let nextSyntheticGameplayEventSequence = -1;
 
-  const pushEvent = (event: GameplayEvent, sequence = nextSyntheticGameplayEventSequence--): void => {
+  const pushEvent = (
+    event: GameplayEvent,
+    sequence = nextSyntheticGameplayEventSequence--,
+  ): void => {
     gameplayEvents.push(event);
     sequencedGameplayEvents.push({ sequence, event });
     if (gameplayEvents.length > MAX_GAMEPLAY_EVENTS) {

@@ -46,14 +46,7 @@
   },
   "evidence": {
     "directory": ".proofloop/evidence/20260811-dependency-remediation",
-    "required": [
-      "baseline",
-      "diff",
-      "validation-result",
-      "test-gate",
-      "handoff",
-      "pane-ownership"
-    ]
+    "required": ["baseline", "diff", "validation-result", "test-gate", "handoff", "pane-ownership"]
   },
   "budgets": {
     "checkpoint_minutes": 20,

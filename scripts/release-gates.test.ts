@@ -495,9 +495,9 @@ describe('canonical release gates', () => {
     expect(plan.commands).not.toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(plan.steps.map(({ gateIds }) => gateIds)).toEqual([
       ['install'],
+      ['format'],
       ['build', 'lint', 'typecheck'],
       ['test'],
-      ['format'],
     ]);
   });
 
@@ -524,7 +524,7 @@ describe('canonical release gates', () => {
     });
 
     expect(docsPlan.escalations.map(({ id }) => id)).toEqual(['docs']);
-    expect(docsPlan.commands[1]).toEqual([
+    expect(docsPlan.commands[2]).toEqual([
       'pnpm',
       'turbo',
       'run',
@@ -535,7 +535,7 @@ describe('canonical release gates', () => {
       '--filter',
       '@tileborne/docs...',
     ]);
-    expect(docsPlan.commands[2]).toEqual([
+    expect(docsPlan.commands[3]).toEqual([
       'pnpm',
       'turbo',
       'run',
@@ -547,7 +547,7 @@ describe('canonical release gates', () => {
     ]);
     expect(docsPlan.commands).toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(desktopPlan.escalations.map(({ id }) => id)).toEqual(['desktop']);
-    expect(desktopPlan.commands[1]).toContain('@tileborne/desktop...');
+    expect(desktopPlan.commands[2]).toContain('@tileborne/desktop...');
     expect(desktopPlan.commands).toContainEqual(['pnpm', 'test:desktop-smoke']);
     expect(desktopPlan.commands).toContainEqual([
       'pnpm',
@@ -568,7 +568,7 @@ describe('canonical release gates', () => {
       'release-scripts',
       'workflows',
     ]);
-    expect(rootPlan.commands[1]).toEqual([
+    expect(rootPlan.commands[2]).toEqual([
       'pnpm',
       'turbo',
       'run',
@@ -583,7 +583,7 @@ describe('canonical release gates', () => {
       '--filter',
       '@tileborne/game-host...',
     ]);
-    expect(rootPlan.commands[2]).toEqual([
+    expect(rootPlan.commands[3]).toEqual([
       'pnpm',
       'turbo',
       'run',
@@ -627,11 +627,11 @@ describe('canonical release gates', () => {
 
     expect(emittedGateIds).toEqual([
       'install',
+      'format',
       'build',
       'lint',
       'typecheck',
       'test',
-      'format',
       'desktop-release-contract',
       'desktop-smoke',
       'packaged-runtime',
@@ -691,9 +691,9 @@ describe('canonical release gates', () => {
       expect(result.status, result.stderr).toBe(0);
       expect(readFileSync(commandLogPath, 'utf8').trimEnd().split('\n')).toEqual([
         'install --frozen-lockfile',
+        'format:check',
         'turbo run build lint typecheck --affected --filter @tileborne/desktop...',
         'turbo run test --affected --concurrency=1 --filter @tileborne/desktop...',
-        'format:check',
         'release:desktop:policy',
         'release:desktop:status',
         'release:desktop:docs',
@@ -711,11 +711,11 @@ describe('canonical release gates', () => {
       };
       const expectedGateIds = [
         'install',
+        'format',
         'build',
         'lint',
         'typecheck',
         'test',
-        'format',
         'desktop-release-contract',
         'desktop-smoke',
         'packaged-runtime',

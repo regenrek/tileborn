@@ -454,5 +454,4 @@ describe('project creation flow (Playwright Electron via vitest)', () => {
       )
       .toBe(true);
   });
-
 });

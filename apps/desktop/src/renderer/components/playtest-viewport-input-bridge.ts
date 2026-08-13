@@ -12,10 +12,7 @@ import {
 } from '@tileborne/runtime';
 
 import { attachPlaytestInputCapture } from '@/lib/playtest-input';
-import {
-  dispatchRuntimeAudioEvent,
-  resolvePlaytestPlugin,
-} from '@/lib/playtest-plugin-bridge';
+import { dispatchRuntimeAudioEvent, resolvePlaytestPlugin } from '@/lib/playtest-plugin-bridge';
 import type { LocalInputPrediction } from '@/lib/local-playtest-prediction';
 
 const LOCAL_PLAYER_INPUT_ID = 'player-1';

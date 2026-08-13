@@ -28,7 +28,12 @@
     }
   },
   "files": ["src/main/__tests__/map-editor-playtest-owner.integration.test.tsx"],
-  "include": ["src/main/**/*.ts", "src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts"],
+  "include": [
+    "src/main/**/*.ts",
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx",
+    "src/shared/**/*.ts"
+  ],
   "exclude": [
     "src/main/**/*.test.ts",
     "src/main/**/*.test.tsx",

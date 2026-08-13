@@ -317,9 +317,9 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
   );
   const steps = [
     ciFastStep(['install'], ['pnpm', 'install', '--frozen-lockfile']),
+    ciFastFormatCommand,
     ciFastStep(['build', 'lint', 'typecheck'], turboVerificationCommand),
     ciFastStep(['test'], turboTestCommand),
-    ciFastFormatCommand,
     ...(includesDesktopReleaseContractScope ? ciFastDesktopReleaseContractCommands : []),
     ...(includesDesktopCandidateScope ? ciFastDesktopCandidateCommands : []),
   ];

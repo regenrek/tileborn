@@ -204,9 +204,7 @@ const spritePool = (): Map<string, unknown> =>
     emitFrame(new BattleRoyaleProtocol.GameplayEventFrame({ sequence: 1, event: flow.events[1]! }));
   },
   emitRemoteMovementFlow: () => {
-    const remoteUpdate = flow.acceptedDeltaFrame.updated.find(
-      (update) => update.id === 'player-2',
-    );
+    const remoteUpdate = flow.acceptedDeltaFrame.updated.find((update) => update.id === 'player-2');
     if (remoteUpdate === undefined) {
       throw new Error('accepted fire fixture has no remote player update');
     }

@@ -54,20 +54,18 @@ export const toCatalogEntries = (
 
 /** Same authored-pixel → runtime-tile projection assembly performs. */
 const projectPlacements = (map: TileborneMap): readonly RuntimeObjectPlacement[] =>
-  map.objects.map(
-    (object) => {
-      const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
-      return new RuntimeObjectPlacement({
-        objectId: object.id,
-        typeId: object.kind,
-        x: tilePosition.x,
-        y: tilePosition.y,
-        ...(Object.keys(object.properties).length > 0
-          ? { instanceProperties: object.properties }
-          : {}),
-      });
-    },
-  );
+  map.objects.map((object) => {
+    const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
+    return new RuntimeObjectPlacement({
+      objectId: object.id,
+      typeId: object.kind,
+      x: tilePosition.x,
+      y: tilePosition.y,
+      ...(Object.keys(object.properties).length > 0
+        ? { instanceProperties: object.properties }
+        : {}),
+    });
+  });
 
 const namespacedSettings = (map: TileborneMap): Record<string, JsonObject> =>
   Object.fromEntries(

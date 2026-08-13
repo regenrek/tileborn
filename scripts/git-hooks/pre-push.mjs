@@ -1,4 +1,3 @@
-/* global process */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
@@ -50,7 +49,11 @@ for (const update of updates) {
 if (ranges.size === 0) process.exit(0);
 
 for (const { base, head } of ranges.values()) {
-  process.stdout.write(`Verifying affected lint for ${base}...${head}\n`);
+  process.stdout.write(`Verifying pushed formatting and affected lint for ${base}...${head}\n`);
+  const changedFiles =
+    git('diff', '--name-only', '--diff-filter=ACMR', `${base}...${head}`)
+      ?.split('\n')
+      .filter(Boolean) ?? [];
   const worktree = mkdtempSync(path.join(os.tmpdir(), 'tileborn-pre-push-'));
   let registeredWorktree = false;
   let status;
@@ -76,6 +79,16 @@ for (const { base, head } of ranges.values()) {
       );
       if (install.error !== undefined) throw install.error;
       status = install.status ?? 1;
+    }
+
+    if (status === 0 && changedFiles.length > 0) {
+      const format = spawnSync(
+        'pnpm',
+        ['exec', 'prettier', '--check', '--ignore-unknown', '--', ...changedFiles],
+        { cwd: worktree, stdio: 'inherit' },
+      );
+      if (format.error !== undefined) throw format.error;
+      status = format.status ?? 1;
     }
 
     if (status === 0) {

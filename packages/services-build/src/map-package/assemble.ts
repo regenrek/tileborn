@@ -156,20 +156,18 @@ const projectPlacements = (
     );
   }
   return Result.succeed(
-    map.objects.map(
-      (object) => {
-        const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
-        return new RuntimeObjectPlacement({
-          objectId: object.id,
-          typeId: object.kind,
-          x: tilePosition.x,
-          y: tilePosition.y,
-          ...(Object.keys(object.properties).length > 0
-            ? { instanceProperties: object.properties }
-            : {}),
-        });
-      },
-    ),
+    map.objects.map((object) => {
+      const tilePosition = authoringPixelToRuntimeTile(object, map.tileSize);
+      return new RuntimeObjectPlacement({
+        objectId: object.id,
+        typeId: object.kind,
+        x: tilePosition.x,
+        y: tilePosition.y,
+        ...(Object.keys(object.properties).length > 0
+          ? { instanceProperties: object.properties }
+          : {}),
+      });
+    }),
   );
 };
 

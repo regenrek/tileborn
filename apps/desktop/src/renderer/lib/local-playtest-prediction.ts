@@ -109,9 +109,7 @@ export class LocalPlaytestPredictionController {
         dir: this.#latestInput.dir,
         dtSeconds: elapsedSeconds,
       };
-      if (
-        this.#latestInput.sequence > this.#predictor.getState().acknowledgedInputSequence
-      ) {
+      if (this.#latestInput.sequence > this.#predictor.getState().acknowledgedInputSequence) {
         this.#pendingElapsedSeconds += elapsedSeconds;
         this.#predictor.upsertPending(
           { ...movement, dtSeconds: this.#pendingElapsedSeconds },

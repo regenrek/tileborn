@@ -20,11 +20,7 @@
     "luna": {
       "enabled": true,
       "read_only": true,
-      "allowed_modes": [
-        "silent-sentinel",
-        "bounded-verifier",
-        "interactive-operator"
-      ]
+      "allowed_modes": ["silent-sentinel", "bounded-verifier", "interactive-operator"]
     },
     "fable": {
       "enabled": true,
@@ -44,13 +40,7 @@
   },
   "paths": {
     "allowed": ["**"],
-    "forbidden": [
-      ".git/**",
-      ".env",
-      ".env.*",
-      "**/*.pem",
-      "**/*.key"
-    ]
+    "forbidden": [".git/**", ".env", ".env.*", "**/*.pem", "**/*.key"]
   },
   "validation": {
     "cwd": ".",
@@ -60,12 +50,7 @@
   },
   "testing": {
     "strategy": "distill",
-    "tracked_test_globs": [
-      "**/*.test.*",
-      "**/*.spec.*",
-      "**/__tests__/**",
-      "**/__replay__/**"
-    ],
+    "tracked_test_globs": ["**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/__replay__/**"],
     "build": {
       "permanent_test_edits": "deny",
       "full_suite": "deny"

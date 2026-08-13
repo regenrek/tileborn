@@ -109,7 +109,7 @@ describe('usePlaytestControls stop coordinator', () => {
     const stopSettled = new Promise<void>((resolve) => {
       resolveStop = resolve;
     });
-    const registeredStopRequests: typeof owner[] = [];
+    const registeredStopRequests: (typeof owner)[] = [];
     const stop = vi.fn(async (input: typeof owner) => {
       registeredStopRequests.push(input);
       if (!activeRuntimes.has(input.sessionId)) {

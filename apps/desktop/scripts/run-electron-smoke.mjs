@@ -57,6 +57,9 @@ export function runElectronSmoke({
   return result.status ?? 1;
 }
 
-if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   process.exit(runElectronSmoke());
 }

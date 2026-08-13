@@ -1,4 +1,4 @@
 interface:
-  display_name: "Tileborne Electron Live Test"
-  short_description: "Verify Tileborne behavior in live Electron"
-  default_prompt: "Use $electron-live-test to reproduce and verify this Tileborne UI or gameplay change in the running Electron app."
+  display_name: 'Tileborne Electron Live Test'
+  short_description: 'Verify Tileborne behavior in live Electron'
+  default_prompt: 'Use $electron-live-test to reproduce and verify this Tileborne UI or gameplay change in the running Electron app.'

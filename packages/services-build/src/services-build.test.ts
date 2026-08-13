@@ -1383,6 +1383,10 @@ describe('BuildService', () => {
               state: { lastTick: 7 },
             });
 
+            // The CLI/WebSocket gameplay dogfood starts real processes and can take over a minute.
+            // Keep it available as an explicit probe without charging every package test run for it.
+            if (process.env.TILEBORNE_REFERENCE_GAME_E2E !== '1') return;
+
             const serveHome = yield* Effect.promise(() =>
               mkdtemp(path.join(tmpdir(), 'tileborne-reference-br-cli-home-')),
             );

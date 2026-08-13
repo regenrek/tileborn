@@ -211,7 +211,7 @@ describe('canonical release gates', () => {
     expect(workflow).toContain('run: corepack enable');
     expect(read('scripts/release-gates.mjs')).toContain('GITHUB_STEP_SUMMARY');
     expect(read('scripts/release-gates.mjs')).toContain('Escalations');
-    expect(read('scripts/release-gates.mjs')).toContain('Turbo command');
+    expect(read('scripts/release-gates.mjs')).toContain('Turbo commands');
     expect(workflow).not.toContain('pnpm/action-setup');
     expect(workflow).not.toContain('release-gate-plan');
     expect(workflow).not.toContain('strategy:');
@@ -461,7 +461,7 @@ describe('canonical release gates', () => {
     expect(requiredStatusChecks.map(({ context }) => context)).toEqual(['ci-fast']);
   });
 
-  it('plans one affected Turbo command without unrelated desktop release contracts', () => {
+  it('plans affected verification before serial package tests', () => {
     const plan = createCiFastPlan({
       base: 'base-sha',
       head: 'head-sha',
@@ -477,7 +477,10 @@ describe('canonical release gates', () => {
     });
     expect(
       plan.commands.filter((command) => command[0] === 'pnpm' && command[1] === 'turbo'),
-    ).toEqual([['pnpm', 'turbo', 'run', 'build', 'lint', 'typecheck', 'test', '--affected']]);
+    ).toEqual([
+      ['pnpm', 'turbo', 'run', 'build', 'lint', 'typecheck', '--affected'],
+      ['pnpm', 'turbo', 'run', 'test', '--affected', '--concurrency=1'],
+    ]);
     expect(plan.commands).toContainEqual(['pnpm', 'format:check']);
     expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:policy']);
     expect(plan.commands).not.toContainEqual(['pnpm', 'release:desktop:status']);
@@ -485,7 +488,8 @@ describe('canonical release gates', () => {
     expect(plan.commands).not.toContainEqual(['pnpm', 'test:desktop-release-contract']);
     expect(plan.steps.map(({ gateIds }) => gateIds)).toEqual([
       ['install'],
-      ['build', 'lint', 'typecheck', 'test'],
+      ['build', 'lint', 'typecheck'],
+      ['test'],
       ['format'],
     ]);
   });
@@ -520,8 +524,17 @@ describe('canonical release gates', () => {
       'build',
       'lint',
       'typecheck',
+      '--affected',
+      '--filter',
+      '@tileborne/docs...',
+    ]);
+    expect(docsPlan.commands[2]).toEqual([
+      'pnpm',
+      'turbo',
+      'run',
       'test',
       '--affected',
+      '--concurrency=1',
       '--filter',
       '@tileborne/docs...',
     ]);
@@ -555,8 +568,21 @@ describe('canonical release gates', () => {
       'build',
       'lint',
       'typecheck',
+      '--affected',
+      '--filter',
+      '@tileborne/desktop...',
+      '--filter',
+      '@tileborne/docs...',
+      '--filter',
+      '@tileborne/game-host...',
+    ]);
+    expect(rootPlan.commands[2]).toEqual([
+      'pnpm',
+      'turbo',
+      'run',
       'test',
       '--affected',
+      '--concurrency=1',
       '--filter',
       '@tileborne/desktop...',
       '--filter',
@@ -658,7 +684,8 @@ describe('canonical release gates', () => {
       expect(result.status, result.stderr).toBe(0);
       expect(readFileSync(commandLogPath, 'utf8').trimEnd().split('\n')).toEqual([
         'install --frozen-lockfile',
-        'turbo run build lint typecheck test --affected --filter @tileborne/desktop...',
+        'turbo run build lint typecheck --affected --filter @tileborne/desktop...',
+        'turbo run test --affected --concurrency=1 --filter @tileborne/desktop...',
         'format:check',
         'release:desktop:policy',
         'release:desktop:status',

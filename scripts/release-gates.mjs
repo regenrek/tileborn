@@ -291,16 +291,25 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
     }))
     .filter(({ matchedPaths }) => matchedPaths.length > 0);
   const filters = [...new Set(escalations.flatMap((match) => match.filters))];
-  const turboCommand = [
+  const turboFilters = filters.flatMap((filter) => ['--filter', filter]);
+  const turboVerificationCommand = [
     'pnpm',
     'turbo',
     'run',
     'build',
     'lint',
     'typecheck',
+    '--affected',
+    ...turboFilters,
+  ];
+  const turboTestCommand = [
+    'pnpm',
+    'turbo',
+    'run',
     'test',
     '--affected',
-    ...filters.flatMap((filter) => ['--filter', filter]),
+    '--concurrency=1',
+    ...turboFilters,
   ];
   const includesDesktopCandidateScope = filters.includes('@tileborne/desktop...');
   const includesDesktopReleaseContractScope = escalations.some(({ id }) =>
@@ -308,7 +317,8 @@ export function createCiFastPlan({ base, head, changedPaths = [] } = {}) {
   );
   const steps = [
     ciFastStep(['install'], ['pnpm', 'install', '--frozen-lockfile']),
-    ciFastStep(['build', 'lint', 'typecheck', 'test'], turboCommand),
+    ciFastStep(['build', 'lint', 'typecheck'], turboVerificationCommand),
+    ciFastStep(['test'], turboTestCommand),
     ciFastFormatCommand,
     ...(includesDesktopReleaseContractScope ? ciFastDesktopReleaseContractCommands : []),
     ...(includesDesktopCandidateScope ? ciFastDesktopCandidateCommands : []),
@@ -378,7 +388,10 @@ function writeCiFastSummary(plan, receiptPath) {
       `| Head | ${plan.head ?? 'unknown'} |`,
       `| Changed paths | ${plan.changedPaths.length} |`,
       `| Escalations | ${escalationText} |`,
-      `| Turbo command | ${plan.steps[1].command.join(' ')} |`,
+      `| Turbo commands | ${plan.steps
+        .filter((step) => step.command[1] === 'turbo')
+        .map((step) => step.command.join(' '))
+        .join('<br>')} |`,
       `| Receipt | ${receiptPath} |`,
       '',
     ].join('\n'),

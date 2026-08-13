@@ -25,6 +25,12 @@
       "@tileborne/ipc-contracts/contracts/multiplayer": [
         "./packages/ipc-contracts/src/contracts/multiplayer.ts"
       ],
+      "@tileborne/ipc-contracts/contracts/gameplay-event": [
+        "./packages/ipc-contracts/src/contracts/gameplay-event.ts"
+      ],
+      "@tileborne/ipc-contracts/protocols/battle-royale": [
+        "./packages/ipc-contracts/src/protocols/battle-royale.ts"
+      ],
       "@tileborne/ipc-contracts/preload": ["./packages/ipc-contracts/src/preload.ts"],
       "@tileborne/sdk-tileset": ["./packages/sdk-tileset/src/index.ts"],
       "@tileborne/cli": ["./packages/cli/src/main.ts"],

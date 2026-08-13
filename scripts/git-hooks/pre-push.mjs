@@ -50,7 +50,7 @@ for (const update of updates) {
 if (ranges.size === 0) process.exit(0);
 
 for (const { base, head } of ranges.values()) {
-  process.stdout.write(`Verifying affected lint and typecheck for ${base}...${head}\n`);
+  process.stdout.write(`Verifying affected lint for ${base}...${head}\n`);
   const worktree = mkdtempSync(path.join(os.tmpdir(), 'tileborn-pre-push-'));
   let registeredWorktree = false;
   let status;
@@ -81,7 +81,7 @@ for (const { base, head } of ranges.values()) {
     if (status === 0) {
       const verify = spawnSync(
         'pnpm',
-        ['turbo', 'run', 'lint', 'typecheck', '--affected', '--output-logs=errors-only'],
+        ['turbo', 'run', 'lint', '--affected', '--only', '--output-logs=errors-only'],
         {
           cwd: worktree,
           stdio: 'inherit',

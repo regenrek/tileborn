@@ -63,12 +63,12 @@
     "@testing-library/user-event": "14.6.1",
     "@tileborne/services-plugin": "workspace:*",
     "@types/react": "19.2.14",
-    "@vitejs/plugin-react": "6.0.1",
+    "@vitejs/plugin-react": "6.0.5",
     "jsdom": "29.1.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsup": "8.5.0",
+    "tsup": "8.5.1",
     "typescript": "6.0.3",
-    "vitest": "4.1.7"
+    "vitest": "4.1.10"
   }
 }

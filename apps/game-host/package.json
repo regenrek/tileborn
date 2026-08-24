@@ -41,10 +41,10 @@
     "@tileborne/ipc-contracts": "workspace:*",
     "@tileborne/runtime": "workspace:*",
     "effect": "4.0.0-beta.78",
-    "esbuild": "0.25.5",
+    "esbuild": "0.28.2",
     "hono": "4.12.27",
-    "miniflare": "4.20260603.0",
-    "msgpackr": "2.0.1"
+    "miniflare": "4.20260730.0",
+    "msgpackr": "2.0.5"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.4",

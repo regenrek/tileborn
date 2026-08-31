@@ -47,13 +47,13 @@
     "msgpackr": "2.0.1"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.18.4",
+    "@cloudflare/vitest-pool-workers": "0.22.0",
     "@cloudflare/workers-types": "4.20250508.0",
     "@tileborne/plugin-battle-royale": "workspace:*",
     "@tileborne/test-fixtures": "workspace:*",
     "@types/node": "22.19.19",
     "typescript": "6.0.3",
-    "vitest": "4.1.7",
+    "vitest": "4.1.11",
     "wrangler": "4.98.0"
   },
   "license": "MIT"

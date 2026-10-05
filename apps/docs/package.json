@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@astrojs/starlight": "0.41.2",
-    "astro": "7.1.0",
-    "sharp": "0.35.3"
+    "astro": "7.3.5",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@tileborne/cli": "workspace:*",
